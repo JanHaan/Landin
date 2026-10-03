@@ -1643,7 +1643,8 @@ package body Landin.Backend.X86_64 is
                   At_Offset : constant Landin.Targets.Byte_Count :=
                     Landin.Backend.Variant_Payload_Field_Offset
                       (Of_Unit, Reached_Shape (Place, Field, Nested),
-                       Positive (Which), Positive (Payload_Field), Facts);
+                       Positive (Which), Positive (Payload_Field), Facts,
+                       Path_Layouts);
                begin
                   if At_Offset > 0 then
                      Emit
@@ -3704,7 +3705,8 @@ package body Landin.Backend.X86_64 is
                          (Of_Unit, Shape, Which, Payload_Field);
                      At_Offset : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Which, Payload_Field, Facts);
+                         (Of_Unit, Shape, Which, Payload_Field, Facts,
+                          Path_Layouts);
                      Held : constant Held_Size :=
                        Size_Of (Leaf.Element, Facts);
                   begin
@@ -3786,7 +3788,8 @@ package body Landin.Backend.X86_64 is
                          (Of_Unit, Shape, Which, Payload_Field);
                      At_Offset : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Which, Payload_Field, Facts);
+                         (Of_Unit, Shape, Which, Payload_Field, Facts,
+                          Path_Layouts);
                      Held : constant Held_Size :=
                        Size_Of (Leaf.Element, Facts);
                   begin
@@ -5772,6 +5775,7 @@ package body Landin.Backend.X86_64 is
       procedure Emit_Recursive_Image_Datum
         (Item : Landin.IR.Item_Id)
       is
+         Datum_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Placed : Landin.Targets.Placement;
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
@@ -6023,7 +6027,8 @@ package body Landin.Backend.X86_64 is
                            (Of_Unit, Item, Image, Payload);
                      At_Payload : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Selected, Payload, Facts);
+                         (Of_Unit, Shape, Selected, Payload, Facts,
+                          Datum_Layouts);
                      Payload_Size : Landin.Targets.Byte_Count;
                      Payload_Alignment : Landin.Targets.Byte_Alignment;
                   begin

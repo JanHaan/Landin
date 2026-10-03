@@ -12,12 +12,15 @@ package Landin.IR.Shape_Measurement is
    --  as descendant extents until the group ends.
    type Layout_Cache is private;
 
-   function Cached_Aggregate_Layout
+   --  Observable plan inventory for repeated-query regression checks.
+   function Cached_Plan_Count (Cache : Layout_Cache) return Natural;
+
+   function Cached_Aggregate_Field_Offset
      (Cache : in out Layout_Cache;
-      Of_Unit : Unit; Shape : Field_Shape;
+      Of_Unit : Unit; Shape : Field_Shape; Field : Positive;
       Facts : Landin.Targets.Target_Facts;
       Maximum : Landin.Targets.Byte_Count)
-      return Landin.Targets.Layouts.Plan;
+      return Landin.Targets.Byte_Count;
 
    function Cached_Field_Extent
      (Cache : in out Layout_Cache;
@@ -26,19 +29,12 @@ package Landin.IR.Shape_Measurement is
       Maximum : Landin.Targets.Byte_Count)
       return Landin.Targets.Layouts.Field_Extent;
 
-   function Cached_Case_Layout
+   function Cached_Variant_Payload_Field_Offset
      (Cache : in out Layout_Cache;
-      Of_Unit : Unit; Shape : Field_Shape; Which : Positive;
+      Of_Unit : Unit; Shape : Field_Shape; Which, Field : Positive;
       Facts : Landin.Targets.Target_Facts;
       Maximum : Landin.Targets.Byte_Count)
-      return Landin.Targets.Layouts.Plan;
-
-   function Cached_Variant_Layout
-     (Cache : in out Layout_Cache;
-      Of_Unit : Unit; Shape : Field_Shape;
-      Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count)
-      return Landin.Targets.Layouts.Plan;
+      return Landin.Targets.Byte_Count;
 
    --  Each query memoizes repeated descendant shapes for its fixed unit,
    --  target and limit, and discards that memo on return or failure.

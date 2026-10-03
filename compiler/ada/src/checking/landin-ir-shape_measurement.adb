@@ -6,6 +6,7 @@ package body Landin.IR.Shape_Measurement is
    package Layout renames Landin.Targets.Layouts;
    use type Targets.Byte_Count;
    use type Ada.Containers.Hash_Type;
+   use type Ada.Containers.Count_Type;
 
    function Hash (Key : Shape_Key) return Ada.Containers.Hash_Type is
       Result : Ada.Containers.Hash_Type := 0;
@@ -36,6 +37,10 @@ package body Landin.IR.Shape_Measurement is
       return (Hash (Key.Shape) xor Ada.Containers.Hash_Type (Key.Which))
         * 16_777_619;
    end Hash;
+
+   function Cached_Plan_Count (Cache : Layout_Cache) return Natural is
+     (Natural (Cache.Plans.Length + Cache.Variants.Length
+               + Cache.Cases.Length));
 
    --  Ordinary public queries own one memo and discard it on return. The
    --  caller-owned layout cache keeps its memo for one fixed query group.
@@ -269,11 +274,11 @@ package body Landin.IR.Shape_Measurement is
         (Cache, Of_Unit, Shape, Facts, Maximum);
    end Aggregate_Layout;
 
-   function Cached_Aggregate_Layout
+   function Cached_Aggregate_Field_Offset
      (Cache : in out Layout_Cache;
-      Of_Unit : Unit; Shape : Field_Shape;
+      Of_Unit : Unit; Shape : Field_Shape; Field : Positive;
       Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count) return Layout.Plan
+      Maximum : Landin.Targets.Byte_Count) return Targets.Byte_Count
    is
       Key : constant Shape_Key :=
         (Shape => Shape,
@@ -281,19 +286,20 @@ package body Landin.IR.Shape_Measurement is
            (if Holds (Of_Unit, Shape.Nominal)
             then Nominal_Identities.Position (Of_Unit, Shape.Nominal)
             else 0));
-      Position : constant Layout_Maps.Cursor := Cache.Plans.Find (Key);
+      Position : Layout_Maps.Cursor := Cache.Plans.Find (Key);
    begin
-      if Layout_Maps.Has_Element (Position) then
-         return Layout_Maps.Element (Position);
+      if not Layout_Maps.Has_Element (Position) then
+         declare
+            Placed : constant Layout.Plan := Aggregate_Layout
+              (Cache.Extents, Of_Unit, Shape, Facts, Maximum);
+         begin
+            Cache.Plans.Insert (Key, Placed);
+         end;
+         Position := Cache.Plans.Find (Key);
       end if;
-      declare
-         Placed : constant Layout.Plan := Aggregate_Layout
-           (Cache.Extents, Of_Unit, Shape, Facts, Maximum);
-      begin
-         Cache.Plans.Insert (Key, Placed);
-         return Placed;
-      end;
-   end Cached_Aggregate_Layout;
+      return Layout_Maps.Constant_Reference
+        (Cache.Plans, Position).Element.Offsets (Field);
+   end Cached_Aggregate_Field_Offset;
 
    function Cached_Field_Extent
      (Cache : in out Layout_Cache;
@@ -306,11 +312,17 @@ package body Landin.IR.Shape_Measurement is
       return Extent (Cache.Extents, Of_Unit, Shape, Facts, Maximum);
    end Cached_Field_Extent;
 
-   function Cached_Case_Layout
+   function Cached_Case_Position
      (Cache : in out Layout_Cache;
       Of_Unit : Unit; Shape : Field_Shape; Which : Positive;
       Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count) return Layout.Plan
+      Maximum : Landin.Targets.Byte_Count) return Case_Maps.Cursor;
+
+   function Cached_Case_Position
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape; Which : Positive;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Case_Maps.Cursor
    is
       Key : constant Case_Key :=
         (Shape =>
@@ -320,25 +332,31 @@ package body Landin.IR.Shape_Measurement is
                then Nominal_Identities.Position (Of_Unit, Shape.Nominal)
                else 0)),
          Which => Which);
-      Position : constant Case_Maps.Cursor := Cache.Cases.Find (Key);
+      Position : Case_Maps.Cursor := Cache.Cases.Find (Key);
    begin
-      if Case_Maps.Has_Element (Position) then
-         return Case_Maps.Element (Position);
+      if not Case_Maps.Has_Element (Position) then
+         declare
+            Placed : constant Layout.Plan := Case_Layout
+              (Cache.Extents, Of_Unit, Shape, Which, Facts, Maximum);
+         begin
+            Cache.Cases.Insert (Key, Placed);
+         end;
+         Position := Cache.Cases.Find (Key);
       end if;
-      declare
-         Placed : constant Layout.Plan := Case_Layout
-           (Cache.Extents, Of_Unit, Shape, Which, Facts, Maximum);
-      begin
-         Cache.Cases.Insert (Key, Placed);
-         return Placed;
-      end;
-   end Cached_Case_Layout;
+      return Position;
+   end Cached_Case_Position;
 
-   function Cached_Variant_Layout
+   function Cached_Variant_Position
      (Cache : in out Layout_Cache;
       Of_Unit : Unit; Shape : Field_Shape;
       Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count) return Layout.Plan
+      Maximum : Landin.Targets.Byte_Count) return Layout_Maps.Cursor;
+
+   function Cached_Variant_Position
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Layout_Maps.Cursor
    is
       Key : constant Shape_Key :=
         (Shape => Shape,
@@ -346,39 +364,64 @@ package body Landin.IR.Shape_Measurement is
            (if Holds (Of_Unit, Shape.Nominal)
             then Nominal_Identities.Position (Of_Unit, Shape.Nominal)
             else 0));
-      Position : constant Layout_Maps.Cursor := Cache.Variants.Find (Key);
+      Position : Layout_Maps.Cursor := Cache.Variants.Find (Key);
    begin
-      if Layout_Maps.Has_Element (Position) then
-         return Layout_Maps.Element (Position);
-      end if;
-      declare
-         Tag : constant Targets.Scalar_Size :=
-           Landin.Types.Storage_Size (Shape.Element, Facts);
-         Fields : Layout.Field_Extent_Array (1 .. 2) :=
-           [1 => (Targets.Byte_Count (Targets.Bytes (Tag)),
-                  Targets.Alignment_Of (Facts, Tag)),
-            2 => (0, 1)];
-      begin
-         for Which in 1 .. Shape.Cases loop
-            declare
-               Payload : constant Layout.Plan := Cached_Case_Layout
-                 (Cache, Of_Unit, Shape, Which, Facts, Maximum);
-            begin
-               Fields (2).Size := Targets.Byte_Count'Max
-                 (Fields (2).Size, Payload.Size);
-               Fields (2).Alignment := Targets.Byte_Alignment'Max
-                 (Fields (2).Alignment, Payload.Alignment);
-            end;
-         end loop;
+      if not Layout_Maps.Has_Element (Position) then
          declare
-            Placed : constant Layout.Plan :=
-              Layout.Make (Fields, Landin.Layouts.Natural, Maximum);
+            Tag : constant Targets.Scalar_Size :=
+              Landin.Types.Storage_Size (Shape.Element, Facts);
+            Fields : Layout.Field_Extent_Array (1 .. 2) :=
+              [1 => (Targets.Byte_Count (Targets.Bytes (Tag)),
+                     Targets.Alignment_Of (Facts, Tag)),
+               2 => (0, 1)];
          begin
-            Cache.Variants.Insert (Key, Placed);
-            return Placed;
+            for Which in 1 .. Shape.Cases loop
+               declare
+                  Case_Position : constant Case_Maps.Cursor :=
+                    Cached_Case_Position
+                    (Cache, Of_Unit, Shape, Which, Facts, Maximum);
+                  Payload : constant Case_Maps.Constant_Reference_Type :=
+                    Case_Maps.Constant_Reference (Cache.Cases, Case_Position);
+               begin
+                  Fields (2).Size := Targets.Byte_Count'Max
+                    (Fields (2).Size, Payload.Element.Size);
+                  Fields (2).Alignment := Targets.Byte_Alignment'Max
+                    (Fields (2).Alignment, Payload.Element.Alignment);
+               end;
+            end loop;
+            declare
+               Placed : constant Layout.Plan :=
+                 Layout.Make (Fields, Landin.Layouts.Natural, Maximum);
+            begin
+               Cache.Variants.Insert (Key, Placed);
+            end;
          end;
-      end;
-   end Cached_Variant_Layout;
+         Position := Cache.Variants.Find (Key);
+      end if;
+      return Position;
+   end Cached_Variant_Position;
+
+   function Cached_Variant_Payload_Field_Offset
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape; Which, Field : Positive;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Targets.Byte_Count
+   is
+      Part : constant Layout_Maps.Cursor := Cached_Variant_Position
+        (Cache, Of_Unit, Shape, Facts, Maximum);
+      Payload : constant Case_Maps.Cursor := Cached_Case_Position
+        (Cache, Of_Unit, Shape, Which, Facts, Maximum);
+   begin
+      if Field > Case_Maps.Constant_Reference
+        (Cache.Cases, Payload).Element.Count
+      then
+         raise Compiler_Defect with "no such variant payload field";
+      end if;
+      return Layout_Maps.Constant_Reference
+        (Cache.Variants, Part).Element.Offsets (2)
+        + Case_Maps.Constant_Reference
+            (Cache.Cases, Payload).Element.Offsets (Field);
+   end Cached_Variant_Payload_Field_Offset;
 
    function Case_Layout
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive;

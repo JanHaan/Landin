@@ -1719,7 +1719,8 @@ package body Landin.Backend.Cortex_M is
             if Payload_Field > 0 then
                Offset := Offset + Landin.Backend.Variant_Payload_Field_Offset
                  (Of_Unit, Landin.IR.Shape_At (Of_Unit, Shape, Nested),
-                  Positive (Which), Positive (Payload_Field), Facts);
+                  Positive (Which), Positive (Payload_Field), Facts,
+                  Path_Layouts);
             end if;
             Add_Offset (Register, Offset);
          end Part_Address;
@@ -4036,6 +4037,7 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Recursive_Image_Datum
         (Item : Landin.IR.Item_Id)
       is
+         Datum_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Placed : Landin.Targets.Placement;
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
@@ -4287,7 +4289,8 @@ package body Landin.Backend.Cortex_M is
                            (Of_Unit, Item, Image, Payload);
                      At_Payload : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Selected, Payload, Facts);
+                         (Of_Unit, Shape, Selected, Payload, Facts,
+                          Datum_Layouts);
                      Payload_Size : Landin.Targets.Byte_Count;
                      Payload_Alignment : Landin.Targets.Byte_Alignment;
                   begin

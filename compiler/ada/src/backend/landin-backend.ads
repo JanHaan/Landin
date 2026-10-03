@@ -238,6 +238,24 @@ package Landin.Backend is
                    Landin.IR.Variant_Case_Field_Count
                      (Of_Unit, Shape, Which);
 
+   --  Routine and datum emission reuse this query for every selected field.
+   function Variant_Payload_Field_Offset
+     (Of_Unit       : Landin.IR.Unit;
+      Shape         : Landin.IR.Field_Shape;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Facts         : Landin.Targets.Target_Facts;
+      Cache         : in out Landin.IR.Shape_Measurement.Layout_Cache)
+      return Landin.Targets.Byte_Count
+     with Pre => Landin.IR."="
+                   (Shape.Kind, Landin.IR.Variant_Field_Shape)
+                 and then Which <= Shape.Cases
+                 and then Landin.IR.Variant_Case_Run_Is_Valid
+                   (Of_Unit, Shape, Which)
+                 and then Payload_Field <=
+                   Landin.IR.Variant_Case_Field_Count
+                     (Of_Unit, Shape, Which);
+
    --  Answer one target-neutral measurement instruction.  Aggregate
    --  measurements carry declaration-order scalar or compact fixed-array
    --  fields and D74/D75's shared variant case runs; this

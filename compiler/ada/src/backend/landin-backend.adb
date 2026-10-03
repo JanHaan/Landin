@@ -91,33 +91,18 @@ package body Landin.Backend is
                Reached := Element;
             end;
          elsif Step.Case_Index = 0 then
-            declare
-               Plan : constant Landin.Targets.Layouts.Plan :=
-                 IR.Shape_Measurement.Cached_Aggregate_Layout
-                   (Cache, Of_Unit, Reached, Facts,
-                    Targets.Maximum_Object_Size (Facts));
-            begin
-               Total := Total + Plan.Offsets (Positive (Step.Field));
-               Reached := Landin.IR.Nth_Aggregate_Field
-                 (Of_Unit, Reached, Positive (Step.Field));
-            end;
+            Total := Total
+              + IR.Shape_Measurement.Cached_Aggregate_Field_Offset
+                  (Cache, Of_Unit, Reached, Positive (Step.Field), Facts,
+                   Targets.Maximum_Object_Size (Facts));
+            Reached := Landin.IR.Nth_Aggregate_Field
+              (Of_Unit, Reached, Positive (Step.Field));
          else
-            declare
-               Part : constant Layout.Plan :=
-                 IR.Shape_Measurement.Cached_Variant_Layout
-                   (Cache, Of_Unit, Reached, Facts,
-                    Targets.Maximum_Object_Size (Facts));
-               Payload : constant Layout.Plan :=
-                 IR.Shape_Measurement.Cached_Case_Layout
-                   (Cache, Of_Unit, Reached, Step.Case_Index, Facts,
-                    Targets.Maximum_Object_Size (Facts));
-            begin
-               if Positive (Step.Field) > Payload.Count then
-                  raise Compiler_Defect with "no such variant payload field";
-               end if;
-               Total := Total + Part.Offsets (2)
-                 + Payload.Offsets (Positive (Step.Field));
-            end;
+            Total := Total
+              + IR.Shape_Measurement.Cached_Variant_Payload_Field_Offset
+                  (Cache, Of_Unit, Reached, Step.Case_Index,
+                   Positive (Step.Field), Facts,
+                   Targets.Maximum_Object_Size (Facts));
             Reached := Landin.IR.Nth_Variant_Case_Field
               (Of_Unit, Reached, Step.Case_Index,
                Positive (Step.Field));
@@ -284,6 +269,18 @@ package body Landin.Backend is
       end if;
       return Part.Offsets (2) + Payload.Offsets (Payload_Field);
    end Variant_Payload_Field_Offset;
+
+   function Variant_Payload_Field_Offset
+     (Of_Unit       : Landin.IR.Unit;
+      Shape         : Landin.IR.Field_Shape;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Facts         : Landin.Targets.Target_Facts;
+      Cache         : in out IR.Shape_Measurement.Layout_Cache)
+      return Landin.Targets.Byte_Count is
+     (IR.Shape_Measurement.Cached_Variant_Payload_Field_Offset
+        (Cache, Of_Unit, Shape, Which, Payload_Field, Facts,
+         Targets.Maximum_Object_Size (Facts)));
 
    ------------------------------------------------------------------
    --  A target-neutral measurement

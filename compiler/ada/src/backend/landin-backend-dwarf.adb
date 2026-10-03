@@ -221,6 +221,7 @@ package body Landin.Backend.Dwarf is
       package Descriptions is new Ada.Containers.Vectors
         (Positive, Description);
       Types : Descriptions.Vector;
+      Type_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
 
       procedure Put (Text : String);
       procedure Put (Text : String) is
@@ -594,7 +595,8 @@ package body Landin.Backend.Dwarf is
                                (Of_Unit, Shape, Which, Field),
                                Desc.Source, Node),
                              Variant_Payload_Field_Offset
-                               (Of_Unit, Shape, Which, Field, Facts));
+                               (Of_Unit, Shape, Which, Field, Facts,
+                                Type_Layouts));
                         end;
                      end loop;
                      if Variant_Case_Field_Count
