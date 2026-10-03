@@ -665,6 +665,46 @@ int main(void)
                      if item.get("c_name") == "Outer")
         self.assertEqual(outer["representation"], "c-owned-opaque")
 
+    def test_record_dependency_chain_is_classified_once(self) -> None:
+        count = 16
+        header = "typedef struct R0 { int value; } R0;\n"
+        header += "".join(
+            f"typedef struct R{index} {{ R{index - 1} value; }} R{index};\n"
+            for index in range(1, count))
+        header += f"extern R{count - 1} get_outer(void);\n"
+        parent = self.root / "dependency-chain"
+        selected = self.selection(self.function("get_outer"))
+        sysroot, includes, output = self.make_tree(
+            parent, header=header, selected_policy=selected)
+        module = runpy.run_path(str(GENERATOR))
+        inputs = module["parse_arguments"](
+            self.command(parent, sysroot, includes, output)[2:])
+        include_map = parent / "header-map"
+        include_map.mkdir()
+        module["create_include_map"](include_map, inputs.headers)
+        translation = parent / "translation.c"
+        module["write_translation_unit"](translation, inputs.headers)
+        driver = module["ClangDriver"](inputs, include_map)
+        ast = module["ASTModel"](driver.parse_ast(driver.preprocess(translation)))
+        generator = module["Generator"](
+            ast, module["Policy"].load(inputs.policy_path), inputs.headers)
+
+        with mock.patch.object(generator, "record_classification",
+                               wraps=generator.record_classification) as classify, \
+             mock.patch.object(generator, "validate_function_shape",
+                               wraps=generator.validate_function_shape) as validate:
+            generator.collect_dependencies()
+            self.assertEqual(len(generator.needed_records), count)
+            self.assertLessEqual(classify.call_count, 2 * count)
+            first_calls = classify.call_count
+            generator.collect_dependencies()
+            self.assertEqual(classify.call_count, first_calls)
+            self.assertEqual(validate.call_count, 1)
+
+        bindings, _, _, _ = generator.generate()
+        self.assertIn("public r15: type = layout(c) struct", bindings)
+        self.assertIn("public r0: type = layout(c) struct", bindings)
+
     def test_const_global_has_read_only_address_adapter(self) -> None:
         selected = {
             "schema_version": 1, "namespace": "constant", "abi": policy()["abi"],
