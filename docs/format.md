@@ -33,6 +33,17 @@ What `refine fmt` does to bytes no example can show:
 The bytes inside a raw literal [0280] and inside a block comment [1780] are
 the literal's and the comment's, their line ends included, and never change.
 
+Replacement writes a sibling temporary file and renames it only after all
+bytes and mode bits have been written successfully. Failures leave the
+original bytes intact. The formatter follows symlinks, refuses hard-linked
+or read-only targets, and needs write permission in the target directory.
+Owner, group and all mode bits are preserved. Files carrying ACLs or extended
+attributes are refused without replacement; an inability to establish their
+absence is also a refusal. This conservative policy avoids dropping metadata.
+Timestamps may change. The file is synced, but the directory is not, so
+power-loss durability of the renamed directory entry is not promised.
+Concurrent changes to source contents or filesystem metadata are unsupported.
+
 ## Rules
 
 ### Blocks

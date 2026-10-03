@@ -2,7 +2,11 @@
  * in a sibling file.  The path is resolved so a symlink remains a symlink.
  * Hard links are refused: replacing one name cannot update its other names.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -12,6 +16,42 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/xattr.h>
+#endif
+#ifdef __APPLE__
+#include <sys/acl.h>
+#endif
+
+/* Replacing a file must not silently drop ACLs or extended attributes.
+ * Until the adapter can copy every platform's metadata, conservatively
+ * refuse files carrying any, and refuse if absence cannot be established.
+ * Linux exposes POSIX ACLs through system.posix_acl_access. Darwin's ACL
+ * is separate from its xattr list and needs its own query.
+ */
+static int metadata_is_plain(int fd)
+{
+#if defined(__linux__)
+    ssize_t count = flistxattr(fd, NULL, 0);
+    return count == 0 || (count < 0 && errno == ENOTSUP);
+#elif defined(__APPLE__)
+    ssize_t count = flistxattr(fd, NULL, 0, 0);
+    if (count != 0 && !(count < 0 && errno == ENOTSUP))
+        return 0;
+    acl_t acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED);
+    if (!acl)
+        return errno == ENOTSUP;
+    acl_entry_t entry;
+    int present = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
+    int error = errno;
+    acl_free(acl);
+    /* Darwin returns zero for an entry, and EINVAL at the end. */
+    return present == -1 && error == EINVAL;
+#else
+    (void)fd;
+    return 0;
+#endif
+}
 
 int landin_replace_existing_file(const char *path, const char *data, size_t size)
 {
@@ -21,13 +61,18 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     struct stat original;
     struct stat current;
     int fd = -1;
+    int source = -1;
     int result = -1;
 
     if (!target)
         return -1;
-    if (stat(target, &original) != 0 || !S_ISREG(original.st_mode)
+    source = open(target, O_RDONLY | O_NOFOLLOW);
+    if (source < 0 || fstat(source, &original) != 0
+        || !S_ISREG(original.st_mode)
         || original.st_nlink != 1 || original.st_uid != geteuid()
         || (original.st_mode & 0222) == 0 || access(target, W_OK) != 0)
+        goto done;
+    if (!metadata_is_plain(source))
         goto done;
 
     size_t length = strlen(target);
@@ -57,6 +102,9 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     /* Writing can clear setuid and setgid; set the final mode afterward. */
     if (fchmod(fd, original.st_mode & 07777) != 0)
         goto done;
+    /* Default directory ACLs may also add metadata to the temporary file. */
+    if (!metadata_is_plain(fd))
+        goto done;
     if (fsync(fd) != 0)
         goto done;
     if (close(fd) != 0) {
@@ -69,11 +117,15 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     if (stat(target, &current) != 0 || current.st_dev != original.st_dev
         || current.st_ino != original.st_ino || current.st_nlink != 1)
         goto done;
+    if (!metadata_is_plain(source))
+        goto done;
     if (rename(temporary, target) != 0)
         goto done;
     result = 0;
 
 done:
+    if (source >= 0)
+        close(source);
     if (fd >= 0)
         close(fd);
     if (temporary) {
