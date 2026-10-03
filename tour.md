@@ -4199,6 +4199,16 @@ itself exclude host I/O or heap allocation below the call.
 Restricting host minting to the entry module remains a
 possible later tightening; it would not close the address
 literal route needed by drivers.
+The chosen boundary is deliberate: provider parameters let
+callers substitute an in-memory world or bounded allocator
+for code that uses those parameters. They do not certify a
+whole call tree. Establishing that stronger claim requires
+inspection of its calls and imports. A checked exclusion rule
+would add privileged-module or call-graph machinery, while an
+entry-module rule alone would leave foreign calls and address
+literals. When trusted code needs a static isolation guarantee,
+or when untrusted code must run, the roadmap reconsiders that cost and
+the full set of authority paths. D258 records this choice.
 
 ### [1690] One mechanism, two readings, is better than two mechanisms
 

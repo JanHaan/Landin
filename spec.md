@@ -1823,6 +1823,10 @@ require the startup described here. Constructor use is not restricted to the
 entry point or to a routine that received a capability argument. A routine's
 parameter list therefore records supplied capabilities, not an enforced upper
 bound on host I/O or allocation in its call tree [1660] [1680].
+For a call tree that uses only its supplied providers, a caller can substitute
+an in-memory world or bounded allocator without changing that code. Establishing
+that premise requires inspecting the called code; a signature alone cannot
+establish it, including for code offered as untrusted.
 
 The first call requires a nonnegative `argc` and non-null `argv` and retains that
 exact pair as the one argument root. It allocates and copies nothing: the C
@@ -15387,6 +15391,43 @@ capability without changing its callers.
 `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`,
 `runtime/derived-parser`, the rooted fixture execution path, and
 the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.
+
+### D258 — Hosted capability parameters select providers without excluding new roots
+
+**The tour and prototype 4 said** that the entry normally mints host roots
+[1660] and that ordinary routines receive capabilities as arguments [1680].
+They also expose public, zero-argument host constructors. The original W1
+resolution called the argument list enforcement below a root, but an ordinary
+helper can mint another root below that call.
+
+**Chosen:** keep the constructors public and permit ordinary hosted routines to
+call them. A capability parameter promises that the caller can supply a
+provider for uses of that parameter; it does not promise that the routine or
+its callees have no other route to host I/O or allocation. Passing an in-memory
+world or bounded allocator makes code that uses those providers substitutable
+and testable. For a whole call tree, that claim requires inspecting its calls
+and imports, not reading its signature. The derived hosted-memory fixture even
+mints a heap root inside a parameterless helper. This is an explicit limit of
+the current capability model for trusted code as well as untrusted code.
+
+**The alternative:** restrict root construction to an entry module or add an
+effect or authority rule checked through calls. Either would improve the
+checkability of host exclusion for code below that boundary, but would add a
+privileged module or whole-call-graph rule to ordinary function checking.
+Entry-module restriction alone would still leave direct foreign calls and
+freestanding address literals as independent authority paths. Without an
+actual need for a static exclusion guarantee, the added machinery and
+incomplete boundary do not earn their cost for a systems language. The
+roadmap's language-evolution record reopens this choice when trusted code needs
+that guarantee or when untrusted code must be run, and requires the proposed
+boundary to account
+for those other authority paths.
+
+**Pinned by** `runtime/derived-hosted-memory`, whose `long_lines` helper calls
+`heap.host()` without an allocator parameter, `runtime/core-io-erased-system`
+for provider substitution, and the `capabilities.host-root-exclusion` guarantee
+row. These demonstrate the current behavior; they do not prove that an
+arbitrary call tree uses only supplied providers.
 
 ### D154 — Diagnostics separate retention from delivery failure
 

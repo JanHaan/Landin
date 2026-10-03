@@ -208,7 +208,7 @@ with every named refusal and the wording of its [1830] note.
 | `[1650]` | executed | all | none | none | matrix evidence |
 | `[1660]` | executed | hosted | none | none | matrix evidence; the freestanding root is [0460]'s address literal |
 | `[1670]` | executed | all | none | none | matrix evidence |
-| `[1680]` | executed | hosted | none | none | Capabilities minted at the hosted entry and passed below it are matrix evidence. The freestanding root is [0460]'s address literal, which the paragraph states is a habit rather than an enforced rule. Restricting minting to the entry module is a Language evolution record in the register, untriggered: no program here runs untrusted code. |
+| `[1680]` | executed | hosted | none | none | Matrix evidence covers passing entry-minted capabilities and substituting the in-memory I/O provider. `runtime/derived-hosted-memory` also has an ordinary parameterless `long_lines` helper that calls `heap.host()`: D258 and `capabilities.host-root-exclusion` record that a parameter list cannot exclude an independent host root. The freestanding root is [0460]'s address literal. The language-evolution record remains open for a trusted-code need for checkable host exclusion or unaudited provider substitution, as well as for untrusted code; no such static boundary is claimed by these fixtures. |
 | `[1690]` | executed | all | none | none | matrix evidence |
 | `[1700]` | executed | all | none | none | matrix evidence |
 | `[1710]` | advisory | none | none | none | The admission test for a new language feature, a design-process rule. It adds no source behavior; the parked and watched items it governs are records in the register in `ROADMAP.md`. |

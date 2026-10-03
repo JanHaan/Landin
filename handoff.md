@@ -89,6 +89,9 @@ what the function can do: any ordinary hosted routine can call the public
 host I/O or heap constructor, and a driver can form an address literal.
 Passing roots from the entry point is a convention, not a checked effect
 boundary.
+Provider parameters still let callers substitute an in-memory world or
+bounded allocator for code that uses them. A whole-call-tree claim needs
+inspection of its calls and imports; signatures alone do not establish it.
 
 **Syntax** is `name: type = value`, with the name always left of the
 colon. Immutable by default. Keyword blocks closed by `end`, and blocks
@@ -124,7 +127,9 @@ interface files, header parsing.
 - **Require a capability, do not track an effect.** Interfaces pass
   capabilities as ordinary arguments. The argument list exposes the
   supplied dependencies; it cannot rule out a fresh host root or an
-  address literal in an ordinary routine. There is no effect system.
+  address literal in an ordinary routine. Substitution is reliable for
+  uses of the supplied provider, not a proof that the entire call tree
+  avoids the host. There is no effect system.
 - **One mechanism with two readings beats two mechanisms.** Static
   generics and runtime dispatch are one thing from two sides.
 - **Atoms are the same idea wherever they appear.**

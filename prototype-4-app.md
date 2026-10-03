@@ -763,12 +763,17 @@ existing principle honest. [1680] said a function given no
 allocator cannot allocate, enforced by nothing more exotic than
 an argument list. That claimed more than the language delivers,
 because any function can reach for a root — hosted.host() here, or
-ptr(0x4002_0000) in a driver. So the principle now says it
-exactly: below a root the argument list is the whole
-enforcement, the roots are two and both nameable, and at those
-it is a habit. Restricting the first to the entry module is
-available later and cannot close the second, since a driver has
-to be able to write an address.
+ptr(0x4002_0000) in a driver. The resolved principle is that
+arguments name supplied providers, not an enforced upper bound
+on authority below a call. An in-memory Io or bounded allocator
+can replace the host provider for code that uses the supplied
+value, but an ordinary helper may independently mint a host root.
+The call tree must be inspected before claiming host exclusion.
+The public constructors keep that systems access simple; restricting
+host minting to the entry module would add a privileged-module rule
+and still leave foreign calls and driver address literals. The
+roadmap reopens a checked boundary when trusted code needs it for testing
+or when untrusted code must run; D258 records the choice.
 
 Writing this also found an error in this file. Io was a struct,
 which made the whole capability story worthless: nothing else
