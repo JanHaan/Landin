@@ -4076,7 +4076,6 @@ argument, output and error storage; the test must supply an input path in
 its argument table for the application's configuration.
 
 ```landin
-<<<<<<< HEAD
 test_drops_debug: () -> (ok: bool) =
     ok = false
     source: []u8 = "DEBUG a\nERROR b\n"
@@ -4109,20 +4108,6 @@ test_drops_debug: () -> (ok: bool) =
         return
     end
     ok = kept == 1 and not files[0].opened
-=======
-test_drops_debug: () -> none =
-    mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
-    mut w: any io.world = any(addr h)
-    mut bytes: [4096]u8 = zeroed
-    --  Keep every allocation within this test's frame.
-    mut backing := mem.arena_over_unchecked(addr bytes[0], 4096)
-    mut scratch := region.new_region(addr backing)
-    defer region.release_region(scratch)
-    mut logger := diag.new_log(capacity: 32)
-    mut d := any(addr logger)
-    kept := run(w, scratch, d, []) else 0
-    assert(kept == 1)
->>>>>>> ef894283 (Require retainable arena backing)
 end test_drops_debug
 ```
 
