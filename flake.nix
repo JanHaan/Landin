@@ -214,16 +214,34 @@
               #  would build with a compiler that cannot link.  This
               #  description recognizes the wrapper instead, while taking the
               #  Ada runtime path from the pinned compiler's own GCC report.
-              postInstall = (previous.postInstall or "") + ''
-                mkdir -p "$out/share/landin-gprconfig"
-                substitute \
-                  ${inputs.nixpkgs}/pkgs/development/ada-modules/gprbuild/nixpkgs-gnat.xml \
-                  "$out/share/landin-gprconfig/nixpkgs-gnat.xml" \
-                  --replace-fail \
-                    '<external>readlink -n ''${PATH}/../nix-support/gprconfig-gnat-unwrapped</external>' \
-                    '<external>''${PREFIX}gcc -v</external>
-                     <grep regexp="^COLLECT_GCC=(.*)/bin/gcc" group="1"></grep>'
-              '';
+              #
+              #  gprconfig reads a runtime directory segment holding a regular
+              #  expression character as a pattern, and the compiler's store
+              #  name holds the dots of its version.  Every probe then
+              #  statted each entry of /nix/store: three quarters of the
+              #  probe, over half of a no-op developer build, and growing
+              #  with the store.  The prefix is written escaped instead, and
+              #  only a GCC report naming that same prefix sets the
+              #  variable, so another compiler is ignored rather than
+              #  handed this runtime.
+              postInstall =
+                let
+                  unwrapped = lib.escapeRegex "${gnatUnwrapped}";
+                in
+                (previous.postInstall or "")
+                + ''
+                  mkdir -p "$out/share/landin-gprconfig"
+                  substitute \
+                    ${inputs.nixpkgs}/pkgs/development/ada-modules/gprbuild/nixpkgs-gnat.xml \
+                    "$out/share/landin-gprconfig/nixpkgs-gnat.xml" \
+                    --replace-fail \
+                      '<external>readlink -n ''${PATH}/../nix-support/gprconfig-gnat-unwrapped</external>' \
+                      '<external>''${PREFIX}gcc -v</external>
+                       <grep regexp="^COLLECT_GCC=(${unwrapped})/bin/gcc" group="1"></grep>' \
+                    --replace-fail \
+                      '>$gnat_unwrapped/' \
+                      '>${unwrapped}/'
+                '';
 
               #  The description has to be named on the command line, and
               #  makeWrapper cannot be the one to name it: it runs the real
