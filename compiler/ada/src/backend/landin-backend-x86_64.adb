@@ -1418,6 +1418,9 @@ package body Landin.Backend.X86_64 is
             Payload_Field : Natural := 0;
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count;
+         procedure Add_Storage_Offset
+           (At_Offset : Landin.Targets.Byte_Count;
+            Register  : String);
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -1612,6 +1615,28 @@ package body Landin.Backend.X86_64 is
             return Size;
          end Element_Bytes_Of;
 
+         procedure Add_Storage_Offset
+           (At_Offset : Landin.Targets.Byte_Count;
+            Register  : String) is
+         begin
+            if At_Offset = 0 then
+               return;
+            end if;
+
+            if Machine.Fits_Arithmetic_Immediate (At_Offset) then
+               Emit
+                 ("addq $"
+                  & Trimmed (Landin.Targets.Byte_Count'Image (At_Offset))
+                  & ", " & Register);
+            else
+               Emit
+                 ("movabsq $"
+                  & Trimmed (Landin.Targets.Byte_Count'Image (At_Offset))
+                  & ", %rdx");
+               Emit ("addq %rdx, " & Register);
+            end if;
+         end Add_Storage_Offset;
+
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -1631,14 +1656,7 @@ package body Landin.Backend.X86_64 is
                           Field_Offset
                             (Place.Datum, Landin.IR.Part_Position (Field));
                      begin
-                        if At_Offset > 0 then
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Targets.Byte_Count'Image (At_Offset))
-                              & ", %rdx");
-                           Emit ("addq %rdx, " & Register);
-                        end if;
+                        Add_Storage_Offset (At_Offset, Register);
                      end;
                   end if;
                when Landin.IR.Frame_Slot =>
@@ -1669,14 +1687,7 @@ package body Landin.Backend.X86_64 is
                                 (Field => Landin.IR.Part_Position (Field),
                                  Case_Index => 0)]);
                      begin
-                        if At_Offset > 0 then
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Targets.Byte_Count'Image (At_Offset))
-                              & ", %rdx");
-                           Emit ("addq %rdx, " & Register);
-                        end if;
+                        Add_Storage_Offset (At_Offset, Register);
                      end;
                   end if;
             end case;
@@ -1693,14 +1704,7 @@ package body Landin.Backend.X86_64 is
                   At_Offset : constant Landin.Targets.Byte_Count :=
                     Path_Offset (Root_Shape_Of (Place, Field), Nested);
                begin
-                  if At_Offset > 0 then
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (At_Offset))
-                        & ", %rdx");
-                     Emit ("addq %rdx, " & Register);
-                  end if;
+                  Add_Storage_Offset (At_Offset, Register);
                end;
             end if;
 
@@ -1712,14 +1716,7 @@ package body Landin.Backend.X86_64 is
                        Positive (Which), Positive (Payload_Field), Facts,
                        Path_Layouts);
                begin
-                  if At_Offset > 0 then
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (At_Offset))
-                        & ", %rdx");
-                     Emit ("addq %rdx, " & Register);
-                  end if;
+                  Add_Storage_Offset (At_Offset, Register);
                end;
             end if;
          end Storage_Address;
@@ -3826,14 +3823,7 @@ package body Landin.Backend.X86_64 is
                   begin
                      Storage_Address
                        (Source, Field, "%rcx", Nested => Nested);
-                     if At_Offset > 0 then
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (At_Offset))
-                           & ", %rdx");
-                        Emit ("addq %rdx, %rcx");
-                     end if;
+                     Add_Storage_Offset (At_Offset, "%rcx");
                      Carry (Held, "(%rcx)", Value_Operand (Value));
                   end;
 
@@ -3909,14 +3899,7 @@ package body Landin.Backend.X86_64 is
                   begin
                      Storage_Address
                        (Destination, Field, "%rcx", Nested => Nested);
-                     if At_Offset > 0 then
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (At_Offset))
-                           & ", %rdx");
-                        Emit ("addq %rdx, %rcx");
-                     end if;
+                     Add_Storage_Offset (At_Offset, "%rcx");
                      Carry (Held, Value_Operand (Operand (1)), "(%rcx)");
                   end;
 
@@ -4165,14 +4148,7 @@ package body Landin.Backend.X86_64 is
                      Storage_Address
                        (Place, Field, "%rcx", Which, Payload_Field, Nested);
                      Emit ("addq %rax, %rcx");
-                     if Inside > 0 then
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Inside))
-                           & ", %rdx");
-                        Emit ("addq %rdx, %rcx");
-                     end if;
+                     Add_Storage_Offset (Inside, "%rcx");
 
                      if Op = Landin.IR.Load_Element then
                         Carry (Held, "(%rcx)", Value_Operand (Value));
@@ -4391,12 +4367,7 @@ package body Landin.Backend.X86_64 is
                        and then At_Offset > 0
                      then
                         Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (At_Offset))
-                           & ", %rdx");
-                        Emit ("addq %rdx, %rcx");
+                        Add_Storage_Offset (At_Offset, "%rcx");
 
                         if Op = Landin.IR.Load_Field then
                            Carry (Held, "(%rcx)", Value_Operand (Value));
