@@ -303,7 +303,7 @@ The first roadmap's endpoint was feature-complete pre-v1, and it closed
 there. The current `ROADMAP.md` starts where it stopped: a frontend that
 scales and serves an editor, assembly with operands, more hosted targets, the
 RP2040, RP2350, STM32 and ESP32 families, a library split into freestanding
-and hosted halves, concurrency, Windows and measured optimization. A build
+and hosted halves, concurrency and measured optimization. A build
 tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.

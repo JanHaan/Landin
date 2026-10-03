@@ -301,7 +301,7 @@ today is under **Repository state** above.
 
 The current roadmap covers a frontend that scales, assembly with
 operands, a frontend for an editor, more hosted targets, microcontrollers,
-the library split, concurrency, Windows and optimization. A build tool,
+the library split, concurrency and optimization. A build tool,
 package acquisition, release versioning and self-hosting stay outside it, with
 the successor families in `ROADMAP.md` owning each. Do not change any version
 or release designation without explicit user approval, and do not assume

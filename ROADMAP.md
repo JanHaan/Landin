@@ -18,7 +18,9 @@ This roadmap takes the compiler from that slice to one that other people can
 use on the machines they have: a frontend that scales and serves an editor,
 assembly with operands, more hosted targets, the microcontrollers people
 actually buy, a library split along the line the capability model already
-draws, concurrency, Windows, and measured optimization.
+draws, concurrency and measured optimization. Windows is deferred outside the
+active scope; its existing identities below preserve the proposal for a future
+explicit scope decision.
 
 Outside it, and staying outside: a build tool and a package manager, which
 the Companion tool and ecosystem family owns; self-hosting; and every release
@@ -50,8 +52,11 @@ A status is `planned`, `active`, `blocked` or `complete`. `blocked` means the
 item cannot proceed for a reason other than its dependencies, and the reason
 is one nonempty `Blocked because:` line in the item. A complete item's
 dependencies are all complete. `none` is the only empty dependency value.
-Phases are claimed in order; the next item is the first dependency-ready
-planned item in roadmap order, and `README.md` and `handoff.md` name it.
+Phases are claimed in order among work in scope; a phase explicitly deferred
+by a scope decision does not hold up later independent work. Its items stay
+blocked with their reasons, and its gate is inactive until scope is restored.
+The next item is the first dependency-ready planned item in roadmap order,
+and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
 An item is complete when its exit evidence exists: the gate green on the
@@ -836,11 +841,19 @@ oracles.
 - Prototype 5's derived programs run.
 - R14.20's retained-profile stack-backing and capacity evidence is recorded.
 
-## R15 — Windows
+## R15 — Windows (deferred)
+
+Windows is not in the current implementation scope. These identities and
+original proposals remain for history and possible reconsideration, not as
+current implementation commitments. Only an explicit scope decision can
+reactivate them. In particular, they do not block R16 or require a Windows
+event-driven backend. R14.30 retains epoll on Linux and kqueue on
+Darwin/FreeBSD.
 
 ### R15.10 — Windows x86-64
 
-Status: planned
+Status: blocked
+Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
 Depends on: R11.10
 
 The Win64 calling convention, COFF objects, the unwind tables Windows requires
@@ -851,7 +864,8 @@ Exit evidence: the corpus on GitHub's Windows runners in the gate.
 
 ### R15.20 — Windows debugging
 
-Status: planned
+Status: blocked
+Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
 Depends on: R15.10
 
 CodeView debug information in the objects, and PDB files from the linker
@@ -861,7 +875,8 @@ Exit evidence: scripted debugger sessions on Windows in the gate.
 
 ### R15.30 — Windows arm64
 
-Status: planned
+Status: blocked
+Blocked because: Windows is outside the approved scope until an explicit decision reopens it.
 Depends on: R15.20, R11.20
 
 The same on arm64, which reuses the arm64 backend with Windows' variant of
@@ -872,7 +887,9 @@ runners in the gate.
 
 ### R15 gate
 
-- Windows runs the corpus and its debugger sessions on both architectures.
+Inactive while Windows is deferred. If an explicit decision restores this
+phase, its original proposed gate is corpus and debugger sessions on both
+architectures; future scope and exit evidence must be reviewed at that time.
 
 ## R16 — Optimization
 
