@@ -413,7 +413,7 @@ package body Landin.Driver is
                      elsif Check then
                         Not_Formatted (Answer);
                      else
-                        Host.Write_File
+                        Host.Replace_File
                           (Path, Unbounded.To_String (Answer.Text), Written);
                         if Written /= Landin.Platform.Write_Ok then
                            Refuse (Code_Unwritable, "cannot write: " & Path);

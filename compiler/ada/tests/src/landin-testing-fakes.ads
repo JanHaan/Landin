@@ -82,6 +82,12 @@ package Landin.Testing.Fakes is
       Content : String;
       Status  : out Landin.Platform.Write_Status);
 
+   overriding procedure Replace_File
+     (Host    : Fake_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Landin.Platform.Write_Status);
+
    overriding procedure List_Directory
      (Host    : Fake_Filesystem;
       Path    : String;

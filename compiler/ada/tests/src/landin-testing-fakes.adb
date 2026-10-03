@@ -235,6 +235,20 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Items.Append (Entry_Value);
    end Write_File;
 
+   overriding procedure Replace_File
+     (Host    : Fake_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Landin.Platform.Write_Status)
+   is
+   begin
+      if not Host.Exists (Path) then
+         Status := Landin.Platform.Not_Writable;
+      else
+         Host.Write_File (Path, Content, Status);
+      end if;
+   end Replace_File;
+
    procedure Refuse_Removals (Host : in out Fake_Filesystem) is
    begin
       Host.Writes.Data.Refuses_Removal := True;

@@ -14,6 +14,7 @@ package body Landin.Tests.Driver_Suite is
    package Unbounded renames Ada.Strings.Unbounded;
 
    use type Landin.Platform.Termination;
+   use type Landin.Platform.Read_Status;
 
    function Contains (Text : String; Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
@@ -4072,6 +4073,16 @@ package body Landin.Tests.Driver_Suite is
                      and then Contains (Report, "not readable: hidden.ldn")
                      and then Contains (Report, "not found: absent.ldn"),
                "unreadable, missing and unwritable sources are reported");
+            declare
+               Kept : Unbounded.Unbounded_String;
+               Read : Landin.Platform.Read_Status;
+            begin
+               Host.Read_File ("loose.ldn", Kept, Read);
+               Landin.Testing.Check
+                 (Item, Read = Landin.Platform.Read_Ok
+                        and then Unbounded.To_String (Kept) = Loose,
+                  "a refused formatter replacement keeps source bytes");
+            end;
          end;
          declare
             procedure Refused (Given : Landin.Platform.Path_List;

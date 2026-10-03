@@ -111,6 +111,7 @@ jobs:
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       #  Every one-file corpus program and every reproducer, mutated once
@@ -150,6 +151,7 @@ jobs:
           refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       - name: Object quality

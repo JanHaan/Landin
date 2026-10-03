@@ -217,6 +217,38 @@ package body Landin.Platform.Native is
          Status := Not_Writable;
    end Write_File;
 
+   overriding procedure Replace_File
+     (Host    : Native_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status)
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Replace_Existing
+        (Name : Interfaces.C.char_array;
+         Data : System.Address;
+         Size : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_replace_existing_file";
+      Data : constant System.Address :=
+        (if Content'Length = 0 then System.Null_Address
+         else Content (Content'First)'Address);
+   begin
+      if Path = "" or else
+        (for some Byte of Path => Byte = Character'Val (0))
+      then
+         Status := Not_Writable;
+      elsif Replace_Existing
+        (Interfaces.C.To_C (Path), Data,
+         Interfaces.C.size_t (Content'Length)) = 0
+      then
+         Status := Write_Ok;
+      else
+         Status := Not_Writable;
+      end if;
+   end Replace_File;
+
    overriding procedure Remove_File
      (Host   : Native_Filesystem;
       Path   : String;

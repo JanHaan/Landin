@@ -38,6 +38,12 @@ package Landin.Platform.Native is
       Content : String;
       Status  : out Write_Status);
 
+   overriding procedure Replace_File
+     (Host    : Native_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status);
+
    overriding procedure Remove_File
      (Host   : Native_Filesystem;
       Path   : String;

@@ -69,6 +69,15 @@ package Landin.Platform is
       Content : String;
       Status  : out Write_Status) is abstract;
 
+   --  Replace an existing ordinary file only after all new bytes have been
+   --  written.  On failure its original bytes remain.  The native adapter
+   --  follows a symlink to its target and refuses hard-linked targets.
+   procedure Replace_File
+     (Host    : Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status) is abstract;
+
    --  Remove one file, never a directory. Missing files already meet the
    --  absence requirement. Establish fresh output without reading old bytes.
    procedure Remove_File

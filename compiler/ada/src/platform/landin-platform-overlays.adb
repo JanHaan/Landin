@@ -85,6 +85,17 @@ package body Landin.Platform.Overlays is
       Status := Not_Writable;
    end Write_File;
 
+   overriding procedure Replace_File
+     (Host    : Overlay;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status)
+   is
+      pragma Unreferenced (Host, Path, Content);
+   begin
+      Status := Not_Writable;
+   end Replace_File;
+
    overriding procedure Remove_File
      (Host   : Overlay;
       Path   : String;
