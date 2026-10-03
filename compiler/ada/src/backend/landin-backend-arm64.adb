@@ -586,20 +586,25 @@ package body Landin.Backend.Arm64 is
       end Frame_Address;
 
       procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
-         Loop_Label : constant String := Fresh;
       begin
          if Bytes = 0 then
             return;
          end if;
          --  Touch each intervening page without using the reserved x18.
-         Immediate ("x15", Pattern (Bytes / 4096));
-         Emit ("cbz x15, " & Loop_Label & "_tail");
-         Put (Loop_Label & ":");
-         Emit ("sub sp, sp, #1, lsl #12");
-         Emit ("str xzr, [sp]");
-         Emit ("subs x15, x15, #1");
-         Emit ("b.ne " & Loop_Label);
-         Put (Loop_Label & "_tail:");
+         if Bytes >= 4096 then
+            declare
+               Loop_Label : constant String := Fresh;
+            begin
+               Immediate ("x15", Pattern (Bytes / 4096));
+               Emit ("cbz x15, " & Loop_Label & "_tail");
+               Put (Loop_Label & ":");
+               Emit ("sub sp, sp, #1, lsl #12");
+               Emit ("str xzr, [sp]");
+               Emit ("subs x15, x15, #1");
+               Emit ("b.ne " & Loop_Label);
+               Put (Loop_Label & "_tail:");
+            end;
+         end if;
          if Bytes mod 4096 > 0 then
             Emit ("sub sp, sp, #"
                   & Trimmed (Landin.Targets.Byte_Count'Image
