@@ -1,4 +1,6 @@
 with Ada.Containers.Vectors;
+with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Strings.Hash;
 with Landin.Provenance;
 with Landin.Layouts;
 with Landin.IR.Shape_Measurement;
@@ -343,14 +345,43 @@ package body Landin.Backend.Arm64 is
         Landin.Targets.Capabilities.Object_Format_Of (Facts);
       System : constant Hosted_ABI.Hosted_System :=
         Landin.Targets.Capabilities.Hosted_System_Of (Facts);
-      Out_Text : Unbounded.Unbounded_String;
+      type Line_Entry is record
+         Text : Unbounded.Unbounded_String;
+         Offset : Long_Long_Integer;
+         Segment : Natural;
+      end record;
+      package Line_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Line_Entry);
+      Lines : Line_Vectors.Vector;
+      type Label_Position is record
+         Offset : Long_Long_Integer;
+         Segment : Natural;
+      end record;
+      package Label_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+        (Key_Type => String, Element_Type => Label_Position,
+         Hash => Ada.Strings.Hash, Equivalent_Keys => "=");
+      Labels : Label_Maps.Map;
+      type Branch_Entry is record
+         First : Positive;
+         Target : Unbounded.Unbounded_String;
+         Direct : Unbounded.Unbounded_String;
+         Reach : Long_Long_Integer;
+      end record;
+      package Branch_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Branch_Entry);
+      Branches : Branch_Vectors.Vector;
+      Preamble_Text : Unbounded.Unbounded_String;
+      Preamble_After : Natural := 0;
+      Debug_Text : Unbounded.Unbounded_String;
+      Offset : Long_Long_Integer := 0;
+      Segment : Natural := 0;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
 
-      procedure Put (Line : String);
+      procedure Put (Line : String; Known : Boolean := False);
       procedure Emit (Instruction : String);
       function Fresh return String;
       procedure Immediate (Register : String; Value : Pattern);
@@ -365,9 +396,37 @@ package body Landin.Backend.Arm64 is
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
 
-      procedure Put (Line : String) is
+      procedure Put (Line : String; Known : Boolean := False) is
+         Instruction : constant String := Trimmed (Line);
       begin
-         Unbounded.Append (Out_Text, Line & LF);
+         Lines.Append (Line_Entry'
+           (Text => Unbounded.To_Unbounded_String (Line),
+            Offset => Offset, Segment => Segment));
+         if Line'Length > 0 and then Line (Line'Last) = ':' then
+            Labels.Include
+              (Line (Line'First .. Line'Last - 1),
+               (Offset => Offset, Segment => Segment));
+         elsif Instruction = ".p2align 2" then
+            --  Alignment may change after an earlier branch is shortened.
+            Offset := Offset + 3;
+         elsif Known and then Instruction'Length > 0
+           and then Instruction (Instruction'First) /= '.'
+         then
+            Offset := Offset + 4;
+         elsif Instruction'Length = 0
+           or else Ada.Strings.Fixed.Index (Instruction, ".cfi_") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".loc ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".file ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".globl ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".arch ") = 1
+         then
+            null;
+         else
+            --  An opaque instruction, a section change, or a directive
+            --  whose size is not bounded separates branch-range regions.
+            Segment := Segment + 1;
+            Offset := 0;
+         end if;
       end Put;
 
       --  A platform directive, which on some object formats is nothing.
@@ -407,7 +466,7 @@ package body Landin.Backend.Arm64 is
             elsif Mnemonic = "tbnz" then "tbz" else "");
       begin
          if Inverse = "" then
-            Put (Character'Val (9) & Instruction);
+            Put (Character'Val (9) & Instruction, Known => True);
          else
             --  Conditional branches have shorter reach than B.  Keep their
             --  immediate target adjacent even in expanded cleanup routines.
@@ -416,10 +475,20 @@ package body Landin.Backend.Arm64 is
                Last_Space : constant Natural := Ada.Strings.Fixed.Index
                  (Instruction, " ", Ada.Strings.Backward);
             begin
+               Branches.Append
+                 (Branch_Entry'
+                   (First => Positive (Natural (Lines.Length) + 1),
+                   Target => Unbounded.To_Unbounded_String
+                     (Instruction (Last_Space + 1 .. Instruction'Last)),
+                   Direct => Unbounded.To_Unbounded_String
+                     (Character'Val (9) & Instruction),
+                   Reach => (if Mnemonic in "tbz" | "tbnz"
+                             then 32 * 1024 - 4 else 1024 * 1024 - 4)));
                Put (Character'Val (9) & Inverse
-                 & Instruction (Space .. Last_Space) & Skip);
+                 & Instruction (Space .. Last_Space) & Skip, Known => True);
                Put (Character'Val (9) & "b "
-                 & Instruction (Last_Space + 1 .. Instruction'Last));
+                 & Instruction (Last_Space + 1 .. Instruction'Last),
+                 Known => True);
                Put (Skip & ":");
             end;
          end if;
@@ -4603,9 +4672,9 @@ package body Landin.Backend.Arm64 is
       end if;
       Emit (".text");
       if Debug /= null then
-         Unbounded.Append (Out_Text, Dwarf.Preamble
-           (Debug.all, Local_Prefix,
-            Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
+         Preamble_After := Natural (Lines.Length);
+         Unbounded.Append (Preamble_Text, Dwarf.Preamble
+           (Debug.all, Local_Prefix, Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
@@ -4694,7 +4763,7 @@ package body Landin.Backend.Arm64 is
          Runtime;
       end if;
       if Debug /= null then
-         Unbounded.Append (Out_Text,
+         Unbounded.Append (Debug_Text,
            (case Format is
                when Landin.Targets.Capabilities.Mach_O =>
                   Mach_O_Debug_Sections
@@ -4706,7 +4775,57 @@ package body Landin.Backend.Arm64 is
                      Local_Prefix, Symbol'Access)));
       end if;
       Emit (Platform.Trailer (Format));
-      Assembly := Out_Text;
+      --  The first pass retains every long form.  Its byte counts are upper
+      --  bounds, including the largest possible padding at each alignment.
+      --  Removing long forms cannot increase those bounds.  A segment break
+      --  leaves the original form intact when inline assembly or a directive
+      --  makes the distance unknown.
+      declare
+         Out_Text : Unbounded.Unbounded_String;
+         Next_Branch : Positive := 1;
+         Index : Positive := 1;
+      begin
+         while Index <= Natural (Lines.Length) loop
+            if Next_Branch <= Natural (Branches.Length)
+              and then Branches (Next_Branch).First = Index
+            then
+               declare
+                  Branch : constant Branch_Entry := Branches (Next_Branch);
+                  Name : constant String := Unbounded.To_String
+                    (Branch.Target);
+               begin
+                  if Labels.Contains (Name)
+                    and then Labels.Element (Name).Segment =
+                      Lines (Index).Segment
+                    and then abs (Labels.Element (Name).Offset -
+                                  Lines (Index).Offset) <= Branch.Reach
+                  then
+                     Unbounded.Append
+                       (Out_Text, Unbounded.To_String (Branch.Direct) & LF);
+                  else
+                     for Part in Index .. Index + 2 loop
+                        Unbounded.Append
+                          (Out_Text,
+                           Unbounded.To_String (Lines (Part).Text) & LF);
+                     end loop;
+                  end if;
+                  Index := Index + 3;
+                  Next_Branch := Next_Branch + 1;
+               end;
+            else
+               if Index = Natural (Lines.Length) then
+                  Unbounded.Append (Out_Text, Debug_Text);
+               end if;
+               Unbounded.Append
+                 (Out_Text, Unbounded.To_String (Lines (Index).Text) & LF);
+               if Index = Preamble_After then
+                  Unbounded.Append (Out_Text, Preamble_Text);
+               end if;
+               Index := Index + 1;
+            end if;
+         end loop;
+         Assembly := Out_Text;
+      end;
    end Emit;
 
 end Landin.Backend.Arm64;
