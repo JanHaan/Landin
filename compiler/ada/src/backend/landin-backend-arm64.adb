@@ -390,6 +390,9 @@ package body Landin.Backend.Arm64 is
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String);
+      procedure Frame_Memory
+        (Store : Boolean; Size : Held_Size; Register : String;
+         Offset : Landin.Targets.Byte_Count);
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x15");
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
@@ -546,6 +549,31 @@ package body Landin.Backend.Arm64 is
                     when others => "")
                & " " & Reg & ", [" & Base & "]");
       end Memory;
+
+      procedure Frame_Memory
+        (Store : Boolean; Size : Held_Size; Register : String;
+         Offset : Landin.Targets.Byte_Count)
+      is
+         Reg : constant String :=
+           (if Size = Landin.Targets.Byte_8 then Register
+            else "w" & Register (Register'First + 1 .. Register'Last));
+      begin
+         if Offset <= 256 then
+            --  The signed unscaled byte offset reaches x29 - 256 without
+            --  changing the frame pointer or requiring a scratch register.
+            Emit ((if Store then "stur" else "ldur")
+                  & (case Size is
+                       when Landin.Targets.Byte_1 => "b",
+                       when Landin.Targets.Byte_2 => "h",
+                       when others => "")
+                  & " " & Reg & ", [x29, #"
+                  & Trimmed (Integer'Image (-Integer (Offset)))
+                  & "]");
+         else
+            Frame_Address (Offset);
+            Memory (Store, Size, Register, "x15");
+         end if;
+      end Frame_Memory;
 
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x15") is
@@ -1134,8 +1162,8 @@ package body Landin.Backend.Arm64 is
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9") is
          begin
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (False, Size_Of_Value (Value), Register, "x15");
+            Frame_Memory (False, Size_Of_Value (Value), Register,
+                          Value_Offset (Layout, Value));
          end Load_Value;
 
          procedure Store_Value
@@ -1169,26 +1197,24 @@ package body Landin.Backend.Arm64 is
                   Put (Done & ":");
                end;
             end if;
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (True, Size_Of_Value (Value), Register, "x15");
+            Frame_Memory (True, Size_Of_Value (Value), Register,
+                          Value_Offset (Layout, Value));
          end Store_Value;
 
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (False, Size_Of
+            Frame_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "x15");
+              Register, Slot_Offset (Layout, Slot));
          end Load_Slot;
 
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (True, Size_Of
+            Frame_Memory (True, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "x15");
+              Register, Slot_Offset (Layout, Slot));
          end Store_Slot;
 
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind)
