@@ -121,10 +121,12 @@ A level above the default is not asked of the host on a cross run, since
 the emulator offers every level its lane has.
 The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
-acceptance ran the complete suite in both modes. Nothing runs either now:
-`.github/workflows/gate.yml` runs the complete suite in debug mode on Linux,
-and [`ROADMAP.md`](../../ROADMAP.md) schedules the fuller gate. See
-[`docs/process.md`](../../docs/process.md).
+acceptance ran the complete suite in both modes. Those exact-revision
+acceptance runs are retired. The current `.github/workflows/gate.yml` has
+separate Linux `compiler` and `release` jobs; each runs unfiltered
+`./scripts/test.sh`, so the complete suite runs in both debug and release
+modes. The gate is a safety net, not an exact-revision acceptance verdict.
+See [`docs/process.md`](../../docs/process.md).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
 opaque identity, no inherited operators or conformances, ordinary identifiers,
