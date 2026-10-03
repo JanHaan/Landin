@@ -349,7 +349,11 @@ package body Landin.Diagnostics.Explanations is
                & "ot fail. A public or first-class signature writes a conc"
                & "rete error set instead of `! ...`. Add the atom to the e"
                & "rror set, handle or propagate the call, or remove the ha"
-               & "ndling from an infallible call.",
+               & "ndling from an infallible call. The implicit provider ca"
+               & "lls in `try for` also propagate their declared errors: t"
+               & "he enclosing routine must declare or infer those atoms, "
+               & "and its caller may recover them through ordinary call `e"
+               & "lse`.",
             when Catalogue.Assembly_Block_Contract =>
                "An assembly block, operand or template breaks [1630]'s b"
                & "lock contract or [1990]'s register rules. Only `assemble"
@@ -541,7 +545,20 @@ package body Landin.Diagnostics.Explanations is
                & "ce selects one exact iterable conformance with one `Cur`"
                & " and `Item` pair (D180). An ordinary pointer is not a `c"
                & "string` (D184). Traverse an integer range or a traversab"
-               & "le value, or declare one iterable conformance.",
+               & "le value, or declare one iterable conformance. Each prov"
+               & "ider takes a read-only, non-escaping `ptr T` to the reta"
+               & "ined source, with the exact cursor, item, permission and"
+               & " origin contract at [1320]; migrate a by-value source pa"
+               & "rameter to that pointer contract."
+               & LF
+               & LF
+               & "If the source supplies `fallible_iterable`, use `try for"
+               & "` and declare or infer its provider errors in the enclos"
+               & "ing routine. That conformance has one exact shared atom "
+               & "error set across all four providers. Ordinary `for` only"
+               & " selects infallible `iterable`; `try for` prefers `falli"
+               & "ble_iterable` when both exist and may use ordinary `iter"
+               & "able` when there is no fallible conformance.",
             when Catalogue.No_Toolchain =>
                "No assembler and linker for the selected target were fou"
                & "nd on this host [1550]. The note names the program looke"
