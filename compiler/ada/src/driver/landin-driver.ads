@@ -112,8 +112,11 @@ package Landin.Driver is
    --  derived from an input file name: a compilation is one module made of
    --  any number of files [1480], so there is no one input to name it
    --  after.
-   --  Written only when emitted code injects caller coordinates. This is
-   --  an off-target artifact and is never an assembler or linker input.
+
+   --  Path of the off-target source map beside an emitted output.  Written
+   --  when source debugging is enabled (`--debug=full` or `--debug=lines`),
+   --  `--panic-map` is requested, or emitted code injects caller
+   --  coordinates.  Never an assembler or linker input.
    function Source_Map_Beside (Output : String) return String
      is (Output & ".sources.json");
 
