@@ -91,6 +91,9 @@ package body Landin.Stages.Configuration is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String;
          Note : String := "D202: configuration expressions use only closed"
            & " fixed forms; no user routine runs");
+      procedure Report_Configuration_Rule
+        (Item : Bad.Failure; Of_Tree : Syn.Tree; Node : Syn.Node_Id;
+         Message : String; Note : String);
       procedure Report_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String;
          Related_Node : Syn.Node_Id := Syn.No_Node;
@@ -176,6 +179,19 @@ package body Landin.Stages.Configuration is
             Note    => Note,
             Into    => Found);
       end Report_Not_Fixed;
+
+      procedure Report_Configuration_Rule
+        (Item : Bad.Failure; Of_Tree : Syn.Tree; Node : Syn.Node_Id;
+         Message : String; Note : String) is
+      begin
+         Bad.Report
+           (Item    => Item,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => Message,
+            Note    => Note,
+            Into    => Found);
+      end Report_Configuration_Rule;
 
       procedure Report_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String;
@@ -728,8 +744,8 @@ package body Landin.Stages.Configuration is
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Option_Declaration then
             if Conditional then
-               Report_Not_Fixed
-                 (Of_Tree, Node,
+               Report_Configuration_Rule
+                 (Bad.Invalid_Option_Declaration, Of_Tree, Node,
                   "an option must be declared outside every fixed arm",
                   Note => "[1530]/D202: all options must be declared"
                     & " unconditionally before arm selection");
@@ -761,8 +777,9 @@ package body Landin.Stages.Configuration is
               in "x86_64" | "arm64" | "cortex_m0" | "synthetic_32"
                  | "little" | "big" | "debug" | "release"
             then
-               Report_Not_Fixed
-                 (Of_Tree, Node, "this option name is compiler-owned",
+               Report_Configuration_Rule
+                 (Bad.Invalid_Option_Declaration, Of_Tree, Node,
+                  "this option name is compiler-owned",
                   Note => "D202: configuration atom names cannot be reused"
                     & " by options");
             else
@@ -853,10 +870,11 @@ package body Landin.Stages.Configuration is
          Setting.State := Evaluating;
          Options.Replace_Element (Index, Setting);
          if Kind not in Ty.Bool | Ty.Integer_Name then
-            Report_Not_Fixed (Of_Tree.all, Setting.Node,
-                              "an option needs bool or an integer scalar",
-                              Note => "[1530]/D202: only bool and enabled"
-                                & " integer scalar names are option types");
+            Report_Configuration_Rule
+              (Bad.Invalid_Option_Declaration, Of_Tree.all, Setting.Node,
+               "an option needs bool or an integer scalar",
+               Note => "[1530]/D202: only bool and enabled"
+                 & " integer scalar names are option types");
          elsif Validate (Of_Tree.all, Syn.Value_Of (Of_Tree.all, Setting.Node))
          then
             Value := Evaluate
@@ -956,10 +974,11 @@ package body Landin.Stages.Configuration is
                Note => Landin.Configuration.Tool_Advice (Base, Member),
                Into => Found);
          elsif Syn.Argument_Count (Of_Tree, Call) /= 1 then
-            Report_Not_Fixed (Of_Tree, Node,
-                             "this tool directive needs one fixed argument",
-                             Note => "D202: " & Base & "." & Member
-                               & " takes exactly one positional argument");
+            Report_Configuration_Rule
+              (Bad.Invalid_Tool_Directive, Of_Tree, Node,
+               "this tool directive needs one fixed argument",
+               Note => "D202: " & Base & "." & Member
+                 & " takes exactly one positional argument");
          else
             Argument := Syn.Nth_Argument (Of_Tree, Call, 1);
             if Base = "compiler" then
@@ -986,10 +1005,11 @@ package body Landin.Stages.Configuration is
                   end if;
                end if;
             elsif Syn.Kind (Of_Tree, Argument) /= Syn.Text_Literal then
-               Report_Not_Fixed (Of_Tree, Argument,
-                                 "linker.library needs a fixed text literal",
-                                 Note => "[1590]/D202: linker.library takes"
-                                   & " one quoted library name");
+               Report_Configuration_Rule
+                 (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
+                  "linker.library needs a fixed text literal",
+                  Note => "[1590]/D202: linker.library takes"
+                    & " one quoted library name");
             else
                declare
                   Text : constant String := Landin.Source.Slice
@@ -1014,11 +1034,12 @@ package body Landin.Stages.Configuration is
                      Has_Name := Has_Name or else Bytes (Index) /= '.';
                   end loop;
                   if not Valid or else not Has_Name then
-                     Report_Not_Fixed (Of_Tree, Argument,
-                       "this is not a portable static library name",
-                       Note => "[1590]/D202: use ASCII letters, digits, _, -"
-                         & " and .; the name must be nonempty, must not start"
-                         & " with -, and must not consist only of dots");
+                     Report_Configuration_Rule
+                       (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
+                        "this is not a portable static library name",
+                        Note => "[1590]/D202: use ASCII letters, digits, _, -"
+                          & " and .; the name must be nonempty, must not start"
+                          & " with -, and must not consist only of dots");
                   else
                      Landin.Configuration.Add_Library
                        (Activity.all, Bytes (1 .. Length));

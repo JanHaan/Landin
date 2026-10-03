@@ -40,7 +40,7 @@ L0301  Live     [1890]: a value's type is not the one its context or operation r
 L0302  Live     [1910]: a name read on a path that does not assign it
 L0303  Live     [1900]: a place that may not be written
 L0304  Live     [1920]: a name used in a way the kernel does not enable
-L0305  Live     [1940]/D136: a value required before runtime that the compiler's closed fold cannot produce
+L0305  Live     [1940]/D136/D202: a value required before runtime that the compiler's closed fold cannot produce
 L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
 L0324  Live     [1510]: a compile-time assertion is false
 L0307  Live     [1795]: a chain of aliases that reaches no type
@@ -61,6 +61,8 @@ L0321  Live     [0210] [0220] [0230]: a float has a complete fraction and expone
 L0322  Live     [0250] [0270]: a character literal spells exactly one Unicode scalar value
 L0323  Live     [0280] [1750]: raw content is UTF-8 and every nonblank line has the closing delimiter's indentation
 L0325  Live     D247: an implementation limit on how many declarations a routine or fields a struct holds
+L0390  Live     [1530]/D202: an option must be unconditional, have an available name and use a supported scalar type
+L0391  Live     [1510]/[1590]/D202: a tool directive must have the required argument shape and portable library name
 L0326  Live     D251: a local declared `mut` that nothing writes
 L0327  Live     [1920]/D138: call arguments match the parameters and the callee's static formals
 L0328  Live     [0540]: zeroed or an implicit initializer has no complete zero image

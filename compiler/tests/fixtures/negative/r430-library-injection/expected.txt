@@ -1,4 +1,4 @@
-error[L0305]: this is not a portable static library name
+error[L0391]: this is not a portable static library name
   --> ../tests/fixtures/negative/r430-library-injection/main.ldn:1:16
   |
 1 | linker.library("-Wl,--whole-archive")

@@ -1,4 +1,4 @@
-error[L0305]: an option must be declared outside every fixed arm
+error[L0390]: an option must be declared outside every fixed arm
   --> ../tests/fixtures/negative/r430-option-conditional/main.ldn:2:5
   |
 2 |     option count: u32 = 1

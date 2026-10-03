@@ -202,9 +202,11 @@ package body Landin.Diagnostics.Explanations is
                & "nding.",
             when Catalogue.Not_Known_At_Compile_Time =>
                "A value required before the program runs, which the comp"
-               & "iler's closed fold cannot produce [1940] (D136): a modul"
-               & "e value or an array bound that names a runtime value, ca"
-               & "lls a function, or depends on itself.",
+               & "iler's closed fold cannot produce [1940] (D136, D202). A"
+               & " module value, array bound or fixed configuration expres"
+               & "sion can depend on a runtime value or call, contain an u"
+               & "nknown fixed name or form, or depend on itself. Change t"
+               & "he expression to one the closed fold can evaluate.",
             when Catalogue.Impossible_Operand =>
                "An operand the operation cannot take, where the compiler"
                & " knows it [1950]: a divisor of zero, a shift by a negati"
@@ -273,6 +275,20 @@ package body Landin.Diagnostics.Explanations is
                "An implementation limit, not a rule of the language: a r"
                & "outine declares, or a struct holds, more than the compil"
                & "er admits (D247). Split it.",
+            when Catalogue.Invalid_Option_Declaration =>
+               "An `option` declaration breaks [1530]/D202: it is inside"
+               & " a fixed arm, reuses a compiler-owned configuration atom"
+               & " name, or declares a type other than `bool` or an enable"
+               & "d integer scalar. Move the option outside every fixed ar"
+               & "m, choose an available name, or change its type, respect"
+               & "ively. A fixed default value does not make any of those "
+               & "declarations valid.",
+            when Catalogue.Invalid_Tool_Directive =>
+               "A tool directive breaks [1510]/[1590]/D202: it has the w"
+               & "rong number of arguments, `linker.library` does not take"
+               & " a quoted text literal, or the library name contains a f"
+               & "orbidden character or shape. Supply the required argumen"
+               & "t and a portable static library name.",
             when Catalogue.Mutable_Never_Written =>
                "A warning, and the program is accepted: a local binding "
                & "is declared `mut` and nothing writes it, steps it, passe"
@@ -838,6 +854,12 @@ package body Landin.Diagnostics.Explanations is
                & LF,
             when Catalogue.Size_Limit_Exceeded =>
                "",
+            when Catalogue.Invalid_Option_Declaration =>
+               "option debug: u32 = 1"
+               & LF,
+            when Catalogue.Invalid_Tool_Directive =>
+               "linker.library(""-bad"")"
+               & LF,
             when Catalogue.Mutable_Never_Written =>
                "count_up: () -> (total: u32) ="
                & LF

@@ -371,8 +371,10 @@ wide: u128 = 1
 ### L0305
 
 A value required before the program runs, which the compiler's closed fold
-cannot produce [1940] (D136): a module value or an array bound that names a
-runtime value, calls a function, or depends on itself.
+cannot produce [1940] (D136, D202). A module value, array bound or fixed
+configuration expression can depend on a runtime value or call, contain an
+unknown fixed name or form, or depend on itself. Change the expression to
+one the closed fold can evaluate.
 
 ```landin
 a: i32 = b + 1
@@ -971,6 +973,29 @@ public main: () -> (code: i32) =
         _ = 0
     end for
 end main
+```
+
+### L0390
+
+An `option` declaration breaks [1530]/D202: it is inside a fixed arm, reuses
+a compiler-owned configuration atom name, or declares a type other than `bool`
+or an enabled integer scalar. Move the option outside every fixed arm, choose
+an available name, or change its type, respectively. A fixed default value
+does not make any of those declarations valid.
+
+```landin
+option debug: u32 = 1
+```
+
+### L0391
+
+A tool directive breaks [1510]/[1590]/D202: it has the wrong number of
+arguments, `linker.library` does not take a quoted text literal, or the
+library name contains a forbidden character or shape. Supply the required
+argument and a portable static library name.
+
+```landin
+linker.library("-bad")
 ```
 
 ## The backend and its toolchain

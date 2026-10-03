@@ -1,7 +1,7 @@
 class: negative
 summary: D202 options cannot reuse compiler-owned atom names
 program: main.ldn
-codes: L0305
+codes: L0390
 constructs: 1530, 1560
 targets: linux-x86-64, linux-arm64, synthetic-32
 expect: expected.txt

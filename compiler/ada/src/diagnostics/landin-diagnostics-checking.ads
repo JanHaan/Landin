@@ -86,6 +86,8 @@ package Landin.Diagnostics.Checking is
       Unsatisfied_Constraint,
       Compiler_Conformance_Reserved,
       Size_Limit_Exceeded,
+      Invalid_Option_Declaration,
+      Invalid_Tool_Directive,
       Mutable_Never_Written,
       Call_Argument_Match,
       Zero_Image_Unavailable,
@@ -157,6 +159,10 @@ package Landin.Diagnostics.Checking is
                Catalogue.Compiler_Conformance_Reserved,
             when Size_Limit_Exceeded =>
                Catalogue.Size_Limit_Exceeded,
+            when Invalid_Option_Declaration =>
+               Catalogue.Invalid_Option_Declaration,
+            when Invalid_Tool_Directive =>
+               Catalogue.Invalid_Tool_Directive,
             when Mutable_Never_Written =>
                Catalogue.Mutable_Never_Written,
             when Call_Argument_Match =>

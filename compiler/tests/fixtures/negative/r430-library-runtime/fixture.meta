@@ -1,7 +1,7 @@
 class: negative
 summary: A library directive cannot execute a user routine
 program: main.ldn
-codes: L0305
+codes: L0391
 constructs: 1540, 1560, 1590
 targets: linux-x86-64, linux-arm64, synthetic-32
 expect: expected.txt

@@ -154,6 +154,8 @@ package Landin.Diagnostics.Catalogue is
       --  checker's because counting what a routine declares needs the
       --  resolver's scopes.
       Size_Limit_Exceeded,
+      Invalid_Option_Declaration,
+      Invalid_Tool_Directive,
       --  The first warning: a judgement the language does not make and the
       --  compiler does, with the repair that settles it (D251).  It is the
       --  checker's because the checker is what knows whether `mut` was
@@ -264,6 +266,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Character_Literal    => "L0322",
             when Malformed_Raw_Literal          => "L0323",
             when Size_Limit_Exceeded            => "L0325",
+            when Invalid_Option_Declaration     => "L0390",
+            when Invalid_Tool_Directive         => "L0391",
             when Mutable_Never_Written          => "L0326",
             when Call_Argument_Match          => "L0327",
             when Zero_Image_Unavailable         => "L0328",
@@ -317,9 +321,8 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => Error,
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
-               .. Size_Limit_Exceeded => Error,
-            when Call_Argument_Match .. Traversal_Source
-               => Error,
+               .. Invalid_Tool_Directive => Error,
+            when Call_Argument_Match .. Traversal_Source => Error,
             --  A warning never refuses a program; see Fixes below.
             when Mutable_Never_Written => Warning,
             when No_Toolchain .. Panic_Contract_Invalid => Error);
@@ -443,7 +446,7 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       =>
                "[1920]: a name used in a way the kernel does not enable",
             when Not_Known_At_Compile_Time =>
-               "[1940]/D136: a value required before runtime that the"
+               "[1940]/D136/D202: a value required before runtime that the"
                & " compiler's closed fold cannot produce",
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
@@ -493,6 +496,12 @@ package Landin.Diagnostics.Catalogue is
             when Size_Limit_Exceeded =>
                "D247: an implementation limit on how many declarations a"
                & " routine or fields a struct holds",
+            when Invalid_Option_Declaration =>
+               "[1530]/D202: an option must be unconditional, have an"
+               & " available name and use a supported scalar type",
+            when Invalid_Tool_Directive =>
+               "[1510]/[1590]/D202: a tool directive must have the"
+               & " required argument shape and portable library name",
             when Mutable_Never_Written =>
                "D251: a local declared `mut` that nothing writes",
             when Call_Argument_Match =>
@@ -781,6 +790,7 @@ package Landin.Diagnostics.Catalogue is
                | Malformed_Character_Literal => 1,
             when Malformed_Raw_Literal => 1,
             when Size_Limit_Exceeded   => 1,
+            when Invalid_Option_Declaration | Invalid_Tool_Directive => 1,
             --  D251: the judgement is the compiler's and not the language's,
             --  and the note says so.
             when Mutable_Never_Written => 1,
