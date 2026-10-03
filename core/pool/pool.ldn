@@ -122,6 +122,59 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
              rejected_frees: 0)
 end over
 
+--  Keep indexed heap access in shared routines. Each access still checks its
+--  slice bound, while freestanding callers do not duplicate the aggregate
+--  address calculation at every step of both heap operations.
+free_index_at: (state: ptr fixed_pool, index: usize) -> (value: usize) =
+    value = state.val.bookkeeping[index].free_index
+end free_index_at
+
+store_free_index: (state: ptr mut fixed_pool, index: usize,
+                   value: usize) -> none =
+    state.val.bookkeeping[index].free_index = value
+end store_free_index
+
+take_free_index: (inout state: fixed_pool) -> (index: usize) =
+    index = free_index_at(addr state, 0)
+    dec state.free_count
+    if state.free_count > 0 then
+        last: usize = free_index_at(addr state, state.free_count)
+        mut position: usize = 0
+        while position < state.free_count / 2 do
+            child: usize = position * 2 + 1
+            mut smallest: usize = child
+            if child + 1 < state.free_count
+              and free_index_at(addr state, child + 1)
+                  < free_index_at(addr state, child)
+            then
+                smallest = child + 1
+            end if
+            if last <= free_index_at(addr state, smallest) then
+                break
+            end if
+            store_free_index(addr state, position,
+                             free_index_at(addr state, smallest))
+            position = smallest
+        end while
+        store_free_index(addr state, position, last)
+    end if
+end take_free_index
+
+return_free_index: (inout state: fixed_pool, index: usize) -> none =
+    mut position: usize = state.free_count
+    while position > 0 do
+        parent: usize = (position - 1) / 2
+        if free_index_at(addr state, parent) <= index then
+            break
+        end if
+        store_free_index(addr state, position,
+                         free_index_at(addr state, parent))
+        position = parent
+    end while
+    store_free_index(addr state, position, index)
+    inc state.free_count
+end return_free_index
+
 pool_alloc: (inout state: fixed_pool,
              size: usize, alignment: usize)
             -> (block: ptr mut u8) ! mem.out_of_memory =
@@ -131,34 +184,13 @@ pool_alloc: (inout state: fixed_pool,
     end if
 
     fail mem.out_of_memory when state.free_count == 0
-    index: usize = state.bookkeeping[0].free_index
-    dec state.free_count
-    if state.free_count > 0 then
-        last: usize = state.bookkeeping[state.free_count].free_index
-        mut position: usize = 0
-        while position < state.free_count / 2 do
-            child: usize = position * 2 + 1
-            mut smallest: usize = child
-            if child + 1 < state.free_count
-              and state.bookkeeping[child + 1].free_index
-                  < state.bookkeeping[child].free_index
-            then
-                smallest = child + 1
-            end if
-            if last <= state.bookkeeping[smallest].free_index then
-                break
-            end if
-            state.bookkeeping[position].free_index =
-                state.bookkeeping[smallest].free_index
-            position = smallest
-        end while
-        state.bookkeeping[position].free_index = last
-    end if
+    index: usize = take_free_index(state)
     distance: usize = index * state.stride
     address: usize = usize(state.base) + state.first_offset + distance
     block = ptr(address)
-    state.bookkeeping[index].occupied = true
-    state.bookkeeping[index].size = size
+    selected: ptr mut slot = addr state.bookkeeping[index]
+    selected.val.occupied = true
+    selected.val.size = size
     inc state.allocations
     inc state.live_count
 end pool_alloc
@@ -185,26 +217,15 @@ pool_free: (inout state: fixed_pool,
         inc state.rejected_frees
         return
     end if
-    if not state.bookkeeping[index].occupied
-      or state.bookkeeping[index].size <> size then
+    selected: ptr mut slot = addr state.bookkeeping[index]
+    if not selected.val.occupied or selected.val.size <> size then
         inc state.rejected_frees
         return
     end if
 
-    state.bookkeeping[index].occupied = false
-    state.bookkeeping[index].size = 0
-    mut position: usize = state.free_count
-    while position > 0 do
-        parent: usize = (position - 1) / 2
-        if state.bookkeeping[parent].free_index <= index then
-            break
-        end if
-        state.bookkeeping[position].free_index =
-            state.bookkeeping[parent].free_index
-        position = parent
-    end while
-    state.bookkeeping[position].free_index = index
-    inc state.free_count
+    selected.val.occupied = false
+    selected.val.size = 0
+    return_free_index(state, index)
     inc state.frees
     dec state.live_count
 end pool_free
