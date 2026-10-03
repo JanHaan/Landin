@@ -212,7 +212,7 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
             current: u8 = sought_bytes[candidate + matched]
             best: u8 = sought_bytes[maximum + matched]
             if (pass == 0 and current < best)
-              or (pass == 1 and best < current)
+                or (pass == 1 and best < current)
             then
                 candidate += matched + 1
                 matched = 0

@@ -2,6 +2,7 @@
 """Report-only comparisons must preserve every old warning and help line."""
 import base64
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -11,11 +12,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from scripts import driver_manifest
-
-
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "driver_manifest.py"
+SPEC = importlib.util.spec_from_file_location("driver_manifest", SCRIPT)
+driver_manifest = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(driver_manifest)
 KEY = "negative/example|linux-x86-64|plain"
 ERROR = b"error[L0001]: original\n  = note: stable\n"
 HELP = b"  = help: try this\n"
