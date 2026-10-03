@@ -3474,10 +3474,14 @@ needs an explicit image because no zero function address exists [0540].
 A package is a named collection of modules with a version
 and an origin. Names have two levels, owner and package,
 and a directory under a search root is the package it names.
-Exactly one version of a package name exists in a program:
+The intended rule is one version of a package name per program:
 duplicated code is untenable at 32 KB, the types are
-nominal, and there is one conformance register. A version
-conflict is therefore a hard error and somebody upgrades.
+nominal, and there is one conformance register. The current compiler
+does not read package versions or origins. It selects the first
+matching module directory from the ordered roots [1420], even if a
+later root contains another version. The future companion tool will
+solve versions and report a conflict as a hard error, requiring an
+upgrade.
 
 ### [1480] The roots are the project
 
@@ -3492,9 +3496,9 @@ that. Fetching, version solving, lock files and naming
 authority all live in a companion tool that ships
 alongside but stays separable — a compiler you can read is
 worth more than one that can download things. Arranging
-the roots so that only one version of anything is
-reachable is that tool's job, which is what makes [1470]'s
-one-version rule keepable.
+the roots so that only one version of each package name is
+reachable is that tool's job. Until it does so, [1470]'s
+one-version rule is not enforced by the compiler.
 core and landin are reserved, and both are used. The bare tool namespace
 names `compiler`, `assembler` and `linker` cannot be declared or bound by an
 import. Their built-in paths are implicitly available; an explicit import
