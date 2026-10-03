@@ -196,6 +196,7 @@ different responsibilities.
 | `Landin.Server.Navigation` | what is at a byte of a checked module: the name it is in, where that is declared, its type as the checker spells one, its written header and its doc comment [2000] | answer where the stages decided nothing, or inside a held body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Build_Reports.Firmware` | post-link Cortex ELF load extents and selected libgcc members for build evidence | infer bytes from instruction counts or include toolchain paths in the report |
+| `Landin.Source_Digests` | per-emission memoization of immutable source snapshot hashes shared by maps and reports | retain digests beyond one emission or read source files from the host |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
 

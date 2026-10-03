@@ -10,6 +10,7 @@ with Landin.Layouts;
 with Landin.Optimization;
 with Landin.Platform;
 with Landin.Source;
+with Landin.Source_Digests;
 with Landin.Source_Maps;
 with Landin.Stages;
 with Landin.Targets;
@@ -30,6 +31,7 @@ package body Landin.Tests.Host_Reports_Suite is
 
    procedure Byte_Encoding (Item : in out Landin.Testing.Context);
    procedure Adapter_Bytes (Item : in out Landin.Testing.Context);
+   procedure Map_And_Report (Item : in out Landin.Testing.Context);
    procedure Whole_Plans (Item : in out Landin.Testing.Context);
    procedure Refused_Plans (Item : in out Landin.Testing.Context);
    procedure Host_Identity (Item : in out Landin.Testing.Context);
@@ -73,6 +75,8 @@ package body Landin.Tests.Host_Reports_Suite is
       Path : constant String := "q""" & LF & Character'Val (255) & ".ldn";
       Id : constant Landin.Source.Source_Id :=
         Landin.Stages.Add_Source (Context, Path, Source);
+      Digests : aliased Landin.Source_Digests.Cache
+        (Landin.Source.Source_Id (Landin.Stages.Source_Count (Context)));
       Report : Reports.Report;
       Files : constant String := "    {""file_id"":"
         & Landin.Source.Source_Id'Image (Id)
@@ -87,9 +91,11 @@ package body Landin.Tests.Host_Reports_Suite is
       Landin.IR.Note_Caller_Source (Landin.Stages.Code (Context).all, Id);
       declare
          Map : constant Landin.Source_Maps.Artifact :=
-           Landin.Source_Maps.Create (Context, Assembly);
+           Landin.Source_Maps.Create
+             (Context, Assembly, Digests => Digests'Access);
          JSON : constant String := Reports.Sources.JSON
-           (Report, Context, Landin.Optimization.Reference_Options);
+           (Report, Context, Landin.Optimization.Reference_Options,
+            Digests'Access);
       begin
          Landin.Testing.Check_Equal
            (Item, US.To_String (Map.Assembly), Expected_Assembly,
@@ -107,6 +113,47 @@ package body Landin.Tests.Host_Reports_Suite is
             "report uses exactly the same arbitrary filename bytes");
       end;
    end Adapter_Bytes;
+
+   procedure Map_And_Report (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Other : constant String := "extra: () -> none = end extra";
+      Map_Path : constant String :=
+        Landin.Driver.Source_Map_Beside ("out.s");
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Host.Add_File ("extra.ldn", Other);
+      Args.Append ("main.ldn");
+      Args.Append ("extra.ldn");
+      Args.Append ("--emit=asm");
+      Args.Append ("--debug=full");
+      Args.Append ("-o");
+      Args.Append ("out.s");
+      Args.Append ("--build-report=report.json");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         "a debug map and build report emit together");
+      for Index in 1 .. 2 loop
+         declare
+            Text : constant String := (if Index = 1 then Source else Other);
+            Hash : constant String := GNAT.SHA256.Digest (Text);
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Host.Written (Map_Path),
+                  """source_sha256"":""" & Hash & """") > 0,
+               "the map records the source digest");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Host.Written ("report.json"),
+                  """sha256"":""" & Hash & """") > 0,
+               "the report reuses the source digest");
+         end;
+      end loop;
+   end Map_And_Report;
 
    procedure Whole_Plans (Item : in out Landin.Testing.Context) is
       Report : Reports.Report;
@@ -381,6 +428,9 @@ package body Landin.Tests.Host_Reports_Suite is
       Landin.Testing.Register
         (Into, "host reports", "source adapters preserve JSON and build ids",
          Adapter_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "host reports", "debug map and report share source digests",
+         Map_And_Report'Access);
       Landin.Testing.Register
         (Into, "host reports", "whole discriminated plans",
          Whole_Plans'Access);

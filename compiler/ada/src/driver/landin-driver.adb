@@ -29,6 +29,7 @@ with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
+with Landin.Source_Digests;
 with Landin.Source_Maps;
 with Landin.Stages;
 with Landin.Syntax;
@@ -1084,6 +1085,8 @@ package body Landin.Driver is
             Written : Landin.Platform.Write_Status;
             Map_Id : Unbounded.Unbounded_String;
             Evidence : Landin.Build_Reports.Report;
+            Digests : aliased Landin.Source_Digests.Cache
+              (Landin.Source.Source_Id (Landin.Stages.Source_Count (Context)));
             Product_Path : constant String :=
               (if Unbounded.Length (Output) > 0
                then Unbounded.To_String (Output)
@@ -1128,7 +1131,8 @@ package body Landin.Driver is
                     (Report_Path,
                      Landin.Build_Reports.Sources.JSON
                        (Evidence, Context, Optimization,
-                        Unbounded.To_String (Firmware)), Written);
+                        Unbounded.To_String (Firmware), Digests'Access),
+                      Written);
                   if Written /= Landin.Platform.Write_Ok then
                      Note_Failure
                        (Code_Unwritable, "cannot write: " & Report_Path);
@@ -1474,7 +1478,8 @@ package body Landin.Driver is
                        Landin.Source_Maps.Create
                          (Context, Unbounded.To_String (Emitted),
                           All_Sources => Debug_Enabled,
-                          Panic => (if Panic_Map then Panic'Access else null));
+                          Panic => (if Panic_Map then Panic'Access else null),
+                          Digests => Digests'Access);
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
