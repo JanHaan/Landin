@@ -8678,6 +8678,10 @@ therefore [1850]'s L0200, with the declaration encountered by the module's
 set-building pass as the deterministic owner. The part name and payload field
 names remain labels rather than declarations.
 
+Within one case payload, a field label names one position and may appear only
+once. A repeated label is L0309, related to an earlier occurrence. Separate
+cases have separate payload label namespaces.
+
 The representation is target-neutral and unfolded. A part is one field of its
 containing struct. Its tag is first and uses the smallest enabled unsigned
 scalar that can enumerate every case: `u8` through 256 cases, `u16` through

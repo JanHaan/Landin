@@ -474,22 +474,33 @@ end f
 
 ### L0309
 
-A struct declaration or literal names a field more than once [0710], or a
-variant case construction repeats a payload field label (D76). Name each field
-only once.
+A struct declaration [0670] or literal [0710] repeats a field name, a variant
+case declaration [0680] (D74) repeats a payload field name, or a case
+construction (D76) supplies the same payload field twice. Remove or rename a
+repeated declaration field; in a literal or construction, supply each field
+once.
 
 ```landin
 bad: type (item: type) = struct
     value: u8
     value: item
 end bad
+
+choice: type = struct
+    kind: variant
+        pair: (first: u8, first: bool)
+    end kind
+end choice
 ```
+
+For a case declared as `pair: (first: u8, second: bool)`, the construction
+`pair(first: 1, first: 2, second: true)` repeats `first`.
 
 ### L0310
 
-A struct literal gives no value for a field and no `of` covers it [0710]. A
-variant case construction likewise omits a payload field without a trailing
-`of zeroed` (D76). Supply the missing field or use a permitted trailing fill.
+A struct literal [0710] or variant case construction (D76) omits a field
+without a trailing `of zeroed`. Supply the missing field, or use `of zeroed`
+when every omitted field has a zero image.
 
 ```landin
 point: type = struct
@@ -501,6 +512,9 @@ f: () -> none =
     local: point = (x: 1)
 end f
 ```
+
+For a case declared as `pair: (first: u8, second: bool)`, the construction
+`pair(first: 1)` omits `second`.
 
 ### L0311
 

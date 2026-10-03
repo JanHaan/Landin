@@ -248,15 +248,26 @@ package body Landin.Diagnostics.Explanations is
                & "the written name, the diagnostic offers it as a likely f"
                & "ix.",
             when Catalogue.Field_Named_Twice =>
-               "A struct declaration or literal names a field more than "
-               & "once [0710], or a variant case construction repeats a pa"
-               & "yload field label (D76). Name each field only once.",
+               "A struct declaration [0670] or literal [0710] repeats a "
+               & "field name, a variant case declaration [0680] (D74) repe"
+               & "ats a payload field name, or a case construction (D76) s"
+               & "upplies the same payload field twice. Remove or rename a"
+               & " repeated declaration field; in a literal or constructio"
+               & "n, supply each field once."
+               & LF
+               & LF
+               & "For a case declared as `pair: (first: u8, second: bool)`"
+               & ", the construction `pair(first: 1, first: 2, second: tru"
+               & "e)` repeats `first`.",
             when Catalogue.Field_Not_Given =>
-               "A struct literal gives no value for a field and no `of` "
-               & "covers it [0710]. A variant case construction likewise o"
-               & "mits a payload field without a trailing `of zeroed` (D76"
-               & "). Supply the missing field or use a permitted trailing "
-               & "fill.",
+               "A struct literal [0710] or variant case construction (D7"
+               & "6) omits a field without a trailing `of zeroed`. Supply "
+               & "the missing field, or use `of zeroed` when every omitted"
+               & " field has a zero image."
+               & LF
+               & LF
+               & "For a case declared as `pair: (first: u8, second: bool)`"
+               & ", the construction `pair(first: 1)` omits `second`.",
             when Catalogue.Variant_Case_Named_Twice =>
                "A match names one variant case twice [1210].",
             when Catalogue.Variant_Case_Not_Matched =>
@@ -787,6 +798,17 @@ package body Landin.Diagnostics.Explanations is
                & "    value: item"
                & LF
                & "end bad"
+               & LF
+               & LF
+               & "choice: type = struct"
+               & LF
+               & "    kind: variant"
+               & LF
+               & "        pair: (first: u8, first: bool)"
+               & LF
+               & "    end kind"
+               & LF
+               & "end choice"
                & LF,
             when Catalogue.Field_Not_Given =>
                "point: type = struct"

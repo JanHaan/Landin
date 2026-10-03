@@ -1,0 +1,11 @@
+choice: type = struct
+    kind: variant
+        pair: (first: u8, first: bool)
+    end kind
+end choice
+
+generic: type (item: type) = struct
+    kind: variant
+        option: (value: item, value: u8)
+    end kind
+end generic
