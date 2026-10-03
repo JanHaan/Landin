@@ -37,8 +37,10 @@ unexamined while the header said "every positive fixture".
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
 """
+import concurrent.futures
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -46,6 +48,7 @@ from pathlib import Path
 
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
 MODES = ("debug", "release")
+MAX_WORKERS = 4
 
 
 def operands(fixture):
@@ -71,33 +74,43 @@ def operands(fixture):
     return [meta["program"]] + rest
 
 
-def emit(refine, root, out):
+def compile_one(job):
+    """Compile one entry in its own directory, including any sidecars."""
+    key, refine, fixture, sources, target, mode, asm = job
+    asm.parent.mkdir()
+    #  cwd and operands preserve the source-path spelling on every host.
+    result = subprocess.run(
+        [str(refine), "--target=" + target, "--build-mode=" + mode,
+         "--optimize=size", "--specialize=auto", "--emit=asm",
+         "-o", str(asm)] + sources,
+        capture_output=True, cwd=fixture)
+    if result.returncode != 0 or not asm.exists():
+        return key, "refused:%d" % result.returncode
+    return key, hashlib.sha256(asm.read_bytes()).hexdigest()
+
+
+def emit(refine, root, out, workers=None):
     refine = Path(refine).resolve()
     fixtures = sorted(
         p for p in (Path(root).resolve() / "compiler/tests/fixtures/positive").iterdir()
         if p.is_dir())
+    if workers is None:
+        workers = min(MAX_WORKERS, os.cpu_count() or 1)
     manifest, refused = {}, 0
     with tempfile.TemporaryDirectory() as tmp:
-        asm = Path(tmp) / "out.s"
+        jobs = []
         for fixture in fixtures:
             sources = operands(fixture)
             for target in TARGETS:
                 for mode in MODES:
-                    if asm.exists():
-                        asm.unlink()
-                    #  cwd is the fixture, and the operands are relative,
-                    #  so the source-path spelling is identical everywhere.
-                    result = subprocess.run(
-                        [str(refine), "--target=" + target, "--build-mode=" + mode,
-                         "--optimize=size", "--specialize=auto", "--emit=asm",
-                         "-o", str(asm)] + sources,
-                        capture_output=True, cwd=fixture)
                     key = "%s|%s|%s" % (fixture.name, target, mode)
-                    if result.returncode != 0 or not asm.exists():
-                        manifest[key] = "refused:%d" % result.returncode
-                        refused += 1
-                    else:
-                        manifest[key] = hashlib.sha256(asm.read_bytes()).hexdigest()
+                    asm = Path(tmp) / str(len(jobs)) / "out.s"
+                    jobs.append((key, refine, fixture, sources, target, mode, asm))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            #  map yields in fixture/target/mode order regardless of completion.
+            for key, value in pool.map(compile_one, jobs):
+                manifest[key] = value
+                refused += value.startswith("refused:")
     Path(out).write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
     print("fixtures %d  entries %d  emitted %d  refused %d"
           % (len(fixtures), len(manifest), len(manifest) - refused, refused))
