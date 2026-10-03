@@ -131,5 +131,55 @@ class ReportOnlyComparison(unittest.TestCase):
         self.assertEqual(emitted["errors"], digest(ERROR))
 
 
+class RecordedArguments(unittest.TestCase):
+    def test_emit_runs_args_with_and_without_program(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ada = root / "compiler/ada"
+            ada.mkdir(parents=True)
+            fixtures = root / "compiler/tests/fixtures"
+            for klass in driver_manifest.CLASSES:
+                (fixtures / klass).mkdir(parents=True)
+
+            level = fixtures / "end-to-end/level"
+            level.mkdir()
+            (level / "fixture.meta").write_text(
+                "program: main.ldn\n"
+                "args: --level=x86-64-v3 ../tests/fixtures/end-to-end/level/main.ldn\n")
+            (level / "main.ldn").write_text("")
+            unknown = fixtures / "negative/unknown"
+            unknown.mkdir()
+            (unknown / "fixture.meta").write_text("args: --wat\n")
+
+            refine = root / "refine"
+            refine.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, sys\n"
+                "print(os.getcwd() + '\\n' + ' '.join(sys.argv[1:]))\n"
+                "sys.exit(2 if '--wat' in sys.argv else 0)\n")
+            refine.chmod(0o755)
+            output = root / "manifest.json"
+            self.assertEqual(driver_manifest.emit(
+                refine, root, root / "work", output), 0)
+            manifest = json.loads(output.read_text())
+
+            recorded = manifest["end-to-end/level|recorded"]
+            invocation = (str(ada) + "\n--level=x86-64-v3 "
+                          "../tests/fixtures/end-to-end/level/main.ldn\n")
+            self.assertEqual(recorded["stdout"],
+                             hashlib.sha256(invocation.encode()).hexdigest())
+            self.assertEqual(recorded["status"], 0)
+            self.assertEqual(manifest["negative/unknown|recorded"]["status"], 2)
+            self.assertFalse(any(key.startswith("negative/unknown|linux-")
+                                 for key in manifest))
+            self.assertIn("end-to-end/level|linux-x86-64|plain", manifest)
+            self.assertEqual(driver_manifest.compare(output, output), 0)
+            changed = root / "changed.json"
+            manifest["negative/unknown|recorded"]["status"] = 0
+            changed.write_text(json.dumps(manifest))
+            self.assertEqual(driver_manifest.compare(output, changed), 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()

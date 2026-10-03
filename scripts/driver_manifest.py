@@ -15,13 +15,16 @@ target: a negative fixture's verdict is its report, and a program a target
 refuses is a verdict too.  Each is compiled once with `--emit=asm` and the
 build report, and each program that is not a negative is compiled again with
 debugging information and the panic map, where the source-identifying
-artifacts are made.
+artifacts are made.  Every fixture with `args` also gets a `recorded` entry:
+its exact invocation is run from `compiler/ada`, including fixtures without
+a program.  That entry compares status and both output streams; the recorded
+invocation does not request the extra artifacts of a manifest compilation.
 
 The two revisions must see the same bytes under the same spellings, so the
-fixtures are read from one ROOT for both, each is compiled from its own
-directory under the operands its `fixture.meta` names, and every output goes
-to the same path under WORK.  Tier 2 of the determinism contract holds under
-exactly that relation.
+fixtures are read from one ROOT for both.  Manifest compilations run from
+each fixture directory and write under WORK; recorded invocations run from
+ROOT/compiler/ada, as the fixture harness does.  Tier 2 of the determinism
+contract holds under exactly that relation.
 
     emit REFINE ROOT WORK OUT.json   write this compiler's manifest
     emit --targets=A,B REFINE ROOT WORK OUT.json
@@ -56,12 +59,13 @@ status, output and report equal as they are, and `layout` equal where the
 raw artefacts differ.  A line that moved would show in a `.loc`'s line and
 in a report's line numbers, so both still count.
 
-Every compilation is at its target's default CPU feature level, which the
+Manifest compilations use each target's default CPU feature level, which the
 build report names as `"level"`.  That member is taken out before the report
 is digested, so a compiler that names the level and one that predates levels
 are compared on everything else; the level itself is recorded as `level`,
 and a manifest that has it is compared with one that does not as though it
-were absent only when it is the default.
+were absent only when it is the default.  Recorded invocations use any level
+selected by their `args`.
 """
 import base64
 import binascii
@@ -287,6 +291,19 @@ def run_one(refine, fixture, sources, target, variant, work):
     return entry
 
 
+def run_recorded(refine, root, args):
+    """The fixture harness's invocation, without manifest-only options."""
+    result = subprocess.run([str(refine)] + args.split(), capture_output=True,
+                            cwd=root / "compiler/ada")
+    return {
+        "status": result.returncode,
+        "stdout": text_digest(result.stdout),
+        "stderr": text_digest(result.stderr),
+        "stderr_base64": base64.b64encode(result.stderr).decode("ascii"),
+        "errors": text_digest(without_additions(result.stderr)),
+    }
+
+
 def emit(refine, root, work, out, targets=TARGETS):
     refine = Path(refine).resolve()
     root = Path(root).resolve()
@@ -294,12 +311,15 @@ def emit(refine, root, work, out, targets=TARGETS):
     if work.exists():
         shutil.rmtree(work)
     jobs = []
+    recorded = []
     for klass in CLASSES:
         for fixture in sorted((root / "compiler/tests/fixtures" / klass)
                               .iterdir()):
             if not fixture.is_dir():
                 continue
             meta = meta_of(fixture)
+            if "args" in meta:
+                recorded.append((fixture, meta["args"]))
             if not meta.get("program"):
                 continue
             sources = operands(meta)
@@ -315,6 +335,10 @@ def emit(refine, root, work, out, targets=TARGETS):
             pool.submit(run_one, refine, f, s, t, v, work):
             "%s/%s|%s|%s" % (f.parent.name, f.name, t, v)
             for f, s, t, v in jobs}
+        futures.update({
+            pool.submit(run_recorded, refine, root, args):
+            "%s/%s|recorded" % (f.parent.name, f.name)
+            for f, args in recorded})
         for done in concurrent.futures.as_completed(futures):
             manifest[futures[done]] = done.result()
     shutil.rmtree(work, ignore_errors=True)
@@ -328,8 +352,7 @@ def emit(refine, root, work, out, targets=TARGETS):
     return 0
 
 
-#  The level a compilation assumes when none is selected, which is the only
-#  one a manifest compiles at and so the only one it may treat as absent.
+#  Default levels for manifest compilations without an explicit level.
 DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "linux-arm64": "armv8-a",
                  "darwin-arm64": "armv8-a", "cortex-m0": "armv6-m"}
 
@@ -349,7 +372,7 @@ def compare(first, second, report_only=False, layout_only=False):
             continue
         target = key.split("|")[1]
         for entry in (a[key], b[key]):
-            if entry.get("level") == DEFAULT_LEVEL[target]:
+            if "level" in entry and entry["level"] == DEFAULT_LEVEL.get(target):
                 entry.pop("level")
         if a[key] != b[key]:
             fields = sorted(f for f in set(a[key]) | set(b[key])
