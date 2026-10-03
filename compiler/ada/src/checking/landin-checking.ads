@@ -59,6 +59,7 @@ with Landin.Machine;
 
 with Ada.Containers;
 private with Ada.Containers.Hashed_Maps;
+private with Ada.Containers.Ordered_Maps;
 private with Ada.Containers.Vectors;
 
 with Landin.Layouts;
@@ -2535,26 +2536,23 @@ private
    package Conformance_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Conformance_Record);
 
-   --  A digest narrows lookup to rows that may share the whole-program key.
-   --  Structural actuals still use Actuals_Agree for the final comparison.
-   type Conformance_Bucket_Key is record
-      Concept : Concept_Id;
-      Target  : Ada.Containers.Hash_Type;
-      Inputs  : Ada.Containers.Hash_Type;
-   end record;
+   --  A conformance key spelled as words.  Two exactly spelled keys agree
+   --  if and only if their words are equal.  The order is lexicographic
+   --  and means nothing else; no word's value decides a lookup's cost.
+   package Key_Word_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Packed.Image,
+      "="          => Landin.Packed."=");
 
-   function Hash (Key : Conformance_Bucket_Key)
-     return Ada.Containers.Hash_Type;
+   function Precedes (Left, Right : Key_Word_Vectors.Vector) return Boolean;
+
+   package Conformance_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type     => Key_Word_Vectors.Vector,
+      Element_Type => Positive,
+      "<"          => Precedes);
 
    package Conformance_Position_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Positive);
-
-   package Conformance_Maps is new Ada.Containers.Hashed_Maps
-     (Key_Type        => Conformance_Bucket_Key,
-      Element_Type    => Conformance_Position_Vectors.Vector,
-      Hash            => Hash,
-      Equivalent_Keys => "=",
-      "="             => Conformance_Position_Vectors."=");
 
    type Conformance_Provider is record
       Declaration : Declaration_Id := No_Declaration;
@@ -2835,7 +2833,10 @@ private
       Routine_Evidence : Routine_Evidence_Vectors.Vector;
       Concepts : Concept_Vectors.Vector;
       Conformances : Conformance_Vectors.Vector;
-      Conformance_Buckets : Conformance_Maps.Map;
+      --  The earliest row of each exactly spelled key, and in order every
+      --  row whose key has no exact spelling.
+      Conformance_Index : Conformance_Maps.Map;
+      Unspelled_Conformances : Conformance_Position_Vectors.Vector;
       Conformance_Actuals : Actual_Key_Vectors.Vector;
       Conformance_Providers : Conformance_Provider_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;

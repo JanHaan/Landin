@@ -9893,6 +9893,66 @@ package body Landin.Tests.Checking_Suite is
                   end;
                end loop;
             end;
+
+            declare
+               Rows : array (0 .. 255) of Landin.Checking.Conformance_Id;
+               function Periodic (K : Natural)
+                 return Landin.Checking.Actual_Key
+                 is (Landin.Checking.Fixed_Array_Type_Actual
+                       (1 + Landin.Checking.Element_Count (K) * 2 ** 32,
+                        Landin.Types.U8));
+            begin
+               --  These lengths agree in their low 32 bits.
+               for K in Rows'Range loop
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept, Periodic (K), Empty)
+                       = Landin.Checking.No_Conformance,
+                     "a periodic array length misses");
+                  Rows (K) := Landin.Checking.Add_Conformance
+                    (Types.all, Concept, Periodic (K), Empty, Empty, Src,
+                     Point_Node, Landin.Checking.Declared_Conformance);
+               end loop;
+               for K in Rows'Range loop
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept, Periodic (K), Empty) = Rows (K),
+                     "a periodic array length finds its row");
+               end loop;
+            end;
+
+            declare
+               First_Member : constant Natural :=
+                 Landin.Checking.Declaration_Limit (Types.all) - 2;
+               X : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id (First_Member + 1);
+               Y : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id (First_Member + 2);
+               Repeated : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all,
+                    Landin.Checking.Add_Atom_Set
+                      (Types.all, [Point, Point, X]));
+               Distinct : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all,
+                    Landin.Checking.Add_Atom_Set (Types.all, [Y, X, Point]));
+               Unspelled : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept, Repeated, Empty, Empty, Src,
+                    Point_Node, Landin.Checking.Declared_Conformance);
+            begin
+               --  Atom_Sets_Agree counts members, so a set listing one atom
+               --  twice agrees with a three-atom set that holds its atoms.
+               --  Such a row has no exact spelling and is still found by
+               --  comparison, from a key that has one and from itself.
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Find_Conformance
+                    (Types.all, Concept, Distinct, Empty) = Unspelled
+                  and then Landin.Checking.Find_Conformance
+                    (Types.all, Concept, Repeated, Empty) = Unspelled,
+                  "a row without an exact spelling is still found");
+            end;
          end;
       end;
    end Conformance_Register_Uses_Normalized_Keys;
