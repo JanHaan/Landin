@@ -234,10 +234,22 @@ package body Landin.Diagnostics.Explanations is
                & "s a local or module binding of one name, the diagnostic "
                & "offers `mut` on its declaration as a likely fix.",
             when Catalogue.Unsupported_Use =>
-               "A name used in a way the kernel does not enable [1920], "
-               & "found once the checker knows what the name is. The two n"
-               & "otes are [1830]'s: the tour paragraph and the form's sta"
-               & "nding.",
+               "A known form used where the language does not permit it "
+               & "[1830], found once the checker knows what the form means"
+               & ". The report names the specific rule; its two notes give"
+               & " the tour paragraph and the form's standing."
+               & LF
+               & LF
+               & "For a variant [0680]-[0690] (D75/D76/D241), its part bel"
+               & "ongs to the enclosing struct and has no standalone value"
+               & ". Match the part to inspect its case, or copy the whole "
+               & "struct. To change the part, write one of its cases to a "
+               & "directly selected part of a mutable struct, or supply th"
+               & "at case while constructing the struct. A case cannot ini"
+               & "tialize an unrelated binding as a standalone value: its "
+               & "destination must supply its variant part. A case without"
+               & " payload may be bare; write a payload case with labelled"
+               & " fields.",
             when Catalogue.Not_Known_At_Compile_Time =>
                "A required static value or initial image cannot be estab"
                & "lished before the program runs [1940] (D136, D202). A mo"
@@ -784,7 +796,33 @@ package body Landin.Diagnostics.Explanations is
                & "end f"
                & LF,
             when Catalogue.Unsupported_Use =>
-               "wide: u128 = 1"
+               "holder: type = struct"
+               & LF
+               & "    kind: variant"
+               & LF
+               & "        dot |"
+               & LF
+               & "        box: (w: u8)"
+               & LF
+               & "    end kind"
+               & LF
+               & "end holder"
+               & LF
+               & LF
+               & "f: () -> none ="
+               & LF
+               & "    mut h: holder = zeroed"
+               & LF
+               & "    h.kind = dot      -- permitted: the part is the dest"
+               & "ination"
+               & LF
+               & "    part := h.kind    -- L0304: the part has no standalo"
+               & "ne value"
+               & LF
+               & "    alone := dot      -- L0304: the case needs its part "
+               & "as destination"
+               & LF
+               & "end f"
                & LF,
             when Catalogue.Not_Known_At_Compile_Time =>
                "a: i32 = b + 1"

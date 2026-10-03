@@ -450,7 +450,8 @@ package Landin.Diagnostics.Catalogue is
             when Immutable_Target      =>
                "[1900]: a place that may not be written",
             when Unsupported_Use       =>
-               "[1920]: a name used in a way the kernel does not enable",
+               "[1830]: a known form used where the language does not"
+               & " permit it",
             when Not_Known_At_Compile_Time =>
                "[1940]/D136/D202: a required static value or initial image"
                & " that the compiler cannot establish before runtime",

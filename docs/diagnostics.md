@@ -429,12 +429,32 @@ end f
 
 ### L0304
 
-A name used in a way the kernel does not enable [1920], found once the
-checker knows what the name is. The two notes are [1830]'s: the tour
-paragraph and the form's standing.
+A known form used where the language does not permit it [1830], found once
+the checker knows what the form means. The report names the specific rule;
+its two notes give the tour paragraph and the form's standing.
+
+For a variant [0680]-[0690] (D75/D76/D241), its part belongs to the
+enclosing struct and has no standalone value. Match the part to inspect its
+case, or copy the whole struct. To change the part, write one of its cases
+to a directly selected part of a mutable struct, or supply that case while
+constructing the struct. A case cannot initialize an unrelated binding as
+a standalone value: its destination must supply its variant part. A case
+without payload may be bare; write a payload case with labelled fields.
 
 ```landin
-wide: u128 = 1
+holder: type = struct
+    kind: variant
+        dot |
+        box: (w: u8)
+    end kind
+end holder
+
+f: () -> none =
+    mut h: holder = zeroed
+    h.kind = dot      -- permitted: the part is the destination
+    part := h.kind    -- L0304: the part has no standalone value
+    alone := dot      -- L0304: the case needs its part as destination
+end f
 ```
 
 ### L0305
