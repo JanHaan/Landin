@@ -842,6 +842,53 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Local_Branches;
 
+   procedure Branch_Rich_Cleanup (Item : in out Landin.Testing.Context);
+
+   procedure Branch_Rich_Cleanup (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Source : U.Unbounded_String := U.To_Unbounded_String
+        ("mut trace: i32 = 0 "
+         & "mark: (value: i32) -> none = trace += value end mark "
+         & "cleanup: (flag: bool) -> (result: i32) = result = 42 ");
+   begin
+      --  Each return unwinds the remaining cleanups. This small source
+      --  emits thousands of branches, and exposed a quadratic text walk
+      --  that kept every Cortex corpus profile from reaching the linker.
+      for Index in 1 .. 12 loop
+         U.Append (Source, "defer mark(begin return when flag 1 end) ");
+      end loop;
+      U.Append (Source, "end cleanup");
+      Host.Add_File ("cleanup.ldn", U.To_String (Source));
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("--optimize=none");
+      Args.Append ("--specialize=off");
+      Args.Append ("-o");
+      Args.Append ("cleanup.s");
+      Args.Append ("cleanup.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Count
+                 (Host.Written ("cleanup.s"), "cmp r0, #0")
+                   > 4_000,
+               "a large cleanup routine retains its conditional edges");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Host.Written ("cleanup.s"), "ldr r7, ") > 0,
+               "distant cleanup edges retain their long jumps");
+         end if;
+      end;
+   end Branch_Rich_Cleanup;
+
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context) is
    begin
       for Mode in 1 .. 4 loop
@@ -1597,6 +1644,9 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "local branches", Local_Branches'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "branch-rich cleanup",
+         Branch_Rich_Cleanup'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "layout and transport contract", Contract'Access);
       Landin.Testing.Register

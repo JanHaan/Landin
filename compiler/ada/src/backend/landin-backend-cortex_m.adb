@@ -1,4 +1,6 @@
 with Ada.Containers.Vectors;
+with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Strings.Hash;
 with Landin.Backend.Firmware;
 with Landin.Backend.Dwarf;
 with Landin.Provenance;
@@ -1183,49 +1185,116 @@ package body Landin.Backend.Cortex_M is
          --  cross an inline-assembly or literal-pool boundary, whose size is
          --  not known here. The assembler remains the final range check.
          procedure Shorten_Local_Branches is
-            Text : constant String := Unbounded.To_String (Out_Text);
+            --  Index this routine once. Branch spans then use prefix line
+            --  counts and ordered barriers rather than rescanning the text.
+            Text : constant String := Unbounded.Slice
+              (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+            package Label_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+              (String, Positive, Ada.Strings.Hash, "=");
+            Labels : Label_Maps.Map;
+            Lines, Pools : Position_Vectors.Vector;
+            Rewritten : Unbounded.Unbounded_String;
+            Cursor : Positive := Text'First;
+            Line_First : Positive := Text'First;
+
+            --  Number of indexed positions strictly before Position.
+            function Before
+              (Points : Position_Vectors.Vector; Position : Positive)
+               return Natural;
+
+            function Before
+              (Points : Position_Vectors.Vector; Position : Positive)
+               return Natural
+            is
+               Low : Positive := 1;
+               High : Natural := Natural (Points.Length);
+            begin
+               while Low <= High loop
+                  declare
+                     Middle : constant Positive := Low + (High - Low) / 2;
+                  begin
+                     if Points (Middle) < Position then
+                        Low := Middle + 1;
+                     else
+                        High := Middle - 1;
+                     end if;
+                  end;
+               end loop;
+               return High;
+            end Before;
+
+            function Crosses
+              (Points : Position_Vectors.Vector; Low, High : Positive)
+               return Boolean
+              is (Before (Points, High + 1) /= Before (Points, Low));
          begin
             if Sites.Is_Empty then
                return;
             end if;
-            for Index in reverse Sites.First_Index .. Sites.Last_Index loop
-               declare
-                  Site : constant Branch_Site := Sites (Index);
-                  Name : constant String :=
-                    Unbounded.To_String (Site.Target);
-                  Destination : constant Natural := Ada.Strings.Fixed.Index
-                    (Text (Routine_Start .. Text'Last), LF & Name & ":" & LF);
-               begin
-                  if Destination /= 0 then
+            for Index in Text'Range loop
+               if Text (Index) = LF then
+                  Lines.Append (Index);
+                  if Index > Line_First
+                    and then Text (Index - 1) = ':'
+                    and then Line_First > Text'First
+                  then
                      declare
-                        Low : constant Positive :=
-                          Positive'Min (Site.First, Destination);
-                        High : constant Natural :=
-                          Natural'Max (Site.First, Destination);
-                        Span : constant String := Text (Low .. High);
-                        Bound : constant Natural :=
-                          4 * Ada.Strings.Fixed.Count
-                            (Span, String'(1 => LF)) + 8;
-                        Crosses_Assembly : Boolean := False;
+                        Name : constant String :=
+                          Text (Line_First .. Index - 2);
                      begin
-                        for Barrier of Assembly_Barriers loop
-                           if Barrier in Low .. High then
-                              Crosses_Assembly := True;
-                              exit;
-                           end if;
-                        end loop;
-                        if not Crosses_Assembly
-                          and then Ada.Strings.Fixed.Index
-                            (Span, ".ltorg") = 0
+                        if not Labels.Contains (Name) then
+                           --  The old search names the LF before the label.
+                           Labels.Insert (Name, Line_First - 1);
+                        end if;
+                     end;
+                  end if;
+                  declare
+                     Pool : constant Natural := Ada.Strings.Fixed.Index
+                       (Text (Line_First .. Index - 1), ".ltorg");
+                  begin
+                     if Pool /= 0 then
+                        Pools.Append (Pool);
+                     end if;
+                  end;
+                  Line_First := Index + 1;
+               end if;
+            end loop;
+            for Site of Sites loop
+               declare
+                  Name : constant String := Unbounded.To_String (Site.Target);
+                  Found : constant Label_Maps.Cursor := Labels.Find (Name);
+                  First : constant Positive :=
+                    Site.First - Routine_Start + Text'First;
+               begin
+                  if Label_Maps.Has_Element (Found) then
+                     declare
+                        Destination : constant Positive :=
+                          Label_Maps.Element (Found);
+                        Low : constant Positive :=
+                          Positive'Min (First, Destination);
+                        High : constant Positive :=
+                          Positive'Max (First, Destination);
+                        Bound : constant Natural :=
+                          4 * (Before (Lines, High + 1)
+                               - Before (Lines, Low)) + 8;
+                     begin
+                        if not Crosses
+                          (Assembly_Barriers,
+                           Low - Text'First + Routine_Start,
+                           High - Text'First + Routine_Start)
+                          and then not Crosses (Pools, Low, High)
                           and then Bound <
                             (if Unbounded.Length (Site.Condition) = 0
                              then 2_000 else 240)
                         then
-                           Unbounded.Replace_Slice
-                             (Out_Text, Site.First, Site.Last,
-                              Character'Val (9) & "b"
+                           Unbounded.Append
+                             (Rewritten, Text (Cursor .. First - 1));
+                           Unbounded.Append
+                             (Rewritten, Character'Val (9) & "b"
                               & Unbounded.To_String (Site.Condition)
                               & " " & Name & LF);
+                           Cursor := Site.Last - Routine_Start
+                             + Text'First + 1;
                            Instruction_Count := Instruction_Count -
                              (if Unbounded.Length (Site.Condition) = 0
                               then 1 else 2);
@@ -1234,6 +1303,12 @@ package body Landin.Backend.Cortex_M is
                   end if;
                end;
             end loop;
+            if Cursor /= Text'First then
+               Unbounded.Append (Rewritten, Text (Cursor .. Text'Last));
+               Unbounded.Delete
+                 (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+               Unbounded.Append (Out_Text, Rewritten);
+            end if;
          end Shorten_Local_Branches;
 
          procedure Load_Value
