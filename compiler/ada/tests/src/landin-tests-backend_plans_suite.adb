@@ -191,8 +191,8 @@ package body Landin.Tests.Backend_Plans_Suite is
       Unit : IR.Unit;
       Site : Landin.Provenance.Origin;
       Nominal : IR.Nominal_Type_Id;
-      Shape, Variant, Repeated, Empty : IR.Field_Shape;
-      Run, Cases : Natural;
+      Shape, Variant, Repeated, Empty, Short_Array : IR.Field_Shape;
+      Run, Other_Run, Cases : Natural;
       Fields : constant IR.Field_Shape_Array :=
         [(Element => Landin.Types.U8, others => <>),
          (Element => Landin.Types.Usize, others => <>),
@@ -208,11 +208,15 @@ package body Landin.Tests.Backend_Plans_Suite is
       Shape := (Kind => IR.Aggregate_Field_Shape, Nominal => Nominal,
                 others => <>);
       Run := IR.Add_Shape_Run (Unit, [Fields (1), Shape]);
-      Cases := IR.Add_Case_Run (Unit, [1 => (First => Run, Count => 2)]);
+      Other_Run := IR.Add_Shape_Run (Unit, [Fields (1), Fields (1)]);
+      Cases := IR.Add_Case_Run
+        (Unit, [(First => Run, Count => 2),
+                (First => Other_Run, Count => 2)]);
       Variant := (Kind => IR.Variant_Field_Shape, Element => Landin.Types.U8,
-                  Cases => 1, Payloads_First => Cases, others => <>);
+                  Cases => 2, Payloads_First => Cases, others => <>);
       Repeated := IR.Make_Array_Shape (Unit, 2 ** 30, Shape);
       Empty := IR.Make_Array_Shape (Unit, 0, Shape);
+      Short_Array := IR.Make_Array_Shape (Unit, 3, Shape);
       for Small in Boolean loop
          declare
             Facts : constant Targets.Target_Facts :=
@@ -228,6 +232,9 @@ package body Landin.Tests.Backend_Plans_Suite is
               (Unit, Outer, Landin.Layouts.C, Facts);
             Optimal : constant Layout.Plan := Backend.Fields_Layout
               (Unit, Outer, Landin.Layouts.Optimal, Facts);
+            Element_Plan : constant Layout.Plan :=
+              Backend.Aggregate_Layout (Unit, Shape, Facts);
+            Path_Layouts : IR.Shape_Measurement.Layout_Cache;
             Size : Targets.Byte_Count;
             Alignment : Targets.Byte_Alignment;
          begin
@@ -246,6 +253,25 @@ package body Landin.Tests.Backend_Plans_Suite is
                and then Optimal.Size = 7 * Pointer
                and then Optimal.Order = [2, 4, 1, 3],
                "outer policy moves a whole variant and never its payload");
+            for Repeat in 1 .. 2 loop
+               Landin.Testing.Check
+                 (Item, Backend.Path_Offset
+                    (Unit, Short_Array, [(2, 0), (4, 0)], Facts,
+                     Path_Layouts) = Element_Plan.Size
+                       + Element_Plan.Offsets (4),
+                  "repeated array-of-struct paths reuse element extent");
+               Landin.Testing.Check
+                 (Item, Backend.Path_Offset
+                    (Unit, Variant, [(2, 1), (4, 0)], Facts,
+                     Path_Layouts) = 2 * Pointer
+                       + Element_Plan.Offsets (4),
+                  "repeated variant payload paths reuse case placement");
+               Landin.Testing.Check
+                 (Item, Backend.Path_Offset
+                    (Unit, Variant, [1 => (2, 2)], Facts,
+                     Path_Layouts) = Pointer + 1,
+                  "cached variant cases keep distinct payload offsets");
+            end loop;
             Backend.Field_Extent (Unit, Empty, Facts, Size, Alignment);
             Landin.Testing.Check
               (Item, Size = 0 and then Alignment = 1,

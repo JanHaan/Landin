@@ -79,15 +79,15 @@ package body Landin.Backend is
             declare
                Element : constant Landin.IR.Field_Shape :=
                  Landin.IR.Array_Element_Shape (Of_Unit, Reached);
-               Size : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
+               Extent : constant Layout.Field_Extent :=
+                 IR.Shape_Measurement.Cached_Field_Extent
+                   (Cache, Of_Unit, Element, Facts,
+                    Targets.Maximum_Object_Size (Facts));
             begin
-               Landin.Backend.Field_Extent
-                 (Of_Unit, Element, Facts, Size, Alignment);
                Total := Total
                  + Landin.Targets.Byte_Count
                      (Landin.IR.Element_Total (Step.Field) - 1)
-                   * Size;
+                   * Extent.Size;
                Reached := Element;
             end;
          elsif Step.Case_Index = 0 then
@@ -102,10 +102,22 @@ package body Landin.Backend is
                  (Of_Unit, Reached, Positive (Step.Field));
             end;
          else
-            Total := Total
-              + Landin.Backend.Variant_Payload_Field_Offset
-                  (Of_Unit, Reached, Step.Case_Index,
-                   Positive (Step.Field), Facts);
+            declare
+               Part : constant Layout.Plan :=
+                 IR.Shape_Measurement.Cached_Variant_Layout
+                   (Cache, Of_Unit, Reached, Facts,
+                    Targets.Maximum_Object_Size (Facts));
+               Payload : constant Layout.Plan :=
+                 IR.Shape_Measurement.Cached_Case_Layout
+                   (Cache, Of_Unit, Reached, Step.Case_Index, Facts,
+                    Targets.Maximum_Object_Size (Facts));
+            begin
+               if Positive (Step.Field) > Payload.Count then
+                  raise Compiler_Defect with "no such variant payload field";
+               end if;
+               Total := Total + Part.Offsets (2)
+                 + Payload.Offsets (Positive (Step.Field));
+            end;
             Reached := Landin.IR.Nth_Variant_Case_Field
               (Of_Unit, Reached, Step.Case_Index,
                Positive (Step.Field));

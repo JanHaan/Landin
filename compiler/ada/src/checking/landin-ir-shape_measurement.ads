@@ -19,6 +19,27 @@ package Landin.IR.Shape_Measurement is
       Maximum : Landin.Targets.Byte_Count)
       return Landin.Targets.Layouts.Plan;
 
+   function Cached_Field_Extent
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count)
+      return Landin.Targets.Layouts.Field_Extent;
+
+   function Cached_Case_Layout
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape; Which : Positive;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count)
+      return Landin.Targets.Layouts.Plan;
+
+   function Cached_Variant_Layout
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count)
+      return Landin.Targets.Layouts.Plan;
+
    --  Each query memoizes repeated descendant shapes for its fixed unit,
    --  target and limit, and discards that memo on return or failure.
    function Extent
@@ -79,9 +100,24 @@ private
       Hash => Hash, Equivalent_Keys => "=",
       "=" => Landin.Targets.Layouts."=");
 
+   type Case_Key is record
+      Shape : Shape_Key;
+      Which : Positive;
+   end record;
+
+   function Hash (Key : Case_Key) return Ada.Containers.Hash_Type;
+
+   package Case_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type => Case_Key,
+      Element_Type => Landin.Targets.Layouts.Plan,
+      Hash => Hash, Equivalent_Keys => "=",
+      "=" => Landin.Targets.Layouts."=");
+
    type Layout_Cache is record
       Extents : Memo;
       Plans : Layout_Maps.Map;
+      Variants : Layout_Maps.Map;
+      Cases : Case_Maps.Map;
    end record;
 
 end Landin.IR.Shape_Measurement;
