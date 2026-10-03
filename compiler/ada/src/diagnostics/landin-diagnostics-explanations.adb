@@ -289,7 +289,9 @@ package body Landin.Diagnostics.Explanations is
                & "declarations valid.",
             when Catalogue.Invalid_Tool_Directive =>
                "A tool directive breaks [1510]/[1590]/D202 when it has o"
-               & "ther than one positional argument. Give `compiler.assert"
+               & "ther than one positional argument, or when `linker.libra"
+               & "ry` has an argument that is not a quoted text literal wi"
+               & "th a portable static library name. Give `compiler.assert"
                & "` one fixed bool expression. Give `linker.library` one q"
                & "uoted text literal containing a portable static library "
                & "name; its argument must have the required form and name "

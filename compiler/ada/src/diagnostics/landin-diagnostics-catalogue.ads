@@ -501,7 +501,7 @@ package Landin.Diagnostics.Catalogue is
                & " available name and use a supported scalar type",
             when Invalid_Tool_Directive =>
                "[1510]/[1590]/D202: a tool directive needs one argument;"
-               & " linker.library needs a portable fixed library name",
+               & " linker.library needs a quoted portable library name",
             when Mutable_Never_Written =>
                "D251: a local declared `mut` that nothing writes",
             when Call_Argument_Match =>

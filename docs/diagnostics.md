@@ -993,7 +993,9 @@ option debug: u32 = 1
 ### L0391
 
 A tool directive breaks [1510]/[1590]/D202 when it has other than one
-positional argument. Give `compiler.assert` one fixed bool expression.
+positional argument, or when `linker.library` has an argument that is not a
+quoted text literal with a portable static library name. Give
+`compiler.assert` one fixed bool expression.
 Give `linker.library` one quoted text literal containing a portable static
 library name; its argument must have the required form and name characters.
 

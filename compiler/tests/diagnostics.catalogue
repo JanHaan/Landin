@@ -62,7 +62,7 @@ L0322  Live     [0250] [0270]: a character literal spells exactly one Unicode sc
 L0323  Live     [0280] [1750]: raw content is UTF-8 and every nonblank line has the closing delimiter's indentation
 L0325  Live     D247: an implementation limit on how many declarations a routine or fields a struct holds
 L0390  Live     [1530]/D202: an option must be unconditional, have an available name and use a supported scalar type
-L0391  Live     [1510]/[1590]/D202: a tool directive needs one argument; linker.library needs a portable fixed library name
+L0391  Live     [1510]/[1590]/D202: a tool directive needs one argument; linker.library needs a quoted portable library name
 L0326  Live     D251: a local declared `mut` that nothing writes
 L0327  Live     [1920]/D138: call arguments match the parameters and the callee's static formals
 L0328  Live     [0540]: zeroed or an implicit initializer has no complete zero image
