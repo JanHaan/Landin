@@ -65,6 +65,38 @@ checked_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
 end checked_free
 audit is mem.allocator (alloc: checked_alloc, free: checked_free)
 
+byte_release_case: () -> (ok: bool) =
+    mut bytes: [8]u8 = zeroed
+    start: ptr mut u8 = addr bytes[0]
+    slots: usize = 8
+    mut storage := mem.reserve(item: u8, base: start, slots: slots)
+    _ = mem.admit(storage, u8(11)) else slots
+    _ = mem.admit(storage, u8(22)) else slots
+    _ = mem.admit(storage, u8(33)) else slots
+    before: usize = mem.initialized(storage)
+    refused: bool = begin
+        absent: allocation = mem.dispose(storage) else no_allocation
+        is_absent(absent)
+    end
+    mem.release_bytes(storage)
+    empty: bool = mem.initialized(storage) == 0
+      and mem.capacity(storage) == slots
+    released_address: usize = begin
+        released: ptr mut u8 = mem.dispose(storage) else (problem)
+            _ = problem
+            ok = false
+            return
+        end
+        usize(released)
+    end
+    again: bool = begin
+        absent: allocation = mem.dispose(storage) else no_allocation
+        is_absent(absent)
+    end
+    ok = before == 3 and refused and empty
+      and released_address == usize(start) and again
+end byte_release_case
+
 public main: () -> (code: i32) =
     code = 1
     mut heap_state := checked_host()
@@ -148,7 +180,7 @@ public main: () -> (code: i32) =
       and heap_state.exact and heap_state.allocated == 3
       and heap_state.freed == 3
       and is_absent(heap_state.first) and is_absent(heap_state.second)
-      and is_absent(heap_state.third)
+      and is_absent(heap_state.third) and byte_release_case()
     then
         code = 42
     end if

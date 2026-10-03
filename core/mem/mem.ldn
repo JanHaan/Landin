@@ -176,6 +176,12 @@ public release: (item: type, inout storage: raw(item))
     storage.prefix = storage.prefix[0..<tail]
 end release
 
+--  Bytes have no per-item cleanup. Shorten their typed initialized witness
+--  in one transition; keep the original base and capacity for dispose.
+public release_bytes: (inout storage: raw(u8)) -> none =
+    storage.prefix = storage.prefix[0..<0]
+end release_bytes
+
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage)
                 ! raw_not_empty | raw_empty =

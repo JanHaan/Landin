@@ -15152,7 +15152,10 @@ before extending the witness by one. Neither step publishes spare capacity.
 `replace`, like `admit`, declares the inserted value `escaping`. `used` returns
 only the initialized witness, with mutable element permission and
 `from storage`. `release` checks for `raw_empty`, saves the typed former tail
-and then shortens the witness. `dispose` checks for `raw_not_empty`, returns
+and then shortens the witness. For `raw(u8)` alone, `release_bytes` shortens the
+typed initialized witness to zero in one transition without returning each
+byte; it preserves the original base and capacity. Bytes require no per-item
+cleanup. `dispose` checks for `raw_not_empty`, returns
 the original byte pointer and clears the allocation state, witness and
 capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
@@ -15194,9 +15197,10 @@ byte-specific `new_bytes` returns a private `byte_buffer` containing the full
 allocation extent and an initialized byte prefix. Zero count makes no provider
 call; nonzero count publishes a view only after every byte is initialized.
 `bytes` derives its mutable view from the owner. `drop_bytes` drains and clears
-the owner before freeing its original base and extent; a shortened borrowed
-slice is never used as allocation identity. These routines introduce no
-ownership, implicit destruction or exemption from shallow origin analysis.
+the owner with `release_bytes` before freeing its original base and extent;
+a shortened borrowed slice is never used as allocation identity. These routines
+introduce no ownership, implicit destruction or exemption from shallow origin
+analysis.
 
 **The alternatives:** a built-in raw-storage kind would add syntax, type-table
 and backend machinery for an invariant a private module can express. A public

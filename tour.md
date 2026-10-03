@@ -704,6 +704,8 @@ slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
 foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
 `raw_empty`, and `raw_not_empty`.
+For byte storage, `release_bytes` shortens the typed initialized prefix to
+zero in one step; it leaves the backing allocation for `dispose` to return.
 
 Growth uses two raw values. Allocate and reserve an empty replacement, copy
 the old initialized prefix into it, and roll that private replacement back if
@@ -733,7 +735,8 @@ and releases the original object extent through the supplied allocator.
 `mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
 every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
 slice, and `mem.drop_bytes(state, owner)` releases the original allocation and
-clears the owner. A zero count makes no allocation. A copied view or owner is
+clears the owner after the byte prefix is emptied. A zero count makes no
+allocation. A copied view or owner is
 still subject to manual lifetime discipline; consumption is not ownership.
 
 ### [0520] Array: a value
