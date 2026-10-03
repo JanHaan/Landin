@@ -959,7 +959,10 @@ class ClangDriver:
         # describe SDK annotations, not the explicit adapter pointer policy.
         sdk_warnings = (("-Wno-nullability-completeness",)
                         if self.inputs.target == DARWIN_TARGET else ())
-        self.run(("-iquote", str(staging), "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+        # The Nix Clang wrapper adds linker options even for syntax-only runs.
+        # Keep adapter warnings fatal; only unused driver options may warn.
+        self.run(("-iquote", str(staging), "-Wall", "-Wextra", "-Werror",
+                  "-Wno-error=unused-command-line-argument", "-fsyntax-only",
                   *sdk_warnings, str(adapters)), context="validating generated adapters")
 
 @dataclasses.dataclass

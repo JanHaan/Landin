@@ -415,7 +415,10 @@ Current deliberate limits are visible rather than completion shortcuts:
 python3 bindings/test.py
 ```
 
-The suite requires an external Clang. It uses an empty explicit Linux sysroot,
+The suite requires an external Clang; the pinned Linux Nix development shell
+provides one. Syntax-only adapter checks keep C warnings fatal while allowing
+unused command-line options from the Nix Clang wrapper to remain warnings.
+It uses an empty explicit Linux sysroot,
 self-contained headers, and Clang's explicitly named resource headers. It
 checks relocated byte-for-byte generation, path-free metadata, ABI guards,
 precise refusal paths, and no replacement on failure. It compiles generated C

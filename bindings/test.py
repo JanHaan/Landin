@@ -374,7 +374,7 @@ class GeneratorTests(unittest.TestCase):
 
         peer = subprocess.run([
             str(self.clang), "-std=c11", "-Wall", "-Wextra", "-Werror",
-            "-pthread", "-fsyntax-only", "-I", str(FIXTURE),
+            "-Wno-error=unused-command-line-argument", "-pthread", "-fsyntax-only", "-I", str(FIXTURE),
             str(FIXTURE / "peer.c"),
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(peer.returncode, 0, peer.stderr)
@@ -407,7 +407,8 @@ class GeneratorTests(unittest.TestCase):
         shutil.copyfile(source / "api.h", logical / "api.h")
         target_compile = [
             str(self.clang), f"--target={TARGET}", f"--sysroot={source / 'sysroot'}",
-            "-std=c11", "-nostdinc", "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+            "-std=c11", "-nostdinc", "-Wall", "-Wextra", "-Werror",
+            "-Wno-error=unused-command-line-argument", "-fsyntax-only",
             "-I", str(output), "-I", str(source), "-isystem", str(source / "includes"),
             "-isystem", str(self.resource_include), str(output / "adapters.c"),
         ]
