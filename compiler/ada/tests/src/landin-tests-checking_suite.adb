@@ -10757,6 +10757,123 @@ package body Landin.Tests.Checking_Suite is
       Check_Tail ("pair(left: 1, right: 2)");
    end C_Variadic_Carrier_Refusal_Is_Precise;
 
+   procedure Array_Field_Lookup_Keeps_First_Raw_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Lookup_Keeps_First_Raw_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      use type C.Field_Shape;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-index.ldn",
+         "one: type = struct x: u8 end one" & LF
+         & "two: type = struct x: u8 end two" & LF
+         & "three: type = struct x: u8 end three" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "shape source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "shape source was refused");
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Site : constant Landin.Provenance.Origin :=
+           Landin.Syntax.Origin
+             (Tree.all, Landin.Syntax.Nth_Declaration (Tree.all, 1));
+         Part : constant C.Signature_Part :=
+           (Kind => Ty.Usize, Site => Site, others => <>);
+         Fits : Boolean;
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         declare
+            First : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site);
+            Second : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site);
+            Mutable : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], Part, Site, Error_Form => C.Inferred);
+            A : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => First, others => <>);
+            B : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => Second, others => <>);
+            C_Mutable : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => Mutable, others => <>);
+            A_Array, B_Array, M_Array, Nested, Again : C.Field_Shape;
+         begin
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 1),
+               [(Kind => C.Variant_Field, Element => Ty.U8,
+                 Cases => 1, Payloads_First => 1, others => <>),
+                A, (Element => Ty.U8, others => <>)],
+               Landin.Targets.Linux_X86_64, Fits,
+               Cases => [(First => 1, Count => 2)],
+               Payloads => [A, (Element => Ty.U16, others => <>)]);
+            Landin.Testing.Check (Item, Fits, "variant payload layout fits");
+            A_Array := C.Make_Array_Field (Types.all, 3, A);
+            Landin.Testing.Check
+              (Item, A_Array.Payloads_First = 1
+                 and then C.Array_Field_Element (Types.all, A_Array) = A,
+               "payload precedes the same ordinary field");
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 2),
+               [(Element => Ty.U8, others => <>), B],
+               Landin.Targets.Linux_X86_64, Fits);
+            Landin.Testing.Check (Item, Fits, "ordinary field layout fits");
+            B_Array := C.Make_Array_Field (Types.all, 3, B);
+            Landin.Testing.Check
+              (Item, First /= Second
+                 and then C.Signatures_Agree (Types.all, First, Second)
+                 and then B_Array.Payloads_First = 7
+                 and then A_Array.Payloads_First /= B_Array.Payloads_First,
+               "raw-distinct semantic twins keep separate first positions");
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 3), [A, B],
+               Landin.Targets.Linux_X86_64, Fits);
+            Landin.Testing.Check (Item, Fits, "repeated field layout fits");
+            Again := C.Make_Array_Field (Types.all, 5, A);
+            Landin.Testing.Check
+              (Item, Again.Payloads_First = A_Array.Payloads_First
+                 and then C.Array_Field_Element (Types.all, Again) = A,
+               "later layout duplicates preserve earliest positions");
+            Again := C.Make_Array_Field (Types.all, 5, B);
+            Landin.Testing.Check
+              (Item, Again.Payloads_First = B_Array.Payloads_First,
+               "repeated ordinary field keeps its first position");
+            M_Array := C.Make_Array_Field (Types.all, 3, C_Mutable);
+            C.Finalize_Inferred_Errors
+              (Types.all, Mutable, C.No_Atom_Set);
+            Again := C.Make_Array_Field (Types.all, 4, C_Mutable);
+            Landin.Testing.Check
+              (Item, M_Array.Payloads_First = Again.Payloads_First,
+               "signature finalization does not change the raw key");
+            Nested := C.Make_Array_Field (Types.all, 2, M_Array);
+            Again := C.Make_Array_Field (Types.all, 9, M_Array);
+            Landin.Testing.Check
+              (Item, Nested.Payloads_First = Again.Payloads_First
+                 and then C.Array_Field_Element (Types.all, Nested)
+                   = M_Array,
+               "array appended shapes are indexed and reused");
+         end;
+      end;
+   end Array_Field_Lookup_Keeps_First_Raw_Shape;
+
    procedure Recursive_Array_Foundations
      (Item : in out Landin.Testing.Context);
 
@@ -14563,6 +14680,9 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking",
          "array field copies compare complete children",
          Array_Field_Copies_Compare_Complete_Children'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field lookup keeps first raw shape",
+         Array_Field_Lookup_Keeps_First_Raw_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "recursive array foundations",
          Recursive_Array_Foundations'Access);

@@ -2339,6 +2339,46 @@ package body Landin.Checking is
       end loop;
    end Holds;
 
+   function Hash (Shape : Field_Shape) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type := 0;
+
+      procedure Mix (Value : Ada.Containers.Hash_Type);
+
+      procedure Mix (Value : Ada.Containers.Hash_Type) is
+      begin
+         Result := Result * 16#9E37_79B1# + Value;
+      end Mix;
+   begin
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.First));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Bits));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Storage));
+      Mix (Ada.Containers.Hash_Type'Mod (Field_Kind'Pos (Shape.Kind)));
+      Mix (Ada.Containers.Hash_Type'Mod
+             (Landin.Types.Scalar_Name'Pos (Shape.Element)));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length / 2 ** 32));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Cases));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Payloads_First));
+      Mix (Nominal_Identities.Hash (Shape.Nominal));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Signature));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Atoms));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Reference));
+      return Result;
+   end Hash;
+
+   procedure Append_Field_Shape (Into : in out Table; Shape : Field_Shape);
+
+   procedure Append_Field_Shape (Into : in out Table; Shape : Field_Shape) is
+      First : constant Boolean := not Into.Field_Shape_First.Contains (Shape);
+   begin
+      Into.Field_Shapes.Append (Shape);
+      if First then
+         Into.Field_Shape_First.Insert
+           (Shape, Into.Field_Shapes.Last_Index);
+      end if;
+   end Append_Field_Shape;
+
    function Make_Array_Field
      (Into    : in out Table;
       Length  : Element_Count;
@@ -2367,14 +2407,12 @@ package body Landin.Checking is
         or else Element.Atoms /= No_Atom_Set
       then
          Made.Cases := 1;
-         for Position in 1 .. Natural (Into.Field_Shapes.Length) loop
-            if Into.Field_Shapes (Position) = Element then
-               Made.Payloads_First := Position;
-               return Made;
-            end if;
-         end loop;
-         Into.Field_Shapes.Append (Element);
-         Made.Payloads_First := Into.Field_Shapes.Last_Index;
+         if Into.Field_Shape_First.Contains (Element) then
+            Made.Payloads_First := Into.Field_Shape_First.Element (Element);
+         else
+            Append_Field_Shape (Into, Element);
+            Made.Payloads_First := Into.Field_Shapes.Last_Index;
+         end if;
       end if;
       return Made;
    end Make_Array_Field;
@@ -4537,7 +4575,7 @@ package body Landin.Checking is
          Case_Base : constant Natural := Natural (Into.Case_Runs.Length);
       begin
          for Payload of Payloads loop
-            Into.Field_Shapes.Append (Payload);
+            Append_Field_Shape (Into, Payload);
          end loop;
 
          for Run of Cases loop
@@ -4561,7 +4599,7 @@ package body Landin.Checking is
                   Stored.Payloads_First :=
                     Case_Base + Stored.Payloads_First;
                end if;
-               Into.Field_Shapes.Append (Stored);
+               Append_Field_Shape (Into, Stored);
             end;
          end loop;
       end;

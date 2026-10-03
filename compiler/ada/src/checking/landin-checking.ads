@@ -2652,6 +2652,14 @@ private
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
 
+   function Hash (Shape : Field_Shape) return Ada.Containers.Hash_Type;
+
+   package Field_Shape_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Field_Shape,
+      Element_Type    => Positive,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
+
    package Case_Run_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Case_Run);
@@ -2886,6 +2894,8 @@ private
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
       Field_Shapes : Field_Shape_Vectors.Vector;
+      --  The first raw-equal position, including layout fields and payloads.
+      Field_Shape_First : Field_Shape_Maps.Map;
       Case_Runs    : Case_Run_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
