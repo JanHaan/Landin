@@ -90,15 +90,15 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 
-#  One shared corpus on all three targets, so the contract is the same
-#  contract everywhere rather than three target-shaped approximations.
+#  One shared corpus on every target, so the contract is the same contract
+#  everywhere rather than target-shaped approximations.
 CORPUS = ("insertion-sort", "sieve-of-eratosthenes", "add-exits-with-its-sum",
           "array-of-structs", "atom-values-cross-the-abi",
           "array-arguments-cross-calls")
-TARGETS = ("linux-x86-64", "darwin-arm64", "cortex-m0")
+TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
 PROFILES = (("none", "off"), ("size", "auto"), ("speed", "all"))
-DEBUG_FLAG = {"linux-x86-64": "full", "darwin-arm64": "full",
-              "cortex-m0": "lines"}
+DEBUG_FLAG = {"linux-x86-64": "full", "linux-arm64": "full",
+              "darwin-arm64": "full", "cortex-m0": "lines"}
 #  A module closure, so the contract covers import resolution and not only
 #  one file: the report's source order is what makes closure order irrelevant.
 CLOSURE_FIXTURE = "core-mem-allocators"
@@ -128,6 +128,8 @@ def host_target() -> str | None:
     """The one target this host can also assemble and link."""
     if platform.system() == "Linux" and platform.machine() == "x86_64":
         return "linux-x86-64"
+    if platform.system() == "Linux" and platform.machine() == "aarch64":
+        return "linux-arm64"
     if platform.system() == "Darwin" and platform.machine() == "arm64":
         return "darwin-arm64"
     return None

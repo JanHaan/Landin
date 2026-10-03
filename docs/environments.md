@@ -24,9 +24,11 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 |---|---|---|
 | native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
+| Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
+| QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
+| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
 
 The acceptance controller runs the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion runs debug compiler-host
@@ -80,7 +82,7 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild for this host
 ./scripts/test.sh
 ```
 
-On a Mac use `./scripts/dev-test.sh --host`, optionally with an exact
+On a Mac use `./scripts/dev-test.sh --host --target=linux-x86-64`, optionally with an exact
 `--suite` or `--case`. Every selected check must pass. The first native Mac
 run's unfiltered missing-Linux-driver result is a historical environment observation, not a
 current success rule.
@@ -112,7 +114,7 @@ checking while avoiding a clean rebuild for every Ada edit:
 ./scripts/dev-test.sh --case='harness/filters select exact cases'
 ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
 
-./scripts/dev-test.sh --host --suite=checking
+./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
 
 The selectors are exact, accept one selection at a time, and print `FILTERED`
@@ -204,6 +206,7 @@ recorded evidence requires.
 | 2026-08-20 | macOS arm64 (Darwin 25.5.0, Apple M1 Pro) | GNAT 16.1.0, GPRbuild 26.0.0 (aarch64-apple-darwin) | clean build; debug and release |
 | 2026-08-20 | Apple Container 1.2.2, `linux/amd64` under Rosetta, Linux 6.18.15 | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | build from an empty build directory; debug |
 | 2026-08-20 | builds.sr.ht `debian/stable`, Linux 6.12.94 x86-64 hardware, [job 1867022](https://builds.sr.ht/~sinnfrei/job/1867022) | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | both archives verified against their checksums; clean build; debug and release; `check.py` clean; 47 seconds |
+| 2026-10-02 | Apple Container 1.2.2, `linux/arm64` Debian trixie on an Apple M1 Pro, 8 CPUs, 8 GiB | GNAT 16.1.0, GPRbuild 26.0.0 (aarch64-linux-gnu) | both archives verified against their checksums; clean build; the whole test program on the Linux arm64 lane, 800 cases, in 339 seconds; the GDB sessions with the bundled GDB 17.2 |
 
 The retired builds.sr.ht gate job also printed `refine --identify`, so "no
 release version is assigned" appeared in the log of every run rather than

@@ -207,9 +207,10 @@ class ContractControls(unittest.TestCase):
         self.assertEqual(set(CHECK.DEBUG_FLAG), set(CHECK.TARGETS))
         self.assertEqual(CHECK.DEBUG_FLAG["cortex-m0"], "lines")
 
-    def test_the_contract_covers_all_three_targets(self):
+    def test_the_contract_covers_every_target(self):
         self.assertEqual(CHECK.TARGETS,
-                         ("linux-x86-64", "darwin-arm64", "cortex-m0"))
+                         ("linux-x86-64", "linux-arm64", "darwin-arm64",
+                          "cortex-m0"))
 
     def test_the_corpus_is_shared_by_every_target(self):
         fixtures = CHECK.repository_root() / "compiler/tests/fixtures/runtime"

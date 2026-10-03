@@ -142,7 +142,7 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/test.sh
 ```
 
-On macOS, use `./scripts/dev-test.sh --host` for compiler checks and add an
+On macOS, use `./scripts/dev-test.sh --host --target=linux-x86-64` for compiler checks and add an
 exact `--suite` or `--case` selector while editing. Every selected case must
 pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
 workloads and LLDB natively on the Mac. The unfiltered harness includes Linux

@@ -1,5 +1,6 @@
 #  Publish `refine` for the platforms the pins carry a checksum for.
 #
+#  Linux x86-64, Linux arm64 and macOS arm64, each built on its own host.
 #  A consuming project should not have to build a compiler to use one, and
 #  should not have to fetch a 383 MB toolchain to get a 20 MB program. The
 #  flake's source build stays what it is; this is the fast path beside it.
@@ -33,7 +34,7 @@ permissions:
   contents: read
 
 #  One run per tag, and never cancel one in flight: a cancelled publish can
-#  leave a release holding one platform's asset without the other's.
+#  leave a release holding one platform's asset without the others'.
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
@@ -47,6 +48,9 @@ jobs:
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
+          - runner: ubuntu-24.04-arm
+            platform: aarch64-linux
+            build: linux-arm64
           - runner: macos-15
             platform: aarch64-darwin
             build: darwin-arm64
@@ -88,7 +92,8 @@ jobs:
       #  have to agree: tagging v0.2.1 on a tree that still says 0.2.0
       #  would otherwise publish landin-0.2.0-* under release v0.2.1.
       #  The compilations are the smoke test -- the whole pipeline to
-      #  assembly for both hosted targets, needing no assembler.
+      #  assembly for every hosted target, needing no assembler -- and the
+      #  compiler must default to its own host (D257).
       - name: Check and smoke-test it
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
@@ -101,11 +106,12 @@ jobs:
           fi
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
           "$binary" --identify
-          for target in linux-x86-64 darwin-arm64; do
+          for target in linux-x86-64 linux-arm64 darwin-arm64; do
             "$binary" --target="$target" --emit=asm -o "$RUNNER_TEMP/smoke.s" \
               compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
             grep -q main "$RUNNER_TEMP/smoke.s"
           done
+          python3 compiler/tests/test_default_target.py --refine "$binary"
           if [ "$RUNNER_OS" = Linux ]; then
             readelf -d "$binary"
             if readelf -d "$binary" | grep -qE 'RPATH|RUNPATH'; then

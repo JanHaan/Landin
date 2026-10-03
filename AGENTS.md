@@ -9,20 +9,21 @@ see the same text; edit this one.
 Landin is a language specification with a working Ada bootstrap compiler.
 `refine` scans and parses every `.ldn` file it is given, resolves the files as
 one module, checks every type and definite assignment, lowers accepted
-functions into verified target-neutral IR, emits Linux x86-64, Darwin arm64 or
-Cortex-M0 assembly, and can invoke a target-selected native toolchain to
-assemble and link.
+functions into verified target-neutral IR, emits Linux x86-64, Linux arm64,
+Darwin arm64 or Cortex-M0 assembly, and can invoke a target-selected native
+toolchain to assemble and link. A build is for the compiler's own host unless
+`--target=` names another.
 
-All three targets are implemented. The two hosted ones build and run complete
+All four targets are implemented. The three hosted ones build and run complete
 programs with native source-debugging coverage — GDB on Linux, LLDB on
 Darwin — and Cortex-M0 builds firmware with compiler-owned reset, vectors,
 linker script and initialized-data copying, with line and function debugging.
 A small repository-owned `core` library and the complete derived prototypes 2,
 3 and 4 execute through that path. Runtime fixtures execute those binaries,
-and the gate runs them on all three targets on every push: natively on
-Linux x86-64 and macOS arm64, and on Cortex-M0 under QEMU, whose synthetic
-devices a repository-owned harness serves through QEMU's debugger stub, with
-GDB and LLDB sessions on the hosted targets.
+and the gate runs them on all four targets on every push: natively on
+Linux x86-64, Linux arm64 and macOS arm64, and on Cortex-M0 under QEMU, whose
+synthetic devices a repository-owned harness serves through QEMU's debugger
+stub, with GDB and LLDB sessions on the hosted targets.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
@@ -61,8 +62,15 @@ python3 check.py prototype-2-parser.md
 # Remove this host's build artefacts (--all removes every host's).
 ./scripts/clean.sh
 
-# Mac compiler-host feedback.  The unfiltered suite needs Linux.
-./scripts/dev-test.sh --host --suite=checking
+# Mac compiler-host feedback.  The unfiltered suite needs Linux, and a Mac's
+# own compiler defaults to darwin-arm64, so the shared verdicts' lane is named.
+./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
+
+# Another Linux target's corpus from this host: a cross lane, under QEMU's
+# user emulation and a cross driver.  Evidence about the emitted code, never
+# about the pinned toolchain on its own host.
+./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
+    --toolchain=aarch64-unknown-linux-gnu-gcc --suite='fixture execution'
 
 # Render every document as HTML, verify nothing was dropped, and package
 # it.  It does not publish: .github/workflows/pages.yml is the only
@@ -101,6 +109,8 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 | `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism, report identity and the scripted server sessions |
 | `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `lldb` | macos-26 | the LLDB sessions |
+| `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
+| `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
 
 A compile error surfaces in the first minutes of every job that builds.
 Measured on the runners, each job including its install and build:
@@ -138,8 +148,8 @@ remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
-Use `scripts/dev-test.sh --host` on the Mac for compiler-host feedback, and
-expect every selected case to pass. The unfiltered harness includes Linux
+Use `scripts/dev-test.sh --host --target=linux-x86-64` on the Mac for
+compiler-host feedback, and expect every selected case to pass. The unfiltered harness includes Linux
 execution and fails without its target toolchain, so do not run Linux
 containers, Linux workload emission or repeated complete suites on the Mac as
 routine feedback. Run changed-component tests while editing and the complete

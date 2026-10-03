@@ -6,10 +6,13 @@
 #  owns it.  `gate` needs every job and fails unless all of them succeeded,
 #  which is the one check a branch protection rule can require.
 #
-#  Linux x86-64 runs on ubuntu-24.04, macOS arm64 on macos-26 with Xcode 26.6
+#  Linux x86-64 runs on ubuntu-24.04, Linux arm64 on ubuntu-24.04-arm with
+#  the pinned aarch64 toolchain, macOS arm64 on macos-26 with Xcode 26.6
 #  -- the only image whose tools match environments/macos-arm64/policy.json
 #  exactly -- and Cortex-M on ubuntu-24.04 under its locked QEMU and GDB.
-#  The debug and release compilers each run the whole corpus.
+#  On both Linux architectures the debug and release compilers each run the
+#  whole corpus, and each compiler builds for its own host by default
+#  (D257), so the same commands run either lane.
 #
 #  It is still not the retired exact-revision acceptance: nothing is
 #  retained, and nothing accepts a revision.  It is a safety net that now
@@ -105,6 +108,7 @@ jobs:
           set -eu
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           refine="$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
+          python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -292,13 +296,16 @@ jobs:
         with:
           platform: aarch64-darwin
 
+      #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
+      #  compiler defaults to darwin-arm64 (D257), so the lane is named.
       - name: The compiler host suite
-        run: ./scripts/test.sh --host
+        run: ./scripts/test.sh --host --target=linux-x86-64
 
       - name: Determinism closures, native report identity and the server
         run: |
           set -eu
           refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
+          python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -370,11 +377,90 @@ jobs:
       - name: LLDB source debugging
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
 
+  #  Linux arm64 with the debug compiler: the whole test program, whose lane
+  #  is this host's own, then the checks that need a compiler and no
+  #  corpus.  The same steps as `compiler` on the other architecture.
+  arm64-compiler:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - name: The fixture corpus
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+
+      - name: The default target, determinism closures, native report identity and the server
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          refine="$PWD/compiler/ada/build/linux-arm64/debug/bin/refine"
+          python3 compiler/tests/test_default_target.py --refine "$refine"
+          python3 compiler/tests/test_determinism.py --refine "$refine"
+          python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
+
+  #  Linux arm64 with the release compiler: the corpus, the GDB sessions
+  #  with the GDB the pinned aarch64 GNAT bundles, and the generated
+  #  bindings for the standard AAPCS64 with the pinned Clang's arm64 build.
+  arm64-release:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - name: The fixture corpus
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+
+      - name: The default target and the server
+        run: |
+          set -eu
+          refine="$PWD/compiler/ada/build/linux-arm64/release/bin/refine"
+          python3 compiler/tests/test_default_target.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
+
+      - name: GDB source debugging
+        run: |
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          ./scripts/debug.sh
+
+      - name: Install the pinned Clang
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
+          installed=$(dpkg-query -W -f='${Version}' clang-19)
+          if [ "$installed" != "$LANDIN_CLANG_UBUNTU" ]; then
+            echo "clang-19 is $installed, not $LANDIN_CLANG_UBUNTU" >&2
+            exit 1
+          fi
+          clang-19 --version | head -1
+
+      - name: The generated bindings for the standard AAPCS64
+        run: |
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH" python3 compiler/tests/linux-arm64/bindings.py \
+            --refine "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" \
+            --clang clang-19 --output "$RUNNER_TEMP/bindings"
+
   #  The one check a branch rule requires: every job above succeeded.
   gate:
     if: always()
     needs: [documents, scripts, compiler, release, bindings, editor-grammar,
-            cortex-m, scaling, darwin-host, darwin-parity, lldb]
+            cortex-m, scaling, darwin-host, darwin-parity, lldb,
+            arm64-compiler, arm64-release]
     runs-on: ubuntu-24.04
     steps:
       - name: Every job succeeded

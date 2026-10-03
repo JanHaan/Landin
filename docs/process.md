@@ -12,11 +12,12 @@ what they cost.
 | stage | command | what it says |
 |---|---|---|
 | edit/test loop | `./scripts/dev-test.sh` with one exact `--suite`, `--case` or `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
-| Mac compiler host | `./scripts/dev-test.sh --host` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
+| Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
+| another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
 | before pushing | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | the host suite, `compiler/tests/darwin/check.py --parity` and `scripts/debug.sh --target=darwin-arm64 --parity` on a Mac, LLDB from a terminal session | the change passes where the gate will run it |
-| every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
+| every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
