@@ -246,6 +246,19 @@ package body Landin.Server.Sessions is
       --  Analysis
       ------------------------------------------------------------------
 
+      --  Switching aliases can change an imported overlay too, so invalidate
+      --  all checked modules when activation selects different source bytes.
+      procedure Activate (URI : String);
+
+      procedure Activate (URI : String) is
+         Changed : Boolean;
+      begin
+         Landin.Server.Documents.Activate (Store, URI, Changed);
+         if Changed then
+            Clear (Cached);
+         end if;
+      end Activate;
+
       --  Keep checked modules until a document changes or closes.
       procedure With_Analysis
         (URI   : String;
@@ -264,6 +277,7 @@ package body Landin.Server.Sessions is
          Item : Analysis_Access;
          New_Entry : Boolean := False;
       begin
+         Activate (URI);
          if Cached.Entries.Contains (Key) then
             Item := Cached.Entries.Element (Key);
          else
@@ -315,17 +329,6 @@ package body Landin.Server.Sessions is
             Buckets : array (1 .. Landin.Stages.Source_Count (Context)) of
               Landin.Server.Answers.Diagnostic_Indexes.Vector;
             By_Path : Path_Maps.Map;
-
-            function URI_At (Path : String) return String;
-
-            function URI_At (Path : String) return String is
-               Position : constant Path_Maps.Cursor := By_Path.Find (Path);
-            begin
-               return (if Path_Maps.Has_Element (Position)
-                       then Unbounded.To_String
-                         (Path_Maps.Element (Position).URI)
-                       else Landin.Server.Documents.URI_Of (Path));
-            end URI_At;
          begin
             --  The URI map iterates in key order.  Its first document at a
             --  path is the one URI_For and Version_Of would both select.
@@ -338,6 +341,10 @@ package body Landin.Server.Sessions is
                   end if;
                end;
             end loop;
+
+            By_Path.Include
+              (Landin.Server.Documents.Held_Path (Store, URI),
+               Store.Open.Element (URI));
 
             if Published.Contains (Key) then
                declare
@@ -440,6 +447,8 @@ package body Landin.Server.Sessions is
          while not Stale.Is_Empty loop
             declare
                Key : constant String := Stale.First_Element;
+               Has_Alias : Boolean := False;
+               Paths : String_Sets.Set;
             begin
                Stale.Delete_First;
                Remove (Cached, Key);
@@ -447,8 +456,20 @@ package body Landin.Server.Sessions is
                   if Landin.Server.Documents.Module_Key
                        (Store, Unbounded.To_String (Held.URI)) = Key
                   then
+                     if Paths.Contains (Unbounded.To_String (Held.Path)) then
+                        Has_Alias := True;
+                        exit;
+                     end if;
+                     Paths.Include (Unbounded.To_String (Held.Path));
+                  end if;
+               end loop;
+               for Held of Store.Open loop
+                  if Landin.Server.Documents.Module_Key
+                       (Store, Unbounded.To_String (Held.URI)) = Key
+                  then
                      Publish (Unbounded.To_String (Held.URI));
-                     exit;
+                     --  Each alias needs its own analysis and diagnostics.
+                     exit when not Has_Alias;
                   end if;
                end loop;
             end;
@@ -769,6 +790,7 @@ package body Landin.Server.Sessions is
                      end if;
                   end loop;
                   if Others_Open then
+                     Send (Landin.Server.Answers.Cleared (URI));
                      Stale.Include (Key);
                   else
                      --  Nothing of the module is open: clear what it said.
@@ -858,6 +880,7 @@ package body Landin.Server.Sessions is
                Read    : Landin.Platform.Read_Status;
                Sources : Landin.Source.Sets.Source_Set;
             begin
+               Activate (URI);
                Store.Held.Read_File (Path, Content, Read);
                declare
                   Text   : constant String := Unbounded.To_String (Content);
