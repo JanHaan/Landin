@@ -702,8 +702,16 @@ operands to float registers on M4F and the hosted targets that have them,
 including the register class and clobber set in [1630] and D248.
 
 Exit evidence: the Cortex-M corpus on the emulator lane in the gate, and a
-recorded run on each board; [1630] and D248 amended for float operands, with
-executed float-operand fixtures on every target with float registers.
+recorded run on each board. On the M4F board, a nonconstant source f32
+arithmetic and comparison fixture must execute with results checked against
+its oracle; linked disassembly must show compiler-generated hardware float
+operations rather than software arithmetic helpers. Direct target-description
+and C ABI-planner checks must establish the M4F's VFP argument and result
+registers, call-preserved registers and stack fallback against AAPCS32's VFP
+variant, and check the linked image's float ABI attributes. Executable C
+source interoperation remains in R13.20. [1630] and D248 must also be amended for float
+operands, with executed float-operand fixtures on every target with float
+registers.
 
 ### R12.40 — RISC-V microcontrollers
 
