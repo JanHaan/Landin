@@ -44,7 +44,8 @@ public drop_message: (provider: type is mem.allocator, inout allocator: provider
 end drop_message
 
 public dest: type = concept (item: type)
-    emit: (self: ptr mut item, world: any io.world, inout line: message)
+    emit: (self: ptr mut item, world: any io.world, inout pending: message,
+           line: []u8)
           -> none ! io.io_failed
     done: (self: ptr mut item, world: any io.world) -> none ! io.io_failed
 end dest
@@ -55,23 +56,24 @@ public count_dest: type = struct
     by_level: [8]usize
     total: usize
 end count_dest
-text_emit: (self: ptr mut text_dest, world: any io.world, inout line: message)
+text_emit: (self: ptr mut text_dest, world: any io.world, inout pending: message,
+            line: []u8)
            -> none ! io.io_failed =
     --  R480_DEBUG_TEXT
-    try deliver(line, world, self.val.stream)
+    _ = line
+    try deliver(pending, world, self.val.stream)
 end text_emit
 text_done: (self: ptr mut text_dest, world: any io.world)
            -> none ! io.io_failed =
     _ = self
     _ = world
 end text_done
-count_emit: (self: ptr mut count_dest, world: any io.world, inout line: message)
+count_emit: (self: ptr mut count_dest, world: any io.world, inout pending: message,
+             line: []u8)
             -> none ! io.io_failed =
     _ = world
-    bytes := vec.used(line.bytes)
-    mut length: usize = lenof bytes
-    if length > 0 and bytes[length - 1] == 10 then dec length end if
-    level: u8 = level_of(bytes[0..<length])
+    _ = pending
+    level: u8 = level_of(line)
     inc self.val.by_level[usize(level)]
     inc self.val.total
 end count_emit

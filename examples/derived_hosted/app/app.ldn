@@ -22,11 +22,13 @@ public process: (provider: type is mem.allocator, inout allocator: provider,
             break when not pass
         end for
         if pass then
-            try append(allocator, pending, line)
-            try append(allocator, pending, "\n")
+            if not cfg.count_only then
+                try append(allocator, pending, line)
+                try append(allocator, pending, "\n")
+            end if
             --  One explicit retry. The buffered cursor survives failure;
             --  a second failure is terminal and normal cleanup still runs.
-            try emit_retry(cfg.to, world, pending)
+            try emit_retry(cfg.to, world, pending, line)
             clear_message(pending)
             inc kept
         end if
@@ -66,10 +68,11 @@ public run: (provider: type is mem.allocator, inout allocator: provider,
     kept = try run_logged(allocator, world, chunk_size, log)
 end run
 
-emit_retry: (to: any dest, world: any io.world, inout pending: message)
+emit_retry: (to: any dest, world: any io.world, inout pending: message,
+             line: []u8)
             -> none ! io.io_failed =
-    to.emit(world, pending) else (problem)
+    to.emit(world, pending, line) else (problem)
         _ = problem
-        try to.emit(world, pending)
+        try to.emit(world, pending, line)
     end
 end emit_retry

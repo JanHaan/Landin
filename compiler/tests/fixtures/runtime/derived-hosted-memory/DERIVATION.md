@@ -30,9 +30,10 @@ boundary. Output opens only after complete argument validation. Identical path
 spellings are rejected; resolving filesystem aliases is outside this app's
 path comparison and remains the caller's responsibility.
 
-The destination protocol receives an owned message assembled with explicit
-allocator authority before dispatch. Text writes consume its cursor; count
-emission reads its bytes and updates fixed counters. Both providers are
+The destination protocol receives the borrowed reader line and a message.
+Text mode assembles an owned message with explicit allocator authority before
+dispatch and writes through its cursor. Count mode skips message preparation,
+classifies the borrowed line, and updates fixed counters. Both providers are
 selected dynamically and reached through their evidence pairs. `world.write`
 returns no byte count on failure, so retrying a multi-byte call could duplicate
 an unknown committed prefix. One-byte delivery makes progress knowable for
@@ -47,7 +48,7 @@ have no resumable cursor and terminate on failure.
 | W1 | Only hosted entry mints authority; the complete application runs against memory and system worlds without inspecting provider identity. |
 | W2 | Both worlds supply user arguments, excluding argv[0]; every retained byte is copied with a checked extent and explicit allocator. |
 | W3 | Reader shutdown consumes the whole reader. Every acquired file closes once, even when close reports failure; close is never retried. |
-| W4 | No allocator is added to the destination concept: message preparation allocates before dispatch; count state is fixed and text consumes an existing message. |
+| W4 | No allocator is added to the destination concept: text message preparation allocates before dispatch; count state is fixed and classifies the borrowed reader line. |
 | W5 | Filter traversal uses initialized `vec.used` values; it does not pretend generic iterable copies are mutable places. |
 | W6 | Each heterogeneous pair preserves its mutable provider pointer and evidence; sample filters update original state through indirect calls. |
 | Callback function/state pair | The sketch declares `on_progress` but has no call site. Its ordinary function/state representation and independent allocated callback result are exercised by `runtime/r480-arena-independent-results`; `negative/r480-callback-frame-escape` preserves the tracked local-state refusal. No C callback ABI is inferred from that Landin pair. |
@@ -63,6 +64,8 @@ configuration after argument mutation, arbitrary binary message copying and
 retry, transactional append exhaustion, nested regions over explicit finite
 backing, exact metadata-exhaustion consumption on a monotonic parent, allocation-failure sweeps including metadata failures, and terminal
 read/write/close/configuration failures with exact handle/allocation accounting.
+The count path also runs with a finite arena that holds the reader line but
+cannot hold two additional full-line message extents.
 
 `runtime/r480-hosted-count` runs the actual hosted root with real argv and an
 input file, comparing counts and summary. `runtime/r480-hosted-text` runs that

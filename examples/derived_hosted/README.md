@@ -28,15 +28,16 @@ counts on standard output. The program prints `kept: N` to standard error.
 Input is split on LF, which is removed from each line. Other bytes, including
 CR, remain unchanged. Empty lines are real lines, a final unterminated line is
 returned once, and a trailing LF creates no phantom line. Reader chunks have
-an explicit size, while lines and copied messages grow through the supplied
+an explicit size, while lines and text messages grow through the supplied
 allocator without a fixed line-length limit. Allocation and read failures are
 terminal for that reader; its partial internal line is not a retry protocol.
 
 Every argument is copied before parsing, including a private trailing NUL for
 paths. Configuration and match filters therefore survive later mutation of a
 memory provider's argument buffers. The reader returns a `from reading` view,
-consumed before its next refill. `process` copies each kept line into an owned
-message and appends one LF before calling an ordinary erased destination.
+consumed before its next refill. Count delivery classifies that borrowed line
+without copying it. For text delivery, `process` copies each kept line into an
+owned message and appends one LF before calling an ordinary erased destination.
 The message keeps its completed delivery cursor across failure. Text delivery
 writes one byte per `world.write` call: the repository system and memory
 providers cannot report failure after completing that one byte. The caller

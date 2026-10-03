@@ -9,6 +9,7 @@ public bad_encoding: atom
 public config: type = struct
     chain: vec.list(any filter)
     to: any dest
+    count_only: bool
     input: ptr u8
     output: io.file
     owns_output: bool
@@ -170,7 +171,8 @@ public build_logged: (provider: type is mem.allocator, inout allocator: provider
         object := try mem.new(allocator, initial)
         chosen = any(object)
     end if
-    value = (chain: chain, to: chosen, input: addr input[0],
+    value = (chain: chain, to: chosen, count_only: lenof output == 0,
+             input: addr input[0],
              output: opened, owns_output: owns_output, warnings: warnings,
              encoding_warnings: encoding_warnings)
 end build_logged
