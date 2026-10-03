@@ -43,8 +43,10 @@ checked against the Apple tools and SDK pinned in
 float arguments v0–v7. Homogeneous float aggregates of up to four leaves use
 the float bank. Other aggregates through sixteen bytes use integer chunks;
 larger values use caller copies and pointers. Indirect results use x8 without
-consuming x0. Fixed stack arguments are naturally packed; promoted variadic
-tails use eight-byte stack slots. Narrow integer arguments are extended by the
+consuming x0. Fixed scalar and homogeneous floating aggregate stack arguments
+keep their natural size and alignment; other fixed aggregates occupy whole
+eight-byte slots aligned to at least eight. Promoted variadic tails use
+eight-byte stack slots. Narrow integer arguments are extended by the
 caller. The native C differential corpus covers both call directions, bank
 exhaustion, partial chunks, nested arrays, callbacks and large results.
 
