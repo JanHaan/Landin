@@ -3,6 +3,7 @@ with Ada.Unchecked_Deallocation;
 package body Landin.Testing.Fakes is
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Write_Status;
 
    overriding procedure Finalize (Owner : in out Store_Owner) is
       procedure Free is new Ada.Unchecked_Deallocation (Store, Store_Access);
@@ -305,6 +306,29 @@ package body Landin.Testing.Fakes is
       end if;
    end Remove_File;
 
+   overriding procedure Move_File
+     (Host   : Fake_Filesystem;
+      From, To : String;
+      Status : out Landin.Platform.Move_Status)
+   is
+      Existing : constant Natural := Find (Host, From);
+      Destination : constant Natural := Find (Host, To);
+      Item : File_Entry;
+   begin
+      if Existing = 0 then
+         Status := Landin.Platform.Move_Source_Absent;
+      elsif Host.Writes.Data.Refuses_Removal or else Destination /= 0
+        or else Host.Writes.Data.Files (Existing).Kind = A_Directory
+      then
+         Status := Landin.Platform.Not_Movable;
+      else
+         Item := Host.Writes.Data.Files (Existing);
+         Item.Path := Unbounded.To_Unbounded_String (To);
+         Host.Writes.Data.Files.Replace_Element (Existing, Item);
+         Status := Landin.Platform.Moved;
+      end if;
+   end Move_File;
+
    ---------------------------------------------------------------------
    --  List_Directory
    --
@@ -537,6 +561,26 @@ package body Landin.Testing.Fakes is
             Arguments => Arguments,
             Capture   => Capture));
    end Run;
+
+   procedure Set_Output_Produced
+     (Host : in out Fake_Tool_Runner; Produced : Boolean)
+   is
+   begin
+      Host.State.Data.Produces_Output := Produced;
+   end Set_Output_Produced;
+
+   overriding function Output_Produced
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String) return Boolean
+   is
+      Written : Landin.Platform.Write_Status;
+   begin
+      if not Host.State.Data.Produces_Output then
+         return False;
+      end if;
+      Files.Write_File (Path, "fake executable", Written);
+      return Written = Landin.Platform.Write_Ok;
+   end Output_Produced;
 
    ---------------------------------------------------------------------
    --  Channel

@@ -52,6 +52,11 @@ package Landin.Platform.Native is
       Path   : String;
       Status : out Remove_Status);
 
+   overriding procedure Move_File
+     (Host   : Native_Filesystem;
+      From, To : String;
+      Status : out Move_Status);
+
    overriding procedure List_Directory
      (Host    : Native_Filesystem;
       Path    : String;

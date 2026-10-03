@@ -110,6 +110,16 @@ package body Landin.Platform.Overlays is
       Status := Not_Removable;
    end Remove_File;
 
+   overriding procedure Move_File
+     (Host   : Overlay;
+      From, To : String;
+      Status : out Move_Status)
+   is
+      pragma Unreferenced (Host, From, To);
+   begin
+      Status := Not_Movable;
+   end Move_File;
+
    --  The host's listing with every held entry of the same directory
    --  merged into its sorted place, once.
    overriding procedure List_Directory

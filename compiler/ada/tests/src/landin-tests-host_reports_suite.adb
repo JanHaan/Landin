@@ -344,8 +344,9 @@ package body Landin.Tests.Host_Reports_Suite is
                           (Host.Written (Report), "landin-build-report-1") > 0,
                         "an inactive map path holds the requested report");
                      Landin.Testing.Check_Equal
-                       (Item, Host.Write_Count, 2,
-                        "only assembly and report use the fake filesystem");
+                       (Item, Host.Write_Count,
+                        (if Executable then 3 else 2),
+                        "assembly, requested output and report are written");
                      Landin.Testing.Check_Equal
                        (Item, Tools.Run_Count,
                         (if Executable then 1 else 0),

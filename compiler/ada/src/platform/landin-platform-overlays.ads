@@ -71,6 +71,11 @@ package Landin.Platform.Overlays is
       Path   : String;
       Status : out Remove_Status);
 
+   overriding procedure Move_File
+     (Host   : Overlay;
+      From, To : String;
+      Status : out Move_Status);
+
    overriding procedure List_Directory
      (Host    : Overlay;
       Path    : String;

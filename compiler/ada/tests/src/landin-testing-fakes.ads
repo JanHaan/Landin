@@ -79,6 +79,11 @@ package Landin.Testing.Fakes is
       Path   : String;
       Status : out Landin.Platform.Remove_Status);
 
+   overriding procedure Move_File
+     (Host   : Fake_Filesystem;
+      From, To : String;
+      Status : out Landin.Platform.Move_Status);
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -167,6 +172,15 @@ package Landin.Testing.Fakes is
       Arguments : Landin.Platform.Path_List;
       Result    : out Landin.Platform.Tool_Result;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+
+   --  A fake successful run stands in for writing the requested output.
+   --  Cases about a lying tool can turn that promise off.
+   procedure Set_Output_Produced
+     (Host : in out Fake_Tool_Runner; Produced : Boolean);
+
+   overriding function Output_Produced
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String) return Boolean;
 
    --  Which capture mode the last run asked for, so a caller that must
    --  keep the streams apart can be held to it.
@@ -285,6 +299,7 @@ private
    type Recorder is record
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
+      Produces_Output : Boolean := True;
       Script      : Result_Vectors.Vector;
       Raises      : Boolean := False;
       Run_Exception : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;

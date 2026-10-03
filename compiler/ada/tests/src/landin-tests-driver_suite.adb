@@ -1952,6 +1952,65 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Failing_Toolchain_Is_Reported;
 
+   procedure Executable_Output_Belongs_To_This_Run
+     (Item : in out Landin.Testing.Context);
+
+   procedure Executable_Output_Belongs_To_This_Run
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario is (Missing, Stale, Identical, Failed);
+   begin
+      for Case_Kind in Scenario loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Both ("main.ldn", "--emit=exe");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            if Case_Kind /= Missing then
+               Host.Add_File ("program", "fake executable");
+            end if;
+            Tools.Set_Output_Produced
+              (Case_Kind = Identical);
+            if Case_Kind = Failed then
+               Tools.Set_Result (1, "link refused");
+            end if;
+            Args.Append ("-o");
+            Args.Append ("program");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 1,
+                  "each output verdict follows a tool invocation");
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Case_Kind = Identical then Landin.Driver.Status_Success
+                   else Landin.Driver.Status_Reported),
+                  "only the produced output succeeds");
+               if Case_Kind in Missing | Stale then
+                  Landin.Testing.Check
+                    (Item, Contains (Report, "L0501")
+                     and then Contains (Report, "produced no executable")
+                     and then Contains (Report, "program"),
+                     "a zero-exit omission names the missing output");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Host.Written ("program"),
+                  (if Case_Kind = Identical then "fake executable" else ""),
+                  "a failed attempt does not publish a new executable");
+               Landin.Testing.Check
+                 (Item, Host.Exists ("program") = (Case_Kind /= Missing),
+                  "a prior executable survives a failed attempt");
+            end;
+         end;
+      end loop;
+   end Executable_Output_Belongs_To_This_Run;
+
    --  A tool a signal killed has no exit status at all, and reading the one
    --  beside it would read zero.  The driver asks how the run ended before
    --  it asks what it returned, or an assembler that died would be a
@@ -4569,6 +4628,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a failing toolchain is reported",
          A_Failing_Toolchain_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "executable output belongs to this run",
+         Executable_Output_Belongs_To_This_Run'Access);
       Landin.Testing.Register
         (Into, "driver", "a killed toolchain is reported",
          A_Killed_Toolchain_Is_Reported'Access);

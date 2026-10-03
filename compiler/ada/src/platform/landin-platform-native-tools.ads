@@ -29,6 +29,10 @@ package Landin.Platform.Native.Tools is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged);
 
+   overriding function Output_Produced
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean;
+
 private
 
    type Native_Tool_Runner is limited new Tool_Runner with record

@@ -55,6 +55,8 @@ package body Landin.Driver is
    use type Landin.IR.Item_Kind;
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Remove_Status;
+   use type Landin.Platform.Move_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
@@ -1471,6 +1473,35 @@ package body Landin.Driver is
                Ran : Landin.Platform.Tool_Result;
                Libraries : Landin.Platform.Path_List;
                Libraries_Ready : Boolean;
+               Backup : Unbounded.Unbounded_String;
+               Prepared : Boolean := False;
+               Removed : Landin.Platform.Remove_Status;
+               Moved : Landin.Platform.Move_Status;
+
+               procedure Restore_Output;
+
+               procedure Restore_Output is
+               begin
+                  if not Prepared then
+                     return;
+                  end if;
+                  Host.Remove_File (Target_Path, Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot clear failed executable: " & Target_Path);
+                  elsif Unbounded.Length (Backup) > 0 then
+                     Host.Move_File
+                       (Unbounded.To_String (Backup), Target_Path, Moved);
+                     if Moved /= Landin.Platform.Moved then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot restore prior executable from "
+                           & Unbounded.To_String (Backup));
+                     end if;
+                  end if;
+                  Prepared := False;
+               end Restore_Output;
             begin
                if Driver = "" then
                   Note_No_Toolchain
@@ -1530,6 +1561,65 @@ package body Landin.Driver is
                         Unbounded.To_String (Ran.Output));
                      return;
                   end if;
+
+                  --  A zero-exit tool must produce a new pathname for this
+                  --  invocation. Keep the old file aside until that is
+                  --  established, even when the new bytes are identical.
+                  if Host.Exists (Target_Path) then
+                     for Index in 1 .. 100 loop
+                        declare
+                           Candidate : constant String := Target_Path
+                             & ".landin-backup-"
+                             & Ada.Strings.Fixed.Trim
+                                 (Positive'Image (Index), Ada.Strings.Both);
+                           Conflicts : Boolean := Host.Exists (Candidate)
+                             or else (Report_Seen and then
+                               Host.Paths_Overlap (Candidate, Report_Path));
+                        begin
+                           for Path of Destinations loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap (Candidate, Path);
+                           end loop;
+                           for Source in 1 .. Landin.Stages.Source_Count
+                             (Context)
+                           loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap
+                                  (Candidate, Landin.Source.Name
+                                     (Landin.Stages.Source
+                                        (Context,
+                                         Landin.Stages.Nth_Source
+                                           (Context, Source))));
+                           end loop;
+                           if not Conflicts then
+                              Host.Move_File
+                                (Target_Path, Candidate, Moved);
+                              if Moved = Landin.Platform.Moved then
+                                 Backup := Unbounded.To_Unbounded_String
+                                   (Candidate);
+                                 exit;
+                              end if;
+                           end if;
+                        end;
+                     end loop;
+                     if Unbounded.Length (Backup) = 0 then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot preserve prior executable: "
+                           & Target_Path);
+                        return;
+                     end if;
+                  else
+                     Host.Remove_File (Target_Path, Removed);
+                     if Removed = Landin.Platform.Not_Removable then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot clear executable output: "
+                           & Target_Path);
+                        return;
+                     end if;
+                  end if;
+                  Prepared := True;
                   Tools.Run
                     (Program   => Driver,
                      Arguments =>
@@ -1545,6 +1635,7 @@ package body Landin.Driver is
                      Capture   => Landin.Platform.Merged);
                exception
                   when Failure : Landin.External_Tool_Failed =>
+                     Restore_Output;
                      --  The adapter says why.  Only a tool that is not
                      --  there is the reader's to install; a capture file
                      --  that could not be removed is a host fault after
@@ -1568,6 +1659,9 @@ package body Landin.Driver is
                         end if;
                      end;
                      return;
+                  when others =>
+                     Restore_Output;
+                     raise;
                end;
 
                --  How the run ended is asked before what it returned,
@@ -1575,16 +1669,33 @@ package body Landin.Driver is
                --  field beside it holds zero.  Reading that alone would
                --  make a dead assembler a success that wrote nothing.
                if Ran.Ended /= Landin.Platform.Exited then
+                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " was stopped before it could finish" & LF
                      & Unbounded.To_String (Ran.Output));
                elsif Ran.Exit_Code /= 0 then
+                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " failed with status"
                      & Integer'Image (Ran.Exit_Code) & LF
                      & Unbounded.To_String (Ran.Output));
+               elsif not Tools.Output_Produced (Host, Target_Path) then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " reported success but produced no executable"
+                     & " at " & Target_Path & LF
+                     & Unbounded.To_String (Ran.Output));
+               elsif Unbounded.Length (Backup) > 0 then
+                  Host.Remove_File (Unbounded.To_String (Backup), Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot remove prior executable backup: "
+                        & Unbounded.To_String (Backup));
+                  end if;
                end if;
             end;
             Write_Build_Report;

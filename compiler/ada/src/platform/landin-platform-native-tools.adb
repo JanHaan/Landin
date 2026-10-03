@@ -299,4 +299,13 @@ package body Landin.Platform.Native.Tools is
          raise;
    end Run;
 
+   overriding function Output_Produced
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean
+   is
+      pragma Unreferenced (Host);
+   begin
+      return Files.Exists (Path) and then not Files.Is_Directory (Path);
+   end Output_Produced;
+
 end Landin.Platform.Native.Tools;

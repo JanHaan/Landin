@@ -23,6 +23,7 @@ package Landin.Platform is
    type Read_Status is (Read_Ok, Not_Found, Not_Readable);
    type Write_Status is (Write_Ok, Not_Writable);
    type Remove_Status is (Removed, Already_Absent, Not_Removable);
+   type Move_Status is (Moved, Move_Source_Absent, Not_Movable);
    type List_Status is
      (List_Ok, Directory_Not_Found, Not_A_Directory,
       Directory_Not_Readable);
@@ -101,6 +102,13 @@ package Landin.Platform is
       Path   : String;
       Status : out Remove_Status) is abstract;
 
+   --  Move one file without replacing an existing destination. Used to keep
+   --  an earlier executable while a tool produces a fresh one.
+   procedure Move_File
+     (Host   : Filesystem;
+      From, To : String;
+      Status : out Move_Status) is abstract;
+
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.
    procedure List_Directory
@@ -157,6 +165,13 @@ package Landin.Platform is
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
+
+   --  Answer whether a successful run left the named output as a file.
+   --  The caller clears that path before Run, so this is evidence from this
+   --  invocation rather than mere evidence of an earlier file.
+   function Output_Produced
+     (Host : Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean is abstract;
 
    ---------------------------------------------------------------------
    --  Resource measurement

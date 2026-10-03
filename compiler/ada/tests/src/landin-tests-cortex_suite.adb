@@ -1171,8 +1171,9 @@ package body Landin.Tests.Cortex_Suite is
                     (Item, Tools.Run_Count, 2,
                      "assembly and freestanding link are separate calls");
                   Landin.Testing.Check_Equal
-                    (Item, Host.Write_Count, 2,
-                     "compiler writes assembly and linker script");
+                    (Item, Host.Write_Count, 3,
+                     "assembly, linker script and fake link output"
+                     & " are written");
                   Landin.Testing.Check
                     (Item, Ada.Strings.Fixed.Index
                        (Tools.Last_Command, "-nostdlib") > 0,

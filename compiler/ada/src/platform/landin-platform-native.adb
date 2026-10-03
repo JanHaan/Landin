@@ -295,6 +295,29 @@ package body Landin.Platform.Native is
          Status := Not_Removable;
    end Remove_File;
 
+   overriding procedure Move_File
+     (Host   : Native_Filesystem;
+      From, To : String;
+      Status : out Move_Status)
+   is
+      pragma Unreferenced (Host);
+   begin
+      if not Directories.Exists (From) then
+         Status := Move_Source_Absent;
+      elsif Directories.Exists (To)
+        or else Directories.Kind (From) = Directories.Directory
+      then
+         Status := Not_Movable;
+      else
+         Directories.Rename (From, To);
+         Status := Moved;
+      end if;
+   exception
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+         | Ada.IO_Exceptions.Device_Error =>
+         Status := Not_Movable;
+   end Move_File;
+
    ---------------------------------------------------------------------
    --  List_Directory
    --
