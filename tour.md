@@ -188,10 +188,12 @@ end point
 
 ```
 
-### [0130] Order inside a module does not matter
+### [0130] Module names do not depend on declaration order
 
-Order inside a module does not matter. Forward references
-are fine; the compiler collects names before resolving them.
+Declaration order does not affect name lookup inside a module. Forward
+references are fine; the compiler collects names before resolving them.
+Active `linker.library` directives retain their source order for linking
+[1590].
 
 ### [0140] An inner scope may shadow an outer name
 
@@ -3357,10 +3359,11 @@ with no import. Two levels of visibility: module-internal
 
 The compiler reads every direct `.ldn` child in bytewise filename
 order. Other files are ignored and subdirectories are modules of their own.
-An empty directory is therefore a legal empty module. Declaration order still
-has no language meaning: the ordering fixes identities and diagnostics, not
-visibility. Public functions, bindings, atoms, types and concepts may be named
-through an import; a variant case inherits whether its containing type is
+An empty directory is therefore a legal empty module. Declaration order does
+not affect visibility. Canonical file order fixes identities and diagnostics
+and determines the order of active `linker.library` directives [1590]. Public
+functions, bindings, atoms, types and concepts may be named through an import;
+a variant case inherits whether its containing type is
 public. A public declaration may mention a private declaration, whose identity
 can flow through that public surface but remains unnameable by an importer.
 
@@ -3818,7 +3821,8 @@ libraries while leaving the hosted runtime's linkage to the driver. Darwin
 asks the selected driver to resolve `libNAME.a` and passes that existing file;
 a missing archive fails even when a dylib exists. With Apple's default driver,
 a returned bare filename must exist in the invocation directory. An inactive
-directive adds nothing.
+directive adds nothing. Moving an active directive among module declarations
+can therefore change archive resolution.
 
 ### [1600] Exporting to C
 

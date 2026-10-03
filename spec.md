@@ -70,10 +70,11 @@ the one name 'incx', which is why [1750] says what separates two tokens.
 
 A source file is a possibly empty import prelude followed by declarations in
 any order. All reached source files together are the program.
-Order inside a module does not matter [0130], so a file is a set of
-declarations rather than a sequence of them, and a name may be used
-above the line that introduces it. 'public' rides on a declaration
-and not on a statement [0090]: what a module exports is decided
+Declaration order does not affect name lookup inside a module [0130]:
+names are collected as a set, and a name may be used above the line that
+introduces it. Active `linker.library` directives retain canonical
+source/declaration order for archive resolution (D202). 'public' rides on a
+declaration and not on a statement [0090]: what a module exports is decided
 where the module is written, never inside a body.
 
 ```landin-grammar
@@ -869,7 +870,7 @@ an inner scope means nothing until the inner ones are named.
 | --- | --- |
 | program | every module reachable from the entry directory after [1420]'s ordered-root selection. This is the outer identity and the one whole-program conformance register; it is not a source namespace. |
 | configuration | D202's global options and implicit tool namespaces, used by the closed configuration fold before ordinary resolution. It has no runtime declarations or storage. |
-| module | every direct `.ldn` file in one directory [1410]. Its unordered declarations are shared by those files, module-internal by default and public only when written so. |
+| module | every direct `.ldn` file in one directory [1410]. Its named declarations are shared by those files regardless of order, module-internal by default and public only when written so. Active `linker.library` directives retain source order (D202). |
 | file imports | the final segment of a plain import, the written alias, or the public declarations named by a selected import in this file's prelude [1420]-[1450]. A namespace binding is not a declaration or value; a selected binding retains the imported declaration's identity. This scope encloses the module scope for lookups performed from that file. |
 | type declaration | D135's complete ordered formal list. The scope encloses the declaring file's imports and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
 | concept declaration | D142's complete ordered type-formal list. It encloses the declaring file's imports and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
@@ -879,8 +880,8 @@ an inner scope means nothing until the inner ones are named.
 
 [1800]'s direct final expression opens no additional scope inside its function
 body, because an expression declares nothing.
-Order matters in a body and does not in a module. [0130]'s set
-is a set of declarations, so a module name may be used above
+Order matters in a body; module declaration order does not affect lookup.
+[0130]'s set is a set of named declarations, so a module name may be used above
 the line that introduces it; [1800]'s block is a sequence, so a local is visible
 to the statements and final expression after it. Both its written type and
 initializer resolve before its name exists [0110] (D218), including names
@@ -897,8 +898,8 @@ re-exported.
 
 One scope gives one name to one thing.
 Two declarations of one name in one scope leave nothing to
-choose between them: [0130] says order inside a module does not
-matter, so neither is first, and [0140] licenses shadowing
+choose between them: [0130] makes module name lookup independent of
+declaration order, so neither is first, and [0140] licenses shadowing
 between an inner scope and an outer one and not within one. So
 it is refused, and the report names both places.
 Shadowing is not this. An inner scope may shadow an outer name
@@ -3539,9 +3540,9 @@ their existing CFG and observable short-circuit behavior.
 This is an implementation conformance repair, not a new source rule. Checking
 still validates every written subtree before folding: short-circuiting does not
 hide an ill-typed operand, a call, an impossible integer operand, or another
-initializer that [1940] refuses. Module declaration order remains irrelevant
-[0130], and a cycle remains refused even if another declaration could skip a
-reference to it.
+initializer that [1940] refuses. Module value lookup remains independent of
+declaration order [0130], and a cycle remains refused even if another
+declaration could skip a reference to it.
 
 **The alternatives:** teach the backend datum fold to interpret CFG, add a
 non-short-circuit logical opcode, or retain a second scalar-only syntax folder.
@@ -13891,6 +13892,8 @@ a same-named dynamic library is never a substitute. Apple's driver can return
 the bare filename, which must then exist in the invocation directory; a custom
 driver may provide a different archive search policy. Neither target changes
 the source order or repetition of archive operands.
+This is the ordering exception to [0130] and [1740]'s order-independent
+module name lookup: moving an active directive can change archive resolution.
 Inactive directives add no arguments. D227 enables scalar atomic operations;
 D229 enables Cortex-M0 body assembly, placement annotations and explicit
 firmware requests, and other targets refuse placement and firmware. D248
