@@ -446,7 +446,7 @@ package Landin.Diagnostics.Catalogue is
                "[1890]: a value's type is not the one its context or"
                & " operation requires",
             when Not_Definitely_Assigned =>
-               "[1910]: a name read on a path that does not assign it",
+               "[1910], [0910], [0930]: a place unassigned at a read or exit",
             when Immutable_Target      =>
                "[1900]: a place that may not be written",
             when Unsupported_Use       =>

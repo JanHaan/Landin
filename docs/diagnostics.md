@@ -390,12 +390,28 @@ count: u8 = flag
 
 ### L0302
 
-A name is read on a path that does not assign it first [1910]. Assign it on
-every path before the read, or give it a value where it is declared.
+Required storage is not definitely assigned at a read or an exit [1910]. A
+read needs the place assigned on every path that reaches it. Reading a whole
+aggregate also reads its parts; a computed local-array index requires the
+whole array assigned (D19-D22). Assign the needed place before the read on
+every arriving path, or give it a value where it is declared.
+
+After `sink`, the consumed place is dead until assigned again [0910]. Assign
+it or its enclosing aggregate before a later read. A consumed part of an
+`inout` parameter must also be restored on every exit, including `fail` and
+`try` failure propagation: the caller can observe that storage after a
+recovered failure. Assign it on each exit path, either before the exit or in
+an applicable `defer` or `undo` cleanup, which runs before this check.
+A named result must be fully assigned on successful return [0930], including
+any part consumed by `sink`; failure exits do not require the named result.
 
 ```landin
-make: () -> (result: [2]i32) =
-end make
+unavailable: atom
+consume: (sink value: i32) -> none = end consume
+bad: (inout value: i32) -> none ! unavailable =
+    consume(value)
+    fail unavailable
+end bad
 ```
 
 ### L0303

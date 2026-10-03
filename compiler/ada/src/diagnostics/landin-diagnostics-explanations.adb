@@ -207,9 +207,26 @@ package body Landin.Diagnostics.Explanations is
                & "tated. Change the value, or convert it explicitly where "
                & "a conversion exists.",
             when Catalogue.Not_Definitely_Assigned =>
-               "A name is read on a path that does not assign it first ["
-               & "1910]. Assign it on every path before the read, or give "
-               & "it a value where it is declared.",
+               "Required storage is not definitely assigned at a read or"
+               & " an exit [1910]. A read needs the place assigned on ever"
+               & "y path that reaches it. Reading a whole aggregate also r"
+               & "eads its parts; a computed local-array index requires th"
+               & "e whole array assigned (D19-D22). Assign the needed plac"
+               & "e before the read on every arriving path, or give it a v"
+               & "alue where it is declared."
+               & LF
+               & LF
+               & "After `sink`, the consumed place is dead until assigned "
+               & "again [0910]. Assign it or its enclosing aggregate befor"
+               & "e a later read. A consumed part of an `inout` parameter "
+               & "must also be restored on every exit, including `fail` an"
+               & "d `try` failure propagation: the caller can observe that"
+               & " storage after a recovered failure. Assign it on each ex"
+               & "it path, either before the exit or in an applicable `def"
+               & "er` or `undo` cleanup, which runs before this check. A n"
+               & "amed result must be fully assigned on successful return "
+               & "[0930], including any part consumed by `sink`; failure e"
+               & "xits do not require the named result.",
             when Catalogue.Immutable_Target =>
                "A place that may not be written [1900]: an immutable bin"
                & "ding, an `in` parameter, an atom, a function, or storage"
@@ -747,9 +764,17 @@ package body Landin.Diagnostics.Explanations is
                & "count: u8 = flag"
                & LF,
             when Catalogue.Not_Definitely_Assigned =>
-               "make: () -> (result: [2]i32) ="
+               "unavailable: atom"
                & LF
-               & "end make"
+               & "consume: (sink value: i32) -> none = end consume"
+               & LF
+               & "bad: (inout value: i32) -> none ! unavailable ="
+               & LF
+               & "    consume(value)"
+               & LF
+               & "    fail unavailable"
+               & LF
+               & "end bad"
                & LF,
             when Catalogue.Immutable_Target =>
                "f: (x: u32) -> none ="
