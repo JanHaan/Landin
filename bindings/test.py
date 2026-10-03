@@ -217,6 +217,58 @@ class TargetContractTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ("-print-target-triple",))
 
 
+class PolicyNameTests(unittest.TestCase):
+    def test_malformed_names_report_context_before_clang_or_output_creation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
+            root = pathlib.Path(temporary)
+            header = root / "api.h"
+            header.write_text("typedef int Widget;\n", encoding="utf-8")
+            for index, (name, explicit) in enumerate((
+                    (" ", False), (" \t ", True), ("@", False),
+                    ("@ \t", True), (" @ @ ", True))):
+                with self.subTest(name=name, explicit=explicit):
+                    selected = policy()
+                    entry = {"kind": "alias", "name": name}
+                    if explicit:
+                        entry["landin_name"] = "widget"
+                    selected["declarations"] = [entry]
+                    policy_path = root / f"policy-{index}.json"
+                    policy_path.write_text(json.dumps(selected), encoding="utf-8")
+                    output = root / f"generated-{index}"
+                    process = subprocess.run([
+                        sys.executable, str(GENERATOR), "--clang", sys.executable,
+                        "--target", TARGET, "--sysroot", str(root),
+                        "--header", str(header), "--policy", str(policy_path),
+                        "--out-dir", str(output),
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    self.assertEqual(process.returncode, 2, process.stderr)
+                    self.assertEqual(process.stdout, "")
+                    self.assertEqual(process.stderr,
+                        f"bindings: error: policy declaration 1 (alias {name!r}): "
+                        "name must contain a non-whitespace, non-@ character\n")
+                    self.assertFalse(output.exists())
+
+    def test_supported_names_and_explicit_landin_names_still_load(self) -> None:
+        module = runpy.run_path(str(GENERATOR))
+        with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
+            path = pathlib.Path(temporary) / "policy.json"
+            for name, explicit, expected in (
+                    ("Widget", None, "widget"),
+                    ("@Widget", None, "widget"),
+                    ("struct Widget", None, "widget"),
+                    ("@Widget", "chosen", "chosen")):
+                with self.subTest(name=name, explicit=explicit):
+                    selected = policy()
+                    entry = {"kind": "alias", "name": name}
+                    if explicit is not None:
+                        entry["landin_name"] = explicit
+                    selected["declarations"] = [entry]
+                    path.write_text(json.dumps(selected), encoding="utf-8")
+                    loaded = module["Policy"].load(path)
+                    self.assertEqual(loaded.entries[0].name, name)
+                    self.assertEqual(loaded.entries[0].landin_name, expected)
+
+
 class GeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

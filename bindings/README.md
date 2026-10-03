@@ -116,7 +116,10 @@ error; it is never silently skipped.
 
 All entries accept `kind`, `name`, and an optional `landin_name`. The default
 Landin name is a safe form of the C name. Names that would collide in Landin
-must be disambiguated explicitly. Opaque-object, callback-cell, variable and
+must be disambiguated explicitly. Policy `name` values made only of whitespace
+and `@` are rejected, including when `landin_name` is explicit.
+
+Opaque-object, callback-cell, variable and
 by-value-wrapper C locals and parameters are allocated independently of public
 Landin names, avoiding every identifier in
 the header AST (including nested typedefs and existing suffix variants) and

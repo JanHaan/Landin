@@ -638,12 +638,17 @@ class Policy:
                     f"policy declaration {index}: unknown kind {kind!r}")
             require(isinstance(name, str) and name,
                     f"policy declaration {index}: name must be a nonempty string")
+            context = f"policy declaration {index} ({kind} {name!r})"
+            require(any(character != "@" and not character.isspace() for character in name),
+                    f"{context}: name must contain a non-whitespace, non-@ character")
             duplicate = (kind, name)
             require(duplicate not in seen,
                     f"policy declaration {index}: duplicate selection {kind} {name!r}")
             seen.add(duplicate)
-            context = f"policy declaration {index} ({kind} {name!r})"
-            landin_name = raw.get("landin_name", sanitize_landin(name.lstrip("@").split()[-1]))
+            if "landin_name" in raw:
+                landin_name = raw["landin_name"]
+            else:
+                landin_name = sanitize_landin(name.lstrip("@").split()[-1])
             landin_name = require_landin_name(landin_name, context)
             cls._validate_entry(raw, kind, context)
             entries.append(PolicyEntry(kind, name, landin_name, raw, index))
