@@ -398,7 +398,8 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Comment  =>
                "[1780]: a block comment that is never closed",
             when Unterminated_Literal  =>
-               "[0260]: a quoted literal that is never closed",
+               "[0250]/[0260]/[0280]: a quoted or raw literal "
+               & "that is never closed",
             when Name_Expected         =>
                "[1760]: a name position holds something that is not a name",
             when Type_Expected         =>

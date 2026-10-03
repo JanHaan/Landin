@@ -187,11 +187,15 @@ f: () -> (r: i32) = 1 end
 
 ### L0014
 
-A quoted literal that is never closed on its line [0260]. Close it, or write a
-raw literal for text that spans lines [0280].
+An ordinary quoted text or character literal must close before its line ends
+[0250] [0260]. A raw text literal may span lines [0280]. Its maximal opening
+quote run sets the delimiter width; only a later run of at least that many
+quotes closes it. A shorter run remains content. Close the ordinary literal
+on its line, or add enough closing quotes to the raw literal.
 
 ```landin
 value := "never closed
+unclosed_raw: []u8 = """"never closed"""
 ```
 
 ## The parser

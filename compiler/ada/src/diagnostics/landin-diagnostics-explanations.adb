@@ -103,9 +103,13 @@ package body Landin.Diagnostics.Explanations is
                & "r needs its closer; the second label shows where the com"
                & "ment began.",
             when Catalogue.Unterminated_Literal =>
-               "A quoted literal that is never closed on its line [0260]"
-               & ". Close it, or write a raw literal for text that spans l"
-               & "ines [0280].",
+               "An ordinary quoted text or character literal must close "
+               & "before its line ends [0250] [0260]. A raw text literal m"
+               & "ay span lines [0280]. Its maximal opening quote run sets"
+               & " the delimiter width; only a later run of at least that "
+               & "many quotes closes it. A shorter run remains content. Cl"
+               & "ose the ordinary literal on its line, or add enough clos"
+               & "ing quotes to the raw literal.",
             when Catalogue.Name_Expected =>
                "A name belongs here and something else stands there [176"
                & "0]. A keyword is never a name, including a control word "
@@ -704,6 +708,8 @@ package body Landin.Diagnostics.Explanations is
                & LF,
             when Catalogue.Unterminated_Literal =>
                "value := ""never closed"
+               & LF
+               & "unclosed_raw: []u8 = """"""""never closed"""""""
                & LF,
             when Catalogue.Name_Expected =>
                "_: u32 = 1"
