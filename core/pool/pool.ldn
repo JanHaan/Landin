@@ -180,7 +180,14 @@ pool_alloc: (inout state: fixed_pool,
             -> (block: ptr mut u8) ! mem.out_of_memory =
     fail mem.out_of_memory when size > state.slot_size
     if alignment > 1 then
-        fail mem.out_of_memory when state.slot_alignment % alignment <> 0
+        --  A power-of-two request divides the slot alignment iff its low
+        --  bits are clear; other requests retain numeric divisibility.
+        mask: usize = alignment - 1
+        if (alignment & mask) == 0 then
+            fail mem.out_of_memory when (state.slot_alignment & mask) <> 0
+        else
+            fail mem.out_of_memory when state.slot_alignment % alignment <> 0
+        end if
     end if
 
     fail mem.out_of_memory when state.free_count == 0

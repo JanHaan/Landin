@@ -82,6 +82,18 @@ public main: () -> (code: i32) =
     limited_rounding_past_top: allocation =
         mem.allocate(limited_top, zero, two) else no_allocation
 
+    --  Direct allocator calls can request divisors other than powers of two.
+    mut odd := mem.arena_over_unchecked(misaligned_base, sixty_three)
+    odd_first: ptr mut u8 = mem.allocate(odd, three, three) else (problem)
+        _ = problem
+        return
+    end
+    six: usize = 6
+    odd_second: ptr mut u8 = mem.allocate(odd, two, six) else (problem)
+        _ = problem
+        return
+    end
+
     if usize(zero_unaligned) == usize(misaligned_base)
       and usize(aligned) % 8 == 0
       and mem.arena_used(arena) == usize(aligned) - usize(misaligned_base) + 3
@@ -104,6 +116,9 @@ public main: () -> (code: i32) =
       and mem.failing_used(limited_top) == maximum - usize(raw_base)
       and mem.failing_remaining(limited_top) == 1
       and mem.failing_allocations(limited_top) == 1 and mem.failing_frees(limited_top) == 0
+      and usize(odd_first) % three == 0
+      and usize(odd_second) % six == 0
+      and mem.arena_used(odd) == usize(odd_second) - usize(misaligned_base) + two
     then
         code = 42
     else

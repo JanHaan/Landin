@@ -205,7 +205,14 @@ allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
 
     mut padding: usize = 0
     if alignment > 1 then
-        remainder: usize = current_address % alignment
+        --  alignof requests take the mask path; direct calls may need division.
+        mask: usize = alignment - 1
+        mut remainder: usize = 0
+        if (alignment & mask) == 0 then
+            remainder = current_address & mask
+        else
+            remainder = current_address % alignment
+        end if
         if not (remainder == 0) then
             padding = alignment - remainder
         end if

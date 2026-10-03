@@ -75,6 +75,46 @@ one_slot_reuses: () -> (ok: bool) =
          and pool.free_count(state) == 1 and pool.live(state) == 1
     mem.free(state, second, second_size)
     ok = ok and pool.free_count(state) == 2 and pool.live(state) == 0
+
+    --  The non-power-of-two slot alignment admits both kinds of divisors.
+    eight: usize = 8
+    three: usize = 3
+    sixteen: usize = 16
+    five: usize = 5
+    by_eight: ptr mut u8 = mem.allocate(state, one, eight) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = ok and usize(by_eight) % eight == 0
+    mem.free(state, by_eight, one)
+    by_three: ptr mut u8 = mem.allocate(state, one, three) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = ok and usize(by_three) % three == 0
+    mem.free(state, by_three, one)
+    zero: usize = 0
+    by_zero: ptr mut u8 = mem.allocate(state, one, zero) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    mem.free(state, by_zero, one)
+    mut sixteen_refused: bool = false
+    _ = mem.allocate(state, one, sixteen) else (problem)
+        _ = problem
+        sixteen_refused = true
+    end
+    mut five_refused: bool = false
+    _ = mem.allocate(state, one, five) else (problem)
+        _ = problem
+        five_refused = true
+    end
+    ok = ok and sixteen_refused and five_refused
+         and pool.allocation_count(state) == 5
+         and pool.free_count(state) == 5 and pool.live(state) == 0
 end one_slot_reuses
 
 multiple_live_and_bounds: () -> (ok: bool) =
