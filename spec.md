@@ -15196,8 +15196,9 @@ its target extent and alignment, stores it and then returns the pointer;
 byte-specific `new_bytes` returns a private `byte_buffer` containing the full
 allocation extent and an initialized byte prefix. Zero count makes no provider
 call; nonzero count publishes a view only after every byte is initialized.
-`bytes` derives its mutable view from the owner. `drop_bytes` drains and clears
-the owner with `release_bytes` before freeing its original base and extent;
+`bytes` derives its mutable view from the owner. `drop_bytes` empties the byte
+witness with `release_bytes`, then `dispose` clears the descriptor before
+`drop_bytes` frees the saved original base and extent;
 a shortened borrowed slice is never used as allocation identity. These routines
 introduce no ownership, implicit destruction or exemption from shallow origin
 analysis.
