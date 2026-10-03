@@ -464,9 +464,11 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Field      =>
                "[0750]: a field a struct was not declared with",
             when Field_Named_Twice     =>
-               "[0710]: a struct literal names a field at most once",
+               "[0710]/D76: each struct field or variant payload label"
+               & " is named at most once",
             when Field_Not_Given       =>
-               "[0710]: every field is named or covered by `of`",
+               "[0710]/D76: every struct or variant payload field is"
+               & " named or covered by `of`",
             when Variant_Case_Named_Twice =>
                "[1210]: a match names each variant case at most once",
             when Variant_Case_Not_Matched =>

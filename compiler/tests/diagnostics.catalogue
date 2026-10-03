@@ -46,8 +46,8 @@ L0306  Live     [1950]: an operand the operation cannot take, where the compiler
 L0324  Live     [1510]: a compile-time assertion is false
 L0307  Live     [1795]: a chain of aliases that reaches no type
 L0308  Live     [0750]: a field a struct was not declared with
-L0309  Live     [0710]: a struct literal names a field at most once
-L0310  Live     [0710]: every field is named or covered by `of`
+L0309  Live     [0710]/D76: each struct field or variant payload label is named at most once
+L0310  Live     [0710]/D76: every struct or variant payload field is named or covered by `of`
 L0311  Live     [1210]: a match names each variant case at most once
 L0312  Live     [1210]: an exhaustive match names every variant case
 L0313  Live     D137: a nominal value layout cannot contain itself by value

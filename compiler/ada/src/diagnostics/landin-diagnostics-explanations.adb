@@ -248,11 +248,15 @@ package body Landin.Diagnostics.Explanations is
                & "the written name, the diagnostic offers it as a likely f"
                & "ix.",
             when Catalogue.Field_Named_Twice =>
-               "A struct literal or a struct names a field more than onc"
-               & "e [0710].",
+               "A struct declaration or literal names a field more than "
+               & "once [0710], or a variant case construction repeats a pa"
+               & "yload field label (D76). Name each field only once.",
             when Catalogue.Field_Not_Given =>
                "A struct literal gives no value for a field and no `of` "
-               & "covers it [0710].",
+               & "covers it [0710]. A variant case construction likewise o"
+               & "mits a payload field without a trailing `of zeroed` (D76"
+               & "). Supply the missing field or use a permitted trailing "
+               & "fill.",
             when Catalogue.Variant_Case_Named_Twice =>
                "A match names one variant case twice [1210].",
             when Catalogue.Variant_Case_Not_Matched =>

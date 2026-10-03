@@ -474,7 +474,9 @@ end f
 
 ### L0309
 
-A struct literal or a struct names a field more than once [0710].
+A struct declaration or literal names a field more than once [0710], or a
+variant case construction repeats a payload field label (D76). Name each field
+only once.
 
 ```landin
 bad: type (item: type) = struct
@@ -485,7 +487,9 @@ end bad
 
 ### L0310
 
-A struct literal gives no value for a field and no `of` covers it [0710].
+A struct literal gives no value for a field and no `of` covers it [0710]. A
+variant case construction likewise omits a payload field without a trailing
+`of zeroed` (D76). Supply the missing field or use a permitted trailing fill.
 
 ```landin
 point: type = struct
