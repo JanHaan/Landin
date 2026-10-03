@@ -329,6 +329,101 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Outgoing_Calls;
 
+   procedure Fixed_Zero_Stores (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Zero_Stores (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("zero.ldn",
+        "public main: () -> (code: i32) =" & LF
+        & "    aligned32: [8]u32 = zeroed" & LF
+        & "    aligned12: [3]u32 = zeroed" & LF
+        & "    tail: [5]u8 = zeroed" & LF
+        & "    mut empty: [0]u8 = zeroed" & LF
+        & "    empty = zeroed" & LF
+        & "    if aligned32[0] == 0 and aligned12[2] == 0"
+        & " and tail[4] == 0 then" & LF
+        & "        code = 42" & LF
+        & "    else" & LF
+        & "        code = 1" & LF
+        & "    end if" & LF
+        & "end main" & LF);
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("zero.s");
+      Args.Append ("zero.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("zero.s");
+               function Loop_Body (Count : Positive) return String;
+               function Occurrences (Needle : String) return Natural;
+               function Loop_Body (Count : Positive) return String is
+                  At_Count : constant Natural := Ada.Strings.Fixed.Index
+                    (Text, "movs r4, #" & Ada.Strings.Fixed.Trim
+                       (Count'Image, Ada.Strings.Both));
+               begin
+                  if At_Count = 0 then
+                     return "";
+                  end if;
+                  return Text
+                    (At_Count .. Natural'Min (Text'Last, At_Count + 95));
+               end Loop_Body;
+               function Occurrences (Needle : String) return Natural is
+                  From : Positive := Text'First;
+                  At_Next : Natural;
+                  Seen : Natural := 0;
+               begin
+                  loop
+                     At_Next := Ada.Strings.Fixed.Index
+                       (Text (From .. Text'Last), Needle);
+                     exit when At_Next = 0;
+                     Seen := Seen + 1;
+                     exit when At_Next + Needle'Length > Text'Last;
+                     From := At_Next + Needle'Length;
+                  end loop;
+                  return Seen;
+               end Occurrences;
+            begin
+               for Which in 1 .. 2 loop
+                  declare
+                     Count : constant Positive :=
+                       (if Which = 1 then 8 else 3);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Contains (Loop_Body (Count),
+                        "str r5, [r0]" & LF & HT & "adds r0, #4"),
+                        "aligned clear uses " & Count'Image
+                          & " word stores");
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Contains (Loop_Body (5),
+                    "strb r5, [r0]" & LF & HT & "adds r0, #1"),
+                  "five-byte clear stays bytewise");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences ("str r5, [r0]"), 2,
+                  "only aligned clears use word stores");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences ("strb r5, [r0]"), 1,
+                  "five-byte clear is the only byte loop");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "assembly inspection invokes no target tools");
+            end;
+         end if;
+      end;
+   end Fixed_Zero_Stores;
+
    procedure Register_Staging (Item : in out Landin.Testing.Context);
 
    procedure Register_Staging (Item : in out Landin.Testing.Context) is
@@ -1885,6 +1980,8 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "fixed zero stores", Fixed_Zero_Stores'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "outgoing calls", Outgoing_Calls'Access);
       Landin.Testing.Register

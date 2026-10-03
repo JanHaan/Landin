@@ -370,7 +370,9 @@ package body Landin.Backend.Cortex_M is
       procedure Release (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Two_Words;
-      procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
+      procedure Zero_Bytes
+        (Bytes : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment);
       function High (Register : String) return String;
       procedure Frame_Address_Through
         (Offset : Landin.Targets.Byte_Count; Register : String);
@@ -637,10 +639,28 @@ package body Landin.Backend.Cortex_M is
          Emit ("str r4, [r0, #4]");
       end Copy_Two_Words;
 
-      procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
+      procedure Zero_Bytes
+        (Bytes : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment) is
          Id : constant String := Fresh;
       begin
          if Bytes = 0 then
+            return;
+         end if;
+         if Alignment >= 4 and then Bytes >= 4 then
+            Immediate ("r4", Pattern (Bytes / 4));
+            Emit ("movs r5, #0");
+            Put (Id & ":");
+            Emit ("str r5, [r0]");
+            Emit ("adds r0, #4");
+            Emit ("subs r4, #1");
+            Emit ("bne " & Id);
+            for Tail in 1 .. Bytes mod 4 loop
+               Emit ("strb r5, [r0]");
+               if Tail < Bytes mod 4 then
+                  Emit ("adds r0, #1");
+               end if;
+            end loop;
             return;
          end if;
          Immediate ("r4", Pattern (Bytes));
@@ -1526,6 +1546,11 @@ package body Landin.Backend.Cortex_M is
          function Disjoint_Roots
            (Left, Right : Landin.IR.Storage;
             Bytes : Landin.Targets.Byte_Count) return Boolean;
+         function Clear_Alignment
+           (Place  : Landin.IR.Storage;
+            Field  : Natural;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.Targets.Byte_Alignment;
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
@@ -1917,6 +1942,53 @@ package body Landin.Backend.Cortex_M is
                end;
             end if;
          end Disjoint_Roots;
+         --  A runtime address may be supplied with weaker alignment than
+         --  its shape.  Static storage and frame slots follow the target
+         --  layout, including the offsets of their reached child fields.
+         function Clear_Alignment
+           (Place  : Landin.IR.Storage;
+            Field  : Natural;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.Targets.Byte_Alignment
+         is
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            if Place.Kind = Landin.IR.Runtime_Address then
+               return 1;
+            end if;
+            if Field = 0 and then Nested'Length = 0 then
+               case Place.Kind is
+                  when Landin.IR.Module_Datum =>
+                     if Landin.IR.Result_Of (Of_Unit, Place.Datum)
+                          = Landin.Types.Aggregate
+                     then
+                        declare
+                           Placed : Landin.Targets.Placement;
+                           Ignored : Landin.Targets.Byte_Count;
+                        begin
+                           Place_Fields (Place.Datum, Placed, 0, Ignored);
+                           return Landin.Targets.Alignment_Of (Placed);
+                        end;
+                     end if;
+                  when Landin.IR.Frame_Slot =>
+                     if Landin.IR.Is_Aggregate
+                          (Of_Unit, Item, Place.Slot)
+                     then
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Place.Slot, Facts,
+                           Size, Alignment);
+                        return Alignment;
+                     end if;
+                  when Landin.IR.Runtime_Address =>
+                     null;
+               end case;
+            end if;
+            Landin.Backend.Field_Extent
+              (Of_Unit, Reached_Shape (Place, Field, Nested), Facts,
+               Size, Alignment);
+            return Alignment;
+         end Clear_Alignment;
 
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
@@ -3115,7 +3187,9 @@ package body Landin.Backend.Cortex_M is
                      end if;
                      Storage_Address (Destination, Field, "r0", Nested =>
                        Nested);
-                     Zero_Bytes (Bytes);
+                     Zero_Bytes
+                       (Bytes, Clear_Alignment
+                          (Destination, Field, Nested));
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "r2", Nested => Nested);
