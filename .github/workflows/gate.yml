@@ -13,3 +13,5 @@ jobs:
           id
           cc -Wall -Wextra probe/metadata.c -o /tmp/metadata-probe
           /tmp/metadata-probe /tmp/landin-loop/metadata-probe/source.ldn
+          cc -Wall -Wextra probe/formatter.c -o /tmp/formatter-probe
+          python3 compiler/tests/test_formatter_write_safety.py --refine /tmp/formatter-probe
