@@ -1743,7 +1743,13 @@ An explicit `defer region.release_region(program)` releases them together.
 The region value borrows its provider; its allocations are still independent,
 and its bookkeeping also consumes the supplied provider's capacity. A finite
 caller-backed provider therefore remains finite, with no hidden heap fallback.
-This library operation is not the withdrawn lexical escape guarantee.
+This library operation is not the withdrawn lexical escape guarantee. Region
+allocations must stop being used before `release_region`, regardless of the
+parent provider's backing lifetime. Likewise, `core/pool.over` retains the
+backing origin in its handle, but its allocation results are independent:
+callers must keep the backing live until every use of those results ends.
+The checked arena constructor does not extend these guarantees to other
+providers or prove allocation lifetimes generally.
 
 The allocator's independent no-`from` result permits both live allocations
 and useful helper results. It does not acquire a lexical frame origin when
@@ -3216,10 +3222,11 @@ prefix. These are semantic caller obligations, not compiler proofs.
 Every lookup, removal and insertion probe is bounded by capacity, including a
 full or all-tombstone table. Insertion first searches for an equal key and
 updates its dense value without consulting the allocator, even with a preceding
-tombstone. Only an absent key considers pressure;
-placement then remembers the first tombstone until it reaches a free bucket or
-the probe bound. Hashes are reduced modulo capacity as `u64` before conversion
-to `usize`, and load pressure uses checked-equivalent arithmetic that cannot
+tombstone. This same search remembers the first tombstone and free bucket;
+an absent key uses the remembered position without probing again unless growth
+rebuilds the table. Hashes are reduced modulo capacity as `u64` before
+conversion to `usize`, using an equivalent full-width mask for power-of-two
+capacities. Load pressure uses checked-equivalent arithmetic that cannot
 overflow. An absent key reuses an available dead or free bucket while
 tombstones remain, without allocation. A crowded tombstone-free table grows.
 Growth rehash preflights all byte extents, acquires

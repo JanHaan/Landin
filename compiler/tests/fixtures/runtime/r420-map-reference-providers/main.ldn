@@ -64,7 +64,7 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
 
     --  Six occupied records are already at the 8-slot pressure threshold.
     --  Removing the first colliding key leaves a preceding tombstone but does
-    --  not reduce pressure. With no allocation budget, replacing the last key
+    --  permits reuse. With no allocation budget, replacing the last key
     --  must still search, update, and return without consulting the provider.
     map.remove(value, k1) else 0
     zero: usize = 0
@@ -86,6 +86,14 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
                                        and failing.frees(state) == 0
                                        and failing.live(state) == 3
 
+    --  Reuse that tombstone without allocation, restoring growth pressure.
+    map.insert(value, state, k1, addr n1) else (problem)
+        _ = problem
+        initial = false
+    end
+    reused: bool = map.length(value) == 6 and value.tombstones == 0
+                   and failing.attempts(state) == 3 and has(value, k1, 11)
+
     failing.permit(state, allowed)
     mut failed: bool = false
     map.insert(value, state, k7, addr n7) else (problem)
@@ -95,7 +103,7 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
 
     --  No old allocation was released, every acquired replacement was, and
     --  all old logical contents remain observable after each failure stage.
-    mut preserved: bool = failed and map.length(value) == 5
+    mut preserved: bool = failed and map.length(value) == 6
                           and has(value, k2, 22) and has(value, k3, 33)
                           and has(value, k6, 77)
                           and failing.frees(state) == rollback_frees
@@ -114,7 +122,7 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
         _ = problem
         preserved = false
     end
-    retried: bool = map.length(value) == 6 and has(value, k2, 22)
+    retried: bool = map.length(value) == 7 and has(value, k2, 22)
                    and has(value, k4, 44) and has(value, k7, 77)
                    and failing.frees(state) == rollback_frees + 3
                    and failing.live(state) == 3
@@ -131,7 +139,7 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
     released: bool = map.length(value) == 0
                      and failing.frees(state) == rollback_frees + 6
                      and failing.live(state) == 0
-    ok = initial and updated_without_allocation and preserved
+    ok = initial and updated_without_allocation and reused and preserved
          and retried and counts and released
 end failure_case
 

@@ -578,7 +578,7 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k3) else (problem) _ = problem return end
     before_capacity: usize = map.capacity(compact)
     before_tombstones: usize = compact.tombstones
-    before_used: usize = provider.used
+    before_used: usize = mem.arena_used(provider)
 
     --  Enumerate while dead buckets still precede and follow live buckets. A
     --  scan that mistakes any non-free bucket for a live entry changes both
@@ -617,7 +617,7 @@ map_operations: () -> (ok: bool) =
     reused_without_growth: bool = before_capacity == 8
                       and before_tombstones == 3
                       and map.capacity(compact) == before_capacity
-                      and provider.used == before_used
+                      and mem.arena_used(provider) == before_used
                       and compact.tombstones == 2
                       and map.length(compact) == 4
                       and map_lacks(compact, 1) and map_lacks(compact, 2)

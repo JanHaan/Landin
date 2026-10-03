@@ -167,19 +167,26 @@ composed_seven_buckets: () -> (ok: bool) =
     seventh: collision_key = (identity: 8, home: 4294967301)
     map.insert(value, provider, fourth, 50) else 0
     map.insert(value, provider, fifth, 60) else 0
-    --  Pressure first compacts the tombstone at seven slots, then doubles
-    --  that composed capacity to fourteen on the next absent insertion.
+    --  Keep the composed seven-slot capacity while a tombstone remains.
+    --  The eighth key reuses it; only the following insertion doubles.
     map.insert(value, provider, sixth, 70) else 0
-    compacted: bool = map.capacity(value) == 7
+    retained: bool = map.capacity(value) == 7
                       and expect_value(value, 3, 4294967299, 30)
                       and expect_value(value, 4, 4294967306, 40)
     map.insert(value, provider, seventh, 80) else 0
+    reused: bool = map.capacity(value) == 7
+    eighth: collision_key = (identity: 9, home: 4294967296)
+    map.insert(value, provider, eighth, 90) else 0
+    filled: bool = map.capacity(value) == 7 and value.tombstones == 0
+                   and map.length(value) == 7
+    ninth: collision_key = (identity: 10, home: 4294967297)
+    map.insert(value, provider, ninth, 100) else 0
     grown: bool = map.capacity(value) == 14
                   and expect_value(value, 3, 4294967299, 30)
                   and expect_value(value, 4, 4294967306, 40)
                   and expect_value(value, 8, 4294967301, 80)
     ok = empty_get and empty_remove and placed and removed
-         and compacted and grown
+         and retained and reused and filled and grown
     map.release_map(value, provider)
     ok = ok and map.capacity(value) == 0
 end composed_seven_buckets

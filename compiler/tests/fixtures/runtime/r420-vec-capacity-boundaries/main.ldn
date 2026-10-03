@@ -93,7 +93,7 @@ public main: () -> (code: i32) =
 
     --  A refused second zero-byte allocation leaves the first allocation's
     --  initialized witness available for access and eventual release.
-    mut refused_state := mem.fail_over(base, 0, 1)
+    mut refused_state := mem.fail_over_unchecked(base, 0, 1)
     mut refused_values := vec.new_list(item: zero_item)
     for index in 0..<8 do
         _ = index
@@ -114,7 +114,7 @@ public main: () -> (code: i32) =
     _ = retained_zero
     refused_length: usize = vec.length(refused_values)
     refused_capacity: usize = vec.capacity(refused_values)
-    refused_frees_before_release: usize = refused_state.frees
+    refused_frees_before_release: usize = mem.failing_frees(refused_state)
     vec.release(refused_values, refused_state)
 
     if overflow_refused
@@ -136,7 +136,7 @@ public main: () -> (code: i32) =
       and maximum_zero_state.last_free_size == 0
       and zero_growth_refused and refused_length == 8
       and refused_capacity == 8 and refused_frees_before_release == 0
-      and refused_state.allocations == 1 and refused_state.frees == 1
+      and mem.failing_allocations(refused_state) == 1 and mem.failing_frees(refused_state) == 1
       and vec.length(refused_values) == 0
       and vec.capacity(refused_values) == 0
     then

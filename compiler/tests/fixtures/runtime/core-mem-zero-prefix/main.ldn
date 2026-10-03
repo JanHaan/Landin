@@ -38,6 +38,66 @@ public main: () -> (code: i32) =
         view := mem.used(target)
         lenof view == 0
     end
+    -- Bulk transitions retain the same source/destination bounds and leave
+    -- both prefixes unchanged when refused.
+    mut beyond_source: bool = false
+    three: usize = 3
+    mem.transfer_zero_prefix(source, target, three) else (problem)
+        _ = problem
+        beyond_source = true
+    end
+    mut limited := mem.reserve(item: empty, base: other, slots: one)
+    mut beyond_capacity: bool = false
+    mem.transfer_zero_prefix(source, limited, two) else (problem)
+        _ = problem
+        beyond_capacity = true
+    end
+    refused_unchanged: bool = mem.initialized(source) == 2
+                             and mem.initialized(target) == 0
+                             and mem.initialized(limited) == 0
+    mem.transfer_zero_prefix(source, target, two) else (problem)
+        _ = problem
+        return
+    end
+    mut occupied: bool = false
+    mem.transfer_zero_prefix(source, target, zero) else (problem)
+        _ = problem
+        occupied = true
+    end
+    bulk_full: bool = mem.initialized(target) == 2
+    mem.drain_zero_prefix(target) else (problem)
+        _ = problem
+        return
+    end
+    mem.transfer_zero_prefix(source, target, zero) else (problem)
+        _ = problem
+        return
+    end
+    bulk_empty: bool = mem.initialized(target) == 0
+    positive_base: ptr mut u8 = mem.allocate(allocator, one, alignof u8)
+        else (problem)
+        _ = problem
+        return
+    end
+    mut positive := mem.reserve(item: u8, base: positive_base, slots: one)
+    _ = mem.admit(positive, u8(17)) else one
+    mut positive_target := mem.reserve(item: u8, base: positive_base, slots: one)
+    mut positive_copy: bool = false
+    mem.transfer_zero_prefix(positive, positive_target, one) else (problem)
+        _ = problem
+        positive_copy = true
+    end
+    mut positive_drain: bool = false
+    mem.drain_zero_prefix(positive) else (problem)
+        _ = problem
+        positive_drain = true
+    end
+    positive_kept: bool = mem.initialized(positive) == 1
+                         and mem.initialized(positive_target) == 0
+                         and (mem.get(positive, zero) else u8(0)) == 17
+    _ = mem.release(positive) else u8(0)
+    _ = mem.dispose(positive) else positive_base
+    mem.free(allocator, positive_base, one)
     _ = mem.release(source) else value
     _ = mem.release(source) else value
     released: ptr mut u8 = mem.dispose(source) else (problem)
@@ -54,6 +114,9 @@ public main: () -> (code: i32) =
     mem.free(allocator, released_other, zero)
     if a == 0 and b == 1 and refused == 2 and c == 0 and d == 1
       and full and shortened and ended and exact
+      and beyond_source and beyond_capacity and refused_unchanged
+      and occupied and bulk_full and bulk_empty
+      and positive_copy and positive_drain and positive_kept
       and mem.capacity(source) == 0 and mem.capacity(target) == 0
     then
         code = 42

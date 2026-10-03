@@ -192,6 +192,7 @@ negative/control-expression-fallthrough-without-value | linux-x86-64, linux-arm6
 negative/control-expression-function-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/control-result-field-name-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-arena-frame-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/core-arena-private-representation | linux-x86-64, macos-arm64, synthetic-32
 negative/core-diag-frame-message-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-diag-frame-world-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-failing-frame-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
