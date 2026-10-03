@@ -511,8 +511,9 @@ package Landin.Diagnostics.Catalogue is
                "[1020]/[1930]/[0990]: a call's results are used,"
                & " discarded or bound as the signature allows",
             when Control_Value =>
-               "[1190]/D124: a control expression produces its value"
-               & " on every exit",
+               "[1180]/[1190]/D124: a break carries a value exactly when"
+               & " its target needs one; value-producing fallthroughs"
+               & " supply one",
             when Match_Arm_Form =>
                "[1210]/[0480]/[0640]: each match arm names a case of"
                & " its subject in an admitted form",

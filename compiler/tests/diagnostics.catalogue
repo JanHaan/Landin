@@ -67,7 +67,7 @@ L0328  Live     [0540]: zeroed or an implicit initializer has no complete zero i
 L0329  Live     [0940]/[0960]: failures obey the declared error set and call handling
 L0330  Live     [1630]/[1990]: assembly operands, registers and template slots obey the block contract
 L0331  Live     [1020]/[1930]/[0990]: a call's results are used, discarded or bound as the signature allows
-L0332  Live     [1190]/D124: a control expression produces its value on every exit
+L0332  Live     [1180]/[1190]/D124: a break carries a value exactly when its target needs one; value-producing fallthroughs supply one
 L0333  Live     [1210]/[0480]/[0640]: each match arm names a case of its subject in an admitted form
 L0334  Live     [0700]/[0720]: struct, variant and array values are built and used in their admitted forms
 L0335  Live     [0480]: a pointer union is matched before its pointer is read

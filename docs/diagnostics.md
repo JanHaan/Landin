@@ -697,12 +697,15 @@ end f
 
 ### L0332
 
-A control expression does not produce its value on every exit [1190] (D124).
-Every `break` out of a loop used as an expression carries `with`, and a
-finite loop leaves through `break with` when it completes. Every fallthrough
-path of a value-producing `if` or block produces the value. A labelled bare
-block or a statement loop takes no value. Add the missing value, or use the
-construct as a statement.
+A `break` must carry a value exactly when its target needs one [1180] [1190];
+every value-producing fallthrough must supply one (D124). Every `break` out
+of a loop used as an expression carries `with`. A finite expression loop
+leaves through `break with` when it completes. Every fallthrough path of a
+value-producing `if` or block produces a value; an early return need not.
+A labelled bare block and a statement loop take no value. Add `with` and a
+value to a break from an expression loop. Remove `with` from a break to a
+statement loop or labelled bare block. Supply a value on each fallthrough
+path, or use the construct as a statement.
 
 ```landin
 public main: () -> (code: i32) =
@@ -914,11 +917,22 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. A C signature is infallible and nongeneric, with scalars, pointers,
-fixed C callbacks or `layout(c)` structs, and at most one result. A
-`layout(c)` struct holds only C representations. A variadic call takes
-positional scalar, pointer or callback arguments. Pass a pointer to an
-aggregate, or change the type to one C represents.
+[1580]. On a target with C ABI support, a C signature is infallible and
+nongeneric, with at most one result. Each parameter and result part uses
+implicit or explicit `in`, without `caller` or a constraint. Its type is a
+scalar, pointer (including a named optional pointer union), fixed infallible
+C callback, or `layout(c)` struct; slices, `any`, atoms and by-value arrays
+are excluded. A `layout(c)` struct has at least one field and holds only C
+representations: scalars, pointers, fixed C callbacks, nonempty fixed arrays
+or recursively `layout(c)` structs, with no tagged variants. A variadic C
+declaration needs at least one fixed parameter and target support; a variadic
+definition needs a generated adapter. Variadic calls take positional scalar,
+pointer or fixed C callback tail arguments, without labels or static
+arguments. Change `inout` or `sink` to `in`; pass a pointer if C must write
+through a parameter. Remove `caller` and constraints, specialize generics,
+represent errors through an ordinary C result, and combine multiple results
+into one C-representable result. Pass a pointer to a by-value array or other
+unsupported aggregate, or change the type or layout to one C represents.
 
 ```landin
 extern(c) collect: (count: i32, ...) -> none

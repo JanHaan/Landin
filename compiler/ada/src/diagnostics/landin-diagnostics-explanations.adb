@@ -339,14 +339,18 @@ package body Landin.Diagnostics.Explanations is
                & "e a call that returns one, or bind the result names the "
                & "signature declares.",
             when Catalogue.Control_Value =>
-               "A control expression does not produce its value on every"
-               & " exit [1190] (D124). Every `break` out of a loop used as"
-               & " an expression carries `with`, and a finite loop leaves "
-               & "through `break with` when it completes. Every fallthroug"
-               & "h path of a value-producing `if` or block produces the v"
-               & "alue. A labelled bare block or a statement loop takes no"
-               & " value. Add the missing value, or use the construct as a"
-               & " statement.",
+               "A `break` must carry a value exactly when its target nee"
+               & "ds one [1180] [1190]; every value-producing fallthrough "
+               & "must supply one (D124). Every `break` out of a loop used"
+               & " as an expression carries `with`. A finite expression lo"
+               & "op leaves through `break with` when it completes. Every "
+               & "fallthrough path of a value-producing `if` or block prod"
+               & "uces a value; an early return need not. A labelled bare "
+               & "block and a statement loop take no value. Add `with` and"
+               & " a value to a break from an expression loop. Remove `wit"
+               & "h` from a break to a statement loop or labelled bare blo"
+               & "ck. Supply a value on each fallthrough path, or use the "
+               & "construct as a statement.",
             when Catalogue.Match_Arm_Form =>
                "A `match` arm does not fit its subject [1210]. A subject"
                & " is an atom set, a variant part or a pointer union. Each"
@@ -468,13 +472,28 @@ package body Landin.Diagnostics.Explanations is
                & "dinary routine instead.",
             when Catalogue.Foreign_Boundary =>
                "A C boundary declaration or call is something the C ABI "
-               & "cannot carry [1580]. A C signature is infallible and non"
-               & "generic, with scalars, pointers, fixed C callbacks or `l"
-               & "ayout(c)` structs, and at most one result. A `layout(c)`"
-               & " struct holds only C representations. A variadic call ta"
-               & "kes positional scalar, pointer or callback arguments. Pa"
-               & "ss a pointer to an aggregate, or change the type to one "
-               & "C represents.",
+               & "cannot carry [1580]. On a target with C ABI support, a C"
+               & " signature is infallible and nongeneric, with at most on"
+               & "e result. Each parameter and result part uses implicit o"
+               & "r explicit `in`, without `caller` or a constraint. Its t"
+               & "ype is a scalar, pointer (including a named optional poi"
+               & "nter union), fixed infallible C callback, or `layout(c)`"
+               & " struct; slices, `any`, atoms and by-value arrays are ex"
+               & "cluded. A `layout(c)` struct has at least one field and "
+               & "holds only C representations: scalars, pointers, fixed C"
+               & " callbacks, nonempty fixed arrays or recursively `layout"
+               & "(c)` structs, with no tagged variants. A variadic C decl"
+               & "aration needs at least one fixed parameter and target su"
+               & "pport; a variadic definition needs a generated adapter. "
+               & "Variadic calls take positional scalar, pointer or fixed "
+               & "C callback tail arguments, without labels or static argu"
+               & "ments. Change `inout` or `sink` to `in`; pass a pointer "
+               & "if C must write through a parameter. Remove `caller` and"
+               & " constraints, specialize generics, represent errors thro"
+               & "ugh an ordinary C result, and combine multiple results i"
+               & "nto one C-representable result. Pass a pointer to a by-v"
+               & "alue array or other unsupported aggregate, or change the"
+               & " type or layout to one C represents.",
             when Catalogue.Linkage_Contract =>
                "A link symbol, helper import or firmware placement break"
                & "s [1610]'s or [1640]'s contract. A link symbol denotes o"
