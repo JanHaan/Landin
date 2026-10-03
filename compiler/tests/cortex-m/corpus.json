@@ -1116,7 +1116,9 @@
       "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
     "runtime/r420-memory-world-cortex": {
-      "mode": "execute"
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. The generic world calls retain the memory provider evidence table and its methods. Every profile attempts execution; only measured stack, flash or RAM overflow can exclude its image, and an image limit is not runtime evidence."
     },
     "runtime/r420-memory-world-boundaries": {
       "mode": "execute",
