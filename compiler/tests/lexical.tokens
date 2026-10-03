@@ -77145,6 +77145,37 @@ file negative/r640-zero-field/program.ldn tokens 75
   239 240 0
   241 244 end
   245 249 main
+file negative/r660-firmware-frame/program.ldn tokens 30
+  0 5 start
+  5 6 :
+  7 8 (
+  8 9 )
+  10 12 ->
+  13 17 none
+  18 19 =
+  24 27 mut
+  28 33 bytes
+  33 34 :
+  35 36 [
+  36 40 5000
+  40 41 ]
+  41 43 u8
+  44 45 =
+  46 52 zeroed
+  57 62 bytes
+  62 63 [
+  63 64 0
+  64 65 ]
+  66 67 =
+  68 69 1
+  74 75 _
+  76 77 =
+  78 83 bytes
+  83 84 [
+  84 85 0
+  85 86 ]
+  87 90 end
+  91 96 start
 file negative/r660-materialization/program.ldn tokens 24
   0 4 link
   4 5 (

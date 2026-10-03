@@ -1434,6 +1434,61 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Firmware_Path;
 
+   procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context);
+
+   procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Body_Text : constant String :=
+              "mut bytes: [" & (if Mode = 4 then "4048" else "5000")
+              & "]u8 = zeroed bytes[0] = 1 _ = bytes[0] ";
+         begin
+            Host.Add_File ("p.ldn",
+              (if Mode = 2 then
+                 "large: () -> none = " & Body_Text & "end large "
+                 & "start: () -> none = large() end start"
+               else "start: () -> none = " & Body_Text & "end start"));
+            Args.Append ("--target=cortex-m0");
+            if Mode /= 3 then
+               Args.Append ("--firmware-entry=start");
+            end if;
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Mode in 1 .. 2 then Landin.Driver.Status_Reported
+                   else Landin.Driver.Status_Success),
+                  "firmware frame mode" & Mode'Image & ": "
+                  & U.To_String (Result.Report));
+               if Mode in 1 .. 2 then
+                  Landin.Testing.Check
+                    (Item, U.Index (Result.Report, "L0507") > 0,
+                     "oversized known frame has its own diagnostic");
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "oversized frame is refused before writing");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 1,
+                     "fitting frame or bare target writes assembly");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "assembly needs no tool");
+            end;
+         end;
+      end loop;
+   end Firmware_Frame_Limit;
+
    procedure Machine_Directives (Item : in out Landin.Testing.Context);
 
    procedure Machine_Directives (Item : in out Landin.Testing.Context) is
@@ -2006,6 +2061,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "linked firmware evidence",
          Linked_Firmware_Evidence'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "firmware frame limit",
+         Firmware_Frame_Limit'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register

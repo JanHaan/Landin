@@ -10,6 +10,7 @@ with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
+with Landin.Targets.Firmware;
 with Ada.Strings.Fixed;
 with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Work_Arrays;
@@ -308,6 +309,28 @@ package body Landin.Backend.Cortex_M is
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Is_Addressable;
+
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean is
+      --  Emit_Routine reserves 16 bytes for incoming register homes and
+      --  pushes 24 bytes of saved registers beyond Extent (Layout).
+      Overhead : constant Landin.Targets.Byte_Count := 16 + 24;
+   begin
+      if Landin.IR.Is_External (Of_Unit, Item)
+        or else Landin.IR.Signature_Machine
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+            = Landin.Machine.Naked_Routine
+      then
+         return True;
+      end if;
+      return Extent (Allocated_Frame
+        (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
+          Landin.Targets.Firmware.Stack_Size - Overhead;
+   exception
+      when Stack_Limit_Exceeded => return False;
+   end Frame_Fits_Firmware_Stack;
 
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;

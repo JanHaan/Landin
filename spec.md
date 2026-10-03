@@ -1866,6 +1866,10 @@ The selected image has 32 KiB flash at zero and 16 KiB RAM at `0x20000000`.
 The initial SP is `0x20004000`, aligned to eight bytes. The upper 4 KiB of RAM
 is reserved for stacks; static RAM ends no later than `0x20003000`. This is a
 constrained test profile, not permission to use the board's larger flash.
+The firmware request refuses an ordinary routine when its known frame alone,
+including saved registers and reserved homes, exceeds the selected 4 KiB stack
+reservation. This does not bound total stack use across calls or interrupts;
+those paths remain programmer obligations.
 The compiler creates a 48-word, 256-byte-aligned vector image at address zero.
 Its first two words are the initial SP and compiler reset function. Core
 slots 4–10 and 12–13 and selected-device slots 21 and 42–47 are zero.
@@ -14576,7 +14580,7 @@ This is a toolchain slice, not a new initialization language or package system.
 | Conservative opaque assembly with restricted ordinary registers/control flow | Unstated clobbers corrupt live values; treating a compiler boundary as a hardware barrier invents ordering/completion | generic opaque-memory and ordinary-live-value execution, generated interrupt/DMA trace |
 | Flash immutable images, RAM data/BSS and explicit RAM code load images | Leaving initialization to test setup or treating load addresses as execution addresses conceals relocation failures | poisoned boot, copied RAM handler, veneer and libgcc execution |
 | Section retention separate from calling convention | Keeping every handler changes reachability and code size; dropping relocation targets breaks vector/data images | kept/discarded sections, first-class handler and text relocations |
-| Explicit constrained script and bounded materialization | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505 and misplaced-vector controls |
+| Explicit constrained script, bounded materialization and one-frame check | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505/L0507 and misplaced-vector controls |
 
 The physical startup/exception premises are outside language memory safety;
 shape, convention, placement and assembly restrictions are static checks;

@@ -79,6 +79,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Entry_Point_Missing);
    Code_Wide_Frame : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Frame_Not_Addressable);
+   Code_Firmware_Frame : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Firmware_Frame_Exceeds_Stack);
 
    --  What a request asked to be left behind.  Nothing is the state every
    --  request had before the native path and most still have: a program is
@@ -1355,6 +1357,22 @@ package body Landin.Driver is
                                    Landin.IR.Declares (Unit, Item)))
                            & "` needs a frame outside the "
                            & Landin.Backend.Dispatch.Frame_Limit (Facts));
+                        Refused := True;
+                     elsif Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
+                       and then Firmware_Entry /= Landin.IR.No_Item
+                       and then not Landin.Backend.Dispatch
+                         .Frame_Fits_Firmware_Stack (Unit, Item, Facts)
+                     then
+                        Note_Failure
+                          (Code_Firmware_Frame,
+                           "`"
+                           & Landin.Source.Names.Spelling
+                               (Spellings,
+                                Landin.Resolution.Name_Of
+                                  (Known,
+                                   Landin.IR.Declares (Unit, Item)))
+                           & "` has a frame larger than the selected "
+                           & "4 KiB firmware stack reservation");
                         Refused := True;
                      end if;
                   end;

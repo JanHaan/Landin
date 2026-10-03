@@ -21,6 +21,11 @@ package Landin.Backend.Dispatch is
       Facts   : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean;
 
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

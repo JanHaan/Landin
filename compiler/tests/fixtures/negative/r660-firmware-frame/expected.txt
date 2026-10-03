@@ -1,0 +1,2 @@
+error[L0507]: `start` has a frame larger than the selected 4 KiB firmware stack reservation
+  --> <unknown source>
