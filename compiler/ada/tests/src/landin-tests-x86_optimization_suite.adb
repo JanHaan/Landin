@@ -52,7 +52,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Selected_Instructions (Item : in out Landin.Testing.Context);
    procedure Canonical_Bodies (Item : in out Landin.Testing.Context);
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
-   procedure Pressure_And_C_Homes (Item : in out Landin.Testing.Context);
+   procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
    procedure Level_Selects_Shifts (Item : in out Landin.Testing.Context);
@@ -248,7 +248,7 @@ package body Landin.Tests.X86_Optimization_Suite is
       end;
    end Loop_Allocation;
 
-   procedure Pressure_And_C_Homes (Item : in out Landin.Testing.Context) is
+   procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Native_Source : constant String :=
@@ -291,6 +291,7 @@ package body Landin.Tests.X86_Optimization_Suite is
          Plan : constant Alloc.Plan := Alloc.Make
            (Code, 2, Landin.Stages.Target (C_Work), Opt.Default_Options);
          Calls : Natural := 0;
+         Register_Arguments : Natural := 0;
       begin
          for Index in 1 .. IR.Value_Count (Code, 2) loop
             declare
@@ -308,20 +309,25 @@ package body Landin.Tests.X86_Optimization_Suite is
                           (IR.Nth_Operand (Code, 2, Value, Position));
                      begin
                         Landin.Testing.Check
-                          (Item, Plan.Value (Argument).Kind = Alloc.Stack
-                           and then Plan.Value (Argument).Address_Required,
-                           "C arguments keep addressable transport homes");
+                          (Item, not Plan.Value (Argument).Address_Required,
+                           "scalar C arguments do not require an address");
+                        if Plan.Value (Argument).Kind = Alloc.GP then
+                           Register_Arguments := Register_Arguments + 1;
+                        end if;
                      end;
                   end loop;
                end if;
             end;
          end loop;
          Landin.Testing.Check
-           (Item, Calls = 2
-            and then Contains (Emitted (C_Work), "foreign_step"),
-            "both foreign call boundaries survive allocation");
+           (Item, Calls = 2 and then Register_Arguments > 0
+            and then Contains (Emitted (C_Work), "foreign_step")
+            and then Contains (Emitted (C_Work), "movq %r10, %rdi")
+            and then not Contains
+              (Emitted (C_Work), "movq 0(%r11), %r10"),
+            "foreign calls load scalar values without address roundtrips");
       end;
-   end Pressure_And_C_Homes;
+   end Pressure_And_C_Scalars;
 
    procedure Bounded_Probes (Item : in out Landin.Testing.Context) is
       type Length_Array is array (Positive range <>) of Positive;
@@ -476,7 +482,8 @@ package body Landin.Tests.X86_Optimization_Suite is
       Landin.Testing.Register
         (Into, "x86 opt", "loop allocation", Loop_Allocation'Access);
       Landin.Testing.Register
-        (Into, "x86 opt", "pressure and C homes", Pressure_And_C_Homes'Access);
+        (Into, "x86 opt", "pressure and C scalars",
+         Pressure_And_C_Scalars'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
       Landin.Testing.Register

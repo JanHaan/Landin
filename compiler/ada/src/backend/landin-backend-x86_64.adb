@@ -1830,6 +1830,7 @@ package body Landin.Backend.X86_64 is
            (Offset, Bytes : Landin.Targets.Byte_Count);
          procedure Extend_C_Integer
            (Kind : Landin.Types.Type_Kind);
+         procedure Load_C_Scalar (Value : Landin.IR.Value_Id);
          procedure Reserve_Stack
            (Bytes : Landin.Targets.Byte_Count; Identity : String);
          procedure Emit_C_Entry;
@@ -1886,6 +1887,24 @@ package body Landin.Backend.X86_64 is
                when others => null;
             end case;
          end Extend_C_Integer;
+
+         procedure Load_C_Scalar (Value : Landin.IR.Value_Id) is
+            Bytes : constant Held_Size := Size_Of_Value (Value);
+            Source : constant String := Value_Operand (Value, Bytes);
+         begin
+            case Bytes is
+               when Landin.Targets.Byte_1 =>
+                  Emit ("movzbq " & Source & ", %r10");
+               when Landin.Targets.Byte_2 =>
+                  Emit ("movzwq " & Source & ", %r10");
+               when Landin.Targets.Byte_4 =>
+                  Emit ("movl " & Source & ", %r10d");
+               when Landin.Targets.Byte_8 =>
+                  Emit ("movq " & Source & ", %r10");
+            end case;
+            Extend_C_Integer
+              (Landin.IR.Result_Of (Of_Unit, Item, Value));
+         end Load_C_Scalar;
 
          procedure Emit_C_Entry is
             Plan : constant C_ABI.Plan := C_ABI.Signature_Plan
@@ -1996,12 +2015,7 @@ package body Landin.Backend.X86_64 is
                         Emit ("cld");
                         Emit ("rep movsb");
                      else
-                        Emit ("leaq " & Value_Address (Argument (Index))
-                              & ", %r11");
-                        Load_C_Chunk (0, Place.Shape.Size);
-                        Extend_C_Integer
-                          (Landin.IR.Result_Of
-                             (Of_Unit, Item, Argument (Index)));
+                        Load_C_Scalar (Argument (Index));
                         Emit ("movq %r10, "
                               & Displacement (Place.Stack_At, "%rsp"));
                      end if;
@@ -2018,24 +2032,23 @@ package body Landin.Backend.X86_64 is
                   Place : C_ABI.Location renames Plan.Arguments (Index);
                begin
                   if not Place.On_Stack then
-                     Emit ((if Place.Shape.Aggregate
-                            then "movq " & Value_Operand (Argument (Index))
-                            else "leaq " & Value_Address (Argument (Index)))
-                           & ", %r11");
-                     for Chunk in 1 .. Place.Shape.Count loop
-                        if Place.Shape.Classes (Chunk) /= C_ABI.No_Class
-                        then
-                           Load_C_Chunk
-                             (Landin.Targets.Byte_Count (Chunk - 1) * 8,
-                              Chunk_Bytes (Place.Shape, Chunk));
-                           if not Place.Shape.Aggregate then
-                              Extend_C_Integer
-                                (Landin.IR.Result_Of
-                                   (Of_Unit, Item, Argument (Index)));
+                     if Place.Shape.Aggregate then
+                        Emit ("movq " & Value_Operand (Argument (Index))
+                              & ", %r11");
+                        for Chunk in 1 .. Place.Shape.Count loop
+                           if Place.Shape.Classes (Chunk) /= C_ABI.No_Class
+                           then
+                              Load_C_Chunk
+                                (Landin.Targets.Byte_Count (Chunk - 1) * 8,
+                                 Chunk_Bytes (Place.Shape, Chunk));
+                              Emit ("movq %r10, "
+                                    & C_Register (Place, Chunk));
                            end if;
-                           Emit ("movq %r10, " & C_Register (Place, Chunk));
-                        end if;
-                     end loop;
+                        end loop;
+                     else
+                        Load_C_Scalar (Argument (Index));
+                        Emit ("movq %r10, " & C_Register (Place, 1));
+                     end if;
                   end if;
                end;
             end loop;
