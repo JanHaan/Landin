@@ -894,6 +894,21 @@ verdict against that profile. A switch that only fits a larger device profile
 does not complete this item; the measurement is for this consumer, not a
 general bound on stack depth.
 
+### R14.25 — Run the firmware counterpart
+
+Status: planned
+Depends on: R14.20, R13.20
+
+Derive a complete Cortex-M0 program from prototype 5's firmware counterpart.
+It presents the same request for two operations in flight as the hosted server
+and produces the single-core answer specified in R14.20. Record a trace that
+shows the answer and when each operation starts and finishes.
+
+Exit evidence: the firmware derivative running in the Cortex-M0 emulator lane
+in the gate, with its captured trace checked against a repository-owned oracle
+for the specified no-concurrency answer and no two operations in flight. A
+missing answer, overlap, trap or timeout fails the run.
+
 ### R14.30 — A second Io
 
 Status: planned
@@ -918,7 +933,9 @@ oracles.
 
 ### R14 gate
 
-- Prototype 5's derived programs run.
+- Prototype 5's derived server runs on every hosted target over both Io
+  implementations, and its firmware counterpart runs on Cortex-M0 with the
+  single-core answer checked against its trace oracle.
 - R14.20's retained-profile stack-backing and capacity evidence is recorded.
 - On every target covered by R14.20, a scripted debugger session switches
   fibres and checks the expected frames in a backtrace through the switch.
