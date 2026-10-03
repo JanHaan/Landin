@@ -928,10 +928,12 @@ package body Landin.Tests.Server_Suite is
      (Item : in out Landin.Testing.Context)
    is
    begin
-      for Index in 1 .. 2 loop
+      for Index in 1 .. 3 loop
          declare
             Name : constant String :=
-              (if Index = 1 then "hover" else "code-actions");
+              (if Index = 1 then "hover"
+               elsif Index = 2 then "code-actions"
+               else "navigation-past-a-hole");
             Directory : constant String :=
               Sessions_Root & "/" & Name;
             With_Queries : constant Landin.Testing.Sessions.Outcome :=
@@ -947,6 +949,11 @@ package body Landin.Tests.Server_Suite is
             Landin.Testing.Check
               (Item, With_Queries.Analyses = Without_Queries.Analyses,
                Name & " queries cause no additional analyses");
+            if Index = 3 then
+               Landin.Testing.Check_Equal
+                 (Item, With_Queries.Analyses, 1,
+                  "one cached stand-in serves all later navigation");
+            end if;
          end;
       end loop;
    end Navigation_Reuses_Checked_Modules;

@@ -157,6 +157,13 @@ is released after transfer; the checked result may remain cached. The
 transfer temporarily holds both compilations and increases peak memory.
 The `memory` suite checks repeated sessions and edits for accumulation.
 
+On Linux/glibc, `compiler/tests/server/measure_memory.py` compares two built
+compilers over four modules sharing an import, two with broken bodies. It
+records live allocated bytes at idle, peak resident memory, repeated and
+alternating queries, twenty edits, import open/close and session teardown.
+Pass `--baseline`, `--refine` and `--output` to retain the comparison. The
+probe is a temporary host library; it does not alter either compiler.
+
 ## Limits
 
 | | bound |
