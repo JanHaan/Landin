@@ -1547,7 +1547,7 @@ package body Landin.Stages.Checking.Flow is
             Position : Field_Sets.Cursor :=
               State.Dead_Fields.Ceiling ((Id, 0));
          begin
-            while Field_Sets.Has_Element (Position)
+            while not Dead and then Field_Sets.Has_Element (Position)
               and then Field_Sets.Element (Position).Declaration = Id
             loop
                declare
@@ -1564,27 +1564,48 @@ package body Landin.Stages.Checking.Flow is
                Field_Sets.Next (Position);
             end loop;
          end;
-         for Fact of State.Dead_Nested loop
-            Dead := Dead or else
-              (Fact.Declaration = Id
-               and then (Prefix (Fact.Path, Path)
-                         or else (not Is_Element
-                                  and then Prefix (Path, Fact.Path))));
-         end loop;
-         for Fact of State.Dead_Elements loop
-            Dead := Dead or else
-              (Fact.Declaration = Id
-               and then
-                 (if Is_Element then
-                     Fact.Path = Path
-                     and then (not Known_Position
-                               or else Fact.Position = Position)
-                     and then (Prefix (Below, Fact.Below)
-                               or else Prefix (Fact.Below, Below))
-                  else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
-                         /= Ty.Slice_Value
-                    and then Prefix (Path, Fact.Path)));
-         end loop;
+         declare
+            At_Fact : Nested_Sets.Cursor :=
+              State.Dead_Nested.Ceiling ((Id, No_Path));
+         begin
+            while not Dead and then Nested_Sets.Has_Element (At_Fact)
+              and then Nested_Sets.Element (At_Fact).Declaration = Id
+            loop
+               declare
+                  Fact : constant Nested_Fact := Nested_Sets.Element (At_Fact);
+               begin
+                  Dead := Prefix (Fact.Path, Path)
+                    or else (not Is_Element
+                             and then Prefix (Path, Fact.Path));
+               end;
+               Nested_Sets.Next (At_Fact);
+            end loop;
+         end;
+         declare
+            At_Fact : Element_Sets.Cursor :=
+              State.Dead_Elements.Ceiling ((Id, No_Path, 0, No_Path));
+         begin
+            while not Dead and then Element_Sets.Has_Element (At_Fact)
+              and then Element_Sets.Element (At_Fact).Declaration = Id
+            loop
+               declare
+                  Fact : constant Element_Fact :=
+                    Element_Sets.Element (At_Fact);
+               begin
+                  Dead :=
+                    (if Is_Element then
+                        Fact.Path = Path
+                        and then (not Known_Position
+                                  or else Fact.Position = Position)
+                        and then (Prefix (Below, Fact.Below)
+                                  or else Prefix (Fact.Below, Below))
+                     else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                            /= Ty.Slice_Value
+                       and then Prefix (Path, Fact.Path));
+               end;
+               Element_Sets.Next (At_Fact);
+            end loop;
+         end;
          if not Dead then
             return True;
          end if;
