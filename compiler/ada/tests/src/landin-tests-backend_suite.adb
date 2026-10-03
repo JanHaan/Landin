@@ -5932,12 +5932,10 @@ package body Landin.Tests.Backend_Suite is
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Import
-        (Declaration, Present, Absent : String;
-         Has_Arguments : Boolean);
+        (Declaration, Present, Absent : String);
 
       procedure Check_Import
-        (Declaration, Present, Absent : String;
-         Has_Arguments : Boolean)
+        (Declaration, Present, Absent : String)
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -5954,15 +5952,14 @@ package body Landin.Tests.Backend_Suite is
             Landin.Testing.Check
               (Item, Contains (Text, Present & ":" & LF)
                and then not Contains (Text, Absent & ":" & LF)
-               and then not Contains
+               and then Contains
                  (Text, "_landin_host_initialize_arguments:" & LF)
                and then Occurrences
-                 (Text, HT & ".type _landin_host_") = 1,
-               "only the imported helper receives a body");
+                 (Text, HT & ".type _landin_host_") = 2,
+               "the initializer and imported helper receive bodies");
             Landin.Testing.Check
-              (Item, Contains (Text, ".Llandin_host_argv:" & LF)
-               = Has_Arguments,
-               "argument state is emitted only for argument readers");
+              (Item, Contains (Text, ".Llandin_host_argv:" & LF),
+               "retained bridge support exposes startup state");
          end;
       end Check_Import;
 
@@ -6005,10 +6002,10 @@ package body Landin.Tests.Backend_Suite is
       Check_Import
         ("extern(c) _landin_host_text_length: (data: ptr u8)"
          & " -> (length: usize)",
-         "_landin_host_text_length", "_landin_host_heap_allocate", False);
+         "_landin_host_text_length", "_landin_host_heap_allocate");
       Check_Import
         ("extern(c) _landin_host_argument_count: () -> (n: usize)",
-         "_landin_host_argument_count", "_landin_host_text_length", True);
+         "_landin_host_argument_count", "_landin_host_text_length");
    end Hosted_Bridges_Emit_Only_Requested_Helpers;
 
    procedure C_Classification_And_Assignment_Agree
@@ -6671,16 +6668,31 @@ package body Landin.Tests.Backend_Suite is
             and then not Contains (Text, HT & ".globl main" & LF),
             "startup-independent helpers need no Landin main or libc alias");
          Landin.Testing.Check
-           (Item, not Contains
+           (Item, Contains
               (Text, HT & ".globl _landin_host_initialize_arguments" & LF)
+            and then Contains
+              (Text, HT & ".hidden _landin_host_initialize_arguments" & LF)
+            and then Occurrences
+              (Text, HT & ".type _landin_host_initialize_arguments,") = 1
             and then not Contains
               (Text, HT & "call _landin_host_initialize_arguments" & LF),
-            "argument readers do not synthesize a C initializer");
+            "C startup gets one hidden initializer, never a callback hook");
          Landin.Testing.Check
            (Item, Contains
+              (Text, "_landin_host_initialize_arguments:" & LF
+               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_initialized" & LF
+               & HT & "testl %edi, %edi" & LF
+               & HT & "js .Llandin_host_arguments_invalid" & LF
+               & HT & "testq %rsi, %rsi" & LF
+               & HT & "jz .Llandin_host_arguments_invalid" & LF
+               & HT & "movl %edi, .Llandin_host_argc(%rip)" & LF
+               & HT & "movq %rsi, .Llandin_host_argv(%rip)" & LF
+               & HT & "ret" & LF)
+            and then Contains
               (Text, ".Llandin_host_arguments_invalid:" & LF
                & HT & "ud2" & LF),
-            "argument readers retain their shared invalid-state trap");
+            "first initialization validates and stores the C carriers");
          Landin.Testing.Check
            (Item, Contains
               (Text, "_landin_host_argument_count:" & LF
@@ -6697,11 +6709,20 @@ package body Landin.Tests.Backend_Suite is
                & HT & "je .Llandin_host_arguments_invalid" & LF),
             "every global argument API guards real initialization");
          Landin.Testing.Check
-           (Item, not Contains
-              (Text, ".Llandin_host_arguments_initialized:" & LF)
+           (Item, Occurrences
+              (Text, "movl %edi, .Llandin_host_argc(%rip)") = 1
+            and then Occurrences
+              (Text, "movq %rsi, .Llandin_host_argv(%rip)") = 1
+            and then Contains
+              (Text, ".Llandin_host_arguments_initialized:" & LF
+               & HT & "cmpl %edi, .Llandin_host_argc(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_invalid" & LF
+               & HT & "cmpq %rsi, .Llandin_host_argv(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_invalid" & LF
+               & HT & "ret" & LF)
             and then Contains (Text, ".Llandin_host_argv:" & LF)
             and then Contains (Text, ".Llandin_host_argc:" & LF),
-            "argument readers retain the persistent C-owned root");
+            "only first initialization stores the persistent argument root");
          Landin.Testing.Check
            (Item, Contains (Text, HT & ".globl r440_first" & LF)
             and then Contains (Text, HT & ".globl r440_second" & LF)

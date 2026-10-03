@@ -472,8 +472,8 @@ package body Landin.Backend.X86_64 is
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
 
       use Landin.Hosted;
-      --  A hosted main needs startup; an external import makes that one
-      --  bridge available to the Landin unit or its C-owned caller.
+      --  A hosted main needs startup; an external import retains bridge
+      --  support for the Landin unit or its C-owned caller.
       Needed_Bridges : array (Host_Helper range Initialize_Arguments
         .. Heap_Release) of Boolean := [others => False];
       subtype Hosted_Bridge is Host_Helper;
@@ -6556,8 +6556,6 @@ package body Landin.Backend.X86_64 is
       then
          raise Compiler_Defect with "x86-64 emission needs Linux ELF facts";
       end if;
-      Needed_Bridges (Initialize_Arguments) :=
-        Hosted_Entry /= Landin.IR.No_Item;
       --  A C-owned main can drive Landin exports without asking refine to
       --  synthesize a hosted entry.  Those exports still need the library's
       --  fixed runtime bridges.  Discover them before choosing private names,
@@ -6578,6 +6576,9 @@ package body Landin.Backend.X86_64 is
             end if;
          end;
       end loop;
+      --  [1975] exposes the hidden initializer with any hosted bridge
+      --  support: a C-owned main may establish the root before io.host.
+      Needed_Bridges (Initialize_Arguments) := Host_Bridge_Needed;
       Validate_Linkage;
       Allocate_Symbols;
       if Optimized then
