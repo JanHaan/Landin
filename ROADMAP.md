@@ -22,6 +22,12 @@ draws, concurrency and measured optimization. Windows is deferred outside the
 active scope; its existing identities below preserve the proposal for a future
 explicit scope decision.
 
+The stated 32 TB hosted endpoint remains an unverified project goal. What
+quantity it measures and what evidence would prove it are still open.
+Current hosted execution and the large-image work in the register below do
+not establish a 32 TB bound. Define the measure and proof criterion before
+claiming that endpoint as demonstrated.
+
 Outside it, and staying outside: a build tool and a package manager, which
 the Companion tool and ecosystem family owns; self-hosting; and every release
 or version decision, each of which needs an explicit decision of its own.

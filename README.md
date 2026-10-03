@@ -1,8 +1,12 @@
 # Landin
 
-> Ada, but small. Zig, but sweeter. One systems language from 32 KB to
-> 32 TB. Move fast, keep the pointers, and let the compiler tell you
+> Ada, but small. Zig, but sweeter. One systems language aiming to span
+> 32 KB to 32 TB. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
+
+The 32 TB endpoint is an unverified project goal. What it measures at the
+hosted end, and what evidence would prove it, remain open. The hosted programs
+running today do not establish a 32 TB bound.
 
 A systems programming language, its compiler and a small standard
 library, designed and built from scratch. Named after Peter Landin, who

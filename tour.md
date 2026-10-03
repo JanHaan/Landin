@@ -1,8 +1,10 @@
 # Learn Landin in Y minutes
 
-Ada, but small. Zig, but sweeter. One systems language from 32 KB to
-32 TB. Move fast, keep the pointers, and let the compiler tell you when
-you are being an idiot.
+Ada, but small. Zig, but sweeter. One systems language aiming to span
+32 KB to 32 TB. Move fast, keep the pointers, and let the compiler tell you when
+you are being an idiot. The 32 TB endpoint is an unverified project goal:
+what it measures at the hosted end and what evidence would prove it remain
+open. Current hosted support does not establish a 32 TB bound.
 
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.

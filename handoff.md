@@ -16,6 +16,9 @@ scratch as a serious learning project. The scale is Odin, Hare, Crystal
 a hosted application at the other, and the same way of writing code on
 both. Every decision in the specification was taken against both ends
 at once, and several of them look odd until you remember the small end.
+The stated 32 TB hosted endpoint is an unverified project goal: what it
+measures and the evidence needed to prove it remain open. Existing hosted
+runs do not establish a 32 TB bound.
 
 ---
 

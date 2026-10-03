@@ -316,7 +316,7 @@ anywhere outside `ROADMAP.md`, except the status pointer `README.md` and
 
 ## Design constraints
 
-Changes must preserve the range from a 32 KB microcontroller to a hosted application. The central design choices are:
+Changes must preserve the range from a 32 KB microcontroller to a hosted application. The stated 32 TB hosted endpoint is an unverified goal: what it measures and its proof criterion remain open, and current hosted support establishes no 32 TB bound. The central design choices are:
 
 - Manual memory with arenas as the idiom; no GC, reference counting, or destructors. Allocators are threaded as capabilities rather than stored in containers.
 - Reference permission and binding mutability are separate. Lifetime checks use local origin/escape analysis, not ownership or a borrow checker. The language is deliberately unsafe with useful local checks rather than claiming memory or resource safety.
