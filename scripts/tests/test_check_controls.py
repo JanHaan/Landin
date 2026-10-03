@@ -409,6 +409,37 @@ class CodeRules(unittest.TestCase):
         #  cheap rules still have something to say about the line.
         self.assertEqual(self.said("mut cursor: ptr u32 = addr first\n"), [])
 
+    def test_fenced_diagnostics_follow_source_lines_across_blocks(self):
+        from check_controls import tree
+        document = ("Intro\n"
+                    "```landin\n"
+                    "mut if: u8 = 1\n"
+                    "ordinary: u8 = 2\n"
+                    "mut else: u8 = 3\n"
+                    "```\n"
+                    "\n"
+                    "```text\n"
+                    "mut while: u8 = 4\n"
+                    "```\n"
+                    "```landin\n"
+                    "\n"
+                    "mut for: u8 = 5\n"
+                    "```\n")
+        with tree(written={"example.md": document}) as root:
+            self.assertEqual(checker.check(root / "example.md"), [
+                (3, "'if' is a keyword and cannot be a name"),
+                (5, "'else' is a keyword and cannot be a name"),
+                (13, "'for' is a keyword and cannot be a name"),
+            ])
+
+        sections = list(checker.sections(document.split("\n")))
+        self.assertEqual((sections[1][0], sections[1][1], sections[1][2][0]),
+                         ("landin", 3, "mut if: u8 = 1"))
+        self.assertEqual((sections[2][0], sections[2][1], sections[2][2][0]),
+                         ("prose", 7, ""))
+        self.assertEqual((sections[5][0], sections[5][1], sections[5][2][0]),
+                         ("landin", 12, ""))
+
 
 GRAMMAR = ["spec.md", "compiler/tests/fixtures",
            "compiler/tests/lexical.tokens",

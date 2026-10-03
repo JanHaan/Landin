@@ -236,7 +236,8 @@ STALE_BACKLOG_ALLOWLIST = {
 
 def sections(lines):
     """Split a file into (kind, first_line, lines), by fence rather than
-    by guess.
+    by guess.  A fence marks the boundary; the following line starts its
+    section.
 
     A fenced block says what it is, so nothing has to be inferred.  The
     tag is the kind: `landin` is checked, `landin-grammar` is notation
@@ -264,10 +265,10 @@ def sections(lines):
             tag = fence.group(1)
             if kind in ("prose", "findings"):
                 yield kind, start, buf
-                kind, start, buf = (tag or "text"), n, []
+                kind, start, buf = (tag or "text"), n + 1, []
             else:
                 yield kind, start, buf
-                kind, start, buf = ("findings" if findings else "prose"), n, []
+                kind, start, buf = ("findings" if findings else "prose"), n + 1, []
             continue
 
         buf.append(line)
