@@ -100,7 +100,7 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | ubuntu-24.04 | the debug compiler's 795 cases at `LANDIN_TEST_JOBS=8`, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `compiler` | ubuntu-24.04 | the debug compiler's 800 cases at `LANDIN_TEST_JOBS=8`, the default target, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
 | `release` | ubuntu-24.04 | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
@@ -115,10 +115,10 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 A compile error surfaces in the first minutes of every job that builds.
 Measured on the runners, each job including its install and build:
 `documents` about ninety seconds, `editor-grammar` fifteen, `bindings`
-seventy, `scripts` five minutes, `lldb` five, `darwin-host` seven and eight,
-`release` seven, `scaling` eight, `compiler` ten and a half, `darwin-parity`
-ten and a half, and `cortex-m` fifteen and a half, which sets the gate at
-about sixteen minutes.
+seventy, `scaling` five and a half, `scripts` six, `lldb` seven, `arm64-release`
+eight, `darwin-host` nine and twelve, `arm64-compiler` eleven, `release`
+twelve, `compiler` and `darwin-parity` fourteen, and `cortex-m` sixteen and a
+half, which sets the gate at about seventeen minutes.
 
 The gate is **not** the retired acceptance: it retains no evidence, and
 green is not a verdict on a revision. It is a safety net over every target.

@@ -22,7 +22,8 @@
 #  and three cores on macOS, install and build included; lane times inside
 #  them were measured on an ubuntu:24.04 container pinned to four CPUs and on
 #  an eight-core Mac, except cortex-m's, measured on its runner.  cortex-m,
-#  fifteen and a half minutes, sets the gate's length.
+#  sixteen and a half minutes, sets the gate's length; the two arm64 jobs
+#  take eleven and eight.
 
 name: gate
 
@@ -75,7 +76,7 @@ jobs:
           python3 compiler/tests/quality/test_check.py
           python3 compiler/tests/debugging/test_check.py
 
-  #  The debug compiler and all 795 cases, then the checks that need a built
+  #  The debug compiler and all 800 cases, then the checks that need a built
   #  compiler and no corpus.  scripts/test.sh builds first, so this is also
   #  where a compile error is reported.
   compiler:
@@ -218,7 +219,7 @@ jobs:
 
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB: 612 s on the runner, and the
-  #  whole job fifteen and a half minutes.
+  #  whole job sixteen and a half minutes.
   cortex-m:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -317,7 +318,7 @@ jobs:
   #  Three workers, the runner's cores.  macOS vets each newly linked
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
-  #  and at eight alike.  On this image the whole job takes ten and a half
+  #  and at eight alike.  On this image the whole job takes fourteen
   #  minutes.
   darwin-parity:
     runs-on: macos-26
@@ -380,6 +381,7 @@ jobs:
   #  Linux arm64 with the debug compiler: the whole test program, whose lane
   #  is this host's own, then the checks that need a compiler and no
   #  corpus.  The same steps as `compiler` on the other architecture.
+  #  Eleven minutes as a job.
   arm64-compiler:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
@@ -407,6 +409,7 @@ jobs:
   #  Linux arm64 with the release compiler: the corpus, the GDB sessions
   #  with the GDB the pinned aarch64 GNAT bundles, and the generated
   #  bindings for the standard AAPCS64 with the pinned Clang's arm64 build.
+  #  Eight minutes as a job.
   arm64-release:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60

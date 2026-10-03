@@ -543,7 +543,7 @@ fresh clone of the branch, and the gate was green on every job on `f43e2858`.
 
 ### R11.20 — Linux arm64
 
-Status: planned
+Status: complete
 Depends on: R11.10
 
 The arm64 backend with the standard AAPCS64 and ELF, and a pinned toolchain so
@@ -551,6 +551,28 @@ The arm64 backend with the standard AAPCS64 and ELF, and a pinned toolchain so
 
 Exit evidence: the corpus and the GDB sessions on GitHub's arm64 Linux
 runners in the gate.
+
+Done: `linux-arm64` is the arm64 backend's second description, with the
+standard AAPCS64, ELF objects and DWARF, and Linux's libc, beside Darwin's
+under one instruction selector: an object-format layer spells relocations,
+sections and symbols, one planner holds both AAPCS64 conventions, and the
+hosted bridge asks the operating system its libc spellings. D256 makes it a
+third C ABI with its own `compiler.c_aapcs64_lp64` and an unsigned plain
+`char`, which `core/c` and the binding generator follow; D257 makes a build
+target the compiler's own host and cross-compilation explicit. The pinned
+GNAT 16.1.0 and GPRbuild 26.0.0 have aarch64-linux checksums, the flake an
+`aarch64-linux` system and the release an aarch64-linux row. The test
+program runs one target's corpus per lane, the host's own or a named one
+under an emulator; 1,950 fixtures name `linux-arm64`, and every Linux x86-64
+runtime or ABI fixture that does not has a record and a counterpart that
+runs. Six ABI peers that chose x86-64 by "not Apple" now choose by
+architecture. The gate's `arm64-compiler` and `arm64-release` jobs run both
+compilers' corpus, the GDB sessions with the bundled GDB and the bindings on
+`ubuntu-24.04-arm`, and determinism gained the host. `driver_manifest.py`
+held every compiler commit to its parent, the existing targets unchanged; the
+largest scaling ratio is 2.18. A `linux/arm64` container on the Mac ran the
+corpus, the GDB sessions and the bindings natively before the push, and the
+gate was green on every job on `6750dfcb`.
 
 ### R11.30 — FreeBSD x86-64 and arm64
 
