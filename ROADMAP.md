@@ -920,6 +920,8 @@ oracles.
 
 - Prototype 5's derived programs run.
 - R14.20's retained-profile stack-backing and capacity evidence is recorded.
+- On every target covered by R14.20, a scripted debugger session switches
+  fibres and checks the expected frames in a backtrace through the switch.
 
 ## R15 — Windows (deferred)
 
