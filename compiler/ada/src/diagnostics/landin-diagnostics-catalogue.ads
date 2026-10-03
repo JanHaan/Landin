@@ -478,7 +478,8 @@ package Landin.Diagnostics.Catalogue is
             when Recursive_Nominal_Value =>
                "D137: a nominal value layout cannot contain itself by value",
             when Reference_Escapes =>
-               "[0770]/[0780]: a retained reference must outlive its use",
+               "[0770]/[0780]: retention requires live storage and"
+               & " permission from the reference's origin",
             when Borrowed_Place =>
                "[0800]/[0830]: a live derived view keeps its source still",
             when Return_Sources_Disagree =>
