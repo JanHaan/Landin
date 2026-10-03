@@ -548,6 +548,80 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit;
 
+   --  A direct zeroed aggregate needs no saved aggregate, but its scalar
+   --  carrier must still be defined in the call's block after a later split.
+   procedure A_Zeroed_Argument_Reaches_A_Call_After_A_Short_Circuit
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Zeroed_Argument_Reaches_A_Call_After_A_Short_Circuit
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "caller: (a: bool, b: bool) -> (r: bool) =" & LF
+         & "    r = choose(zeroed, a and b)" & LF
+         & "end caller" & LF
+         & "choose: (data: [2]u8, second: bool) -> (r: bool) =" & LF
+         & "    r = second" & LF
+         & "end choose" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the call is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Caller : constant IR.Item_Id := 1;
+         Split : IR.Value_Id := IR.No_Value;
+         Call : IR.Value_Id := IR.No_Value;
+         Clears : Natural := 0;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Caller) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+            begin
+               case IR.Op_Of (Unit, Caller, Value) is
+                  when IR.Branch => Split := Value;
+                  when IR.Call => Call := Value;
+                  when IR.Clear_Array => Clears := Clears + 1;
+                  when others => null;
+               end case;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Split /= IR.No_Value and then Call /= IR.No_Value,
+            "the later argument splits before the call");
+         if Call /= IR.No_Value then
+            declare
+               Carrier : constant IR.Value_Id :=
+                 IR.Nth_Operand (Unit, Caller, Call, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, Caller, Carrier) = IR.Number
+                  and then IR.Number_Of (Unit, Caller, Carrier) = 0
+                  and then IR.Result_Of (Unit, Caller, Carrier)
+                    = Landin.Types.Usize
+                  and then IR.Block_Of (Unit, Caller, Carrier)
+                    = IR.Block_Of (Unit, Caller, Call)
+                  and then (Split = IR.No_Value or else Carrier > Split),
+                  "the zero carrier is formed in the final call block");
+            end;
+         end if;
+         Landin.Testing.Check_Equal
+           (Item, Clears, 0, "no caller aggregate is cleared");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind
+             = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the block-local zero carrier");
+      end;
+   end A_Zeroed_Argument_Reaches_A_Call_After_A_Short_Circuit;
+
    ------------------------------------------------------------------
 
    procedure A_Binary_Carries_Its_Left_Across_A_Short_Circuit
@@ -13487,6 +13561,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a call carries an earlier argument across a short circuit",
          A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a zeroed argument reaches a call after a short circuit",
+         A_Zeroed_Argument_Reaches_A_Call_After_A_Short_Circuit'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a binary carries its left across a short circuit",

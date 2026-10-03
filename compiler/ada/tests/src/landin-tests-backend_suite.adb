@@ -1137,6 +1137,224 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Direct_Zeroed_Arguments_Clear_Only_Callee_Storage;
 
+   --  Both non-host emitters must dispatch a register and a stack aggregate
+   --  carrier to either a target-sized clear or the ordinary by-value copy.
+   procedure Non_Host_Zeroed_Carriers_Dispatch_At_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Non_Host_Zeroed_Carriers_Dispatch_At_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "first: (data: [64]u8) -> (r: i32) =" & LF
+        & "    r = i32(data[0])" & LF
+        & "end first" & LF
+        & "ninth: (a: i32, b: i32, c: i32, d: i32, e: i32,"
+        & " f: i32, g: i32, h: i32, data: [64]u8) -> (r: i32) =" & LF
+        & "    r = i32(data[63])" & LF
+        & "end ninth" & LF
+        & "use: () -> (r: i32) =" & LF
+        & "    mut data: [64]u8 = zeroed" & LF
+        & "    data[0] = 7" & LF
+        & "    data[63] = 9" & LF
+        & "    r = first(zeroed) + first(data)"
+        & " + ninth(1, 2, 3, 4, 5, 6, 7, 8, zeroed)"
+        & " + ninth(1, 2, 3, 4, 5, 6, 7, 8, data)" & LF
+        & "end use" & LF;
+   begin
+      for Target in 1 .. 2 loop
+         declare
+            Darwin : constant Boolean := Target = 1;
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Darwin then Landin.Targets.Darwin_Arm64
+               else Landin.Targets.Cortex_M);
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Assembly : Ada.Strings.Unbounded.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Lower (Work, Source, Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "the source lowers on each target");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               "both aggregate positions are accepted");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            if Darwin then
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts,
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            else
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts,
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            end if;
+            declare
+               Text : constant String :=
+                 Ada.Strings.Unbounded.To_String (Assembly);
+               First_At : constant Natural := Index
+                 (Text, (if Darwin then "_first:" else "first:") & LF);
+               Ninth_At : constant Natural := Index
+                 (Text, (if Darwin then "_ninth:" else "ninth:") & LF);
+               Use_At : constant Natural := Index
+                 (Text, (if Darwin then "_use:" else "use:") & LF);
+            begin
+               Landin.Testing.Check
+                 (Item, First_At > 0 and then Ninth_At > First_At
+                  and then Use_At > Ninth_At,
+                  "both callee entries and their caller are emitted");
+               if First_At = 0 or else Ninth_At <= First_At
+                 or else Use_At <= Ninth_At
+               then
+                  return;
+               end if;
+               declare
+                  First_Text : constant String :=
+                    Text (First_At .. Ninth_At - 1);
+                  Ninth_Text : constant String :=
+                    Text (Ninth_At .. Use_At - 1);
+                  Use_Text : constant String := Text (Use_At .. Text'Last);
+                  procedure Check_Dispatch (Part : String);
+
+                  procedure Check_Dispatch (Part : String) is
+                  begin
+                     if Darwin then
+                        Landin.Testing.Check
+                          (Item, Contains (Part, HT & "cbnz x10,")
+                           and then Contains (Part,
+                             HT & "ldrb w12, [x10], #1" & LF)
+                           and then Contains (Part,
+                             HT & "strb wzr, [x9], #1" & LF)
+                           and then Occurrences
+                             (Part, HT & "movz x11, #64" & LF) = 2,
+                           "arm64 selects a full copy or clear");
+                     else
+                        Landin.Testing.Check
+                          (Item, Contains (Part, HT & "cmp r2, #0" & LF)
+                           and then Contains (Part,
+                             HT & "ldrb r5, [r2]" & LF)
+                           and then Contains (Part,
+                             HT & "movs r5, #0" & LF)
+                           and then Occurrences
+                             (Part, HT & "movs r4, #64" & LF) = 2,
+                           "Cortex-M0 selects a full copy or clear");
+                     end if;
+                  end Check_Dispatch;
+               begin
+                  if Darwin then
+                     Landin.Testing.Check
+                       (Item, Contains (First_Text, HT & "mov x10, x0" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "mov x10, x29" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "ldr x10, [x10]" & LF),
+                        "arm64 reads register and stack carriers");
+                     Landin.Testing.Check
+                       (Item, Occurrences
+                         (Use_Text, HT & "bl _first" & LF) = 2
+                        and then Occurrences
+                          (Use_Text, HT & "bl _ninth" & LF) = 2,
+                        "arm64 calls each position with zero and storage");
+                  else
+                     Landin.Testing.Check
+                       (Item, Contains (First_Text,
+                         HT & "ldr r2, [r6]" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "adds r6, #40" & LF
+                          & HT & "ldr r2, [r6]" & LF),
+                        "Cortex-M0 reads register home and stack carrier");
+                     Landin.Testing.Check
+                       (Item, Occurrences
+                         (Use_Text, HT & "bl first" & LF) = 2
+                        and then Occurrences
+                          (Use_Text, HT & "bl ninth" & LF) = 2,
+                        "Cortex-M0 calls each position with zero and storage");
+                  end if;
+                  Check_Dispatch (First_Text);
+                  Check_Dispatch (Ninth_Text);
+               end;
+            end;
+         end;
+      end loop;
+   end Non_Host_Zeroed_Carriers_Dispatch_At_Entry;
+
+   --  The internal zero carrier is not a C aggregate argument.  The C
+   --  classifier still reads a shaped, cleared caller object.
+   procedure C_Zeroed_Aggregates_Keep_Caller_Materialization
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Zeroed_Aggregates_Keep_Caller_Materialization
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Opcode;
+      use type IR.Value_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = layout(c) struct" & LF
+         & "    value: u64" & LF
+         & "end pair" & LF
+         & "extern(c) inspect: (data: pair) -> (r: u64)" & LF
+         & "use: () -> (r: u64) =" & LF
+         & "    r = inspect(zeroed)" & LF
+         & "end use" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the C aggregate call accepts zeroed");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Caller : constant IR.Item_Id := 2;
+         Clears : Natural := 0;
+         Call : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Caller) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+            begin
+               case IR.Op_Of (Unit, Caller, Value) is
+                  when IR.Clear_Array => Clears := Clears + 1;
+                  when IR.Call => Call := Value;
+                  when others => null;
+               end case;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Clears, 1, "C zeroed clears caller storage");
+         Landin.Testing.Check
+           (Item, Call /= IR.No_Value, "the C call is emitted");
+         if Call /= IR.No_Value then
+            Landin.Testing.Check
+              (Item, IR.Op_Of (Unit, Caller,
+                IR.Nth_Operand (Unit, Caller, Call, 1))
+                  = IR.Storage_Address,
+               "C receives the caller storage address for classification");
+         end if;
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "rep stosb" & LF)
+               and then Contains (Text, HT & "call inspect" & LF),
+               "the cleared C value is classified and passed normally");
+         end;
+      end;
+   end C_Zeroed_Aggregates_Keep_Caller_Materialization;
+
    --  A datum's block describes a value and is not code [1940], so it
    --  becomes an initialized object in `.data` at its own alignment rather
    --  than instructions anything runs.
@@ -8046,6 +8264,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "direct zeroed arguments clear callee storage",
          Direct_Zeroed_Arguments_Clear_Only_Callee_Storage'Access);
+      Landin.Testing.Register
+        (Into, "backend", "non-host zeroed carriers dispatch at entry",
+         Non_Host_Zeroed_Carriers_Dispatch_At_Entry'Access);
+      Landin.Testing.Register
+        (Into, "backend", "C zeroed aggregates keep caller materialization",
+         C_Zeroed_Aggregates_Keep_Caller_Materialization'Access);
       Landin.Testing.Register
         (Into, "backend", "narrow external arguments are extended",
          Narrow_External_Arguments_Are_Extended'Access);

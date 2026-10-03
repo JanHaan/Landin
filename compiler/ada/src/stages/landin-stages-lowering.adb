@@ -4934,6 +4934,9 @@ package body Landin.Stages.Lowering is
                 | Ty.Any_Value;
          Given : array (1 .. Positive'Max (1, Actual_Count)) of IR.Value_Id :=
            [others => IR.No_Value];
+         Direct_Zeroed : array
+           (1 .. Positive'Max (1, Actual_Count)) of Syn.Node_Id :=
+             [others => Syn.No_Node];
          Saved : array (1 .. Positive'Max (1, Actual_Count)) of IR.Slot_Id :=
            [others => IR.No_Slot];
          Evidence_Count : constant Natural :=
@@ -5339,11 +5342,10 @@ package body Landin.Stages.Lowering is
                       (Unit.all, Signature)
                   then
                      --  D97: zero is an internal aggregate carrier.  The
-                     --  callee clears its own slot at entry; no caller
-                     --  aggregate storage is needed for this value.
-                     Given (Formal_Position) := IR.Emit_Number
-                       (Unit.all, Filling, Ty.Usize, 0, False,
-                        Site_Of (Of_Tree, Argument));
+                     --  callee clears its own slot at entry.  Emit the
+                     --  carrier after all arguments so a later control
+                     --  expression cannot leave it in a predecessor block.
+                     Direct_Zeroed (Formal_Position) := Argument;
                   elsif Syn.Kind (Of_Tree, Argument)
                           in Syn.Zeroed_Literal | Syn.Array_Literal
                              | Syn.Array_Repetition
@@ -5505,12 +5507,7 @@ package body Landin.Stages.Lowering is
                end if;
 
                if Has_Runtime_After (Written)
-                 and then not
-                   (Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
-                    and then Parameter.Kind in
-                      Ty.Aggregate | Ty.Fixed_Array
-                    and then not IR.Signature_Uses_C_ABI
-                      (Unit.all, Signature))
+                 and then Direct_Zeroed (Formal_Position) = Syn.No_Node
                then
                   --  Every saved storage carrier retains its full shape.
                   --  A scalar usize slot loses that proof on reload, even
@@ -5549,6 +5546,14 @@ package body Landin.Stages.Lowering is
             end;
             <<Next_Runtime_Argument>>
             null;
+         end loop;
+
+         for Which in Direct_Zeroed'Range loop
+            if Direct_Zeroed (Which) /= Syn.No_Node then
+               Given (Which) := IR.Emit_Number
+                 (Unit.all, Filling, Ty.Usize, 0, False,
+                  Site_Of (Of_Tree, Direct_Zeroed (Which)));
+            end if;
          end loop;
 
          --  D192: omission constructs three ordinary u32 fields. No text

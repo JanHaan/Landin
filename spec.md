@@ -10790,8 +10790,9 @@ records; and `runtime/array-arguments-cross-calls` on Linux x86-64.
 
 **The tour said** that labelled struct construction evaluates fields in source
 order [0410], omitted fields may use `of zeroed` [0700], and ordinary structs
-are nominal [0710]. D97 supplied the shaped caller temporary for an entirely
-zero aggregate but not for labelled construction.
+are nominal [0710]. D97 supplied a zero carrier for an entirely zero aggregate,
+but labelled construction still needs a shaped caller temporary for its
+source-ordered field expressions.
 
 **Chosen:** a bare or correctly nominal construction may appear directly where
 a flat ordinary-struct parameter has scalar fields only. Labels are checked
