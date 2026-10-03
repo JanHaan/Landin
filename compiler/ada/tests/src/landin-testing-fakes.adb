@@ -113,6 +113,18 @@ package body Landin.Testing.Fakes is
    function Write_Count (Host : Fake_Filesystem) return Natural
      is (Host.Writes.Data.Write_Attempts);
 
+   function List_Count
+     (Host : Fake_Filesystem; Path : String) return Natural
+   is
+   begin
+      for Call of Host.Writes.Data.List_Calls loop
+         if Unbounded.To_String (Call.Path) = Path then
+            return Call.Count;
+         end if;
+      end loop;
+      return 0;
+   end List_Count;
+
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean
      is (Find (Host, Path) /= 0);
@@ -308,6 +320,18 @@ package body Landin.Testing.Fakes is
          then Base else Base & "/");
    begin
       Entries := Landin.Platform.Path_Vectors.Empty_Vector;
+
+      for Call of Host.Writes.Data.List_Calls loop
+         if Unbounded.To_String (Call.Path) = Path then
+            Call.Count := Call.Count + 1;
+            exit;
+         end if;
+      end loop;
+      if List_Count (Host, Path) = 0 then
+         Host.Writes.Data.List_Calls.Append
+           (List_Call'
+              (Path => Unbounded.To_Unbounded_String (Path), Count => 1));
+      end if;
 
       if Index = 0 then
          Status := Landin.Platform.Directory_Not_Found;

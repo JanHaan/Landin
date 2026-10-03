@@ -816,6 +816,51 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Absent_Import_Roots_Allow_Fallback;
 
+   procedure Shared_Import_Prefixes_Are_Listed_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Import_Prefixes_Are_Listed_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("first");
+      Host.Add_Directory ("first/pkg");
+      Host.Add_Directory ("first/pkg/a");
+      Host.Add_Directory ("second");
+      Host.Add_Directory ("second/pkg");
+      Host.Add_Directory ("second/pkg/b");
+      Host.Add_File
+        ("entry/main.ldn", "import pkg/a" & LF & "import pkg/b" & LF);
+      Args.Append ("--root=first");
+      Args.Append ("--root=second");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "each import selects the first root with its full path");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("first"), 1,
+            "the first root is listed once for shared prefixes");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("first/pkg"), 1,
+            "the first root's shared prefix is listed once");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("second"), 1,
+            "the second root is listed once");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("second/pkg"), 1,
+            "the second root's prefix is listed once");
+      end;
+   end Shared_Import_Prefixes_Are_Listed_Once;
+
    procedure Private_Imported_Names_Are_Diagnosed
      (Item : in out Landin.Testing.Context);
 
@@ -4485,6 +4530,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "absent import roots allow fallback",
          Absent_Import_Roots_Allow_Fallback'Access);
+      Landin.Testing.Register
+        (Into, "driver", "shared import prefixes are listed once",
+         Shared_Import_Prefixes_Are_Listed_Once'Access);
       Landin.Testing.Register
         (Into, "driver", "private imported names are diagnosed",
          Private_Imported_Names_Are_Diagnosed'Access);

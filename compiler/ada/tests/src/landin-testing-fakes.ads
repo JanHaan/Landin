@@ -33,6 +33,8 @@ package Landin.Testing.Fakes is
    function Written (Host : Fake_Filesystem; Path : String) return String;
    --  Counts attempts, including refused and empty writes.
    function Write_Count (Host : Fake_Filesystem) return Natural;
+   function List_Count
+     (Host : Fake_Filesystem; Path : String) return Natural;
 
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean;
@@ -224,6 +226,14 @@ private
    package File_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => File_Entry);
 
+   type List_Call is record
+      Path  : Unbounded.Unbounded_String;
+      Count : Natural := 0;
+   end record;
+
+   package List_Call_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => List_Call);
+
    type Store is record
       Files : File_Vectors.Vector;
       --  Latest successful write per path, separate from the live namespace.
@@ -238,6 +248,7 @@ private
       Refuses_Write : Boolean := False;
       Refuses_Removal : Boolean := False;
       Write_Attempts : Natural := 0;
+      List_Calls     : List_Call_Vectors.Vector;
    end record;
 
    type Store_Access is access Store;

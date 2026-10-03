@@ -1,3 +1,4 @@
+with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
@@ -113,6 +114,86 @@ package body Landin.Driver.Loading is
       Previous        : access Landin.Stages.Compilation := null;
       Watch_Syntax    : access procedure (Name : String) := null)
    is
+      type Directory_Listing is record
+         Entries : Landin.Platform.Path_List;
+         Status  : Landin.Platform.List_Status;
+      end record;
+
+      package Listing_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Directory_Listing);
+      package Child_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Boolean);
+
+      Listings : Listing_Maps.Map;
+      Children : Child_Maps.Map;
+
+      procedure Cached_Listing
+        (Directory : String;
+         Entries   : out Landin.Platform.Path_List;
+         Status    : out Landin.Platform.List_Status);
+      procedure Find_Child_Directory
+        (Directory : String;
+         Child     : String;
+         Found     : out Boolean;
+         Status    : out Landin.Platform.List_Status);
+
+      procedure Cached_Listing
+        (Directory : String;
+         Entries   : out Landin.Platform.Path_List;
+         Status    : out Landin.Platform.List_Status)
+      is
+      begin
+         if Listings.Contains (Directory) then
+            declare
+               Saved : constant Directory_Listing :=
+                 Listings.Element (Directory);
+            begin
+               Entries := Saved.Entries;
+               Status := Saved.Status;
+            end;
+         else
+            Host.List_Directory (Directory, Entries, Status);
+            Listings.Insert (Directory, (Entries, Status));
+         end if;
+      end Cached_Listing;
+
+      --  Include the parent's exact spelling in the key: distinct root
+      --  spellings can produce the same joined child path.  Cache successful
+      --  parent lookups only; a failed listing keeps its status in Listings.
+      procedure Find_Child_Directory
+        (Directory : String;
+         Child     : String;
+         Found     : out Boolean;
+         Status    : out Landin.Platform.List_Status)
+      is
+         Path : constant String := Joined_Path (Directory, Child);
+         Key  : constant String :=
+           Natural'Image (Directory'Length) & ":" & Directory & Child;
+      begin
+         Status := Landin.Platform.List_Ok;
+         if Children.Contains (Key) then
+            Found := Children.Element (Key);
+            return;
+         end if;
+
+         declare
+            Entries : Landin.Platform.Path_List;
+         begin
+            Cached_Listing (Directory, Entries, Status);
+            Found := False;
+            if Status /= Landin.Platform.List_Ok then
+               return;
+            end if;
+            for Child_Name of Entries loop
+               if Child_Name = Child then
+                  Found := Host.Is_Directory (Path);
+                  exit;
+               end if;
+            end loop;
+            Children.Insert (Key, Found);
+         end;
+      end Find_Child_Directory;
+
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id) return String;
@@ -175,12 +256,12 @@ package body Landin.Driver.Loading is
                             (Of_Tree,
                              Landin.Syntax.Nth_Import_Segment
                                (Of_Tree, Node, Position)));
-                     Entries : Landin.Platform.Path_List;
                      Status  : Landin.Platform.List_Status;
                      Found   : Boolean := False;
                   begin
-                     Host.List_Directory
-                       (Unbounded.To_String (Current), Entries, Status);
+                     Find_Child_Directory
+                       (Unbounded.To_String (Current), Segment,
+                        Found, Status);
                      if Status = Landin.Platform.Directory_Not_Readable then
                         Unlistable := Current;
                         return "";
@@ -189,12 +270,6 @@ package body Landin.Driver.Loading is
                         Matched := False;
                         exit;
                      end if;
-                     for Child_Name of Entries loop
-                        if Child_Name = Segment then
-                           Found := True;
-                           exit;
-                        end if;
-                     end loop;
                      if not Found then
                         Matched := False;
                         exit;
@@ -202,12 +277,6 @@ package body Landin.Driver.Loading is
                      Current := Unbounded.To_Unbounded_String
                        (Joined_Path
                           (Unbounded.To_String (Current), Segment));
-                     if not Host.Is_Directory
-                       (Unbounded.To_String (Current))
-                     then
-                        Matched := False;
-                        exit;
-                     end if;
                   end;
                end loop;
                if Matched then
@@ -262,10 +331,9 @@ package body Landin.Driver.Loading is
             begin
                for Directory of Reached loop
                   declare
-                     Entries : Landin.Platform.Path_List;
                      Status  : Landin.Platform.List_Status;
                   begin
-                     Host.List_Directory (Directory, Entries, Status);
+                     Cached_Listing (Directory, Entries, Status);
                      if Status = Landin.Platform.List_Ok then
                         for Child_Name of Entries loop
                            if Child_Name = Written then
