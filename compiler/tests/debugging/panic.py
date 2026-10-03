@@ -26,10 +26,18 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+#  Each host debugs its own target natively; the panic path is the same
+#  promise on every one.
+HOST_TARGETS = {('Darwin', 'arm64'): 'darwin-arm64',
+                ('Linux', 'x86_64'): 'linux-x86-64',
+                ('Linux', 'aarch64'): 'linux-arm64'}
+
+
 def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
-    assert (platform.system(), platform.machine()) in (('Darwin', 'arm64'), ('Linux', 'x86_64'))
+    host = (platform.system(), platform.machine())
+    assert host in HOST_TARGETS, host
     darwin = platform.system() == 'Darwin'
-    target = 'darwin-arm64' if darwin else 'linux-x86-64'
+    target = HOST_TARGETS[host]
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     refine = Path(refine).resolve(strict=True)

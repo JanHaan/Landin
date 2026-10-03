@@ -273,8 +273,10 @@ benchmark evidence. A non-Linux host fails rather than claiming a skip as a pass
 
 ## Source debugger acceptance
 
-After building the compiler, `./scripts/debug.sh` runs the Linux x86-64
-source-debugger acceptance in `debugging/check.py`. It uses GDB to test the
+After building the compiler, `./scripts/debug.sh` runs the Linux
+source-debugger acceptance in `debugging/check.py` for this host's own Linux
+target, x86-64 or arm64; `--target=linux-arm64` with `--qemu` and `--driver`
+selects the other under QEMU's GDB stub, as cross evidence. It uses GDB to test the
 emitted program's line information, breakpoints, stepping, stack frames and
 selected parameters and locals. Routine debugger risk runs the full release
 matrix; milestones run it with both debug and release Ada compilers. The script fails if its tools or

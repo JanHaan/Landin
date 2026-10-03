@@ -45,6 +45,21 @@ DEBUG_SECTIONS = (".debug_info", ".debug_abbrev", ".debug_line",
                   ".debug_loc", ".debug_frame")
 
 
+#  What the lane needs to know about the target it debugs.  Everything else
+#  -- the scripts, the transcripts, DWARF, the build identity, the source
+#  map -- is the same on every ELF target, which is the point of running
+#  one lane on two: the second architecture checks the same promises.
+LANES = {
+    "x86_64": {"target": "linux-x86-64", "triplet": "x86_64-pc-linux-gnu",
+               "qemu": "qemu-x86_64", "saved": "rbx",
+               "assembly": 0},
+    "aarch64": {"target": "linux-arm64", "triplet": "aarch64-linux-gnu",
+                "qemu": "qemu-aarch64", "saved": "x19",
+                "assembly": 1},
+}
+LANE = LANES["x86_64"]
+
+
 class Native_Transport_Unavailable(ValueError):
     """The host cannot provide ptrace even though the test remains failed."""
 
@@ -72,7 +87,7 @@ def run(args: list[str], *, cwd: Path | None = None,
 
 
 def tool(home: Path, name: str) -> str:
-    candidates = (home / "bin" / f"x86_64-pc-linux-gnu-{name}",
+    candidates = (home / "bin" / f"{LANE['triplet']}-{name}",
                   home / "bin" / name)
     selected = next((path for path in candidates if path.is_file()), None)
     require(selected is not None, f"pinned installation lacks {name}")
@@ -381,20 +396,22 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
         ("pointee", "*union_pointer.ptr"),
     ))
     #  [1630]: the block's own line, its output a local after it, and the
-    #  callee-saved rbx it declares restored for the caller through CFI.
+    #  callee-saved register it declares, rbx or x19, restored for the
+    #  caller through CFI.
+    saved = "$" + LANE["saved"]
     lines.extend(["delete breakpoints",
                   f"tbreak {source_name}:{source_lines['assembly-block']}",
                   "continue"])
     emit_section(lines, "assembly-block-line", ["frame", "info line"])
-    #  Before the block rbx is still the caller's; the block overwrites it,
-    #  and only the routine's save can give the caller back its own.
-    emit_values(lines, "assembly", (("caller_rbx", "$rbx"),))
+    #  Before the block the register is still the caller's; the block
+    #  overwrites it, and only the routine's save can give it back.
+    emit_values(lines, "assembly", (("caller_saved", saved),))
     lines.append("next")
     emit_section(lines, "assembly-ready-line", ["frame", "info line"])
     emit_values(lines, "assembly", (("sum", "assembly_sum"),
-                                    ("block_rbx", "$rbx")))
+                                    ("block_saved", saved)))
     lines.append("up")
-    emit_values(lines, "assembly", (("unwound_rbx", "$rbx"),))
+    emit_values(lines, "assembly", (("unwound_saved", saved),))
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
@@ -736,13 +753,14 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
     expect_line(transcript, "assembly-ready-line",
                 source_lines["assembly-ready"], "debug_assembly")
     expect_value(transcript, "assembly.sum", 0x5a5a5a5a5f)
-    expect_value(transcript, "assembly.block_rbx", 0x5a5a5a5a5a)
-    caller_rbx = re.search(r"^LANDIN-VALUE assembly\.caller_rbx=(-?\d+)$",
-                           transcript, re.M)
-    require(caller_rbx is not None
-            and int(caller_rbx.group(1)) != 0x5a5a5a5a5a,
-            "the caller's rbx cannot be told from the block's")
-    expect_value(transcript, "assembly.unwound_rbx", int(caller_rbx.group(1)))
+    expect_value(transcript, "assembly.block_saved", 0x5a5a5a5a5a)
+    caller_saved = re.search(r"^LANDIN-VALUE assembly\.caller_saved=(-?\d+)$",
+                             transcript, re.M)
+    require(caller_saved is not None
+            and int(caller_saved.group(1)) != 0x5a5a5a5a5a,
+            "the caller's saved register cannot be told from the block's")
+    expect_value(transcript, "assembly.unwound_saved",
+                 int(caller_saved.group(1)))
     for section_name, source_text in (
             ("outer-source", "inner_result: i32 = debug_inner("),
             ("inner-source", "step_local: i32 = scalar_local"),
@@ -1061,7 +1079,7 @@ def guest_command(executable: Path, runner: str,
                   qemu: str | None, arguments: tuple[str, ...] = ()) -> list[str]:
     if runner == "native":
         return [str(executable), *arguments]
-    require(qemu is not None, "qemu runner has no qemu-x86_64 command")
+    require(qemu is not None, f"qemu runner has no {LANE['qemu']} command")
     return [qemu, str(executable), *arguments]
 
 
@@ -1110,7 +1128,7 @@ def run_gdb(gdb: str, executable: Path, script_path: Path,
                 os.close(secondary)
         script_path.write_text(script(["run"]))
         return run_gdb_process(gdb_args, debugger_cwd, transcript_path)
-    require(qemu is not None, "qemu runner has no qemu-x86_64 command")
+    require(qemu is not None, f"qemu runner has no {LANE['qemu']} command")
     socket_path = transport_dir / "gdb.sock"
     qemu_process = subprocess.Popen(
         [qemu, "-g", str(socket_path), str(executable), *arguments],
@@ -1236,10 +1254,13 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
               if workload else list(source_args))
     profile_args = [f"--optimize={optimize}",
                     f"--specialize={specialize}"]
-    compiler_args = [str(refine), "--target=linux-x86-64", "--debug=full",
+    target = "--target=" + LANE["target"]
+    toolchain = ([f"--toolchain={tools['gcc']}"]
+                 if tools.get("gcc") else [])
+    compiler_args = [str(refine), target, "--debug=full",
                      *inputs, "--emit=exe", "-o", str(executable),
-                     *profile_args, f"--build-report={report}"]
-    assembly_args = [str(refine), "--target=linux-x86-64", "--debug=full",
+                     *profile_args, f"--build-report={report}", *toolchain]
+    assembly_args = [str(refine), target, "--debug=full",
                      *inputs, "--emit=asm", "-o", str(assembly),
                      *profile_args]
     # The rooted client takes over two minutes to compile even natively;
@@ -1274,7 +1295,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     shutil.copy2(map_path, retained / f"{key}.sources.json")
     shutil.copy2(assembly_map_path, retained / f"{key}.s.sources.json")
     shutil.copy2(report, retained / f"{key}.build.json")
-    build = check_specialization(report, optimize, specialize)
+    build = check_specialization(report, optimize, specialize, LANE["target"])
     sections = check_debug_sections(
         tools["readelf"], executable, True, retained / f"{key}.sections.txt")
     debug_info = run([tools["readelf"], "--debug-dump=info", str(executable)])
@@ -1323,7 +1344,9 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     script_path = retained / f"{key}.gdb"
     transcript_path = retained / f"{key}.gdb.txt"
     lines = (parser_lines() if parser_workload else hosted_lines() if hosted else
-             container_lines() if containers else SOURCE_LINES)
+             container_lines() if containers else
+             {**SOURCE_LINES, **(ARM64_ASSEMBLY_LINES if LANE["assembly"]
+                                 else {})})
     script = (parser_gdb_script if parser_workload else hosted_gdb_script if hosted else
               container_gdb_script if containers else gdb_script)
     with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
@@ -1437,23 +1460,38 @@ def main() -> None:
     parser.add_argument("--runner", choices=("native", "qemu"),
                         help="debugger transport; default is strict native")
     parser.add_argument("--qemu", metavar="PATH",
-                        help="qemu-x86_64 path; also selects qemu by default")
+                        help="qemu-x86_64 or qemu-aarch64 path; also"
+                             " selects qemu by default")
+    parser.add_argument("--target", choices=[l["target"] for l in LANES.values()],
+                        help="the Linux target to debug; default this host's")
+    parser.add_argument("--driver", metavar="DRIVER",
+                        help="the C driver that links a cross target's"
+                             " executables; default the toolchain's own")
     parser.add_argument("--workload", choices=WORKLOADS,
                         help="exact developer workload; FILTERED, not acceptance")
     args = parser.parse_args()
+    global LANE
     require(platform.system() == "Linux",
             "source debugging requires Linux; no skip is a pass")
+    host = LANES.get(platform.machine())
+    LANE = (next(l for l in LANES.values() if l["target"] == args.target)
+            if args.target else host)
+    require(LANE is not None,
+            "this host's machine has no Linux lane; name --target")
     runner = args.runner or ("qemu" if args.qemu else "native")
     if runner == "native":
         require(args.qemu is None,
                 "--qemu cannot be combined with --runner=native")
-        require(platform.machine() == "x86_64",
-                "native debugging requires Linux x86-64; no skip is a pass")
+        require(LANE is host,
+                f"native debugging of {LANE['target']} needs that machine;"
+                " no skip is a pass")
     refine = args.refine.resolve(strict=True)
     home = args.toolchain.resolve(strict=True)
     tools = {name: tool(home, name) for name in ("readelf", "strip")}
+    if args.driver:
+        tools["gcc"] = command(args.driver)
     gdb = command(args.gdb)
-    qemu = command(args.qemu or "qemu-x86_64") if runner == "qemu" else None
+    qemu = command(args.qemu or LANE["qemu"]) if runner == "qemu" else None
     versions = {"gdb": run([gdb, "--version"]).splitlines()[0],
                 **{name: run([path, "--version"]).splitlines()[0]
                    for name, path in tools.items()}}
@@ -1500,6 +1538,7 @@ def main() -> None:
         raise
     result = {
         "schema": 1,
+        "target": LANE["target"],
         "filtered": args.workload is not None,
         "runner": runner,
         "tools": versions,

@@ -199,7 +199,15 @@ and a source breakpoint on it stops before any of them. Each output is an
 ordinary local from the next line on. A callee-saved register the block
 declares is saved with the others and described by the same CFI, so the
 caller's frame shows its own value; the GDB session asserts `rbx` there on
-every profile, and the LLDB session `x19`.
+every profile on Linux x86-64 and `x19` on Linux arm64, and the LLDB session
+`x19`.
+
+Linux arm64 debugs as Linux x86-64 does: the same ELF DWARF 4, the same GDB
+sessions over the same sources and workloads, the same GNU build ID and
+source maps, with the frame base x29 and the CFA at x29+16 that Darwin's
+CFI describes. `./scripts/debug.sh` on an arm64 Linux host runs them with the
+GDB the pinned aarch64 GNAT bundles; `--target=linux-arm64 --qemu
+qemu-aarch64 --driver DRIVER` runs them anywhere else under QEMU's GDB stub.
 
 ### Exact identity and optional deployment
 

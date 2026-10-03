@@ -21,6 +21,8 @@ if [ -n "${LANDIN_QEMU:-}" ]; then
     set -- --qemu "$LANDIN_QEMU" "$@"
 fi
 
+#  --target=linux-arm64 or linux-x86-64 passes through to the GDB lane,
+#  which otherwise debugs this host's own Linux target.
 python3 "$LANDIN_ROOT/compiler/tests/debugging/test_check.py"
 exec python3 "$LANDIN_ROOT/compiler/tests/debugging/check.py" \
     --refine "$LANDIN_BUILD_DIR/bin/refine" \
