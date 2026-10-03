@@ -13800,7 +13800,9 @@ That collision is L0390; a reserved tool namespace name is L0203. An option
 inside any fixed arm or with a type other than `bool` or an enabled integer
 scalar is likewise L0390, even when its default is a fixed value. An invalid
 tool directive argument count, library argument form or library name is
-L0391. L0305 remains a failure to produce a value with the closed fold.
+L0391. In configuration, L0305 remains a failure to produce a value with the
+closed fold; elsewhere it also covers a required module initial image that
+cannot be supplied implicitly, including a function value with no initializer.
 All options are collected before evaluating their defaults. Defaults may
 refer forward to options in any reached source; cycles and invalid defaults
 are refused even when the request overrides the option. A dependent default

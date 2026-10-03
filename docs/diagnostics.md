@@ -370,11 +370,14 @@ wide: u128 = 1
 
 ### L0305
 
-A value required before the program runs, which the compiler's closed fold
-cannot produce [1940] (D136, D202). A module value, array bound or fixed
+A required static value or initial image cannot be established before the
+program runs [1940] (D136, D202). A module value, array bound or fixed
 configuration expression can depend on a runtime value or call, contain an
-unknown fixed name or form, or depend on itself. Change the expression to
-one the closed fold can evaluate.
+unknown fixed name or form, or depend on itself. Change such an expression to
+one the closed fold can evaluate. A module function binding without an
+initializer has no implicit zero function address; give it an initial function
+address, such as a declared function or another module function value whose
+image is known.
 
 ```landin
 a: i32 = b + 1
@@ -989,10 +992,10 @@ option debug: u32 = 1
 
 ### L0391
 
-A tool directive breaks [1510]/[1590]/D202: it has the wrong number of
-arguments, `linker.library` does not take a quoted text literal, or the
-library name contains a forbidden character or shape. Supply the required
-argument and a portable static library name.
+A tool directive breaks [1510]/[1590]/D202 when it has other than one
+positional argument. Give `compiler.assert` one fixed bool expression.
+Give `linker.library` one quoted text literal containing a portable static
+library name; its argument must have the required form and name characters.
 
 ```landin
 linker.library("-bad")

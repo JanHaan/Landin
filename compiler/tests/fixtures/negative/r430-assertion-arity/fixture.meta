@@ -1,0 +1,9 @@
+class: negative
+summary: A compiler assertion has one fixed bool expression
+program: main.ldn
+codes: L0391
+constructs: 1510, 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-assertion-arity/main.ldn
+status: 1

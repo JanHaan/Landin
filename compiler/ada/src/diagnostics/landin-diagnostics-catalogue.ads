@@ -446,8 +446,8 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       =>
                "[1920]: a name used in a way the kernel does not enable",
             when Not_Known_At_Compile_Time =>
-               "[1940]/D136/D202: a value required before runtime that the"
-               & " compiler's closed fold cannot produce",
+               "[1940]/D136/D202: a required static value or initial image"
+               & " that the compiler cannot establish before runtime",
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
                & " compiler knows it",
@@ -500,8 +500,8 @@ package Landin.Diagnostics.Catalogue is
                "[1530]/D202: an option must be unconditional, have an"
                & " available name and use a supported scalar type",
             when Invalid_Tool_Directive =>
-               "[1510]/[1590]/D202: a tool directive must have the"
-               & " required argument shape and portable library name",
+               "[1510]/[1590]/D202: a tool directive needs one argument;"
+               & " linker.library needs a portable fixed library name",
             when Mutable_Never_Written =>
                "D251: a local declared `mut` that nothing writes",
             when Call_Argument_Match =>
