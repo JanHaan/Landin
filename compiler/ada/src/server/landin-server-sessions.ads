@@ -13,10 +13,10 @@
 --
 --  A request the server does not offer is MethodNotFound, one before
 --  `initialize` ServerNotInitialized, one after `shutdown`
---  InvalidRequest, and a notification it does not know is ignored.  A
---  request `$/cancelRequest` names before it is answered is
---  RequestCancelled.  Positions are UTF-8 when the editor offers it and
---  UTF-16 otherwise.
+--  InvalidRequest, and a notification it does not know is ignored.
+--  Cancellation notifications are ignored: requests are answered before
+--  the next message is read.  Positions are UTF-8 when the editor offers
+--  it and UTF-16 otherwise.
 --
 --  When to analyse: after every change, but never while more input is
 --  already waiting, so a burst of edits is analysed once.  A request is

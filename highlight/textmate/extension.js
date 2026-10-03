@@ -17,11 +17,17 @@ async function activate(context) {
   }
   const command = settings.get("server.path") || "refine";
   const server = { command, args: ["lsp"] };
+  const target = settings.get("server.target", "");
+  const level = settings.get("server.level", "");
+  const options = settings.get("server.options", {});
+  const initializationOptions = { options };
+  if (target) initializationOptions.target = target;
+  if (level) initializationOptions.level = level;
   client = new LanguageClient(
     "refine",
     "refine lsp",
     { run: server, debug: server },
-    { documentSelector: [{ language: "landin" }] }
+    { documentSelector: [{ language: "landin" }], initializationOptions }
   );
   try {
     await client.start();

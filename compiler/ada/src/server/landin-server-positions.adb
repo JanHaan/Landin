@@ -1,5 +1,13 @@
 package body Landin.Server.Positions is
 
+   use type Landin.Source.Byte_Offset;
+
+   function Before (Left, Right : Endpoint) return Boolean
+     is (Left.Offset < Right.Offset);
+
+   package Endpoint_Sorting is new Endpoint_Vectors.Generic_Sorting
+     ("<" => Before);
+
    --  The byte length of the character starting at Index, by Unicode's
    --  well-formed table: 1 for a byte that begins nothing well formed.
    function Width (Text : String; Index : Positive) return Positive;
@@ -46,6 +54,104 @@ package body Landin.Server.Positions is
      is (case Unit is
            when UTF_8  => Bytes,
            when UTF_16 => (if Bytes = 4 then 2 else 1));
+
+   procedure Register
+     (Map : in out Position_Map; Offset : Landin.Source.Byte_Offset)
+   is
+   begin
+      Map.Points.Append (Endpoint'(Offset => Offset, At_Pos => (0, 0)));
+      Map.Built := False;
+   end Register;
+
+   procedure Prepare
+     (Map : in out Position_Map; Text : String; Unit : Encoding)
+   is
+      At_Byte : Natural := Text'First;
+      At_Pos  : Position;
+      Remaining : Natural := 0;
+      Pending_Units : Positive := 1;
+   begin
+      Endpoint_Sorting.Sort (Map.Points);
+      if Map.Points.Is_Empty then
+         Map.Built := True;
+         return;
+      end if;
+      for Index in Map.Points.First_Index .. Map.Points.Last_Index loop
+         declare
+            Offset : constant Landin.Source.Byte_Offset :=
+              Map.Points.Element (Index).Offset;
+            Target : constant Natural :=
+              Text'First + Natural'Min (Natural (Offset), Text'Length);
+         begin
+            while At_Byte < Target loop
+               if Remaining > 0 then
+                  Remaining := Remaining - 1;
+                  if Remaining = 0 then
+                     At_Pos.Character := At_Pos.Character + Pending_Units;
+                  end if;
+               elsif Text (At_Byte) = ASCII.LF
+                 or else (Text (At_Byte) = ASCII.CR
+                          and then (At_Byte = Text'Last
+                                    or else Text (At_Byte + 1) /= ASCII.LF))
+               then
+                  At_Pos.Line := At_Pos.Line + 1;
+                  At_Pos.Character := 0;
+               elsif Text (At_Byte) /= ASCII.CR then
+                  declare
+                     Size : constant Positive := Width (Text, At_Byte);
+                  begin
+                     if Size = 1 then
+                        At_Pos.Character := At_Pos.Character
+                          + Units (Size, Unit);
+                     else
+                        Remaining := Size - 1;
+                        Pending_Units := Units (Size, Unit);
+                     end if;
+                  end;
+               end if;
+               At_Byte := At_Byte + 1;
+            end loop;
+            Map.Points.Replace_Element
+              (Index, (Offset => Offset, At_Pos => At_Pos));
+         end;
+      end loop;
+      Map.Built := True;
+   end Prepare;
+
+   function Endpoint_Count (Map : Position_Map) return Natural
+     is (Natural (Map.Points.Length));
+
+   function Ready (Map : Position_Map) return Boolean
+     is (Map.Built);
+
+   function Position_Of
+     (Map : Position_Map; Offset : Landin.Source.Byte_Offset)
+      return Position
+   is
+      Low, High : Natural;
+   begin
+      if not Map.Built or else Map.Points.Is_Empty then
+         raise Program_Error with "unprepared LSP positions";
+      end if;
+      Low := Map.Points.First_Index;
+      High := Map.Points.Last_Index;
+      while Low <= High loop
+         declare
+            Middle : constant Natural := Low + (High - Low) / 2;
+            Found  : constant Endpoint := Map.Points.Element (Middle);
+         begin
+            if Found.Offset = Offset then
+               return Found.At_Pos;
+            elsif Offset < Found.Offset then
+               exit when Middle = 0;
+               High := Middle - 1;
+            else
+               Low := Middle + 1;
+            end if;
+         end;
+      end loop;
+      raise Program_Error with "unregistered LSP position";
+   end Position_Of;
 
    --  The index of the first byte of Line, and of the byte after it ends
    --  (its terminator excluded), in Text's own indexing.

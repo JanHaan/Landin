@@ -26,12 +26,14 @@ package Landin.Driver.Loading is
 
    --  The entry module and every module its imports reach, first in first
    --  out, each loaded once.  Roots are searched in order and must be
-   --  nonempty.
+   --  nonempty.  When requested, record every root-relative directory
+   --  where an unresolved import could later become available.
    procedure Load_Reachable_Program
      (Context         : in out Landin.Stages.Compilation;
       Host            : Landin.Platform.Filesystem'Class;
       Roots           : Landin.Platform.Path_List;
-      Entry_Directory : String);
+      Entry_Directory : String;
+      Missing_Directories : access Landin.Platform.Path_List := null);
 
    function Joined_Path (Directory, Child : String) return String;
 

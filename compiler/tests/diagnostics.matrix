@@ -7,7 +7,7 @@ L0002  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb 
 L0003  Live     error   no-fix   false empty-ok    0..0 0     landin-driver-loading.adb,landin-driver.adb test:landin-tests-driver_suite.adb,test:landin-tests-stages_suite.adb
 L0004  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0005  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
-L0006  Live     error   may-fix  true  nonempty    0..0 1     landin-driver-loading.adb           negative/misspelt-module-is-offered-its-directory,negative/module-not-found,test:landin-tests-driver_suite.adb
+L0006  Live     error   may-fix  true  nonempty    0..0 1     landin-driver-loading.adb           negative/misspelt-module-is-offered-its-directory,negative/module-not-found,test:landin-tests-driver_suite.adb,test:landin-tests-server_suite.adb
 L0007  Live     error   no-fix   false empty-ok    0..0 1     landin-driver-loading.adb           negative/module-directory-invalid,test:landin-tests-driver_suite.adb
 L0008  Live     error   no-fix   true  empty-ok    0..0 1     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0009  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb

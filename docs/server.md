@@ -29,6 +29,9 @@ preference:
 | the editor's workspace folders | each folder, in order |
 | the editor's root URI | that directory |
 
+The three sources accept a folder URI with or without a trailing slash;
+both forms name the same root.
+
 For this repository the root is the checkout, which is how the examples and
 `core` are compiled: `refine --root=. examples/derived_hosted`.
 
@@ -46,8 +49,7 @@ choose:
 ```json
 {"roots": ["file:///home/me/landin"],
  "target": "cortex-m0",
- "level": "armv7-m",
- "options": {"board": "rp2040"}}
+ "level": "armv7-m"}
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
@@ -57,9 +59,12 @@ target describes checks for `synthetic-32` and says, through
 `window/showMessage`, that a target has to be named.
 `level` is a CPU feature level of that target's family, read after it as
 `refine` reads it, and the target's default when absent. An
-option is named in lowercase letters, digits and underscores. A value the
-server refuses is reported once, through `window/showMessage`, and the rest
-are used.
+option must be declared in a reached source and named in lowercase letters,
+digits and underscores. For example, `option enabled: bool = true` can be
+overridden with `"options": {"enabled": "false"}`. Option values are strings
+containing `true`, `false`, or signed decimal integer text that fits the
+declared type. A value the server refuses is reported once, through
+`window/showMessage`, and the rest are used.
 
 ## What it answers
 
@@ -79,7 +84,8 @@ source, such as a refused option, goes to `window/showMessage`.
 
 Every source the module reads is published, so an error in a file the editor
 has not opened is still shown, and one that is fixed is cleared. Closing the
-last open file of a module clears everything it reported.
+last open file of a module clears sources only that module reported. Sources
+also reported by another open module are reanalysed through that module.
 
 A quick fix is preferred when it is exact: its rule decides the replacement,
 and applying it keeps what the program means, so an editor may apply it
@@ -102,9 +108,10 @@ a routine body that does not parse, both answer nothing.
 
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
-one after `shutdown` with InvalidRequest, and one `$/cancelRequest` named
-before it was answered with RequestCancelled. A notification the server does
-not know is ignored.
+and one after `shutdown` with InvalidRequest. The server answers each request
+before reading the next message, so it ignores `$/cancelRequest` notifications;
+a late cancellation cannot affect a later request that reuses the ID. A
+notification the server does not know is ignored.
 
 ## Past a syntax error
 
@@ -167,7 +174,7 @@ says how to install each. `refine` must be on the editor's path, as
 | Helix | `highlight/helix/languages.toml` names `refine` as Landin's language server |
 | Emacs | `highlight/emacs/landin-mode.el` registers it with Eglot; `M-x eglot` starts it |
 | Zed | `highlight/zed` names it as Landin's language server and finds `refine` on the path |
-| VS Code and its descendants | `highlight/textmate`'s client starts it; `landin.server.path` names another compiler |
+| VS Code and its descendants | `highlight/textmate`'s client starts it; `landin.server.path` names another compiler, and `landin.server.target`, `landin.server.level` and `landin.server.options` set the analysis target and build options |
 | Vim | `highlight/vim` registers it with vim-lsp when vim-lsp is installed |
 | Sublime Text | `highlight/sublime/LSP-refine.sublime-settings`, for the LSP package |
 | Kate | `highlight/kate/lsp-client.json`, for the LSP Client plugin |

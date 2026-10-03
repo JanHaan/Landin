@@ -109,7 +109,8 @@ package body Landin.Driver.Loading is
      (Context         : in out Landin.Stages.Compilation;
       Host            : Landin.Platform.Filesystem'Class;
       Roots           : Landin.Platform.Path_List;
-      Entry_Directory : String)
+      Entry_Directory : String;
+      Missing_Directories : access Landin.Platform.Path_List := null)
    is
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
@@ -483,6 +484,12 @@ package body Landin.Driver.Loading is
                                    Selected_Root);
                            begin
                               if Directory_Path = "" then
+                                 if Missing_Directories /= null then
+                                    for Root of Roots loop
+                                       Missing_Directories.Append
+                                         (Joined_Path (Root, Logical));
+                                    end loop;
+                                 end if;
                                  declare
                                     Found : Landin.Diagnostics
                                       .Diagnostic_List;

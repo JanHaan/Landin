@@ -31,7 +31,7 @@
   "keywords": ["Landin", "language", "syntax"],
   "activationEvents": [],
   "scripts": {
-    "test": "node ../tests/textmate-smoke.mjs",
+    "test": "node ../tests/textmate-smoke.mjs && node ../tests/textmate-client.mjs",
     "package:check": "vsce ls"
   },
   "dependencies": {
@@ -66,6 +66,25 @@
           "type": "string",
           "default": "",
           "description": "The refine compiler to run as `refine lsp`; empty finds refine on the path."
+        },
+        "landin.server.target": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Compiler target for editor analysis, as in --target=; empty uses refine's own host."
+        },
+        "landin.server.level": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "CPU feature level for editor analysis, as in --level=; empty uses the target's default."
+        },
+        "landin.server.options": {
+          "type": "object",
+          "default": {},
+          "scope": "window",
+          "additionalProperties": { "type": "string" },
+          "description": "Build options for editor analysis, as in --option=NAME=VALUE. Keys name declared options; values are strings containing true, false or signed decimal integer text that fits the declared type."
         }
       }
     }

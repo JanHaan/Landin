@@ -13,7 +13,9 @@ package body Landin.Server.Documents is
            when 'A' .. 'F' => Character'Pos (C) - Character'Pos ('A') + 10,
            when others     => -1);
 
-   function Path_Of (URI : String) return String is
+   function Decode_Path (URI : String; Root : Boolean) return String;
+
+   function Decode_Path (URI : String; Root : Boolean) return String is
       Scheme : constant String := "file://";
       Result : Unbounded.Unbounded_String;
       Index  : Natural;
@@ -63,13 +65,30 @@ package body Landin.Server.Documents is
          if Ada.Strings.Fixed.Index (Path, [1 => ASCII.NUL]) > 0
            or else Ada.Strings.Fixed.Index (Path & "/", "/../") > 0
            or else Ada.Strings.Fixed.Index (Path & "/", "/./") > 0
-           or else Path (Path'Last) = '/'
          then
+            return "";
+         end if;
+         if Root then
+            declare
+               Last : Natural := Path'Last;
+            begin
+               while Last > Path'First and then Path (Last) = '/' loop
+                  Last := Last - 1;
+               end loop;
+               return Path (Path'First .. Last);
+            end;
+         elsif Path (Path'Last) = '/' then
             return "";
          end if;
          return Path;
       end;
-   end Path_Of;
+   end Decode_Path;
+
+   function Path_Of (URI : String) return String
+     is (Decode_Path (URI, Root => False));
+
+   function Root_Path_Of (URI : String) return String
+     is (Decode_Path (URI, Root => True));
 
    function URI_Of (Path : String) return String is
       Result : Unbounded.Unbounded_String :=
@@ -97,7 +116,9 @@ package body Landin.Server.Documents is
       Name : Unbounded.Unbounded_String;
    begin
       for C of URI loop
-         if C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' then
+         --  '_' starts an escaped byte, so a literal one must be escaped
+         --  too; otherwise distinct URIs can name the same held path.
+         if C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' then
             Unbounded.Append (Name, C);
          else
             Unbounded.Append

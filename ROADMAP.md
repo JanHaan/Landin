@@ -486,7 +486,7 @@ the server checks a stand-in with each broken body blanked and `loop do end
 loop` written in it, so no stage changed and `refine` reports as before.
 [2000] and D254 say what a doc comment is about. JSON is read strictly and
 bounded, framing is bounded, and positions are converted in one package, in
-UTF-8 or UTF-16. Fifteen scripted sessions under `compiler/tests/server/`
+UTF-8 or UTF-16. The scripted sessions under `compiler/tests/server/`
 run in the test program and through the executable on Linux and macOS; the
 memory suite runs eight sessions of twenty edits and stays flat.
 `compiler/tests/fuzz/fuzz.py` gives every one-file corpus program and

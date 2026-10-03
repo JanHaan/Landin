@@ -14,16 +14,24 @@ with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Analysis;
+with Landin.Server.Documents;
 with Landin.Server.Holes;
 with Landin.Server.Navigation;
 with Landin.Server.Positions;
+with Landin.Server.Sessions;
 with Landin.Server.Transport;
+with Landin.Json;
 with Landin.Source;
+with Landin.Source.Names;
+with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Targets;
 with Landin.Testing.Fakes;
 with Landin.Testing.Sessions;
 with Landin.Testing.Fixtures;
+with Landin.Tokens;
+with Landin.Tokens.Lexer;
+with Landin.Tokens.Spacing;
 
 package body Landin.Tests.Server_Suite is
 
@@ -582,6 +590,77 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check
         (Item, P.Position_Of ("ab", 2, P.UTF_16) = (0, 2),
          "the end of a file with no final line end");
+      for Unit in P.Encoding loop
+         declare
+            Map : P.Position_Map;
+         begin
+            Landin.Testing.Check
+              (Item, not P.Ready (Map), "an unprepared map is empty");
+            for Offset in reverse 0 .. Text'Length - 1 loop
+               P.Register (Map, Landin.Source.Byte_Offset (Offset));
+            end loop;
+            P.Prepare (Map, Text (Text'First + 1 .. Text'Last), Unit);
+            for Offset in 0 .. Text'Length - 1 loop
+               Landin.Testing.Check
+                 (Item,
+                  P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Offset)) =
+                  P.Position_Of
+                    (Text (Text'First + 1 .. Text'Last),
+                     Landin.Source.Byte_Offset (Offset), Unit),
+                  "every byte boundary matches the scalar conversion");
+            end loop;
+            for Offset in 0 .. Text'Length loop
+               P.Register (Map, Landin.Source.Byte_Offset (Offset));
+            end loop;
+            P.Prepare (Map, Text, Unit);
+            for Offset in 0 .. Text'Length loop
+               Landin.Testing.Check
+                 (Item,
+                  P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Offset)) =
+                  P.Position_Of
+                    (Text, Landin.Source.Byte_Offset (Offset), Unit),
+                  "every endpoint matches after rebuilding the map");
+            end loop;
+            P.Register (Map, 100);
+            P.Prepare (Map, Text, Unit);
+            Landin.Testing.Check
+              (Item,
+               P.Position_Of (Map, 100) =
+               P.Position_Of (Text, 100, Unit),
+               "an offset past the text clamps to its end");
+            declare
+               Empty : P.Position_Map;
+            begin
+               P.Register (Empty, 0);
+               P.Prepare (Empty, "", Unit);
+               Landin.Testing.Check
+                 (Item, P.Ready (Empty)
+                        and then P.Position_Of (Empty, 0) = (0, 0),
+                  "the empty text has one position");
+            end;
+         end;
+      end loop;
+      declare
+         --  The long line makes a byte-indexed map costly even with only
+         --  two reported endpoints.
+         Long_Text : constant String := [1 .. 4 * 1024 * 1024 => 'x'];
+         Map : P.Position_Map;
+      begin
+         P.Register (Map, 1);
+         P.Register (Map, Landin.Source.Byte_Offset (Long_Text'Length));
+         P.Prepare (Map, Long_Text, P.UTF_16);
+         Landin.Testing.Check
+           (Item, P.Endpoint_Count (Map) = 2,
+            "a large source stores only its requested endpoints");
+         Landin.Testing.Check
+           (Item, P.Position_Of (Map, 1) = (0, 1)
+                  and then P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Long_Text'Length)) =
+                    (0, Long_Text'Length),
+            "the long line's endpoints keep their columns");
+      end;
    end Positions_Count_What_Was_Agreed;
 
    ---------------------------------------------------------------------
@@ -589,6 +668,133 @@ package body Landin.Tests.Server_Suite is
    ---------------------------------------------------------------------
 
    Sessions_Root : constant String := "../tests/server";
+
+   --  Add the previously absent directory after the first report, before
+   --  the editor opens its source.
+   procedure Opening_A_Missing_Import_Refreshes_Its_Importer
+     (Item : in out Landin.Testing.Context);
+
+   procedure Opening_A_Missing_Import_Refreshes_Its_Importer
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      type Opening_Channel is new Landin.Testing.Fakes.Fake_Channel
+      with record
+         Files : access Landin.Testing.Fakes.Fake_Filesystem;
+         Created : Boolean := False;
+      end record;
+
+      overriding procedure Read
+        (Channel : in out Opening_Channel;
+         Into : out String;
+         Last : out Natural);
+
+      overriding procedure Read
+        (Channel : in out Opening_Channel;
+         Into : out String;
+         Last : out Natural)
+      is
+      begin
+         if not Channel.Created
+           and then Ada.Strings.Fixed.Index
+             (Landin.Testing.Fakes.Output
+                (Landin.Testing.Fakes.Fake_Channel (Channel)),
+              """code"":""L0006""") > 0
+         then
+            Channel.Files.Add_Directory ("/workspace/lib");
+            Channel.Files.Add_Directory ("/workspace/lib/numbers");
+            Channel.Files.Add_File
+              ("/workspace/lib/numbers/numbers.ldn", "");
+            Channel.Created := True;
+         end if;
+         Landin.Testing.Fakes.Read
+           (Landin.Testing.Fakes.Fake_Channel (Channel), Into, Last);
+      end Read;
+
+      Channel : Opening_Channel := (Landin.Testing.Fakes.Fake_Channel
+        with Files => Host'Access, Created => False);
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+      Main_URI : constant String := "file:///workspace/app/main.ldn";
+      Import_URI : constant String :=
+        "file:///workspace/lib/numbers/numbers.ldn";
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_File ("/workspace/app/main.ldn", "import lib/numbers" & LF);
+
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (Main_URI)
+            & ",""version"":1,""text"":"
+            & Landin.Json.Quoted ("import lib/numbers" & LF) & "}}}");
+      Channel.Pause_At
+        (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (Import_URI)
+            & ",""version"":1,""text"":""""}}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String :=
+           Landin.Testing.Fakes.Output
+             (Landin.Testing.Fakes.Fake_Channel (Channel));
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0 and then Channel.Created
+            and then Ada.Strings.Fixed.Count
+              (Output, """uri"":" & Landin.Json.Quoted (Main_URI)
+                       & ",""version"":1") = 2
+            and then Ada.Strings.Fixed.Count
+              (Output, """code"":""L0006""") = 1,
+            "opening a missing import republishes the importer without L0006: "
+            & Output);
+      end;
+   end Opening_A_Missing_Import_Refreshes_Its_Importer;
+
+   procedure Root_URIs_Accept_Trailing_Slashes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Root_URIs_Accept_Trailing_Slashes
+     (Item : in out Landin.Testing.Context)
+   is
+      package Documents renames Landin.Server.Documents;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace"),
+         "/workspace", "root without trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace/"),
+         "/workspace", "root with trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace%2F"),
+         "/workspace", "root with encoded trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace//"),
+         "/workspace", "root with repeated trailing slashes");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///"),
+         "/", "filesystem root");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Path_Of ("file:///workspace/"),
+         "", "a folder URI is not a document path");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace/../"),
+         "", "a parent segment is still refused");
+   end Root_URIs_Accept_Trailing_Slashes;
 
    --  Every session under compiler/tests/server runs as its transcript
    --  says, read through the real filesystem, which is this case's
@@ -657,10 +863,23 @@ package body Landin.Tests.Server_Suite is
    is
       package N renames Landin.Server.Navigation;
 
-      function Doc (Text : String) return String
-        is (N.Doc_Comment
-              (Text, Landin.Source.Byte_Offset
-                 (Ada.Strings.Fixed.Index (Text, "f:") - Text'First)));
+      function Doc (Text : String) return String;
+
+      function Doc (Text : String) return String is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Spaces  : Landin.Tokens.Spacing.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Id      : constant Landin.Source.Source_Id :=
+           Sources.Add ("doc-comment-test", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Tokens.Spacing.Add (Spaces, Stream);
+         return N.Doc_Comment
+           (Text, Landin.Source.Byte_Offset
+              (Ada.Strings.Fixed.Index (Text, "f:") - Text'First),
+            Spaces, Id);
+      end Doc;
    begin
       Landin.Testing.Check_Equal
         (Item, Doc ("--- one" & LF & "---two" & LF & "f: u8 = 0" & LF),
@@ -679,6 +898,14 @@ package body Landin.Tests.Server_Suite is
         (Item, Doc ("--- kept" & LF & "--( block )--" & LF & "f: u8 = 0"),
          "", "a block comment ends it too");
       Landin.Testing.Check_Equal
+        (Item, Doc ("--(" & LF & "--- not documentation )--" & LF
+                    & "f: u8 = 0"),
+         "", "a doc-looking line inside a block comment is not a doc");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--(" & LF & "--- not documentation )--" & LF
+                    & "--- real documentation" & LF & "f: u8 = 0"),
+         "real documentation", "a doc after a block comment still attaches");
+      Landin.Testing.Check_Equal
         (Item, Doc ("x: u8 = 0 --- trailing" & LF & "f: u8 = 0" & LF), "",
          "a doc comment after code is about nothing");
       Landin.Testing.Check_Equal
@@ -686,6 +913,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check_Equal
         (Item, Doc ("---" & LF & "f: u8 = 0" & LF), "",
          "an empty doc comment says nothing");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("---( lexical doc" & LF & "f: u8 = 0" & LF),
+         "( lexical doc", "a parenthesis after the opener is doc text");
    end Doc_Comments_Are_The_Run_Above;
 
    --  A source refused before the checker ran has no names or types, so
@@ -753,6 +983,12 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "every session runs as written",
          Every_Session_Runs_As_Written'Access);
+      Landin.Testing.Register
+        (Into, "server", "opening a missing import refreshes its importer",
+         Opening_A_Missing_Import_Refreshes_Its_Importer'Access);
+      Landin.Testing.Register
+        (Into, "server", "root URIs accept trailing slashes",
+         Root_URIs_Accept_Trailing_Slashes'Access);
       Landin.Testing.Register
         (Into, "server", "doc comments are the run above",
          Doc_Comments_Are_The_Run_Above'Access);

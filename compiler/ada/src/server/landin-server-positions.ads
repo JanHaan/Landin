@@ -14,6 +14,8 @@
 --  inside a character is that character's first byte, so any position an
 --  editor sends names a byte boundary of the source.
 
+private with Ada.Containers.Vectors;
+
 with Landin.Source;
 
 package Landin.Server.Positions is
@@ -24,6 +26,20 @@ package Landin.Server.Positions is
       Line      : Natural := 0;
       Character : Natural := 0;
    end record;
+
+   --  A batch holds only its requested endpoints.  Register them before
+   --  Prepare, which sorts them and scans Text once in offset order.
+   type Position_Map is tagged private;
+
+   procedure Register
+     (Map : in out Position_Map; Offset : Landin.Source.Byte_Offset);
+   procedure Prepare
+     (Map : in out Position_Map; Text : String; Unit : Encoding);
+   function Endpoint_Count (Map : Position_Map) return Natural;
+   function Ready (Map : Position_Map) return Boolean;
+   function Position_Of
+     (Map : Position_Map; Offset : Landin.Source.Byte_Offset)
+      return Position;
 
    --  Text is the whole source.  Offset is at most its length.
    function Position_Of
@@ -36,5 +52,20 @@ package Landin.Server.Positions is
      (Text  : String;
       Where : Position;
       Unit  : Encoding) return Landin.Source.Byte_Offset;
+
+private
+
+   type Endpoint is record
+      Offset : Landin.Source.Byte_Offset;
+      At_Pos : Position;
+   end record;
+
+   package Endpoint_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Natural, Element_Type => Endpoint);
+
+   type Position_Map is tagged record
+      Points : Endpoint_Vectors.Vector;
+      Built  : Boolean := False;
+   end record;
 
 end Landin.Server.Positions;

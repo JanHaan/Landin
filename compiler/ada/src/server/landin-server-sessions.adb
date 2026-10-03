@@ -37,7 +37,6 @@ package body Landin.Server.Sessions is
    Invalid_Params       : constant := -32602;
    Internal_Error       : constant := -32603;
    Not_Initialized      : constant := -32002;
-   Request_Cancelled    : constant := -32800;
 
    package String_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
@@ -75,7 +74,8 @@ package body Landin.Server.Sessions is
       --  Every path each module's last report published to, so a path it
       --  no longer reports on is cleared.
       Published : Text_Maps.Map;
-      Cancelled : String_Sets.Set;
+      --  Candidate directories of imports missing at the last report.
+      Missing   : Text_Maps.Map;
 
       procedure Send (Item : String);
 
@@ -83,6 +83,35 @@ package body Landin.Server.Sessions is
       begin
          Channel.Write (Landin.Server.Transport.Framed (Item));
       end Send;
+
+      --  A publication belongs to a path, even when several open entry
+      --  modules read it.  Refresh another reporter instead of erasing its
+      --  diagnostics when one module stops reporting that path.
+      procedure Clear_Unless_Shared
+        (Key, Path : String; Closing_URI : String := "");
+
+      procedure Clear_Unless_Shared
+        (Key, Path : String; Closing_URI : String := "")
+      is
+         Shared : Boolean := False;
+      begin
+         for Position in Published.Iterate loop
+            if Text_Maps.Key (Position) /= Key
+              and then Unbounded.Index
+                (Unbounded.To_Unbounded_String
+                   (ASCII.LF & Text_Maps.Element (Position)),
+                 ASCII.LF & Path & ASCII.LF) > 0
+            then
+               Shared := True;
+               Stale.Include (Text_Maps.Key (Position));
+            end if;
+         end loop;
+         if not Shared then
+            Send (Landin.Server.Answers.Cleared
+              (if Closing_URI /= "" then Closing_URI
+               else Landin.Server.Documents.URI_For (Store, Path)));
+         end if;
+      end Clear_Unless_Shared;
 
       --  An id as written, to answer with: a number or a string.
       function Id_Text (Message : J.Document; Id : J.Value) return String
@@ -187,8 +216,10 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result)
          is
-            Now : String_Sets.Set;
-            Was : String_Sets.Set;
+            Now     : String_Sets.Set;
+            Was     : String_Sets.Set;
+            Buckets : array (1 .. Landin.Stages.Source_Count (Context)) of
+              Landin.Server.Answers.Diagnostic_Indexes.Vector;
          begin
             if Published.Contains (Key) then
                declare
@@ -204,17 +235,20 @@ package body Landin.Server.Sessions is
                end;
             end if;
 
-            --  Diagnostics with no source belong to no document.
+            --  Dispatch each report item once.  Source identities are the
+            --  one-based positions in the compilation's source set.
             for Index in 1 .. Answer.Found.Count loop
                declare
                   Item : constant Diag.Diagnostic := Answer.Found.Get (Index);
+                  Source : constant Landin.Source.Source_Id :=
+                    Diag.Source_Of (Diag.Primary (Item));
                begin
-                  if Diag.Source_Of (Diag.Primary (Item))
-                    = Landin.Source.No_Source
-                  then
+                  if Source = Landin.Source.No_Source then
                      Tell ((if Diag.Level (Item) = Diag.Error then 1 else 2),
                            Diag.Code (Item) & ": "
                            & Diag.Message (Diag.Primary (Item)));
+                  elsif Source <= Landin.Source.Source_Id (Buckets'Last) then
+                     Buckets (Positive (Source)).Append (Index);
                   end if;
                end;
             end loop;
@@ -233,7 +267,7 @@ package body Landin.Server.Sessions is
                      Version  => Landin.Server.Answers.Version_Of
                        (Store, Path),
                      Found    => Answer.Found,
-                     Source   => Id,
+                     Indexes  => Buckets (Positive (Id)),
                      Sources  => Landin.Stages.Sources (Context),
                      Store    => Store,
                      Unit     => Unit));
@@ -243,17 +277,21 @@ package body Landin.Server.Sessions is
             --  A path last published to and not reported on now is clear.
             for Path of Was loop
                if not Now.Contains (Path) then
-                  Send (Landin.Server.Answers.Cleared
-                    (Landin.Server.Documents.URI_For (Store, Path)));
+                  Clear_Unless_Shared (Key, Path);
                end if;
             end loop;
             declare
                Kept : Unbounded.Unbounded_String;
+               Absent : Unbounded.Unbounded_String;
             begin
                for Path of Now loop
                   Unbounded.Append (Kept, Path & ASCII.LF);
                end loop;
+               for Path of Answer.Missing_Directories loop
+                  Unbounded.Append (Absent, Path & ASCII.LF);
+               end loop;
                Published.Include (Key, Unbounded.To_String (Kept));
+               Missing.Include (Key, Unbounded.To_String (Absent));
             end;
          end Visit;
       begin
@@ -295,6 +333,8 @@ package body Landin.Server.Sessions is
       procedure Mark_Stale (URI : String) is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
+         Path : constant String :=
+           Landin.Server.Documents.Held_Path (Store, URI);
       begin
          Stale.Include (Key);
          --  A change to a file another module imports makes that module
@@ -304,8 +344,19 @@ package body Landin.Server.Sessions is
                  (Unbounded.To_Unbounded_String
                     (ASCII.LF & Text_Maps.Element (Position)),
                   ASCII.LF
-                  & Landin.Server.Documents.Held_Path (Store, URI)
+                  & Path
                   & ASCII.LF) > 0
+            then
+               Stale.Include (Text_Maps.Key (Position));
+            end if;
+         end loop;
+         --  A source opened in a formerly absent import directory makes
+         --  that import available even though no source was published there.
+         for Position in Missing.Iterate loop
+            if Unbounded.Index
+                 (Unbounded.To_Unbounded_String
+                    (ASCII.LF & Text_Maps.Element (Position)),
+                  ASCII.LF & Key & ASCII.LF) > 0
             then
                Stale.Include (Text_Maps.Key (Position));
             end if;
@@ -333,7 +384,8 @@ package body Landin.Server.Sessions is
          procedure Add_Root (URI : String);
 
          procedure Add_Root (URI : String) is
-            Path : constant String := Landin.Server.Documents.Path_Of (URI);
+            Path : constant String :=
+              Landin.Server.Documents.Root_Path_Of (URI);
          begin
             if Path = "" then
                Unbounded.Append (Bad, "a root is not a file URI: " & URI);
@@ -554,6 +606,8 @@ package body Landin.Server.Sessions is
                declare
                   Key : constant String :=
                     Landin.Server.Documents.Module_Key (Store, URI);
+                  Closing_Path : constant String :=
+                    Landin.Server.Documents.Held_Path (Store, URI);
                   Others_Open : Boolean := False;
                begin
                   Landin.Server.Documents.Close (Store, URI);
@@ -577,28 +631,23 @@ package body Landin.Server.Sessions is
                         begin
                            for Index in Earlier'Range loop
                               if Earlier (Index) = ASCII.LF then
-                                 Send (Landin.Server.Answers.Cleared
-                                   (Landin.Server.Documents.URI_For
-                                      (Store, Earlier (First .. Index - 1))));
+                                 Clear_Unless_Shared
+                                   (Key, Earlier (First .. Index - 1),
+                                    (if Earlier (First .. Index - 1)
+                                          = Closing_Path
+                                     then URI else ""));
                                  First := Index + 1;
                               end if;
                            end loop;
                         end;
                         Published.Delete (Key);
+                        Missing.Exclude (Key);
                      else
                         Send (Landin.Server.Answers.Cleared (URI));
                      end if;
                   end if;
                end;
             end if;
-         elsif Method = "$/cancelRequest" then
-            declare
-               Id : constant J.Value := J.Member (Message, Params, "id");
-            begin
-               if J.Is_Present (Id) then
-                  Cancelled.Include (Id_Text (Message, Id));
-               end if;
-            end;
          end if;
       end Notification;
 
@@ -613,11 +662,6 @@ package body Landin.Server.Sessions is
          Answer_Id : constant String := Id_Text (Message, Id);
          URI       : constant String := Document_URI (Message, Params);
       begin
-         if Cancelled.Contains (Answer_Id) then
-            Cancelled.Exclude (Answer_Id);
-            Refuse (Answer_Id, Request_Cancelled, "the request was cancelled");
-            return;
-         end if;
          if Method = "initialize" then
             if Started then
                Refuse (Answer_Id, Invalid_Request, "already initialized");

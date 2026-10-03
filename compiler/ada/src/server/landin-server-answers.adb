@@ -16,6 +16,9 @@ package body Landin.Server.Answers is
    use type Landin.Source.Source_Id;
    use type Landin.Server.Navigation.Place;
 
+   type Position_Maps is array (Landin.Source.Source_Id range <>) of
+     Positions.Position_Map;
+
    function Capabilities (Unit : Positions.Encoding) return String is
       Written : J.Builder;
    begin
@@ -72,21 +75,26 @@ package body Landin.Server.Answers is
    --  A range over Text, as the editor counts it.
    procedure Write_Range
      (Written : in out J.Builder;
+      Map     : Positions.Position_Map;
+      Where   : Landin.Source.Span);
+
+   procedure Write_Range
+     (Written : in out J.Builder;
       Text    : String;
       Where   : Landin.Source.Span;
       Unit    : Positions.Encoding);
 
    procedure Write_Range
      (Written : in out J.Builder;
-      Text    : String;
-      Where   : Landin.Source.Span;
-      Unit    : Positions.Encoding)
-   is
-      procedure Write_Position (Offset : Landin.Source.Byte_Offset);
+      First, Last : Positions.Position);
 
-      procedure Write_Position (Offset : Landin.Source.Byte_Offset) is
-         At_Position : constant Positions.Position :=
-           Positions.Position_Of (Text, Offset, Unit);
+   procedure Write_Range
+     (Written : in out J.Builder;
+      First, Last : Positions.Position)
+   is
+      procedure Write_Position (At_Position : Positions.Position);
+
+      procedure Write_Position (At_Position : Positions.Position) is
       begin
          J.Begin_Object (Written);
          J.Name (Written, "line");
@@ -98,10 +106,33 @@ package body Landin.Server.Answers is
    begin
       J.Begin_Object (Written);
       J.Name (Written, "start");
-      Write_Position (Where.First);
+      Write_Position (First);
       J.Name (Written, "end");
-      Write_Position (Where.Last);
+      Write_Position (Last);
       J.End_Object (Written);
+   end Write_Range;
+
+   procedure Write_Range
+     (Written : in out J.Builder;
+      Map     : Positions.Position_Map;
+      Where   : Landin.Source.Span)
+   is
+   begin
+      Write_Range
+        (Written, Positions.Position_Of (Map, Where.First),
+         Positions.Position_Of (Map, Where.Last));
+   end Write_Range;
+
+   procedure Write_Range
+     (Written : in out J.Builder;
+      Text    : String;
+      Where   : Landin.Source.Span;
+      Unit    : Positions.Encoding)
+   is
+   begin
+      Write_Range
+        (Written, Positions.Position_Of (Text, Where.First, Unit),
+         Positions.Position_Of (Text, Where.Last, Unit));
    end Write_Range;
 
    --  The text of Source, through the set the compilation keeps.
@@ -115,20 +146,109 @@ package body Landin.Server.Answers is
       Source  : Landin.Source.Source_Id) return String
      is (Landin.Source.Name (Sources.Get (Source).Element.all));
 
+   procedure Register_Source_Range
+     (Maps   : in out Position_Maps;
+      Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span);
+
+   procedure Register_Source_Range
+     (Maps   : in out Position_Maps;
+      Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span)
+   is
+   begin
+      Positions.Register (Maps (Source), Where.First);
+      Positions.Register (Maps (Source), Where.Last);
+   end Register_Source_Range;
+
+   procedure Prepare_Maps
+     (Maps    : in out Position_Maps;
+      Sources : not null access constant Landin.Source.Sets.Source_Set;
+      Unit    : Positions.Encoding);
+
+   procedure Prepare_Maps
+     (Maps    : in out Position_Maps;
+      Sources : not null access constant Landin.Source.Sets.Source_Set;
+      Unit    : Positions.Encoding)
+   is
+   begin
+      for Source in Maps'Range loop
+         if Positions.Endpoint_Count (Maps (Source)) > 0 then
+            Positions.Prepare
+              (Maps (Source), Text_Of (Sources, Source), Unit);
+         end if;
+      end loop;
+   end Prepare_Maps;
+
+   --  Related labels and edits can name other sources.  Their endpoints
+   --  must be registered before Prepare_Maps is called.
+   procedure Write_Source_Range
+     (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
+      Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span);
+
+   procedure Write_Source_Range
+     (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
+      Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span)
+   is
+   begin
+      Write_Range (Written, Maps (Source), Where);
+   end Write_Source_Range;
+
+   procedure Register_Edit (Maps : in out Position_Maps; One : Diag.Fix);
+
+   procedure Register_Edit (Maps : in out Position_Maps; One : Diag.Fix)
+   is
+   begin
+      for Index in 1 .. Diag.Edit_Count (One) loop
+         declare
+            Change : constant Diag.Edit := Diag.Nth_Edit (One, Index);
+         begin
+            Register_Source_Range
+              (Maps, Diag.Source_Of (Change), Diag.Span_Of (Change));
+         end;
+      end loop;
+   end Register_Edit;
+
+   procedure Register_Diagnostic
+     (Maps : in out Position_Maps; Item : Diag.Diagnostic);
+
+   procedure Register_Diagnostic
+     (Maps : in out Position_Maps; Item : Diag.Diagnostic)
+   is
+      Primary : constant Diag.Label := Diag.Primary (Item);
+   begin
+      Register_Source_Range
+        (Maps, Diag.Source_Of (Primary), Diag.Span_Of (Primary));
+      for Index in 1 .. Diag.Label_Count (Item) loop
+         declare
+            Extra : constant Diag.Label := Diag.Nth_Label (Item, Index);
+         begin
+            if Diag.Source_Of (Extra) /= Landin.Source.No_Source then
+               Register_Source_Range
+                 (Maps, Diag.Source_Of (Extra), Diag.Span_Of (Extra));
+            end if;
+         end;
+      end loop;
+   end Register_Diagnostic;
+
    --  Every edit of One, grouped by document, as a WorkspaceEdit.
    procedure Write_Edit
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       One     : Diag.Fix;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
-      Store   : Landin.Server.Documents.Store;
-      Unit    : Positions.Encoding);
+      Store   : Landin.Server.Documents.Store);
 
    procedure Write_Edit
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       One     : Diag.Fix;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
-      Store   : Landin.Server.Documents.Store;
-      Unit    : Positions.Encoding)
+      Store   : Landin.Server.Documents.Store)
    is
       package Source_Maps is new Ada.Containers.Indefinite_Ordered_Maps
         (Key_Type => String, Element_Type => Landin.Source.Source_Id);
@@ -158,10 +278,9 @@ package body Landin.Server.Answers is
                then
                   J.Begin_Object (Written);
                   J.Name (Written, "range");
-                  Write_Range
-                    (Written,
-                     Text_Of (Sources, Diag.Source_Of (Change)),
-                     Diag.Span_Of (Change), Unit);
+                  Write_Source_Range
+                    (Written, Maps, Diag.Source_Of (Change),
+                     Diag.Span_Of (Change));
                   J.Name (Written, "newText");
                   J.Write_String (Written, Diag.Replacement (Change));
                   J.End_Object (Written);
@@ -177,18 +296,18 @@ package body Landin.Server.Answers is
    --  One Diagnostic, its range and related information in Sources.
    procedure Write_Diagnostic
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       Item    : Diag.Diagnostic;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
-      Unit    : Positions.Encoding;
       Explain : String);
 
    procedure Write_Diagnostic
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       Item    : Diag.Diagnostic;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
-      Unit    : Positions.Encoding;
       Explain : String)
    is
       Primary : constant Diag.Label := Diag.Primary (Item);
@@ -201,9 +320,9 @@ package body Landin.Server.Answers is
       end loop;
       J.Begin_Object (Written);
       J.Name (Written, "range");
-      Write_Range
-        (Written, Text_Of (Sources, Diag.Source_Of (Primary)),
-         Diag.Span_Of (Primary), Unit);
+      Write_Source_Range
+        (Written, Maps, Diag.Source_Of (Primary),
+         Diag.Span_Of (Primary));
       J.Name (Written, "severity");
       J.Write_Integer
         (Written,
@@ -241,9 +360,8 @@ package body Landin.Server.Answers is
                     (Written, Landin.Server.Documents.URI_For
                        (Store, Name_Of (Sources, Source)));
                   J.Name (Written, "range");
-                  Write_Range
-                    (Written, Text_Of (Sources, Source),
-                     Diag.Span_Of (Extra), Unit);
+                  Write_Source_Range
+                    (Written, Maps, Source, Diag.Span_Of (Extra));
                   J.End_Object (Written);
                   J.Name (Written, "message");
                   J.Write_String (Written, Diag.Message (Extra));
@@ -260,13 +378,19 @@ package body Landin.Server.Answers is
      (URI     : String;
       Version : Long_Long_Integer;
       Found   : Landin.Diagnostics.Diagnostic_List;
-      Source  : Landin.Source.Source_Id;
+      Indexes : Diagnostic_Indexes.Vector;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
       Unit    : Positions.Encoding) return String
    is
       Written : J.Builder;
+      Maps    : Position_Maps
+        (1 .. Landin.Source.Source_Id (Sources.Count));
    begin
+      for Index of Indexes loop
+         Register_Diagnostic (Maps, Found.Get (Index));
+      end loop;
+      Prepare_Maps (Maps, Sources, Unit);
       J.Begin_Object (Written);
       J.Name (Written, "jsonrpc");
       J.Write_String (Written, "2.0");
@@ -282,14 +406,12 @@ package body Landin.Server.Answers is
       end if;
       J.Name (Written, "diagnostics");
       J.Begin_Array (Written);
-      for Index in 1 .. Found.Count loop
+      for Index of Indexes loop
          declare
             Item : constant Diag.Diagnostic := Found.Get (Index);
          begin
-            if Diag.Source_Of (Diag.Primary (Item)) = Source then
-               Write_Diagnostic
-                 (Written, Item, Sources, Store, Unit, Explanations);
-            end if;
+            Write_Diagnostic
+              (Written, Maps, Item, Sources, Store, Explanations);
          end;
       end loop;
       J.End_Array (Written);
@@ -309,15 +431,21 @@ package body Landin.Server.Answers is
    is
       use type Landin.Formatting.Verdict;
       Written : J.Builder;
+      Map     : Positions.Position_Map;
    begin
       if Laid.Outcome = Landin.Formatting.Refused then
          return "null";
       end if;
+      for Change of Laid.Edits loop
+         Positions.Register (Map, Diag.Span_Of (Change).First);
+         Positions.Register (Map, Diag.Span_Of (Change).Last);
+      end loop;
+      Positions.Prepare (Map, Text, Unit);
       J.Begin_Array (Written);
       for Change of Laid.Edits loop
          J.Begin_Object (Written);
          J.Name (Written, "range");
-         Write_Range (Written, Text, Diag.Span_Of (Change), Unit);
+         Write_Range (Written, Map, Diag.Span_Of (Change));
          J.Name (Written, "newText");
          J.Write_String (Written, Diag.Replacement (Change));
          J.End_Object (Written);
@@ -439,6 +567,8 @@ package body Landin.Server.Answers is
         Landin.Source.Sets.Source_Set := Landin.Stages.Sources (Context);
       Asked   : constant J.Value := J.Member (Message, Params, "range");
       Written : J.Builder;
+      Maps    : Position_Maps
+        (1 .. Landin.Source.Source_Id (Sources.Count));
    begin
       if Source = Landin.Source.No_Source then
          return "[]";
@@ -453,6 +583,24 @@ package body Landin.Server.Answers is
          if First < 0 or else Last < First then
             return "[]";
          end if;
+         for Index in 1 .. Answer.Found.Count loop
+            declare
+               Item  : constant Diag.Diagnostic := Answer.Found.Get (Index);
+               Where : constant Landin.Source.Span :=
+                 Diag.Span_Of (Diag.Primary (Item));
+            begin
+               if Diag.Source_Of (Diag.Primary (Item)) = Source
+                 and then Natural (Where.First) <= Last
+                 and then First <= Natural (Where.Last)
+               then
+                  for Position in 1 .. Diag.Fix_Count (Item) loop
+                     Register_Diagnostic (Maps, Item);
+                     Register_Edit (Maps, Diag.Nth_Fix (Item, Position));
+                  end loop;
+               end if;
+            end;
+         end loop;
+         Prepare_Maps (Maps, Sources, Unit);
          J.Begin_Array (Written);
          for Index in 1 .. Answer.Found.Count loop
             declare
@@ -477,14 +625,15 @@ package body Landin.Server.Answers is
                         J.Name (Written, "diagnostics");
                         J.Begin_Array (Written);
                         Write_Diagnostic
-                          (Written, Item, Sources, Store, Unit,
+                          (Written, Maps, Item, Sources, Store,
                            Explanations);
                         J.End_Array (Written);
                         J.Name (Written, "isPreferred");
                         J.Write_Boolean
                           (Written, Diag.Level (One) = Diag.Exact);
                         J.Name (Written, "edit");
-                        Write_Edit (Written, One, Sources, Store, Unit);
+                        Write_Edit
+                          (Written, Maps, One, Sources, Store);
                         J.End_Object (Written);
                      end;
                   end loop;
