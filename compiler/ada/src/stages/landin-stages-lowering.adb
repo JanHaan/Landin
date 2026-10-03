@@ -1966,6 +1966,32 @@ package body Landin.Stages.Lowering is
          return IR.Add_Pointee (Unit.all, Shape);
       end Pointee_For;
 
+      --  The element a declared slice reaches, for source debugging alone:
+      --  the carrier stays two usize words to everything that executes.
+      procedure Note_Slice_Element
+        (Id : Res.Declaration_Id; Item : IR.Item_Id;
+         Slot : IR.Slot_Id := IR.No_Slot);
+
+      procedure Note_Slice_Element
+        (Id : Res.Declaration_Id; Item : IR.Item_Id;
+         Slot : IR.Slot_Id := IR.No_Slot)
+      is
+      begin
+         if Landin.Checking.Type_Of (Types.all, Id) /= Ty.Slice_Value then
+            return;
+         end if;
+         declare
+            Element : constant IR.Pointee_Id := Pointee_For
+              (Landin.Checking.Reference_Of (Types.all, Id));
+         begin
+            if Slot = IR.No_Slot then
+               IR.Set_Slice_Element (Unit.all, Item, Element);
+            else
+               IR.Set_Slice_Element (Unit.all, Item, Slot, Element);
+            end if;
+         end;
+      end Note_Slice_Element;
+
       function Packed_Field_Node
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
 
@@ -2914,6 +2940,7 @@ package body Landin.Stages.Lowering is
             Slots (Positive (Id)) := IR.Add_Array_Slot
               (Unit.all, Filling, Ty.Usize, 2, Id,
                Site_Of (Of_Tree, Node));
+            Note_Slice_Element (Id, Filling, Slots (Positive (Id)));
             return Slots (Positive (Id));
          end if;
 
@@ -14261,6 +14288,7 @@ package body Landin.Stages.Lowering is
                     IR.Add_Array_Parameter
                       (Unit.all, Filling, Ty.Usize, 2, Id,
                        Site_Of (Of_Tree, Param));
+                  Note_Slice_Element (Id, Filling, Slots (Positive (Id)));
                elsif Held = Ty.Aggregate then
                   declare
                      Nominal : constant Landin.Checking.Nominal_Type_Id :=
@@ -14872,6 +14900,7 @@ package body Landin.Stages.Lowering is
                   --  count, which reaches four billion.
                   if Held in Ty.Slice_Value | Ty.Any_Value then
                      IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
+                     Note_Slice_Element (Id, Made);
                   elsif Held = Ty.Fixed_Array then
                      IR.Set_Array
                        (Unit.all, Made,

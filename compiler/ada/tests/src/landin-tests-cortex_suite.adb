@@ -2,6 +2,9 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
+with Landin.Backend.Cortex_M;
+with Landin.Build_Reports;
+with Landin.Build_Reports.Firmware;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
@@ -9,6 +12,9 @@ with Landin.IR.Dump;
 with Landin.IR.Verifier;
 with Landin.IR.Testing_Support;
 with Landin.Machine;
+with Landin.Optimization;
+with Landin.Provenance;
+with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Platform.Native;
 with Landin.Source;
@@ -91,6 +97,185 @@ package body Landin.Tests.Cortex_Suite is
    procedure Refusals (Item : in out Landin.Testing.Context);
    procedure Source_Carriers (Item : in out Landin.Testing.Context);
    procedure Driver_Boundaries (Item : in out Landin.Testing.Context);
+   procedure Scalar_Spill_Homes (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Spill_Homes (Item : in out Landin.Testing.Context) is
+      use type IR.Verifier.Fault_Kind;
+      Kinds : constant array (Positive range 1 .. 5) of Ty.Integer_Name :=
+        [Ty.U8, Ty.U16, Ty.U32, Ty.U64, Ty.U8];
+      Bytes : constant array (Positive range 1 .. 5) of T.Byte_Count :=
+        [1, 2, 4, 8, 8];
+      Narrow_Frame : T.Byte_Count := 0;
+   begin
+      for Index in Kinds'Range loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (T.Cortex_M);
+            Order : Landin.Stages.Pipeline;
+            Written : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Work, "spill.ldn", "f: () -> none = end f");
+            Unit : IR.Unit;
+            Site : constant Landin.Provenance.Origin :=
+              (Written, Landin.Source.Empty_Span);
+            Routine : IR.Item_Id;
+            Signature : IR.Signature_Id;
+            Block : IR.Block_Id;
+            Next_Block : IR.Block_Id := IR.No_Block;
+            Left, Right, Sum, Next : IR.Value_Id;
+            Assembly : U.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Resolver'Access);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Run (Order, Work), 3,
+               "spill declarations resolve");
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Ty.No_Value, Site);
+            Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts, (others => <>));
+            IR.Set_Signature (Unit, Routine, Signature);
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            Left := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 1, False, Site);
+            Right := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 2, False, Site);
+            Sum := IR.Emit_Binary
+              (Unit, Routine, IR.Add, Left, Right, Kinds (Index), Site);
+            Next := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 3, False, Site);
+            Sum := IR.Emit_Binary
+              (Unit, Routine, IR.Add, Sum, Next, Kinds (Index), Site);
+            if Index = 5 then
+               --  Later wide values enlarge the three reused homes.
+               Left := IR.Emit_Number
+                 (Unit, Routine, Ty.U64, 4, False, Site);
+               Right := IR.Emit_Number
+                 (Unit, Routine, Ty.U64, 5, False, Site);
+               Sum := IR.Emit_Binary
+                 (Unit, Routine, IR.Add, Left, Right, Ty.U64, Site);
+            end if;
+            if Index = 5 then
+               Next_Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Emit_Jump (Unit, Routine, Next_Block, Site);
+            else
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            end if;
+            IR.Leave_Block (Unit, Routine);
+            if Index = 5 then
+               --  The next block starts at home 1 after the first grew to
+               --  three homes.
+               IR.Enter (Unit, Routine, Next_Block);
+               Left := IR.Emit_Number
+                 (Unit, Routine, Ty.U8, 6, False, Site);
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Routine);
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit, T.Cortex_M).Kind
+                = IR.Verifier.Nothing_Wrong,
+               "overlapping and reused scalar values verify");
+            Landin.Backend.Cortex_M.Emit
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, T.Cortex_M,
+               Landin.Optimization.Reference_Options, Assembly, Report);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Build_Reports.Routine_Count (Report), 1,
+               "one scalar routine is emitted");
+            declare
+               Stats : constant Landin.Build_Reports.Routine_Statistics :=
+                 Landin.Build_Reports.Nth_Routine (Report, 1);
+            begin
+               if Index = 1 then
+                  Narrow_Frame := Stats.Frame_Bytes;
+               end if;
+               Landin.Testing.Check
+                 (Item, Stats.Spill_Count = 3
+                    and then Stats.Spill_Bytes = 3 * Bytes (Index)
+                    and then Stats.Frame_Bytes =
+                      Narrow_Frame + T.Align_Up
+                        (3 * Bytes (Index), 8) - 8,
+                  "three live homes use scalar widths and aligned frames");
+            end;
+         end;
+      end loop;
+   end Scalar_Spill_Homes;
+   procedure Register_Staging (Item : in out Landin.Testing.Context);
+
+   procedure Register_Staging (Item : in out Landin.Testing.Context) is
+   begin
+      for Count in 0 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Parameters : constant String :=
+              (case Count is
+                 when 0 => "",
+                 when 1 => "a: u32",
+                 when 2 => "a: u32, b: u32",
+                 when 3 => "a: u32, b: u32, c: u32",
+                 when 4 => "a: u32, b: u32, c: u32, d: u32");
+            Store : constant String :=
+              (case Count is
+                 when 0 => "",
+                 when 1 => "str r0, [sp]",
+                 when 2 => "stmia r6!, {r0, r1}",
+                 when 3 => "stmia r6!, {r0, r1, r2}",
+                 when 4 => "stmia r6!, {r0, r1, r2, r3}");
+            Reserve : constant String :=
+              (if Count = 0 then ""
+               elsif Count <= 2 then "sub sp, #16"
+               else "sub sp, #32");
+         begin
+            Host.Add_File ("p.ldn", "f: (" & Parameters
+              & ") -> none = end f");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "Cortex register staging" & Count'Image & ": "
+                  & U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Code : constant String := Host.Written ("p.s");
+                  begin
+                     Landin.Testing.Check
+                       (Item, (Store = "" or else
+                          Ada.Strings.Fixed.Index (Code, Store) > 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "stmia r6!") = 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "str r0, [sp]") = 0)
+                        and then (Count = 4 or else
+                          Ada.Strings.Fixed.Index
+                            (Code, "stmia r6!, {r0, r1, r2, r3}") = 0),
+                        "entry stores only the planned core words");
+                     Landin.Testing.Check
+                       (Item, (Reserve = "" or else
+                          Ada.Strings.Fixed.Index (Code, Reserve) > 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "sub sp, #") = 0),
+                        "frame reserves only aligned argument homes");
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Register_Staging;
 
    procedure Contract (Item : in out Landin.Testing.Context) is
       Unit : IR.Unit;
@@ -600,6 +785,62 @@ package body Landin.Tests.Cortex_Suite is
    end Source_Debugging;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
+   procedure Local_Branches (Item : in out Landin.Testing.Context);
+
+   procedure Local_Branches (Item : in out Landin.Testing.Context) is
+   begin
+      for Long_Body in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Source : U.Unbounded_String := U.To_Unbounded_String
+              ("main: (x: u32) -> (r: u32) = r = 1 "
+               & "if x == 0 then ");
+         begin
+            if Long_Body then
+               for N in 1 .. 80 loop
+                  U.Append (Source, "r = r + x ");
+               end loop;
+            else
+               U.Append (Source, "r = 3 ");
+            end if;
+            U.Append (Source, "else r = 2 end if end main");
+            Host.Add_File ("p.ldn", U.To_String (Source));
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Assembly : constant String := Host.Written ("p.s");
+                  begin
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Assembly, Character'Val (9) & "bne L1_2") > 0,
+                        "near conditional branch is direct");
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Assembly, Character'Val (9)
+                           & (if Long_Body then
+                                "bne L1_2" & LF & Character'Val (9)
+                                & "ldr r7, "
+                              else "b L1_3" & LF & "L1_2:")) > 0,
+                        "near edge is direct; distant edge uses long jump");
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Local_Branches;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context) is
    begin
@@ -650,6 +891,101 @@ package body Landin.Tests.Cortex_Suite is
    end Backend_Boundaries;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context);
+   procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context);
+
+   procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Data : String (1 .. 512) := [others => Character'Val (0)];
+      Result : U.Unbounded_String;
+      Valid : Boolean;
+      Args : Landin.Platform.Path_List;
+
+      procedure Put (Offset : Natural; Value : Natural; Width : Positive);
+      procedure Put (Offset : Natural; Value : Natural; Width : Positive) is
+         Rest : Natural := Value;
+      begin
+         for Index in 0 .. Width - 1 loop
+            Data (Offset + Index + 1) := Character'Val (Rest mod 256);
+            Rest := Rest / 256;
+         end loop;
+      end Put;
+   begin
+      Data (1 .. 6) := Character'Val (127) & "ELF"
+        & Character'Val (1) & Character'Val (1);
+      Put (16, 2, 2);
+      Put (18, 40, 2);
+      Put (20, 1, 4);
+      Put (28, 52, 4);
+      Put (40, 52, 2);
+      Put (42, 32, 2);
+      Put (44, 3, 2);
+      --  Vectors, flash text, and copied data plus zero-filled RAM.
+      Put (52, 1, 4);
+      Put (56, 148, 4);
+      Put (68, 192, 4);
+      Put (72, 192, 4);
+      Put (84, 1, 4);
+      Put (88, 340, 4);
+      Put (92, 512, 4);
+      Put (96, 512, 4);
+      Put (100, 100, 4);
+      Put (104, 100, 4);
+      Put (116, 1, 4);
+      Put (120, 440, 4);
+      Put (124, 16#2000_0008#, 4);
+      Put (128, 768, 4);
+      Put (132, 16, 4);
+      Put (136, 32, 4);
+      Host.Add_File ("p.elf", Data);
+      Host.Add_File ("p.elf.map",
+        "/tool/libgcc.a(_udivsi3.o)" & LF
+        & "/tool/libgcc.a(_muldi3.o)" & LF
+        & "/tool/libgcc.a(_udivsi3.o)" & LF);
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, Valid, "ELF load extents are measured");
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Result),
+         "{""flash_used"":784,""flash_limit"":32768,"
+         & """flash_remaining"":31984,""static_ram_used"":40,"
+         & """static_ram_limit"":12288,""static_ram_remaining"":12248,"
+         & """stack_reserved"":4096,""runtime_members"":"
+         & "[""_muldi3.o"",""_udivsi3.o""]}",
+         "occupied extents include gaps and archive members are sorted");
+
+      Host.Add_File ("p.ldn", "start: () -> none = end start");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=exe");
+      Args.Append ("--build-report=p.json");
+      Args.Append ("-o");
+      Args.Append ("p.elf");
+      Args.Append ("p.ldn");
+      Tools.Set_Result (0, "");
+      declare
+         Built : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Built.Status, Landin.Driver.Status_Success,
+            U.To_String (Built.Report));
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Host.Written ("p.json"), """flash_used"":784") > 0,
+            "post-link measurement reaches the emitted report");
+      end;
+      Host.Add_File ("p.elf", "invalid ELF");
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, not Valid, "invalid ELF is refused");
+      Host.Add_File ("p.elf", Data);
+      Host.Add_File ("p.elf.map", "");
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, not Valid, "empty map is refused");
+   end Linked_Firmware_Evidence;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context) is
    begin
@@ -941,6 +1277,98 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Assembly_IR (Item : in out Landin.Testing.Context);
 
+   procedure Literal_Pooling (Item : in out Landin.Testing.Context);
+
+   procedure Literal_Pooling (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("pool.ldn", "mut datum: u32 = 1 "
+        & "f: () -> (r: u32) = "
+        & "r = datum + datum + datum end f "
+        & "g: () -> (r: u32) = "
+        & "r = 305419896 r = 305419896 end g");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("pool.s");
+      Args.Append ("pool.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            Landin.Testing.Check_Equal
+              (Item, Ada.Strings.Fixed.Count
+                (Host.Written ("pool.s"), ".word datum"), 1,
+               "three datum references share one forward literal");
+            Landin.Testing.Check_Equal
+              (Item, Ada.Strings.Fixed.Count
+                (Host.Written ("pool.s"), ".word 305419896"), 1,
+               "repeated non-encodable constants share one literal");
+         end if;
+      end;
+      declare
+         Source : U.Unbounded_String := U.To_Unbounded_String
+           ("mut datum: u32 = 1 f: () -> (r: u32) = r = 0 ");
+         Long_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Long_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         for Index in 1 .. 40 loop
+            U.Append (Source, "r = r + datum ");
+         end loop;
+         U.Append (Source, "end f");
+         Long_Host.Add_File ("pool.ldn", U.To_String (Source));
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Long_Host, Long_Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               declare
+                  Words : constant Natural := Ada.Strings.Fixed.Count
+                    (Long_Host.Written ("pool.s"), ".word datum");
+               begin
+                  Landin.Testing.Check
+                    (Item, Words in 2 .. 20,
+                     "long code flushes reachable pools and reuses words");
+               end;
+            end if;
+         end;
+      end;
+      declare
+         Boundary_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Boundary_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         --  The pending datum literal reaches its distance bound inside a
+         --  shortenable branch. Replacing that branch must retain the pool.
+         Boundary_Host.Add_File ("pool.ldn", "mut datum: u32 = 1 "
+           & "f: (x: u32) -> (r: u32) = r = datum unchecked begin "
+           & "r = r + x r = r + x end unchecked "
+           & "if x == 0 then r = 3 else r = 2 end if end f");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Boundary_Host, Boundary_Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               Landin.Testing.Check_Equal
+                 (Item, Ada.Strings.Fixed.Count
+                   (Boundary_Host.Written ("pool.s"), ".word datum"), 1,
+                  "shortening a branch preserves its inserted literal pool");
+            end if;
+         end;
+      end;
+   end Literal_Pooling;
+
    --  [1630]'s one instruction, from D230's shorthand and from the named
    --  form, and the verifier's refusal of each way it can be malformed.
    --  Mode 8 is the per-target evidence: a register [1990]'s Cortex-M0
@@ -1103,9 +1531,16 @@ package body Landin.Tests.Cortex_Suite is
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
+        (Into, "cortex ABI", "scalar spill homes",
+         Scalar_Spill_Homes'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "register staging", Register_Staging'Access);
+      Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "assembly IR", Assembly_IR'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "literal pooling", Literal_Pooling'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register
@@ -1113,7 +1548,12 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "firmware path", Firmware_Path'Access);
       Landin.Testing.Register
+        (Into, "cortex ABI", "linked firmware evidence",
+         Linked_Firmware_Evidence'Access);
+      Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "local branches", Local_Branches'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "layout and transport contract", Contract'Access);
       Landin.Testing.Register

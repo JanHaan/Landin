@@ -678,6 +678,11 @@ exclusive-access implementation or change of board. D229 owns the exact
 implemented/reserved slots, typed handlers and ordinary/naked obligations.
 
 The driver retains `OUTPUT.s`, `OUTPUT.o`, `OUTPUT.ld`, `OUTPUT.map` and the ELF.
+With `--build-report=PATH`, a successful firmware executable also reports
+post-link occupied flash and static RAM extents, their limits and remaining
+capacity, the reserved stack size, and the selected libgcc archive members.
+The sizes come from ELF load segments; the helper names come from the linker
+map. Assembly-only reports have no linked capacity measurement.
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
 explicit generated script, `--gc-sections --build-id=none --emit-relocs` and

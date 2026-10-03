@@ -14190,6 +14190,15 @@ byte-identical reports without clocks or temporary output paths. Routine
 metrics are emitted instruction sites and frame/register/spill/save and static
 stack-traffic counts. Actual assembled text bytes are measured externally by
 `compiler/tests/quality/check.py`, not fabricated from an IR count.
+For a successful Cortex-M0 executable link, `firmware` adds measured
+`flash_used` and `static_ram_used` as the highest ELF PT_LOAD physical
+payload end from flash origin and RAM memory end from RAM origin, respectively.
+The paired limits and remaining bytes describe the selected 32 KiB flash and
+12 KiB static RAM budget, with the other 4 KiB reserved for stacks. These
+occupied extents include alignment gaps, flash copies of initialized RAM,
+retained runtime helpers and linker veneers. `runtime_members` lists the
+selected libgcc archive member names from the linker map, without toolchain
+paths. Assembly-only reports have no `firmware` field.
 
 Every optimization preserves observable side effects, error/cleanup order,
 traps, exact integer widths and floating-point signed zero/NaN behavior. No

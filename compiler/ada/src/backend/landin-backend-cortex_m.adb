@@ -106,8 +106,8 @@ package body Landin.Backend.Cortex_M is
 
    --  All source places stay pinned. Verified scalar temporaries are block
    --  local: an operand's last read precedes reuse, including across calls.
-   --  Scratch registers belong to selection; eight-byte spill homes hold any
-   --  admitted scalar without a second calling convention or host-sized math.
+   --  Scratch registers belong to selection. A reused spill home grows to
+   --  hold the widest scalar assigned to it.
    function Allocated_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
@@ -123,17 +123,70 @@ package body Landin.Backend.Cortex_M is
       package Masks is new Work_Arrays (Boolean, Home_Mask, True);
       package Numbers is new Work_Arrays (Natural, Spill_Assignments, 0);
       package Extents is new Work_Arrays
-        (L.Field_Extent, L.Field_Extent_Array, (8, 8));
+        (L.Field_Extent, L.Field_Extent_Array, (0, 1));
       Slots : Masks.Buffer (IR.Slot_Count (Of_Unit, Item));
       Values : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
       Last : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
-      Free_After : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
+      Release_Data, Next_Release_Data, Heap_Data :
+        Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
       Spills : Extents.Buffer (IR.Value_Count (Of_Unit, Item));
       Count : Natural := 0;
+      Block_Homes : Natural := 0;
+      Heap_Count : Natural := 0;
+
+      --  Keep the lowest available home, as the former linear search did.
+      --  A heap bounds selection by the logarithm of the block's peak
+      --  liveness; release buckets visit each scalar only once.
+      procedure Free_Home (Home : Positive);
+      function Take_Home return Positive;
+
+      procedure Free_Home (Home : Positive) is
+         Index : Positive;
+      begin
+         Heap_Count := Heap_Count + 1;
+         Index := Heap_Count;
+         while Index > 1
+           and then Heap_Data.Data (Index / 2) > Home
+         loop
+            Heap_Data.Data (Index) := Heap_Data.Data (Index / 2);
+            Index := Index / 2;
+         end loop;
+         Heap_Data.Data (Index) := Home;
+      end Free_Home;
+
+      function Take_Home return Positive is
+         Home : constant Positive := Heap_Data.Data (1);
+         Last_Home : constant Positive := Heap_Data.Data (Heap_Count);
+         Index : Positive := 1;
+         Child : Natural;
+      begin
+         Heap_Count := Heap_Count - 1;
+         while Index <= Heap_Count / 2 loop
+            Child := Index * 2;
+            if Child < Heap_Count
+              and then Heap_Data.Data (Child + 1) < Heap_Data.Data (Child)
+            then
+               Child := Child + 1;
+            end if;
+            exit when Last_Home <= Heap_Data.Data (Child);
+            Heap_Data.Data (Index) := Heap_Data.Data (Child);
+            Index := Child;
+         end loop;
+         if Heap_Count > 0 then
+            Heap_Data.Data (Index) := Last_Home;
+         end if;
+         return Home;
+      end Take_Home;
    begin
       for Block in 1 .. IR.Block_Count (Of_Unit, Item) loop
-         for Home in 1 .. Count loop
-            Free_After.Data (Home) := 0;
+         --  All prior homes are available at a block boundary. Start this
+         --  block at home 1 instead of clearing the routine's high-water mark.
+         Block_Homes := 0;
+         Heap_Count := 0;
+         for Position in 1 .. IR.Length
+           (Of_Unit, Item, IR.Block_Id (Block))
+         loop
+            Release_Data.Data (Position) := 0;
          end loop;
          for Position in 1 .. IR.Length
            (Of_Unit, Item, IR.Block_Id (Block))
@@ -155,19 +208,46 @@ package body Landin.Backend.Cortex_M is
             declare
                Value : constant IR.Value_Id := IR.Nth_Value
                  (Of_Unit, Item, IR.Block_Id (Block), Position);
-               Home : Positive := 1;
+               Home : Positive;
+               Released : Natural :=
+                 (if Position > 1 then Release_Data.Data (Position - 1)
+                  else 0);
             begin
+               while Released /= 0 loop
+                  Free_Home (Positive (Values.Data (Released)));
+                  Released := Next_Release_Data.Data (Released);
+               end loop;
                if IR.Result_Of (Of_Unit, Item, Value)
                  in Landin.Types.Scalar_Name
                then
-                  while Home <= Count
-                    and then Free_After.Data (Home) >= Position
-                  loop
-                     Home := Home + 1;
-                  end loop;
-                  Count := Natural'Max (Count, Home);
+                  if Heap_Count > 0 then
+                     Home := Take_Home;
+                  else
+                     Block_Homes := Block_Homes + 1;
+                     Home := Block_Homes;
+                  end if;
+                  Count := Natural'Max (Count, Block_Homes);
                   Values.Data (Positive (Value)) := Home;
-                  Free_After.Data (Home) := Last.Data (Positive (Value));
+                  Next_Release_Data.Data (Positive (Value)) :=
+                    Release_Data.Data (Last.Data (Positive (Value)));
+                  Release_Data.Data (Last.Data (Positive (Value))) :=
+                    Positive (Value);
+                  declare
+                     Held : constant Landin.Targets.Scalar_Size :=
+                       Landin.Types.Storage_Size
+                         (Landin.Types.Scalar_Name
+                            (IR.Result_Of (Of_Unit, Item, Value)), Facts);
+                  begin
+                     Spills.Data (Home).Size :=
+                       Landin.Targets.Byte_Count'Max
+                         (Spills.Data (Home).Size,
+                          Landin.Targets.Byte_Count
+                            (Landin.Targets.Bytes (Held)));
+                     Spills.Data (Home).Alignment :=
+                       Landin.Targets.Byte_Alignment'Max
+                         (Spills.Data (Home).Alignment,
+                          Landin.Targets.Alignment_Of (Facts, Held));
+                  end;
                end if;
             end;
          end loop;
@@ -253,11 +333,26 @@ package body Landin.Backend.Cortex_M is
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
       Instruction_Count : Natural := 0;
+      type Literal_Entry is record
+         Name : Unbounded.Unbounded_String;
+         Label : Unbounded.Unbounded_String;
+      end record;
+      package Literal_Vectors is new Ada.Containers.Vectors
+        (Positive, Literal_Entry);
+      Literals : Literal_Vectors.Vector;
+      Pool_Active : Boolean := False;
+      Pool_Flushing : Boolean := False;
+      --  Four bytes per instruction is an upper bound on these Thumb
+      --  instructions.  Keep well below the M0 literal-load limit of 1020
+      --  bytes, including alignment and at most 32 pool words.
+      Pool_Distance : Natural := 0;
+      Pool_Generation : Natural := 0;
       pragma Unreferenced (Options);
 
       function Fresh return String;
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
+      procedure Flush_Literals;
       procedure Immediate (Register : String; Value : Pattern);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Add_Offset
@@ -284,10 +379,33 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit (Instruction : String) is
       begin
+         if Pool_Active and then not Pool_Flushing
+           and then not Literals.Is_Empty
+         then
+            if Pool_Distance >= 512 then
+               Flush_Literals;
+            elsif Instruction'Length > 0
+              and then Instruction (Instruction'First) = '.'
+            then
+               if Instruction = ".balign 4"
+                 or else Ada.Strings.Fixed.Index (Instruction, ".word ") = 1
+               then
+                  Pool_Distance := Pool_Distance + 4;
+               elsif Ada.Strings.Fixed.Index (Instruction, ".cfi_") /= 1
+               then
+                  Flush_Literals;
+               end if;
+            end if;
+         end if;
          if Instruction'Length > 0
            and then Instruction (Instruction'First) /= '.'
          then
             Instruction_Count := Instruction_Count + 1;
+            if Pool_Active and then not Pool_Flushing
+              and then not Literals.Is_Empty
+            then
+               Pool_Distance := Pool_Distance + 4;
+            end if;
          end if;
          Put (Character'Val (9) & Instruction);
       end Emit;
@@ -297,19 +415,73 @@ package body Landin.Backend.Cortex_M is
             when '0' => "r1", when '2' => "r3", when '4' => "r5",
             when others => raise Compiler_Defect with "invalid word pair");
 
-      --  Every literal is adjacent to its load and skipped in execution.
-      --  No pool-distance assumption depends on cleanup expansion or layout.
+      --  A branch keeps literal words out of fallthrough control flow.  The
+      --  oldest load is at most 512 bytes back, and 32 words plus alignment
+      --  keep even the last entry within the 1020-byte M0 forward reach.
+      procedure Flush_Literals is
+      begin
+         if Literals.Is_Empty then
+            return;
+         end if;
+         declare
+            Done : constant String := Fresh;
+         begin
+            Pool_Flushing := True;
+            Pool_Generation := Pool_Generation + 1;
+            Emit ("b " & Done);
+            Emit (".balign 4");
+            for Literal of Literals loop
+               Put (Unbounded.To_String (Literal.Label) & ":");
+               Emit (".word " & Unbounded.To_String (Literal.Name));
+            end loop;
+            Put (Done & ":");
+            Literals.Clear;
+            Pool_Distance := 0;
+            Pool_Flushing := False;
+         end;
+      end Flush_Literals;
+
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
          pragma Unreferenced (Imported);
-         Id : constant String := Fresh;
       begin
-         Emit ("ldr " & Register & ", " & Id);
-         Emit ("b " & Id & "_end");
-         Emit (".balign 4");
-         Put (Id & ":");
-         Emit (".word " & Name);
-         Put (Id & "_end:");
+         if Pool_Active then
+            if Pool_Distance >= 512 then
+               Flush_Literals;
+            end if;
+            for Literal of Literals loop
+               if Unbounded.To_String (Literal.Name) = Name then
+                  Emit ("ldr " & Register & ", "
+                    & Unbounded.To_String (Literal.Label));
+                  return;
+               end if;
+            end loop;
+            if Natural (Literals.Length) = 32 then
+               Flush_Literals;
+            end if;
+            declare
+               Id : constant String := Fresh;
+            begin
+               Literals.Append
+                 (Literal_Entry'
+                   (Name => Unbounded.To_Unbounded_String (Name),
+                    Label => Unbounded.To_Unbounded_String (Id)));
+               Emit ("ldr " & Register & ", " & Id);
+            end;
+         else
+            --  Startup code is emitted by a separate producer; this path
+            --  also keeps a load safe if Address is used outside a routine.
+            declare
+               Id : constant String := Fresh;
+            begin
+               Emit ("ldr " & Register & ", " & Id);
+               Emit ("b " & Id & "_end");
+               Emit (".balign 4");
+               Put (Id & ":");
+               Emit (".word " & Name);
+               Put (Id & "_end:");
+            end;
+         end if;
       end Address;
 
       procedure Immediate (Register : String; Value : Pattern) is
@@ -376,6 +548,7 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Verbatim (Text : String) is
          Start : Natural := Text'First;
       begin
+         Flush_Literals;
          for Index in Text'First .. Text'Last + 1 loop
             if Index > Text'Last or else Text (Index) = LF then
                declare
@@ -850,13 +1023,29 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
          Before_Emit : constant Natural := Instruction_Count;
+         Routine_Start : constant Positive := Unbounded.Length (Out_Text) + 1;
+         type Branch_Site is record
+            First, Last : Positive;
+            Target, Condition : Unbounded.Unbounded_String;
+         end record;
+         package Branch_Vectors is new Ada.Containers.Vectors
+           (Positive, Branch_Site);
+         package Position_Vectors is new Ada.Containers.Vectors
+           (Positive, Positive);
+         Sites : Branch_Vectors.Vector;
+         Assembly_Barriers : Position_Vectors.Vector;
          Layout : constant Frame := Allocated_Frame
            (Of_Unit, Item, Facts, 16#FFFF_FFC0#);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
-         Homes : constant Landin.Targets.Byte_Count := Extent (Layout) + 16;
+         --  Keep the incoming register words below the laid-out frame.
+         --  Round up so calls retain eight-byte SP alignment.
+         Home_Bytes : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8;
+         Homes : constant Landin.Targets.Byte_Count :=
+           Extent (Layout) + Home_Bytes;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          Ordinary : constant Boolean := Landin.IR.Signature_Machine
@@ -919,10 +1108,12 @@ package body Landin.Backend.Cortex_M is
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Branch (Condition, Target : String);
          procedure Jump (Target : String);
+         procedure Long_Jump (Target : String);
+         procedure Shorten_Local_Branches;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
 
-         procedure Jump (Target : String) is
+         procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
          begin
             Emit ("ldr r7, " & Id);
@@ -930,9 +1121,27 @@ package body Landin.Backend.Cortex_M is
             Emit (".balign 4");
             Put (Id & ":");
             Emit (".word " & Target & " + 1");
+         end Long_Jump;
+
+         procedure Jump (Target : String) is
+            First : constant Positive := Unbounded.Length (Out_Text) + 1;
+            Generation : constant Natural := Pool_Generation;
+         begin
+            Long_Jump (Target);
+            --  A distance-triggered pool may have been inserted in this
+            --  sequence. Its literals serve earlier loads, so retain the
+            --  complete sequence when shortening would also erase them.
+            if Generation = Pool_Generation then
+               Sites.Append
+                 (Branch_Site'(First, Unbounded.Length (Out_Text),
+                   Unbounded.To_Unbounded_String (Target),
+                   Unbounded.Null_Unbounded_String));
+            end if;
          end Jump;
 
          procedure Branch (Condition, Target : String) is
+            First : constant Positive := Unbounded.Length (Out_Text) + 1;
+            Generation : constant Natural := Pool_Generation;
             Skip : constant String := Fresh;
             Inverse : constant String :=
               (if Condition = "eq" then "ne"
@@ -950,9 +1159,75 @@ package body Landin.Backend.Cortex_M is
                else raise Compiler_Defect with "invalid ARM condition");
          begin
             Emit ("b" & Inverse & " " & Skip);
-            Jump (Target);
+            Long_Jump (Target);
             Put (Skip & ":");
+            if Generation = Pool_Generation then
+               Sites.Append
+                 (Branch_Site'(First, Unbounded.Length (Out_Text),
+                   Unbounded.To_Unbounded_String (Target),
+                   Unbounded.To_Unbounded_String (Condition)));
+            end if;
          end Branch;
+
+         --  Each ordinary Thumb instruction occupies at most four bytes;
+         --  the compiler's in-routine data and alignment lines also occupy
+         --  at most four. Four bytes per source line, plus room for both
+         --  endpoints, bounds the span before branches are shortened. Do not
+         --  cross an inline-assembly or literal-pool boundary, whose size is
+         --  not known here. The assembler remains the final range check.
+         procedure Shorten_Local_Branches is
+            Text : constant String := Unbounded.To_String (Out_Text);
+         begin
+            if Sites.Is_Empty then
+               return;
+            end if;
+            for Index in reverse Sites.First_Index .. Sites.Last_Index loop
+               declare
+                  Site : constant Branch_Site := Sites (Index);
+                  Name : constant String :=
+                    Unbounded.To_String (Site.Target);
+                  Destination : constant Natural := Ada.Strings.Fixed.Index
+                    (Text (Routine_Start .. Text'Last), LF & Name & ":" & LF);
+               begin
+                  if Destination /= 0 then
+                     declare
+                        Low : constant Positive :=
+                          Positive'Min (Site.First, Destination);
+                        High : constant Natural :=
+                          Natural'Max (Site.First, Destination);
+                        Span : constant String := Text (Low .. High);
+                        Bound : constant Natural :=
+                          4 * Ada.Strings.Fixed.Count
+                            (Span, String'(1 => LF)) + 8;
+                        Crosses_Assembly : Boolean := False;
+                     begin
+                        for Barrier of Assembly_Barriers loop
+                           if Barrier in Low .. High then
+                              Crosses_Assembly := True;
+                              exit;
+                           end if;
+                        end loop;
+                        if not Crosses_Assembly
+                          and then Ada.Strings.Fixed.Index
+                            (Span, ".ltorg") = 0
+                          and then Bound <
+                            (if Unbounded.Length (Site.Condition) = 0
+                             then 2_000 else 240)
+                        then
+                           Unbounded.Replace_Slice
+                             (Out_Text, Site.First, Site.Last,
+                              Character'Val (9) & "b"
+                              & Unbounded.To_String (Site.Condition)
+                              & " " & Name & LF);
+                           Instruction_Count := Instruction_Count -
+                             (if Unbounded.Length (Site.Condition) = 0
+                              then 1 else 2);
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end Shorten_Local_Branches;
 
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0") is
@@ -1539,6 +1814,7 @@ package body Landin.Backend.Cortex_M is
                   Waiting (Number (Index)) := True;
                end if;
             end loop;
+            Assembly_Barriers.Append (Unbounded.Length (Out_Text) + 1);
             Emit_Verbatim (Landin.Backend.Assembly_Text
               (Of_Unit, Item, Value, Names, Facts));
             if (for all Held of Waiting => Held) then
@@ -2966,6 +3242,7 @@ package body Landin.Backend.Cortex_M is
                 (Item => Item, others => <>));
             return;
          end if;
+         Pool_Active := True;
          Emit ("push {r4, r5, r6, r7}");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 16");
@@ -2998,8 +3275,19 @@ package body Landin.Backend.Cortex_M is
             Emit ("movs r7, #1");
             Emit ("str r7, [r6]");
          end if;
-         Emit ("mov r6, sp");
-         Emit ("stmia r6!, {r0, r1, r2, r3}");
+         case Plan.Core_Used is
+            when 0 => null;
+            when 1 => Emit ("str r0, [sp]");
+            when 2 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1}");
+            when 3 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1, r2}");
+            when 4 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1, r2, r3}");
+         end case;
          if Plan.Result.Shape.Indirect then
             Store_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1));
          end if;
@@ -3061,16 +3349,19 @@ package body Landin.Backend.Cortex_M is
          end loop;
          Put (Hard_Trap & ":");
          Emit ("udf #1");
+         Flush_Literals;
+         Pool_Active := False;
          if Debug /= null then
             Put (Dwarf.Label_Name (Debug_Prefix, "end", Item) & ":");
             Emit (".cfi_endproc");
          end if;
          Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+         Shorten_Local_Branches;
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Homes + 24,
               Spill_Bytes => Spill_Bytes (Layout), Save_Bytes => 24,
-              Spill_Count => Natural (Spill_Bytes (Layout) / 8),
+              Spill_Count => Spill_Count (Layout),
               Instructions => Instruction_Count - Before_Emit,
               others => <>));
       end Emit_Routine;

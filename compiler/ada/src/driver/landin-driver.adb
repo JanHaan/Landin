@@ -6,6 +6,7 @@ with Landin.Backend.Firmware;
 with Landin.Backend.Toolchain;
 with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
+with Landin.Build_Reports.Firmware;
 with Landin.Build_Reports.Sources;
 with Landin.Checking;
 with Landin.Configuration;
@@ -1067,12 +1068,26 @@ package body Landin.Driver is
             procedure Write_Build_Report;
 
             procedure Write_Build_Report is
+               Firmware : Unbounded.Unbounded_String;
+               Valid : Boolean := True;
             begin
                if Report_Seen and then not Landin.Stages.Failed (Context) then
+                  if Cortex and then Emit = Emit_Executable then
+                     Landin.Build_Reports.Firmware.Measure
+                       (Host, Product_Path, Product_Path & ".map",
+                        Firmware, Valid);
+                     if not Valid then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot measure linked firmware image or map");
+                        return;
+                     end if;
+                  end if;
                   Host.Write_File
                     (Report_Path,
                      Landin.Build_Reports.Sources.JSON
-                       (Evidence, Context, Optimization), Written);
+                       (Evidence, Context, Optimization,
+                        Unbounded.To_String (Firmware)), Written);
                   if Written /= Landin.Platform.Write_Ok then
                      Note_Failure
                        (Code_Unwritable, "cannot write: " & Report_Path);

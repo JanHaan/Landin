@@ -14,7 +14,8 @@ package body Landin.Build_Reports.Sources is
    function JSON
      (Of_Report : Report;
       Context : in out Landin.Stages.Compilation;
-      Options : Landin.Optimization.Options) return String
+      Options : Landin.Optimization.Options;
+      Firmware : String := "") return String
    is
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : US.Unbounded_String;
@@ -23,6 +24,7 @@ package body Landin.Build_Reports.Sources is
         & Landin.Build_Reports.JSON
           (Of_Report, Landin.Stages.Target (Context),
            Landin.Stages.Level (Context), Options)
+        & (if Firmware = "" then "" else ",""firmware"":" & Firmware)
         & ",""sources"":[" & LF);
       for Index in 1 .. Landin.Stages.Source_Count (Context) loop
          declare

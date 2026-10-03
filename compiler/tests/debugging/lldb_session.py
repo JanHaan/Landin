@@ -169,6 +169,24 @@ def run(debugger, config_path):
         record('assembly.caller', caller.GetFunctionName(), 'main')
         record('assembly.unwound_x19', caller.FindRegister('x19').GetValueAsUnsigned(),
                caller_x19)
+        # A module table and a slice over it; the table's element type is
+        # reached through nothing but the table.
+        f = continued('slices-ready', 'debug_slices')
+        view_type = f.FindVariable('table_view').GetType()
+        record('slice type', view_type.GetName(), '[]debug_entry')
+        record('slice members', [view_type.GetFieldAtIndex(i).GetName()
+                                 for i in range(view_type.GetNumberOfFields())], ['ptr', 'len'])
+        record('slice element', view_type.GetFieldAtIndex(0).GetType().GetPointeeType().GetName(),
+               'debug_entry')
+        values(f, 'slices', {'table_view.len': 3})
+        table = target.FindFirstGlobalVariable('debug_table')
+        assert table.IsValid(), 'module table has no debug variable'
+        record('table type', table.GetType().GetArrayElementType().GetName(), 'debug_entry')
+        record('table length', table.GetNumChildren(), 3)
+        record('table key', table.GetChildAtIndex(1).GetChildMemberWithName('entry_key')
+               .GetValueAsSigned(), 7)
+        record('slice base', f.FindVariable('table_view').GetChildMemberWithName('ptr')
+               .GetValueAsUnsigned(), table.GetLoadAddress())
         process.Continue()
         record('inferior exited', process.GetState(), lldb.eStateExited)
         record('inferior status', process.GetExitStatus(), 42)

@@ -213,6 +213,9 @@ package body Landin.Backend.Dwarf is
          Node : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
          Item : Item_Id := No_Item;
          Slot : Slot_Id := No_Slot;
+         --  A slice's element: its carrier is presented as a pointer to
+         --  that element and a length rather than as two bare words.
+         Slice : Pointee_Id := No_Pointee;
       end record;
       package Descriptions is new Ada.Containers.Vectors
         (Positive, Description);
@@ -335,6 +338,37 @@ package body Landin.Backend.Dwarf is
          Put (HT & ".uleb128 " & Landin.Targets.Byte_Count'Image (Offset));
       end Member;
 
+      --  [0570]: a slice is its base address and its length, in that order,
+      --  named by the element it reaches where the element has a name.
+      procedure Slice_Type (Element : Pointee_Id);
+      procedure Slice_Type (Element : Pointee_Id) is
+         Width : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count
+             (Landin.Targets.Bytes (Landin.Targets.Pointer_Size (Facts)));
+         Reached : constant Field_Shape := Pointee_Shape (Of_Unit, Element);
+         Name : constant String :=
+           (if Reached.Kind = Scalar_Field_Shape
+              and then Reached.Pointee = No_Pointee
+              and then Reached.Signature = No_Signature
+              and then Reached.Atoms = No_Atom_Set
+            then "[]" & Landin.Types.Spelling (Reached.Element)
+            elsif Reached.Kind = Aggregate_Field_Shape
+              and then Reached.Nominal /= No_Nominal_Type
+            then "[]" & Nominal_Name (Reached.Nominal)
+            else "slice");
+      begin
+         U (6);
+         Str (Name);
+         Put (HT & ".uleb128 " & Landin.Targets.Byte_Count'Image
+           (2 * Width));
+         Member ("ptr", Shape_Type
+           ((Element => Landin.Types.Usize, Pointee => Element,
+             others => <>)), 0);
+         Member ("len", Shape_Type
+           ((Element => Landin.Types.Usize, others => <>)), Width);
+         U (0);
+      end Slice_Type;
+
       procedure Emit_Type (Index : Positive);
       procedure Emit_Type (Index : Positive) is
          Desc : constant Description := Types (Index);
@@ -381,7 +415,10 @@ package body Landin.Backend.Dwarf is
               (Info.Trees.all, Desc.Source);
          end if;
          Put (T (Index) & ":");
-         if Shape.Kind = Aggregate_Field_Shape
+         if Desc.Slice /= No_Pointee then
+            Slice_Type (Desc.Slice);
+            return;
+         elsif Shape.Kind = Aggregate_Field_Shape
            and then Shape.Nominal /= No_Nominal_Type
            and then not Has_Nominal_Shape (Of_Unit, Shape.Nominal)
          then
@@ -571,6 +608,8 @@ package body Landin.Backend.Dwarf is
 
       procedure Routine (Item : Item_Id);
       procedure Routine (Item : Item_Id) is
+         Availability : Debug_Locations.Analysis :=
+           Debug_Locations.Prepare (Of_Unit, Item);
          Plan : constant Placement :=
            Make (Of_Unit, Item, Facts, Options);
          Frame_Plan : constant Frame :=
@@ -750,7 +789,8 @@ package body Landin.Backend.Dwarf is
                      Put (HT & ".long " & Loc & "-" & Prefix & "debug_loc");
                      Location_List
                        (Loc, Expr, Debug_Locations.Available_Alias
-                          (Of_Unit, Meanings, Info, Item, Index));
+                          (Availability, Of_Unit, Meanings, Info,
+                           Item, Index));
                   end if;
                end;
             end loop;
@@ -794,6 +834,13 @@ package body Landin.Backend.Dwarf is
                                and then not Is_Address (Of_Unit, Item, Slot)
                              then Intern ((Shape => Shape, Item => Item,
                                           Slot => Slot, others => <>))
+                             elsif Is_Array (Of_Unit, Item, Slot)
+                               and then Slice_Element_Of
+                                 (Of_Unit, Item, Slot) /= No_Pointee
+                             then Intern ((Shape => Shape,
+                                          Slice => Slice_Element_Of
+                                            (Of_Unit, Item, Slot),
+                                          others => <>))
                              else Shape_Type (Shape));
                      U (if Parameter then 3 else 10);
                      Str (Decl_Name (Binding));
@@ -804,7 +851,8 @@ package body Landin.Backend.Dwarf is
                        (Slot_Expression (Plan, Frame_Plan, Slot,
                           Is_Address (Of_Unit, Item, Slot), False));
                      Location_List (Loc, Expr, Debug_Locations.Available
-                       (Of_Unit, Meanings, Info, Item, Slot, Parameter));
+                       (Availability, Of_Unit, Meanings, Info,
+                        Item, Slot, Parameter));
                   end if;
                end;
             end loop;
@@ -919,6 +967,41 @@ package body Landin.Backend.Dwarf is
          U (0);
       end Routine;
 
+      --  A module datum lives at its symbol for the whole run, so it is a
+      --  compilation-unit variable with one fixed address, not a location
+      --  list.  Text and other anonymous datums have no source name.
+      procedure Module_Datum (Item : Item_Id);
+      procedure Module_Datum (Item : Item_Id) is
+         Typ : Positive;
+      begin
+         if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array then
+            Typ := (if Slice_Element_Of (Of_Unit, Item) /= No_Pointee
+                    then Intern ((Shape => Whole_Array_Shape (Of_Unit, Item),
+                                  Slice => Slice_Element_Of (Of_Unit, Item),
+                                  others => <>))
+                    else Shape_Type (Whole_Array_Shape (Of_Unit, Item)));
+         elsif Result_Of (Of_Unit, Item) = Landin.Types.Aggregate then
+            if Nominal_Of (Of_Unit, Item) = No_Nominal_Type then
+               return;
+            end if;
+            Typ := Shape_Type
+              ((Kind => Aggregate_Field_Shape,
+                Nominal => Nominal_Of (Of_Unit, Item), others => <>));
+         elsif Result_Of (Of_Unit, Item) in Landin.Types.Scalar_Name then
+            Typ := Shape_Type
+              ((Element => Result_Of (Of_Unit, Item),
+                Pointee => Pointee_Of (Of_Unit, Item), others => <>));
+         else
+            return;
+         end if;
+         U (14);
+         Str (Decl_Name (Declares (Of_Unit, Item)));
+         Ref (T (Typ));
+         Coordinates (Origin_Of (Of_Unit, Item));
+         U (9);
+         Put (HT & ".byte 0x03" & LF & HT & ".quad " & Symbol (Item));
+      end Module_Datum;
+
       procedure Abbreviation
         (Code, Tag : Natural; Children : Boolean; Attributes : String);
       procedure Abbreviation
@@ -956,6 +1039,9 @@ package body Landin.Backend.Dwarf is
       Abbreviation (12, 16#13#, False, "0x03,0x08,0x3c,0x0c");
       --  Empty represented structures have a size but no child DIEs.
       Abbreviation (13, 16#13#, False, "0x03,0x08,0x0b,0x0f");
+      --  A module variable: one address expression, never a list.
+      Abbreviation (14, 16#34#, False,
+        "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0x02,0x18");
       U (0);
       Put (Section ("info", Mach_O));
       Put (CU & ":");
@@ -984,6 +1070,10 @@ package body Landin.Backend.Dwarf is
               and then not Is_External (Of_Unit, Item)
             then
                Routine (Item);
+            elsif Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+              and then Declares (Of_Unit, Item) /= No_Declaration
+            then
+               Module_Datum (Item);
             end if;
          end;
       end loop;

@@ -102,6 +102,7 @@ package Landin.Backend is
 
    --  Sum of requested home extents, excluding inter-home/final padding.
    function Spill_Bytes (Of_Frame : Frame) return Landin.Targets.Byte_Count;
+   function Spill_Count (Of_Frame : Frame) return Natural;
    function Save_Bytes (Of_Frame : Frame) return Landin.Targets.Byte_Count;
 
    --  What the prologue subtracts: the whole extent, rounded up to the

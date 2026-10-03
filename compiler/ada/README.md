@@ -195,6 +195,7 @@ different responsibilities.
 | `Landin.Server.Answers` | each answer as the protocol's JSON: capabilities, published diagnostics, formatting edits, code actions, definitions and hover | decide anything a stage decided, or convert a position itself |
 | `Landin.Server.Navigation` | what is at a byte of a checked module: the name it is in, where that is declared, its type as the checker spells one, its written header and its doc comment [2000] | answer where the stages decided nothing, or inside a held body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
+| `Landin.Build_Reports.Firmware` | post-link Cortex ELF load extents and selected libgcc members for build evidence | infer bytes from instruction counts or include toolchain paths in the report |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -347,9 +348,14 @@ bytes and half-open item-origin spans using pure computation. The driver alone
 writes `--build-report=PATH` through `Landin.Platform`, after successful output
 and tools; failure is an ordinary failed request, not a source warning. No
 report bytes or provenance strings become mandatory executable storage.
+`Landin.Build_Reports.Firmware` reads the finished Cortex ELF and linker map
+through that platform boundary when an executable report is requested. It
+measures occupied flash and static RAM extents from load segments and lists
+the selected libgcc member names without host-specific paths.
 
 The outer JSON has `schema: 1`, a `build` object in
-`landin-build-report-1` format, `sources` and `items`. A source entry contains
+`landin-build-report-1` format, `sources` and `items`; a linked Cortex
+executable also has a `firmware` object. A source entry contains
 `source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `source`,
 `first`, `last`. The nested build carries the target and both controls, plus
 `specializations`, `routines`, `layouts`. Instruction/stack counts are static
