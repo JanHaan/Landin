@@ -15,6 +15,7 @@ package body Landin.Modules is
            (Logical    => Unbounded.Null_Unbounded_String,
             Directory  => Unbounded.Null_Unbounded_String,
             Root_Index => 0));
+      Into.Logical_Index.Insert ("", Entry_Module);
    end Initialize;
 
    procedure Set_Entry_Directory
@@ -31,15 +32,11 @@ package body Landin.Modules is
 
    function Find_Logical (Of_Table : Table; Logical : String) return Module_Id
    is
+      Found : constant Logical_Maps.Cursor :=
+        Of_Table.Logical_Index.Find (Logical);
    begin
-      for Index in 1 .. Module_Count (Of_Table) loop
-         if Unbounded.To_String
-              (Of_Table.Modules.Element (Index).Logical) = Logical
-         then
-            return Module_Id (Index);
-         end if;
-      end loop;
-      return No_Module;
+      return (if Logical_Maps.Has_Element (Found)
+              then Logical_Maps.Element (Found) else No_Module);
    end Find_Logical;
 
    function Find_Directory
@@ -68,6 +65,7 @@ package body Landin.Modules is
            (Logical    => Unbounded.To_Unbounded_String (Logical),
             Directory  => Unbounded.To_Unbounded_String (Directory),
             Root_Index => Root_Index));
+      Into.Logical_Index.Insert (Logical, Module_Id (Into.Modules.Length));
       return Module_Id (Into.Modules.Length);
    end Add_Module;
 

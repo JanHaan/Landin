@@ -5,7 +5,9 @@
 --  semantic stages consume identities and never read a path from the host.
 
 private with Ada.Containers.Hashed_Maps;
+private with Ada.Containers.Indefinite_Hashed_Maps;
 private with Ada.Containers.Vectors;
+private with Ada.Strings.Hash;
 private with Ada.Strings.Unbounded;
 
 with Landin.Source;
@@ -123,6 +125,12 @@ private
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Module_Record);
 
+   package Logical_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type        => String,
+      Element_Type    => Module_Id,
+      Hash            => Ada.Strings.Hash,
+      Equivalent_Keys => "=");
+
    package Source_Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Module_Id);
 
@@ -139,10 +147,13 @@ private
      (Key_Type => Import_Key, Element_Type => Module_Id,
       Hash => Hash, Equivalent_Keys => "=");
 
+   --  The vector assigns stable discovery-order identities; this index only
+   --  avoids walking it when an import names an already reached module.
    type Table is tagged limited record
-      Modules : Module_Vectors.Vector;
-      Sources : Source_Module_Vectors.Vector;
-      Imports : Import_Maps.Map;
+      Modules       : Module_Vectors.Vector;
+      Logical_Index : Logical_Maps.Map;
+      Sources       : Source_Module_Vectors.Vector;
+      Imports       : Import_Maps.Map;
    end record;
 
 end Landin.Modules;
