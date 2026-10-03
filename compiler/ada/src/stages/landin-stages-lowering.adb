@@ -532,7 +532,14 @@ package body Landin.Stages.Lowering is
       function Signature_For
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
 
+      function Build_Signature
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
+
       function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id;
+
+      function Build_Instance_Signature
         (Instance : Landin.Checking.Routine_Instance_Id)
          return IR.Signature_Id;
 
@@ -861,7 +868,7 @@ package body Landin.Stages.Lowering is
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name;
 
-      function Signature_For
+      function Build_Signature
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id
       is
          Count : constant Natural :=
@@ -938,9 +945,6 @@ package body Landin.Stages.Lowering is
                   else IR.No_Atom_Set));
          end Converted;
       begin
-         if Signatures (Positive (Source)) /= IR.No_Signature then
-            return Signatures (Positive (Source));
-         end if;
          if Landin.Checking.Signature_Error_Form (Types.all, Source)
               = Landin.Checking.Inferred
          then
@@ -987,9 +991,19 @@ package body Landin.Stages.Lowering is
               Variadic => Landin.Checking.Signature_Is_Variadic
                 (Types.all, Source));
          return Signatures (Positive (Source));
+      end Build_Signature;
+
+      function Signature_For
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id
+      is
+      begin
+         if Signatures (Positive (Source)) /= IR.No_Signature then
+            return Signatures (Positive (Source));
+         end if;
+         return Build_Signature (Source);
       end Signature_For;
 
-      function Signature_For_Instance
+      function Build_Instance_Signature
         (Instance : Landin.Checking.Routine_Instance_Id)
          return IR.Signature_Id
       is
@@ -1013,9 +1027,6 @@ package body Landin.Stages.Lowering is
              [others => (others => 1)];
          Source_Count : Natural := 0;
       begin
-         if Generic_Signatures (Position) /= IR.No_Signature then
-            return Generic_Signatures (Position);
-         end if;
          for Index in 1 .. Hidden loop
             Parameters (Index) :=
               (Kind => Ty.Usize, Convention => IR.In_Value, others => <>);
@@ -1049,6 +1060,20 @@ package body Landin.Stages.Lowering is
               C_ABI => IR.Signature_Uses_C_ABI (Unit.all, Source),
               Variadic => IR.Signature_Is_Variadic (Unit.all, Source));
          return Generic_Signatures (Position);
+      end Build_Instance_Signature;
+
+      function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id
+      is
+         Position : constant Positive :=
+           Landin.Checking.Routine_Identities.Position
+             (Types.all, Instance);
+      begin
+         if Generic_Signatures (Position) /= IR.No_Signature then
+            return Generic_Signatures (Position);
+         end if;
+         return Build_Instance_Signature (Instance);
       end Signature_For_Instance;
 
       --  [1820]'s operators onto Landin.IR's opcodes, one to one.  The
