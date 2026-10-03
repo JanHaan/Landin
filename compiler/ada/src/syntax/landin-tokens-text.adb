@@ -412,7 +412,11 @@ package body Landin.Tokens.Text is
          end loop;
 
          while At_Byte <= Content_Last loop
-            if At_Line_Start and then Indent_Length > 0 then
+            --  A column-zero line-leading closer still discards horizontal
+            --  bytes on blank lines, though it removes no nonblank prefix.
+            if At_Line_Start
+              and then (Indent_Length > 0 or else Line_First = Close_First)
+            then
                declare
                   Line_Last : Natural := At_Byte;
                   Prefix    : Natural := 0;
@@ -433,10 +437,12 @@ package body Landin.Tokens.Text is
                   if At_Byte + Prefix = Line_Last then
                      --  A blank line carries no observable indentation.
                      At_Byte := At_Byte + Prefix;
-                  elsif Prefix < Indent_Length
-                    or else Lexeme
-                      (At_Byte .. At_Byte + Indent_Length - 1)
-                        /= Lexeme (Line_First .. Close_First - 1)
+                  elsif Indent_Length > 0
+                    and then
+                      (Prefix < Indent_Length
+                       or else Lexeme
+                         (At_Byte .. At_Byte + Indent_Length - 1)
+                           /= Lexeme (Line_First .. Close_First - 1))
                   then
                      Fail
                        (Inconsistent_Raw_Indentation,

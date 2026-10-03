@@ -783,6 +783,16 @@ package body Landin.Tests.Lexer_Suite is
            and then Bytes (1 .. Length) = LF & "one" & LF & "  two" & LF,
          "the closer's exact indentation is removed from every line");
 
+      Decode
+        (Three & LF & "  " & LF & Character'Val (9) & LF
+         & "  x" & LF & Three);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 7
+           and then Bytes (1 .. Length) = LF & LF & LF & "  x" & LF,
+         "a zero-indent closer discards blank-line spaces and tabs");
+
       Decode (Three & "\n" & Three);
       Landin.Testing.Check
         (Item,
