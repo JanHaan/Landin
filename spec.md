@@ -1866,7 +1866,7 @@ The selected image has 32 KiB flash at zero and 16 KiB RAM at `0x20000000`.
 The initial SP is `0x20004000`, aligned to eight bytes. The upper 4 KiB of RAM
 is reserved for stacks; static RAM ends no later than `0x20003000`. This is a
 constrained test profile, not permission to use the board's larger flash.
-The firmware request refuses an ordinary routine when its known frame alone,
+The firmware request refuses a compiler-framed routine when its known frame alone,
 including saved registers and reserved homes, exceeds the selected 4 KiB stack
 reservation. This does not bound total stack use across calls or interrupts;
 those paths remain programmer obligations.

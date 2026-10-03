@@ -676,7 +676,7 @@ source definition; its exported symbol may differ. `Backend.Firmware` generates
 the reset source and linker script for the existing 32 KiB flash/16 KiB RAM
 profile. The top 4 KiB of RAM is reserved for stacks, with eight-byte-aligned
 initial MSP `0x20004000`. Static images cannot overlap `0x20003000`.
-The driver refuses a known ordinary frame larger than the 4 KiB reservation,
+The driver refuses a known compiler-framed routine larger than the 4 KiB reservation,
 counting its saved registers and reserved homes. This per-routine check does
 not bound stack use through calls or interrupt nesting.
 The 48-word vector image starts at zero. There is no VTOR relocation, FPU,
