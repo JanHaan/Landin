@@ -7133,8 +7133,71 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Conditional_Reach;
 
+   procedure Arm64_Calls_Restore_Only_Reserved_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Calls_Restore_Only_Reserved_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "wide: type = layout(c) struct" & LF
+         & "    bytes: [24]u8" & LF & "end wide" & LF
+         & "mut state: wide" & LF
+         & "extern(c) c_zero: () -> (r: i32)" & LF
+         & "extern(c) c_copy: (value: wide) -> none" & LF
+         & "native_zero: () -> (r: i32) = 7 end native_zero" & LF
+         & "native_nine: (a0: i64, a1: i64, a2: i64, a3: i64,"
+         & " a4: i64, a5: i64, a6: i64, a7: i64, a8: i64)"
+         & " -> none = _ = a8 end native_nine" & LF
+         & "public probe: () -> none =" & LF
+         & "    _ = native_zero()" & LF
+         & "    _ = c_zero()" & LF
+         & "    native_nine(1, 2, 3, 4, 5, 6, 7, 8, 9)" & LF
+         & "    c_copy(state)" & LF
+         & "end probe" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "four calls lower");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "bl _native_zero")
+              and then Contains (Text, "bl _c_zero")
+              and then Contains (Text, "bl _native_nine")
+              and then Contains (Text, "bl _c_copy"),
+            "both conventions emit zero and nonzero calls");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "add sp, sp, x15"), 2,
+            "only the two calls that reserve space restore it");
+         Landin.Testing.Check
+           (Item, Contains (Text, "movz x15, #16" & LF
+                             & HT & "add sp, sp, x15")
+              and then Contains (Text, "movz x15, #32" & LF
+                                 & HT & "add sp, sp, x15"),
+            "native stack argument and C indirect copy restore full areas");
+      end;
+   end Arm64_Calls_Restore_Only_Reserved_Stack;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "arm64 calls restore only reserved stack", Arm64_Calls_Restore_Only_Reserved_Stack'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 conditional reach",
          Arm64_Conditional_Reach'Access);

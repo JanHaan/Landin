@@ -1934,8 +1934,10 @@ package body Landin.Backend.Arm64 is
                   C_Chunk (Plan.Result, Chunk, True);
                end loop;
             end if;
-            Immediate ("x15", Pattern (Bytes));
-            Emit ("add sp, sp, x15");
+            if Bytes > 0 then
+               Immediate ("x15", Pattern (Bytes));
+               Emit ("add sp, sp, x15");
+            end if;
          end C_Call;
 
          procedure C_Result (Value : Landin.IR.Value_Id) is
@@ -3045,8 +3047,10 @@ package body Landin.Backend.Arm64 is
                      then
                         Store_Value (Value, "x0");
                      end if;
-                     Immediate ("x15", Pattern (Bytes));
-                     Emit ("add sp, sp, x15");
+                     if Bytes > 0 then
+                        Immediate ("x15", Pattern (Bytes));
+                        Emit ("add sp, sp, x15");
+                     end if;
                   end;
                when Landin.IR.Jump =>
                   Emit ("b " & Label (Item, Landin.IR.Target_Of (Of_Unit,
