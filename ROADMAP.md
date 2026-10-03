@@ -762,12 +762,25 @@ A standard library split where the capability model already splits it.
 Status: planned
 Depends on: none
 
-`core/*` becomes what every target has, and hosted modules move under a
-sibling root so that firmware cannot import them by accident. The root's name
-is decided here, with [1480] and [1660] amended.
+`core/*` becomes the shared freestanding library: each module and its public
+interface must be selectable on every supported target, though its
+implementation may use target-specific paths. Hosted-only modules move under
+a sibling root so that firmware cannot import them by accident.
+Target-specific freestanding modules move under a separate sibling root;
+each declares the target families or profiles on which it is available, and
+an import outside that scope is refused during target checking. They require
+no hosted runtime or services. A module mixing these availability classes is
+split so importing one class does not select declarations from another. The
+existing `core/cpu` belongs in this root for the M-profile family, including
+its later feature levels, rather than in either the shared or hosted root. The
+two sibling roots' names are decided here, with [1480] and [1660] amended.
 
-Exit evidence: the amended paragraphs, every existing module on its side of
-the line, and a firmware build that refuses a hosted import by name.
+Exit evidence: the amended paragraphs and an inventory assigning every
+existing module to the shared, target-specific freestanding or hosted root;
+the resulting imports and consumers check on their supported targets. A
+module under `core/*` checks on every supported target, `core/cpu` checks on
+M-profile levels and is refused on other families, and a firmware build
+refuses a hosted import by name.
 
 ### R13.20 — The freestanding library
 
@@ -797,7 +810,10 @@ oracles.
 
 ### R13 gate
 
-- The library's two halves are separate, and every facility has a consumer.
+- The shared freestanding, target-specific freestanding and hosted roots are
+  separate. Every shared module checks on every supported target, each
+  target-specific module checks only on its declared targets, firmware
+  refuses hosted imports by name, and every facility has a consumer.
 
 ## R14 — Concurrency
 
