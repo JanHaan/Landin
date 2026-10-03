@@ -12153,7 +12153,7 @@ classified failure boundary before the repository gate can pass.
 | `inout.exact-alias` | static | 0900 | L0337 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale, including an old pool pointer whose address and extent match a later reuse | `runtime/r250-references`, `runtime/r420-pool-provider` |
-| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 retains complete operand values in source order, allowing stable storage to supply them, and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
@@ -12180,7 +12180,7 @@ classified failure boundary before the repository gate can pass.
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io/hosted` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
-| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` copies at most N messages of up to `diag.message_capacity` bytes and counts later or oversized notes in `dropped` | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0337 for a sink path crossing a reference boundary or using a computed index; L0302 or L0315 for consumed-place and restoration checks | `negative/use-after-sink`, `negative/sunk-inout-not-restored`, `negative/r491-sink-slice-storage`, `positive/r491-sink-contained-places`, `positive/r491-sink-call-entry`, `negative/r491-sink-entry-overlap` |
@@ -15519,23 +15519,24 @@ two implementations use the same dynamic call path.
 
 **Chosen:** `core/diag.log(logger)` is an object-safe concept with `note` and
 `failed`. `note` receives a mutable self pointer, `core/text.position`, a
-`u8`-represented warning/error severity and an `escaping []u8` message, and
+`u8`-represented warning/error severity and a call-scoped `[]u8` message, and
 declares `core/io.io_failed`. `failed` reports whether any error-severity note
 has been received. A producer accepts `any diag.log` and invokes both entries
 through D147's ordinary erased evidence table; it neither names nor branches on
 the concrete logger.
 
 `bounded(capacity)` is a parameterized private nominal implementation. It
-retains the first `capacity` entries in order, counts every later note in
-`dropped`, and counts error severity even when that note is dropped. Overflow
-therefore returns normally and never raises `io_failed`. Entry and logger
-representation stay private; checked accessors report `out_of_bounds` rather
-than exposing unused storage. Its inline note array is explicitly `uninit` at
-construction; each note is written before `stored` grows, and `note_at`
-checks that prefix. The final text types did not yet exist, so one entry retains the message address and byte length internally.
-The `escaping` parameter prevents a frame-backed slice at the capability
-boundary; explicit integer-pointer conversion remains subject to [0470]'s
-honest validity limit.
+copies up to `message_capacity` (256) bytes into each retained entry, so a
+producer may pass a frame-backed message through the shared concept. It
+retains fitting notes in order until `capacity` entries have been stored;
+every note that arrives after the entry limit or exceeds the byte limit
+increments `dropped`. Error severity is counted even when that note is
+dropped. Overflow returns normally and never raises `io_failed`. Entry and
+logger representation stay private; checked accessors report `out_of_bounds`
+rather than exposing unused storage. A returned entry owns its copied bytes
+and remains valid after the producer's frame ends.
+Its inline note array is explicitly `uninit` at construction; each owned
+entry is written before `stored` grows, and `note_at` checks that prefix.
 
 `streaming` retains a pointer to an erased `core/io.world` and a borrowed file,
 not a system-provider pointer. Its construction result derives from both
@@ -15558,14 +15559,15 @@ stop because its reporting policy is intentionally finite. Ignoring a failed
 stream write would claim delivery that did not happen. Giving each logger a
 different producer interface would erase the capability abstraction, while
 specializing the producer would make optimization the semantic basis contrary
-to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address was
-also declined; `escaping` states the lifetime consequence at the call.
+to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address
+was also declined. The bounded implementation uses a finite copy budget and
+reports an oversized note in `dropped` instead.
 
 **Pinned by** `runtime/diagnostic-loggers-dispatch`,
 `negative/core-diag-frame-message-escape`,
 `negative/core-diag-frame-world-escape`, the parameterized and erased
 conformance registers, the `diagnostics.retention`,
-`diagnostics.delivery-failure`, `origins.escape`, `pointer.integer-origin` and
+`diagnostics.delivery-failure`, `origins.escape` and
 `host.io-failure` guarantee rows, and the rooted fixture execution path's
 recorded merged output.
 

@@ -60,6 +60,13 @@ emit_notes: (inout logger: any diag.log) -> none ! io.io_failed =
     try logger.note(third, diag.warning, message_c[0..<2])
 end emit_notes
 
+emit_frame_note: (inout logger: any diag.log) -> none ! io.io_failed =
+    mut message: [2]u8 = [68, 10]
+    try logger.note(text.first(message[0..<2]), diag.error,
+                    message[0..<2])
+    message[0] = 90
+end emit_frame_note
+
 public main: () -> (code: i32) =
     code = 1
 
@@ -131,6 +138,38 @@ public main: () -> (code: i32) =
         return
     end if
     if not check_position_writes() then
+        return
+    end if
+
+    emit_frame_note(streaming_log) else (unexpected_frame_stream_failure)
+        _ = unexpected_frame_stream_failure
+        return
+    end
+
+    mut copied := diag.new_log(capacity: 2)
+    mut copied_log: any diag.log = any(addr copied)
+    emit_frame_note(copied_log) else (unexpected_frame_copy_failure)
+        _ = unexpected_frame_copy_failure
+        return
+    end
+    copied_note := diag.note_at(copied, usize(0)) else (missing_copied_note)
+        _ = missing_copied_note
+        return
+    end
+    copied_byte: u8 = diag.message_byte(copied_note, usize(0))
+      else (missing_copied_byte)
+        _ = missing_copied_byte
+        return
+    end
+    mut too_long: [257]u8 = zeroed
+    copied_log.note(text.first(too_long[0..<257]), diag.warning,
+                    too_long[0..<257]) else (unexpected_long_failure)
+        _ = unexpected_long_failure
+        return
+    end
+    if diag.stored(copied) <> 1 or diag.dropped(copied) <> 1
+      or not copied_log.failed() or copied_byte <> 68
+    then
         return
     end if
 
