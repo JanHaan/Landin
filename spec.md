@@ -15203,10 +15203,11 @@ semantics; the named refusals now report that disposition.
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
 `get` and `pop` expose only initialized values. Growth allocates an empty
-replacement, iteratively transfers the complete initialized prefix, rolls
+replacement, transfers the complete initialized prefix, rolls
 back that replacement on failure, and publishes it only after draining and
 freeing the old storage. D194 replaces the original recursive traversal with
-ordinary loops and checks capacity arithmetic before allocation.
+ordinary loops for positive-sized items and checks capacity arithmetic before
+allocation. Zero-sized items use a bulk witness transition.
 A failing reserve leaves the old list and its values
 unchanged. Pointer elements are valid inputs; no `zeroable` constraint is
 introduced. `get` and `pop` translate raw bounds/empty results to
@@ -15718,7 +15719,14 @@ An enabled zero-sized item, such as `[0]u8`, retains logical capacity and an
 initialized count. Its byte extent is zero without division. Every successful
 increase to a nonzero capacity performs one zero-byte allocation, later paired
 with one zero-byte free using the returned pointer. Admission, transfer and
-release change the logical count without copying payload bytes. Even
+release change the logical count without copying payload bytes. Growth
+establishes the replacement's initialized witness with one complete typed
+store through the returned pointer, then extends that witness to the old
+logical count in one step. It does not require a `zeroable` item or invent
+backing when the provider returns an invalid pointer. Releasing or replacing
+zero-sized storage shortens its witness in one step before disposal. These
+bulk transitions check the old initialized count, replacement capacity and
+allocation token; failed allocation still leaves the old list untouched. Even
 `maximum_usize` is a representable reserve capacity for this item. Capacity
 zero acquires no allocation; releasing an empty-capacity list, including a
 second release, makes no provider call. No `zeroable` constraint is added.
@@ -15730,8 +15738,9 @@ helper is tested directly at that boundary through ordinary same-module source
 composition. It is not a public test API or a promise that a particular growth
 factor is part of the list's public interface.
 
-Copy and drain use loops with stack usage independent of list length. Only the
-old initialized prefix is transferred. The fresh list remains private until
+Positive-sized copy and drain use loops with stack usage independent of list
+length; zero-sized copy and drain take constant work. Only the old initialized
+prefix is transferred. The fresh list remains private until
 that copy succeeds and the old initialized values have been drained and their
 allocation freed with its original exact byte extent. Publication is last.
 Failed allocation leaves pointer values and the list shape intact, and a retry

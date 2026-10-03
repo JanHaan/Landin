@@ -131,6 +131,42 @@ public transfer: (item: type, source: raw(item), index: usize,
     end if
 end transfer
 
+--  A zero-byte prefix has one logical item value repeated at the same
+--  address. Establish the destination's own initialized witness with a
+--  complete typed store before extending it to the requested count. The
+--  source and destination counters and the destination allocation remain
+--  checked, just as they are for individual transfers.
+public transfer_zero_prefix: (item: type, source: raw(item),
+                              inout target: raw(item), count: usize)
+                             -> none ! uninitialized | raw_full =
+    fail uninitialized when sizeof item <> 0
+    fail uninitialized when count > initialized(source)
+    fail raw_full when initialized(target) <> 0
+    fail raw_full when count > target.capacity_count
+    return when count == 0
+
+    saved: item = source.prefix[0]
+    match target.base
+        no_storage: fail raw_full
+        ptr (base): begin
+            first: ptr mut [1]item = ptr(usize(base))
+            first.val[0] = saved
+            target.prefix = first.val[0..<1]
+        end
+    end match
+    unchecked begin
+        target.prefix = target.prefix[0..<count]
+    end unchecked
+end transfer_zero_prefix
+
+--  With no payload bytes to destroy, shortening this witness discards all
+--  logical items at once. Reject a nonzero-sized item before changing it.
+public drain_zero_prefix: (item: type, inout storage: raw(item))
+                          -> none ! raw_not_empty =
+    fail raw_not_empty when sizeof item <> 0
+    storage.prefix = storage.prefix[0..<0]
+end drain_zero_prefix
+
 public release: (item: type, inout storage: raw(item))
                 -> (value: item from storage) ! raw_empty =
     count: usize = initialized(storage)

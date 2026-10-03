@@ -65,6 +65,19 @@ public main: () -> (code: i32) =
         _ = index
         vec.push(zero_values, zero_state, empty_value) else 0
     end for
+    last_index: usize = 8
+    last_zero: zero_item = vec.get(zero_values, last_index) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    _ = last_zero
+    removed_zero: zero_item = vec.pop(zero_values) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    vec.push(zero_values, zero_state, removed_zero) else 0
     zero_length: usize = vec.length(zero_values)
     zero_capacity: usize = vec.capacity(zero_values)
     vec.release(zero_values, zero_state)
@@ -77,6 +90,32 @@ public main: () -> (code: i32) =
     vec.reserve(maximum_zero, maximum_zero_state, maximum) else 0
     maximum_zero_capacity: usize = vec.capacity(maximum_zero)
     vec.release(maximum_zero, maximum_zero_state)
+
+    --  A refused second zero-byte allocation leaves the first allocation's
+    --  initialized witness available for access and eventual release.
+    mut refused_state := mem.fail_over(base, 0, 1)
+    mut refused_values := vec.new_list(item: zero_item)
+    for index in 0..<8 do
+        _ = index
+        vec.push(refused_values, refused_state, empty_value) else 0
+    end for
+    mut zero_growth_refused: bool = false
+    vec.push(refused_values, refused_state, empty_value) else (problem)
+        _ = problem
+        zero_growth_refused = true
+    end
+    retained_index: usize = 7
+    retained_zero: zero_item = vec.get(refused_values, retained_index)
+        else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    _ = retained_zero
+    refused_length: usize = vec.length(refused_values)
+    refused_capacity: usize = vec.capacity(refused_values)
+    refused_frees_before_release: usize = refused_state.frees
+    vec.release(refused_values, refused_state)
 
     if overflow_refused
       and overflow_state.calls == 0 and overflow_state.frees == 0
@@ -95,6 +134,11 @@ public main: () -> (code: i32) =
       and maximum_zero_state.calls == 1 and maximum_zero_state.frees == 1
       and maximum_zero_state.last_alloc_size == 0
       and maximum_zero_state.last_free_size == 0
+      and zero_growth_refused and refused_length == 8
+      and refused_capacity == 8 and refused_frees_before_release == 0
+      and refused_state.allocations == 1 and refused_state.frees == 1
+      and vec.length(refused_values) == 0
+      and vec.capacity(refused_values) == 0
     then
         code = 42
     else

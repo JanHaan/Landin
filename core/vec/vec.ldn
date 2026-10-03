@@ -23,9 +23,25 @@ public capacity: (item: type, value: list(item)) -> (count: usize) =
     count = mem.capacity(value.values)
 end capacity
 
+copy_zero_prefix: (item: type, source: mem.storage(item),
+                   inout target: mem.storage(item), count: usize)
+                  -> (ok: bool) =
+    mem.transfer_zero_prefix(source, target, count) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = true
+end copy_zero_prefix
+
 copy_prefix: (item: type, source: mem.storage(item),
               inout target: mem.storage(item), count: usize)
              -> (ok: bool) =
+    if sizeof item == 0 then
+        ok = copy_zero_prefix(source, target, count)
+        return
+    end if
+
     mut at: usize = 0
     while at < count do
         admitted: usize = mem.transfer(source, at, target) else (problem)
@@ -39,7 +55,18 @@ copy_prefix: (item: type, source: mem.storage(item),
     ok = true
 end copy_prefix
 
+drain_zero: (item: type, inout value: mem.storage(item)) -> none =
+    mem.drain_zero_prefix(value) else (problem)
+        _ = problem
+    end
+end drain_zero
+
 drain: (item: type, inout value: mem.storage(item)) -> none =
+    if sizeof item == 0 then
+        drain_zero(value)
+        return
+    end if
+
     while mem.initialized(value) > 0 do
         discarded: item = mem.release(value) else (problem)
             --  D151 makes this unreachable after the positive initialized
