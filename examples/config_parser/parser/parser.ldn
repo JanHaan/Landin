@@ -181,22 +181,36 @@ parse_entry: (source: []u8, inout parser: parser_state,
     item = no_entry
 end parse_entry
 
-continue_after_failure:
+recover_entry_failure:
     (problem: entry_failure, source: []u8, inout parser: parser_state,
-     inout logger: any diag.log, escaping inout arena: mem.arena,
-     inout items: vec.list(ptr mut value), nested: bool)
+     inout logger: any diag.log)
     -> none ! mem.out_of_memory | io.io_failed =
     match problem
         too_deep: begin
             try report(logger, parser.look.begins, nested_too_deep[0..<22])
             recover_to_boundary(source, parser)
-            try parse_sequence(source, parser, logger, arena, items, nested)
             return
         end
         mem.out_of_memory: fail mem.out_of_memory
         io.io_failed: fail io.io_failed
     end match
-end continue_after_failure
+end recover_entry_failure
+
+parse_and_append: (source: []u8, inout parser: parser_state,
+                   inout logger: any diag.log,
+                   escaping inout arena: mem.arena,
+                   inout items: vec.list(ptr mut value))
+                  -> none ! mem.out_of_memory | io.io_failed =
+    parsed := parse_entry(source, parser, logger, arena) else (problem)
+        issue: entry_failure = problem
+        try recover_entry_failure(issue, source, parser, logger)
+        return
+    end
+    match parsed
+        no_entry: _ = no_entry
+        ptr (item): try vec.push(items, arena, item)
+    end match
+end parse_and_append
 
 parse_sequence: (source: []u8, inout parser: parser_state,
                  inout logger: any diag.log,
@@ -204,41 +218,32 @@ parse_sequence: (source: []u8, inout parser: parser_state,
                  inout items: vec.list(ptr mut value),
                  nested: bool)
                 -> none ! mem.out_of_memory | io.io_failed =
-    if parser.look.what == lexer.end_of_input then
-        if nested then
-            try report(logger, parser.look.begins,
-                       expected_right_brace[0..<24])
-        end if
-        return
-    end if
-    if parser.look.what == lexer.newline then
-        advance(source, parser)
-        try parse_sequence(source, parser, logger, arena, items, nested)
-        return
-    end if
-    if parser.look.what == lexer.right_brace then
-        if nested then
-            advance(source, parser)
+    loop do
+        if parser.look.what == lexer.end_of_input then
+            if nested then
+                try report(logger, parser.look.begins,
+                           expected_right_brace[0..<24])
+            end if
             return
         end if
-        try report(logger, parser.look.begins, unexpected_right_brace[0..<15])
-        advance(source, parser)
-        recover_to_boundary(source, parser)
-        try parse_sequence(source, parser, logger, arena, items, nested)
-        return
-    end if
+        if parser.look.what == lexer.newline then
+            advance(source, parser)
+            continue
+        end if
+        if parser.look.what == lexer.right_brace then
+            if nested then
+                advance(source, parser)
+                return
+            end if
+            try report(logger, parser.look.begins,
+                       unexpected_right_brace[0..<15])
+            advance(source, parser)
+            recover_to_boundary(source, parser)
+            continue
+        end if
 
-    parsed := parse_entry(source, parser, logger, arena) else (problem)
-        issue: entry_failure = problem
-        try continue_after_failure(issue, source, parser, logger, arena,
-                                   items, nested)
-        return
-    end
-    match parsed
-        no_entry: _ = no_entry
-        ptr (item): try vec.push(items, arena, item)
-    end match
-    try parse_sequence(source, parser, logger, arena, items, nested)
+        try parse_and_append(source, parser, logger, arena, items)
+    end loop
 end parse_sequence
 
 public empty: () -> (result: document) =

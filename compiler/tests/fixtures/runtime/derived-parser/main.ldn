@@ -12,6 +12,8 @@ mut first_memory: [4096]u8 = zeroed
 mut second_memory: [4096]u8 = zeroed
 mut tiny_memory: [1]u8 = zeroed
 mut third_memory: [4096]u8 = zeroed
+mut blank_memory: [1]u8 = zeroed
+mut blank_source: [50000]u8 = zeroed
 
 ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = false
@@ -280,5 +282,26 @@ public main: () -> (code: i32) =
     then
         return
     end if
+    --  Fifty thousand separate newline tokens exhausted an 8 MiB stack
+    --  when the flat sequence walk retained one frame per token.
+    mut at: usize = 0
+    while at < 50000 do
+        blank_source[at] = 10
+        inc at
+    end while
+    mut blank_arena := mem.arena_over(addr blank_memory[0], 1)
+    mut blank_notes := diag.new_log(capacity: 1)
+    mut blank_log: any diag.log = any(addr blank_notes)
+    mut blank_tree := parser.empty()
+    parser.parse_file(blank_source[0..<50000], blank_log,
+                      blank_arena, blank_tree) else (problem)
+        _ = problem
+        return
+    end
+    if parser.length(blank_tree) <> 0 or diag.stored(blank_notes) <> 0
+      or diag.dropped(blank_notes) <> 0 then
+        return
+    end if
+
     code = 42
 end main
