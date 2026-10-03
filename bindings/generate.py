@@ -592,9 +592,15 @@ class Policy:
             data_bytes = path.read_bytes()
         except OSError as error:
             raise BindingError(f"cannot read policy {path}: {error.strerror}") from error
+        def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, value in pairs:
+                require(key not in result, f"policy: duplicate JSON key {key!r}")
+                result[key] = value
+            return result
         try:
             data_text = data_bytes.decode("utf-8")
-            data = json.loads(data_text)
+            data = json.loads(data_text, object_pairs_hook=unique_keys)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise BindingError(f"policy is not valid UTF-8 JSON: {error}") from error
         require(isinstance(data, dict), "policy: top level must be an object")

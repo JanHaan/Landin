@@ -1809,6 +1809,41 @@ int main(void) { return f(36) != 37; }
         for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
             self.assertEqual((output / name).read_text(encoding="utf-8"), "sentinel\n")
 
+    def test_duplicate_policy_keys_are_rejected_before_generation(self) -> None:
+        parent = self.root / "duplicate-keys"
+        selected = self.selection(self.function("hold", parameters={
+            "p": annotation(retention="stored"),
+        }))
+        sysroot, includes, output = self.make_tree(
+            parent, header="void hold(int *p);\n", selected_policy=selected)
+        output.mkdir()
+        sentinel = output / "bindings.ldn"
+        sentinel.write_text("sentinel\n", encoding="utf-8")
+        original = json.dumps(selected)
+        for old, replacement, key in (
+            ('"schema_version": 1', '"schema_version": 1, "schema_version": 1',
+             "schema_version"),
+            ('"target": "x86_64-pc-linux-gnu"',
+             '"target": "x86_64-pc-linux-gnu", "target": "x86_64-pc-linux-gnu"',
+             "target"),
+            ('"direction": "import"', '"direction": "import", "direction": "import"',
+             "direction"),
+            ('"retention": "stored"', '"retention": "stored", "retention": "call"',
+             "retention"),
+        ):
+            with self.subTest(key=key):
+                self.assertIn(old, original)
+                (parent / "policy.json").write_text(
+                    original.replace(old, replacement, 1), encoding="utf-8")
+                process = subprocess.run(
+                    self.command(parent, sysroot, includes, output),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(f"duplicate JSON key '{key}'", process.stderr)
+                self.assertEqual(sentinel.read_text(encoding="utf-8"), "sentinel\n")
+                self.assertEqual(sorted(path.name for path in output.iterdir()),
+                                 ["bindings.ldn"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

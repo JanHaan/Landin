@@ -90,7 +90,8 @@ calling-convention compatibility. `landin/compiler` is implicit and is never imp
 
 ## Policy
 
-A policy is UTF-8 JSON. Unknown and missing keys are errors. The top-level
+A policy is UTF-8 JSON. Duplicate keys at any depth, unknown keys, and missing
+keys are errors. The top-level
 shape is:
 
 ```json
