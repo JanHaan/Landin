@@ -3017,11 +3017,42 @@ package body Landin.Tests.Backend_Suite is
          begin
             Landin.Testing.Check
               (Item,
-               Occurrences (Text, HT & "movabsq $0, %rcx") = 2
-               and then Contains (Text, HT & "rep stosb")
-               and then Contains (Text, HT & "rep movsb"),
-               "clearing and copying the empty field are zero-byte ops");
+               not Contains (Text, HT & "leaq")
+               and then not Contains (Text, HT & "xorl %eax, %eax")
+               and then not Contains (Text, HT & "movabsq $0, %rcx")
+               and then not Contains (Text, HT & "cld")
+               and then not Contains (Text, HT & "rep stosb")
+               and then not Contains (Text, HT & "rep movsb"),
+               "empty field clear and copy emit no transfer setup");
          end;
+      end;
+
+      declare
+         Source_Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Source_Ran : Natural;
+      begin
+         Lower
+           (Source_Work,
+            "f: () -> none =" & LF
+            & "    a: [0]u8 = zeroed" & LF
+            & "    b: [0]u8 = a" & LF
+            & "end f" & LF, Source_Ran);
+         Landin.Testing.Check_Equal
+           (Item, Source_Ran, 5, "whole empty arrays lower");
+         if not Landin.Stages.Failed (Source_Work) then
+            declare
+               Text : constant String := Emitted (Source_Work);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  not Contains (Text, HT & "leaq")
+                  and then not Contains (Text, HT & "cld")
+                  and then not Contains (Text, HT & "rep stosb")
+                  and then not Contains (Text, HT & "rep movsb"),
+                  "whole empty array clear and copy emit no transfer");
+            end;
+         end if;
       end;
    end An_Empty_Array_Slot_Field_Has_Identity_Extent;
 

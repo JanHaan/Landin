@@ -3595,20 +3595,25 @@ package body Landin.Backend.X86_64 is
                        Whole_Clear_Extent
                          (Source, Source_Field, Source_Nested);
                   begin
-                     Storage_Address
-                       (Destination, Destination_Field, "%rdi",
-                        Destination_Case, Destination_Payload_Field,
-                        Destination_Nested);
-                     Storage_Address
-                       (Source, Source_Field, "%rsi",
-                        Nested => Source_Nested);
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Bytes))
-                        & ", %rcx");
-                     Emit ("cld");
-                     Emit ("rep movsb");
+                     --  The places were already evaluated by lowering.
+                     --  An empty transfer needs no endpoint setup or DF
+                     --  change; nonempty string operations still clear DF.
+                     if Bytes > 0 then
+                        Storage_Address
+                          (Destination, Destination_Field, "%rdi",
+                           Destination_Case, Destination_Payload_Field,
+                           Destination_Nested);
+                        Storage_Address
+                          (Source, Source_Field, "%rsi",
+                           Nested => Source_Nested);
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                     end if;
                   end;
 
                when Landin.IR.Copy_Variant =>
@@ -3669,16 +3674,18 @@ package body Landin.Backend.X86_64 is
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Whole_Clear_Extent (Destination, Field, Nested);
                   begin
-                     Storage_Address
-                       (Destination, Field, "%rdi", Nested => Nested);
-                     Emit ("xorl %eax, %eax");
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Bytes))
-                        & ", %rcx");
-                     Emit ("cld");
-                     Emit ("rep stosb");
+                     if Bytes > 0 then
+                        Storage_Address
+                          (Destination, Field, "%rdi", Nested => Nested);
+                        Emit ("xorl %eax, %eax");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep stosb");
+                     end if;
                   end;
 
                when Landin.IR.Load_Variant_Tag =>
