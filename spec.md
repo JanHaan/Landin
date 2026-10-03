@@ -14998,8 +14998,10 @@ one family links together. A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and the checker and the
 target-neutral IR never see a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
-detected by the program; on Linux the executable carries the level in its
-ISA note and the loader refuses it.
+detected by the program; on Linux x86-64 the executable carries the level
+in its ISA note and the loader refuses it. Linux arm64 emits no ISA-level
+note and has no such loader-refusal protection. Selecting a supported level
+for its execution environment remains the caller's responsibility.
 
 **The alternatives:** a target per level, `--target=x86-64-v3`, which
 multiplies every operating system by every level and makes comparing two

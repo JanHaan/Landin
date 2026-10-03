@@ -600,6 +600,27 @@ largest scaling ratio is 2.18. A `linux/arm64` container on the Mac ran the
 corpus, the GDB sessions and the bindings natively before the push, and the
 gate was green on every job on `6750dfcb`.
 
+### R11.25 — Linux arm64 feature-level evidence
+
+Status: planned
+Depends on: R11.20
+
+Add recurring Linux arm64 checks for the baseline `armv8-a` and selected
+`armv8.1-a` levels without reopening the completed target implementation.
+The Darwin level lane does not establish Linux evidence. Linux arm64 emits
+no ISA-level note and has no loader-refusal protection for unsupported
+levels; D255 scopes that guarantee to Linux x86-64.
+
+Exit evidence: default and explicit `--level=armv8-a` builds agree in
+instructions and ABI. `fixed if` observes the documented feature facts at
+each level, including false/true `compiler.feature.lse`; atomic add,
+exchange and compare-exchange use exclusive-monitor loops at baseline and
+LSE instructions at `armv8.1-a`. Assembler controls accept a level-specific
+instruction only at the level that permits it. Run the baseline corpus and
+GDB sessions, and execute the higher-level consumers only on a runner whose
+support for all selected features is confirmed. Missing higher-level runtime
+evidence is unverified, never supplied by baseline or Darwin success.
+
 ### R11.30 — FreeBSD x86-64 and arm64
 
 Status: planned
@@ -649,6 +670,8 @@ derive or refuse as decided.
 
 ### R11 gate
 
+- R11.25 passes recurring Linux arm64 baseline and higher-level feature,
+  instruction-selection, assembler and confirmed-runner execution checks.
 - Linux arm64, FreeBSD x86-64, FreeBSD arm64 and rv64 Linux each run the
   corpus in the gate, with a separate verdict for each architecture.
 - A conversion names its type as written, without an alias.
