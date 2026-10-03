@@ -344,6 +344,8 @@ def main(argv: list[str]) -> int:
         if name not in known:
             parser.error("unknown family: " + name)
     sizes = [size for size in SIZES if size <= arguments.largest]
+    if not sizes:
+        parser.error(f"--largest must be at least {SIZES[0]}")
     families = [(name, build) for name, build in FAMILIES
                 if not arguments.family or name in arguments.family]
 
