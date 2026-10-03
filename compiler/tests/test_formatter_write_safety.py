@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import resource
 import signal
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -55,8 +56,19 @@ class FormatterWriteSafety(unittest.TestCase):
         result = self.fmt(link)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(os.readlink(link), self.source.name)
-        self.assertEqual(self.source.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o640)
         self.assertNotEqual(self.source.read_bytes(), LOOSE)
+
+    def test_replacement_preserves_all_mode_bits(self):
+        for mode in (0o4755, 0o2755, 0o6755, 0o7777):
+            with self.subTest(mode=oct(mode)):
+                self.source.write_bytes(LOOSE)
+                self.source.chmod(mode)
+                self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), mode)
+                result = self.fmt()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), mode)
+                self.assertNotEqual(self.source.read_bytes(), LOOSE)
 
     def test_readonly_and_hardlinked_sources_are_refused(self):
         self.source.chmod(0o444)

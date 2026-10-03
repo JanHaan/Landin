@@ -42,10 +42,8 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     if (fd < 0)
         goto done;
 
-    /* A new inode must retain the source's access bits and group.  If the
-     * host refuses either change, keep the original inode and its bytes. */
-    if (fchown(fd, original.st_uid, original.st_gid) != 0
-        || fchmod(fd, original.st_mode & 07777) != 0)
+    /* If the host refuses the source's owner or group, leave it intact. */
+    if (fchown(fd, original.st_uid, original.st_gid) != 0)
         goto done;
     while (size != 0) {
         ssize_t written = write(fd, data, size);
@@ -56,6 +54,9 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
         data += written;
         size -= (size_t)written;
     }
+    /* Writing can clear setuid and setgid; set the final mode afterward. */
+    if (fchmod(fd, original.st_mode & 07777) != 0)
+        goto done;
     if (fsync(fd) != 0)
         goto done;
     if (close(fd) != 0) {
