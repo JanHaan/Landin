@@ -1270,19 +1270,19 @@ package body Landin.Tests.Checking_Suite is
                "anchor: u32 = 0" & LF
                & "iterable: type = concept (t: type, cur: type, "
                & "item_type: type)" & LF
-               & "    first: (s: t) -> (c: cur)" & LF
-               & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
-               & "    item: (s: t, c: cur) -> (v: item_type)" & LF
-               & "    next: (s: t, c: cur) -> (c2: cur)" & LF
+               & "    first: (s: ptr t) -> (c: cur)" & LF
+               & "    at_end: (s: ptr t, c: cur) -> (yes: bool)" & LF
+               & "    item: (s: ptr t, c: cur) -> (v: item_type)" & LF
+               & "    next: (s: ptr t, c: cur) -> (c2: cur)" & LF
                & "end iterable" & LF
                & "bag: type (t: type) = struct value: t end bag" & LF
-               & "first: (t: type, s: bag(t)) -> (c: usize) = 0 end "
+               & "first: (t: type, s: ptr bag(t)) -> (c: usize) = 0 end "
                & "first" & LF
-               & "at_end: (t: type, s: bag(t), c: usize) -> (yes: bool) "
+               & "at_end: (t: type, s: ptr bag(t), c: usize) -> (yes: bool) "
                & "= c == 1 end at_end" & LF
-               & "bag_item: (t: type, s: bag(t), c: usize) -> (v: t) = "
-               & "s.value end bag_item" & LF
-               & "next: (t: type, s: bag(t), c: usize) -> (c2: usize) = "
+               & "bag_item: (t: type, s: ptr bag(t), c: usize) -> (v: t) = "
+               & "s.val.value end bag_item" & LF
+               & "next: (t: type, s: ptr bag(t), c: usize) -> (c2: usize) = "
                & "c + 1 end next" & LF
                & "(t: type) bag(t) is iterable (cur: usize, item_type: "
                & "t, first: first," & LF
@@ -1342,18 +1342,19 @@ package body Landin.Tests.Checking_Suite is
             "anchor: u32 = 0" & LF
             & "iterable: type = concept (t: type, cur: type, "
             & "item_type: type)" & LF
-            & "    first: (s: t) -> (c: cur)" & LF
-            & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
-            & "    item: (s: t, c: cur) -> (v: item_type)" & LF
-            & "    next: (s: t, c: cur) -> (c2: cur)" & LF
+            & "    first: (s: ptr t) -> (c: cur)" & LF
+            & "    at_end: (s: ptr t, c: cur) -> (yes: bool)" & LF
+            & "    item: (s: ptr t, c: cur) -> (v: item_type)" & LF
+            & "    next: (s: ptr t, c: cur) -> (c2: cur)" & LF
             & "end iterable" & LF
             & "bag: type = struct value: u32 end bag" & LF
-            & "first: (s: bag) -> (c: usize) = 0 end first" & LF
-            & "at_end: (s: bag, c: usize) -> (yes: bool) = c == 1 end "
+            & "first: (s: ptr bag) -> (c: usize) = 0 end first" & LF
+            & "at_end: (s: ptr bag, c: usize) -> (yes: bool) = c == 1 end "
             & "at_end" & LF
-            & "bag_item: (s: bag, c: usize) -> (v: u32) = s.value end "
+            & "bag_item: (s: ptr bag, c: usize) -> (v: u32) = s.val.value end "
             & "bag_item" & LF
-            & "next: (s: bag, c: usize) -> (c2: usize) = c + 1 end next" & LF
+            & "next: (s: ptr bag, c: usize) -> (c2: usize) = c + 1 "
+            & "end next" & LF
             & "bag is iterable (cur: usize, item_type: u32, first: first," & LF
             & "                 at_end: at_end, item: bag_item, next: "
             & "next)" & LF
