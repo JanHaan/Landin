@@ -656,11 +656,31 @@ package body Landin.Backend.Arm64 is
       end Reserve;
 
       --  x9 destination, x10 source; private scratch leaves argument banks
-      --  intact while copying by-value parameters at routine entry.
+      --  intact while copying by-value parameters at routine entry.  The
+      --  forward direction also preserves the existing exact self-copy.
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Bytes >= 8 then
+            --  A selected field or runtime address need not be word-aligned.
+            --  Keep its byte path rather than assuming alignment from size.
+            Emit ("orr x11, x9, x10");
+            Emit ("tst x11, #7");
+            Emit ("b.ne " & Loop_Label & "_bytes");
+            Immediate ("x11", Pattern (Bytes / 8));
+            Put (Loop_Label & "_words:");
+            Emit ("ldr x12, [x10], #8");
+            Emit ("str x12, [x9], #8");
+            Emit ("subs x11, x11, #1");
+            Emit ("b.ne " & Loop_Label & "_words");
+            Immediate ("x11", Pattern (Bytes mod 8));
+            Emit ("b " & Loop_Label & "_tail");
+            Put (Loop_Label & "_bytes:");
+         end if;
          Immediate ("x11", Pattern (Bytes));
+         if Bytes >= 8 then
+            Put (Loop_Label & "_tail:");
+         end if;
          Emit ("cbz x11, " & Loop_Label & "_end");
          Put (Loop_Label & ":");
          Emit ("ldrb w12, [x10], #1");
@@ -673,7 +693,22 @@ package body Landin.Backend.Arm64 is
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Bytes >= 8 then
+            Emit ("tst x9, #7");
+            Emit ("b.ne " & Loop_Label & "_bytes");
+            Immediate ("x11", Pattern (Bytes / 8));
+            Put (Loop_Label & "_words:");
+            Emit ("str xzr, [x9], #8");
+            Emit ("subs x11, x11, #1");
+            Emit ("b.ne " & Loop_Label & "_words");
+            Immediate ("x11", Pattern (Bytes mod 8));
+            Emit ("b " & Loop_Label & "_tail");
+            Put (Loop_Label & "_bytes:");
+         end if;
          Immediate ("x11", Pattern (Bytes));
+         if Bytes >= 8 then
+            Put (Loop_Label & "_tail:");
+         end if;
          Emit ("cbz x11, " & Loop_Label & "_end");
          Put (Loop_Label & ":");
          Emit ("strb wzr, [x9], #1");

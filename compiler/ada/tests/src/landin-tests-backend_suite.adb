@@ -7316,8 +7316,69 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Calls_Restore_Only_Reserved_Stack;
 
+   procedure Arm64_Bulk_Array_Transfers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Bulk_Array_Transfers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "public main: () -> (code: i32) =" & LF
+         & "    mut source: [10]u8 = zeroed" & LF
+         & "    mut destination: [10]u8 = zeroed" & LF
+         & "    destination = source" & LF
+         & "    destination = destination" & LF
+         & "    mut large: [2048]u64 = zeroed" & LF
+         & "    code = i32(destination[0]) + i32(large[0])" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "array source lowers");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "array source is legal IR");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "orr x11, x9, x10")
+              and then Contains (Text, "tst x11, #7")
+              and then Contains (Text, "ldr x12, [x10], #8")
+              and then Contains (Text, "str x12, [x9], #8"),
+            "aligned copies use a word loop after checking both addresses");
+         Landin.Testing.Check
+           (Item, Contains (Text, "ldrb w12, [x10], #1")
+              and then Contains (Text, "strb w12, [x9], #1")
+              and then Contains (Text, "movz x11, #2"),
+            "copies retain the unaligned path and two-byte tail");
+         Landin.Testing.Check
+           (Item, Contains (Text, "tst x9, #7")
+              and then Contains (Text, "str xzr, [x9], #8")
+              and then Contains (Text, "strb wzr, [x9], #1")
+              and then Contains (Text, "movz x11, #2048"),
+            "large clears use word counts and retain byte fallback");
+      end;
+   end Arm64_Bulk_Array_Transfers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "arm64 bulk array transfers", Arm64_Bulk_Array_Transfers'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 calls restore only reserved stack", Arm64_Calls_Restore_Only_Reserved_Stack'Access);
       Landin.Testing.Register
