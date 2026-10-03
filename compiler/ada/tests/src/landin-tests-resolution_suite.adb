@@ -693,7 +693,7 @@ package body Landin.Tests.Resolution_Suite is
          & "    _ = box(value: source)" & LF
          & "    _ = leaf(value: source)" & LF
          & "end run" & LF
-         & "apply: (t: type, fixed count: usize, first: t, value: t)"
+         & "apply: (t: type, first: t, fixed count: usize, value: t)"
          & " -> none =" & LF
          & "end apply" & LF);
       Landin.Stages.Append (Order, Frontend'Access);

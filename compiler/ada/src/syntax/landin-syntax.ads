@@ -1599,6 +1599,10 @@ private
         Landin.Tokens.Plain_Assignment;
       First_Slot : Natural := 0;
       Slots      : Natural := 0;
+      --  Mixed routine signatures use one filtered index in Tree.  An all
+      --  runtime or all generic run is already directly indexed by Slot.
+      Signature_First : Natural := 0;
+      Runtime_Count   : Natural := 0;
       Sound      : Boolean := True;
       Exported   : Boolean := False;
       External   : Boolean := False;
@@ -1637,6 +1641,7 @@ private
       Serial : Landin.Serials.Serial := Landin.Serials.Next;
       Items  : Node_Vectors.Vector;
       Links  : Slot_Vectors.Vector;
+      Signature_Links : Slot_Vectors.Vector;
    end record;
 
 end Landin.Syntax;

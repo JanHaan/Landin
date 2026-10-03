@@ -959,15 +959,53 @@ package body Landin.Syntax.Parser is
                Total : Landin.Source.Span :=
                  Join (Join (Extent, At_Token), Extent_Of (Children));
                Sound : Boolean := not Is_Error (Of_Kind);
+               Runtime_Count : Natural := 0;
+               Formal_Count : Natural := 0;
+               Signature_First : Natural := 0;
             begin
                for Item of Children loop
                   if Item /= No_Node then
                      Sound :=
                        Sound
                        and then Result.Items (Positive (Item)).Sound;
+                     if Of_Kind in Function_Declaration
+                         | Anonymous_Function | Function_Type | Concept_Entry
+                     then
+                        case Result.Items (Positive (Item)).Kind is
+                           when Parameter =>
+                              Runtime_Count := Runtime_Count + 1;
+                           when Type_Formal | Fixed_Formal =>
+                              Formal_Count := Formal_Count + 1;
+                           when others =>
+                              null;
+                        end case;
+                     end if;
                   end if;
                   Result.Links.Append (Item);
                end loop;
+
+               if Runtime_Count > 0 and then Formal_Count > 0 then
+                  --  Keep the source-ordered run intact.  Only mixed
+                  --  signatures need a second, filtered index.
+                  Signature_First :=
+                    Natural (Result.Signature_Links.Length) + 1;
+                  for Child of Children loop
+                     if Child /= No_Node
+                       and then Result.Items (Positive (Child)).Kind
+                         = Parameter
+                     then
+                        Result.Signature_Links.Append (Child);
+                     end if;
+                  end loop;
+                  for Child of Children loop
+                     if Child /= No_Node
+                       and then Result.Items (Positive (Child)).Kind
+                         in Type_Formal | Fixed_Formal
+                     then
+                        Result.Signature_Links.Append (Child);
+                     end if;
+                  end loop;
+               end if;
 
                if Recovers /= No_Node then
                   Sound := Sound
@@ -988,6 +1026,8 @@ package body Landin.Syntax.Parser is
                    Assignment_Op => Assignment_Op,
                    First_Slot => Result.Links.Last_Index - Children'Length,
                    Slots      => Children'Length,
+                   Signature_First => Signature_First,
+                   Runtime_Count   => Runtime_Count,
                    Sound      => Sound,
                    Exported   => Exported,
                    External   => External,
