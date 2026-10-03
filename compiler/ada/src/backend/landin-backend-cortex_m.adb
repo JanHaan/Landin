@@ -1233,7 +1233,25 @@ package body Landin.Backend.Cortex_M is
             end if;
             for Index in Text'Range loop
                if Text (Index) = LF then
-                  Lines.Append (Index);
+                  declare
+                     Line : constant String :=
+                       Text (Line_First .. Index - 1);
+                     HT : constant Character := Character'Val (9);
+                  begin
+                     --  Debug directives and labels occupy no code bytes.
+                     --  Unknown source sites also emit an empty debug line.
+                     --  Their presence must not change branch selection.
+                     if Line'Length /= 0
+                       and then Ada.Strings.Fixed.Index
+                         (Line, HT & ".loc ") /= Line'First
+                       and then Ada.Strings.Fixed.Index
+                         (Line, HT & ".cfi_") /= Line'First
+                       and then Ada.Strings.Fixed.Index
+                         (Line, Debug_Prefix & "debug_") /= Line'First
+                     then
+                        Lines.Append (Index);
+                     end if;
+                  end;
                   if Index > Line_First
                     and then Text (Index - 1) = ':'
                     and then Line_First > Text'First

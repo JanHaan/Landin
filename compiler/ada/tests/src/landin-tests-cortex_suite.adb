@@ -842,6 +842,89 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Local_Branches;
 
+   procedure Debug_Branches (Item : in out Landin.Testing.Context);
+
+   procedure Debug_Branches (Item : in out Landin.Testing.Context) is
+      HT : constant Character := Character'Val (9);
+
+      function Edges (Assembly : String) return String;
+
+      function Edges (Assembly : String) return String is
+         Result : U.Unbounded_String;
+         First : Positive := Assembly'First;
+      begin
+         for Last in Assembly'Range loop
+            if Assembly (Last) = LF then
+               declare
+                  Line : constant String := Assembly (First .. Last);
+               begin
+                  if Ada.Strings.Fixed.Index (Line, HT & "b") = First
+                    or else Ada.Strings.Fixed.Index
+                      (Line, HT & "ldr r7, ") = First
+                  then
+                     U.Append (Result, Line);
+                  end if;
+               end;
+               First := Last + 1;
+            end if;
+         end loop;
+         return U.To_String (Result);
+      end Edges;
+   begin
+      --  Vary a checked conversion around the conservative branch bound.
+      --  Source locations must not turn a near trap edge into a long jump.
+      for Size in 1 .. 8 loop
+         declare
+            Source : U.Unbounded_String := U.To_Unbounded_String
+              ("main: (x: u32) -> (r: u32) = r = u32(u8(x)) ");
+            Plain : U.Unbounded_String;
+         begin
+            for Index in 1 .. Size loop
+               U.Append (Source, "r = x ");
+            end loop;
+            U.Append (Source, "end main");
+            for Debug in Boolean loop
+               declare
+                  Host : Landin.Testing.Fakes.Fake_Filesystem;
+                  Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                  Args : Landin.Platform.Path_List;
+               begin
+                  Host.Add_File ("p.ldn", U.To_String (Source));
+                  Args.Append ("--target=cortex-m0");
+                  Args.Append ("--optimize=none");
+                  Args.Append ("--specialize=off");
+                  Args.Append (if Debug then "--debug=lines"
+                               else "--debug=none");
+                  Args.Append ("--emit=asm");
+                  Args.Append ("-o");
+                  Args.Append ("p.s");
+                  Args.Append ("p.ldn");
+                  declare
+                     Result : constant Landin.Driver.Outcome :=
+                       Landin.Driver.Execute (Args, Host, Tools);
+                  begin
+                     Landin.Testing.Check_Equal
+                       (Item, Result.Status, Landin.Driver.Status_Success,
+                        U.To_String (Result.Report));
+                     if Result.Status = Landin.Driver.Status_Success then
+                        if Debug then
+                           Landin.Testing.Check_Equal
+                             (Item, Edges (Host.Written ("p.s")),
+                              U.To_String (Plain),
+                              "debugging preserves branch choices"
+                              & Size'Image);
+                        else
+                           Plain := U.To_Unbounded_String
+                             (Edges (Host.Written ("p.s")));
+                        end if;
+                     end if;
+                  end;
+               end;
+            end loop;
+         end;
+      end loop;
+   end Debug_Branches;
+
    procedure Branch_Rich_Cleanup (Item : in out Landin.Testing.Context);
 
    procedure Branch_Rich_Cleanup (Item : in out Landin.Testing.Context) is
@@ -1644,6 +1727,9 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "local branches", Local_Branches'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "debug branch transparency",
+         Debug_Branches'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "branch-rich cleanup",
          Branch_Rich_Cleanup'Access);
