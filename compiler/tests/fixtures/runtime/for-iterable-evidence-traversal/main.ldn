@@ -106,10 +106,13 @@ mut any_items: usize = 0
 mut any_nexts: usize = 0
 mut cleanups: usize = 0
 
-make_bag: () -> (value: bag) =
+-- Keep the large source in module storage so its retained loop copy fits
+-- the Cortex stack without overlapping a second by-value result frame.
+bags: [1]bag = [(low: 10, count: 3, padding: zeroed)]
+source_index: () -> (index: usize) =
     inc bag_sources
-    value = (low: 10, count: 3, padding: zeroed)
-end make_bag
+    index = 0
+end source_index
 
 bag_first: (s: ptr bag) -> (c: cursor) =
     inc bag_firsts
@@ -172,7 +175,7 @@ end cleaned
 public main: () -> (code: i32) =
     mut index_sum: usize = 0
     mut picked: token = (value: 0)
-    for item, index in make_bag() do
+    for item, index in bags[source_index()] do
         defer cleaned()
         index_sum = index_sum + index
         continue when index == 0
