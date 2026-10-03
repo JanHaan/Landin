@@ -12,6 +12,7 @@
 
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 package Landin.Platform is
 
@@ -61,6 +62,18 @@ package Landin.Platform is
    --  only meaningful within one host and one stable namespace.
    function Existing_File_Key (Host : Filesystem; Path : String)
      return String is abstract;
+
+   --  Snapshot an existing file's identity before a tool can rename it.
+   --  An invalid identity never matches. Native hosts use device and inode;
+   --  this detects the old output even after its backup name disappears.
+   type File_Identity is record
+      Device : Interfaces.Unsigned_64 := 0;
+      Inode  : Interfaces.Unsigned_64 := 0;
+      Valid  : Boolean := False;
+   end record;
+
+   function Identity_Of
+     (Host : Filesystem; Path : String) return File_Identity is abstract;
 
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;

@@ -5,6 +5,7 @@ package body Landin.Testing.Fakes is
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
    use type Landin.Platform.Termination;
+   use type Interfaces.Unsigned_64;
 
    overriding procedure Finalize (Owner : in out Store_Owner) is
       procedure Free is new Ada.Unchecked_Deallocation (Store, Store_Access);
@@ -67,11 +68,15 @@ package body Landin.Testing.Fakes is
       Kind : Entry_Kind)
    is
       Existing : constant Natural := Find (Host, Path);
-      Item     : constant File_Entry :=
+      Item     : File_Entry :=
         (Path    => Unbounded.To_Unbounded_String (Path),
          Content => Unbounded.To_Unbounded_String (Text),
-         Kind    => Kind);
+         Kind    => Kind,
+         Identity => 0);
    begin
+      Item.Identity := Host.Writes.Data.Next_Identity;
+      Host.Writes.Data.Next_Identity :=
+        Host.Writes.Data.Next_Identity + 1;
       if Existing = 0 then
          Host.Writes.Data.Files.Append (Item);
       else
@@ -151,6 +156,23 @@ package body Landin.Testing.Fakes is
       --  Declared alias pairs do not provide a complete equivalence class.
       return "";
    end Existing_File_Key;
+
+   overriding function Identity_Of
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity
+   is
+      Index : constant Natural := Find (Host, Path);
+   begin
+      if Index = 0 then
+         return (others => <>);
+      end if;
+      return (Device => 1,
+              Inode => Host.Writes.Data.Files (Index).Identity,
+              Valid => True);
+   end Identity_Of;
+
+   function Output_Locked (Host : Fake_Filesystem) return Boolean
+     is (Host.Writes.Data.Output_Is_Locked);
 
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
@@ -236,11 +258,15 @@ package body Landin.Testing.Fakes is
       Status  : out Landin.Platform.Write_Status)
    is
       Existing : constant Natural := Find (Host, Path);
-      Entry_Value : constant File_Entry :=
+      Entry_Value : File_Entry :=
         (Path    => Unbounded.To_Unbounded_String (Path),
          Content => Unbounded.To_Unbounded_String (Content),
-         Kind    => A_File);
+         Kind    => A_File,
+         Identity => 0);
    begin
+      Entry_Value.Identity := Host.Writes.Data.Next_Identity;
+      Host.Writes.Data.Next_Identity :=
+        Host.Writes.Data.Next_Identity + 1;
       Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
       if Host.Writes.Data.Refuses_Write
         or else (Existing /= 0
@@ -333,17 +359,22 @@ package body Landin.Testing.Fakes is
    overriding procedure Lock_Output
      (Host : Fake_Filesystem; Path : String; Handle : out Integer)
    is
-      pragma Unreferenced (Host, Path);
+      pragma Unreferenced (Path);
    begin
-      Handle := 0;
+      if Host.Writes.Data.Output_Is_Locked then
+         Handle := -1;
+      else
+         Host.Writes.Data.Output_Is_Locked := True;
+         Handle := 0;
+      end if;
    end Lock_Output;
 
    overriding procedure Unlock_Output
      (Host : Fake_Filesystem; Handle : Integer)
    is
-      pragma Unreferenced (Host, Handle);
+      pragma Unreferenced (Handle);
    begin
-      null;
+      Host.Writes.Data.Output_Is_Locked := False;
    end Unlock_Output;
 
    ---------------------------------------------------------------------
@@ -578,7 +609,7 @@ package body Landin.Testing.Fakes is
             Arguments => Arguments,
             Capture   => Capture));
       if Host.State.Data.Output_Store /= null then
-         if Host.State.Data.Produces_Output
+         if Host.State.Data.Moves_Backup_Back
            and then Result.Ended = Landin.Platform.Exited
            and then Result.Exit_Code = 0
          then
@@ -587,11 +618,40 @@ package body Landin.Testing.Fakes is
                  Host.State.Data.Output_Store;
                Path : constant String :=
                  Unbounded.To_String (Host.State.Data.Output_Path);
-               Item : constant File_Entry :=
+            begin
+               for Index in 1 .. Natural (Store_Value.Files.Length) loop
+                  if Unbounded.To_String
+                    (Store_Value.Files.Element (Index).Path) =
+                    Path & ".landin-backup-1"
+                  then
+                     declare
+                        Item : File_Entry :=
+                          Store_Value.Files.Element (Index);
+                     begin
+                        Item.Path := Unbounded.To_Unbounded_String (Path);
+                        Store_Value.Files.Replace_Element (Index, Item);
+                     end;
+                     exit;
+                  end if;
+               end loop;
+            end;
+         elsif Host.State.Data.Produces_Output
+           and then Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 0
+         then
+            declare
+               Store_Value : constant Store_Access :=
+                 Host.State.Data.Output_Store;
+               Path : constant String :=
+                 Unbounded.To_String (Host.State.Data.Output_Path);
+               Item : File_Entry :=
                  (Unbounded.To_Unbounded_String (Path),
-                  Unbounded.To_Unbounded_String ("fake executable"), A_File);
+                  Unbounded.To_Unbounded_String ("fake executable"),
+                  A_File, 0);
                Found : Natural := 0;
             begin
+               Item.Identity := Store_Value.Next_Identity;
+               Store_Value.Next_Identity := Store_Value.Next_Identity + 1;
                for Index in 1 .. Natural (Store_Value.Files.Length) loop
                   if Unbounded.To_String
                     (Store_Value.Files.Element (Index).Path) = Path
@@ -643,6 +703,11 @@ package body Landin.Testing.Fakes is
    begin
       Host.State.Data.Produces_Output := Produced;
    end Set_Output_Produced;
+
+   procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner) is
+   begin
+      Host.State.Data.Moves_Backup_Back := True;
+   end Set_Move_Backup_Back;
 
    overriding function Output_Produced
      (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;

@@ -2,6 +2,7 @@ with Ada.Directories;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces.C;
+with Interfaces;
 with System;
 
 package body Landin.Platform.Native is
@@ -72,6 +73,35 @@ package body Landin.Platform.Native is
       end if;
       return Interfaces.C.To_Ada (Buffer);
    end Existing_File_Key;
+
+   overriding function Identity_Of
+     (Host : Native_Filesystem; Path : String) return File_Identity
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Get_Identity
+        (Name : Interfaces.C.char_array;
+         Device, Inode : access Interfaces.Unsigned_64)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_file_identity";
+      Result : File_Identity;
+      Device : aliased Interfaces.Unsigned_64;
+      Inode : aliased Interfaces.Unsigned_64;
+   begin
+      if Path = "" or else
+        (for some Byte of Path => Byte = Character'Val (0))
+      then
+         return Result;
+      end if;
+      Result.Valid := Get_Identity
+        (Interfaces.C.To_C (Path), Device'Access, Inode'Access) = 1;
+      if Result.Valid then
+         Result.Device := Device;
+         Result.Inode := Inode;
+      end if;
+      return Result;
+   end Identity_Of;
 
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean

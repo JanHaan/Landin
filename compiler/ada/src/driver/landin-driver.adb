@@ -59,6 +59,7 @@ package body Landin.Driver is
    use type Landin.Platform.Move_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
+   use type Landin.Platform.File_Identity;
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Targets.Capabilities.Debug_Format;
 
@@ -1474,6 +1475,7 @@ package body Landin.Driver is
                Libraries : Landin.Platform.Path_List;
                Libraries_Ready : Boolean;
                Backup : Unbounded.Unbounded_String;
+               Prior_Identity : Landin.Platform.File_Identity;
                Prepared : Boolean := False;
                Removed : Landin.Platform.Remove_Status;
                Moved : Landin.Platform.Move_Status;
@@ -1494,6 +1496,14 @@ package body Landin.Driver is
                procedure Restore_Output is
                begin
                   if not Prepared then
+                     return;
+                  end if;
+                  if Unbounded.Length (Backup) > 0
+                    and then not Host.Exists (Unbounded.To_String (Backup))
+                    and then Host.Identity_Of (Target_Path) = Prior_Identity
+                  then
+                     --  The tool moved the old inode back itself.
+                     Prepared := False;
                      return;
                   end if;
                   Host.Remove_File (Target_Path, Removed);
@@ -1590,6 +1600,15 @@ package body Landin.Driver is
                   --  invocation. Keep the old file aside until that is
                   --  established, even when the new bytes are identical.
                   if Host.Exists (Target_Path) then
+                     Prior_Identity := Host.Identity_Of (Target_Path);
+                     if not Prior_Identity.Valid then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot identify prior executable: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
                      for Index in 1 .. 100 loop
                         declare
                            Candidate : constant String := Target_Path
@@ -1685,6 +1704,7 @@ package body Landin.Driver is
                               & Why);
                         end if;
                      end;
+                     Release_Lock;
                      return;
                   when others =>
                      Restore_Output;
@@ -1716,8 +1736,10 @@ package body Landin.Driver is
                      & " at " & Target_Path & LF
                      & Unbounded.To_String (Ran.Output));
                elsif Unbounded.Length (Backup) > 0
-                 and then Host.Same_File
-                   (Target_Path, Unbounded.To_String (Backup))
+                 and then
+                   (Host.Same_File
+                      (Target_Path, Unbounded.To_String (Backup))
+                    or else Host.Identity_Of (Target_Path) = Prior_Identity)
                then
                   Restore_Output;
                   Note_Failure

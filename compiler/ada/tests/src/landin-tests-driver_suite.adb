@@ -1909,15 +1909,20 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Contains (Report, "install a toolchain") = Missing
                   and then (Missing or else Contains (Report, Why)),
                   "only a missing tool asks the user to install one");
+               Landin.Testing.Check
+                 (Item, not Host.Output_Locked,
+                  "adapter failure releases the output directory lock");
             end;
             declare
-               Outcome : Landin.Platform.Tool_Result;
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (Both ("main.ldn", "--emit=exe"), Host, Tools);
             begin
-               Tools.Run ("fake", Landin.Platform.No_Arguments, Outcome);
                Landin.Testing.Check
-                 (Item, Outcome.Ended = Landin.Platform.Exited
-                  and then Outcome.Exit_Code = 0,
-                  "injected external failures apply to one run only");
+                 (Item, Result.Status = Landin.Driver.Status_Success
+                  and then not Host.Output_Locked,
+                  "a second invocation in this process acquires and releases"
+                  & " the same directory lock");
             end;
          end;
       end loop;
@@ -1958,7 +1963,7 @@ package body Landin.Tests.Driver_Suite is
    procedure Executable_Output_Belongs_To_This_Run
      (Item : in out Landin.Testing.Context)
    is
-      type Scenario is (Missing, Stale, Identical, Failed);
+      type Scenario is (Missing, Stale, Identical, Failed, Moved_Back);
    begin
       for Case_Kind in Scenario loop
          declare
@@ -1973,6 +1978,9 @@ package body Landin.Tests.Driver_Suite is
             end if;
             Tools.Set_Output_Produced
               (Case_Kind = Identical);
+            if Case_Kind = Moved_Back then
+               Tools.Set_Move_Backup_Back;
+            end if;
             if Case_Kind = Failed then
                Tools.Set_Result (1, "link refused");
             end if;
@@ -1998,6 +2006,15 @@ package body Landin.Tests.Driver_Suite is
                      and then Contains (Report, "produced no executable")
                      and then Contains (Report, "program"),
                      "a zero-exit omission names the missing output");
+               end if;
+               if Case_Kind = Moved_Back then
+                  Landin.Testing.Check
+                    (Item, Contains (Report, "L0501")
+                     and then Contains (Report, "aliasing its prior"),
+                     "moving the backup back does not count as production");
+                  Landin.Testing.Check
+                    (Item, not Host.Exists ("program.landin-backup-1"),
+                     "the moved backup name is absent");
                end if;
                Landin.Testing.Check_Equal
                  (Item, Host.Written ("program"),

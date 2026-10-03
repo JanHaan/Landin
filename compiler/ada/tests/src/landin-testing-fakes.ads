@@ -8,6 +8,7 @@ with Ada.Containers.Vectors;
 with Ada.Exceptions;
 with Ada.Finalization;
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 with Landin.Platform;
 
@@ -49,6 +50,12 @@ package Landin.Testing.Fakes is
 
    overriding function Existing_File_Key
      (Host : Fake_Filesystem; Path : String) return String;
+
+   overriding function Identity_Of
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity;
+
+   function Output_Locked (Host : Fake_Filesystem) return Boolean;
 
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
@@ -183,6 +190,9 @@ package Landin.Testing.Fakes is
    procedure Set_Output_Produced
      (Host : in out Fake_Tool_Runner; Produced : Boolean);
 
+   --  Simulate a zero-exit tool moving the reserved old output back.
+   procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner);
+
    overriding function Output_Produced
      (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
       Path : String) return Boolean;
@@ -247,6 +257,7 @@ private
       Path    : Unbounded.Unbounded_String;
       Content : Unbounded.Unbounded_String;
       Kind    : Entry_Kind := A_File;
+      Identity : Interfaces.Unsigned_64 := 0;
    end record;
 
    package File_Vectors is new Ada.Containers.Vectors
@@ -275,6 +286,9 @@ private
       Refuses_Removal : Boolean := False;
       Write_Attempts : Natural := 0;
       List_Calls     : List_Call_Vectors.Vector;
+
+      Next_Identity : Interfaces.Unsigned_64 := 1;
+      Output_Is_Locked : Boolean := False;
    end record;
 
    type Store_Access is access Store;
@@ -309,6 +323,7 @@ private
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
       Produces_Output : Boolean := True;
+      Moves_Backup_Back : Boolean := False;
       Output_Store : Store_Access := null;
       Output_Path : Unbounded.Unbounded_String;
       Script      : Result_Vectors.Vector;

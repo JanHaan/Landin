@@ -17,6 +17,8 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
+
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
@@ -53,6 +55,16 @@ int landin_directory_access_denied(const char *path)
     }
     denied = errno == EACCES || errno == EPERM;
     return denied;
+}
+
+int landin_file_identity(const char *path, uint64_t *device, uint64_t *inode)
+{
+    struct stat object;
+    if (stat(path, &object) != 0)
+        return 0;
+    *device = (uint64_t)object.st_dev;
+    *inode = (uint64_t)object.st_ino;
+    return 1;
 }
 
 /* A directory lock has no replaceable lock-file inode. All cooperating

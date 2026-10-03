@@ -20,6 +20,9 @@ package Landin.Platform.Native is
    overriding function Existing_File_Key
      (Host : Native_Filesystem; Path : String) return String;
 
+   overriding function Identity_Of
+     (Host : Native_Filesystem; Path : String) return File_Identity;
+
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean;
 
