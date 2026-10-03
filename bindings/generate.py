@@ -940,8 +940,14 @@ class ClangDriver:
                 f"{code} * __builtin_types_compatible_p({c_name}, {candidate})"
                 for code, candidate in enumerate(candidates, 1))
             queries.append(f"enum {{ {prefix}type_{index} = {expression} }};")
-        for offset, insertion in sorted(edits, reverse=True):
-            source = source[:offset] + insertion + source[offset:]
+        if edits:
+            pieces: list[bytes] = []
+            end = len(source)
+            for offset, insertion in sorted(edits, reverse=True):
+                pieces.extend((source[offset:end], insertion))
+                end = offset
+            pieces.append(source[:end])
+            source = b"".join(reversed(pieces))
         probe = translation.with_name("enum-probe.i")
         probe.write_bytes(source + b"\n" + "\n".join(queries).encode("utf-8") + b"\n")
         queried = ASTModel(self.parse_ast(probe))
