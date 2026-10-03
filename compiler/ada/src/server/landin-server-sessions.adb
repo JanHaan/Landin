@@ -800,17 +800,25 @@ package body Landin.Server.Sessions is
                            Earlier : constant String :=
                              Published.Element (Key);
                            First   : Positive := Earlier'First;
+                           Cleared_URI : Boolean := False;
                         begin
                            for Index in Earlier'Range loop
                               if Earlier (Index) = ASCII.LF then
-                                 Clear_Unless_Shared
-                                   (Key, Earlier (First .. Index - 1),
-                                    (if Earlier (First .. Index - 1)
-                                          = Closing_Path
-                                     then URI else ""));
+                                 if Earlier (First .. Index - 1)
+                                   = Closing_Path
+                                 then
+                                    Send (Landin.Server.Answers.Cleared (URI));
+                                    Cleared_URI := True;
+                                 else
+                                    Clear_Unless_Shared
+                                      (Key, Earlier (First .. Index - 1));
+                                 end if;
                                  First := Index + 1;
                               end if;
                            end loop;
+                           if not Cleared_URI then
+                              Send (Landin.Server.Answers.Cleared (URI));
+                           end if;
                         end;
                         Published.Delete (Key);
                         Missing.Exclude (Key);
