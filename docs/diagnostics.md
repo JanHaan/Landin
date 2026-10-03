@@ -585,8 +585,20 @@ end node
 
 ### L0314
 
-A reference is kept past the storage it points into [0770] [0780]: the address
-of a local returned, or stored where the local cannot outlive it.
+Retaining a reference requires both storage that remains live and permission
+from its origin [0770] [0780]. A reference into this function's frame cannot
+be returned, passed to a retaining (`escaping`) parameter, or stored outside
+the frame. Move the referenced value to storage that actually outlives the
+retention, or stop retaining the reference. Declaring a parameter `escaping`
+does not extend the lifetime of frame storage.
+
+Parameters are non-escaping by default. A reference derived from one cannot
+be passed to a retaining (`escaping`) call or stored in another origin, even
+if the referenced storage will remain live. If that retention is intended,
+declare the source parameter `escaping` and make its callers satisfy that
+contract. Otherwise, keep the use non-retaining or update storage within the
+same origin. Keeping the storage alive longer alone does not grant retention
+permission.
 
 ```landin
 bad: () -> (pointer: ptr u32) =

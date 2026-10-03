@@ -306,9 +306,25 @@ package body Landin.Diagnostics.Explanations is
                "A struct holds itself by value, so its layout could neve"
                & "r be finite (D137). Hold it through a pointer.",
             when Catalogue.Reference_Escapes =>
-               "A reference is kept past the storage it points into [077"
-               & "0] [0780]: the address of a local returned, or stored wh"
-               & "ere the local cannot outlive it.",
+               "Retaining a reference requires both storage that remains"
+               & " live and permission from its origin [0770] [0780]. A re"
+               & "ference into this function's frame cannot be returned, p"
+               & "assed to a retaining (`escaping`) parameter, or stored o"
+               & "utside the frame. Move the referenced value to storage t"
+               & "hat actually outlives the retention, or stop retaining t"
+               & "he reference. Declaring a parameter `escaping` does not "
+               & "extend the lifetime of frame storage."
+               & LF
+               & LF
+               & "Parameters are non-escaping by default. A reference deri"
+               & "ved from one cannot be passed to a retaining (`escaping`"
+               & ") call or stored in another origin, even if the referenc"
+               & "ed storage will remain live. If that retention is intend"
+               & "ed, declare the source parameter `escaping` and make its"
+               & " callers satisfy that contract. Otherwise, keep the use "
+               & "non-retaining or update storage within the same origin. "
+               & "Keeping the storage alive longer alone does not grant re"
+               & "tention permission.",
             when Catalogue.Borrowed_Place =>
                "A place is changed while a view derived from it is still"
                & " in use [0800] [0830]. Finish with the view first, or ta"
