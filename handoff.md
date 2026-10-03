@@ -82,12 +82,13 @@ build mode. `unchecked` establishes no optimizer facts. D210 reorders only an
 explicitly optimal struct on a strict padded-size win, and reports remain
 off-target rather than imposing runtime machinery on a 32 KB device.
 
-**Capabilities** replace effects. An allocator, an Io, a diagnostics
-log, a peripheral handle are values a function is given, so a function
-that was given none cannot do the thing — below a root. There are two
-roots and both are nameable: the entry point, and an address literal in
-a driver. Between them it is enforced; at them it is a habit, and the
-specification says so rather than claiming more.
+**Capabilities** replace effects in interfaces. An allocator, an Io, a
+diagnostics log, a peripheral handle are values a function can receive.
+Their parameters show which supplied values it uses, but do not bound
+what the function can do: any ordinary hosted routine can call the public
+host I/O or heap constructor, and a driver can form an address literal.
+Passing roots from the entry point is a convention, not a checked effect
+boundary.
 
 **Syntax** is `name: type = value`, with the name always left of the
 colon. Immutable by default. Keyword blocks closed by `end`, and blocks
@@ -120,9 +121,10 @@ interface files, header parsing.
 
 ## The principles
 
-- **Require a capability, do not track an effect.** Below a root, a
-  function can do only what it was given, and the argument list is the
-  whole enforcement. That is why there is no effect system.
+- **Require a capability, do not track an effect.** Interfaces pass
+  capabilities as ordinary arguments. The argument list exposes the
+  supplied dependencies; it cannot rule out a fresh host root or an
+  address literal in an ordinary routine. There is no effect system.
 - **One mechanism with two readings beats two mechanisms.** Static
   generics and runtime dispatch are one thing from two sides.
 - **Atoms are the same idea wherever they appear.**

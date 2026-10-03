@@ -11,9 +11,9 @@ So the interesting question is what the other kind of error looks like
 in a language with no exceptions.
 
 The answer this prototype argues for: a diagnostics log is a
-capability. A function that was given one can report; a function that
-was not, cannot. No effect system, no global error list, just an
-argument — which is principle [1680] doing real work.
+capability. Passing one tells the function where to report, without
+a global error list or an effect system. The argument alone does not
+exclude a different sink or a newly acquired hosted world [1680].
 
 D211 does not turn that capability into an assumed concrete logger. Bounded
 and streaming logs, their state changes and recovery behavior must agree with

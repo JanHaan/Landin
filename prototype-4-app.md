@@ -125,8 +125,9 @@ A descriptor, distinct so it cannot become arithmetic by accident.
 public file: type = distinct i32
 
 ```
-Everything that can block or touch the world goes through this, so
-a function that was not given one can do neither.
+The program passes this world to the routines that block or use host I/O.
+The parameter makes their chosen provider visible, but another hosted
+routine could call the public host constructor itself [1680].
 
 A concept and not a type, which is the whole point: the program
 below never learns which one it got. A first draft of this file

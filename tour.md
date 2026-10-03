@@ -2155,8 +2155,9 @@ fail is for what cannot be foreseen or cannot be dealt
 with where it happens.
 Reporting needs somewhere to report to, and that is an
 ordinary parameter. A diagnostics sink is a capability by
-[1680]: a function that was given none cannot report, which
-is enforced by an argument list and nothing else.
+[1680]: passing one makes the chosen destination explicit.
+The parameter list alone does not prove that the function
+cannot construct another sink or acquire a host world.
 
 The parser-support library spells that capability `core/diag.log`. Its
 object-safe `note` entry accepts a byte position, severity and escaping byte
@@ -4017,13 +4018,13 @@ build/package orchestration is outside it.
 
 ### [1660] And this is where capabilities come from
 
-And this is where capabilities come from. Everything below
-is handed what it may do — an allocator, an Io, a
-diagnostics log — and the entry point is where host roots
-are minted rather than passed. The hosted root imports
-`core/io/hosted`; a caller-backed root needs only `core/io`.
-The derived hosted example's `main` delegates to `app.entry`,
-whose essential flow is:
+The entry point is a usual place to mint roots and pass
+them down — an allocator, an Io, a diagnostics log. The
+language does not reserve host constructors for the entry
+point: another routine can call them too [1680]. The hosted
+root imports `core/io/hosted`; a caller-backed root needs only
+`core/io`. The derived hosted example's `main` delegates to
+`app.entry`, whose essential flow is:
 
 ```landin
 public entry: () -> (code: i32) =
@@ -4182,25 +4183,22 @@ their machine obligations.
 Require a capability, do not track an effect.
 Where another language would record in a type that a
 function performs input and output, allocates, or reads the
-clock, Landin makes it take the thing: an allocator, an Io,
-a peripheral handle, a random source. This is why there is
-no effect system and why there does not need to be one.
-Said exactly, because the obvious wording claims more than
-is true. A function below a root can do only what it was
-given, and the argument list is the whole enforcement. The
-roots are where authority is minted rather than passed, and
-there are two, both nameable: the entry point, where the
-host capability comes from [1660], and an address literal
-in a driver, where a peripheral does [0460]. Nothing stops
-an ordinary function reaching for either. So between the
-roots it is enforced, and at them it is a habit.
-Restricting the first to the entry module would be cheap,
-and would turn "this subtree cannot touch the world" from a
-habit into a checkable claim. It would not close the
-second, because a driver has to be able to write
-ptr(0x4002_0000). That asymmetry is why this is stated
-rather than enforced — and it is a tightening available
-later rather than a repair that is owed.
+clock, Landin interfaces normally pass the thing: an
+allocator, an Io, a peripheral handle, a random source.
+There is no effect system.
+The argument list identifies the capabilities a caller
+supplies. It does not bound the effects of the call tree:
+the public, zero-argument host I/O and heap constructors
+can be called by any ordinary hosted routine, including
+one given a different world or allocator. A driver can also
+form a peripheral pointer from an address literal [0460].
+Passing roots from the entry point [1660] is a convention,
+not a restriction checked by the language. Substituting an
+in-memory world or bounded allocator therefore does not by
+itself exclude host I/O or heap allocation below the call.
+Restricting host minting to the entry module remains a
+possible later tightening; it would not close the address
+literal route needed by drivers.
 
 ### [1690] One mechanism, two readings, is better than two mechanisms
 

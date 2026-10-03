@@ -913,11 +913,12 @@ Carried from the first roadmap, because a settled position written nowhere
 reads as an open question and gets reopened.
 
 Concurrency is not a property of a function. It is a capability — an Io the
-caller hands down, an ordinary parameter like an allocator, minted at the
-entry point [1660] and enforced below it [1680]. The same code blocks or does
-not depending on the Io it was given, so no keyword, no second calling
-convention and no colored function type is needed to say it. The refusal this
-replaces is recorded in `tour.md` under WHAT WAS TRIED AND DROPPED.
+caller hands down, an ordinary parameter like an allocator, commonly minted at
+the entry point [1660]. Code using only that Io blocks or does not according to
+the provider it was given. The argument list does not prevent a routine from
+minting a separate host root [1680]. No keyword, second calling convention or
+colored function type is used to say it. The refusal this replaces is recorded
+in `tour.md` under WHAT WAS TRIED AND DROPPED.
 
 - **One Io implementation today, and it blocks.** Signatures and `core` are
   concurrency-capable without any scheduler existing. R14.30 adds the second.

@@ -1817,6 +1817,13 @@ starting any thread that may do so. Merely importing `core/io` does not perform
 initialization, and startup-independent bridge services may run without it.
 Ordinary exports and callbacks never initialize, replace or reset this state.
 
+The host I/O and heap constructors are public, zero-argument library routines.
+Any ordinary hosted routine can call them; hosted argument services still
+require the startup described here. Constructor use is not restricted to the
+entry point or to a routine that received a capability argument. A routine's
+parameter list therefore records supplied capabilities, not an enforced upper
+bound on host I/O or allocation in its call tree [1660] [1680].
+
 The first call requires a nonnegative `argc` and non-null `argv` and retains that
 exact pair as the one argument root. It allocates and copies nothing: the C
 owner must keep the `argv` table and every argument it names readable for the
@@ -12139,6 +12146,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, L0347 refuses an assembly expression, incompatible declarations or multiple definitions, and L0301 refuses treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
 | `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
+| `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io/hosted` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
