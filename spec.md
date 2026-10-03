@@ -13975,8 +13975,9 @@ struct body or variant case has at most 16,384 fields. A program over either
 bound is refused with L0325 before any checking begins: a routine at its
 name, and a struct or case at its first field past the bound, related to the
 body. Every place over a bound is reported, in source order, and nothing else
-is checked, because later per-routine and per-struct passes are sized by what
-it refuses. The bounds
+is checked. The declaration limit bounds declaration-indexed checking and flow
+facts, and the field limit bounds field-indexed struct work. Neither limits the
+number of IR values in a routine. The bounds
 are `Landin.Stages.Checking.Declaration_Limit` and `Field_Limit`. They are
 an implementation limit, like L0111's nesting depth, and not a rule of the
 language: a larger compiler may raise them without changing what any program
@@ -13997,10 +13998,12 @@ exhausting that host at any size the scaling benchmark generates.
 was the behaviour before, and it is not a diagnostic: exit 71 says nothing
 about which routine or struct did it, and on a smaller host it arrives at a
 smaller program. A single bound on the whole program's declarations was
-declined because checking, flow and lowering scale with the program, while
-their quadratic or stack-bound scratch is sized by a routine's own facts or a
-struct's own fields. Whole-unit IR optimization scratch is heap-backed; it
-does not impose a separate whole-program stack bound. Bounds high enough never
+declined for declaration-indexed checking and flow facts and field-indexed
+struct work, which grow with individual routines or structs. The whole-unit
+IR optimization scratch addressed here is heap-backed and no longer imposes
+a whole-program stack bound. Specialization, simplification and rewriting
+still use automatic arrays indexed by a routine's IR values; L0325 does not
+bound their lengths. Bounds high enough never
 to matter, 65,535 or 2**20, were declined because a program just under them
 would still exhaust an ordinary host, which is the failure the bound exists to
 replace. Making the storage sparse so that no bound is needed was deferred:
