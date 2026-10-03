@@ -1745,7 +1745,7 @@ runtime/r420-map-reference-providers | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-delivery | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-world | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-world-boundaries | linux-x86-64, linux-arm64, macos-arm64
-runtime/r420-memory-world-cortex | linux-x86-64, linux-arm64, macos-arm64, cortex-m
+runtime/r420-memory-world-cortex | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-object-buffer-providers | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-pool-provider | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-reader-cleanup | linux-x86-64, linux-arm64, macos-arm64
