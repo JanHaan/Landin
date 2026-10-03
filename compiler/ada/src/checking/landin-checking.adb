@@ -31,6 +31,9 @@ package body Landin.Checking is
          return Positive (Of_Id);
       end Position;
 
+      function "<" (Left, Right : Id) return Boolean
+        is (Integer (Left) < Integer (Right));
+
       function Hash (Of_Id : Id) return Ada.Containers.Hash_Type
         is (Ada.Containers.Hash_Type'Mod (Of_Id));
    end Nominal_Identities;
@@ -2339,33 +2342,36 @@ package body Landin.Checking is
       end loop;
    end Holds;
 
-   function Hash (Shape : Field_Shape) return Ada.Containers.Hash_Type is
-      use type Ada.Containers.Hash_Type;
-      Result : Ada.Containers.Hash_Type := 0;
-
-      procedure Mix (Value : Ada.Containers.Hash_Type);
-
-      procedure Mix (Value : Ada.Containers.Hash_Type) is
-      begin
-         Result := Result * 16#9E37_79B1# + Value;
-      end Mix;
+   --  Compare every stored component.  Equivalence in the ordered map is
+   --  exactly raw record equality, including IDs rather than their contents.
+   function "<" (Left, Right : Field_Shape) return Boolean is
    begin
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.First));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Bits));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Storage));
-      Mix (Ada.Containers.Hash_Type'Mod (Field_Kind'Pos (Shape.Kind)));
-      Mix (Ada.Containers.Hash_Type'Mod
-             (Landin.Types.Scalar_Name'Pos (Shape.Element)));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length / 2 ** 32));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Cases));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Payloads_First));
-      Mix (Nominal_Identities.Hash (Shape.Nominal));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Signature));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Atoms));
-      Mix (Ada.Containers.Hash_Type'Mod (Shape.Reference));
-      return Result;
-   end Hash;
+      if Left.Packing.First /= Right.Packing.First then
+         return Left.Packing.First < Right.Packing.First;
+      elsif Left.Packing.Bits /= Right.Packing.Bits then
+         return Left.Packing.Bits < Right.Packing.Bits;
+      elsif Left.Packing.Storage /= Right.Packing.Storage then
+         return Left.Packing.Storage < Right.Packing.Storage;
+      elsif Left.Kind /= Right.Kind then
+         return Left.Kind < Right.Kind;
+      elsif Left.Element /= Right.Element then
+         return Left.Element < Right.Element;
+      elsif Left.Length /= Right.Length then
+         return Left.Length < Right.Length;
+      elsif Left.Cases /= Right.Cases then
+         return Left.Cases < Right.Cases;
+      elsif Left.Payloads_First /= Right.Payloads_First then
+         return Left.Payloads_First < Right.Payloads_First;
+      elsif Left.Nominal /= Right.Nominal then
+         return Left.Nominal < Right.Nominal;
+      elsif Left.Signature /= Right.Signature then
+         return Left.Signature < Right.Signature;
+      elsif Left.Atoms /= Right.Atoms then
+         return Left.Atoms < Right.Atoms;
+      else
+         return Left.Reference < Right.Reference;
+      end if;
+   end "<";
 
    procedure Append_Field_Shape (Into : in out Table; Shape : Field_Shape);
 

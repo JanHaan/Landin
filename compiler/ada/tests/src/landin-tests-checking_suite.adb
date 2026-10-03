@@ -10874,6 +10874,90 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Array_Field_Lookup_Keeps_First_Raw_Shape;
 
+   procedure Array_Field_Lookup_Handles_Hash_Collisions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Lookup_Handles_Hash_Collisions
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      use type C.Field_Shape;
+      type Word is mod 2 ** 32;
+
+      function Colliding_Length (K : Natural) return C.Element_Count;
+
+      function Colliding_Length (K : Natural) return C.Element_Count is
+         High : constant Word := Word (0) - Word (K) * 16#9E37_79B1#;
+      begin
+         return C.Element_Count (High) * 2 ** 32
+           + C.Element_Count (K + 1);
+      end Colliding_Length;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      --  Stage setup requires a source; its identity is irrelevant here.
+      pragma Unreferenced (Src);
+      Ran : Natural;
+      First : Natural := 0;
+      Leaf : constant C.Field_Shape := (Element => Ty.U8, others => <>);
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-collisions.ldn",
+         "one: type = struct x: u8 end one");
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "shape source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "shape source was refused");
+         return;
+      end if;
+      declare
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         --  These 256 distinct lengths collide under the old 32-bit hash:
+         --  each low-half increment cancels the high-half multiplication.
+         for K in 0 .. 255 loop
+            declare
+               Inner : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, Colliding_Length (K), Leaf);
+               Outer : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 2, Inner);
+            begin
+               if K = 0 then
+                  First := Outer.Payloads_First;
+               end if;
+               Landin.Testing.Check
+                 (Item, Outer.Payloads_First = First + K
+                    and then C.Array_Field_Element (Types.all, Outer) = Inner,
+                  "distinct colliding array element keeps its own position");
+            end;
+         end loop;
+         for K in reverse 0 .. 255 loop
+            declare
+               Inner : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, Colliding_Length (K), Leaf);
+               Outer : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 3, Inner);
+            begin
+               Landin.Testing.Check
+                 (Item, Outer.Payloads_First = First + K
+                    and then C.Array_Field_Element (Types.all, Outer) = Inner,
+                  "colliding array element reuses its first position");
+            end;
+         end loop;
+      end;
+   end Array_Field_Lookup_Handles_Hash_Collisions;
+
    procedure Recursive_Array_Foundations
      (Item : in out Landin.Testing.Context);
 
@@ -14683,6 +14767,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array field lookup keeps first raw shape",
          Array_Field_Lookup_Keeps_First_Raw_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field lookup handles hash collisions",
+         Array_Field_Lookup_Handles_Hash_Collisions'Access);
       Landin.Testing.Register
         (Into, "checking", "recursive array foundations",
          Recursive_Array_Foundations'Access);

@@ -103,6 +103,7 @@ package Landin.Checking is
       function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
       function Position (Of_Table : Table; Of_Id : Id) return Positive
         with Pre => Holds (Of_Table, Of_Id);
+      function "<" (Left, Right : Id) return Boolean;
       --  Equal for equal identities, None included; a lookup key only.
       function Hash (Of_Id : Id) return Ada.Containers.Hash_Type;
    private
@@ -2652,13 +2653,11 @@ private
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
 
-   function Hash (Shape : Field_Shape) return Ada.Containers.Hash_Type;
+   function "<" (Left, Right : Field_Shape) return Boolean;
 
-   package Field_Shape_Maps is new Ada.Containers.Hashed_Maps
-     (Key_Type        => Field_Shape,
-      Element_Type    => Positive,
-      Hash            => Hash,
-      Equivalent_Keys => "=");
+   package Field_Shape_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type     => Field_Shape,
+      Element_Type => Positive);
 
    package Case_Run_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
