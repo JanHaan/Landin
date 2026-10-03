@@ -1077,6 +1077,57 @@ package body Landin.Tests.Platform_Suite is
          "and each one came back unchanged");
    end Every_Byte_Survives;
 
+   --  Real file and tool captures share the native reader.  The payload
+   --  fills one 64 KiB read and leaves a partial read ending in zero, so a
+   --  dropped tail or text conversion changes the comparison.
+   procedure Chunked_Native_Reads_And_Captures_Preserve_Bytes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Chunked_Native_Reads_And_Captures_Preserve_Bytes
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Path    : constant String := Scratch & "/chunked-bytes.bin";
+      Bytes   : String (1 .. 64 * 1024 + 257);
+      Content : Unbounded.Unbounded_String;
+      Result  : Landin.Platform.Tool_Result;
+      Written : Landin.Platform.Write_Status;
+      Read    : Landin.Platform.Read_Status;
+      Args    : Landin.Platform.Path_List := Landin.Platform.Arguments ("-c");
+   begin
+      for Index in Bytes'Range loop
+         Bytes (Index) := Character'Val ((Index - 1) mod 256);
+      end loop;
+
+      Ada.Directories.Create_Path (Scratch);
+      Host.Write_File (Path, Bytes, Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok,
+         "chunked bytes were written");
+      Host.Read_File (Path, Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Read_Ok, "chunked bytes were read");
+      Landin.Testing.Check
+        (Item, Unbounded.To_String (Content) = Bytes,
+         "full and partial reads preserve every source byte");
+
+      Landin.Platform.Add (Args, "cat ""$1""; cat ""$1"" >&2");
+      Landin.Platform.Add (Args, "capture-control");
+      Landin.Platform.Add (Args, Path);
+      Runner.Run ("sh", Args, Result, Landin.Platform.Output_Only);
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Exited
+         and then Result.Exit_Code = 0,
+         "binary capture tool completed");
+      Landin.Testing.Check
+        (Item, Unbounded.To_String (Result.Output) = Bytes,
+         "captured stdout preserves full and partial binary reads");
+      Landin.Testing.Check
+        (Item, Unbounded.To_String (Result.Error_Output) = Bytes,
+         "captured stderr preserves full and partial binary reads");
+   end Chunked_Native_Reads_And_Captures_Preserve_Bytes;
+
    --  A directory is not a readable file, and neither is a device.  The
    --  reader used to accept anything that existed, so `refine /dev/zero`
    --  never returned.
@@ -1458,6 +1509,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "every byte survives",
          Every_Byte_Survives'Access);
+      Landin.Testing.Register
+        (Into, "platform", "chunked native reads and captures preserve bytes",
+         Chunked_Native_Reads_And_Captures_Preserve_Bytes'Access);
       Landin.Testing.Register
         (Into, "platform", "only ordinary files are read",
          Only_Ordinary_Files_Are_Read'Access);

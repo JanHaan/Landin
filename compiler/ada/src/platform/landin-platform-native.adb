@@ -210,10 +210,15 @@ package body Landin.Platform.Native is
             Stream_IO.Read (File, Buffer, Last);
             exit when Last < Buffer'First;
 
-            for Index in Buffer'First .. Last loop
-               Unbounded.Append
-                 (Content, Character'Val (Natural (Buffer (Index))));
-            end loop;
+            declare
+               Chunk : String (1 .. Natural (Last));
+            begin
+               for Index in Buffer'First .. Last loop
+                  Chunk (Natural (Index)) :=
+                    Character'Val (Natural (Buffer (Index)));
+               end loop;
+               Unbounded.Append (Content, Chunk);
+            end;
 
             exit when Last < Buffer'Last;
          end;
