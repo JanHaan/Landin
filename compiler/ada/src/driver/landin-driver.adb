@@ -921,6 +921,17 @@ package body Landin.Driver is
             if not Stage_Report_Seen or else Bad_Use then
                return;
             end if;
+            --  A failed read has no source in Context, but its requested
+            --  path must still be protected from the report writer.
+            for Input of Inputs loop
+               if Host.Paths_Overlap (Path, Input) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "stage report collides with source: " & Path);
+                  return;
+               end if;
+            end loop;
             for Index in 1 .. Landin.Stages.Source_Count (Context) loop
                if Host.Paths_Overlap
                  (Path, Landin.Source.Name
