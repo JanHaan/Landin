@@ -101,8 +101,17 @@ targets.
 
 ### L0005
 
-An output file cannot be written: its directory is missing or read-only.
-Choose another path with `-o`.
+An output file cannot be written, or `refine fmt` cannot safely replace its
+input. For emitted output, check that the destination directory exists and is
+writable, or choose another path with `-o`.
+
+Formatting needs a writable ordinary file owned by the caller and write
+permission in its directory. Hard links, ACLs, extended attributes and an
+inability to establish their absence cause refusal. On Linux, ordinary users
+may be unable to inspect privileged attributes even on apparently plain files.
+Editor formatting can return edits without replacing the file. A refused
+formatter replacement leaves the original bytes intact; see
+[formatter file handling](format.md) for the full contract.
 
 ### L0006
 

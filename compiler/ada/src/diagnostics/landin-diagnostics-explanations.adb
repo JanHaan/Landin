@@ -43,8 +43,21 @@ package body Landin.Diagnostics.Explanations is
                & "l one is named. `refine --identify` lists the described "
                & "targets.",
             when Catalogue.Unwritable_Output =>
-               "An output file cannot be written: its directory is missi"
-               & "ng or read-only. Choose another path with `-o`.",
+               "An output file cannot be written, or `refine fmt` cannot"
+               & " safely replace its input. For emitted output, check tha"
+               & "t the destination directory exists and is writable, or c"
+               & "hoose another path with `-o`."
+               & LF
+               & LF
+               & "Formatting needs a writable ordinary file owned by the c"
+               & "aller and write permission in its directory. Hard links,"
+               & " ACLs, extended attributes and an inability to establish"
+               & " their absence cause refusal. On Linux, ordinary users m"
+               & "ay be unable to inspect privileged attributes even on ap"
+               & "parently plain files. Editor formatting can return edits"
+               & " without replacing the file. A refused formatter replace"
+               & "ment leaves the original bytes intact; see [formatter fi"
+               & "le handling](format.md) for the full contract.",
             when Catalogue.Module_Not_Found =>
                "No import root holds the module an import names [1420]. "
                & "Roots are searched in the order `--root=` gives them, an"

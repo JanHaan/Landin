@@ -35,8 +35,9 @@ the literal's and the comment's, their line ends included, and never change.
 
 Replacement writes a sibling temporary file and renames it only after all
 bytes and mode bits have been written successfully. Failures leave the
-original bytes intact. The formatter follows symlinks, refuses hard-linked
-or read-only targets, and needs write permission in the target directory.
+original bytes intact. The formatter follows symlinks, refuses hard-linked,
+read-only or differently owned targets, and needs write permission in the
+target directory.
 Owner, group and all mode bits are preserved. Files carrying ACLs or extended
 attributes are refused without replacement; an inability to establish their
 absence is also a refusal. Linux may hide privileged `trusted.*` attributes
