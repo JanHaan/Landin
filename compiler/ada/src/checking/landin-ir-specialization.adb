@@ -16,6 +16,16 @@ package body Landin.IR.Specialization is
      (Into : in out Unit;
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options;
+      Report : in out Landin.Build_Reports.Report) is
+   begin
+      Verifier.Verify (Into, Facts);
+      Run_On_Verified (Into, Facts, Options, Report);
+   end Run;
+
+   procedure Run_On_Verified
+     (Into : in out Unit;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
       Report : in out Landin.Build_Reports.Report)
    is
       package Reports renames Landin.Build_Reports;
@@ -132,7 +142,6 @@ package body Landin.IR.Specialization is
          end if;
       end Pin;
    begin
-      Verifier.Verify (Into, Facts);
       Visit_Address_Exposures (Into, Expose'Access);
       --  Allocate every decision before inspecting recursive calls. Proof
       --  is a greatest fixed point: each surviving incoming edge is either
@@ -433,7 +442,7 @@ package body Landin.IR.Specialization is
          Rewriting.Compact
            (Into, Rewriting.Keep_Vectors.To_Vector
               (True, Into.Code.Length));
+         Verifier.Verify (Into, Facts);
       end if;
-      Verifier.Verify (Into, Facts);
-   end Run;
+   end Run_On_Verified;
 end Landin.IR.Specialization;

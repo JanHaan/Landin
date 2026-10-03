@@ -953,7 +953,29 @@ package body Landin.Tests.IR_Optimization_Suite is
             Before : constant String := IR.Dump.Text
               (Code, Landin.Stages.Meanings (Work).all,
                Landin.Stages.Identities (Work).all);
+            Report : Reports.Report;
          begin
+            begin
+               IR.Specialization.Run
+                 (Code, Landin.Stages.Target (Work),
+                  (Opt.None, Opt.Off), Report);
+               Landin.Testing.Fail
+                 (Item, "disabled specialization accepted malformed input");
+            exception
+               when Landin.Compiler_Defect =>
+                  Landin.Testing.Check_Equal
+                    (Item, Reports.Specialization_Count (Report), 0,
+                     "malformed input is refused before decisions");
+            end;
+            begin
+               IR.Simplification.Run
+                 (Code, Landin.Stages.Target (Work), Opt.None);
+               Landin.Testing.Fail
+                 (Item, "disabled simplification accepted malformed input");
+            exception
+               when Landin.Compiler_Defect =>
+                  null;
+            end;
             begin
                IR.Simplification.Run
                  (Code, Landin.Stages.Target (Work), Opt.Size);

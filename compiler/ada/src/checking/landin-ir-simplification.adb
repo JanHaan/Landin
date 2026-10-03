@@ -33,6 +33,15 @@ package body Landin.IR.Simplification is
    procedure Run
      (Into : in out Unit;
       Facts : Landin.Targets.Target_Facts;
+      Objective : Landin.Optimization.Objective) is
+   begin
+      Verifier.Verify (Into, Facts);
+      Run_On_Verified (Into, Facts, Objective);
+   end Run;
+
+   procedure Run_On_Verified
+     (Into : in out Unit;
+      Facts : Landin.Targets.Target_Facts;
       Objective : Landin.Optimization.Objective)
    is
       procedure Simplify
@@ -411,7 +420,6 @@ package body Landin.IR.Simplification is
          end loop;
       end Simplify;
    begin
-      Verifier.Verify (Into, Facts);
       if Objective = Landin.Optimization.None then
          return;
       end if;
@@ -430,5 +438,5 @@ package body Landin.IR.Simplification is
          Rewriting.Compact (Into, Keep);
       end;
       Verifier.Verify (Into, Facts);
-   end Run;
+   end Run_On_Verified;
 end Landin.IR.Simplification;

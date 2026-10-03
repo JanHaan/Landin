@@ -1291,10 +1291,12 @@ package body Landin.Driver is
             end if;
 
             Landin.Build_Reports.Clear (Evidence);
-            Landin.IR.Specialization.Run
+            --  Lowering already verified this unit with Facts. The checks
+            --  above only read it; each enabled pass verifies its output.
+            Landin.IR.Specialization.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization, Evidence);
-            Landin.IR.Simplification.Run
+            Landin.IR.Simplification.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization.Optimize);
 

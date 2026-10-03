@@ -11,4 +11,13 @@ package Landin.IR.Specialization is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options;
       Report : in out Landin.Build_Reports.Report);
+
+   --  For the driver after lowering verified Into against these same Facts.
+   --  No IR edit may intervene. Run remains the checked entry for callers
+   --  without that guarantee; an enabled pass verifies its changed output.
+   procedure Run_On_Verified
+     (Into : in out Unit;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Report : in out Landin.Build_Reports.Report);
 end Landin.IR.Specialization;
