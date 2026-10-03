@@ -43,13 +43,14 @@ there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
 the test program compiles.
 
-Three more options choose what `--target=`, `--level=` and `--option=`
-choose:
+Build settings choose what `--target=`, `--level=`, `--option=` and
+`--firmware-entry=` choose:
 
 ```json
 {"roots": ["file:///home/me/landin"],
  "target": "cortex-m0",
- "level": "armv7-m"}
+ "level": "armv7-m",
+ "firmwareEntry": "start"}
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
@@ -65,6 +66,11 @@ overridden with `"options": {"enabled": "false"}`. Option values are strings
 containing `true`, `false`, or signed decimal integer text that fits the
 declared type. A value the server refuses is reported once, through
 `window/showMessage`, and the rest are used.
+
+`firmwareEntry` is a nonempty routine name for `cortex-m0`. When selected,
+analysis checks the same entry shape as a firmware build and publishes
+`L0502` at an invalid candidate, or at the first entry-module source if it
+is missing. With no selection, analysis makes no firmware entry claim.
 
 ## What it answers
 

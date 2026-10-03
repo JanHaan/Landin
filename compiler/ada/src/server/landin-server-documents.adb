@@ -202,12 +202,14 @@ package body Landin.Server.Documents is
                    Unbounded.To_Unbounded_String (Directory_Of (Path)),
                  Roots => From.Roots,
                  Files => Landin.Platform.No_Arguments,
-                 Options => Landin.Platform.No_Arguments);
+                 Options => Landin.Platform.No_Arguments,
+                 Firmware_Entry => Unbounded.Null_Unbounded_String);
       end if;
       return (Entry_Directory => Unbounded.Null_Unbounded_String,
               Roots => Landin.Platform.No_Arguments,
               Files => Landin.Platform.Arguments (Path),
-              Options => Landin.Platform.No_Arguments);
+              Options => Landin.Platform.No_Arguments,
+              Firmware_Entry => Unbounded.Null_Unbounded_String);
    end Request_For;
 
    function Module_Key (From : Store; URI : String) return String

@@ -32,6 +32,7 @@ package body Landin.Server.Sessions is
    use type Diag.Severity;
    use type Landin.Source.Source_Id;
    use type Landin.Server.Documents.Document;
+   use type Landin.Targets.Architecture;
 
    --  JSON-RPC's and the protocol's error codes.
    Parse_Error          : constant := -32700;
@@ -134,6 +135,7 @@ package body Landin.Server.Sessions is
       Level     : Landin.Targets.Levels.Feature_Level :=
         Landin.Targets.Levels.Default_Level (Facts);
       Options   : Landin.Platform.Path_List;
+      Firmware_Entry : Unbounded.Unbounded_String;
       Started   : Boolean := False;
       Stopping  : Boolean := False;
       --  Modules whose documents changed since they were last published.
@@ -272,6 +274,7 @@ package body Landin.Server.Sessions is
                  Landin.Server.Documents.Request_For (Store, URI);
             begin
                Asked.Options := Options;
+               Asked.Firmware_Entry := Firmware_Entry;
                if On_Analysis /= null then
                   On_Analysis.all;
                end if;
@@ -643,6 +646,27 @@ package body Landin.Server.Sessions is
                end loop;
             elsif J.Is_Present (Given) then
                Unbounded.Append (Bad, "options are an object");
+            end if;
+         end;
+
+         declare
+            Named : constant J.Value :=
+              J.Member (Message, Settings, "firmwareEntry");
+         begin
+            if J.Is_Kind (Message, Named, J.String_Value) then
+               if J.Text (Message, Named) = "" then
+                  Unbounded.Append (Bad, "firmwareEntry is empty");
+               elsif Landin.Targets.Architecture_Of (Facts)
+                 /= Landin.Targets.Cortex_M0
+               then
+                  Unbounded.Append
+                    (Bad, "firmwareEntry requires target cortex-m0");
+               else
+                  Firmware_Entry :=
+                    Unbounded.To_Unbounded_String (J.Text (Message, Named));
+               end if;
+            elsif J.Is_Present (Named) then
+               Unbounded.Append (Bad, "firmwareEntry is a string");
             end if;
          end;
 

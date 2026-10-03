@@ -42,6 +42,8 @@ package Landin.Server.Analysis is
       --  Each `name=value` a `--option=` would give.  Valid and distinct:
       --  the caller has refused anything else.
       Options         : Landin.Platform.Path_List;
+      --  A selected Cortex-M0 build entry, empty when none was requested.
+      Firmware_Entry  : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    package Hold_Vectors is new Ada.Containers.Indefinite_Vectors
