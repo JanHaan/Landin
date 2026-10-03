@@ -1,4 +1,4 @@
-error[L0301]: this body can fail with an atom outside its declared error set
+error[L0329]: this body can fail with an atom outside its declared error set
   --> ../tests/fixtures/negative/for-fallible-undeclared-error/main.ldn:28:1
    |
 28 | public main: () -> (code: i32) =

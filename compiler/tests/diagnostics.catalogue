@@ -36,6 +36,7 @@ L0201  Live     [1860]: a name used and declared in no visible scope
 L0202  Live     [1410]: a module-internal declaration used across modules
 L0203  Live     [1560]: a builtin tool namespace binding or use is unavailable
 L0300  Live     a compile-time magnitude its context or target does not hold
+L0398  Live     [0740]: a known register image violates its reserved-bit write policy
 L0301  Live     [1890]: a value's type is not the one its context or operation requires
 L0302  Live     [1910]: a name read on a path that does not assign it
 L0303  Live     [1900]: a place that may not be written

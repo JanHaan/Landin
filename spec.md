@@ -12551,7 +12551,7 @@ that exact set after `!`. The provider result, cursor, permission, convention
 and origin rules above still apply. If no fallible conformance exists,
 `try for` may use an ordinary `iterable`; plain `for` cannot select a
 fallible conformance. Missing, ambiguous, malformed, or non-exact evidence
-is L0301.
+is L0348.
 
 The source is still evaluated once. A failure from `first`, `at_end`, `item`
 or `next` propagates its original error atom after applicable `defer` and

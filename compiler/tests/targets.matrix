@@ -464,6 +464,7 @@ negative/loop-value-in-every-value-context | linux-x86-64, linux-arm64, macos-ar
 negative/loop-value-missing-break-value | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/loop-value-missing-completion | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/loop-value-type-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/machine-entry-signature-is-machine-shaped | linux-x86-64, macos-arm64, synthetic-32
 negative/malformed-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-hex-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -662,6 +663,7 @@ negative/pointer-union-present-arm-named-twice | linux-x86-64, linux-arm64, maco
 negative/pointer-union-two-pointers | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/pointer-union-zeroed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/public-on-statement | linux-x86-64, linux-arm64, macos-arm64
+negative/r430-assertion-arity | linux-x86-64, synthetic-32
 negative/r430-assertion-call | linux-x86-64, linux-arm64, synthetic-32
 negative/r430-assertion-false | linux-x86-64, linux-arm64, synthetic-32
 negative/r430-assertion-nominal | linux-x86-64, linux-arm64, synthetic-32
@@ -1610,7 +1612,7 @@ runtime/float-width-conversions | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-aggregate-element-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-any-element-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-collection-traversal | linux-x86-64, linux-arm64, macos-arm64
-runtime/for-fallible-iteration | linux-x86-64, macos-arm64
+runtime/for-fallible-iteration | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-iterable-evidence-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-range-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-value-block-statements | linux-x86-64, linux-arm64, macos-arm64

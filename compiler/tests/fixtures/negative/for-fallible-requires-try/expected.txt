@@ -1,4 +1,4 @@
-error[L0301]: this type has no [1320] iterable conformance
+error[L0348]: this type has no [1320] iterable conformance
   --> ../tests/fixtures/negative/for-fallible-requires-try/main.ldn:30:17
    |
 30 |     for item in value do
