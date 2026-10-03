@@ -26,6 +26,8 @@ public world: type = concept (provider: type)
                -> (opened: file) ! not_found | no_access | io_failed
     open_write: (self: ptr mut provider, path: ptr u8)
                 -> (opened: file) ! not_found | no_access | io_failed
+    same_file: (self: ptr mut provider, left: ptr u8, right: ptr u8)
+               -> (same: bool) ! io_failed
     close: (self: ptr mut provider, sink opened: file)
            -> none ! io_failed
     read: (self: ptr mut provider, opened: file, into: []mut u8)
@@ -55,6 +57,12 @@ public open_write: (provider: type is world, inout state: provider,
                    -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_write(addr state, path)
 end open_write
+
+public same_file: (provider: type is world, inout state: provider,
+                   left: ptr u8, right: ptr u8)
+                  -> (same: bool) ! io_failed =
+    same = try provider.same_file(addr state, left, right)
+end same_file
 
 public close: (provider: type is world, inout state: provider,
                sink opened: file) -> none ! io_failed =

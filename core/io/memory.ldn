@@ -89,6 +89,25 @@ memory_open_write: (self: ptr mut memory, path: ptr u8)
     opened = try memory_open(self, path, true)
 end memory_open_write
 
+memory_same_file: (self: ptr mut memory, left: ptr u8, right: ptr u8)
+                  -> (same: bool) ! io_failed =
+    same = false
+    mut left_index: usize = memory_file_count(self.val.files)
+    mut right_index: usize = memory_file_count(self.val.files)
+    for at in usize(0)..<memory_file_count(self.val.files) do
+        if left_index == memory_file_count(self.val.files)
+          and memory_name_matches(left, self.val.files[at].name) then
+            left_index = at
+        end if
+        if right_index == memory_file_count(self.val.files)
+          and memory_name_matches(right, self.val.files[at].name) then
+            right_index = at
+        end if
+    end for
+    fail io_failed when left_index == memory_file_count(self.val.files)
+    same = left_index == right_index
+end memory_same_file
+
 memory_close: (self: ptr mut memory, sink opened: file) -> none ! io_failed =
     inc self.val.close_calls
     if i32(opened) == 1 then
@@ -218,6 +237,7 @@ end memory_argument
 
 memory is world
     (open_read: memory_open_read, open_write: memory_open_write,
+     same_file: memory_same_file,
      close: memory_close, read: memory_read, write: memory_write,
      write_some: memory_write_some,
      out: memory_out, err: memory_err,

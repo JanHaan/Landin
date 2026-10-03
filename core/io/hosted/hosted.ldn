@@ -91,6 +91,29 @@ system_open_write: (self: ptr mut system, path: ptr u8)
     end loop
 end system_open_write
 
+--  A stable-path identity check, not an atomic check-and-open operation.
+--  Every input lookup failure refuses; only an absent output is allowed.
+system_same_file: (self: ptr mut system, left: ptr u8, right: ptr u8)
+                  -> (same: bool) ! io.io_failed =
+    self.val.failure_errno = 0
+    mut first: native_stat = zeroed
+    mut second: native_stat = zeroed
+    if stat(left, addr first) <> 0 then
+        self.val.failure_errno = _landin_host_errno()
+        fail io.io_failed
+    end if
+    if stat(right, addr second) <> 0 then
+        number: i32 = _landin_host_errno()
+        if number == linux_enoent then
+            same = false
+            return
+        end if
+        self.val.failure_errno = number
+        fail io.io_failed
+    end if
+    same = first.device == second.device and first.inode == second.inode
+end system_same_file
+
 system_close: (self: ptr mut system, sink opened: io.file)
               -> none ! io.io_failed =
     self.val.failure_errno = 0
@@ -229,6 +252,7 @@ end system_argument
 
 system is io.world
     (open_read: system_open_read, open_write: system_open_write,
+     same_file: system_same_file,
      close: system_close,
      read: system_read, write: system_write,
      write_some: system_write_some, out: system_out,

@@ -166,6 +166,9 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
     end while
     fail bad_argument when lenof input == 0
     fail bad_argument when lenof output > 0 and equal(input, output)
+    if lenof output > 0 then
+        fail bad_argument when try world.same_file(addr input[0], addr output[0])
+    end if
     --  Keep the output path until run has opened the input reader. Opening
     --  it here would truncate an existing output on an input-open failure.
     initial: count_dest = zeroed

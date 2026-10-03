@@ -22,7 +22,9 @@ unrepresentable numbers, and zero recover to one with distinct diagnostics;
 the hosted process reports failure status after processing because its logger
 has recorded an error. Repeated filters retain independent state. Unknown
 options, missing operands, empty/NUL-containing paths, multiple input paths,
-and identical input/output spellings are refused before opening a file.
+and input/output paths naming the same existing file (including relative,
+symlink, and hard-link aliases) are refused before opening an output file.
+The check assumes paths are not replaced concurrently during the run.
 
 `--out` selects the text destination; its absence selects eight per-level
 counts on standard output. The program prints `kept: N` to standard error.

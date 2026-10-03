@@ -1,0 +1,81 @@
+--  Private libc stat bindings for the three supported hosted ABIs.
+--  Full records, not guessed opaque storage: native C header oracles in
+--  abi/core-io-file-identity check their size, alignment and identity fields.
+--  Darwin arm64 uses the ordinary stat symbol with its 64-bit inode ABI.
+
+compiler.assert(compiler.c_sysv_lp64 or compiler.c_aapcs64_lp64
+                or compiler.c_darwin_lp64)
+
+native_time: type = struct
+    seconds: i64
+    nanoseconds: i64
+end native_time
+
+fixed if compiler.c_sysv_lp64 then
+    native_stat: type = struct
+        device: u64
+        inode: u64
+        links: u64
+        mode: u32
+        uid: u32
+        gid: u32
+        padding: i32
+        special_device: u64
+        bytes: i64
+        block_size: i64
+        blocks: i64
+        accessed: native_time
+        modified: native_time
+        changed: native_time
+        reserved: [3]i64
+    end native_stat
+elsif compiler.c_aapcs64_lp64 then
+    native_stat: type = struct
+        device: u64
+        inode: u64
+        mode: u32
+        links: u32
+        uid: u32
+        gid: u32
+        special_device: u64
+        padding1: u64
+        bytes: i64
+        block_size: i32
+        padding2: i32
+        blocks: i64
+        accessed: native_time
+        modified: native_time
+        changed: native_time
+        reserved: [2]u32
+    end native_stat
+else
+    native_stat: type = struct
+        device: i32
+        mode: u16
+        links: u16
+        inode: u64
+        uid: u32
+        gid: u32
+        special_device: i32
+        accessed: native_time
+        modified: native_time
+        changed: native_time
+        created: native_time
+        bytes: i64
+        blocks: i64
+        block_size: i32
+        flags: u32
+        generation: u32
+        spare: i32
+        reserved: [2]i64
+    end native_stat
+end if
+
+compiler.assert(alignof native_stat == 8)
+fixed if compiler.c_aapcs64_lp64 then
+    compiler.assert(sizeof native_stat == 128)
+else
+    compiler.assert(sizeof native_stat == 144)
+end if
+
+extern(c) stat: (path: ptr u8, result: ptr mut native_stat) -> (status: i32)
