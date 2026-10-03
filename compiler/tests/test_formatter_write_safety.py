@@ -36,6 +36,10 @@ class FormatterWriteSafety(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.source = self.root / "source.ldn"
         self.source.write_bytes(LOOSE)
+        # Darwin inherits /tmp's group (often wheel), which the runner need
+        # not belong to. Test setgid on a group this process can establish.
+        os.chown(self.source, -1, os.getgid())
+        self.assertEqual(self.source.stat().st_gid, os.getgid())
 
     def metadata_visibility_known(self):
         if sys.platform != "linux":
@@ -113,13 +117,25 @@ class FormatterWriteSafety(unittest.TestCase):
     def test_extended_attribute_refuses_without_metadata_loss(self):
         name = "user.landin-format" if sys.platform == "linux" else "landin-format"
         try:
-            os.setxattr(self.source, name, b"retained metadata")
+            if sys.platform == "darwin":
+                # Python's os xattr functions are Linux-only. The native
+                # command's hex mode preserves the exact test bytes.
+                subprocess.run(["xattr", "-wx", name,
+                                b"retained metadata".hex(), str(self.source)],
+                               check=True, capture_output=True)
+            else:
+                os.setxattr(self.source, name, b"retained metadata")
         except OSError as error:
             if error.errno == errno.ENOTSUP:
                 self.skipTest("test filesystem has no extended attributes")
             raise
         self.assert_metadata_refused()
-        self.assertEqual(os.getxattr(self.source, name), b"retained metadata")
+        if sys.platform == "darwin":
+            value = bytes.fromhex(subprocess.check_output(
+                ["xattr", "-px", name, str(self.source)], text=True))
+        else:
+            value = os.getxattr(self.source, name)
+        self.assertEqual(value, b"retained metadata")
 
     @unittest.skipUnless(sys.platform == "linux", "Linux POSIX ACL encoding")
     def test_posix_acl_refuses_without_metadata_loss(self):
@@ -222,6 +238,59 @@ class FormatterWriteSafety(unittest.TestCase):
                 self.assertEqual(self.source.read_bytes(), LOOSE)
                 self.assertEqual(self.source.stat().st_ino, before.st_ino)
                 self.assertEqual(list(self.root.glob("*.fmt-*")), [])
+
+    def test_owner_and_mode_results_are_verified(self):
+        # Supply an inspectable namespace only for this disposable adapter
+        # fixture. A no-op chown would fail; chmod can return success after
+        # clearing setgid. Neither host behavior may lose source metadata.
+        adapter = Path(__file__).resolve().parents[1] / "ada/src/platform/landin_format_replace.c"
+        os.chown(self.root, -1, os.getgid())
+        harness = self.root / "mode_result.c"
+        harness.write_text(
+            '#define _DARWIN_C_SOURCE\n'
+            '#define _POSIX_C_SOURCE 200809L\n'
+            '#define _XOPEN_SOURCE 700\n'
+            '#include <errno.h>\n#include <sys/stat.h>\n#include <unistd.h>\n'
+            '#ifdef __linux__\n#include <sys/xattr.h>\n'
+            'static int unsupported_trusted(int fd, const char *n, const void *v, size_t s, int f) {\n'
+            '  (void)fd; (void)n; (void)v; (void)s; (void)f; errno = ENOTSUP; return -1;\n'
+            '}\n#define fsetxattr unsupported_trusted\n#endif\n'
+            'static int fault;\n'
+            'static int refused_chown(int fd, uid_t u, gid_t g) {\n'
+            '  (void)fd; (void)u; (void)g;\n'
+            '  if (fault) return 0;\n'
+            '  errno = EPERM; return -1;\n'
+            '}\n'
+            'static int checked_chmod(int fd, mode_t mode) {\n'
+            '  return fchmod(fd, fault ? mode & ~S_ISGID : mode);\n'
+            '}\n'
+            '#define fchown refused_chown\n#define fchmod checked_chmod\n'
+            '#include "' + str(adapter) + '"\n'
+            'int main(int argc, char **argv) {\n'
+            '  if (argc != 3) return 2;\n'
+            '  fault = atoi(argv[2]);\n'
+            '  int result = landin_replace_existing_file(argv[1], "changed", 7);\n'
+            '  return result == (fault ? -1 : 0) ? 0 : 1;\n'
+            '}\n')
+        binary = self.root / "mode_result"
+        subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
+                        str(harness), "-o", str(binary)], check=True,
+                       capture_output=True)
+        self.source.chmod(0o640)
+        subprocess.run([str(binary), str(self.source), "0"], check=True,
+                       capture_output=True)
+        self.assertEqual(self.source.read_bytes(), b"changed")
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o640)
+        self.source.write_bytes(LOOSE)
+        self.source.chmod(0o6755)
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o6755)
+        before = self.source.stat()
+        subprocess.run([str(binary), str(self.source), "1"], check=True,
+                       capture_output=True)
+        self.assertEqual(self.source.read_bytes(), LOOSE)
+        self.assertEqual(self.source.stat().st_ino, before.st_ino)
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o6755)
+        self.assertEqual(list(self.root.glob("*.fmt-*")), [])
 
     def test_readonly_and_hardlinked_sources_are_refused(self):
         self.source.chmod(0o444)

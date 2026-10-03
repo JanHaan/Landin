@@ -40,7 +40,9 @@ static int metadata_is_plain(int fd)
         return 0;
     acl_t acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED);
     if (!acl)
-        return errno == ENOTSUP;
+        /* acl_get_fd_np delegates to FILESEC_ACL: an absent property on
+         * the existing open file is ENOENT, not an empty allocated ACL. */
+        return errno == ENOENT || errno == ENOTSUP;
     acl_entry_t entry;
     int present = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
     int error = errno;
@@ -108,8 +110,16 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     if (!metadata_visibility_known(fd))
         goto done;
 
-    /* If the host refuses the source's owner or group, leave it intact. */
-    if (fchown(fd, original.st_uid, original.st_gid) != 0)
+    /* A same-owner/group chown can still require group membership on
+     * Darwin. Do not request changes when inheritance already matched. */
+    if (fstat(fd, &current) != 0)
+        goto done;
+    uid_t owner = current.st_uid == original.st_uid
+        ? (uid_t)-1 : original.st_uid;
+    gid_t group = current.st_gid == original.st_gid
+        ? (gid_t)-1 : original.st_gid;
+    if ((owner != (uid_t)-1 || group != (gid_t)-1)
+        && fchown(fd, owner, group) != 0)
         goto done;
     while (size != 0) {
         ssize_t written = write(fd, data, size);
@@ -122,6 +132,12 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     }
     /* Writing can clear setuid and setgid; set the final mode afterward. */
     if (fchmod(fd, original.st_mode & 07777) != 0)
+        goto done;
+    /* chmod may succeed while silently clearing a disallowed setgid bit.
+     * Establish the actual result before replacing the original inode. */
+    if (fstat(fd, &current) != 0 || current.st_uid != original.st_uid
+        || current.st_gid != original.st_gid
+        || (current.st_mode & 07777) != (original.st_mode & 07777))
         goto done;
     /* Default directory ACLs may also add metadata to the temporary file. */
     if (!metadata_is_plain(fd))
