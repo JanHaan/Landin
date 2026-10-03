@@ -586,21 +586,27 @@ package body Landin.Checking is
    function Concept_Count (Of_Table : Table) return Natural
      is (Natural (Of_Table.Concepts.Length));
 
+   function Hash_Concept_Declaration
+     (Id : Declaration_Id) return Ada.Containers.Hash_Type
+     is (Ada.Containers.Hash_Type'Mod (Id));
+
    function Compiler_Zeroable_Concept (Of_Table : Table) return Concept_Id
      is (Concept_Identities.Nth (Of_Table, 1));
 
    function Intern_Concept
      (Into : in out Table; Declaration : Declaration_Id) return Concept_Id
    is
+      Cursor : constant Concept_Maps.Cursor :=
+        Into.Concept_Index.Find (Declaration);
    begin
-      for Position in 1 .. Natural (Into.Concepts.Length) loop
-         if Into.Concepts (Position).Declaration = Declaration then
-            return Concept_Identities.Nth (Into, Position);
-         end if;
-      end loop;
+      if Concept_Maps.Has_Element (Cursor) then
+         return Concept_Identities.Nth
+           (Into, Concept_Maps.Element (Cursor));
+      end if;
       Into.Concepts.Append
         (Concept_Record'
            (Declaration => Declaration, Compiler_Supplied => False));
+      Into.Concept_Index.Insert (Declaration, Into.Concepts.Last_Index);
       return Concept_Identities.Nth (Into, Into.Concepts.Last_Index);
    end Intern_Concept;
 

@@ -2519,6 +2519,15 @@ private
    package Concept_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Record);
 
+   function Hash_Concept_Declaration
+     (Id : Declaration_Id) return Ada.Containers.Hash_Type;
+
+   package Concept_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Declaration_Id,
+      Element_Type    => Positive,
+      Hash            => Hash_Concept_Declaration,
+      Equivalent_Keys => "=");
+
    package Concept_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Id);
 
@@ -2832,6 +2841,8 @@ private
       Routine_Actuals : Actual_Key_Vectors.Vector;
       Routine_Evidence : Routine_Evidence_Vectors.Vector;
       Concepts : Concept_Vectors.Vector;
+      --  Source declarations only; the compiler concept occupies position 1.
+      Concept_Index : Concept_Maps.Map;
       Conformances : Conformance_Vectors.Vector;
       --  The earliest row of each exactly spelled key, and in order every
       --  row whose key has no exact spelling.

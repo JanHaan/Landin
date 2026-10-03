@@ -9638,6 +9638,103 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Array_Reference_Fields_Follow_Target;
 
+   procedure Concept_Interning_Keeps_Collection_Positions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Concept_Interning_Keeps_Collection_Positions
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+   begin
+      for Round in 1 .. 2 loop
+         declare
+            Count : constant Positive := (if Round = 1 then 12 else 3);
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Order : Landin.Stages.Pipeline;
+            Text : US.Unbounded_String;
+            Ids : array (1 .. Count) of Landin.Provenance.Declaration_Id;
+            Found : Natural := 0;
+            Src : Landin.Source.Source_Id;
+            Ran : Natural;
+         begin
+            for Index in 1 .. Count loop
+               US.Append
+                 (Text, "concept_" & Image (Index)
+                  & ": type = concept (t: type) end concept_"
+                  & Image (Index) & LF);
+            end loop;
+            Src := Landin.Stages.Add_Source
+              (Work, "concept-interning.ldn", US.To_String (Text));
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Names'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Ran := Landin.Stages.Run (Order, Work);
+            Landin.Testing.Check
+              (Item, Src /= Landin.Source.No_Source and then Ran = 4
+               and then not Landin.Stages.Failed (Work),
+               "the distinct concepts are checked");
+            if Ran /= 4 or else Landin.Stages.Failed (Work) then
+               return;
+            end if;
+
+            declare
+               Types : constant not null access C.Table :=
+                 Landin.Stages.Types (Work);
+               Meanings : constant not null access Landin.Resolution.Table :=
+                 Landin.Stages.Meanings (Work);
+               Compiler : constant C.Concept_Id :=
+                 C.Compiler_Zeroable_Concept (Types.all);
+            begin
+               Landin.Testing.Check
+                 (Item, C.Concept_Count (Types.all) = Count + 1
+                  and then Compiler = C.Concept_Identities.Nth
+                    (Types.all, 1)
+                  and then C.Is_Compiler_Concept (Types.all, Compiler)
+                  and then C.Concept_Declaration (Types.all, Compiler)
+                    = C.No_Declaration,
+                  "the compiler concept remains the first identity");
+               for Id in Landin.Provenance.Declaration_Id'(1)
+                 .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+               loop
+                  if Landin.Resolution.Sort_Of (Meanings.all, Id)
+                       = Landin.Resolution.Module_Concept
+                  then
+                     Found := Found + 1;
+                     Ids (Found) := Id;
+                     declare
+                        Concept : constant C.Concept_Id :=
+                          C.Intern_Concept (Types.all, Id);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Concept = C.Concept_Identities.Nth
+                            (Types.all, Found + 1)
+                           and then C.Concept_Declaration
+                             (Types.all, Concept) = Id
+                           and then not C.Is_Compiler_Concept
+                             (Types.all, Concept),
+                           "source concepts retain collection positions");
+                     end;
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Found, Count, "every source concept was collected");
+               for Index in reverse Ids'Range loop
+                  Landin.Testing.Check
+                    (Item, C.Intern_Concept (Types.all, Ids (Index))
+                       = C.Concept_Identities.Nth (Types.all, Index + 1),
+                     "repeated declarations retain their identities");
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, C.Concept_Count (Types.all), Count + 1,
+                  "repeated interning appends no concepts");
+            end;
+         end;
+      end loop;
+   end Concept_Interning_Keeps_Collection_Positions;
+
    procedure Conformance_Register_Uses_Normalized_Keys
      (Item : in out Landin.Testing.Context);
 
@@ -14499,6 +14596,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "float specials have canonical bits",
          Float_Specials_Have_Canonical_Bits'Access);
+      Landin.Testing.Register
+        (Into, "checking", "concept interning keeps collection positions",
+         Concept_Interning_Keeps_Collection_Positions'Access);
       Landin.Testing.Register
         (Into, "checking", "conformance register uses normalized keys",
          Conformance_Register_Uses_Normalized_Keys'Access);
