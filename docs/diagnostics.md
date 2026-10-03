@@ -663,8 +663,9 @@ A compile-time assertion is false [1510].
 
 ### L0325
 
-An implementation limit, not a rule of the language: a routine declares, or a
-struct holds, more than the compiler admits (D247). Split it.
+An implementation limit, not a rule of the language: a routine has too many
+declarations, or a struct body or variant case has too many fields (D247).
+Split the routine or reduce the fields in the body or case.
 
 ### L0326
 
