@@ -4335,10 +4335,8 @@ package body Landin.IR is
             begin
                Widened.Atoms := Shape.Atoms;
                Fits := Same_Shape (Into, Shape, Widened);
-               for Index in 1 .. Atom_Count (Into, Source.Atoms) loop
-                  Fits := Fits and then Contains_Atom
-                    (Into, Shape.Atoms, Nth_Atom (Into, Source.Atoms, Index));
-               end loop;
+               Fits := Fits and then Atom_Set_Is_Subset
+                 (Into, Source.Atoms, Shape.Atoms);
             end;
          end if;
          if not Fits then
