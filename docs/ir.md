@@ -33,9 +33,11 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-Linux x86-64 and Darwin arm64 backends emit executable programs. The IR is
-expressed without machine registers, stack offsets or instruction encodings. The backend translates its operations into machine instructions
-and supplies the calling convention and object-format details.
+The same IR feeds three emitters: Linux x86-64 and Darwin arm64 emit hosted
+executables, while Cortex-M0 emits firmware. The IR is expressed without
+machine registers, stack offsets or instruction encodings. Each backend
+translates its operations into machine instructions and supplies the calling
+convention and object-format details.
 
 There is a reason for having a representation between syntax and assembly.
 The syntax already preserves nested statements and expressions. Repeating
@@ -385,7 +387,7 @@ aggregate copies and a separate w8 failure carrier. The Darwin C planner maps
 the same verified signatures onto Apple's independent register banks, HFA
 rules, indirect results and packed/variadic stack rules. These choices belong
 to the emitter; error propagation and cleanup edges arrive already verified.
-Neutral specialization and simplification run before either emitter. Darwin
+Neutral specialization and simplification run before all three emitters. Darwin
 currently uses baseline stack homes without the x86 register allocator or body
 folding. Its reports record frame size; backend quality optimization is not a
 parity claim. macOS source debugging consumes these same stack placement plans
