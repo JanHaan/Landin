@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -26,6 +27,14 @@ def run(arguments):
     if process.returncode:
         raise ValueError(f"{arguments[0]} failed ({process.returncode}): {err.strip()}")
     return out
+
+
+def binary_identity(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65536), b""):
+            digest.update(chunk)
+    return {"path": str(path), "sha256": digest.hexdigest()}
 
 
 def snapshot(destination):
@@ -50,15 +59,12 @@ def snapshot(destination):
         version = run([str(driver), "--version"]).strip()
         if not version:
             raise ValueError("configured C driver returned no version")
-        digest = hashlib.sha256()
-        with driver.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(65536), b""):
-                digest.update(chunk)
-        identity = {
-            "path": str(driver),
-            "sha256": digest.hexdigest(),
-            "version": version,
-        }
+        identity = {**binary_identity(driver), "version": version}
+        selected_builder = shutil.which("gprbuild")
+        if selected_builder is None:
+            raise ValueError("gprbuild is not on PATH")
+        builder = Path(selected_builder).absolute()
+        builder_identity = binary_identity(builder)
         # A failed probe leaves the previous snapshot and successful source
         # manifest alone. The caller holds the per-mode build lock throughout.
         if not destination.exists() or destination.read_text() != content:
@@ -67,7 +73,9 @@ def snapshot(destination):
             staged.replace(destination)
         return ("toolchain configuration "
                 + hashlib.sha256(content.encode()).hexdigest() + "\n"
-                + "toolchain c-driver " + json.dumps(identity, sort_keys=True))
+                + "toolchain c-driver " + json.dumps(identity, sort_keys=True)
+                + "\n" + "toolchain gprbuild "
+                + json.dumps(builder_identity, sort_keys=True))
 
 
 if __name__ == "__main__":

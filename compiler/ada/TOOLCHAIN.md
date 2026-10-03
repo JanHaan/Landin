@@ -142,7 +142,9 @@ GNAT runtime dependency; it adds no separately acquired library.
 Before comparing that manifest, `scripts/build_config.py` asks the pinned
 GPRconfig to select the native Ada/C configuration. It records the configuration
 hash and the selected C driver's absolute path, binary hash and complete version
-response. Both project builds receive that same configuration snapshot, stored
+response. It also records the selected GPRbuild executable's absolute path and
+binary hash, so replacing a local builder with one that prints the same version
+line still invalidates the build. Both project builds receive that same configuration snapshot, stored
 beside the per-mode build lock so cleaning objects cannot remove it. Changes to
 that identity force a clean rebuild in both ordinary and checksum modes;
 failed configuration or version probes preserve the previous successful build.

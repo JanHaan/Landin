@@ -23,7 +23,8 @@ BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
         "4 40 /src/lib.gpr", "5 50 /scripts/build.sh",
         "6 60 /scripts/build_lock.py", "mode debug tag test",
         "gnat pinned", "gprbuild pinned", "toolchain configuration selected",
-        'toolchain c-driver {"path": "/tools/selected-cc", "sha256": "123"}']
+        'toolchain c-driver {"path": "/tools/selected-cc", "sha256": "123"}',
+        'toolchain gprbuild {"path": "/tools/builder", "sha256": "456"}']
 
 
 class BuildInventory(unittest.TestCase):
@@ -209,8 +210,10 @@ landin_require() { command -v "$1" >/dev/null; }
         self.executable(fake / "gnat", "#!/bin/sh\necho 'pinned Ada'\n")
         # This prints commands instead of compiling anything. The only invoked
         # C-driver action is --version from the production configuration helper.
-        self.executable(fake / "gprbuild", '''#!/usr/bin/env python3
+        self.builder = fake / "gprbuild"
+        self.executable(self.builder, '''#!/usr/bin/env python3
 import json, os, pathlib, sys
+artifact = "old"
 if sys.argv[1:] == ["--version"]:
     print("pinned builder")
     raise SystemExit(0)
@@ -228,7 +231,7 @@ build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
 (build / "bin").mkdir(parents=True, exist_ok=True)
 for name in ("refine", "landin_tests"):
     path = build / "bin" / name
-    path.write_text("#!/bin/sh\\nexit 0\\n")
+    path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
     path.chmod(0o755)
 ''')
         self.executable(fake / "gprconfig", '''#!/usr/bin/env python3
@@ -297,6 +300,32 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(self.calls(), calls)
         self.assertEqual(self.configuration.stat().st_mtime_ns, stamp)
         self.assertEqual(self.manifest.read_text(), manifest)
+
+    def test_same_version_builder_replacement_rebuilds(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        executable = self.build / "bin/refine"
+        self.assertEqual(subprocess.check_output([executable], text=True), "old\n")
+        previous = self.manifest.read_text()
+        builder_identity = json.loads(next(
+            line.removeprefix("toolchain gprbuild ")
+            for line in previous.splitlines()
+            if line.startswith("toolchain gprbuild ")))
+        self.assertEqual(builder_identity["path"], str(self.builder))
+        marker = self.build / "stale-object"
+        marker.write_text("old object")
+        old_builder = self.builder.read_text()
+        self.assertIn('artifact = "old"', old_builder)
+        self.executable(self.builder, old_builder.replace(
+            'artifact = "old"', 'artifact = "new"'))
+
+        second = self.run_build()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertIn("rebuilding from clean", second.stdout)
+        self.assertFalse(marker.exists())
+        self.assertEqual(subprocess.check_output([executable], text=True), "new\n")
+        self.assertEqual(len(self.calls()), 4)
+        self.assertNotEqual(self.manifest.read_text(), previous)
 
     def test_selected_identity_changes_clean_both_build_modes(self):
         for incremental in ("yes", "no"):

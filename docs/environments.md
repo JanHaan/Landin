@@ -120,8 +120,9 @@ checking while avoiding a clean rebuild for every Ada edit:
 The selectors are exact, accept one selection at a time, and print `FILTERED`
 in the transcript. They are fast feedback, not validation evidence. The
 developer build asks the pinned GPRbuild for checksum-based Ada recompilation;
-a changed source inventory or project file still makes it clean. The ordinary
-`build.sh` and `test.sh` remain complete native Linux commands; `--host`
+a changed source inventory, project file or selected GPRbuild executable still
+makes it clean. The ordinary `build.sh` and `test.sh` remain complete native
+Linux commands; `--host`
 selects Mac compiler checks. Nothing approves a revision now. The container
 command is retained troubleshooting, not a routine gate.
 
@@ -148,7 +149,7 @@ a preference. A release build is `-O2` with `-gnatn`, so gprbuild's `-j0`
 runs one `gnat1` per core doing cross-unit inlining, and in a default-sized
 VM the kernel kills one of them:
 
-```
+```text
 gcc: fatal error: Killed signal terminated program gnat1
 compilation terminated.
    compilation of landin-ir.adb failed
