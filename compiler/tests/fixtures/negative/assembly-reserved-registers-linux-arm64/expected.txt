@@ -1,4 +1,4 @@
-error[L0301]: `x18` is a register no operand may name
+error[L0330]: `x18` is a register no operand may name
   --> ../tests/fixtures/negative/assembly-reserved-registers-linux-arm64/program.ldn:2:49
   |
 2 |     assembler.block("mov x9, {v}", in v: u64 at x18 = value)
@@ -8,7 +8,7 @@ error[L0301]: `x18` is a register no operand may name
 2 |     assembler.block("mov x9, {v}", in v: u64 at x18 = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
-error[L0301]: the text names `x29`, a register no ordinary block may write
+error[L0330]: the text names `x29`, a register no ordinary block may write
   --> ../tests/fixtures/negative/assembly-reserved-registers-linux-arm64/program.ldn:3:21
   |
 3 |     assembler.block("mov x29, {v}", in v: u64 at general = value)
@@ -18,7 +18,7 @@ error[L0301]: the text names `x29`, a register no ordinary block may write
 3 |     assembler.block("mov x29, {v}", in v: u64 at general = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
-error[L0301]: the text names `x19`, a register the routine preserves, and no operand declares it
+error[L0330]: the text names `x19`, a register the routine preserves, and no operand declares it
   --> ../tests/fixtures/negative/assembly-reserved-registers-linux-arm64/program.ldn:4:21
   |
 4 |     assembler.block("mov x19, {v}", in v: u64 at general = value)
@@ -28,7 +28,7 @@ error[L0301]: the text names `x19`, a register the routine preserves, and no ope
 4 |     assembler.block("mov x19, {v}", in v: u64 at general = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: declare it with `out _ at x19` so the routine saves it
-error[L0301]: the text names `d8`, a register no ordinary block may write
+error[L0330]: the text names `d8`, a register no ordinary block may write
   --> ../tests/fixtures/negative/assembly-reserved-registers-linux-arm64/program.ldn:5:21
   |
 5 |     assembler.block("fmov d8, {v}", in v: u64 at general = value)

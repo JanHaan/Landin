@@ -1002,7 +1002,7 @@ package body Landin.Tests.Cortex_Suite is
                Result : constant Landin.Driver.Outcome :=
                  Landin.Driver.Execute (Args, Host, Tools);
                Code : constant String :=
-                 (case Mode is when 1 => "L0504", when 2 | 3 => "L0301",
+                 (case Mode is when 1 => "L0504", when 2 | 3 => "L0344",
                     when 4 => "L0500");
             begin
                Landin.Testing.Check_Equal

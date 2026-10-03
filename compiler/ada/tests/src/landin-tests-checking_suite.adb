@@ -12153,10 +12153,10 @@ package body Landin.Tests.Checking_Suite is
         ("nominal-less traversal",
          "iterable: type = concept (t: type, cur: type, "
          & "item_type: type)" & LF
-         & "    first:  (s: t) -> (c: cur)" & LF
-         & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
-         & "    item:   (s: t, c: cur) -> (v: item_type)" & LF
-         & "    next:   (s: t, c: cur) -> (c2: cur)" & LF
+         & "    first:  (s: ptr t) -> (c: cur)" & LF
+         & "    at_end: (s: ptr t, c: cur) -> (yes: bool)" & LF
+         & "    item:   (s: ptr t, c: cur) -> (v: item_type)" & LF
+         & "    next:   (s: ptr t, c: cur) -> (c2: cur)" & LF
          & "end iterable" & LF
          & "" & LF
          & "token: type = struct" & LF
@@ -12177,20 +12177,20 @@ package body Landin.Tests.Checking_Suite is
          & "    count: usize" & LF
          & "end cell" & LF
          & "" & LF
-         & "cell_first: (t: type, s: cell(t)) -> (c: usize) =" & LF
+         & "cell_first: (t: type, s: ptr cell(t)) -> (c: usize) =" & LF
          & "    c = 0" & LF
          & "end cell_first" & LF
          & "" & LF
-         & "cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: "
+         & "cell_at_end: (t: type, s: ptr cell(t), c: usize) -> (yes: "
          & "bool) =" & LF
-         & "    yes = c == s.count" & LF
+         & "    yes = c == s.val.count" & LF
          & "end cell_at_end" & LF
          & "" & LF
-         & "cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =" & LF
-         & "    v = s.value" & LF
+         & "cell_item: (t: type, s: ptr cell(t), c: usize) -> (v: t) =" & LF
+         & "    v = s.val.value" & LF
          & "end cell_item" & LF
          & "" & LF
-         & "cell_next: (t: type, s: cell(t), c: usize) -> (c2: "
+         & "cell_next: (t: type, s: ptr cell(t), c: usize) -> (c2: "
          & "usize) =" & LF
          & "    c2 = c + 1" & LF
          & "end cell_next" & LF
@@ -12207,10 +12207,10 @@ package body Landin.Tests.Checking_Suite is
         ("valid nominal traversal",
          "iterable: type = concept (t: type, cur: type, "
          & "item_type: type)" & LF
-         & "    first:  (s: t) -> (c: cur)" & LF
-         & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
-         & "    item:   (s: t, c: cur) -> (v: item_type)" & LF
-         & "    next:   (s: t, c: cur) -> (c2: cur)" & LF
+         & "    first:  (s: ptr t) -> (c: cur)" & LF
+         & "    at_end: (s: ptr t, c: cur) -> (yes: bool)" & LF
+         & "    item:   (s: ptr t, c: cur) -> (v: item_type)" & LF
+         & "    next:   (s: ptr t, c: cur) -> (c2: cur)" & LF
          & "end iterable" & LF
          & "" & LF
          & "token: type = struct" & LF
@@ -12231,20 +12231,20 @@ package body Landin.Tests.Checking_Suite is
          & "    count: usize" & LF
          & "end cell" & LF
          & "" & LF
-         & "cell_first: (t: type, s: cell(t)) -> (c: usize) =" & LF
+         & "cell_first: (t: type, s: ptr cell(t)) -> (c: usize) =" & LF
          & "    c = 0" & LF
          & "end cell_first" & LF
          & "" & LF
-         & "cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: "
+         & "cell_at_end: (t: type, s: ptr cell(t), c: usize) -> (yes: "
          & "bool) =" & LF
-         & "    yes = c == s.count" & LF
+         & "    yes = c == s.val.count" & LF
          & "end cell_at_end" & LF
          & "" & LF
-         & "cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =" & LF
-         & "    v = s.value" & LF
+         & "cell_item: (t: type, s: ptr cell(t), c: usize) -> (v: t) =" & LF
+         & "    v = s.val.value" & LF
          & "end cell_item" & LF
          & "" & LF
-         & "cell_next: (t: type, s: cell(t), c: usize) -> (c2: "
+         & "cell_next: (t: type, s: ptr cell(t), c: usize) -> (c2: "
          & "usize) =" & LF
          & "    c2 = c + 1" & LF
          & "end cell_next" & LF
