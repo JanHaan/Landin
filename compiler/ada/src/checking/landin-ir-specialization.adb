@@ -1,4 +1,5 @@
 with Ada.Containers.Ordered_Maps;
+with Ada.Containers.Vectors;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
 with Landin.IR.Shape_Measurement;
@@ -19,18 +20,28 @@ package body Landin.IR.Specialization is
    is
       package Reports renames Landin.Build_Reports;
       package Layouts renames Landin.Targets.Layouts;
+      use type Reports.Specialization_Decision;
       package Template_Counts is new Ada.Containers.Ordered_Maps
         (Key_Type => Declaration_Id, Element_Type => Natural);
+      package Boolean_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Boolean);
+      package Decision_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive,
+         Element_Type => Reports.Specialization_Decision);
       Eligible : Template_Counts.Map;
       Count : constant Natural := Item_Count (Into);
-      Proven, Exposed : array (1 .. Count) of Boolean := [others => False];
-      Decisions : array (1 .. Count) of Reports.Specialization_Decision;
-      Stable_Slots : array (1 .. Natural (Into.Slots.Length)) of Boolean :=
-        [others => True];
-      Private_Slots : array (Stable_Slots'Range) of Boolean :=
-        [others => True];
-      Aliases : array (1 .. Natural (Into.Code.Length)) of Value_Id :=
-        [others => No_Value];
+      Proven : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (False, Ada.Containers.Count_Type (Count));
+      Exposed : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (False, Ada.Containers.Count_Type (Count));
+      Decisions : Decision_Vectors.Vector := Decision_Vectors.To_Vector
+        ((others => <>), Ada.Containers.Count_Type (Count));
+      Stable_Slots : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (True, Into.Slots.Length);
+      Private_Slots : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (True, Into.Slots.Length);
+      Aliases : Value_Ref_Vectors.Vector := Value_Ref_Vectors.To_Vector
+        (No_Value, Into.Code.Length);
       Changed : Boolean;
       Rewritten : Boolean := False;
 
@@ -420,7 +431,8 @@ package body Landin.IR.Specialization is
       --  only when a rewritten call leaves an unused callee operand behind.
       if Rewritten then
          Rewriting.Compact
-           (Into, [1 .. Natural (Into.Code.Length) => True]);
+           (Into, Rewriting.Keep_Vectors.To_Vector
+              (True, Into.Code.Length));
       end if;
       Verifier.Verify (Into, Facts);
    end Run;
