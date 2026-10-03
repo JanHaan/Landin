@@ -12,6 +12,7 @@
 #endif
 #endif
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -32,6 +33,23 @@ int landin_same_file(const char *left, const char *right);
 int landin_same_existing_file(const char *left, const char *right);
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
+int landin_directory_access_denied(const char *path);
+
+/* A failed Ada.Directories.Exists can mean either absence or a parent that
+   refused traversal. Probe only that failure path, preserving the host's
+   errno rather than guessing from an empty listing. */
+int landin_directory_access_denied(const char *path)
+{
+    DIR *directory = opendir(path);
+    int denied;
+
+    if (directory) {
+        closedir(directory);
+        return 0;
+    }
+    denied = errno == EACCES || errno == EPERM;
+    return denied;
+}
 
 struct destination {
     struct stat object;

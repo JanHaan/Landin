@@ -384,7 +384,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      =>
                "[1420]: no ordered import root contains the requested module",
             when Module_Directory_Invalid =>
-               "[1410]: an entry module must be a readable directory",
+               "[1410], [1420]: a module directory is invalid or unreadable",
             when Not_Formatted         =>
                "D252: a source `refine fmt --check` finds out of the layout",
             when Unknown_Level         =>

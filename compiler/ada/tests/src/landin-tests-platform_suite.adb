@@ -107,6 +107,13 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Check
         (Item, Status = Landin.Platform.Directory_Not_Found,
          "a missing directory says so");
+
+      Host.Add_Unlistable_Directory ("locked");
+      Host.List_Directory ("locked/", Entries, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Directory_Not_Readable
+         and then Entries.Is_Empty and then Host.Is_Directory ("locked"),
+         "an unlistable directory stays distinct from an absent one");
    end Fake_Listings_Are_Sorted_And_Shallow;
 
    procedure Fake_Directory_Separators_Keep_Identity

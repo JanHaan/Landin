@@ -42,7 +42,7 @@ package body Landin.Testing.Fakes is
             Stored : constant String := Unbounded.To_String (Item.Path);
          begin
             if Stored = Path
-              or else (Item.Kind = A_Directory
+              or else (Item.Kind in A_Directory | An_Unlistable_Directory
                        and then Stored = Directory_Path (Path))
             then
                return Index;
@@ -88,6 +88,12 @@ package body Landin.Testing.Fakes is
    begin
       Add (Host, Directory_Path (Path), "", A_Directory);
    end Add_Directory;
+
+   procedure Add_Unlistable_Directory
+     (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Add (Host, Directory_Path (Path), "", An_Unlistable_Directory);
+   end Add_Unlistable_Directory;
 
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String) is
    begin
@@ -151,7 +157,8 @@ package body Landin.Testing.Fakes is
       Index : constant Natural := Find (Host, Path);
    begin
       return Index /= 0
-        and then Host.Writes.Data.Files.Element (Index).Kind = A_Directory;
+        and then Host.Writes.Data.Files.Element (Index).Kind
+          in A_Directory | An_Unlistable_Directory;
    end Is_Directory;
 
    procedure Raise_On_Read
@@ -188,7 +195,8 @@ package body Landin.Testing.Fakes is
          when A_File =>
             Content := Host.Writes.Data.Files.Element (Index).Content;
             Status := Landin.Platform.Read_Ok;
-         when A_Directory | An_Unreadable_File =>
+         when A_Directory | An_Unlistable_Directory |
+              An_Unreadable_File =>
             Status := Landin.Platform.Not_Readable;
       end case;
    end Read_File;
@@ -213,7 +221,8 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
       if Host.Writes.Data.Refuses_Write
         or else (Existing /= 0
-                 and then Host.Writes.Data.Files (Existing).Kind = A_Directory)
+                 and then Host.Writes.Data.Files (Existing).Kind
+                   in A_Directory | An_Unlistable_Directory)
       then
          Status := Landin.Platform.Not_Writable;
          return;
@@ -265,7 +274,9 @@ package body Landin.Testing.Fakes is
          Status := Landin.Platform.Not_Removable;
       elsif Existing = 0 then
          Status := Landin.Platform.Already_Absent;
-      elsif Host.Writes.Data.Files (Existing).Kind = A_Directory then
+      elsif Host.Writes.Data.Files (Existing).Kind
+        in A_Directory | An_Unlistable_Directory
+      then
          Status := Landin.Platform.Not_Removable;
       else
          Host.Writes.Data.Files.Delete (Existing);
@@ -300,6 +311,13 @@ package body Landin.Testing.Fakes is
 
       if Index = 0 then
          Status := Landin.Platform.Directory_Not_Found;
+         return;
+      end if;
+
+      if Host.Writes.Data.Files.Element (Index).Kind =
+        An_Unlistable_Directory
+      then
+         Status := Landin.Platform.Directory_Not_Readable;
          return;
       end if;
 

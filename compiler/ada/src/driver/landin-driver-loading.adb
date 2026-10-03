@@ -23,6 +23,7 @@ package body Landin.Driver.Loading is
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
+   use type Unbounded.Unbounded_String;
 
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
@@ -118,7 +119,8 @@ package body Landin.Driver.Loading is
       function Select_Module_Directory
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
-         Root_At : out Natural) return String;
+         Root_At : out Natural;
+         Unlistable : out Unbounded.Unbounded_String) return String;
 
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
@@ -150,10 +152,12 @@ package body Landin.Driver.Loading is
       function Select_Module_Directory
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
-         Root_At : out Natural) return String
+         Root_At : out Natural;
+         Unlistable : out Unbounded.Unbounded_String) return String
       is
       begin
          Root_At := 0;
+         Unlistable := Unbounded.Null_Unbounded_String;
          for Root_Index in 1 .. Natural (Roots.Length) loop
             declare
                Current : Unbounded.Unbounded_String :=
@@ -177,6 +181,10 @@ package body Landin.Driver.Loading is
                   begin
                      Host.List_Directory
                        (Unbounded.To_String (Current), Entries, Status);
+                     if Status = Landin.Platform.Directory_Not_Readable then
+                        Unlistable := Current;
+                        return "";
+                     end if;
                      if Status /= Landin.Platform.List_Ok then
                         Matched := False;
                         exit;
@@ -479,12 +487,36 @@ package body Landin.Driver.Loading is
                         elsif Target = Landin.Modules.No_Module then
                            declare
                               Selected_Root : Natural;
+                              Unlistable : Unbounded.Unbounded_String;
                               Directory_Path : constant String :=
                                 Select_Module_Directory
                                   (Tree.all, Import_Node,
-                                   Selected_Root);
+                                   Selected_Root, Unlistable);
                            begin
-                              if Directory_Path = "" then
+                              if Unlistable /=
+                                Unbounded.Null_Unbounded_String
+                              then
+                                 declare
+                                    Found : Landin.Diagnostics
+                                      .Diagnostic_List;
+                                 begin
+                                    Module_Diagnostics.Report
+                                      (Item    => Module_Diagnostics
+                                         .Module_Directory_Invalid,
+                                       Source  => Source_Id,
+                                       Where   => Landin.Syntax.Where
+                                         (Tree.all, Import_Node),
+                                       Message => "import directory cannot"
+                                         & " be listed: "
+                                         & Unbounded.To_String (Unlistable),
+                                       Note    => "[1420]: roots are"
+                                         & " searched in supplied order",
+                                       Into    => Found);
+                                    Landin.Stages.Report
+                                      (Context,
+                                       Landin.Diagnostics.Get (Found, 1));
+                                 end;
+                              elsif Directory_Path = "" then
                                  if Missing_Directories /= null then
                                     for Root of Roots loop
                                        Missing_Directories.Append

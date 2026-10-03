@@ -717,6 +717,105 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Roots_Are_Searched_In_Order;
 
+   procedure Unlistable_Import_Roots_Are_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unlistable_Import_Roots_Are_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String := "import pkg/sub" & LF;
+
+      procedure Check_Search
+        (Locked_Path : String; With_Second : Boolean);
+
+      procedure Check_Search
+        (Locked_Path : String; With_Second : Boolean)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_File ("entry/main.ldn", Source);
+         Host.Add_Directory ("first");
+         if Locked_Path = "first/pkg" then
+            Host.Add_Unlistable_Directory (Locked_Path);
+         else
+            Host.Add_Unlistable_Directory ("first");
+         end if;
+         Host.Add_Directory ("second");
+         Host.Add_Directory ("second/pkg");
+         Host.Add_Directory ("second/pkg/sub");
+         Host.Add_File ("second/pkg/sub/bad.ldn", "@" & LF);
+         Args.Append ("--root=first");
+         if With_Second then
+            Args.Append ("--root=second");
+         end if;
+         Args.Append ("entry");
+
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String :=
+              Unbounded.To_String (Result.Report);
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "an unlistable import root refuses the request");
+            Landin.Testing.Check
+              (Item, Contains (Report, "L0007")
+               and then Contains
+                 (Report, "import directory cannot be listed: "
+                  & Locked_Path)
+               and then not Contains (Report, "L0006")
+               and then not Contains (Report, "second/pkg/sub/bad.ldn"),
+               "the first inaccessible segment is reported before fallback");
+            Host.Read_File ("entry/main.ldn", Content, Read);
+            Landin.Testing.Check
+              (Item, Read = Landin.Platform.Read_Ok
+               and then Unbounded.To_String (Content) = Source
+               and then Host.Write_Count = 0,
+               "the source snapshot and files are unchanged");
+         end;
+      end Check_Search;
+   begin
+      Check_Search ("first", True);
+      Check_Search ("first", False);
+      Check_Search ("first/pkg", True);
+   end Unlistable_Import_Roots_Are_Reported;
+
+   procedure Absent_Import_Roots_Allow_Fallback
+     (Item : in out Landin.Testing.Context);
+
+   procedure Absent_Import_Roots_Allow_Fallback
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_File ("entry/main.ldn", "import pkg/sub" & LF);
+      Host.Add_Directory ("second");
+      Host.Add_Directory ("second/pkg");
+      Host.Add_Directory ("second/pkg/sub");
+      Host.Add_File ("second/pkg/sub/main.ldn", "value: i32 = 1" & LF);
+      Args.Append ("--root=absent");
+      Args.Append ("--root=second");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "an absent first root permits a later module");
+      end;
+   end Absent_Import_Roots_Allow_Fallback;
+
    procedure Private_Imported_Names_Are_Diagnosed
      (Item : in out Landin.Testing.Context);
 
@@ -4380,6 +4479,12 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "roots are searched in order",
          Roots_Are_Searched_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "unlistable import roots are reported",
+         Unlistable_Import_Roots_Are_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "absent import roots allow fallback",
+         Absent_Import_Roots_Allow_Fallback'Access);
       Landin.Testing.Register
         (Into, "driver", "private imported names are diagnosed",
          Private_Imported_Names_Are_Diagnosed'Access);

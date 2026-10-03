@@ -22,6 +22,10 @@ package Landin.Testing.Fakes is
    --  Trailing directory separators do not create a different entry.
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String);
 
+   --  A directory whose entry is visible but whose contents cannot be listed.
+   procedure Add_Unlistable_Directory
+     (Host : in out Fake_Filesystem; Path : String);
+
    --  A path that exists and refuses to be read, which is how the driver's
    --  unreadable-source diagnostic gets tested.
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String);
@@ -207,7 +211,9 @@ private
 
    package Unbounded renames Ada.Strings.Unbounded;
 
-   type Entry_Kind is (A_File, A_Directory, An_Unreadable_File);
+   type Entry_Kind is
+     (A_File, A_Directory, An_Unreadable_File,
+      An_Unlistable_Directory);
 
    type File_Entry is record
       Path    : Unbounded.Unbounded_String;

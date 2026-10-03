@@ -122,8 +122,11 @@ diagnostic offers it as a likely fix.
 
 ### L0007
 
-With `--root=`, the entry module is a directory [1410], and the operand given
-is not a readable one. Pass the directory, not a file inside it.
+With `--root=`, the entry module must be a readable directory [1410]. Pass
+the directory, not a file inside it. This code also reports an import root or
+intermediate directory that cannot be listed while searching in root order
+[1420]. Check the named path and its permissions; a genuinely absent module
+is reported by L0006.
 
 ### L0008
 

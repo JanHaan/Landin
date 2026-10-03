@@ -65,9 +65,12 @@ package body Landin.Diagnostics.Explanations is
                & "d exactly. When a directory near the missing segment is "
                & "there, the diagnostic offers it as a likely fix.",
             when Catalogue.Module_Directory_Invalid =>
-               "With `--root=`, the entry module is a directory [1410], "
-               & "and the operand given is not a readable one. Pass the di"
-               & "rectory, not a file inside it.",
+               "With `--root=`, the entry module must be a readable dire"
+               & "ctory [1410]. Pass the directory, not a file inside it. "
+               & "This code also reports an import root or intermediate di"
+               & "rectory that cannot be listed while searching in root or"
+               & "der [1420]. Check the named path and its permissions; a "
+               & "genuinely absent module is reported by L0006.",
             when Catalogue.Not_Formatted =>
                "`refine fmt --check` found a source that is not in the l"
                & "ayout D252 decides and `docs/format.md` shows. The diagn"

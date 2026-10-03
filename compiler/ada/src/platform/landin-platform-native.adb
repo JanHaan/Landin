@@ -284,16 +284,23 @@ package body Landin.Platform.Native is
       Status  : out List_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
 
       package Sorting is new Path_Vectors.Generic_Sorting ("<" => "<");
 
       Search : Directories.Search_Type;
       Item   : Directories.Directory_Entry_Type;
+      function Access_Denied
+        (Path : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_directory_access_denied";
    begin
       Entries := Path_Vectors.Empty_Vector;
 
       if not Directories.Exists (Path) then
-         Status := Directory_Not_Found;
+         Status :=
+           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
+            then Directory_Not_Readable else Directory_Not_Found);
          return;
       end if;
 
@@ -325,8 +332,12 @@ package body Landin.Platform.Native is
       Status := List_Ok;
 
    exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
-         Status := Directory_Not_Found;
+      when Ada.IO_Exceptions.Name_Error =>
+         Status :=
+           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
+            then Directory_Not_Readable else Directory_Not_Found);
+      when Ada.IO_Exceptions.Use_Error | Ada.IO_Exceptions.Device_Error =>
+         Status := Directory_Not_Readable;
    end List_Directory;
 
    overriding function Sample (Host : Native_Meter) return Resource_Sample

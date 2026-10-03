@@ -23,7 +23,9 @@ package Landin.Platform is
    type Read_Status is (Read_Ok, Not_Found, Not_Readable);
    type Write_Status is (Write_Ok, Not_Writable);
    type Remove_Status is (Removed, Already_Absent, Not_Removable);
-   type List_Status is (List_Ok, Directory_Not_Found, Not_A_Directory);
+   type List_Status is
+     (List_Ok, Directory_Not_Found, Not_A_Directory,
+      Directory_Not_Readable);
 
    ---------------------------------------------------------------------
    --  Filesystem
