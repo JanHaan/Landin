@@ -381,8 +381,12 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit (Instruction : String) is
       begin
+         --  Frame records emit no instructions. In particular, a record
+         --  between a return and its trap label must not advance a pool
+         --  flush ahead of that label in debug builds.
          if Pool_Active and then not Pool_Flushing
            and then not Literals.Is_Empty
+           and then Ada.Strings.Fixed.Index (Instruction, ".cfi_") /= 1
          then
             if Pool_Distance >= 512 then
                Flush_Literals;
