@@ -144,6 +144,43 @@ package body Landin.Tests.Server_Suite is
          "a source that parses is analysed as it is");
    end A_Broken_Body_Is_Stood_In_For;
 
+   procedure Several_Broken_Bodies_Are_Stood_In_For
+     (Item : in out Landin.Testing.Context);
+
+   procedure Several_Broken_Bodies_Are_Stood_In_For
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "first: () -> none =" & LF
+        & "    x := 1 + 2 * 3 -" & LF
+        & "end first" & LF
+        & "sound: () -> none = end sound" & LF
+        & "second: () -> none =" & LF
+        & "    x := 2 + 3 * 4 -" & LF
+        & "end second" & LF
+        & "third: () -> none =" & LF
+        & "    x := 3 + 4 * 5 -" & LF
+        & "end third" & LF;
+      Plan : constant Holes.Plan := Holes.Plan_For (Text);
+   begin
+      Landin.Testing.Check
+        (Item, Plan.Outcome = Holes.Stood_In,
+         "all broken bodies can be stood in for");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Plan.Held.Length), 3,
+         "one held region per broken body");
+      if Natural (Plan.Held.Length) = 3 then
+         Landin.Testing.Check
+           (Item, Plan.Held.Element (1).Last < Plan.Held.Element (2).First
+                  and then Plan.Held.Element (2).Last
+                    < Plan.Held.Element (3).First,
+            "held regions stay in source order across a sound body");
+      end if;
+      Landin.Testing.Check_Equal
+        (Item, Ada.Strings.Fixed.Count (Plan.Text, "loop do end loop"), 3,
+         "each broken body receives a stand-in");
+   end Several_Broken_Bodies_Are_Stood_In_For;
+
    --  Each source here has an error a stand-in must not hide.
    procedure Only_A_Body_Is_Stood_In_For
      (Item : in out Landin.Testing.Context);
@@ -1176,6 +1213,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "a broken body is stood in for",
          A_Broken_Body_Is_Stood_In_For'Access);
+      Landin.Testing.Register
+        (Into, "server", "several broken bodies are stood in for",
+         Several_Broken_Bodies_Are_Stood_In_For'Access);
       Landin.Testing.Register
         (Into, "server", "only a body is stood in for",
          Only_A_Body_Is_Stood_In_For'Access);
