@@ -149,6 +149,20 @@ package body Landin.IR.Specialization is
                                        + Positive (Code.Slot)) := False;
                      end if;
                   end if;
+                  --  Assembly outputs are frame writes, even though the
+                  --  instruction itself has no Slot operand.  A parameter
+                  --  overwritten here cannot establish static evidence.
+                  for A in 1 .. Code.Assembly_Run.Count loop
+                     declare
+                        Output : constant Slot_Id := Into.Assembly_Operands
+                          (Code.Assembly_Run.First + A).Output;
+                     begin
+                        if Output /= No_Slot then
+                           Stable_Slots (Into.Items (I).Slots.First
+                                         + Positive (Output)) := False;
+                        end if;
+                     end;
+                  end loop;
                end;
             end loop;
          end;
@@ -185,6 +199,19 @@ package body Landin.IR.Specialization is
                           Stored (Positive (Code.Slot));
                      end if;
                   end if;
+                  --  Do not forward a store across a block's output write.
+                  --  A later store may still establish a fresh alias.
+                  for A in 1 .. Code.Assembly_Run.Count loop
+                     declare
+                        Output : constant Slot_Id := Into.Assembly_Operands
+                          (Code.Assembly_Run.First + A).Output;
+                     begin
+                        if Output /= No_Slot then
+                           Stored (Positive (Output)) := No_Value;
+                           Blocks (Positive (Output)) := No_Block;
+                        end if;
+                     end;
+                  end loop;
                end;
             end loop;
          end;

@@ -30,6 +30,9 @@ package body Landin.Tests.IR_Optimization_Suite is
    package Reports renames Landin.Build_Reports;
    use type IR.Opcode;
    use type IR.Item_Kind;
+   use type IR.Item_Id;
+   use type IR.Evidence_Id;
+   use type IR.Slot_Id;
    use type IR.Block_Id;
    use type IR.Signature_Id;
    use type Opt.Objective;
@@ -69,6 +72,8 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Exposed_Evidence (Item : in out Landin.Testing.Context);
    procedure Raw_Any (Item : in out Landin.Testing.Context);
    procedure Incoming_Evidence (Item : in out Landin.Testing.Context);
+   procedure Assembly_Output_Aliases
+     (Item : in out Landin.Testing.Context);
    procedure Instance_Costs (Item : in out Landin.Testing.Context);
    procedure Large_Graph (Item : in out Landin.Testing.Context);
    procedure Scalar_Boundaries (Item : in out Landin.Testing.Context);
@@ -76,10 +81,13 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Cyclic_Islands (Item : in out Landin.Testing.Context);
 
    type Incoming_Kind is (Literal_Table, Unknown_Table, Wrong_Table);
+   type Assembly_Case is
+     (No_Assembly, Overwritten, Restored, Unrelated_Output);
    procedure Evidence_Unit
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
-      Split_Template : Boolean := False);
+      Split_Template : Boolean := False;
+      Assembly_Output : Assembly_Case := No_Assembly);
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -380,13 +388,14 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Evidence_Unit
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
-      Split_Template : Boolean := False)
+      Split_Template : Boolean := False;
+      Assembly_Output : Assembly_Case := No_Assembly)
    is
       Site : constant Landin.Provenance.Origin :=
         IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
       Generic_Items : array (1 .. Instances) of IR.Item_Id;
       Parameters : array (Generic_Items'Range) of IR.Slot_Id;
-      Root, Provider : IR.Item_Id;
+      Root, Provider, Alternate : IR.Item_Id;
       Hidden : IR.Slot_Id := IR.No_Slot;
       Signature, Empty : IR.Signature_Id;
       Expected, Other : IR.Evidence_Id;
@@ -407,12 +416,26 @@ package body Landin.Tests.IR_Optimization_Suite is
       IR.Enter (Code, Provider, Block);
       IR.Emit_Leave (Code, Provider, IR.No_Value, Site);
       IR.Leave_Block (Code, Provider);
+      if Assembly_Output /= No_Assembly then
+         Alternate := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration,
+            Landin.Types.No_Value, Site);
+         IR.Set_Signature (Code, Alternate, Empty);
+         Block := IR.Add_Block
+           (Code, Alternate, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Code, Alternate, Block);
+         IR.Emit_Leave (Code, Alternate, IR.No_Value, Site);
+         IR.Leave_Block (Code, Alternate);
+      end if;
       Expected := IR.Add_Evidence
         (Code, (Element => Landin.Types.I32, others => <>));
       IR.Add_Evidence_Entry (Code, Expected, Provider, Empty);
       Other := IR.Add_Evidence
         (Code, (Element => Landin.Types.I32, others => <>));
-      IR.Add_Evidence_Entry (Code, Other, Provider, Empty);
+      IR.Add_Evidence_Entry
+        (Code, Other, (if Assembly_Output /= No_Assembly
+                      then Alternate else Provider),
+         Empty);
       for I in Generic_Items'Range loop
          Generic_Items (I) := IR.Add_Routine_Instance_Item
            (Code, I, (if Split_Template and then I = Instances then 2 else 1),
@@ -436,6 +459,39 @@ package body Landin.Tests.IR_Optimization_Suite is
            (Code, Generic_Items (I), Landin.Resolution.Program_Scope, Site);
          IR.Enter (Code, Generic_Items (I), Block);
          Table := IR.Emit_Load (Code, Generic_Items (I), Parameters (I), Site);
+         if Assembly_Output /= No_Assembly then
+            declare
+               Local : constant IR.Slot_Id := IR.Add_Slot
+                 (Code, Generic_Items (I), Landin.Types.Usize,
+                  IR.No_Declaration, Site);
+               Output : IR.Slot_Id := Local;
+               Other_Table : IR.Value_Id;
+               Ignore : IR.Value_Id;
+            begin
+               IR.Emit_Store (Code, Generic_Items (I), Local, Table, Site);
+               Other_Table := IR.Emit_Evidence_Address
+                 (Code, Generic_Items (I), Other, Site);
+               if Assembly_Output = Unrelated_Output then
+                  Output := IR.Add_Slot
+                    (Code, Generic_Items (I), Landin.Types.Usize,
+                     IR.No_Declaration, Site);
+               end if;
+               Ignore := IR.Emit_Assembly
+                 (Code, Generic_Items (I),
+                  Landin.Source.Names.Intern
+                    (Landin.Stages.Identities (Work).all, "nop"),
+                  [1 => IR.Operand_At
+                    (IR.Both, Landin.Source.Names.No_Name, "rax",
+                     Landin.Types.Usize, Output)],
+                  [1 => Other_Table], Site);
+               if Assembly_Output = Restored then
+                  IR.Emit_Store
+                    (Code, Generic_Items (I), Local, Table, Site);
+               end if;
+               Table := IR.Emit_Load
+                 (Code, Generic_Items (I), Local, Site);
+            end;
+         end if;
          Projection := IR.Emit_Evidence_Function
            (Code, Generic_Items (I), Table, Expected, 1, Site);
          IR.Set_Loop_Depth (Code, Generic_Items (I), 1);
@@ -471,6 +527,101 @@ package body Landin.Tests.IR_Optimization_Suite is
       IR.Leave_Block (Code, Root);
       IR.Verifier.Verify (Code, Landin.Stages.Target (Work));
    end Evidence_Unit;
+
+   procedure Assembly_Output_Aliases
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Value_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      for Scenario in Overwritten .. Unrelated_Output loop
+         declare
+            Code : IR.Unit;
+            Report : Reports.Report;
+            Found : Boolean := False;
+            Assembly_Slot : IR.Slot_Id := IR.No_Slot;
+            Reloads_Output : Boolean := False;
+            Input_Is_Other : Boolean := False;
+            Other_Address : IR.Value_Id := IR.No_Value;
+            Expected, Other : IR.Evidence_Id := IR.No_Evidence;
+         begin
+            Evidence_Unit
+              (Code, Work, Literal_Table, 1, False,
+               Assembly_Output => Scenario);
+            Landin.Testing.Check_Equal
+              (Item, Count (Code, IR.Indirect_Call), 1,
+               "verified fixture starts with indirect dispatch");
+            --  Check that the two table addresses really name different
+            --  providers and that the overwritten case reloads the output.
+            for V in 1 .. IR.Value_Count (Code, IR.Item_Id'(3)) loop
+               declare
+                  Id : constant IR.Value_Id := IR.Value_Id (V);
+                  Op : constant IR.Opcode :=
+                    IR.Op_Of (Code, IR.Item_Id'(3), Id);
+               begin
+                  if Op = IR.Evidence_Address then
+                     Other := IR.Evidence_Of (Code, IR.Item_Id'(3), Id);
+                     Other_Address := Id;
+                  elsif Op = IR.Evidence_Function then
+                     Expected := IR.Evidence_Of (Code, IR.Item_Id'(3), Id);
+                  elsif Op = IR.Assembly then
+                     Assembly_Slot := IR.Nth_Assembly_Operand
+                       (Code, IR.Item_Id'(3), Id, 1).Output;
+                     Input_Is_Other := IR.Nth_Operand
+                       (Code, IR.Item_Id'(3), Id, 1) = Other_Address;
+                  elsif Op = IR.Load and then
+                    Assembly_Slot /= IR.No_Slot and then
+                    IR.Slot_Of (Code, IR.Item_Id'(3), Id) = Assembly_Slot
+                  then
+                     Reloads_Output := True;
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Expected /= IR.No_Evidence
+               and then Other /= IR.No_Evidence
+               and then IR.Evidence_Entry_Target (Code, Expected, 1)
+                 = IR.Item_Id'(1)
+               and then IR.Evidence_Entry_Target (Code, Other, 1)
+                 = IR.Item_Id'(2)
+               and then Input_Is_Other
+               and then (Scenario /= Overwritten or else Reloads_Output),
+               "fixture has distinct table providers and output provenance");
+            IR.Specialization.Run
+              (Code, Landin.Stages.Target (Work),
+               (Opt.Speed, Opt.All_Eligible), Report);
+            if Scenario = Overwritten then
+               Landin.Testing.Check
+                 (Item, Reports.Nth_Specialization (Report, 1).Action
+                   = Reports.Declined
+                  and then Count (Code, IR.Indirect_Call) = 1,
+                  "assembly output keeps dynamic dispatch");
+            else
+               Landin.Testing.Check
+                 (Item, Reports.Nth_Specialization (Report, 1).Action
+                   = Reports.Specialized
+                  and then Count (Code, IR.Indirect_Call) = 0,
+                  "safe store remains eligible for specialization");
+               for V in 1 .. IR.Value_Count (Code, IR.Item_Id'(3)) loop
+                  if IR.Op_Of (Code, IR.Item_Id'(3), IR.Value_Id (V))
+                    = IR.Call
+                  then
+                     Found := True;
+                     Landin.Testing.Check
+                       (Item, IR.Callee_Of
+                          (Code, IR.Item_Id'(3), IR.Value_Id (V))
+                            = IR.Item_Id'(1),
+                        "safe dispatch targets expected provider");
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Found, "safe fixture contains direct call");
+            end if;
+         end;
+      end loop;
+   end Assembly_Output_Aliases;
 
    procedure Incoming_Evidence (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -1264,6 +1415,9 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "raw any", Raw_Any'Access);
       Landin.Testing.Register
         (Into, "ir opt", "incoming evidence", Incoming_Evidence'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "assembly output aliases",
+         Assembly_Output_Aliases'Access);
       Landin.Testing.Register
         (Into, "ir opt", "instance costs", Instance_Costs'Access);
       Landin.Testing.Register
