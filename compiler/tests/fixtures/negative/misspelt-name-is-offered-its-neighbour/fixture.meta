@@ -1,5 +1,5 @@
 class: negative
-summary: [1860] refuses a name declared nowhere and offers the nearest names in scope, a parameter and a function
+summary: [1860] refuses a name declared nowhere and offers nearest names in scope, including three tied functions
 program: program.ldn
 codes: L0201, L0201
 fixed: program.fixed

@@ -1,4 +1,6 @@
 count: (value: u32) -> (result: u32) = value + 1 end count
+cuona: (value: u32) -> (result: u32) = value + 2 end cuona
+cuons: (value: u32) -> (result: u32) = value + 3 end cuons
 
 total: (limit: u32) -> (result: u32) =
     mut sum: u32 = 0

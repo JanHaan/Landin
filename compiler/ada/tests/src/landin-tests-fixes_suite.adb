@@ -53,6 +53,7 @@ package body Landin.Tests.Fixes_Suite is
       Text  : constant String := "ab cd ef";
       Found : Diag.Diagnostic_List;
       Clash : Diag.Diagnostic_List;
+      Choices : Diag.Diagnostic_List;
       Clashed : Boolean;
 
       function Fixed_At
@@ -91,12 +92,45 @@ package body Landin.Tests.Fixes_Suite is
          "overlapping fixes leave the text alone");
       Landin.Testing.Check
         (Item, Clashed, "and say that they clashed");
+
+      declare
+         Report : Diag.Diagnostic := Diag.Make
+           ("L0990", Diag.Error, 1, (0, 2), "choose a spelling");
+         procedure Add_Choice (Spelling : String);
+
+         procedure Add_Choice (Spelling : String) is
+            Made : Diag.Fix := Diag.Make_Fix
+              (Diag.Respell, Diag.Likely, "alternative");
+         begin
+            Diag.Add_Edit
+              (Made, Diag.Make_Edit (1, (0, 2), Spelling));
+            Diag.Add_Fix (Report, Made);
+         end Add_Choice;
+      begin
+         Add_Choice ("xy");
+         Add_Choice ("xz");
+         Add_Choice ("xq");
+         Choices.Append (Report);
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Fixes.Applied
+           (Choices, 1, Text, Clashed, 1, 2), "xz cd ef",
+         "the second fix replaces the first for one diagnostic");
+      Landin.Testing.Check
+        (Item, not Clashed, "the second fix does not clash");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Fixes.Applied
+           (Choices, 1, Text, Clashed, 1, 3), "xq cd ef",
+         "the third fix also reaches the applied text");
+      Landin.Testing.Check
+        (Item, not Clashed, "the third fix does not clash");
    end Fixes_Apply_From_The_End;
 
    --  Every fixture that pins a fix: its program is compiled, the first
-   --  fix of every diagnostic that offers one is applied, the result must
-   --  be the bytes the fixture records, and the result must then compile
-   --  with nothing at all to report.  A one-file fixture runs on a fake
+   --  fixes are applied together and checked against the recorded bytes.
+   --  Each alternative replaces its diagnostic's first fix in turn; every
+   --  result must compile with nothing at all to report.  A one-file
+   --  fixture runs on a fake
    --  filesystem holding its sources; reading those sources, the goldens
    --  and a rooted fixture's module closure from the real tree is this
    --  case's deliberate exception, as it is the parser suite's.
@@ -110,6 +144,7 @@ package body Landin.Tests.Fixes_Suite is
       Catalogue : Fixtures.Catalogue;
       Pinned    : Natural := 0;
       Expected  : Natural := 0;
+      Alternatives : Natural := 0;
 
       function Read (Path : String) return String;
 
@@ -172,16 +207,18 @@ package body Landin.Tests.Fixes_Suite is
             return Unbounded.To_String (Result);
          end Golden_For;
 
-         procedure Check_Clean (Again : Landin.Driver.Outcome);
+         procedure Check_Clean
+           (Again : Landin.Driver.Outcome; Description : String);
 
-         procedure Check_Clean (Again : Landin.Driver.Outcome) is
+         procedure Check_Clean
+           (Again : Landin.Driver.Outcome; Description : String) is
          begin
             Landin.Testing.Check_Equal
               (Item, Again.Status, Landin.Driver.Status_Success,
-               Label & ": the fixed program is accepted");
+               Description & ": the fixed program is accepted");
             Landin.Testing.Check_Equal
               (Item, Unbounded.To_String (Again.Report), "",
-               Label & ": the fixed program reports nothing");
+               Description & ": the fixed program reports nothing");
          end Check_Clean;
       begin
          Fixtures.Append_Module_Arguments (Fixture, Corpus, Arguments);
@@ -215,61 +252,95 @@ package body Landin.Tests.Fixes_Suite is
                (for some Index in 1 .. Diag.Count (Ran.Found) =>
                   Diag.Fix_Count (Diag.Get (Ran.Found, Index)) > 0),
                Label & ": the report offers a fix");
+            if Label = "misspelt-name-is-offered-its-neighbour" then
+               Landin.Testing.Check
+                 (Item,
+                  (for some Index in 1 .. Diag.Count (Ran.Found) =>
+                     Diag.Fix_Count (Diag.Get (Ran.Found, Index)) = 3),
+                  Label & ": three tied names are offered");
+            end if;
 
             declare
-               Fixed_Host : Landin.Platform.Overlays.Overlay (Real'Access);
-               Fixed_Fake : Landin.Testing.Fakes.Fake_Filesystem;
-               Goldens    : Natural := 0;
-            begin
-               for Index in 1 .. Natural (Ran.Named.Length) loop
-                  declare
-                     Path   : constant String := Ran.Named.Element (Index);
-                     Id     : constant Landin.Source.Source_Id :=
-                       Landin.Source.Source_Id (Index);
-                     Golden : constant String := Golden_For (Path);
-                     Before : constant String := Read (Path);
-                     Clashed : Boolean;
-                     After  : constant String :=
-                       Landin.Testing.Fixes.Applied
-                         (Ran.Found, Id, Before, Clashed);
-                  begin
-                     Landin.Testing.Check
-                       (Item, not Clashed,
-                        Label & ": the fixes of " & Path & " do not clash");
+               procedure Check_Choice
+                 (Choice_Diagnostic : Natural; Choice_Fix : Positive);
 
-                     if Golden /= "" then
-                        Goldens := Goldens + 1;
-                        Landin.Testing.Check_Equal
-                          (Item, After, Read (Directory & "/" & Golden),
-                           Label & ": " & Path & " becomes " & Golden);
-                     else
+               procedure Check_Choice
+                 (Choice_Diagnostic : Natural; Choice_Fix : Positive)
+               is
+                  Description : constant String :=
+                    Label & (if Choice_Diagnostic = 0 then "" else
+                      " diagnostic" & Natural'Image (Choice_Diagnostic)
+                      & " fix" & Positive'Image (Choice_Fix));
+                  Fixed_Host : Landin.Platform.Overlays.Overlay (Real'Access);
+                  Fixed_Fake : Landin.Testing.Fakes.Fake_Filesystem;
+                  Goldens    : Natural := 0;
+               begin
+                  for Index in 1 .. Natural (Ran.Named.Length) loop
+                     declare
+                        Path   : constant String := Ran.Named.Element (Index);
+                        Id     : constant Landin.Source.Source_Id :=
+                          Landin.Source.Source_Id (Index);
+                        Golden : constant String := Golden_For (Path);
+                        Before : constant String := Read (Path);
+                        Clashed : Boolean;
+                        After  : constant String :=
+                          Landin.Testing.Fixes.Applied
+                            (Ran.Found, Id, Before, Clashed,
+                             Choice_Diagnostic, Choice_Fix);
+                     begin
                         Landin.Testing.Check
-                          (Item,
-                           not Landin.Testing.Fixes.Edits (Ran.Found, Id),
-                           Label & ": " & Path & " is edited and the"
-                           & " fixture records no result for it");
-                     end if;
+                          (Item, not Clashed,
+                           Description & ": the fixes of " & Path
+                           & " do not clash");
 
-                     if Rooted then
-                        Fixed_Host.Hold (Path, After);
-                     else
-                        Fixed_Fake.Add_File (Path, After);
-                     end if;
-                  end;
+                        if Choice_Diagnostic = 0 and then Golden /= "" then
+                           Goldens := Goldens + 1;
+                           Landin.Testing.Check_Equal
+                             (Item, After, Read (Directory & "/" & Golden),
+                              Label & ": " & Path & " becomes " & Golden);
+                        elsif Choice_Diagnostic = 0 then
+                           Landin.Testing.Check
+                             (Item,
+                              not Landin.Testing.Fixes.Edits (Ran.Found, Id),
+                              Label & ": " & Path & " is edited and the"
+                              & " fixture records no result for it");
+                        end if;
+
+                        if Rooted then
+                           Fixed_Host.Hold (Path, After);
+                        else
+                           Fixed_Fake.Add_File (Path, After);
+                        end if;
+                     end;
+                  end loop;
+
+                  if Choice_Diagnostic = 0 then
+                     Landin.Testing.Check
+                       (Item, Goldens > 0,
+                        Label & ": `fixed` names the result of a source the"
+                        & " compilation read");
+                  end if;
+
+                  if Rooted then
+                     Check_Clean
+                       (Landin.Driver.Execute (Arguments, Fixed_Host, Tools),
+                        Description);
+                  else
+                     Check_Clean
+                       (Landin.Driver.Execute (Arguments, Fixed_Fake, Tools),
+                        Description);
+                  end if;
+               end Check_Choice;
+            begin
+               Check_Choice (0, 1);
+               for Diagnostic_Index in 1 .. Diag.Count (Ran.Found) loop
+                  for Fix_Index in 2 .. Diag.Fix_Count
+                    (Diag.Get (Ran.Found, Diagnostic_Index))
+                  loop
+                     Alternatives := Alternatives + 1;
+                     Check_Choice (Diagnostic_Index, Fix_Index);
+                  end loop;
                end loop;
-
-               Landin.Testing.Check
-                 (Item, Goldens > 0,
-                  Label & ": `fixed` names the result of a source the"
-                  & " compilation read");
-
-               if Rooted then
-                  Check_Clean
-                    (Landin.Driver.Execute (Arguments, Fixed_Host, Tools));
-               else
-                  Check_Clean
-                    (Landin.Driver.Execute (Arguments, Fixed_Fake, Tools));
-               end if;
             end;
          end;
 
@@ -298,6 +369,8 @@ package body Landin.Tests.Fixes_Suite is
 
       Landin.Testing.Check_Equal
         (Item, Pinned, Expected, "every fixture that pins a fix was run");
+      Landin.Testing.Check
+        (Item, Alternatives > 0, "a fixture applied an alternative fix");
    end Every_Pinned_Fix_Compiles_Clean;
 
    --  [1860]'s nearness: the distance counts a swap of two neighbours as
