@@ -16071,7 +16071,9 @@ before probing the replacement table for placement. Thus an update after a
 preceding tombstone changes one value without
 changing length, duplicating the key or depending on allocation availability,
 and malformed full or all-dead records still terminate.
-`hash(K) % u64(capacity)` is evaluated before conversion to `usize`.
+Bucket selection reduces the `u64` hash by the capacity before conversion to
+`usize`. For power-of-two capacities, a `u64(capacity - 1)` mask gives the
+same result as `hash(K) % u64(capacity)`; other capacities use the remainder.
 
 For a tombstone-free table, growth pressure has the meaning
 `(length + 1) * 4 > capacity * 3`, but computes the occupied count

@@ -174,9 +174,15 @@ end replace_value
 
 index_of: (key: type is hashable, value: key, slots: usize)
           -> (index: usize) =
-    --  Reduce in the hash's u64 domain before the narrowing conversion. This
-    --  remains correct when usize is 32 bits and the hash uses its high bits.
-    index = usize(key.hash(value) % u64(slots))
+    --  Every library-created nonempty capacity is a power of two. Mask in
+    --  u64 before narrowing, so the same full-width reduction applies on a
+    --  32-bit target. Publicly composed maps may have other capacities.
+    hash: u64 = key.hash(value)
+    if (slots & (slots - 1)) == 0 then
+        index = usize(hash & u64(slots - 1))
+    else
+        index = usize(hash % u64(slots))
+    end if
 end index_of
 
 next_index: (index: usize, slots: usize) -> (next: usize) =

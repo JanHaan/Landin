@@ -66,6 +66,124 @@ missing_value: (value: map.map(collision_key, i32), identity: u64,
     ok = absent
 end missing_value
 
+--  Rebuild one public storage at a caller-chosen capacity. The bucket item
+--  type is inferred from the map field, so this also exercises composition
+--  without naming map's private bucket type.
+resize_storage: (item: type, provider: type is mem.allocator,
+                 inout storage: mem.storage(item), inout state: provider,
+                 slots: usize) -> none ! mem.out_of_memory =
+    old_slots: usize = mem.capacity(storage)
+    count: usize = mem.initialized(storage)
+    block: ptr mut u8 = try provider.alloc(state, slots * sizeof item,
+                                           alignof item)
+    mut replacement := mem.reserve(item: item, base: block, slots: slots)
+    mut at: usize = 0
+    while at < count and at < slots do
+        _ = mem.transfer(storage, at, replacement) else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end
+        inc at
+    end while
+    while mem.initialized(storage) > 0 do
+        _ = mem.release(storage) else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end
+    end while
+    old_block: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        fail mem.out_of_memory
+    end
+    provider.free(state, old_block, old_slots * sizeof item)
+    storage = replacement
+end resize_storage
+
+composed_seven_buckets: () -> (ok: bool) =
+    mut provider := heap.host()
+    mut value := map.new_map(key: collision_key, item: i32)
+    empty_get: bool = missing_value(value, 1, 4294967299)
+    mut empty_remove: bool = false
+    empty_key: collision_key = (identity: 1, home: 4294967299)
+    map.remove(value, empty_key) else (problem)
+        _ = problem
+        empty_remove = true
+    end
+
+    --  Allocate the three storages, then retain a valid dead record while
+    --  replacing their eight-slot extents with seven-slot extents.
+    seed: collision_key = (identity: 1, home: 0)
+    map.insert(value, provider, seed, 10) else 0
+    map.remove(value, seed) else 0
+    seven: usize = 7
+    resize_storage(value.buckets, provider, seven) else 0
+    resize_storage(value.keys, provider, seven) else 0
+    resize_storage(value.values, provider, seven) else 0
+
+    --  2^32 is four modulo seven. The three expected homes are four,
+    --  zero and zero; masking by six would give zero, two and two.
+    first: collision_key = (identity: 2, home: 4294967296)
+    second: collision_key = (identity: 3, home: 4294967299)
+    third: collision_key = (identity: 4, home: 4294967306)
+    map.insert(value, provider, first, 20) else 0
+    map.insert(value, provider, second, 30) else 0
+    map.insert(value, provider, third, 40) else 0
+    mut placed: bool = map.capacity(value) == 7
+                   and expect_value(value, 2, 4294967296, 20)
+                   and expect_value(value, 3, 4294967299, 30)
+                   and expect_value(value, 4, 4294967306, 40)
+                   and missing_value(value, 5, 4294967299)
+    begin
+        mut position := map.entries()
+        first_seen: map.entry(collision_key, i32) =
+            map.next_entry(value, position) else (problem)
+                _ = problem
+                ok = false
+                return
+            end
+        second_seen: map.entry(collision_key, i32) =
+            map.next_entry(value, position) else (problem)
+                _ = problem
+                ok = false
+                return
+            end
+        third_seen: map.entry(collision_key, i32) =
+            map.next_entry(value, position) else (problem)
+                _ = problem
+                ok = false
+                return
+            end
+        placed = placed and first_seen.key.identity == 3
+                        and second_seen.key.identity == 4
+                        and third_seen.key.identity == 2
+    end
+    map.remove(value, first) else 0
+    removed: bool = missing_value(value, 2, 4294967296)
+                    and expect_value(value, 3, 4294967299, 30)
+                    and expect_value(value, 4, 4294967306, 40)
+    fourth: collision_key = (identity: 5, home: 4294967297)
+    fifth: collision_key = (identity: 6, home: 4294967298)
+    sixth: collision_key = (identity: 7, home: 4294967300)
+    seventh: collision_key = (identity: 8, home: 4294967301)
+    map.insert(value, provider, fourth, 50) else 0
+    map.insert(value, provider, fifth, 60) else 0
+    --  Pressure first compacts the tombstone at seven slots, then doubles
+    --  that composed capacity to fourteen on the next absent insertion.
+    map.insert(value, provider, sixth, 70) else 0
+    compacted: bool = map.capacity(value) == 7
+                      and expect_value(value, 3, 4294967299, 30)
+                      and expect_value(value, 4, 4294967306, 40)
+    map.insert(value, provider, seventh, 80) else 0
+    grown: bool = map.capacity(value) == 14
+                  and expect_value(value, 3, 4294967299, 30)
+                  and expect_value(value, 4, 4294967306, 40)
+                  and expect_value(value, 8, 4294967301, 80)
+    ok = empty_get and empty_remove and placed and removed
+         and compacted and grown
+    map.release_map(value, provider)
+    ok = ok and map.capacity(value) == 0
+end composed_seven_buckets
+
 tombstone_update: () -> (ok: bool) =
     mut provider := heap.host()
     mut value := map.new_map(key: collision_key, item: i32)
@@ -238,7 +356,7 @@ pointer_key_and_value: () -> (ok: bool) =
 end pointer_key_and_value
 
 public main: () -> (code: i32) =
-    if tombstone_update() and wrap_rehash_and_churn()
+    if composed_seven_buckets() and tombstone_update() and wrap_rehash_and_churn()
       and bounded_full_and_tombstone_probes() and pointer_key_and_value()
     then
         code = 42
