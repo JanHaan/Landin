@@ -4,14 +4,17 @@ Canonical hosting is GitHub; git.sr.ht
 is a mirror. The exact-revision native acceptance described below approved
 every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
 is what runs now, on every target on every push. Historical SourceHut gate
-results below keep their original meaning.
+results below keep their original meaning. The acceptance operations described
+here are historical; `scripts/ci/` has been removed.
 
-
-Native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
-from the Mac with its pinned tool homes. Its verified bundle must match the
-Linux bundle with compatible committed scope at approval (`--darwin DARWIN_BUNDLE`). Both source and
-execution identities are retained; Linux acceptance alone cannot close the
-Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
+Native macOS arm64 remains a development and gate environment. Use
+`./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
+`darwin-host`, `darwin-parity` and `lldb` on `macos-26`. The former Darwin
+acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
+verified bundle had to match the Linux bundle with compatible committed scope
+at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
+identities. See the [native Mac guide](../environments/macos-arm64/README.md)
+for current development commands and the retired acceptance record.
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
 through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on every
@@ -22,7 +25,8 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
+| native macOS arm64 | compiler-host development; `darwin-host`, `darwin-parity` and `lldb` gate lanes | working |
+| exact-revision Darwin acceptance | verified Mac evidence matched Linux before approval | retired |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
 | QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
@@ -30,16 +34,16 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
 | GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
 
-The acceptance controller runs the committed `scripts/ci/policy.json` scope
-against one committed archive. Routine promotion runs debug compiler-host
+The retired acceptance controller ran the committed `scripts/ci/policy.json` scope
+against one committed archive. Routine promotion ran debug compiler-host
 checks, the complete release suite and native identity, release quality,
-bindings, and document/tooling checks. GDB runs only for substantial debugging
-regression risk or a major milestone. Milestones restore the full matrix in
+bindings, and document/tooling checks. GDB ran only for substantial debugging
+regression risk or a major milestone. Milestones restored the full matrix in
 both compiler modes. Actual versions, binary hashes, commands, logs and
-artifacts are retained; verified export, annotated approval and atomic main
-promotion remain required. See
-[`environments/native-ci/README.md`](../environments/native-ci/README.md) for
-operations and [`docs/process.md`](process.md) for the workflow.
+artifacts were retained; verified export, annotated approval and atomic main
+promotion were required. See the retired
+[native acceptance operations](../environments/native-ci/README.md) and
+[validation workflow](process.md) for that historical process.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
 kept in step by a second push URL on the same remote; the Pages and
@@ -189,8 +193,8 @@ evidence; the native gate uses GDB directly and has no fallback.
 
 `environments/pins.sh` remains the one place an independently downloaded Ada
 toolchain version or checksum is written; `check.py` holds the recipe,
-`compiler/ada/TOOLCHAIN.md`, the native acceptance policy and the nix shell to those same
-values. Objects are kept
+`compiler/ada/TOOLCHAIN.md` and the nix shell to those same values, and checks
+the current native Mac tool policy against `TOOLCHAIN.md`. Objects are kept
 apart per host by `LANDIN_BUILD_TAG`, which `scripts/env.sh` defaults to
 `os-arch`: one checkout is built by two hosts, and `.ali` files from both in
 one directory is a build that fails confusingly.
@@ -353,61 +357,63 @@ QEMU owns CPU/startup evidence, and a repository-owned harness on its debugger
 stub runs the explicit synthetic peripheral lane on the same QEMU. Neither is
 physical hardware fidelity or Landin backend proof.
 
-The mandatory QEMU lane also runs with independently compiled C layouts
+The gate's QEMU lane also runs with independently compiled C layouts
 and C/assembly ABI witnesses, compared with the compiler's Cortex-M planner
-and original synthetic-32 goldens. The verified export retains those
-artifacts beside the CPU and peripheral evidence. No embedded tools
-run on the Mac; both native hosted acceptance policies retain their own work.
+and original synthetic-32 goldens. The retired acceptance export retained
+those artifacts beside the CPU and peripheral evidence. No embedded tools
+run on the Mac; the former native hosted acceptance policies covered their
+own work.
 
 M0 scalar atomic, barrier and nested interrupt controls and bounded
 memory/cache models run on this same Linux path. Native hosted fixtures execute
 Landin atomics, generic evidence calls, SC fences and an escaping ordinary DMA
 slice on each real host. Cacheless emulator results never stand in for cached
-DMA maintenance. The containing dual-native archive binds all three evidence
+DMA maintenance. The retired dual-native archive bound all three evidence
 classes; the memory [probe guide](../environments/cortex-m/README.md) records limits.
 
 Compiler-generated packed image execution runs on both native hosts and
 the Linux line-transport lane, including unnamed-encoding traps at all six
 optimization/specialization profiles. Independent M0 C controls and literal
-access traces remain separate from native Landin execution. The mandatory
-documents job builds the archived compiler and exports these new lanes beside
-all previous embedded evidence; that lane on its own is not a Cortex-M
+access traces remain separate from native Landin execution. The retired
+acceptance documents job built the archived compiler and exported these lanes
+beside previous embedded evidence; that lane on its own was not a Cortex-M
 compiler backend.
 
-The same pinned tool and evidence path carries compiler-generated
-Cortex-M0 execution of the inventoried shared runtime corpus and direct
-synthetic-device packed/byte/ordinary-slice DMA transactions. The external startup and
-linker test harness does not enable Landin firmware entry or vectors. The
-export retains objects, ELF/map/disassembly, literal ABI and device oracles,
+The same pinned tools support compiler-generated Cortex-M0 execution of the
+inventoried shared runtime corpus and direct synthetic-device
+packed/byte/ordinary-slice DMA transactions. The external startup and linker
+test harness does not enable Landin firmware entry or vectors. The retired
+export retained objects, ELF/map/disassembly, literal ABI and device oracles,
 helper identities and bounded image/stack observations; complete measured
 firmware and Landin source debugging belong to the freestanding evidence lane.
 Native GDB/LLDB coverage checks each hosted backend separately.
 
 
 The compiler-owned Cortex firmware lane runs only in the existing native
-Linux embedded environment. It extends the same pinned tool inventory and
-acceptance export with generated startup/vector/linker inputs and fresh-image
-comparisons. The external backend harness, hosted line transport and
-independent C/assembly probes remain separate evidence. See the
-[firmware execution contract](../environments/cortex-m/README.md#compiler-owned-firmware).
+Linux embedded environment. It uses the same pinned tool inventory and
+produces generated startup/vector/linker inputs and fresh-image comparisons.
+The retired acceptance export included them. The external backend harness,
+hosted line transport and independent C/assembly probes remain separate
+evidence. See the [firmware execution contract](../environments/cortex-m/README.md#compiler-owned-firmware).
 The Mac remains the native compiler-host/Darwin/LLDB lane; no local Linux
 container or Nix CI path is introduced.
 
-The generated-device lane is also mandatory in the native Linux embedded
-entry, after the inherited probes. It exports separate `devices`
+The generated-device lane also runs in the native Linux embedded entry,
+after the inherited probes. The retired export retained separate `devices`
 artifacts; vendor-input and regeneration checks run offline on both hosts.
 The selected vendor is provenance, not a replacement QEMU board.
 
-The complete [derived driver](../compiler/tests/driver/DERIVATION.md) is appended
-to mandatory native Linux embedded execution. Its QEMU boot, separate synthetic
+The complete [derived driver](../compiler/tests/driver/DERIVATION.md) runs
+in the native Linux embedded entry. Its QEMU boot, separate synthetic
 protocol model and independent layout control retain their distinct evidence
 roles. Native GDB/LLDB routine risk coverage validated the checking and linker
 repairs it needed.
 
-The mandatory `evidence.py` lane adds actual Cortex line/function GDB
+The `evidence.py` lane adds actual Cortex line/function GDB
 sessions and complete-application resource scenarios to that Linux embedded
 entry. It preserves the fixed board map and separate CPU/peripheral/control
-identities, and recursively exports source/debug matching, ELF load accounting,
-SP/paint/frame observations and bounded results. The dual-native milestone
-policies retain both compiler modes and native GDB/LLDB; no Cortex debugger
-session replaces a native one. See the [evidence contract](../environments/cortex-m/README.md#freestanding-evidence).
+identities. The retired export retained source/debug matching, ELF load
+accounting, SP/paint/frame observations and bounded results. The retired
+dual-native milestone policies retained both compiler modes and native
+GDB/LLDB; no Cortex debugger session replaces a native one. See the
+[evidence contract](../environments/cortex-m/README.md#freestanding-evidence).
