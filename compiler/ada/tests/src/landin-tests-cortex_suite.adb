@@ -206,6 +206,129 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
+   procedure Outgoing_Calls (Item : in out Landin.Testing.Context);
+
+   procedure Outgoing_Calls (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      HT : constant Character := Character'Val (9);
+   begin
+      Host.Add_File ("p.ldn",
+        "f0: () -> none = end f0 "
+        & "f1: (a: u32) -> none = end f1 "
+        & "f2: (a: u32, b: u32) -> none = end f2 "
+        & "f3: (a: u32, b: u32, c: u32) -> none = end f3 "
+        & "f4: (a: u32, b: u32, c: u32, d: u32) -> none = end f4 "
+        & "f5: (a: u32, b: u32, c: u32, d: u32, e: u32) "
+        & "-> none = end f5 "
+        & "pair: type = struct x: u32 y: u32 end pair "
+        & "ret: (a: u32, b: u32, c: u32, d: u32) -> (p: pair) "
+        & "= p = (x: a + c, y: b + d) end ret "
+        & "bad: atom problem: type = bad "
+        & "fails: (a: u32) -> (r: u32) ! problem = a end fails "
+        & "public main: () -> (code: i32) = "
+        & "f0() f1(1) f2(1, 2) f3(1, 2, 3) "
+        & "f4(1, 2, 3, 4) f5(1, 2, 3, 4, 5) "
+        & "made := ret(1, 2, 3, 4) cb := f2 cb(5, 6) "
+        & "value := fails(7) else 8 "
+        & "code = i32(made.x + made.y + value) end main");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--optimize=size");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status /= Landin.Driver.Status_Success then
+            return;
+         end if;
+      end;
+      declare
+         Assembly : constant String := Host.Written ("p.s");
+
+         function Site (Previous, Branch : String) return String;
+         procedure Check_Call
+           (Previous, Branch, Load : String; Bytes : Positive);
+
+         function Site (Previous, Branch : String) return String is
+            Marker : constant String :=
+              (if Previous = "main:" then Previous else HT & Previous);
+            Start_At : constant Natural :=
+              Ada.Strings.Fixed.Index (Assembly, Marker)
+                + Marker'Length;
+            End_At : constant Natural :=
+              Ada.Strings.Fixed.Index
+                (Assembly, HT & Branch, From => Start_At);
+         begin
+            if Start_At <= Marker'Length or else End_At = 0 then
+               return "";
+            end if;
+            return Assembly (Start_At .. End_At + Branch'Length);
+         end Site;
+
+         procedure Check_Call
+           (Previous, Branch, Load : String; Bytes : Positive) is
+            Text : constant String := Site (Previous, Branch);
+            Amount : constant String := Ada.Strings.Fixed.Trim
+              (Bytes'Image, Ada.Strings.Both);
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Text, "sub sp, #" & Amount) > 0,
+               Branch & " reserves aligned homes");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Text, Load & LF & HT & Branch) > 0,
+               Branch & " loads only planned registers");
+            if Branch /= "bl fails" then
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Assembly, Branch & LF & HT & "add sp, #" & Amount) > 0,
+                  Branch & " releases aligned homes");
+            end if;
+         end Check_Call;
+      begin
+         --  The zero-argument call follows its block label directly.
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("main:", "bl f0"), "sub sp, #16") = 0,
+            "zero-register call reserves no outgoing homes");
+         Check_Call ("bl f0", "bl f1", "ldr r0, [r6]", 8);
+         Check_Call ("bl f1", "bl f2", "ldmia r6!, {r0, r1}", 8);
+         Check_Call ("bl f2", "bl f3", "ldmia r6!, {r0, r1, r2}", 16);
+         Check_Call
+           ("bl f3", "bl f4", "ldmia r6!, {r0, r1, r2, r3}", 16);
+         Check_Call
+           ("bl f4", "bl f5", "ldmia r6!, {r0, r1, r2, r3}", 24);
+         Check_Call
+           ("bl f5", "bl ret", "ldmia r6!, {r0, r1, r2, r3}", 24);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("bl f5", "bl ret"),
+               "mov r6, sp" & LF & HT & "adds r6, #8" & LF & HT
+               & "str r0, [r6]") > 0,
+            "hidden result address occupies r0 above stack arguments");
+         Check_Call
+           ("bl ret", "blx r4", "ldmia r6!, {r0, r1}", 8);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("bl ret", "blx r4"), "mov r4, r0") > 0,
+            "indirect target survives argument reload");
+         Check_Call ("blx r4", "bl fails", "ldr r0, [r6]", 8);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Assembly, "bl fails" & LF & HT & "mov r4, r12") > 0,
+            "error carrier survives the call");
+      end;
+   end Outgoing_Calls;
+
    procedure Register_Staging (Item : in out Landin.Testing.Context);
 
    procedure Register_Staging (Item : in out Landin.Testing.Context) is
@@ -1762,6 +1885,8 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "outgoing calls", Outgoing_Calls'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "scalar spill homes",
          Scalar_Spill_Homes'Access);

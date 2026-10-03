@@ -3270,8 +3270,13 @@ package body Landin.Backend.Cortex_M is
                      Offset : constant Natural := (if Indirect then 1 else 0);
                      Hidden : constant Natural :=
                        (if Call.Result.Shape.Indirect then 1 else 0);
+                     --  Stack arguments stay at sp; round the register
+                     --  homes to the call boundary's eight-byte alignment.
+                     Register_Bytes : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count
+                         ((Call.Core_Used + 1) / 2 * 8);
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Call.Stack_Bytes + 16;
+                       Call.Stack_Bytes + Register_Bytes;
                   begin
                      Reserve (Bytes);
                      if Hidden > 0 then
@@ -3308,9 +3313,17 @@ package body Landin.Backend.Cortex_M is
                         Load_Value (Operand (1));
                         Emit ("mov r4, r0");
                      end if;
-                     Emit ("mov r6, sp");
-                     Add_Offset ("r6", Call.Stack_Bytes);
-                     Emit ("ldmia r6!, {r0, r1, r2, r3}");
+                     if Call.Core_Used > 0 then
+                        Emit ("mov r6, sp");
+                        Add_Offset ("r6", Call.Stack_Bytes);
+                        case Call.Core_Used is
+                           when 1 => Emit ("ldr r0, [r6]");
+                           when 2 => Emit ("ldmia r6!, {r0, r1}");
+                           when 3 => Emit ("ldmia r6!, {r0, r1, r2}");
+                           when 4 => Emit ("ldmia r6!, {r0, r1, r2, r3}");
+                           when 0 => null;
+                        end case;
+                     end if;
                      if Indirect then
                         Emit ("blx r4");
                      else
