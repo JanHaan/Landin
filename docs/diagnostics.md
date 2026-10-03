@@ -702,7 +702,9 @@ to a failing function handles the outcome with `else` or propagates it with
 `try`, and neither form applies to a call that cannot fail. A public or
 first-class signature writes a concrete error set instead of `! ...`. Add the
 atom to the error set, handle or propagate the call, or remove the handling
-from an infallible call.
+from an infallible call. The implicit provider calls in `try for` also
+propagate their declared errors: the enclosing routine must declare or infer
+those atoms, and its caller may recover them through ordinary call `else`.
 
 ```landin
 missing, denied: atom
@@ -1011,7 +1013,15 @@ traversal runs over integers, an array or slice is walked by element, and a
 struct or `any C` source selects one exact iterable conformance with one
 `Cur` and `Item` pair (D180). An ordinary pointer is not a `cstring` (D184).
 Traverse an integer range or a traversable value, or declare one iterable
-conformance.
+conformance. Each provider takes a read-only, non-escaping `ptr T` to the
+retained source, with the exact cursor, item, permission and origin contract
+at [1320]; migrate a by-value source parameter to that pointer contract.
+
+If the source supplies `fallible_iterable`, use `try for` and declare or infer
+its provider errors in the enclosing routine. That conformance has one exact
+shared atom error set across all four providers. Ordinary `for` only selects
+infallible `iterable`; `try for` prefers `fallible_iterable` when both exist
+and may use ordinary `iterable` when there is no fallible conformance.
 
 ```landin
 public main: () -> (code: i32) =

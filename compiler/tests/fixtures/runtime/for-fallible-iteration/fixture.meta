@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: try for propagates errors from every iterable provider after running active cleanup
+summary: try for selects fallible evidence or ordinary fallback and propagates provider errors through defer and undo
 program: main.ldn
 status: 42
 constructs: 0940, 0960, 1030, 1100, 1150, 1170, 1320

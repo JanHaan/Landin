@@ -8,6 +8,13 @@ fallible_iterable: type = concept
     next: (s: ptr t, c: cur) -> (c2: cur) ! errors
 end fallible_iterable
 
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first: (s: ptr t) -> (c: cur)
+    at_end: (s: ptr t, c: cur) -> (yes: bool)
+    item: (s: ptr t, c: cur) -> (v: item_type)
+    next: (s: ptr t, c: cur) -> (c2: cur)
+end iterable
+
 stream: type = struct
     mode: i32
 end stream
@@ -35,6 +42,22 @@ end next
 stream is fallible_iterable
     (cur: usize, item_type: i32, errors: stream_failed,
      first: first, at_end: at_end, item: item, next: next)
+
+-- The same source exposes a deliberately different infallible sequence.
+plain_first: (s: ptr stream) -> (c: usize) = c = 0 end plain_first
+plain_end: (s: ptr stream, c: usize) -> (yes: bool) =
+    yes = c == 1
+end plain_end
+plain_item: (s: ptr stream, c: usize) -> (v: i32) =
+    v = 90
+end plain_item
+plain_next: (s: ptr stream, c: usize) -> (c2: usize) =
+    c2 = c + 1
+end plain_next
+
+stream is iterable
+    (cur: usize, item_type: i32,
+     first: plain_first, at_end: plain_end, item: plain_item, next: plain_next)
 
 cell: type (t: type) = struct
     value: t
@@ -78,6 +101,21 @@ end badge_read
 
 badge is reader (read: badge_read)
 
+badge_first: (s: ptr badge) -> (c: usize) = c = 0 end badge_first
+badge_end: (s: ptr badge, c: usize) -> (yes: bool) =
+    yes = c == 1
+end badge_end
+badge_item: (s: ptr badge, c: usize) -> (v: i32) =
+    v = s.val.value
+end badge_item
+badge_next: (s: ptr badge, c: usize) -> (c2: usize) =
+    c2 = c + 1
+end badge_next
+
+badge is iterable
+    (cur: usize, item_type: i32,
+     first: badge_first, at_end: badge_end, item: badge_item, next: badge_next)
+
 erased_first: (s: ptr any reader) -> (c: usize) ! stream_failed =
     c = 0
 end erased_first
@@ -105,13 +143,29 @@ any reader is fallible_iterable
 
 mut cleanups: i32 = 0
 mut completions: i32 = 0
+mut failure_cleanups: i32 = 0
+mut body_failures: i32 = 0
+mut cleanup_trace: i32 = 0
 
-mark: () -> none = inc cleanups end mark
+mark: () -> none =
+    inc cleanups
+    cleanup_trace = cleanup_trace * 10 + 1
+end mark
+
+mark_failure: () -> none =
+    inc failure_cleanups
+    cleanup_trace = cleanup_trace * 10 + 2
+end mark_failure
+
+mark_body_failure: () -> none = inc body_failures end mark_body_failure
 
 walk: (mode: i32) -> (sum: i32) ! stream_failed =
     sum = 0
+    cleanup_trace = 0
+    undo mark_failure()
     source: stream = (mode: mode)
     try for value in source do
+        undo mark_body_failure()
         defer mark()
         sum += value
     complete
@@ -150,17 +204,39 @@ walk_erased: (source: any reader) -> (sum: i32) ! stream_failed =
     end for
 end walk_erased
 
+walk_plain: (source: stream) -> (sum: i32) =
+    sum = 0
+    for value in source do
+        sum += value
+    end for
+end walk_plain
+
+walk_fallback: (source: badge) -> (sum: i32) =
+    sum = 0
+    try for value in source do
+        sum += value
+    end for
+end walk_fallback
+
 public main: () -> (code: i32) =
     success: i32 = walk(0) else (e) 99 end
+    success_trace: i32 = cleanup_trace
     first_error: i32 = walk(1) else (e) -1 end
+    first_trace: i32 = cleanup_trace
     head_error: i32 = walk(2) else (e) -1 end
+    head_trace: i32 = cleanup_trace
     item_error: i32 = walk(3) else (e) -1 end
+    item_trace: i32 = cleanup_trace
     step_error: i32 = walk(4) else (e) -1 end
+    step_trace: i32 = cleanup_trace
     inferred_error: i32 = walk_inferred(3) else (e) -1 end
     picked: i32 = find_first() else (e) -1 end
     boxed: cell(i32) = (value: 7)
     generic_sum: i32 = walk_cell(boxed) else (e) -1 end
     object: badge = (value: 11)
+    plain: stream = (mode: 0)
+    ordinary_sum: i32 = walk_plain(plain)
+    fallback_sum: i32 = walk_fallback(object)
     erased: any reader = any(addr object)
     erased_error: i32 = walk_erased(erased) else (e) -1 end
     code = if success == 3 and first_error == -1
@@ -168,6 +244,9 @@ public main: () -> (code: i32) =
       and step_error == -1 and inferred_error == -1
       and picked == 1 and generic_sum == 7
       and erased_error == -1 and cleanups == 5
-      and completions == 1
+      and completions == 1 and ordinary_sum == 90 and fallback_sum == 11
+      and failure_cleanups == 4 and body_failures == 0
+      and success_trace == 11 and first_trace == 2
+      and head_trace == 12 and item_trace == 12 and step_trace == 12
     then 42 else 1 end if
 end main
