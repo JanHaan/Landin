@@ -233,13 +233,16 @@ package body Landin.Backend.Arm64 is
         & (if Indirect then HT & ".byte 0x06" & LF else "");
    end Debug_Slot;
 
+   type Debug_Frame_Access is access all Frame;
    --  One encoder, instantiated once per object format, since the section
    --  names and the compilation unit's addressing are generic constants.
    function Mach_O_Debug_Sections is new Landin.Backend.Dwarf.Sections
-     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
+     (Frame, Debug_Frame_Access, Debug_Frame_Access,
+      Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
 
    function ELF_Debug_Sections is new Landin.Backend.Dwarf.Sections
-     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, False);
+     (Frame, Debug_Frame_Access, Debug_Frame_Access,
+      Debug_Plan, Debug_Frame, Debug_Slot, 29, False);
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;

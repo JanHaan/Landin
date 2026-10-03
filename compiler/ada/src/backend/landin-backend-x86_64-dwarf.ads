@@ -7,6 +7,9 @@ with Landin.Provenance;
 
 package Landin.Backend.X86_64.Dwarf is
 
+   type Plan_Access is access all Allocation.Plan;
+   type Frame_Access is access all Frame;
+
    function Quoted (Bytes : String) return String;
    function Label_Name
      (Prefix, Kind : String; Item : Landin.IR.Item_Id;
@@ -31,6 +34,10 @@ package Landin.Backend.X86_64.Dwarf is
       Info : Landin.Debugging.Information;
       Prefix : String;
       Symbol : not null access function
-        (Item : Landin.IR.Item_Id) return String) return String;
+        (Item : Landin.IR.Item_Id) return String;
+      Cached_Plan : access function
+        (Item : Landin.IR.Item_Id) return Plan_Access := null;
+      Cached_Frame : access function
+        (Item : Landin.IR.Item_Id) return Frame_Access := null) return String;
 
 end Landin.Backend.X86_64.Dwarf;

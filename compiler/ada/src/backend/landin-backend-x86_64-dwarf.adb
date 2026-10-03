@@ -71,7 +71,8 @@ package body Landin.Backend.X86_64.Dwarf is
    end Slot_Expression;
 
    function Encode is new Landin.Backend.Dwarf.Sections
-     (Allocation.Plan, Allocation.Make, Frame_For, Slot_Expression, 6, False);
+     (Allocation.Plan, Plan_Access, Frame_Access,
+      Allocation.Make, Frame_For, Slot_Expression, 6, False);
 
    function Sections
      (Of_Unit : Unit;
@@ -81,7 +82,11 @@ package body Landin.Backend.X86_64.Dwarf is
       Options : Landin.Optimization.Options;
       Info : Landin.Debugging.Information;
       Prefix : String;
-      Symbol : not null access function (Item : Item_Id) return String)
+      Symbol : not null access function (Item : Item_Id) return String;
+      Cached_Plan : access function
+        (Item : Item_Id) return Plan_Access := null;
+      Cached_Frame : access function (Item : Item_Id)
+        return Frame_Access := null)
       return String
       renames Encode;
 

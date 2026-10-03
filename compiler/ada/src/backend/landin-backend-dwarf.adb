@@ -203,7 +203,11 @@ package body Landin.Backend.Dwarf is
       Options : Landin.Optimization.Options;
       Info : Landin.Debugging.Information;
       Prefix : String;
-      Symbol : not null access function (Item : Item_Id) return String)
+      Symbol : not null access function (Item : Item_Id) return String;
+      Cached_Plan : access function
+        (Item : Item_Id) return Placement_Access := null;
+      Cached_Frame : access function
+        (Item : Item_Id) return Frame_Access := null)
       return String
    is
       Result, Locations, Ranges : US.Unbounded_String;
@@ -609,15 +613,13 @@ package body Landin.Backend.Dwarf is
          end case;
       end Emit_Type;
 
-      procedure Routine (Item : Item_Id);
-      procedure Routine (Item : Item_Id) is
+      procedure Routine
+        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame);
+      procedure Routine
+        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame) is
          Availability : Debug_Locations.Analysis :=
            Debug_Locations.Prepare (Of_Unit, Item);
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Plan : constant Placement :=
-           Make (Of_Unit, Item, Facts, Options);
-         Frame_Plan : constant Frame :=
-           Frame_For (Of_Unit, Item, Facts, Plan, Options);
          Decl : constant Declaration_Id :=
            (if Generic_Template_Of (Of_Unit, Item) /= No_Declaration
             then Generic_Template_Of (Of_Unit, Item)
@@ -1074,7 +1076,19 @@ package body Landin.Backend.Dwarf is
             if Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then not Is_External (Of_Unit, Item)
             then
-               Routine (Item);
+               if Cached_Plan = null then
+                  declare
+                     Plan : constant Placement :=
+                       Make (Of_Unit, Item, Facts, Options);
+                     Frame_Plan : constant Frame :=
+                       Frame_For (Of_Unit, Item, Facts, Plan, Options);
+                  begin
+                     Routine (Item, Plan, Frame_Plan);
+                  end;
+               else
+                  Routine
+                    (Item, Cached_Plan (Item).all, Cached_Frame (Item).all);
+               end if;
             elsif Kind_Of (Of_Unit, Item) = Landin.IR.Datum
               and then Declares (Of_Unit, Item) /= No_Declaration
             then

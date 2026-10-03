@@ -1,5 +1,6 @@
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
+with Ada.Unchecked_Deallocation;
 with Landin.Layouts;
 with Landin.IR.Shape_Measurement;
 with Landin.Memory;
@@ -29,6 +30,7 @@ package body Landin.Backend.X86_64 is
 
    use type Landin.Optimization.Objective;
    use type Allocation.Location_Kind;
+   use type Dwarf.Plan_Access;
    use type Landin.Backend.C_ABI.Eightbyte_Class;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
@@ -362,6 +364,14 @@ package body Landin.Backend.X86_64 is
       Streams : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Machine.Stream;
       Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
         Landin.Build_Reports.Routine_Statistics;
+      Saved_Plans : array (Bodies'Range) of Dwarf.Plan_Access :=
+        [others => null];
+      Saved_Frames : array (Bodies'Range) of Dwarf.Frame_Access :=
+        [others => null];
+      procedure Free_Plan is new Ada.Unchecked_Deallocation
+        (Allocation.Plan, Dwarf.Plan_Access);
+      procedure Free_Frame is new Ada.Unchecked_Deallocation
+        (Frame, Dwarf.Frame_Access);
       Capturing : Landin.IR.Item_Id := Landin.IR.No_Item;
       --  The emission unit is immutable. One retained-reference traversal
       --  excludes exposed routines before final-body equality comparisons.
@@ -369,6 +379,11 @@ package body Landin.Backend.X86_64 is
         [others => False];
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id);
+
+      function Cached_Plan (Item : Landin.IR.Item_Id)
+        return Dwarf.Plan_Access is (Saved_Plans (Positive (Item)));
+      function Cached_Frame (Item : Landin.IR.Item_Id)
+        return Dwarf.Frame_Access is (Saved_Frames (Positive (Item)));
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id) is
       begin
@@ -1207,14 +1222,14 @@ package body Landin.Backend.X86_64 is
          return Offset;
       end Field_Offset;
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id);
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id;
+         Allocation_Plan : Allocation.Plan; Layout : Frame);
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id;
+         Allocation_Plan : Allocation.Plan; Layout : Frame) is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Allocation_Plan : constant Allocation.Plan :=
-           Allocation.Make (Of_Unit, Item, Facts, Options);
-         Layout : constant Frame := Allocation.Frame_For
-           (Of_Unit, Item, Facts, Allocation_Plan, Options);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          type Use_Counts is array (Positive range <>) of Natural;
@@ -6558,7 +6573,25 @@ package body Landin.Backend.X86_64 is
               and then not Landin.IR.Is_External (Of_Unit, Item)
             then
                Out_Text := Unbounded.Null_Unbounded_String;
-               Emit_Routine (Item);
+               if Debug = null then
+                  declare
+                     Plan : constant Allocation.Plan :=
+                       Allocation.Make (Of_Unit, Item, Facts, Options);
+                     Layout : constant Frame := Allocation.Frame_For
+                       (Of_Unit, Item, Facts, Plan, Options);
+                  begin
+                     Emit_Routine (Item, Plan, Layout);
+                  end;
+               else
+                  Saved_Plans (Index) := new Allocation.Plan'
+                    (Allocation.Make (Of_Unit, Item, Facts, Options));
+                  Saved_Frames (Index) := new Frame'
+                    (Allocation.Frame_For
+                       (Of_Unit, Item, Facts, Saved_Plans (Index).all,
+                        Options));
+                  Emit_Routine
+                    (Item, Saved_Plans (Index).all, Saved_Frames (Index).all);
+               end if;
                Bodies (Index) := Out_Text;
             end if;
          end;
@@ -7090,7 +7123,14 @@ package body Landin.Backend.X86_64 is
       if Debug /= null then
          Unbounded.Append (Out_Text, Dwarf.Sections
            (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-            Local_Prefix, Symbol'Access));
+            Local_Prefix, Symbol'Access, Cached_Plan'Access,
+            Cached_Frame'Access));
+         for Index in Saved_Plans'Range loop
+            if Saved_Plans (Index) /= null then
+               Free_Plan (Saved_Plans (Index));
+               Free_Frame (Saved_Frames (Index));
+            end if;
+         end loop;
       end if;
       Put (Character'Val (9) & ELF.No_Executable_Stack);
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
