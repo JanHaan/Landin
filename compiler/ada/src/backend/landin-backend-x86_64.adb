@@ -472,6 +472,10 @@ package body Landin.Backend.X86_64 is
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
 
       use Landin.Hosted;
+      --  A hosted main needs startup; an external import makes that one
+      --  bridge available to the Landin unit or its C-owned caller.
+      Needed_Bridges : array (Host_Helper range Initialize_Arguments
+        .. Heap_Release) of Boolean := [others => False];
       subtype Hosted_Bridge is Host_Helper;
       Not_A_Bridge : constant Hosted_Bridge := No_Host_Helper;
       function Bridge_Of (Spelling : String) return Hosted_Bridge
@@ -491,6 +495,12 @@ package body Landin.Backend.X86_64 is
             or else Spelling = "write"
             or else Spelling = "close"
             or else Spelling = Hosted_ABI.Errno_Function (System));
+
+      function Arguments_State_Needed return Boolean is
+        (Needed_Bridges (Initialize_Arguments)
+         or else Needed_Bridges (Argument_Count)
+         or else Needed_Bridges (Argument_Table)
+         or else Needed_Bridges (Argument_At));
 
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
@@ -6546,6 +6556,8 @@ package body Landin.Backend.X86_64 is
       then
          raise Compiler_Defect with "x86-64 emission needs Linux ELF facts";
       end if;
+      Needed_Bridges (Initialize_Arguments) :=
+        Hosted_Entry /= Landin.IR.No_Item;
       --  A C-owned main can drive Landin exports without asking refine to
       --  synthesize a hosted entry.  Those exports still need the library's
       --  fixed runtime bridges.  Discover them before choosing private names,
@@ -6560,6 +6572,7 @@ package body Landin.Backend.X86_64 is
                begin
                   if Helper_Of (Name) /= No_Host_Helper then
                      Host_Bridge_Needed := True;
+                     Needed_Bridges (Helper_Of (Name)) := True;
                   end if;
                end;
             end if;
@@ -6949,11 +6962,12 @@ package body Landin.Backend.X86_64 is
          --  repeated calls are harmless; replacing a live root is a trap.
          --  The nonzero argv cell is also the initialized-state guard: zero
          --  is private absence, never a published Landin pointer or fake argv.
+         if Needed_Bridges (Initialize_Arguments) then
          Put (Character'Val (9)
               & ".globl " & Bridge_Symbol (Initialize_Arguments));
          Put (Character'Val (9)
               & ELF.Hidden (Bridge_Symbol (Initialize_Arguments)));
-         Begin_Bridge (Initialize_Arguments);
+            Begin_Bridge (Initialize_Arguments);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("jne " & Local_Prefix & "landin_host_arguments_initialized");
          Emit ("testl %edi, %edi");
@@ -6969,23 +6983,11 @@ package body Landin.Backend.X86_64 is
          Emit ("cmpq %rsi, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
-         Put (Local_Prefix & "landin_host_arguments_invalid:");
-         if Panic /= null and then Landin.Panics.Handler (Panic.all)
-           /= Landin.IR.No_Item
-         then
-            --  This private C bridge arrives with its incoming return
-            --  address on the stack. Establish a conventional call frame.
-            Emit ("pushq %rbp");
-            Emit ("movq %rsp, %rbp");
-            Emit ("movl $" & Trimmed (Positive'Image (Landin.Panics.Code
-              (Panic.all, Landin.Panics.Unreachable))) & ", %edi");
-            Emit ("xorl %esi, %esi");
-            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            End_Bridge (Initialize_Arguments);
          end if;
-         Emit ("ud2");
-         End_Bridge (Initialize_Arguments);
 
-         Begin_Bridge (Argument_Count);
+         if Needed_Bridges (Argument_Count) then
+            Begin_Bridge (Argument_Count);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -6994,21 +6996,25 @@ package body Landin.Backend.X86_64 is
          Emit ("xorl %eax, %eax");
          Put (Local_Prefix & "landin_host_count_ready:");
          Emit ("ret");
-         End_Bridge (Argument_Count);
+            End_Bridge (Argument_Count);
+         end if;
 
          --  Publish the user-argument table itself so core/io can retain the
          --  real backing capability in its system value.  Indexed results
          --  then derive from that stored table instead of from hidden global
          --  state; argv[0] remains outside the published table.
-         Begin_Bridge (Argument_Table);
+         if Needed_Bridges (Argument_Table) then
+            Begin_Bridge (Argument_Table);
          Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
          Emit ("testq %rax, %rax");
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("addq $8, %rax");
          Emit ("ret");
-         End_Bridge (Argument_Table);
+            End_Bridge (Argument_Table);
+         end if;
 
-         Begin_Bridge (Argument_At);
+         if Needed_Bridges (Argument_At) then
+            Begin_Bridge (Argument_At);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -7021,63 +7027,81 @@ package body Landin.Backend.X86_64 is
          Emit ("testq %rax, %rax");
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
-         End_Bridge (Argument_At);
+            End_Bridge (Argument_At);
+         end if;
 
          --  Keep the established one-index helper above for the existing
          --  foreign-C boundary fixtures.  The capability-aware variant has a
          --  distinct symbol and derives its result from the explicit table.
-         Begin_Bridge (Argument_At_From);
+         if Needed_Bridges (Argument_At_From) then
+            Begin_Bridge (Argument_At_From);
          Emit ("movq (%rdi,%rsi,8), %rax");
          Emit ("ret");
-         End_Bridge (Argument_At_From);
+            End_Bridge (Argument_At_From);
+         end if;
 
-         Begin_Bridge (Text_Length);
+         if Needed_Bridges (Text_Length) then
+            Begin_Bridge (Text_Length);
          Emit ("jmp strlen");
-         End_Bridge (Text_Length);
+            End_Bridge (Text_Length);
+         end if;
 
-         Begin_Bridge (Open_Read);
+         if Needed_Bridges (Open_Read) then
+            Begin_Bridge (Open_Read);
          Emit ("xorl %esi, %esi");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
-         End_Bridge (Open_Read);
+            End_Bridge (Open_Read);
+         end if;
 
          --  A fixed Landin signature fronts libc's variadic open.  Linux
          --  O_WRONLY | O_CREAT | O_TRUNC is 577; 0666 is filtered by the
          --  process umask.  Clearing eax satisfies the SysV variadic ABI.
-         Begin_Bridge (Open_Write);
+         if Needed_Bridges (Open_Write) then
+            Begin_Bridge (Open_Write);
          Emit ("movl $" & Image (Hosted_ABI.Create_For_Writing (System))
                & ", %esi");
          Emit ("movl $" & Image (Hosted_ABI.Created_File_Mode) & ", %edx");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
-         End_Bridge (Open_Write);
+            End_Bridge (Open_Write);
+         end if;
 
-         Begin_Bridge (Read_Bytes);
+         if Needed_Bridges (Read_Bytes) then
+            Begin_Bridge (Read_Bytes);
          Emit ("jmp read");
-         End_Bridge (Read_Bytes);
+            End_Bridge (Read_Bytes);
+         end if;
 
-         Begin_Bridge (Write_Bytes);
+         if Needed_Bridges (Write_Bytes) then
+            Begin_Bridge (Write_Bytes);
          Emit ("jmp write");
-         End_Bridge (Write_Bytes);
+            End_Bridge (Write_Bytes);
+         end if;
 
-         Begin_Bridge (Close_File);
+         if Needed_Bridges (Close_File) then
+            Begin_Bridge (Close_File);
          Emit ("jmp close");
-         End_Bridge (Close_File);
+            End_Bridge (Close_File);
+         end if;
 
-         Begin_Bridge (Errno_Value);
+         if Needed_Bridges (Errno_Value) then
+            Begin_Bridge (Errno_Value);
          Emit ("subq $8, %rsp");
          Emit ("call " & Hosted_ABI.Errno_Function (System));
          Emit ("movl (%rax), %eax");
          Emit ("addq $8, %rsp");
          Emit ("ret");
-         End_Bridge (Errno_Value);
+            End_Bridge (Errno_Value);
+         end if;
 
          --  core/heap keeps allocation behind the same fixed scalar/pointer
          --  bridge as hosted I/O.  Over-allocation leaves one pointer word
          --  immediately before the aligned result so release can recover
          --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks
          --  are host-width work here, never constants in target-neutral IR.
-         Begin_Bridge (Heap_Allocate);
+         if Needed_Bridges (Heap_Allocate) then
+            Begin_Bridge (Heap_Allocate);
          Emit ("cmpq $1, %rsi");
          Emit ("ja " & Local_Prefix & "landin_host_heap_alignment_ready");
          Emit ("movl $1, %esi");
@@ -7117,15 +7141,34 @@ package body Landin.Backend.X86_64 is
          Put (Local_Prefix & "landin_host_heap_failed:");
          Emit ("xorl %eax, %eax");
          Emit ("ret");
-         End_Bridge (Heap_Allocate);
+            End_Bridge (Heap_Allocate);
+         end if;
 
-         Begin_Bridge (Heap_Release);
+         if Needed_Bridges (Heap_Release) then
+            Begin_Bridge (Heap_Release);
          Emit ("movq -8(%rdi), %rdi");
          Emit ("jmp free");
-         End_Bridge (Heap_Release);
+            End_Bridge (Heap_Release);
+         end if;
+         if Arguments_State_Needed then
+         Put (Local_Prefix & "landin_host_arguments_invalid:");
+         if Panic /= null and then Landin.Panics.Handler (Panic.all)
+           /= Landin.IR.No_Item
+         then
+            --  This private C bridge arrives with its incoming return
+            --  address on the stack. Establish a conventional call frame.
+            Emit ("pushq %rbp");
+            Emit ("movq %rsp, %rbp");
+            Emit ("movl $" & Trimmed (Positive'Image (Landin.Panics.Code
+              (Panic.all, Landin.Panics.Unreachable))) & ", %edi");
+            Emit ("xorl %esi, %esi");
+            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+         end if;
+         Emit ("ud2");
+      end if;
       end if;
 
-      if Host_Bridge_Needed then
+      if Arguments_State_Needed then
          --  Keep the two entry cells in the small initialized data section.
          --  A program may own a multi-gigabyte zero-image datum in .bss;
          --  placing these cells after that section would put RIP-relative
