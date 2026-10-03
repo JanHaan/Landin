@@ -3,6 +3,10 @@ package body Landin.IR is
    use type Landin.Machine.Convention;
    use type Landin.Source.Names.Name_Id;
 
+   function Hash_Instance_Position
+     (Position : Positive) return Ada.Containers.Hash_Type
+     is (Ada.Containers.Hash_Type (Position));
+
    function Packed_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Shape : Field_Shape;
       Descriptor : Aggregate_Field_Image; Scalar : Landin.Types.Folded)
@@ -1304,13 +1308,12 @@ package body Landin.IR is
    function Item_For_Instance
      (Of_Unit : Unit; Instance_Position : Positive) return Item_Id
    is
+      Found : constant Routine_Instance_Item_Maps.Cursor :=
+        Of_Unit.Routine_Instance_Items.Find (Instance_Position);
    begin
-      for Mapping of Of_Unit.Routine_Instance_Items loop
-         if Mapping.Position = Instance_Position then
-            return Mapping.Item;
-         end if;
-      end loop;
-      return No_Item;
+      return (if Routine_Instance_Item_Maps.Has_Element (Found)
+              then Routine_Instance_Item_Maps.Element (Found)
+              else No_Item);
    end Item_For_Instance;
 
    function Add_Routine_Instance_Item
@@ -1328,11 +1331,7 @@ package body Landin.IR is
       Held.Generic_Template := Template;
       Held.Instance_Position := Instance_Position;
       Into.Items (Positive (Made)) := Held;
-      Into.Routine_Instance_Items.Append
-        (Routine_Instance_Item'
-           (Position => Instance_Position,
-            Template => Template,
-            Item     => Made));
+      Into.Routine_Instance_Items.Insert (Instance_Position, Made);
       return Made;
    end Add_Routine_Instance_Item;
 

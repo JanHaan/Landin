@@ -29,6 +29,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    package Opt renames Landin.Optimization;
    package Reports renames Landin.Build_Reports;
    use type IR.Opcode;
+   use type IR.Item_Id;
    use type IR.Item_Kind;
    use type IR.Item_Id;
    use type IR.Evidence_Id;
@@ -37,6 +38,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    use type IR.Signature_Id;
    use type Opt.Objective;
    use type Landin.Provenance.Origin;
+   use type Landin.Provenance.Declaration_Id;
    use type Reports.Specialization_Action;
    use type Reports.Decision_Reason;
    use type Opt.Specialization_Mode;
@@ -75,6 +77,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Assembly_Output_Aliases
      (Item : in out Landin.Testing.Context);
    procedure Instance_Costs (Item : in out Landin.Testing.Context);
+   procedure Sparse_Instance_Items (Item : in out Landin.Testing.Context);
    procedure Large_Graph (Item : in out Landin.Testing.Context);
    procedure Scalar_Boundaries (Item : in out Landin.Testing.Context);
    procedure Policy_Boundaries (Item : in out Landin.Testing.Context);
@@ -622,6 +625,59 @@ package body Landin.Tests.IR_Optimization_Suite is
          end;
       end loop;
    end Assembly_Output_Aliases;
+
+   procedure Sparse_Instance_Items (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Code, Fresh : IR.Unit;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      declare
+         Site : constant Landin.Provenance.Origin :=
+           IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
+         Ordinary, First, Far, Middle, Later, Reused : IR.Item_Id;
+      begin
+         IR.Prepare (Code, Landin.Stages.Meanings (Work).all);
+         IR.Prepare (Fresh, Landin.Stages.Meanings (Work).all);
+         Ordinary := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value,
+            Site);
+         First := IR.Add_Routine_Instance_Item
+           (Code, 1, 1, Landin.Types.No_Value, Site);
+         Far := IR.Add_Routine_Instance_Item
+           (Code, 1_000_000, 1, Landin.Types.No_Value, Site);
+         Middle := IR.Add_Routine_Instance_Item
+           (Code, 17, 1, Landin.Types.No_Value, Site);
+         Later := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value,
+            Site);
+         Landin.Testing.Check
+           (Item,
+            Ordinary = 1 and then First = 2 and then Far = 3
+              and then Middle = 4 and then Later = 5
+              and then IR.Item_For_Instance (Code, 1) = First
+              and then IR.Item_For_Instance (Code, 1_000_000) = Far
+              and then IR.Item_For_Instance (Code, 17) = Middle
+              and then IR.Item_For_Instance (Code, 2) = IR.No_Item
+              and then IR.Item_For_Instance (Code, 999_999) = IR.No_Item
+              and then IR.Item_For_Instance (Code, 17) = Middle
+              and then IR.Instance_Position_Of (Code, Far) = 1_000_000
+              and then IR.Generic_Template_Of (Code, Far) = 1,
+            "sparse checker positions retain their item identities");
+
+         Landin.Testing.Check
+           (Item, IR.Item_For_Instance (Fresh, 1) = IR.No_Item,
+            "a fresh unit has no instance mappings");
+         Reused := IR.Add_Routine_Instance_Item
+           (Fresh, 17, 1, Landin.Types.No_Value, Site);
+         Landin.Testing.Check
+           (Item, Reused = 1
+             and then IR.Item_For_Instance (Fresh, 17) = Reused
+             and then IR.Item_For_Instance (Fresh, 1_000_000) = IR.No_Item
+             and then IR.Item_For_Instance (Code, 17) = Middle,
+            "instance mappings are owned by each unit");
+      end;
+   end Sparse_Instance_Items;
 
    procedure Incoming_Evidence (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -1442,6 +1498,9 @@ package body Landin.Tests.IR_Optimization_Suite is
          Assembly_Output_Aliases'Access);
       Landin.Testing.Register
         (Into, "ir opt", "instance costs", Instance_Costs'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "sparse instance items",
+         Sparse_Instance_Items'Access);
       Landin.Testing.Register
         (Into, "ir opt", "large graph", Large_Graph'Access);
       Landin.Testing.Register

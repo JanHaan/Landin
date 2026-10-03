@@ -133,6 +133,8 @@ with Landin.Packed;
 --  that folder's canonical zero-or-one image beside an otherwise empty datum
 --  block.  Routine short-circuit CFG therefore never becomes data.
 
+with Ada.Containers;
+private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 
 with Landin.Layouts;
@@ -4199,14 +4201,16 @@ private
    package Evidence_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Evidence_Record);
 
-   type Routine_Instance_Item is record
-      Position : Positive := 1;
-      Template : Declaration_Id := No_Declaration;
-      Item     : Item_Id := No_Item;
-   end record;
+   function Hash_Instance_Position
+     (Position : Positive) return Ada.Containers.Hash_Type;
 
-   package Routine_Instance_Item_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Routine_Instance_Item);
+   --  Only ready checker positions have items.  A map keeps storage
+   --  proportional to that set even when positions are sparse.
+   package Routine_Instance_Item_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Positive,
+      Element_Type    => Item_Id,
+      Hash            => Hash_Instance_Position,
+      Equivalent_Keys => "=");
 
    package Nominal_Template_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -4297,7 +4301,7 @@ private
       --  instruction is a fixed-size record and a path is not.
       Paths       : Path_Step_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
-      Routine_Instance_Items : Routine_Instance_Item_Vectors.Vector;
+      Routine_Instance_Items : Routine_Instance_Item_Maps.Map;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.
       Images      : Image_Vectors.Vector;
