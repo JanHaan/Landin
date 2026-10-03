@@ -15323,9 +15323,9 @@ pointer-and-length descriptor `from self`. Thus an in-memory provider may
 return caller backing under the same contract, while the system provider does
 not disguise a source-free global pointer with a false origin annotation.
 
-Every `world` entry has D146's exact first `self` pointer. Open, close, read and
-write use `ptr mut provider`; standard streams, argument count and argument
-lookup use `ptr provider`. The system provider is ordinary composed conformance
+Every `world` entry has D146's exact first `self` pointer. Open, close, read,
+`write` and `write_some` use `ptr mut provider`; standard streams, argument
+count and argument lookup use `ptr provider`. The system provider is ordinary composed conformance
 evidence and may be erased behind `any world`; generic wrappers retain the
 same operations for statically known providers. A read-only provider pointer
 cannot construct an erased world containing the mutable entries. The opaque
@@ -15338,10 +15338,15 @@ already uses the C runtime and libc supplies the smallest stable host contract
 for this workload. File descriptors remain private library representation.
 Arguments exclude `argv[0]`; a runtime fixture's new `run_args` metadata pins
 the distinction. Reads expose EOF as count zero and host failure as
-`io_failed`. Writes use bounded-stack iteration until the complete slice has
-been accepted; zero progress, the host failure sentinel, or a count larger
-than the offered remainder is `io_failed`. An empty write succeeds without a
-host call. `open_read` and `open_write` map Linux libc `ENOENT` to `not_found`,
+`io_failed`. `world.write` completes the whole slice by iterating over the
+remaining suffix; zero progress, the host failure sentinel, or a count larger
+than the offered remainder is `io_failed`. A failed `write` can leave an
+accepted prefix. `world.write_some` instead returns the positive accepted
+count of one nonempty attempt, including a short success. An interrupted host
+attempt with no transfer is retried with the same offer; a terminal failed
+attempt returns `io_failed` and transfers no bytes. Both operations accept an
+empty slice without a host call; `write_some` returns zero for it. `open_read`
+and `open_write` map Linux libc `ENOENT` to `not_found`,
 `EPERM`, `EACCES` or `EROFS` to `no_access`, and every other failure to `io_failed`.
 `open_write` supplies `O_WRONLY | O_CREAT | O_TRUNC` and mode `0666`, subject
 to the process umask.
@@ -15378,10 +15383,13 @@ ownership identity: a copied stale handle can address a reopened slot.
 
 A positive `read_limit` bounds each read. Zero progress with unread data and a
 nonempty destination reports `io_failed`, so it cannot masquerade as EOF.
-`write_limit` bounds each internal write chunk; zero reports `io_failed` for a
-nonempty write. A later failed chunk preserves the exact completed prefix.
-Empty reads and writes are unconditional no-ops, even for closed handles,
-and do not advance failure counters. Other operations validate the handle.
+`write_limit` bounds each `write_some` attempt; zero reports `io_failed` for a
+nonempty write. A successful attempt returns a positive count, possibly short,
+and a failed attempt transfers nothing. `write` repeatedly calls that operation
+to complete its slice; a later failed attempt preserves the exact completed
+prefix. Empty reads and writes are unconditional no-ops, even for closed handles,
+and do not advance failure counters; an empty `write_some` returns zero. Other
+operations validate the handle.
 Failure schedules name one-based read, write-chunk and close counts; zero
 disables injection. A valid close clears the open state before its injected
 failure, allowing ordinary manual cleanup to consume the handle once.
@@ -15438,7 +15446,8 @@ capability without changing its callers.
 `negative/core-io-world-readonly-receiver`,
 `negative/core-io-file-use-after-close`,
 `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`,
-`runtime/derived-parser`, the rooted fixture execution path, and
+`runtime/derived-parser`, `runtime/derived-hosted-memory`,
+`abi/r440-errno-interposition`, the rooted fixture execution path, and
 the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.
 
 ### D258 — Hosted capability parameters select providers without excluding new roots

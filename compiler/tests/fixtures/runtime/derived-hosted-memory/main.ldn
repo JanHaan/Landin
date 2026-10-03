@@ -50,6 +50,12 @@ public main: () -> (code: i32) =
     memory.read_limit = 2
     memory.write_limit = 2
     memory.fail_write_at = 4
+    empty_count: usize = io.write_some(memory, io.out(memory), source[0..<0])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when empty_count <> 0 or memory.write_calls <> 0
     world: any io.world = any(addr memory)
     mut heap := heap.host()
     mut program := region.new_region(addr heap)

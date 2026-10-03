@@ -4147,18 +4147,25 @@ The system provider captures errno immediately after a libc failure and keeps
 the exact terminal value in explicit state, available through `hosted.last_errno`.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no
-progress. Positive partial transfers are preserved; a write continues from its
-remaining suffix. Close consumes the handle once even on failure, and never
-blindly retries EINTR. The public failure atoms remain payload-free; detailed
+progress. `world.write` completes the whole slice, continuing from each
+positive partial transfer; if a later attempt fails, the completed prefix
+remains. `world.write_some` reports a positive accepted count for a nonempty
+attempt, including a short success, and leaves suffix delivery to its caller.
+A failed `write_some` attempt transfers no bytes. An empty slice succeeds
+without a host call, and `write_some` returns zero. Close consumes the handle
+once even on failure, and never blindly retries EINTR. The public failure atoms remain payload-free; detailed
 diagnostics use ordinary state rather than a new exception mechanism.
 
 The bounded library provider is `core/io.memory`, constructed with
 `memory_world(files, arguments, output, errors)`. Its caller supplies every
 file name, content buffer, descriptor and output extent. Files must already
 exist in the table; opening for writing truncates after checks. Reads stop at
-the initialized length, and writes either finish or report a failure while
-preserving the completed prefix. Configurable chunk limits and one-based
-failure counts make short reads, partial writes and cleanup reproducible.
+the initialized length. Memory `write` completes the slice or reports failure
+while preserving a completed prefix; memory `write_some` returns a positive
+count on a nonempty success, possibly short, and transfers nothing on failure.
+An empty `write_some` returns zero without a write attempt or counter increment.
+Configurable chunk limits and one-based failure counts make short reads,
+partial writes and cleanup reproducible.
 A zero read limit with unread data reports an error; it does not signal EOF.
 Empty transfers are no-ops. A close error still leaves a valid handle closed.
 

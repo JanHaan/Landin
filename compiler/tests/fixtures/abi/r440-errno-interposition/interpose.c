@@ -21,7 +21,9 @@ enum scenario {
     CLOSE_TERMINAL = 5,
     READ_TERMINAL = 6,
     WRITE_ZERO_PROGRESS = 7,
-    WRITE_FAILURE_CLEANUP = 8
+    WRITE_FAILURE_CLEANUP = 8,
+    WRITE_SOME_PROGRESS = 9,
+    WRITE_SOME_EMPTY = 10
 };
 
 _Static_assert(EINTR == 4, "fixture requires Linux errno values");
@@ -298,6 +300,43 @@ ssize_t __wrap_write(int descriptor, const void *data, size_t length)
             errno = EIO;
             return -1;
         }
+    } else if (selected == WRITE_SOME_PROGRESS) {
+        if (write_calls == 1) {
+            first_write_data = bytes;
+            first_write_length = length;
+            if (length != sizeof expected
+                || !bytes_are(bytes, expected, sizeof expected)) {
+                mark_fault(101);
+            }
+            errno = EINTR;
+            return -1;
+        }
+        if (write_calls == 2) {
+            if (bytes != first_write_data || length != first_write_length
+                || !bytes_are(bytes, expected, sizeof expected)) {
+                mark_fault(102);
+            }
+            accept_bytes(bytes, 2);
+            return 2;
+        }
+        if (write_calls == 3) {
+            if (bytes != first_write_data + 2
+                || length != first_write_length - 2
+                || !bytes_are(bytes, expected + 2, length)) {
+                mark_fault(103);
+            }
+            accept_bytes(bytes, 1);
+            return 1;
+        }
+        if (write_calls == 4 || write_calls == 5) {
+            if (bytes != first_write_data + 3
+                || length != first_write_length - 3
+                || !bytes_are(bytes, expected + 3, length)) {
+                mark_fault(write_calls == 4 ? 104 : 105);
+            }
+            errno = write_calls == 4 ? EINTR : EIO;
+            return -1;
+        }
     }
 
     mark_fault(49);
@@ -368,6 +407,13 @@ int32_t r440_errno_check(int32_t scenario_number)
                    && recorded_detail == EIO
                ? 0
                : 97;
+    case WRITE_SOME_PROGRESS:
+        return write_calls == 5 && accepted_length == 3
+                   && bytes_are(accepted_bytes, expected, 3)
+               ? 0
+               : 106;
+    case WRITE_SOME_EMPTY:
+        return write_calls == 0 ? 0 : 107;
     default:
         return 98;
     }

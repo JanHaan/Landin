@@ -149,5 +149,43 @@ public main: () -> (code: i32) =
     return when original <> 5 or hosted.last_errno(state) <> 0
       or r440_errno_check(8) <> 0
 
+    --  Each counted success returns immediately.  The caller offers only the
+    --  remaining suffix; EINTR retries that exact offer.  Terminal EIO on
+    --  the final suffix transfers no bytes and preserves its errno detail.
+    code = 9
+    r440_errno_select(9)
+    some_stream: io.file = io.out(state)
+    first_written: usize = io.write_some(state, some_stream, payload[0..<6])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when first_written <> 2 or io.last_errno(state) <> 0
+    second_written: usize = io.write_some(state, some_stream, payload[2..<6])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when second_written <> 1 or io.last_errno(state) <> 0
+    mut some_failed: bool = false
+    failed_count: usize = io.write_some(state, some_stream, payload[3..<6])
+        else (problem)
+            some_failed = problem == io.io_failed and io.last_errno(state) == 5
+            0
+        end
+    return when not some_failed or failed_count <> 0
+      or r440_errno_check(9) <> 0
+
+    --  An empty counted write returns zero without entering the host bridge.
+    code = 10
+    r440_errno_select(10)
+    empty_written: usize = io.write_some(state, some_stream, payload[0..<0])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when empty_written <> 0 or io.last_errno(state) <> 0
+      or r440_errno_check(10) <> 0
+
     code = 42
 end main
