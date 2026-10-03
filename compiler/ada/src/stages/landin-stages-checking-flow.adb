@@ -1178,6 +1178,7 @@ package body Landin.Stages.Checking.Flow is
          State : Assigned_Set) return Boolean
       is
          Assigned : Landin.Checking.Element_Count := 0;
+         Position : Element_Sets.Cursor;
       begin
          if not Is_Tracked (Id)
            or else Array_Sets.Contains (State.Whole_Arrays, (Id, Path))
@@ -1187,15 +1188,19 @@ package body Landin.Stages.Checking.Flow is
             return True;
          end if;
 
-         --  D20: completeness is a count over the sparse facts that exist,
-         --  never a walk over an array whose D18 length may fill the target.
-         for Fact of State.Elements loop
-            if Fact.Declaration = Id
-              and then Fact.Path = Path
-              and then Fact.Below.Is_Empty
-            then
-               Assigned := Assigned + 1;
-            end if;
+         --  D20: count only this array's sparse facts, never an array whose
+         --  D18 length may fill the target or facts for unrelated arrays.
+         Position := State.Elements.Ceiling ((Id, Path, 0, No_Path));
+         while Element_Sets.Has_Element (Position) loop
+            declare
+               Fact : constant Element_Fact := Element_Sets.Element (Position);
+            begin
+               exit when Fact.Declaration /= Id or else Fact.Path /= Path;
+               if Fact.Below.Is_Empty then
+                  Assigned := Assigned + 1;
+               end if;
+            end;
+            Element_Sets.Next (Position);
          end loop;
 
          return Assigned = Array_Length_For (Id, Path);
