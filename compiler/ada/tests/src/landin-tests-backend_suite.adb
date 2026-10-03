@@ -4268,6 +4268,53 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Computed_Element_Is_Checked_Before_Its_Address;
 
+   procedure Unit_Stride_Indexes_Use_The_Checked_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unit_Stride_Indexes_Use_The_Checked_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "mut bytes: [4]u8" & LF
+         & "plain: (i: usize) -> (r: u8) =" & LF
+         & "    bytes[i] = 7" & LF
+         & "    r = bytes[i]" & LF
+         & "end plain" & LF
+         & "through_address: (inout values: [4]u8, i: usize)"
+         & " -> (r: u8) =" & LF
+         & "    values[i] = 7" & LF
+         & "    r = values[i]" & LF
+         & "end through_address" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 4,
+            "both byte-array paths check each read and write");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "ud2"), 4,
+            "each failed byte-array bound traps");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "addq %rax, %rcx"), 4,
+            "each checked index is added to its array base");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "imulq $1, %rax, %rax"),
+            "neither indexed path multiplies a unit stride");
+      end;
+   end Unit_Stride_Indexes_Use_The_Checked_Value;
+
    --  D22: a computed local array element traps like the module one and
    --  then reaches its own frame slot rather than a datum symbol.  The
    --  cell's `%rbp` displacement is where Landin.Backend already places
@@ -7130,6 +7177,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a computed element is checked before its address",
          A_Computed_Element_Is_Checked_Before_Its_Address'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unit stride indexes use the checked value",
+         Unit_Stride_Indexes_Use_The_Checked_Value'Access);
       Landin.Testing.Register
         (Into, "backend",
          "a computed local element reaches its slot",

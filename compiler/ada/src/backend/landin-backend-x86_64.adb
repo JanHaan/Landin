@@ -2562,7 +2562,11 @@ package body Landin.Backend.X86_64 is
                               Emit_Panic;
                               Put (Safe & ":");
                            end if;
-                           if Machine.Fits_Arithmetic_Immediate (Stride) then
+                           if Stride = 1 then
+                              null;
+                           elsif Machine.Fits_Arithmetic_Immediate
+                             (Stride)
+                           then
                               Emit
                                 ("imulq $"
                                  & Trimmed
@@ -4047,7 +4051,10 @@ package body Landin.Backend.X86_64 is
                      --  An `imul` immediate is a signed 32-bit field, and
                      --  D121's element may be wider than one, so a stride
                      --  that does not fit is formed in a register first.
-                     if Machine.Fits_Arithmetic_Immediate (Stride) then
+                     --  A unit stride leaves the checked index unchanged.
+                     if Stride = 1 then
+                        null;
+                     elsif Machine.Fits_Arithmetic_Immediate (Stride) then
                         Emit
                           ("imulq $"
                            & Trimmed
