@@ -36,6 +36,9 @@ protocol error, or reports a compiler defect, on its log or through
 hit: a refusal is the answer a mutant should get. Each hit is kept as
 `OUT/hit-SEED.ldn` with the session that broke it as `OUT/hit-SEED.lsp`, a hit
 restarts the server, and any hit fails the run.
+The close of the last document is checked when a batch rolls over and at
+final shutdown. A premature exit, failed shutdown response or timeout keeps
+that document's mutant and transcript as a hit.
 
 `--batch` runs the original oracle instead: `refine FILE` on each mutant,
 where an exit other than 0 or 1, a run past the bound or a defect line is a

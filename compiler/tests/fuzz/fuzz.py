@@ -152,6 +152,7 @@ class Server:
             stderr=subprocess.PIPE, preexec_fn=limit)
         self.held = b""
         self.log = b""
+        self.stderr_open = True
         self.transcript = []
         self.next_id = 1
         self.request("initialize", {"capabilities": {}})
@@ -191,16 +192,19 @@ class Server:
             if left <= 0:
                 raise Broken("no answer within %d seconds" % self.seconds)
             ready, _, _ = select.select(
-                [self.process.stdout, self.process.stderr], [], [], left)
+                [self.process.stdout] + ([self.process.stderr]
+                                         if self.stderr_open else []),
+                [], [], left)
             for stream in ready:
                 data = os.read(stream.fileno(), 1 << 16)
                 if stream is self.process.stderr:
+                    if not data:
+                        self.stderr_open = False
                     self.log += data
                     if b"defect" in self.log:
                         raise Broken("the server logged a defect")
                 elif not data:
-                    raise Broken("the server stopped, status %s"
-                                 % self.process.poll())
+                    raise Broken("the server closed its output")
                 else:
                     self.held += data
 
@@ -229,21 +233,46 @@ class Server:
             return None
 
     def stop(self):
+        """Shut down a server and report a failed or premature exit."""
+        problem = ""
+        exit_status = None
         try:
-            self.request("shutdown", None)
-            self.notify("exit", None)
-            self.process.wait(timeout=self.seconds)
-        except Exception:
-            pass
-        if self.process.poll() is None:
-            self.process.kill()
-            self.process.wait()
-        for stream in (self.process.stdin, self.process.stdout,
-                       self.process.stderr):
-            try:
-                stream.close()
-            except OSError:
-                pass
+            status = self.process.poll()
+            if status is not None:
+                problem = "server stopped before shutdown, status %d" % status
+            else:
+                try:
+                    self.request("shutdown", None)
+                    self.notify("exit", None)
+                    self.process.wait(timeout=self.seconds)
+                except Broken as broken:
+                    problem = "shutdown: %s" % broken
+                except subprocess.TimeoutExpired:
+                    problem = "shutdown timed out after %d seconds" % self.seconds
+                except Exception as error:
+                    problem = "shutdown: %s: %s" % (type(error).__name__, error)
+                if problem and "closed its output" in problem and \
+                        self.process.poll() is None:
+                    try:
+                        self.process.wait(timeout=self.seconds)
+                    except subprocess.TimeoutExpired:
+                        pass
+            if not problem and self.process.returncode != 0:
+                problem = "server exited after shutdown, status %d" % self.process.returncode
+        finally:
+            exit_status = self.process.poll()
+            if self.process.poll() is None:
+                self.process.kill()
+                self.process.wait()
+            for stream in (self.process.stdin, self.process.stdout,
+                           self.process.stderr):
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        if problem and exit_status is not None and "status" not in problem:
+            problem += ", exit status %d" % exit_status
+        return problem
 
 
 class Broken(Exception):
@@ -325,11 +354,11 @@ def main():
         server = Server(refine, arguments.memory, arguments.seconds)
         try:
             serve_one(server, 0, text, text)
-            return ""
-        except Broken as problem:
-            return str(problem)
-        finally:
-            server.stop()
+            problem = ""
+        except Broken as broken:
+            problem = str(broken)
+        stopped = server.stop()
+        return problem or stopped
 
     if arguments.reduce:
         text = Path(arguments.reduce).read_text(encoding="utf-8",
@@ -355,6 +384,19 @@ def main():
     started = time.monotonic()
     total, hits = 0, 0
     server = None
+    last = None
+
+    def hit(seed, label, mutant, transcript, problem):
+        nonlocal hits
+        hits += 1
+        (out / ("hit-%d.ldn" % seed)).write_bytes(
+            mutant.encode("utf-8", "surrogateescape"))
+        (out / ("hit-%d.lsp" % seed)).write_text(
+            "\n".join(transcript) + "\n", encoding="utf-8",
+            errors="surrogateescape")
+        print("HIT seed=%d src=%s :: %s" % (seed, label, problem),
+              flush=True)
+
     for label, original in seeds():
         for _ in range(arguments.rounds):
             seed = arguments.seed + total
@@ -367,9 +409,13 @@ def main():
             else:
                 if server is None or total % arguments.per_server == 0:
                     if server is not None:
-                        server.stop()
+                        stopped = server.stop()
+                        if stopped:
+                            hit(*last[:3], last[3] + server.transcript,
+                                stopped)
                     server = Server(refine, arguments.memory,
                                     arguments.seconds)
+                    last = None
                 try:
                     serve_one(server, seed, original, mutant)
                 except Broken as broken:
@@ -379,17 +425,15 @@ def main():
                 if problem:
                     server.stop()
                     server = None
+                    last = None
+                else:
+                    last = (seed, label, mutant, transcript)
             if problem:
-                hits += 1
-                (out / ("hit-%d.ldn" % seed)).write_bytes(
-                    mutant.encode("utf-8", "surrogateescape"))
-                (out / ("hit-%d.lsp" % seed)).write_text(
-                    "\n".join(transcript) + "\n", encoding="utf-8",
-                    errors="surrogateescape")
-                print("HIT seed=%d src=%s :: %s" % (seed, label, problem),
-                      flush=True)
+                hit(seed, label, mutant, transcript, problem)
     if server is not None:
-        server.stop()
+        stopped = server.stop()
+        if stopped:
+            hit(*last[:3], last[3] + server.transcript, stopped)
     print("total=%d hits=%d seconds=%d out=%s"
           % (total, hits, time.monotonic() - started, out))
     return 1 if hits else 0
