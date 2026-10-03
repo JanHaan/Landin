@@ -13,6 +13,7 @@ package body Landin.Tests.Driver_Suite is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Platform.Read_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Read_Status;
 
@@ -160,6 +161,8 @@ package body Landin.Tests.Driver_Suite is
       Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Emit   : Landin.Platform.Path_List := Arguments_Of ("--emit=exe");
       Rooted : constant Landin.Platform.Path_List := Arguments_Of ("--root=");
+      Rooted_Emit : constant Landin.Platform.Path_List :=
+        Both ("--root=root", "--emit=exe");
    begin
       Emit.Append ("-o");
       Emit.Append ("app");
@@ -188,6 +191,17 @@ package body Landin.Tests.Driver_Suite is
             Contains (Unbounded.To_String (Result.Report),
                       "names no directory"),
             "the report says the root is empty");
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Rooted_Emit, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+            and then Contains (Report, "error[L0002]:")
+            and then not Contains (Report, "error[L0502]:"),
+            "a rooted emit without an operand remains misuse");
       end;
    end Emission_Without_Sources_Is_Misuse;
 
@@ -380,6 +394,81 @@ package body Landin.Tests.Driver_Suite is
            (Item, Text, "", "and nothing is reported about it");
       end;
    end An_Empty_Source_Is_Accepted;
+
+   procedure Empty_Rooted_Emission_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Empty_Rooted_Emission_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      procedure Preserved (Path, Expected : String);
+
+      procedure Preserved (Path, Expected : String) is
+         Content : Unbounded.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Host.Read_File (Path, Content, Status);
+         Landin.Testing.Check
+           (Item, Status = Landin.Platform.Read_Ok
+            and then Unbounded.To_String (Content) = Expected,
+            Path & " keeps its existing contents");
+      end Preserved;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("entry");
+      Host.Add_File ("out.s", "old assembly");
+      Host.Add_File ("app", "old executable");
+      Host.Add_File ("app.s", "old executable assembly");
+      Host.Add_File ("notes.txt", "user data");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("--root=root", "entry"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Unbounded.Length (Result.Report) = 0,
+            "an empty rooted module is legal without emission");
+      end;
+
+      for Executable in Boolean loop
+         declare
+            Args : Landin.Platform.Path_List :=
+              Arguments_Of ("--root=root");
+            Result : Landin.Driver.Outcome;
+         begin
+            Args.Append
+              (if Executable then "--emit=exe" else "--emit=asm");
+            Args.Append ("-o");
+            Args.Append (if Executable then "app" else "out.s");
+            Args.Append ("entry");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item,
+               Result.Status =
+                 (if Executable then Landin.Driver.Status_Reported
+                  else Landin.Driver.Status_Misuse)
+               and then Occurrences
+                 (Unbounded.To_String (Result.Report), "error[") = 1
+               and then Contains
+                 (Unbounded.To_String (Result.Report),
+                  (if Executable then "error[L0502]:"
+                   else "error[L0002]:")),
+               "an empty rooted module refuses the requested emit mode");
+            Landin.Testing.Check
+              (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "empty rooted emission has no output or tool effects");
+            Preserved ("out.s", "old assembly");
+            Preserved ("app", "old executable");
+            Preserved ("app.s", "old executable assembly");
+            Preserved ("notes.txt", "user data");
+         end;
+      end loop;
+   end Empty_Rooted_Emission_Is_Refused;
 
    ------------------------------------------------------------------
    --  Directory modules and ordered roots
@@ -4268,6 +4357,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an empty source is accepted",
          An_Empty_Source_Is_Accepted'Access);
+      Landin.Testing.Register
+        (Into, "driver", "empty rooted emission is refused",
+         Empty_Rooted_Emission_Is_Refused'Access);
       Landin.Testing.Register
         (Into, "driver", "reachable modules are loaded",
          Reachable_Modules_Are_Loaded'Access);
