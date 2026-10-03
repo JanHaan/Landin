@@ -492,6 +492,109 @@ package body Landin.Tests.Fixture_Suite is
          "ABI Landin companions are kept separately");
    end Well_Formed_Fixtures_Are_Discovered;
 
+   procedure Focused_Discovery_Leaves_Unrelated_Metadata_Alone
+     (Item : in out Landin.Testing.Context);
+
+   procedure Focused_Discovery_Leaves_Unrelated_Metadata_Alone
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Found : Catalogue;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/unit");
+      Host.Add_Directory ("root/unit/chosen");
+      Host.Add_File
+        ("root/unit/chosen/fixture.meta",
+         "class: unit" & LF & "summary: chosen" & LF
+         & "targets: linux-x86-64" & LF);
+      Host.Add_Directory ("root/unit/chosen-extra");
+      Host.Add_File
+        ("root/unit/chosen-extra/fixture.meta",
+         "class: unit" & LF & "summary: neighbour" & LF
+         & "targets: linux-x86-64" & LF);
+      Host.Add_Directory ("root/positive");
+      Host.Add_Directory ("root/positive/broken");
+      Host.Add_File
+        ("root/positive/broken/fixture.meta",
+         "class: positive" & LF & "targets: linux-x86-64" & LF);
+
+      Discover (Found, "root", Host, Only => "unit/chosen");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1, "focused discovery selects one exact name");
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0,
+         "unrelated metadata does not fail a focused selection");
+
+      Discover (Found, "root", Host, Only => "unit/missing");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 0, "an unknown selection stays unknown");
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0,
+         "an unknown selection does not read unrelated metadata");
+
+      Discover (Found, "root", Host, Only => "positive/broken");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 0, "bad selected metadata cannot run");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "missing required key: summary"),
+         "the selected metadata fault is reported");
+
+      Discover (Found, "root", Host);
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 2, "complete discovery keeps both fixtures");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "missing required key: summary"),
+         "complete discovery still checks unrelated metadata");
+   end Focused_Discovery_Leaves_Unrelated_Metadata_Alone;
+
+   procedure Ambiguous_Focused_Selection_Is_Visible
+     (Item : in out Landin.Testing.Context);
+
+   procedure Ambiguous_Focused_Selection_Is_Visible
+     (Item : in out Landin.Testing.Context)
+   is
+      type Duplicate_Filesystem is
+        new Landin.Testing.Fakes.Fake_Filesystem with null record;
+
+      overriding procedure List_Directory
+        (Host    : Duplicate_Filesystem;
+         Path    : String;
+         Entries : out Landin.Platform.Path_List;
+         Status  : out Landin.Platform.List_Status);
+
+      overriding procedure List_Directory
+        (Host    : Duplicate_Filesystem;
+         Path    : String;
+         Entries : out Landin.Platform.Path_List;
+         Status  : out Landin.Platform.List_Status)
+      is
+      begin
+         Landin.Testing.Fakes.List_Directory
+           (Landin.Testing.Fakes.Fake_Filesystem (Host),
+            Path, Entries, Status);
+         if Path = "root/unit" then
+            Entries.Append ("chosen");
+         end if;
+      end List_Directory;
+
+      Host  : Duplicate_Filesystem;
+      Found : Catalogue;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/unit");
+      Host.Add_Directory ("root/unit/chosen");
+      Host.Add_File
+        ("root/unit/chosen/fixture.meta",
+         "class: unit" & LF & "summary: chosen" & LF
+         & "targets: linux-x86-64" & LF);
+
+      Discover (Found, "root", Host, Only => "unit/chosen");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 2,
+         "duplicate selected directory entries remain ambiguous");
+   end Ambiguous_Focused_Selection_Is_Visible;
+
    procedure Malformed_Metadata_Is_Refused
      (Item : in out Landin.Testing.Context);
 
@@ -1035,6 +1138,12 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Register
         (Into, "fixtures", "well formed fixtures are discovered",
          Well_Formed_Fixtures_Are_Discovered'Access);
+      Landin.Testing.Register
+        (Into, "fixtures", "focused discovery leaves unrelated metadata alone",
+         Focused_Discovery_Leaves_Unrelated_Metadata_Alone'Access);
+      Landin.Testing.Register
+        (Into, "fixtures", "ambiguous focused selection is visible",
+         Ambiguous_Focused_Selection_Is_Visible'Access);
       Landin.Testing.Register
         (Into, "fixtures", "malformed metadata is refused",
          Malformed_Metadata_Is_Refused'Access);

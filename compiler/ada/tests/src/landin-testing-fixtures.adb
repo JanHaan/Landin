@@ -1138,7 +1138,8 @@ package body Landin.Testing.Fixtures is
    procedure Discover
      (Into : in out Catalogue;
       Root : String;
-      Host : Landin.Platform.Filesystem'Class)
+      Host : Landin.Platform.Filesystem'Class;
+      Only : String := "")
    is
       procedure Consider
         (Kind : Fixture_Class; Directory : String; Fixture_Name : String);
@@ -1225,27 +1226,35 @@ package body Landin.Testing.Fixtures is
 
       for Kind in Fixture_Class loop
          declare
+            Label_Prefix : constant String := Class_Directory (Kind) & "/";
             Directory : constant String :=
               Root & "/" & Class_Directory (Kind);
             Names     : Landin.Platform.Path_List;
             Status    : Landin.Platform.List_Status;
          begin
-            Host.List_Directory (Directory, Names, Status);
+            if Only = ""
+              or else Ada.Strings.Fixed.Index (Only, Label_Prefix) =
+                      Only'First
+            then
+               Host.List_Directory (Directory, Names, Status);
 
-            if Status = Landin.Platform.Not_A_Directory then
-               Into.Problems.Append
-                 (Directory & ": fixture class path is not a directory");
+               if Status = Landin.Platform.Not_A_Directory then
+                  Into.Problems.Append
+                    (Directory & ": fixture class path is not a directory");
 
-            elsif Status = Landin.Platform.List_Ok then
-               for Fixture_Name of Names loop
-                  --  Host clutter such as .DS_Store is not a fixture and
-                  --  not a fault; a name a fixture could have is.
-                  if Fixture_Name'Length > 0
-                    and then Fixture_Name (Fixture_Name'First) /= '.'
-                  then
-                     Consider (Kind, Directory, Fixture_Name);
-                  end if;
-               end loop;
+               elsif Status = Landin.Platform.List_Ok then
+                  for Fixture_Name of Names loop
+                     --  Host clutter such as .DS_Store is not a fixture and
+                     --  not a fault; a name a fixture could have is.
+                     if Fixture_Name'Length > 0
+                       and then Fixture_Name (Fixture_Name'First) /= '.'
+                       and then (Only = ""
+                                 or else Label_Prefix & Fixture_Name = Only)
+                     then
+                        Consider (Kind, Directory, Fixture_Name);
+                     end if;
+                  end loop;
+               end if;
             end if;
          end;
       end loop;

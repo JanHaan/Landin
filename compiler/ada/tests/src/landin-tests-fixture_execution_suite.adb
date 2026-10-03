@@ -1488,10 +1488,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      Discover (Found, Fixture_Root, Host);
+      Discover (Found, Fixture_Root, Host, Only => Wanted);
       Landin.Testing.Check_Equal
         (Item, Problem_Count (Found), 0,
-         "the fixture tree parses before the selection is run");
+         "the selected fixture metadata is valid");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1,
+         Wanted & ": exactly one fixture was selected");
+
+      if Problem_Count (Found) /= 0 or else Count (Found) /= 1 then
+         return;
+      end if;
 
       for Index in 1 .. Count (Found) loop
          declare
@@ -1535,7 +1542,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Ran, 1, Wanted & ": exactly one fixture was selected");
+        (Item, Ran, 1, Wanted & ": one fixture was executed");
    end Selected_Fixture_Executes;
 
    --  Exercise the shared verdict against fake metadata and outcomes.

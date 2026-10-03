@@ -142,13 +142,16 @@ package Landin.Testing.Fixtures is
 
    type Catalogue is limited private;
 
-   --  Reads `Root/<class-directory>/<name>/fixture.meta` for every class.
-   --  A missing class directory is not a problem: a class with no fixtures
-   --  yet is the normal state early in the roadmap.
+   --  With empty Only, read every fixture's metadata.  With a class/name
+   --  label, inspect that class directory and read metadata only for matching
+   --  entries.  A missing or ambiguous label remains visible through Count;
+   --  matching metadata faults remain visible through Problem_Count.  A
+   --  missing class directory is not a problem in the complete corpus.
    procedure Discover
      (Into : in out Catalogue;
       Root : String;
-      Host : Landin.Platform.Filesystem'Class);
+      Host : Landin.Platform.Filesystem'Class;
+      Only : String := "");
 
    function Count (In_Catalogue : Catalogue) return Natural;
 
