@@ -30,6 +30,7 @@ PROBE = r'''
 #include <sys/syscall.h>
 #include <unistd.h>
 static int logfd = -1;
+static long highest_peak;
 static void sample(const char *phase) {
     if (logfd < 0) return;
     struct mallinfo2 m = mallinfo2();
@@ -47,6 +48,10 @@ static void sample(const char *phase) {
             if (field) peak = strtol(field + 6, NULL, 10);
         }
     }
+    /* Kernel RSS accounting is approximate; retain the highest observed
+       high-water value rather than interpreting small counter reversals. */
+    if (peak > highest_peak) highest_peak = peak;
+    peak = highest_peak;
     char line[160];
     int n = snprintf(line, sizeof line, "%s %zu %ld\n", phase,
                      (size_t)m.uordblks + (size_t)m.hblkhd, peak);
