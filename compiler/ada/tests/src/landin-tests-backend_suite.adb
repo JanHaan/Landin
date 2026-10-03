@@ -7375,8 +7375,63 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Bulk_Array_Transfers;
 
+   procedure Arm64_Small_Call_Offsets_Use_Immediates
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Small_Call_Offsets_Use_Immediates
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Parameters : constant String :=
+        "(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, "
+        & "a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) "
+        & "-> (result: i64)";
+      Arguments : constant String :=
+        "(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)";
+   begin
+      Lower
+        (Work,
+         "native_ten: " & Parameters & " =" & LF
+         & "    result = a8 + a9" & LF
+         & "end native_ten" & LF
+         & "extern(c) c_ten: " & Parameters & LF
+         & "public check: () -> (result: i64) =" & LF
+         & "    result = native_ten" & Arguments
+         & " + c_ten" & Arguments & LF
+         & "end check" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String
+           (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "str x9, [sp, #0]")
+             and then Contains (Text, "str x9, [sp, #8]"),
+            "native stack arguments use scaled store offsets");
+         Landin.Testing.Check
+           (Item, Contains (Text, "add x9, sp, #8"),
+            "C stack destinations use an immediate address");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Count (Text, "add sp, sp, #16") = 2,
+            "both calls restore their small stack areas with immediates");
+      end;
+   end Arm64_Small_Call_Offsets_Use_Immediates;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "arm64 small call offsets use immediates", Arm64_Small_Call_Offsets_Use_Immediates'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 bulk array transfers", Arm64_Bulk_Array_Transfers'Access);
       Landin.Testing.Register

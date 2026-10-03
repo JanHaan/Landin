@@ -390,6 +390,9 @@ package body Landin.Backend.Arm64 is
       procedure Immediate (Register : String; Value : Pattern);
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count);
+      procedure Stack_Address
+        (Register : String; Offset : Landin.Targets.Byte_Count);
+      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String);
@@ -561,10 +564,47 @@ package body Landin.Backend.Arm64 is
         (Register : String; Offset : Landin.Targets.Byte_Count) is
       begin
          if Offset > 0 then
-            Immediate ("x16", Pattern (Offset));
-            Emit ("add " & Register & ", " & Register & ", x16");
+            if Offset <= 4095 then
+               Emit ("add " & Register & ", " & Register & ", #"
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Offset)));
+            elsif Offset mod 4096 = 0 and then Offset / 4096 <= 4095 then
+               Emit ("add " & Register & ", " & Register & ", #"
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Offset / 4096))
+                 & ", lsl #12");
+            else
+               Immediate ("x16", Pattern (Offset));
+               Emit ("add " & Register & ", " & Register & ", x16");
+            end if;
          end if;
       end Add_Offset;
+
+      procedure Stack_Address
+        (Register : String; Offset : Landin.Targets.Byte_Count) is
+      begin
+         if Offset = 0 then
+            Emit ("mov " & Register & ", sp");
+         elsif Offset <= 4095 then
+            Emit ("add " & Register & ", sp, #"
+              & Trimmed (Landin.Targets.Byte_Count'Image (Offset)));
+         elsif Offset mod 4096 = 0 and then Offset / 4096 <= 4095 then
+            Emit ("add " & Register & ", sp, #"
+              & Trimmed (Landin.Targets.Byte_Count'Image (Offset / 4096))
+              & ", lsl #12");
+         else
+            Emit ("mov " & Register & ", sp");
+            Add_Offset (Register, Offset);
+         end if;
+      end Stack_Address;
+
+      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
+      begin
+         if Bytes > 0 then
+            Add_Offset ("sp", Bytes);
+         else
+            Immediate ("x15", 0);
+            Emit ("add sp, sp, x15");
+         end if;
+      end Restore_Stack;
 
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
@@ -1951,15 +1991,20 @@ package body Landin.Backend.Arm64 is
                begin
                   if Place.Shape.Indirect then
                      Load_Value (Argument (Index), "x10");
-                     Emit ("mov x9, sp");
-                     Add_Offset ("x9", Copies (Index));
+                     Stack_Address ("x9", Copies (Index));
                      Copy_Bytes (Place.Shape.Size);
-                     Emit ("mov x13, sp");
-                     Add_Offset ("x13", Copies (Index));
+                     Stack_Address ("x13", Copies (Index));
                      if Place.On_Stack then
-                        Emit ("mov x9, sp");
-                        Add_Offset ("x9", Place.Stack_At);
-                        Emit ("str x13, [x9]");
+                        if Place.Stack_At <= 32760
+                          and then Place.Stack_At mod 8 = 0
+                        then
+                           Emit ("str x13, [sp, #"
+                             & Trimmed (Landin.Targets.Byte_Count'Image
+                               (Place.Stack_At)) & "]");
+                        else
+                           Stack_Address ("x9", Place.Stack_At);
+                           Emit ("str x13, [x9]");
+                        end if;
                      else
                         Emit ("mov x" & Trimmed
                           (Natural'Image (Place.Registers (1) - 1))
@@ -1972,8 +2017,7 @@ package body Landin.Backend.Arm64 is
                         Frame_Address
                           (Value_Offset (Layout, Argument (Index)), "x10");
                      end if;
-                     Emit ("mov x9, sp");
-                     Add_Offset ("x9", Place.Stack_At);
+                     Stack_Address ("x9", Place.Stack_At);
                      Copy_Bytes (Place.Shape.Size);
                   else
                      if Place.Shape.Aggregate then
@@ -2019,10 +2063,7 @@ package body Landin.Backend.Arm64 is
                   C_Chunk (Plan.Result, Chunk, True);
                end loop;
             end if;
-            if Bytes > 0 then
-               Immediate ("x15", Pattern (Bytes));
-               Emit ("add sp, sp, x15");
-            end if;
+            Restore_Stack (Bytes);
          end C_Call;
 
          procedure C_Result (Value : Landin.IR.Value_Id) is
@@ -3108,10 +3149,20 @@ package body Landin.Backend.Arm64 is
                              & Trimmed (Natural'Image (Index - 1)));
                         else
                            Load_Value (Operand (Index + Offset));
-                           Emit ("mov x10, sp");
-                           Add_Offset ("x10", Landin.Targets.Byte_Count (Index
-                             - 9) * 8);
-                           Emit ("str x9, [x10]");
+                           declare
+                              Stack_At : constant Landin.Targets.Byte_Count :=
+                                Landin.Targets.Byte_Count (Index - 9) * 8;
+                           begin
+                              if Stack_At <= 32760 then
+                                 Emit ("str x9, [sp, #"
+                                   & Trimmed (Landin.Targets.Byte_Count'Image
+                                     (Stack_At)) & "]");
+                              else
+                                 Emit ("mov x10, sp");
+                                 Add_Offset ("x10", Stack_At);
+                                 Emit ("str x9, [x10]");
+                              end if;
+                           end;
                         end if;
                      end loop;
                      if Indirect then
@@ -3132,10 +3183,7 @@ package body Landin.Backend.Arm64 is
                      then
                         Store_Value (Value, "x0");
                      end if;
-                     if Bytes > 0 then
-                        Immediate ("x15", Pattern (Bytes));
-                        Emit ("add sp, sp, x15");
-                     end if;
+                     Restore_Stack (Bytes);
                   end;
                when Landin.IR.Jump =>
                   Emit ("b " & Label (Item, Landin.IR.Target_Of (Of_Unit,
