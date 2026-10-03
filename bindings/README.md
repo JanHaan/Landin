@@ -4,13 +4,21 @@
 for the C boundary. It asks an external Clang for a JSON AST; it does not parse C header
 text and it does not make `refine` a header parser. Its supported ABIs are
 Linux x86-64 ELF System V AMD64 LP64 and Darwin arm64 with Apple's AAPCS64
-platform differences, both with signed plain `char` and ordinary (non-short)
-C11 enums. `verify_target` checks the explicit triple, architecture, object
-format macros, data model and byte order. Generated code asserts the selected
-`compiler.c_sysv_lp64` or `compiler.c_darwin_lp64` fact. The exact Apple
-binding target is `arm64-apple-macos26.0.0`; native tools and SDK are pinned in
-`environments/macos-arm64/policy.json`. [Target contracts](../docs/targets.md)
-explains the separate compiler and generator guards.
+platform differences, both with signed plain `char`, and Linux arm64's
+standard AAPCS64 LP64, whose plain `char` is unsigned (D256), all with
+ordinary (non-short) C11 enums. Each is one row of `TARGET_ABIS`, which says
+its fact, calling convention, plain `char` and identifying macros, and a
+policy's `plain_char` must be its target's. `verify_target` checks the
+explicit triple, architecture, object format macros, data model, byte order
+and the sign of plain `char`. Generated code asserts the selected
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` or `compiler.c_aapcs64_lp64`
+fact. The exact Apple binding target is `arm64-apple-macos26.0.0`; native
+tools and SDK are pinned in `environments/macos-arm64/policy.json`. The Linux
+arm64 target is `aarch64-unknown-linux-gnu`, and
+`compiler/tests/linux-arm64/bindings.py` regenerates the committed fixture's
+header and policy for it and runs the result natively.
+[Target contracts](../docs/targets.md) explains the separate compiler and
+generator guards.
 
 The generator writes exactly four files:
 
@@ -75,7 +83,8 @@ preprocessor environment. The ABI fixture harness additionally uses
 before publication.
 
 `bindings.ldn` imports `core/c`, whose aliases admit the explicitly supported
-`compiler.c_sysv_lp64 or compiler.c_darwin_lp64` ABIs. Each generated binding
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
+ABIs. Each generated binding
 visibly asserts only its selected ABI fact; equal LP64 widths do not establish
 calling-convention compatibility. `landin/compiler` is implicit and is never imported.
 

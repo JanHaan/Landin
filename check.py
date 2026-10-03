@@ -3815,7 +3815,12 @@ def arm64_linux_problems():
         if not record.get("reason"):
             out.append((ARM64_LINUX_PARITY, 1, "%s gives no reason" % name))
         counterpart = record.get("counterpart", "")
+        #  A binding counterpart is the runner that regenerates and executes
+        #  it on the lane, which must be here.
         if counterpart.startswith("bindings/"):
+            if not os.path.isfile(os.path.join(ROOT, counterpart[len("bindings/"):])):
+                out.append((ARM64_LINUX_PARITY, 1, "%s's binding counterpart"
+                            " %s is not a runner here" % (name, counterpart)))
             continue
         if counterpart not in fixtures or "linux-arm64" not in targets_of(
                 fixtures[counterpart][1]):

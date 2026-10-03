@@ -165,6 +165,46 @@ def policy() -> dict[str, Any]:
 
 
 class TargetContractTests(unittest.TestCase):
+    def test_each_target_is_one_row_with_its_own_char_and_fact(self) -> None:
+        """D256: the standard AAPCS64's plain char is unsigned, and its
+        bindings assert its own fact rather than Darwin's."""
+        module = runpy.run_path(str(GENERATOR))
+        rows = module["TARGET_ABIS"]
+        self.assertEqual(set(module["SUPPORTED_TARGETS"]), set(rows))
+        arm64 = rows[module["LINUX_ARM64_TARGET"]]
+        self.assertEqual((arm64["fact"], arm64["plain_char"], arm64["convention"]),
+                         ("c_aapcs64_lp64", "unsigned", "aapcs64"))
+        self.assertEqual({row["fact"] for row in rows.values()},
+                         {"c_sysv_lp64", "c_darwin_lp64", "c_aapcs64_lp64"})
+
+    def test_plain_char_sign_must_be_the_rows(self) -> None:
+        """A Clang that disagrees with the row about char describes another ABI."""
+        module = runpy.run_path(str(GENERATOR))
+        macros = ("#define __LP64__ 1\n#define __CHAR_BIT__ 8\n"
+                  "#define __SIZEOF_SHORT__ 2\n#define __SIZEOF_INT__ 4\n"
+                  "#define __SIZEOF_LONG__ 8\n#define __SIZEOF_LONG_LONG__ 8\n"
+                  "#define __SIZEOF_POINTER__ 8\n#define __SIZEOF_SIZE_T__ 8\n"
+                  "#define __SIZEOF_PTRDIFF_T__ 8\n#define __SIZEOF_FLOAT__ 4\n"
+                  "#define __SIZEOF_DOUBLE__ 8\n#define __FLT_RADIX__ 2\n"
+                  "#define __FLT_MANT_DIG__ 24\n#define __DBL_MANT_DIG__ 53\n"
+                  "#define __aarch64__ 1\n#define __linux__ 1\n#define __ELF__ 1\n"
+                  "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__\n")
+        target = module["LINUX_ARM64_TARGET"]
+        for char_macro, accepted in (("#define __CHAR_UNSIGNED__ 1\n", True),
+                                     ("", False)):
+            driver = object.__new__(module["ClangDriver"])
+            driver.inputs = mock.Mock(target=target)
+            replies = [subprocess.CompletedProcess([], 0, (target + "\n").encode()),
+                       subprocess.CompletedProcess([], 0,
+                                                   (macros + char_macro).encode())]
+            with mock.patch.object(driver, "run", side_effect=replies):
+                if accepted:
+                    driver.verify_target()
+                else:
+                    with self.assertRaisesRegex(module["BindingError"],
+                                                "plain char is signed"):
+                        driver.verify_target()
+
     def test_second_lp64_abi_is_refused_before_macro_or_header_work(self) -> None:
         module = runpy.run_path(str(GENERATOR))
         driver = object.__new__(module["ClangDriver"])

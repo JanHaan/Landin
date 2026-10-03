@@ -11,7 +11,7 @@
     },
     "abi/r440-bindings-generated": {
       "reason": "The committed bindings are generated for x86_64-pc-linux-gnu and assert compiler.c_sysv_lp64. The binding generator's linux-arm64 target regenerates and executes the same header and policy for the standard AAPCS64.",
-      "counterpart": "bindings/aarch64-unknown-linux-gnu"
+      "counterpart": "bindings/compiler/tests/linux-arm64/bindings.py"
     },
     "abi/r440-native-varargs": {
       "reason": "SysV's al vector-register count is not an arm64 register. The counterpart keeps the promoted-tail values, direct and indirect calls and the C va_arg oracle, and observes where the standard places each argument.",

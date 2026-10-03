@@ -22,8 +22,10 @@ compiler; the pin is the compiler version, not the distributor.
 The C binding generator, `bindings/generate.py`, is a separate source tool,
 not part of the Ada bootstrap and not a C or LLVM product backend.  The
 Linux environments provide a Clang 19 as the external C11 header frontend and
-compiler for its generated C adapters.  The selected target is always
-`x86_64-pc-linux-gnu`.  The gate's bindings job installs Ubuntu 24.04's
+compiler for its generated C adapters.  The selected target is
+`x86_64-pc-linux-gnu` on x86-64 and `aarch64-unknown-linux-gnu` on arm64,
+where the Linux arm64 jobs install the same package for arm64 and run
+`compiler/tests/linux-arm64/bindings.py`.  The gate's bindings job installs Ubuntu 24.04's
 `clang-19` package at exactly `1:19.1.1-1ubuntu1~24.04.2` (Clang 19.1.1),
 the version `environments/pins.sh` names as `LANDIN_CLANG_UBUNTU`, asserts
 the installed version, and takes the headers and root sysroot from the same

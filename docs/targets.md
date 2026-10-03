@@ -107,11 +107,13 @@ write-open bridge passes its mode in w2 rather than on Apple's variadic stack.
 compiler.c_aapcs64_lp64`, and its `c_char` is `u8` under the standard AAPCS64
 and `i8` otherwise. Each fact identifies its own implemented ABI, not LP64
 generally. Generated bindings
-assert the selected fact. The generator supports `x86_64-pc-linux-gnu` and the
-pinned `arm64-apple-macos26.0.0` deployment triple, independently probing Clang's
-triple, macros and data model. The native Apple corpus regenerates all binding
-categories, including TLS, nullable callbacks and incoming-varargs adapters;
-existing Linux generated files remain unchanged.
+assert the selected fact. The generator supports `x86_64-pc-linux-gnu`, the
+pinned `arm64-apple-macos26.0.0` deployment triple and
+`aarch64-unknown-linux-gnu`, independently probing Clang's triple, macros,
+data model and plain `char`. The native Apple corpus regenerates all binding
+categories, including TLS, nullable callbacks and incoming-varargs adapters,
+and `compiler/tests/linux-arm64/bindings.py` does the same natively on Linux
+arm64; existing Linux x86-64 generated files remain unchanged.
 
 ## CPU feature levels
 
