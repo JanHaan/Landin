@@ -91,7 +91,9 @@ The exact-revision native acceptance that approved every revision through
 0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
 every push it runs every target, Linux x86-64 and macOS arm64 natively with GDB
 and LLDB and Cortex-M under QEMU, both compiler modes, and the
-document, binding and editor-grammar checks, retaining nothing and accepting no
+document, binding and editor-grammar checks. On a failed Cortex-M job, it is
+configured to upload diagnostic output if present and retain it for 14 days;
+it retains no successful exact-revision acceptance record and accepts no
 revision. `.github/workflows/determinism.yml` checks that every host emits the
 same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>;
 neither runs a compiler test.

@@ -120,8 +120,11 @@ eight, `darwin-host` nine and twelve, `arm64-compiler` eleven, `release`
 twelve, `compiler` and `darwin-parity` fourteen, and `cortex-m` sixteen and a
 half, which sets the gate at about seventeen minutes.
 
-The gate is **not** the retired acceptance: it retains no evidence, and
-green is not a verdict on a revision. It is a safety net over every target.
+The gate is **not** the retired acceptance: it retains no successful
+exact-revision acceptance record, and green is not a verdict on a revision.
+On a failed Cortex-M job, it is configured to upload diagnostic output if
+that output exists; uploaded artifacts are retained for 14 days. It is a
+safety net over every target.
 
 Three more workflows run on a push. `determinism.yml` requires every host in
 its matrix to emit the same bytes; it emits and hashes but never assembles,

@@ -22,9 +22,11 @@ what they cost.
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
 pushing. The gate is a safety net rather than a verdict: it runs every
-target on every push and retains nothing, and green says the tree passed
-there, not that a revision is accepted. Documentation changes still receive
-the full `check.py`.
+target on every push. On a failed Cortex-M job, it is configured to upload
+diagnostic output if present and retain it for 14 days. It retains no successful
+exact-revision acceptance record; green says the tree passed there, not that
+a revision is accepted. Documentation changes still receive the full
+`check.py`.
 
 ## Historical: choosing acceptance scope
 

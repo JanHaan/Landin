@@ -14,9 +14,11 @@
 #  whole corpus, and each compiler builds for its own host by default
 #  (D257), so the same commands run either lane.
 #
-#  It is still not the retired exact-revision acceptance: nothing is
-#  retained, and nothing accepts a revision.  It is a safety net that now
-#  covers every target.
+#  It is still not the retired exact-revision acceptance: no successful
+#  acceptance record is retained, and nothing accepts a revision.  If a
+#  Cortex-M job fails and produced output, the workflow attempts to upload
+#  its diagnostics for 14-day retention.  The gate is a safety net over
+#  every target.
 #
 #  Whole-job times below were measured on these runners, four vCPUs on Linux
 #  and three cores on macOS, install and build included; lane times inside
@@ -250,8 +252,8 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
 
-      #  A failed lane's logs are the only record of what an emulator or the
-      #  debugger said; without them a failure is a line with no cause.
+      #  If a failed job produced Cortex-M output, upload its logs to help
+      #  explain what the emulator or debugger said.
       - name: Keep the evidence of a failed lane
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
