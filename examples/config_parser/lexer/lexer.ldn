@@ -52,38 +52,35 @@ is_identifier_tail: (byte: u8) -> (yes: bool) =
 end is_identifier_tail
 
 skip_blanks: (source: []u8, inout cursor: usize) -> none =
-    return when cursor >= lenof source
-    byte: u8 = source[cursor]
-    if byte == 32 or byte == 9 or byte == 13 then
+    while cursor < lenof source do
+        byte: u8 = source[cursor]
+        return when byte <> 32 and byte <> 9 and byte <> 13
         inc cursor
-        skip_blanks(source, cursor)
-    end if
+    end while
 end skip_blanks
 
 take_identifier: (source: []u8, inout cursor: usize) -> none =
-    return when cursor >= lenof source
-    byte: u8 = source[cursor]
-    if is_identifier_tail(byte) then
+    while cursor < lenof source do
+        byte: u8 = source[cursor]
+        return when not is_identifier_tail(byte)
         inc cursor
-        take_identifier(source, cursor)
-    end if
+    end while
 end take_identifier
 
 take_number: (source: []u8, inout cursor: usize) -> none =
-    return when cursor >= lenof source
-    byte: u8 = source[cursor]
-    if is_digit(byte) then
+    while cursor < lenof source do
+        byte: u8 = source[cursor]
+        return when not is_digit(byte)
         inc cursor
-        take_number(source, cursor)
-    end if
+    end while
 end take_number
 
 take_string: (source: []u8, inout cursor: usize) -> none =
-    return when cursor >= lenof source
-    byte: u8 = source[cursor]
-    return when byte == 34 or byte == 10
-    inc cursor
-    take_string(source, cursor)
+    while cursor < lenof source do
+        byte: u8 = source[cursor]
+        return when byte == 34 or byte == 10
+        inc cursor
+    end while
 end take_string
 
 single: (source: []u8, what: kind, begins: usize) -> (result: token) =

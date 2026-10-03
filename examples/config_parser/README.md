@@ -7,8 +7,8 @@ record.
 `lexer/lexer.ldn` turns an ASCII configuration source into positioned tokens.
 `parser/parser.ldn` builds an arena-backed recursive AST, reports recoverable
 syntax faults through `any core/diag.log`, and propagates allocation or
-diagnostic-delivery failures. Its walks use recursion because they were
-written before loops and full UTF-8 text were enabled.
+diagnostic-delivery failures. The lexer scans token bytes with loops; the
+parser's syntax and recovery walks remain recursive.
 
 The hosted entry, recorded input and exact output oracle are in
 `compiler/tests/fixtures/runtime/derived-parser`. `DERIVATION.md` there maps

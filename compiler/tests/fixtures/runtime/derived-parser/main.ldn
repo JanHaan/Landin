@@ -3,6 +3,7 @@ import core/io
 import core/io/hosted
 import core/mem
 import core/text
+import examples/config_parser/lexer
 import examples/config_parser/parser
 
 --  Parsed nodes are retained through the public escaping arena capability.
@@ -112,6 +113,85 @@ notes_are_expected: (value: diag.bounded(8), inout ok: bool) -> none =
     end if
 end notes_are_expected
 
+token_is: (source: []u8, inout scanning: lexer.state,
+           what: lexer.kind, begins: usize, ends: usize) -> (yes: bool) =
+    found: lexer.token = lexer.next(source, scanning)
+    yes = found.what == what and text.ordinal(found.begins) == begins
+      and text.ordinal(found.ends) == ends and scanning.cursor == ends
+end token_is
+
+lexer_positions_are_expected: () -> (yes: bool) =
+    bytes: [20]u8 = [65, 95, 57, 33, 32, 9, 13, 49, 50, 51,
+                     120, 32, 34, 97, 98, 34, 10, 34, 117, 10]
+    source: []u8 = bytes[0..<20]
+    mut scanning := lexer.open()
+    yes = token_is(source, scanning, lexer.identifier, 0, 3)
+      and token_is(source, scanning, lexer.bad_character, 3, 4)
+      and token_is(source, scanning, lexer.number, 7, 10)
+      and token_is(source, scanning, lexer.identifier, 10, 11)
+      and token_is(source, scanning, lexer.string, 12, 16)
+      and token_is(source, scanning, lexer.newline, 16, 17)
+      and token_is(source, scanning, lexer.unterminated_string, 17, 19)
+      and token_is(source, scanning, lexer.newline, 19, 20)
+      and token_is(source, scanning, lexer.end_of_input, 20, 20)
+end lexer_positions_are_expected
+
+lexer_long_scans_are_expected: () -> (yes: bool) =
+    mut bytes: [100002]u8 = zeroed
+    mut at: usize = 0
+    while at < 100000 do
+        bytes[at] = 65
+        inc at
+    end while
+    bytes[100000] = 33
+    mut scanning := lexer.open()
+    if not token_is(bytes[0..<100001], scanning, lexer.identifier, 0, 100000)
+      or not token_is(bytes[0..<100001], scanning,
+                      lexer.bad_character, 100000, 100001)
+    then
+        yes = false
+        return
+    end if
+
+    at = 0
+    while at < 100000 do
+        bytes[at] = 57
+        inc at
+    end while
+    scanning = lexer.open()
+    if not token_is(bytes[0..<100001], scanning, lexer.number, 0, 100000)
+      or not token_is(bytes[0..<100001], scanning,
+                      lexer.bad_character, 100000, 100001)
+    then
+        yes = false
+        return
+    end if
+
+    at = 0
+    while at < 100000 do
+        bytes[at] = 32
+        inc at
+    end while
+    bytes[100000] = 65
+    scanning = lexer.open()
+    if not token_is(bytes[0..<100001], scanning,
+                    lexer.identifier, 100000, 100001)
+    then
+        yes = false
+        return
+    end if
+
+    bytes[0] = 34
+    at = 1
+    while at < 100001 do
+        bytes[at] = 65
+        inc at
+    end while
+    bytes[100001] = 34
+    scanning = lexer.open()
+    yes = token_is(bytes[0..<100002], scanning, lexer.string, 0, 100002)
+end lexer_long_scans_are_expected
+
 public main: () -> (code: i32) =
     code = 1
     mut host := hosted.host()
@@ -195,5 +275,10 @@ public main: () -> (code: i32) =
         return
     end if
 
+    if not lexer_positions_are_expected()
+      or not lexer_long_scans_are_expected()
+    then
+        return
+    end if
     code = 42
 end main

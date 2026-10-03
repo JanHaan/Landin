@@ -19,10 +19,10 @@ input, diagnostics and status oracle.
 | Prototype evidence | Executable evidence |
 |---|---|
 | Y1: syntax faults are handled, world-dependent failures use the error channel | Three syntax faults are logged and recovered in order; a one-byte arena produces `mem.out_of_memory`, and a logger aimed at a closed descriptor produces `io.io_failed`. |
-| Y4: the parser does not require loop labels or value breaks | The derivative uses recursion for scanner, recovery, and sequence walks without changing the workload's control boundaries. Loops were completed later; recursion remains a valid implementation choice. |
+| Y4: the parser does not require loop labels or value breaks | The parser uses recursion for recovery and sequence walks without changing the workload's control boundaries. The lexer uses loops for byte scans so token length does not add call frames. |
 | Y5: variant cases are constructors | `parser.value` constructs text, integer and group cases, and the runtime exhaustively matches all three. |
 | Y6: a recovery arm may produce a value or leave | Numeric overflow leaves its value arm after reporting, while the outer sequence resumes and retains later valid nodes. |
 | Y7: allocated nodes are initialized through pointer `.val` | `parser.value` contains a recursive pointer list; each arena allocation is converted to `ptr mut value` and filled through `item.val`. |
-| `config/lex` retains bad input and source positions | `lexer.next` emits bad-character and unterminated-string tokens with opaque `text.position` bounds. |
+| `config/lex` retains bad input and source positions | `lexer.next` emits bad-character and unterminated-string tokens with opaque `text.position` bounds. The runtime checks token and scanner offsets across delimiters, and scans 100,000-byte identifiers, numbers, blanks, and string contents. |
 | The parser accepts an erased diagnostic capability | The identical parse body runs once with `diag.bounded(8)` and once with `diag.streaming`, both through `any diag.log`. |
 | Nesting cleanup survives failure | The group arm registers `defer lower_depth(parser)` before recursive descent. |
