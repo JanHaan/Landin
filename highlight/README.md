@@ -33,8 +33,12 @@ Helix, Zed, and Emacs fetch the tree-sitter grammar at the fixed commit
 recorded in their packages, matching the queries and mode rules in this
 checkout. When changing the grammar or queries, commit those changes first,
 then update all three revisions to that commit before distributing the
-packages. `highlight/test_adapters.py` checks that the revision still contains
-the shipped grammar and queries when run from a Git checkout.
+packages. `highlight/test_adapters.py` checks the full commit IDs and equality
+in every distribution. In a Git checkout with the pinned commit available, it
+also compares the shipped grammar and queries against that commit. A shallow
+checkout missing the commit reports that it skipped this comparison; fetch the
+commit for the full check. The gate's editor-grammar job checks out full history
+so that it always runs the comparison.
 
 | editor or tool | package | installation |
 |---|---|---|

@@ -14,6 +14,7 @@ trap 'rm -rf -- "$test_tmp"' EXIT HUP INT TERM
 
 python3 "$root/highlight/generate.py" --check
 python3 "$root/highlight/test_adapters.py"
+python3 "$root/highlight/tests/test_adapters_revision.py"
 
 if test -d "$root/highlight/textmate/node_modules" && command -v node >/dev/null 2>&1; then
     extension_tmp="$test_tmp/vsix"

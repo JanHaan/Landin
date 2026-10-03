@@ -194,6 +194,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # compare shipped grammar and queries with the pinned commit
 
       - name: Install the pinned tree-sitter CLI
         working-directory: highlight/tree-sitter

@@ -7,6 +7,7 @@ import json
 import plistlib
 import re
 import subprocess
+import sys
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -70,13 +71,29 @@ def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
     revision = revisions[0]
     assert re.fullmatch(r"[0-9a-f]{40}", revision), "editor grammar revision must be a full commit ID"
 
-    # Source archives have no history. In a checkout, also compare the files
-    # that determine parsing and the queries shipped beside each adapter.
+    # Source archives have no history. In a checkout with the pinned object,
+    # also compare the files that determine parsing and the shipped queries.
     checkout = ROOT.parent
-    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=checkout,
-                         capture_output=True, text=True, check=False)
+    try:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=checkout,
+                             capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return
     if top.returncode != 0 or Path(top.stdout.strip()).resolve() != checkout:
         return
+    pinned = subprocess.run(["git", "cat-file", "-e", f"{revision}^{{commit}}"],
+                            cwd=checkout, capture_output=True, text=True,
+                            check=False)
+    if pinned.returncode != 0:
+        shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"],
+                                 cwd=checkout, capture_output=True, text=True,
+                                 check=False)
+        if shallow.returncode == 0 and shallow.stdout.strip() == "true":
+            print("pinned grammar commit unavailable in shallow checkout; "
+                  "grammar/query comparison skipped", file=sys.stderr)
+            return
+        raise AssertionError(f"pinned grammar commit {revision} is unavailable; "
+                             "fetch it to compare the shipped grammar and queries")
     paths = [
         "highlight/tree-sitter/grammar.js",
         "highlight/tree-sitter/src/parser.c",
