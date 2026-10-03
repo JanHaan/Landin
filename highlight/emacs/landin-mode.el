@@ -27,6 +27,8 @@
 
 (defconst landin-mode-constants '("false" "none" "noreturn" "true" "zeroed"))
 
+(defconst landin-mode-builtin-modules '("assembler" "compiler" "linker"))
+
 (defgroup landin nil "Editing Landin source." :group 'languages)
 
 (defcustom landin-treesit-revision "a26f18b891379a68e31e5a87ac5b813cdfa8a943"
@@ -80,6 +82,7 @@
     (,(regexp-opt landin-mode-keywords 'symbols) . font-lock-keyword-face)
     (,(regexp-opt landin-mode-types 'symbols) . font-lock-type-face)
     (,(regexp-opt landin-mode-constants 'symbols) . font-lock-constant-face)
+    (,(regexp-opt landin-mode-builtin-modules 'symbols) . font-lock-builtin-face)
     ("\\_<[ui]\\(?:0\\|[1-9][0-9]?[0-9]?\\)\\_>" . font-lock-type-face)
     ("^\\s-*\\(?:public\\s-+\\)?\\([a-z_][a-z0-9_]*\\)\\s-*:\\s-*\\(?:type\\|atom\\)\\_>" 1 font-lock-type-face)
     ("^\\s-*\\(?:public\\s-+\\)?\\([a-z_][a-z0-9_]*\\)\\s-*:\\s-*(" 1 font-lock-function-name-face)

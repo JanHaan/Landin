@@ -137,7 +137,8 @@ def scanner_smoke(source: str) -> None:
     assert has("q", "this is part of the raw literal")
     assert has("k", "public")
     assert has("t", "u23")
-    assert has("b", "compiler")
+    for module in BUILTIN_MODULES:
+        assert has("b", module), f"scanner omits builtin module {module}"
     assert has("s", "member")
     assert has("n", "0x2a")
 
@@ -269,6 +270,15 @@ def main() -> int:
     check_grammar_revision(helix, zed, emacs)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
+    modules = re.search(
+        r"\(defconst landin-mode-builtin-modules\s+'\(([^)]*)\)\)", emacs, re.S)
+    assert modules, "Emacs builtin module vocabulary is missing"
+    assert set(re.findall(r'"([^"]+)"', modules.group(1))) == BUILTIN_MODULES, (
+        "Emacs builtin modules differ from the scanner")
+    assert re.search(
+        r"\(,\(regexp-opt landin-mode-builtin-modules 'symbols\)"
+        r"\s*\.\s*font-lock-builtin-face\)", emacs), (
+        "Emacs builtin modules have no font-lock rule")
     textmate = json.dumps(grammar)
     for word in BUILTIN_MODULES:
         assert word in textmate, f"TextMate vocabulary omits {word}"
