@@ -445,8 +445,9 @@ the examples before any was written, and `docs/format.md` shows each with a
 program as written and as formatted, which the `formatting` suite holds
 `Landin.Formatting` to. The formatter returns space-only edits in byte order,
 the shape R10.50's formatting request answers with, and refuses a source that
-does not parse with its own report; it scans its own result and raises a
-defect if a token or comment moved. A line comment now ends at its last
+does not parse with its own report; it scans a changed result and raises a
+defect if a token or comment moved, while byte-identical output needs no
+second scan. A line comment now ends at its last
 visible byte, so no trailing blank belongs to a comment. `refine fmt` rewrites
 files and `refine fmt --check` reports L0008. Over all 2,114 sources in the
 repository the 80 that fail to scan or parse are refused and every other keeps
