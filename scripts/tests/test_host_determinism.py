@@ -3,9 +3,8 @@
 
 A check that cannot fail is worse than no check: renaming tour.md once made
 four of check.py's checks vacuous while the run still said `all clean`.  So
-the comparison is exercised against manifests that disagree in each of the
-three ways they can -- a changed digest, a missing entry and an extra one --
-and against agreeing manifests, which must stay silent.
+the comparison is exercised against differing manifests, unexpected shared
+refusals, and agreeing manifests with real assembly evidence.
 """
 import json
 import subprocess
@@ -20,7 +19,7 @@ CHECK = ROOT / "scripts" / "emit_manifest.py"
 BASE = {
     "alias-conversion|linux-x86-64|debug": "a" * 64,
     "alias-conversion|cortex-m0|release": "b" * 64,
-    "loop-carry|darwin-arm64|debug": "refused:2",
+    "external-scalar-c-boundary|cortex-m0|debug": "refused:1",
 }
 
 
@@ -33,6 +32,23 @@ def compare(*manifests):
             paths.append(str(path))
         return subprocess.run([sys.executable, str(CHECK), "compare"] + paths,
                               capture_output=True, text=True)
+
+
+def emit(stub):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        fixture = root / "compiler/tests/fixtures/positive/external-scalar-c-boundary"
+        fixture.mkdir(parents=True)
+        (fixture / "fixture.meta").write_text("program: main.ldn\n")
+        (fixture / "main.ldn").write_text("unused by the stub\n")
+        refine = root / "refine"
+        refine.write_text("#!/bin/sh\n" + stub)
+        refine.chmod(0o755)
+        out = root / "manifest.json"
+        result = subprocess.run(
+            [sys.executable, str(CHECK), "emit", str(refine), str(root), str(out)],
+            capture_output=True, text=True)
+        return result, json.loads(out.read_text())
 
 
 class Comparison(unittest.TestCase):
@@ -51,7 +67,7 @@ class Comparison(unittest.TestCase):
 
     def test_a_missing_entry_fails(self):
         other = dict(BASE)
-        del other["loop-carry|darwin-arm64|debug"]
+        del other["external-scalar-c-boundary|cortex-m0|debug"]
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
         self.assertIn("is absent", result.stderr)
@@ -67,14 +83,58 @@ class Comparison(unittest.TestCase):
         #  Accept/refuse must agree too: a fixture one host compiles and
         #  another rejects is a host leak in the frontend, not the backend.
         other = dict(BASE)
-        other["loop-carry|darwin-arm64|debug"] = "e" * 64
+        other["external-scalar-c-boundary|cortex-m0|debug"] = "e" * 64
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
+
+    def test_shared_unexpected_refusal_fails(self):
+        other = dict(BASE)
+        other["alias-conversion|linux-x86-64|debug"] = "refused:1"
+        result = compare(other, dict(other))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unexpected emission result", result.stderr)
+
+    def test_all_expected_refusals_still_fail(self):
+        refused = {"external-scalar-c-boundary|cortex-m0|debug": "refused:1"}
+        result = compare(refused, dict(refused))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no assembly digest was emitted", result.stderr)
+
+    def test_missing_assembly_is_not_an_expected_refusal(self):
+        other = dict(BASE)
+        other["external-scalar-c-boundary|cortex-m0|debug"] = "refused:0"
+        result = compare(other, dict(other))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unexpected emission result", result.stderr)
 
     def test_one_manifest_is_not_a_comparison(self):
         result = compare(BASE)
         self.assertEqual(result.returncode, 2)
         self.assertIn("at least two", result.stderr)
+
+
+class Emission(unittest.TestCase):
+    def test_universal_refusal_fails(self):
+        result, manifest = emit("exit 1\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(set(manifest.values()), {"refused:1"})
+        self.assertIn("no assembly digest was emitted", result.stderr)
+
+    def test_declared_target_refusal_passes_with_assembly(self):
+        result, manifest = emit(
+            'for arg do\n'
+            '  case "$arg" in\n'
+            '    --target=cortex-m0) exit 1 ;;\n'
+            '  esac\n'
+            'done\n'
+            'while [ "$#" -gt 0 ]; do\n'
+            '  if [ "$1" = -o ]; then shift; printf "asm\\n" > "$1"; exit 0; fi\n'
+            '  shift\n'
+            'done\n'
+            'exit 2\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 2)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 4)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,68 @@ from pathlib import Path
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
 MODES = ("debug", "release")
 MAX_WORKERS = 4
+
+#  These source/target pairs deliberately refuse in both modes.  Most use
+#  target-specific C or machine facilities; the fixed-conditional fixtures
+#  select a Linux-only declaration.  Keep this list explicit: a new shared
+#  refusal must not become evidence of equal assembly merely by agreeing on
+#  every host.
+REFUSAL_PAIRS = {
+    ("external-scalar-c-boundary", "cortex-m0"),
+    ("fixed-conditional-cross-file-forward", "cortex-m0"),
+    ("fixed-conditional-cross-file-forward", "darwin-arm64"),
+    ("fixed-conditional-generic-activity", "cortex-m0"),
+    ("fixed-conditional-generic-activity", "darwin-arm64"),
+    ("fixed-conditional-nested-inactive", "cortex-m0"),
+    ("fixed-conditional-nested-inactive", "darwin-arm64"),
+    ("fixed-conditional-selects-declarations", "cortex-m0"),
+    ("fixed-conditional-selects-declarations", "darwin-arm64"),
+    ("r440-array-callback-type-argument", "cortex-m0"),
+    ("r440-c-aliases", "cortex-m0"),
+    ("r440-c-aliases", "darwin-arm64"),
+    ("r440-c-layout-recursive-callback", "cortex-m0"),
+    ("r440-c-signatures", "cortex-m0"),
+    ("r440-checker-helper-normalized-imports", "cortex-m0"),
+    ("r440-checker-recursive-callback-contexts", "cortex-m0"),
+    ("r440-checker-recursive-contexts", "cortex-m0"),
+    ("r440-compatible-link-declarations", "cortex-m0"),
+    ("r440-external-float", "cortex-m0"),
+    ("r491-generic-pointee-layout", "cortex-m0"),
+    ("r491-symbolic-c-layout", "cortex-m0"),
+    ("r630-memory-scalars", "cortex-m0"),
+    ("r660-machine-directives", "cortex-m0"),
+}
+EXPECTED_REFUSALS = {
+    "%s|%s|%s" % (fixture, target, mode)
+    for fixture, target in REFUSAL_PAIRS for mode in MODES
+} | {
+    #  This fixture asserts that the build mode is debug.
+    "r430-fixed-options|%s|release" % target for target in TARGETS
+}
+DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def evidence_faults(manifest):
+    """Reject a shared refusal wherever assembly is promised."""
+    faults = []
+    emitted = 0
+    for key, value in sorted(manifest.items()):
+        if isinstance(value, str) and DIGEST.fullmatch(value):
+            emitted += 1
+        elif value == "refused:1" and key in EXPECTED_REFUSALS:
+            continue
+        else:
+            faults.append("%s has unexpected emission result %r" % (key, value))
+    if not emitted:
+        faults.append("no assembly digest was emitted")
+    return faults
+
+
+def report_faults(faults):
+    for line in faults[:40]:
+        print("  " + line, file=sys.stderr)
+    if len(faults) > 40:
+        print("  ... and %d more" % (len(faults) - 40), file=sys.stderr)
 
 
 def operands(fixture):
@@ -115,6 +178,12 @@ def emit(refine, root, out, workers=None):
     print("fixtures %d  entries %d  emitted %d  refused %d"
           % (len(fixtures), len(manifest), len(manifest) - refused, refused))
     print("manifest sha256:", hashlib.sha256(Path(out).read_bytes()).hexdigest())
+    faults = evidence_faults(manifest)
+    if faults:
+        print("manifest lacks required assembly evidence: %d fault(s)" % len(faults),
+              file=sys.stderr)
+        report_faults(faults)
+        return 1
     return 0
 
 
@@ -126,6 +195,9 @@ def compare(paths):
         return 2
     (first_name, first), rest = loaded[0], loaded[1:]
     faults = []
+    for name, manifest in loaded:
+        faults.extend("%s: %s" % (name, fault)
+                      for fault in evidence_faults(manifest))
     for name, other in rest:
         missing = sorted(set(first) - set(other))
         added = sorted(set(other) - set(first))
@@ -138,12 +210,9 @@ def compare(paths):
                 faults.append("%s: %s is %s, %s has %s"
                               % (name, key, other[key][:16], first_name, first[key][:16]))
     if faults:
-        print("emission is not host-neutral: %d disagreement(s)" % len(faults),
+        print("emission is not host-neutral evidence: %d fault(s)" % len(faults),
               file=sys.stderr)
-        for line in faults[:40]:
-            print("  " + line, file=sys.stderr)
-        if len(faults) > 40:
-            print("  ... and %d more" % (len(faults) - 40), file=sys.stderr)
+        report_faults(faults)
         return 1
     print("%d manifests agree on all %d entries" % (len(loaded), len(first)))
     return 0
