@@ -8,7 +8,9 @@ makes of a fixed text, and the seed list to the corpus it is read from.
 """
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "compiler/tests/fuzz"))
@@ -47,6 +49,13 @@ class Mutator(unittest.TestCase):
         seeds = fuzz.seeds()
         labels = [label for label, _ in seeds]
         self.assertEqual(len(labels), len(set(labels)))
+        fixtures = ROOT / "compiler/tests/fixtures"
+        for kind in ("positive", "negative", "runtime", "abi"):
+            expected = [kind + "/" + directory.name
+                        for directory in sorted((fixtures / kind).iterdir())
+                        if len(list(directory.glob("*.ldn"))) == 1]
+            self.assertEqual([label for label in labels
+                              if label.startswith(kind + "/")], expected)
         self.assertEqual(
             sum(label.startswith("reproducers/") for label in labels),
             len(list((ROOT / "compiler/tests/fuzz/reproducers")
@@ -54,6 +63,28 @@ class Mutator(unittest.TestCase):
         self.assertGreater(len(seeds), 1000)
         for _, text in seeds:
             text.encode("utf-8")
+
+    def test_discovery_uses_one_direct_source_per_fixture(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixtures = root / "fixtures"
+            for kind in ("positive", "negative", "runtime", "abi"):
+                (fixtures / kind / "a").mkdir(parents=True)
+                (fixtures / kind / "a" / "main.ldn").write_bytes(
+                    kind.encode() + b"\xff")
+            (fixtures / "runtime" / "b").mkdir()
+            (fixtures / "runtime" / "b" / "main.ldn").write_text("one")
+            (fixtures / "runtime" / "b" / "other.ldn").write_text("two")
+            (fixtures / "abi" / "empty").mkdir()
+            (fixtures / "abi" / "a" / "peer.c").write_text("C companion")
+            (root / "reproducers").mkdir()
+            (root / "reproducers" / "hit.ldn").write_text("reproducer")
+            with patch.object(fuzz, "FIXTURES", fixtures), \
+                    patch.object(fuzz, "HERE", root):
+                self.assertEqual(fuzz.seeds(), [
+                    (kind + "/a", kind + "\ufffd")
+                    for kind in ("positive", "negative", "runtime", "abi")
+                ] + [("reproducers/hit.ldn", "reproducer")])
 
 
 if __name__ == "__main__":

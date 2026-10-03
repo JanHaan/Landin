@@ -116,11 +116,12 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
-      #  Every one-file corpus program and every reproducer, mutated once
-      #  and given to refine lsp as an editor would, with the debug
+      #  The sole direct source in each one-source positive, negative,
+      #  runtime and ABI fixture directory, plus every reproducer, mutated
+      #  once and given to refine lsp as an editor would, with the debug
       #  compiler, whose contracts are the stronger oracle.  The seed is
-      #  fixed, so a hit is a mutant anyone can make again.  About thirty
-      #  seconds; each response is bounded at ten and the server at 2 GiB.
+      #  fixed, so a hit is a mutant anyone can make again.  Each response
+      #  is bounded at ten seconds and the server at 2 GiB.
       - name: The server under mutated sources
         run: >-
           python3 compiler/tests/fuzz/fuzz.py --seed 500000 --rounds 1

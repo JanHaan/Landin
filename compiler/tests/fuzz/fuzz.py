@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Mutate the corpus and drive `refine lsp` with it, and keep what breaks it.
 
-Every positive and negative fixture with exactly one `.ldn` file, and every
-reproducer in `reproducers/`, is a seed.  Each mutant is one of seven
-mutations of one seed, chosen by a splitmix64 generator from its own seed
-number, so a seed number names one mutant on every host and every Python.
+Every positive, negative, runtime and ABI fixture directory with exactly one
+direct `.ldn` file, and every reproducer in `reproducers/`, is a seed.  Each
+mutant is one of seven mutations of one seed, chosen by a splitmix64 generator
+from its own seed number, so a seed number names one mutant on every host and
+every Python.
 The server is given each mutant as an editor would: the seed's source is
 opened, changed to the mutant, and then asked for hover, a definition,
 formatting and code actions at positions the same generator picks.
@@ -114,7 +115,7 @@ def seeds():
     it would show one: U+FFFD.  The scanner's own byte checks are the
     parser suite's to drive; what reaches a server is always UTF-8."""
     found = []
-    for kind in ("positive", "negative"):
+    for kind in ("positive", "negative", "runtime", "abi"):
         for directory in sorted((FIXTURES / kind).iterdir()):
             sources = sorted(directory.glob("*.ldn"))
             if len(sources) == 1:

@@ -12,8 +12,14 @@ nix develop -c compiler/tests/fuzz/fuzz.py \
   --refine compiler/ada/build/nix/debug/bin/refine --seed 500000 --rounds 1
 ```
 
-The seeds are every positive and negative fixture with exactly one `.ldn`
-file, in sorted order, then every reproducer below: 1,414 today. Each is
+The seeds are every positive, negative, runtime and ABI fixture directory
+with exactly one direct `.ldn` file, in class and directory order, then every
+reproducer below: 1,971 today (269 positive, 1,137 negative, 520 runtime,
+33 ABI and 12 reproducers). The seed is the source text, including for
+target-specific or rooted fixtures and ABI fixtures with C companions. The
+server sees that one document; it does not run the fixture or load its
+companions as a module. Multi-source fixture directories are excluded, and
+the discovery test checks this boundary for every class. Each seed is
 mutated `--rounds` times, one mutant per seed number, counting up from
 `--seed`. A mutation is one of seven kinds: truncate the file, delete a
 line, duplicate a line, replace a word with a keyword, insert punctuation or
@@ -48,10 +54,9 @@ for as long as a fresh server given the text still breaks, and writes
 defect as the original, compare the two server logs.
 
 The gate's `compiler` job runs one round from seed 500000 with the debug
-compiler, whose contracts are the stronger oracle: about thirty seconds on
-the runner. Its first run against the server found a definition asked of a
-module whose names were refused raising a defect; the server suite pins the
-fix.
+compiler, whose contracts are the stronger oracle. Its first run against the
+server found a definition asked of a module whose names were refused raising
+a defect; the server suite pins the fix.
 
 The first driver was a Perl mutator, `mutate.pl`, run by `fuzz.sh`, with a
 `reduce.sh` beside it. They made the two recorded runs below and are in the
@@ -102,7 +107,10 @@ not a second copy of those tests:
 ## What it is not
 
 The gate's lane drives the frontend through the server, one file per
-document, with the default target. It does not cover the driver's options,
+document, with the default target. A runtime or ABI seed tests the server's
+handling of that source text; it does not check the fixture's runtime or ABI
+behavior. Rooted imports and C companions are not assembled into the
+document's module. It does not cover the driver's options,
 a target other than the default, several files resolved as one module, or
 emission, linking and running the mutants that are accepted. Its oracle is
 "does not crash", not "gives the right verdict", and every mutant it makes
