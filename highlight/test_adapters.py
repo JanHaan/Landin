@@ -12,7 +12,8 @@ import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from landin_highlight import BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES, Scanner
+from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES,
+                              Scanner, collect_symbols)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -156,6 +157,52 @@ def scanner_declaration_smoke() -> None:
     assert ("d", "value") not in Scanner().scan("other; value: u32")
 
 
+def symbol_collection_smoke() -> None:
+    lines = [
+        "before: type = struct",
+        "--( outer block",
+        "hidden_type: type = struct",
+        "--( nested block",
+        "hidden_atom: atom",
+        ")--",
+        "still_hidden: type = struct",
+        ")-- after: type = struct",
+        'raw: utf8 = """"',
+        "raw_type: type = struct",
+        '"""',  # A shorter delimiter cannot close the raw literal.
+        "raw_atom: atom",
+        '"""" after_raw: atom',
+        "colors: type = red | blue --( false_atom = 9 )--",
+        "-- line_type: type = struct",
+        "--- doc_atom: atom",
+        '"quoted_type: type = struct"',
+        "local_before: atom --( another block",
+        ")-- local_after: type = struct",
+        'raw3: utf8 = """',
+        "raw3_type: type = struct",
+        '""" raw3_after: type = struct',
+        "use: before = 0",
+        "use: after = 0",
+        "use: hidden_type = 0",
+        "use: raw_type = 0",
+        "use: raw_atom = 0",
+    ]
+    types, atoms = collect_symbols(lines)
+    assert types == {"before", "after", "colors", "local_after",
+                     "raw3_after"}, types
+    assert atoms == {"after_raw", "local_before", "red", "blue"}, atoms
+
+    scanner = Scanner(types, atoms)
+    scanned = [list(scanner.scan(line)) for line in lines]
+    assert ("c", "hidden_type: type = struct") in scanned[2]
+    assert ("q", "raw_type: type = struct") in scanned[9]
+    assert ("t", "before") in scanned[22]
+    assert ("t", "after") in scanned[23]
+    assert (None, "hidden_type") in scanned[24]
+    assert (None, "raw_type") in scanned[25]
+    assert (None, "raw_atom") in scanned[26]
+
+
 def pygments_smoke(source: str) -> None:
     try:
         from pygments.token import Comment, Keyword, Name, Number, String
@@ -199,6 +246,9 @@ def main() -> int:
     lexical = (ROOT / "tests/lexical.ldn").read_text(encoding="utf-8")
     scanner_smoke(lexical)
     scanner_declaration_smoke()
+
+
+    symbol_collection_smoke()
     pygments_smoke(lexical)
     samples = {
         "storage.type.builtin.landin": "u23",
