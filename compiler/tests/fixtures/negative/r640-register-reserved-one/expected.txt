@@ -1,4 +1,4 @@
-error[L0300]: register image violates reserved bits
+error[L0398]: register image violates reserved bits
   --> ../tests/fixtures/negative/r640-register-reserved-one/program.ldn:4:41
   |
 4 |     compiler.register_write(addr value, 0, compiler.normal_write, compiler.write_one, 0xff)

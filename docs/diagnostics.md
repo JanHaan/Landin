@@ -1003,6 +1003,14 @@ library name; its argument must have the required form and name characters.
 linker.library("-bad")
 ```
 
+### L0398
+
+A register image known at compile time violates its reserved-bit write policy
+[0740] (D228). Supply zero in every unnamed bit for `write_zero`, or one in
+every unnamed bit for `write_one`. A whole-image write cannot repair those
+bits by reading the device. The image may fit its carrier type; L0300 instead
+reports a value that its type or target cannot hold.
+
 ## The backend and its toolchain
 
 ### L0500

@@ -65,6 +65,7 @@ package Landin.Diagnostics.Checking is
    --  rather than numbers.
    type Failure is
      (Literal_Out_Of_Range,
+      Register_Reserved_Bits,
       Type_Mismatch,
       Not_Definitely_Assigned,
       Immutable_Target,
@@ -117,6 +118,8 @@ package Landin.Diagnostics.Checking is
      is (case Item is
             when Literal_Out_Of_Range =>
                Catalogue.Literal_Out_Of_Range,
+            when Register_Reserved_Bits =>
+               Catalogue.Register_Reserved_Bits,
             when Type_Mismatch        =>
                Catalogue.Type_Mismatch,
             when Not_Definitely_Assigned =>

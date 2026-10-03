@@ -170,6 +170,14 @@ package body Landin.Diagnostics.Explanations is
                "A value known at compile time does not fit the type its "
                & "context gives it [1880], or the target cannot hold it. W"
                & "rite a smaller value or give the context a wider type.",
+            when Catalogue.Register_Reserved_Bits =>
+               "A register image known at compile time violates its rese"
+               & "rved-bit write policy [0740] (D228). Supply zero in ever"
+               & "y unnamed bit for `write_zero`, or one in every unnamed "
+               & "bit for `write_one`. A whole-image write cannot repair t"
+               & "hose bits by reading the device. The image may fit its c"
+               & "arrier type; L0300 instead reports a value that its type"
+               & " or target cannot hold.",
             when Catalogue.Type_Mismatch =>
                "A value's type is not the one its context or operation r"
                & "equires [1890], and no conversion is implied [0310]. Thi"
@@ -686,6 +694,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Literal_Out_Of_Range =>
                "over: u8 = 300"
                & LF,
+            when Catalogue.Register_Reserved_Bits =>
+               "",
             when Catalogue.Type_Mismatch =>
                "flag: bool = true"
                & LF

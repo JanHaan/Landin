@@ -6369,6 +6369,11 @@ when they share a carrier. Reset metadata initializes neither software storage
 nor hardware. A normal read/modify/write sequence is not atomic and requires
 an independent device and concurrency justification.
 
+A known whole image that breaks `write_zero` or `write_one` is refused with
+L0398 at the supplied image [0740]. L0300 remains the refusal for an image
+whose magnitude does not fit its carrier or target [1880]. A dynamic reserved
+bit violation traps before the store, including under `unchecked` [1120].
+
 D227 is unchanged. CPU atomics, a volatile transaction, compiler boundaries,
 hardware barriers, interrupt exclusion and device completion are separate
 contracts. Prototype 1 retains an ordinary slice as its DMA buffer. Decode a
@@ -12076,7 +12081,7 @@ classified failure boundary before the repository gate can pass.
 | `packed.image` | static | 0540, 0730, 0750 | Explicit disjoint positions, one target-sized carrier and packed-only unsigned widths; ordinary storage retains its existing representation | `runtime/r640-packed-fields`, `runtime/r640-packed-construction`, `runtime/r640-packed-static` |
 | `packed.register` | static | 0740, 0850 | L0344 rejects unavailable access modes, invalid masks and unsafe synthesized device field operations; a legal explicit image operation retains exactly its carrier width; L0010 names D238's withdrawn volatile pointer type and the explicit operations that replace it | `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, `runtime/r640-register-images`, `negative/r491-volatile-pointer` |
 | `packed.insertion` | trap | 0730, 1120 | Dynamic field-width and packed-index checks remain enabled under unchecked; no silent truncation or machine shift masking | `runtime/r640-packed-value-fit`, `runtime/r640-packed-index-bound` |
-| `packed.reserved` | trap | 0740, 1120 | A dynamic write-zero/write-one violation traps before the single volatile store, including under unchecked | `runtime/r640-reserved-value`, `abi/r640-reserved-trap` |
+| `packed.reserved` | trap | 0740, 1120 | L0398 refuses a known write-zero/write-one violation; a dynamic violation traps before the single volatile store, including under unchecked | `negative/r640-register-reserved-zero`, `negative/r640-register-reserved-one`, `runtime/r640-reserved-value`, `abi/r640-reserved-trap` |
 | `packed.device` | outside | 0740, 0850 | non-guarantee: a declared access mode, width and reserved policy do not prove that an arbitrary address implements that peripheral contract | `runtime/r640-register-images`, `abi/r640-dma-packed` |
 | `memory.eligibility` | static | 0430, 0850, 1620 | D227: L0344 for invalid arity, type, permission, fixed ordering or target capability | `negative/r630-load-release`, `negative/r630-immutable`, `negative/r630-m0-rmw`, `runtime/r630-memory-scalars`, `abi/r630-native-memory` |
 | `memory.alignment` | trap | 0430, 0850, 1120, 1620 | D227: misalignment traps before access, even unchecked | `runtime/r630-atomic-load-alignment`, `runtime/r630-volatile-load-alignment` |

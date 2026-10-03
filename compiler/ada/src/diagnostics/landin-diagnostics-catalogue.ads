@@ -115,6 +115,8 @@ package Landin.Diagnostics.Catalogue is
       --  Literal_Out_Of_Range is the result half of.  Concepts and
       --  conformances add the rows below.
       Literal_Out_Of_Range,
+      --  Tentative L0398: [0740]'s known whole-image write policy refusal.
+      Register_Reserved_Bits,
       Type_Mismatch,
       Not_Definitely_Assigned,
       Immutable_Target,
@@ -241,6 +243,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name        => "L0202",
             when Reserved_Tool_Name       => "L0203",
             when Literal_Out_Of_Range     => "L0300",
+            when Register_Reserved_Bits   => "L0398",
             when Type_Mismatch            => "L0301",
             when Not_Definitely_Assigned  => "L0302",
             when Immutable_Target         => "L0303",
@@ -436,6 +439,9 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range  =>
                "a compile-time magnitude its context or target does not"
                & " hold",
+            when Register_Reserved_Bits =>
+               "[0740]: a known register image violates its reserved-bit"
+               & " write policy",
             when Type_Mismatch         =>
                "[1890]: a value's type is not the one its context or"
                & " operation requires",
@@ -726,6 +732,7 @@ package Landin.Diagnostics.Catalogue is
             --  the body that holds it.  Maximum_Secondaries admits both.
             when Size_Limit_Exceeded   => 0,
             when Literal_Out_Of_Range  => 0,
+            when Register_Reserved_Bits => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
             --  A direct operand is written down and is the only place to
@@ -762,6 +769,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => 1,
             when Reserved_Tool_Name    => 1,
             when Literal_Out_Of_Range  => 1,
+            when Register_Reserved_Bits => 1,
             when Type_Mismatch         => 1,
             when Call_Argument_Match | Zero_Image_Unavailable
                | Error_Contract_Violated

@@ -32774,7 +32774,7 @@ package body Landin.Stages.Checking is
                        (Contract, Landin.Packed.Image (Amount))
                      then
                         Bad.Report
-                          (Item => Bad.Literal_Out_Of_Range,
+                          (Item => Bad.Register_Reserved_Bits,
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Value_Node),
                            Message => "register image violates reserved bits",
