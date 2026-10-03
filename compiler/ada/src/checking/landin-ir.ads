@@ -704,6 +704,10 @@ package Landin.IR is
       return Boolean
      with Pre => Holds (Of_Unit, Set_Id);
 
+   function Atom_Set_Is_Subset
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+     with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);
+
    function Atom_Sets_Agree
      (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
      with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);

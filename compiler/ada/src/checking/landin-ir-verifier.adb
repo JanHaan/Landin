@@ -2189,14 +2189,7 @@ package body Landin.IR.Verifier is
          if not Holds (Of_Unit, Left) or else not Holds (Of_Unit, Right) then
             return False;
          end if;
-         for Index in 1 .. Atom_Count (Of_Unit, Left) loop
-            if not Contains_Atom
-              (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
-            then
-               return False;
-            end if;
-         end loop;
-         return True;
+         return Atom_Set_Is_Subset (Of_Unit, Left, Right);
       end Atom_Metadata_Is_Subset;
 
       function Address_Agrees

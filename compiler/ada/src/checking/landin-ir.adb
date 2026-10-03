@@ -1,3 +1,5 @@
+with Ada.Containers.Generic_Array_Sort;
+
 package body Landin.IR is
 
    use type Landin.Machine.Convention;
@@ -833,21 +835,65 @@ package body Landin.IR is
       return False;
    end Contains_Atom;
 
+   function Atom_Set_Is_Subset
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+   is
+   begin
+      if Left = Right then
+         return True;
+      end if;
+
+      declare
+         Sorted : Atom_Array (1 .. Atom_Count (Of_Unit, Right));
+         procedure Sort is new Ada.Containers.Generic_Array_Sort
+           (Index_Type   => Positive,
+            Element_Type => Declaration_Id,
+            Array_Type   => Atom_Array,
+            "<"          => "<");
+      begin
+         for Index in Sorted'Range loop
+            Sorted (Index) := Nth_Atom (Of_Unit, Right, Index);
+         end loop;
+         Sort (Sorted);
+
+         for Index in 1 .. Atom_Count (Of_Unit, Left) loop
+            declare
+               Atom  : constant Declaration_Id :=
+                 Nth_Atom (Of_Unit, Left, Index);
+               Below : Natural := 0;
+               Above : Natural := Sorted'Length;
+            begin
+               --  Find the first member not less than Atom.  The bounds are
+               --  positions between members, so neither update can overflow.
+               while Below < Above loop
+                  declare
+                     Middle : constant Positive :=
+                       Below + (Above - Below) / 2 + 1;
+                  begin
+                     if Sorted (Middle) < Atom then
+                        Below := Middle;
+                     else
+                        Above := Middle - 1;
+                     end if;
+                  end;
+               end loop;
+               if Below = Sorted'Length
+                 or else Sorted (Below + 1) /= Atom
+               then
+                  return False;
+               end if;
+            end;
+         end loop;
+         return True;
+      end;
+   end Atom_Set_Is_Subset;
+
    function Atom_Sets_Agree
      (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
    is
    begin
-      if Atom_Count (Of_Unit, Left) /= Atom_Count (Of_Unit, Right) then
-         return False;
-      end if;
-      for Index in 1 .. Atom_Count (Of_Unit, Left) loop
-         if not Contains_Atom
-           (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
-         then
-            return False;
-         end if;
-      end loop;
-      return True;
+      return Atom_Count (Of_Unit, Left) = Atom_Count (Of_Unit, Right)
+        and then Atom_Set_Is_Subset (Of_Unit, Left, Right);
    end Atom_Sets_Agree;
 
    function Signature_Count (Of_Unit : Unit) return Natural

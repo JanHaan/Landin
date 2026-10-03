@@ -7801,6 +7801,32 @@ package body Landin.Tests.Verifier_Suite is
       type Source_Kind is
         (Equivalent, Narrow, Unrelated, Numeric, Numeric_Destination);
    begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Full, Reordered, Narrow, Different : IR.Atom_Set_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Full := IR.Add_Atom_Set (Unit, [3, 5, 6]);
+         Reordered := IR.Add_Atom_Set (Unit, [6, 3, 5]);
+         Narrow := IR.Add_Atom_Set (Unit, [5, 3]);
+         Different := IR.Add_Atom_Set (Unit, [3, 4, 5]);
+         Landin.Testing.Check
+           (Item, IR.Atom_Sets_Agree (Unit, Full, Reordered),
+            "reordered atom sets agree");
+         Landin.Testing.Check
+           (Item, not IR.Atom_Sets_Agree (Unit, Full, Different),
+            "equal-sized sets with different members disagree");
+         Landin.Testing.Check
+           (Item, IR.Atom_Set_Is_Subset (Unit, Narrow, Full)
+            and then not IR.Atom_Set_Is_Subset (Unit, Full, Narrow)
+            and then not IR.Atom_Set_Is_Subset (Unit, Different, Full),
+            "subset checks distinguish missing members");
+      end;
+
       for Small in Boolean loop
          for Operation in Operation_Kind loop
             for Source in Source_Kind loop
