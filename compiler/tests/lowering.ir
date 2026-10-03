@@ -10761,7 +10761,7 @@ nominal 1 good layout(c) struct (u32,usize,[2]u32,struct (u32),usize signature 1
 nominal 2 cbox layout(c) struct (u32)
 signature 1 extern(c) (in u32) -> none
 file positive/r491-tour-allocator-examples/main.ldn
-unit signatures 39 items 25
+unit signatures 46 items 32
 atom set 1 atoms {out_of_memory}
 atom set 2 atoms {out_of_memory}
 atom set 3 atoms {out_of_memory}
@@ -10783,39 +10783,46 @@ signature 3 (in usize) -> none
 signature 4 (inout usize) -> none errors atoms {out_of_memory}
 signature 5 (in struct buffer) -> [2]usize from 1
 signature 6 (in usize, in usize, in usize, in usize, in usize) -> usize errors atoms {out_of_memory}
-signature 7 (in usize, in usize) -> struct arena from 1
-signature 8 (inout usize, in usize, in usize) -> usize errors atoms {out_of_memory}
-signature 9 (inout usize, in usize, in usize) -> none
-signature 10 (in usize, in usize, in usize) -> struct failing from 1
-signature 11 (inout usize, in usize, in usize) -> usize errors atoms {out_of_memory}
-signature 12 (inout usize, in usize, in usize) -> none
-signature 13 (inout usize, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
-signature 14 (in usize, inout usize, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
-signature 15 (inout usize, in usize) -> struct buffer errors atoms {out_of_memory}
-signature 16 (in usize, inout usize, in usize) -> struct buffer errors atoms {out_of_memory}
-signature 17 () -> struct raw
-signature 18 () -> struct raw
-signature 19 (in usize, in usize) -> struct raw from 1
-signature 20 (in usize, in usize) -> struct raw from 1
-signature 21 (inout usize, escaping in u8) -> usize errors atoms {raw_full}
-signature 22 (inout usize, escaping in u8) -> usize errors atoms {raw_full}
-signature 23 (in struct raw) -> usize
-signature 24 (in struct raw) -> usize
-signature 25 (inout usize, inout usize) -> none
-signature 26 (in usize, inout usize, inout usize) -> none
-signature 27 (inout usize) -> u8 from 1 errors atoms {raw_empty}
-signature 28 (inout usize) -> u8 from 1 errors atoms {raw_empty}
-signature 29 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
-signature 30 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
-signature 31 (inout usize) -> [2]usize errors atoms {out_of_memory}
-signature 32 (in usize, inout usize) -> [2]usize errors atoms {out_of_memory}
-signature 33 (inout usize, escaping in struct button) -> usize errors atoms {out_of_memory}
-signature 34 (in usize, inout usize, escaping in struct button) -> usize errors atoms {out_of_memory}
-signature 35 (in struct raw) -> [2]usize from 1
-signature 36 (in struct raw) -> [2]usize from 1
-signature 37 erased-self (in usize) -> none
-signature 38 erased-self (in usize, in usize) -> none
-signature 39 erased-self (in usize, in u32, in u32) -> none
+signature 7 (escaping in usize, in usize) -> struct arena_value from 1
+signature 8 (in usize, in usize) -> struct arena_value from 1
+signature 9 (in struct arena_value) -> usize
+signature 10 (inout usize, in usize, in usize) -> usize errors atoms {out_of_memory}
+signature 11 (inout usize, in usize, in usize) -> none
+signature 12 (escaping in usize, in usize, in usize) -> struct failing_value from 1
+signature 13 (in usize, in usize, in usize) -> struct failing_value from 1
+signature 14 (in struct failing_value) -> usize
+signature 15 (in struct failing_value) -> usize
+signature 16 (in struct failing_value) -> usize
+signature 17 (in struct failing_value) -> usize
+signature 18 (inout usize, in usize, in usize) -> usize errors atoms {out_of_memory}
+signature 19 (inout usize, in usize, in usize) -> none
+signature 20 (inout usize, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
+signature 21 (in usize, inout usize, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
+signature 22 (inout usize, in usize) -> struct buffer errors atoms {out_of_memory}
+signature 23 (in usize, inout usize, in usize) -> struct buffer errors atoms {out_of_memory}
+signature 24 () -> struct raw
+signature 25 () -> struct raw
+signature 26 (in usize, in usize) -> struct raw from 1
+signature 27 (in usize, in usize) -> struct raw from 1
+signature 28 (inout usize, escaping in u8) -> usize errors atoms {raw_full}
+signature 29 (inout usize, escaping in u8) -> usize errors atoms {raw_full}
+signature 30 (in struct raw) -> usize
+signature 31 (in struct raw) -> usize
+signature 32 (inout usize, inout usize) -> none
+signature 33 (in usize, inout usize, inout usize) -> none
+signature 34 (inout usize) -> u8 from 1 errors atoms {raw_empty}
+signature 35 (inout usize) -> u8 from 1 errors atoms {raw_empty}
+signature 36 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
+signature 37 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
+signature 38 (inout usize) -> [2]usize errors atoms {out_of_memory}
+signature 39 (in usize, inout usize) -> [2]usize errors atoms {out_of_memory}
+signature 40 (inout usize, escaping in struct button) -> usize errors atoms {out_of_memory}
+signature 41 (in usize, inout usize, escaping in struct button) -> usize errors atoms {out_of_memory}
+signature 42 (in struct raw) -> [2]usize from 1
+signature 43 (in struct raw) -> [2]usize from 1
+signature 44 erased-self (in usize) -> none
+signature 45 erased-self (in usize, in usize) -> none
+signature 46 erased-self (in usize, in u32, in u32) -> none
 evidence 1 concrete represents struct ([2]usize)
   entry 1 target 1 provider 1 dispatch 1
 evidence 2 concrete represents struct ([2]usize)
@@ -10823,15 +10830,15 @@ evidence 2 concrete represents struct ([2]usize)
 evidence 3 concrete represents struct ([2]usize)
   entry 1 target 3 provider 3 dispatch 3
 evidence 4 erased represents struct ([2]usize)
-  entry 1 target 3 provider 3 dispatch 37
-  entry 2 target 1 provider 1 dispatch 38
-  entry 3 target 2 provider 2 dispatch 39
+  entry 1 target 3 provider 3 dispatch 44
+  entry 2 target 1 provider 1 dispatch 45
+  entry 3 target 2 provider 2 dispatch 46
 evidence 5 concrete represents struct (usize,usize,usize)
-  entry 1 target 8 provider 8 dispatch 8
-  entry 2 target 9 provider 9 dispatch 9
+  entry 1 target 10 provider 10 dispatch 10
+  entry 2 target 11 provider 11 dispatch 11
 evidence 6 concrete represents struct (usize,usize,usize,usize,usize,usize)
-  entry 1 target 11 provider 11 dispatch 11
-  entry 2 target 12 provider 12 dispatch 12
+  entry 1 target 18 provider 18 dispatch 18
+  entry 2 target 19 provider 19 dispatch 19
 item 1 ROUTINE button_draw result none signature 1 params 2 slots 4 blocks 1 values 9
   slot 1 self usize param 1
   slot 2 target usize param 2
@@ -10879,7 +10886,7 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
     5 LOAD usize slot 4
     6 STORAGE_ADDRESS usize storage slot 2
     7 EVIDENCE_ADDRESS usize evidence 5
-    8 CALL none callee 13 - signature 14 failure slot 3 <- 6 7 5 4
+    8 CALL none callee 20 - signature 21 failure slot 3 <- 6 7 5 4
     9 LOAD u32 slot 3
     10 FAILURE_TEST bool <- 9
     11 BRANCH target 2 alternative 3 <- 10
@@ -10892,7 +10899,7 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
     16 LOAD usize slot 1
     17 STORAGE_ADDRESS usize storage slot 6
     18 EVIDENCE_ADDRESS usize evidence 5
-    19 CALL none callee 22 - signature 32 failure slot 7 <- 17 18 16
+    19 CALL none callee 29 - signature 39 failure slot 7 <- 17 18 16
     20 LOAD u32 slot 7
     21 FAILURE_TEST bool <- 20
     22 BRANCH target 4 alternative 5 <- 21
@@ -10907,27 +10914,27 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
     29 COPY_ARRAY from slot 6 to slot 10
     30 PLACE_ADDRESS usize
     31 STORAGE_ADDRESS usize storage slot 10
-    32 EVIDENCE_FUNCTION usize erased receiver evidence 4 entry 2 signature 38 <- 31
+    32 EVIDENCE_FUNCTION usize erased receiver evidence 4 entry 2 signature 45 <- 31
     33 EVIDENCE_SELF usize bound function <- 32
-    34 INDIRECT_CALL none signature 38 <- 32 33 30
+    34 INDIRECT_CALL none signature 45 <- 32 33 30
     35 LOAD usize slot 1
     36 STORE slot 11 <- 35
     37 PLACE_ADDRESS usize
     38 LOAD usize slot 11
     39 EVIDENCE_ADDRESS usize evidence 5
-    40 CALL none callee 19 - signature 26 <- 39 38 37
+    40 CALL none callee 26 - signature 33 <- 39 38 37
     41 LOAD usize slot 1
     42 STORE slot 12 <- 41
     43 PLACE_ADDRESS usize
     44 LOAD usize slot 12
     45 EVIDENCE_ADDRESS usize evidence 5
-    46 CALL none callee 19 - signature 26 <- 45 44 43
+    46 CALL none callee 26 - signature 33 <- 45 44 43
     47 LOAD usize slot 1
     48 STORE slot 13 <- 47
     49 PLACE_ADDRESS usize
     50 LOAD usize slot 13
     51 EVIDENCE_ADDRESS usize evidence 5
-    52 CALL none callee 19 - signature 26 <- 51 50 49
+    52 CALL none callee 26 - signature 33 <- 51 50 49
     53 LEAVE
 item 5 ROUTINE bytes result array signature 5 params 2 slots 3 blocks 1 values 4
   elements 2 of usize
@@ -10937,7 +10944,7 @@ item 5 ROUTINE bytes result array signature 5 params 2 slots 3 blocks 1 values 4
   block 1 scope 31 BLOCK length 4
     1 STORAGE_ADDRESS usize storage slot 2 field 1
     2 STORAGE_ADDRESS usize storage slot 3
-    3 CALL none callee 24 - signature 36 <- 2 1
+    3 CALL none callee 31 - signature 43 <- 2 1
     4 LEAVE
 item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 blocks 19 values 140
   slot 1 base usize param 1
@@ -10977,7 +10984,7 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
   slot 35 - usize
   slot 36 - usize
   slot 37 - u32 atoms {out_of_memory}
-  block 1 scope 86 BLOCK length 12
+  block 1 scope 94 BLOCK length 12
     1 NUMBER usize 0
     2 STORE slot 8 <- 1
     3 NUMBER usize 1
@@ -10990,12 +10997,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     10 LOAD usize slot 9
     11 GREATER_THAN bool <- 10 9
     12 BRANCH target 2 alternative 3 <- 11
-  block 2 scope 86 BLOCK length 4
+  block 2 scope 94 BLOCK length 4
     13 ATOM u32 identity out_of_memory atoms {out_of_memory}
     14 STORE slot 10 <- 13
     15 LOAD u32 slot 10
     16 FAIL <- 15
-  block 3 scope 86 BLOCK length 13
+  block 3 scope 94 BLOCK length 13
     17 LOAD usize slot 1
     18 CONVERSION usize <- 17
     19 STORE slot 11 <- 18
@@ -11009,12 +11016,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     27 LOAD usize slot 12
     28 GREATER_THAN bool <- 27 26
     29 BRANCH target 4 alternative 5 <- 28
-  block 4 scope 86 BLOCK length 4
+  block 4 scope 94 BLOCK length 4
     30 ATOM u32 identity out_of_memory atoms {out_of_memory}
     31 STORE slot 14 <- 30
     32 LOAD u32 slot 14
     33 FAIL <- 32
-  block 5 scope 86 BLOCK length 14
+  block 5 scope 94 BLOCK length 14
     34 LOAD usize slot 11
     35 STORE slot 16 <- 34
     36 LOAD usize slot 2
@@ -11029,7 +11036,7 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     45 LOAD usize slot 18
     46 GREATER_THAN bool <- 45 44
     47 BRANCH target 6 alternative 7 <- 46
-  block 6 scope 87 BLOCK length 13
+  block 6 scope 95 BLOCK length 13
     48 LOAD usize slot 15
     49 STORE slot 20 <- 48
     50 LOAD usize slot 5
@@ -11043,9 +11050,9 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     58 EQUAL_TO bool <- 57 56
     59 LOGICAL_NOT bool <- 58
     60 BRANCH target 8 alternative 9 <- 59
-  block 7 scope 86 BLOCK length 1
+  block 7 scope 94 BLOCK length 1
     70 JUMP target 11
-  block 8 scope 88 BLOCK length 7
+  block 8 scope 96 BLOCK length 7
     61 LOAD usize slot 5
     62 STORE slot 22 <- 61
     63 LOAD usize slot 19
@@ -11053,11 +11060,11 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     65 SUBTRACT usize <- 64 63
     66 STORE slot 17 <- 65
     67 JUMP target 10
-  block 9 scope 87 BLOCK length 1
+  block 9 scope 95 BLOCK length 1
     68 JUMP target 10
-  block 10 scope 87 BLOCK length 1
+  block 10 scope 95 BLOCK length 1
     69 JUMP target 11
-  block 11 scope 86 BLOCK length 10
+  block 11 scope 94 BLOCK length 10
     71 LOAD usize slot 17
     72 STORE slot 23 <- 71
     73 LOAD usize slot 3
@@ -11068,12 +11075,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     78 LOAD usize slot 23
     79 GREATER_THAN bool <- 78 77
     80 BRANCH target 12 alternative 13 <- 79
-  block 12 scope 86 BLOCK length 4
+  block 12 scope 94 BLOCK length 4
     81 ATOM u32 identity out_of_memory atoms {out_of_memory}
     82 STORE slot 25 <- 81
     83 LOAD u32 slot 25
     84 FAIL <- 83
-  block 13 scope 86 BLOCK length 10
+  block 13 scope 94 BLOCK length 10
     85 LOAD usize slot 17
     86 STORE slot 26 <- 85
     87 LOAD usize slot 7
@@ -11084,12 +11091,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     92 LOAD usize slot 26
     93 GREATER_THAN bool <- 92 91
     94 BRANCH target 14 alternative 15 <- 93
-  block 14 scope 86 BLOCK length 4
+  block 14 scope 94 BLOCK length 4
     95 ATOM u32 identity out_of_memory atoms {out_of_memory}
     96 STORE slot 28 <- 95
     97 LOAD u32 slot 28
     98 FAIL <- 97
-  block 15 scope 86 BLOCK length 22
+  block 15 scope 94 BLOCK length 22
     99 LOAD usize slot 2
     100 STORE slot 29 <- 99
     101 LOAD usize slot 17
@@ -11112,12 +11119,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     118 LOAD usize slot 32
     119 GREATER_THAN bool <- 118 117
     120 BRANCH target 16 alternative 17 <- 119
-  block 16 scope 86 BLOCK length 4
+  block 16 scope 94 BLOCK length 4
     121 ATOM u32 identity out_of_memory atoms {out_of_memory}
     122 STORE slot 34 <- 121
     123 LOAD u32 slot 34
     124 FAIL <- 123
-  block 17 scope 86 BLOCK length 10
+  block 17 scope 94 BLOCK length 10
     125 LOAD usize slot 4
     126 STORE slot 35 <- 125
     127 LOAD usize slot 7
@@ -11128,12 +11135,12 @@ item 6 ROUTINE allocation_offset result usize signature 6 params 5 slots 37 bloc
     132 LOAD usize slot 35
     133 GREATER_THAN bool <- 132 131
     134 BRANCH target 18 alternative 19 <- 133
-  block 18 scope 86 BLOCK length 4
+  block 18 scope 94 BLOCK length 4
     135 ATOM u32 identity out_of_memory atoms {out_of_memory}
     136 STORE slot 37 <- 135
     137 LOAD u32 slot 37
     138 FAIL <- 137
-  block 19 scope 86 BLOCK length 2
+  block 19 scope 94 BLOCK length 2
     139 LOAD usize slot 6
     140 LEAVE <- 139
 item 7 ROUTINE arena_over result struct signature 7 params 3 slots 4 blocks 1 values 7
@@ -11141,7 +11148,7 @@ item 7 ROUTINE arena_over result struct signature 7 params 3 slots 4 blocks 1 va
   slot 2 base usize param 2
   slot 3 size usize param 3
   slot 4 state aggregate fields usize usize usize return
-  block 1 scope 90 BLOCK length 7
+  block 1 scope 98 BLOCK length 7
     1 LOAD usize slot 2
     2 STORE_FIELD slot 4 field 1 <- 1
     3 LOAD usize slot 3
@@ -11149,7 +11156,28 @@ item 7 ROUTINE arena_over result struct signature 7 params 3 slots 4 blocks 1 va
     5 NUMBER usize 0
     6 STORE_FIELD slot 4 field 3 <- 5
     7 LEAVE
-item 8 ROUTINE arena_alloc result usize signature 8 params 3 slots 20 blocks 3 values 58
+item 8 ROUTINE arena_over_unchecked result struct signature 8 params 3 slots 4 blocks 1 values 7
+  slot 1 arena_over_unchecked usize param 1
+  slot 2 base usize param 2
+  slot 3 size usize param 3
+  slot 4 state aggregate fields usize usize usize return
+  block 1 scope 100 BLOCK length 7
+    1 LOAD usize slot 2
+    2 STORE_FIELD slot 4 field 1 <- 1
+    3 LOAD usize slot 3
+    4 STORE_FIELD slot 4 field 2 <- 3
+    5 NUMBER usize 0
+    6 STORE_FIELD slot 4 field 3 <- 5
+    7 LEAVE
+item 9 ROUTINE arena_used result usize signature 9 params 1 slots 2 blocks 1 values 4
+  slot 1 state aggregate fields usize usize usize param 1
+  slot 2 count usize return
+  block 1 scope 102 BLOCK length 4
+    1 LOAD_FIELD usize slot 1 field 3
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 10 ROUTINE arena_alloc result usize signature 10 params 3 slots 20 blocks 3 values 58
   slot 1 state address of struct (usize,usize,usize) param 1
   slot 2 size usize param 2
   slot 3 alignment usize param 3
@@ -11170,7 +11198,7 @@ item 8 ROUTINE arena_alloc result usize signature 8 params 3 slots 20 blocks 3 v
   slot 18 - usize
   slot 19 - address of usize
   slot 20 - usize
-  block 1 scope 92 BLOCK length 27
+  block 1 scope 104 BLOCK length 27
     1 PLACE_ADDRESS usize
     2 STORE slot 8 <- 1
     3 LOAD usize slot 8
@@ -11198,12 +11226,12 @@ item 8 ROUTINE arena_alloc result usize signature 8 params 3 slots 20 blocks 3 v
     25 LOAD u32 slot 6
     26 FAILURE_TEST bool <- 25
     27 BRANCH target 2 alternative 3 <- 26
-  block 2 scope 92 BLOCK length 4
+  block 2 scope 104 BLOCK length 4
     28 LOAD u32 slot 6
     29 STORE slot 15 <- 28
     30 LOAD u32 slot 15
     31 FAIL <- 30
-  block 3 scope 92 BLOCK length 27
+  block 3 scope 104 BLOCK length 27
     32 LOAD usize slot 7
     33 STORE slot 5 <- 32
     34 PLACE_ADDRESS usize
@@ -11231,12 +11259,12 @@ item 8 ROUTINE arena_alloc result usize signature 8 params 3 slots 20 blocks 3 v
     56 STORE_INDIRECT address slot 19 <- 55 54
     57 LOAD usize slot 4
     58 LEAVE <- 57
-item 9 ROUTINE arena_free result none signature 9 params 3 slots 4 blocks 1 values 7
+item 11 ROUTINE arena_free result none signature 11 params 3 slots 4 blocks 1 values 7
   slot 1 state address of struct (usize,usize,usize) param 1
   slot 2 block usize param 2
   slot 3 size usize param 3
   slot 4 - address of usize
-  block 1 scope 94 BLOCK length 7
+  block 1 scope 106 BLOCK length 7
     1 PLACE_ADDRESS usize
     2 STORE slot 4 <- 1
     3 LOAD usize slot 4
@@ -11244,13 +11272,13 @@ item 9 ROUTINE arena_free result none signature 9 params 3 slots 4 blocks 1 valu
     5 LOAD usize slot 2
     6 LOAD usize slot 3
     7 LEAVE
-item 10 ROUTINE fail_over result struct signature 10 params 4 slots 5 blocks 1 values 13
+item 12 ROUTINE fail_over result struct signature 12 params 4 slots 5 blocks 1 values 13
   slot 1 fail_over usize param 1
   slot 2 base usize param 2
   slot 3 size usize param 3
   slot 4 successful_allocations usize param 4
   slot 5 state aggregate fields usize usize usize usize usize usize return
-  block 1 scope 97 BLOCK length 13
+  block 1 scope 109 BLOCK length 13
     1 LOAD usize slot 2
     2 STORE_FIELD slot 5 field 1 <- 1
     3 LOAD usize slot 3
@@ -11264,7 +11292,59 @@ item 10 ROUTINE fail_over result struct signature 10 params 4 slots 5 blocks 1 v
     11 NUMBER usize 0
     12 STORE_FIELD slot 5 field 6 <- 11
     13 LEAVE
-item 11 ROUTINE failing_alloc result usize signature 11 params 3 slots 25 blocks 5 values 87
+item 13 ROUTINE fail_over_unchecked result struct signature 13 params 4 slots 5 blocks 1 values 13
+  slot 1 fail_over_unchecked usize param 1
+  slot 2 base usize param 2
+  slot 3 size usize param 3
+  slot 4 successful_allocations usize param 4
+  slot 5 state aggregate fields usize usize usize usize usize usize return
+  block 1 scope 111 BLOCK length 13
+    1 LOAD usize slot 2
+    2 STORE_FIELD slot 5 field 1 <- 1
+    3 LOAD usize slot 3
+    4 STORE_FIELD slot 5 field 2 <- 3
+    5 NUMBER usize 0
+    6 STORE_FIELD slot 5 field 3 <- 5
+    7 LOAD usize slot 4
+    8 STORE_FIELD slot 5 field 4 <- 7
+    9 NUMBER usize 0
+    10 STORE_FIELD slot 5 field 5 <- 9
+    11 NUMBER usize 0
+    12 STORE_FIELD slot 5 field 6 <- 11
+    13 LEAVE
+item 14 ROUTINE failing_used result usize signature 14 params 1 slots 2 blocks 1 values 4
+  slot 1 state aggregate fields usize usize usize usize usize usize param 1
+  slot 2 count usize return
+  block 1 scope 113 BLOCK length 4
+    1 LOAD_FIELD usize slot 1 field 3
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 15 ROUTINE failing_remaining result usize signature 15 params 1 slots 2 blocks 1 values 4
+  slot 1 state aggregate fields usize usize usize usize usize usize param 1
+  slot 2 count usize return
+  block 1 scope 115 BLOCK length 4
+    1 LOAD_FIELD usize slot 1 field 4
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 16 ROUTINE failing_allocations result usize signature 16 params 1 slots 2 blocks 1 values 4
+  slot 1 state aggregate fields usize usize usize usize usize usize param 1
+  slot 2 count usize return
+  block 1 scope 117 BLOCK length 4
+    1 LOAD_FIELD usize slot 1 field 5
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 17 ROUTINE failing_frees result usize signature 17 params 1 slots 2 blocks 1 values 4
+  slot 1 state aggregate fields usize usize usize usize usize usize param 1
+  slot 2 count usize return
+  block 1 scope 119 BLOCK length 4
+    1 LOAD_FIELD usize slot 1 field 6
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 18 ROUTINE failing_alloc result usize signature 18 params 3 slots 25 blocks 5 values 87
   slot 1 state address of struct (usize,usize,usize,usize,usize,usize) param 1
   slot 2 size usize param 2
   slot 3 alignment usize param 3
@@ -11290,7 +11370,7 @@ item 11 ROUTINE failing_alloc result usize signature 11 params 3 slots 25 blocks
   slot 23 - usize
   slot 24 - address of usize
   slot 25 - usize
-  block 1 scope 99 BLOCK length 9
+  block 1 scope 121 BLOCK length 9
     1 PLACE_ADDRESS usize
     2 STORE slot 5 <- 1
     3 LOAD usize slot 5
@@ -11300,12 +11380,12 @@ item 11 ROUTINE failing_alloc result usize signature 11 params 3 slots 25 blocks
     7 LOAD usize slot 6
     8 EQUAL_TO bool <- 7 6
     9 BRANCH target 2 alternative 3 <- 8
-  block 2 scope 99 BLOCK length 4
+  block 2 scope 121 BLOCK length 4
     10 ATOM u32 identity out_of_memory atoms {out_of_memory}
     11 STORE slot 7 <- 10
     12 LOAD u32 slot 7
     13 FAIL <- 12
-  block 3 scope 99 BLOCK length 27
+  block 3 scope 121 BLOCK length 27
     14 PLACE_ADDRESS usize
     15 STORE slot 11 <- 14
     16 LOAD usize slot 11
@@ -11333,12 +11413,12 @@ item 11 ROUTINE failing_alloc result usize signature 11 params 3 slots 25 blocks
     38 LOAD u32 slot 9
     39 FAILURE_TEST bool <- 38
     40 BRANCH target 4 alternative 5 <- 39
-  block 4 scope 99 BLOCK length 4
+  block 4 scope 121 BLOCK length 4
     41 LOAD u32 slot 9
     42 STORE slot 18 <- 41
     43 LOAD u32 slot 18
     44 FAIL <- 43
-  block 5 scope 99 BLOCK length 43
+  block 5 scope 121 BLOCK length 43
     45 LOAD usize slot 10
     46 STORE slot 8 <- 45
     47 PLACE_ADDRESS usize
@@ -11382,12 +11462,12 @@ item 11 ROUTINE failing_alloc result usize signature 11 params 3 slots 25 blocks
     85 STORE_INDIRECT address slot 24 <- 84 83
     86 LOAD usize slot 4
     87 LEAVE <- 86
-item 12 ROUTINE failing_free result none signature 12 params 3 slots 4 blocks 1 values 11
+item 19 ROUTINE failing_free result none signature 19 params 3 slots 4 blocks 1 values 11
   slot 1 state address of struct (usize,usize,usize,usize,usize,usize) param 1
   slot 2 block usize param 2
   slot 3 size usize param 3
   slot 4 - address of usize
-  block 1 scope 101 BLOCK length 11
+  block 1 scope 123 BLOCK length 11
     1 LOAD usize slot 2
     2 LOAD usize slot 3
     3 PLACE_ADDRESS usize
@@ -11399,7 +11479,7 @@ item 12 ROUTINE failing_free result none signature 12 params 3 slots 4 blocks 1 
     9 LOAD usize slot 4
     10 STORE_INDIRECT address slot 4 <- 9 8
     11 LEAVE
-item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 61
+item 20 ROUTINE - result struct signature 21 params 4 slots 17 blocks 7 values 61
   slot 1 new_buffers usize param 1
   slot 2 - usize param 2
   slot 3 state address of struct (usize,usize,usize) param 3
@@ -11424,7 +11504,7 @@ item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 6
     4 LOAD usize slot 7
     5 STORAGE_ADDRESS usize storage slot 5 field 1
     6 EVIDENCE_ADDRESS usize evidence 5
-    7 CALL none callee 14 - signature 16 failure slot 6 <- 5 6 4 3
+    7 CALL none callee 21 - signature 23 failure slot 6 <- 5 6 4 3
     8 LOAD u32 slot 6
     9 FAILURE_TEST bool <- 8
     10 BRANCH target 2 alternative 3 <- 9
@@ -11440,7 +11520,7 @@ item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 6
     18 LOAD usize slot 10
     19 STORAGE_ADDRESS usize storage slot 5 field 2
     20 EVIDENCE_ADDRESS usize evidence 5
-    21 CALL none callee 14 - signature 16 failure slot 9 <- 19 20 18 17
+    21 CALL none callee 21 - signature 23 failure slot 9 <- 19 20 18 17
     22 LOAD u32 slot 9
     23 FAILURE_TEST bool <- 22
     24 BRANCH target 4 alternative 5 <- 23
@@ -11452,7 +11532,7 @@ item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 6
     29 PLACE_ADDRESS usize
     30 LOAD usize slot 12
     31 EVIDENCE_ADDRESS usize evidence 5
-    32 CALL none callee 19 - signature 26 <- 31 30 29
+    32 CALL none callee 26 - signature 33 <- 31 30 29
     33 LOAD u32 slot 11
     34 FAIL <- 33
   block 5 scope 21 BLOCK length 10
@@ -11462,7 +11542,7 @@ item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 6
     38 LOAD usize slot 14
     39 STORAGE_ADDRESS usize storage slot 5 field 3
     40 EVIDENCE_ADDRESS usize evidence 5
-    41 CALL none callee 14 - signature 16 failure slot 13 <- 39 40 38 37
+    41 CALL none callee 21 - signature 23 failure slot 13 <- 39 40 38 37
     42 LOAD u32 slot 13
     43 FAILURE_TEST bool <- 42
     44 BRANCH target 6 alternative 7 <- 43
@@ -11474,18 +11554,18 @@ item 13 ROUTINE - result struct signature 14 params 4 slots 17 blocks 7 values 6
     49 PLACE_ADDRESS usize
     50 LOAD usize slot 16
     51 EVIDENCE_ADDRESS usize evidence 5
-    52 CALL none callee 19 - signature 26 <- 51 50 49
+    52 CALL none callee 26 - signature 33 <- 51 50 49
     53 LOAD usize slot 3
     54 STORE slot 17 <- 53
     55 PLACE_ADDRESS usize
     56 LOAD usize slot 17
     57 EVIDENCE_ADDRESS usize evidence 5
-    58 CALL none callee 19 - signature 26 <- 57 56 55
+    58 CALL none callee 26 - signature 33 <- 57 56 55
     59 LOAD u32 slot 15
     60 FAIL <- 59
   block 7 scope 21 BLOCK length 1
     61 LEAVE
-item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 103
+item 21 ROUTINE - result struct signature 23 params 4 slots 33 blocks 12 values 103
   slot 1 new_bytes usize param 1
   slot 2 - usize param 2
   slot 3 state address of struct (usize,usize,usize) param 3
@@ -11499,7 +11579,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
   slot 11 block usize
   slot 12 - u32 atoms {out_of_memory}
   slot 13 - usize
-  slot 14 - usize signature 8
+  slot 14 - usize signature 10
   slot 15 - address of struct (usize,usize,usize)
   slot 16 - usize
   slot 17 - u32 atoms {out_of_memory}
@@ -11513,7 +11593,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
   slot 25 - usize
   slot 26 - address of struct (usize,usize,[2]usize)
   slot 27 problem u32 atoms {raw_full}
-  slot 28 - usize signature 9
+  slot 28 - usize signature 11
   slot 29 - address of struct (usize,usize,usize)
   slot 30 - usize
   slot 31 - u32 atoms {out_of_memory}
@@ -11530,7 +11610,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     8 BRANCH target 2 alternative 3 <- 7
   block 2 scope 34 BLOCK length 10
     9 STORAGE_ADDRESS usize storage slot 8
-    10 CALL none callee 15 - signature 18 <- 9
+    10 CALL none callee 22 - signature 25 <- 9
     11 STORAGE_ADDRESS usize storage slot 8
     12 STORE slot 9 <- 11
     13 STORAGE_ADDRESS usize storage slot 5 field 1
@@ -11543,7 +11623,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     19 JUMP target 4
   block 4 scope 33 BLOCK length 16
     20 LOAD usize slot 2
-    21 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 8 <- 20
+    21 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 10 <- 20
     22 STORE slot 14 <- 21
     23 LOAD usize slot 3
     24 STORE slot 15 <- 23
@@ -11553,7 +11633,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     28 LOAD usize slot 15
     29 LOAD usize slot 16
     30 LOAD usize slot 14
-    31 INDIRECT_CALL usize signature 8 failure slot 12 <- 30 28 29 27
+    31 INDIRECT_CALL usize signature 10 failure slot 12 <- 30 28 29 27
     32 STORE slot 13 <- 31
     33 LOAD u32 slot 12
     34 FAILURE_TEST bool <- 33
@@ -11571,7 +11651,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     44 LOAD usize slot 4
     45 LOAD usize slot 19
     46 STORAGE_ADDRESS usize storage slot 18
-    47 CALL none callee 16 - signature 20 <- 46 45 44
+    47 CALL none callee 23 - signature 27 <- 46 45 44
     48 NUMBER usize 0
     49 STORE slot 20 <- 48
     50 NUMBER u8 0
@@ -11589,7 +11669,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     60 STORE slot 26 <- 59
     61 LOAD u8 slot 21
     62 LOAD usize slot 26
-    63 CALL usize callee 17 - signature 22 failure slot 24 <- 62 61
+    63 CALL usize callee 24 - signature 29 failure slot 24 <- 62 61
     64 STORE slot 25 <- 63
     65 LOAD u32 slot 24
     66 FAILURE_TEST bool <- 65
@@ -11608,7 +11688,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     69 STORE slot 27 <- 68
     70 LOAD u32 slot 27
     71 LOAD usize slot 2
-    72 EVIDENCE_FUNCTION usize table evidence 5 entry 2 signature 9 <- 71
+    72 EVIDENCE_FUNCTION usize table evidence 5 entry 2 signature 11 <- 71
     73 STORE slot 28 <- 72
     74 LOAD usize slot 3
     75 STORE slot 29 <- 74
@@ -11618,7 +11698,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     79 LOAD usize slot 29
     80 LOAD usize slot 30
     81 LOAD usize slot 28
-    82 INDIRECT_CALL none signature 9 <- 81 79 80 78
+    82 INDIRECT_CALL none signature 11 <- 81 79 80 78
     83 ATOM u32 identity out_of_memory atoms {out_of_memory}
     84 STORE slot 31 <- 83
     85 LOAD u32 slot 31
@@ -11634,7 +11714,7 @@ item 14 ROUTINE - result struct signature 16 params 4 slots 33 blocks 12 values 
     93 ADD usize <- 91 92
     94 STORE slot 20 <- 93
     95 JUMP target 7
-item 15 ROUTINE - result struct signature 18 params 1 slots 3 blocks 1 values 10
+item 22 ROUTINE - result struct signature 25 params 1 slots 3 blocks 1 values 10
   slot 1 empty_storage usize param 1
   slot 2 storage aggregate fields usize usize [2]usize return
   slot 3 prefix elements 2 of usize
@@ -11649,7 +11729,7 @@ item 15 ROUTINE - result struct signature 18 params 1 slots 3 blocks 1 values 10
     8 STORE_FIELD slot 2 field 2 <- 7
     9 COPY_ARRAY from slot 3 to slot 2 field 3
     10 LEAVE
-item 16 ROUTINE - result struct signature 20 params 3 slots 5 blocks 1 values 10
+item 23 ROUTINE - result struct signature 27 params 3 slots 5 blocks 1 values 10
   slot 1 reserve usize param 1
   slot 2 base usize param 2
   slot 3 slots usize param 3
@@ -11666,7 +11746,7 @@ item 16 ROUTINE - result struct signature 20 params 3 slots 5 blocks 1 values 10
     8 STORE_FIELD slot 4 field 2 <- 7
     9 COPY_ARRAY from slot 5 to slot 4 field 3
     10 LEAVE
-item 17 ROUTINE - result usize signature 22 params 2 slots 34 blocks 15 values 132
+item 24 ROUTINE - result usize signature 29 params 2 slots 34 blocks 15 values 132
   slot 1 storage address of struct (usize,usize,[2]usize) param 1
   slot 2 value u8 param 2
   slot 3 index usize return
@@ -11703,7 +11783,7 @@ item 17 ROUTINE - result usize signature 22 params 2 slots 34 blocks 15 values 1
   slot 34 - address of [2]usize
   block 1 scope 60 BLOCK length 12
     1 STORAGE_ADDRESS usize storage address slot 1
-    2 CALL usize callee 18 - signature 24 <- 1
+    2 CALL usize callee 25 - signature 31 <- 1
     3 STORE slot 3 <- 2
     4 LOAD usize slot 3
     5 STORE slot 4 <- 4
@@ -11848,7 +11928,7 @@ item 17 ROUTINE - result usize signature 22 params 2 slots 34 blocks 15 values 1
     129 JUMP target 15
   block 15 scope 65 BLOCK length 1
     130 JUMP target 12
-item 18 ROUTINE - result usize signature 24 params 1 slots 3 blocks 1 values 6
+item 25 ROUTINE - result usize signature 31 params 1 slots 3 blocks 1 values 6
   slot 1 storage aggregate fields usize usize [2]usize param 1
   slot 2 count usize return
   slot 3 prefix elements 2 of usize
@@ -11859,7 +11939,7 @@ item 18 ROUTINE - result usize signature 24 params 1 slots 3 blocks 1 values 6
     4 STORE slot 2 <- 3
     5 LOAD usize slot 2
     6 LEAVE <- 5
-item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
+item 26 ROUTINE - result none signature 33 params 3 slots 20 blocks 12 values 69
   slot 1 - usize param 1
   slot 2 state address of struct (usize,usize,usize) param 2
   slot 3 value address of struct (struct (usize,usize,[2]usize),usize) param 3
@@ -11877,7 +11957,7 @@ item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
   slot 15 - usize
   slot 16 problem u32 atoms {raw_not_empty, raw_empty}
   slot 17 - address of usize
-  slot 18 - usize signature 9
+  slot 18 - usize signature 11
   slot 19 - address of struct (usize,usize,usize)
   slot 20 - usize
   block 1 scope 38 BLOCK length 9
@@ -11903,7 +11983,7 @@ item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
     17 STORAGE_ADDRESS usize storage address slot 3 field 1
     18 STORE slot 8 <- 17
     19 STORAGE_ADDRESS usize storage address slot 8
-    20 CALL usize callee 18 - signature 24 <- 19
+    20 CALL usize callee 25 - signature 31 <- 19
     21 STORE slot 9 <- 20
     22 NUMBER usize 0
     23 LOAD usize slot 9
@@ -11911,14 +11991,14 @@ item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
     25 BRANCH target 5 alternative 6 <- 24
   block 5 scope 39 BLOCK length 6
     26 PLACE_ADDRESS usize
-    27 CALL u8 callee 20 - signature 28 failure slot 10 <- 26
+    27 CALL u8 callee 27 - signature 35 failure slot 10 <- 26
     28 STORE slot 11 <- 27
     29 LOAD u32 slot 10
     30 FAILURE_TEST bool <- 29
     31 BRANCH target 7 alternative 8 <- 30
   block 6 scope 38 BLOCK length 6
     39 PLACE_ADDRESS usize
-    40 CALL usize callee 21 - signature 30 failure slot 14 <- 39
+    40 CALL usize callee 28 - signature 37 failure slot 14 <- 39
     41 STORE slot 15 <- 40
     42 LOAD u32 slot 14
     43 FAILURE_TEST bool <- 42
@@ -11949,7 +12029,7 @@ item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
     55 LOAD usize slot 17
     56 STORE_INDIRECT address slot 17 <- 55 54
     57 LOAD usize slot 1
-    58 EVIDENCE_FUNCTION usize table evidence 5 entry 2 signature 9 <- 57
+    58 EVIDENCE_FUNCTION usize table evidence 5 entry 2 signature 11 <- 57
     59 STORE slot 18 <- 58
     60 LOAD usize slot 2
     61 STORE slot 19 <- 60
@@ -11959,9 +12039,9 @@ item 19 ROUTINE - result none signature 26 params 3 slots 20 blocks 12 values 69
     65 LOAD usize slot 19
     66 LOAD usize slot 20
     67 LOAD usize slot 18
-    68 INDIRECT_CALL none signature 9 <- 67 65 66 64
+    68 INDIRECT_CALL none signature 11 <- 67 65 66 64
     69 LEAVE
-item 20 ROUTINE - result u8 signature 28 params 1 slots 18 blocks 3 values 62
+item 27 ROUTINE - result u8 signature 35 params 1 slots 18 blocks 3 values 62
   slot 1 storage address of struct (usize,usize,[2]usize) param 1
   slot 2 value u8 return
   slot 3 count usize
@@ -11980,9 +12060,9 @@ item 20 ROUTINE - result u8 signature 28 params 1 slots 18 blocks 3 values 62
   slot 16 - usize
   slot 17 - usize
   slot 18 - address of [2]usize
-  block 1 scope 80 BLOCK length 9
+  block 1 scope 88 BLOCK length 9
     1 STORAGE_ADDRESS usize storage address slot 1
-    2 CALL usize callee 18 - signature 24 <- 1
+    2 CALL usize callee 25 - signature 31 <- 1
     3 STORE slot 3 <- 2
     4 LOAD usize slot 3
     5 STORE slot 4 <- 4
@@ -11990,12 +12070,12 @@ item 20 ROUTINE - result u8 signature 28 params 1 slots 18 blocks 3 values 62
     7 LOAD usize slot 4
     8 EQUAL_TO bool <- 7 6
     9 BRANCH target 2 alternative 3 <- 8
-  block 2 scope 80 BLOCK length 4
+  block 2 scope 88 BLOCK length 4
     10 ATOM u32 identity raw_empty atoms {raw_empty}
     11 STORE slot 5 <- 10
     12 LOAD u32 slot 5
     13 FAIL <- 12
-  block 3 scope 80 BLOCK length 49
+  block 3 scope 88 BLOCK length 49
     14 LOAD usize slot 3
     15 STORE slot 7 <- 14
     16 NUMBER usize 1
@@ -12045,7 +12125,7 @@ item 20 ROUTINE - result u8 signature 28 params 1 slots 18 blocks 3 values 62
     60 COPY_ARRAY from slot 12 to address slot 1 field 3
     61 LOAD u8 slot 2
     62 LEAVE <- 61
-item 21 ROUTINE - result usize signature 30 params 1 slots 11 blocks 7 values 47
+item 28 ROUTINE - result usize signature 37 params 1 slots 11 blocks 7 values 47
   slot 1 storage address of struct (usize,usize,[2]usize) param 1
   slot 2 released usize return
   slot 3 - usize
@@ -12057,20 +12137,20 @@ item 21 ROUTINE - result usize signature 30 params 1 slots 11 blocks 7 values 47
   slot 9 - address of usize
   slot 10 - elements 2 of usize
   slot 11 - address of usize
-  block 1 scope 82 BLOCK length 7
+  block 1 scope 90 BLOCK length 7
     1 STORAGE_ADDRESS usize storage address slot 1
-    2 CALL usize callee 18 - signature 24 <- 1
+    2 CALL usize callee 25 - signature 31 <- 1
     3 STORE slot 3 <- 2
     4 NUMBER usize 0
     5 LOAD usize slot 3
     6 NOT_EQUAL_TO bool <- 5 4
     7 BRANCH target 2 alternative 3 <- 6
-  block 2 scope 82 BLOCK length 4
+  block 2 scope 90 BLOCK length 4
     8 ATOM u32 identity raw_not_empty atoms {raw_not_empty}
     9 STORE slot 4 <- 8
     10 LOAD u32 slot 4
     11 FAIL <- 10
-  block 3 scope 82 BLOCK length 9
+  block 3 scope 90 BLOCK length 9
     12 PLACE_ADDRESS usize
     13 STORE slot 6 <- 12
     14 LOAD usize slot 6
@@ -12080,20 +12160,20 @@ item 21 ROUTINE - result usize signature 30 params 1 slots 11 blocks 7 values 47
     18 NUMBER usize 0
     19 EQUAL_TO bool <- 17 18
     20 BRANCH target 4 alternative 5 <- 19
-  block 4 scope 83 BLOCK length 4
+  block 4 scope 91 BLOCK length 4
     21 ATOM u32 identity raw_empty atoms {raw_empty}
     22 STORE slot 7 <- 21
     23 LOAD u32 slot 7
     24 FAIL <- 23
-  block 5 scope 82 BLOCK length 1
+  block 5 scope 90 BLOCK length 1
     25 JUMP target 6
-  block 6 scope 84 BLOCK length 5
+  block 6 scope 92 BLOCK length 5
     26 LOAD usize slot 5
     27 STORE slot 8 <- 26
     28 LOAD usize slot 8
     29 STORE slot 2 <- 28
     30 JUMP target 7
-  block 7 scope 82 BLOCK length 17
+  block 7 scope 90 BLOCK length 17
     31 PLACE_ADDRESS usize
     32 STORE slot 9 <- 31
     33 NUMBER usize 0
@@ -12111,7 +12191,7 @@ item 21 ROUTINE - result usize signature 30 params 1 slots 11 blocks 7 values 47
     45 STORE_INDIRECT address slot 11 <- 44 43
     46 LOAD usize slot 2
     47 LEAVE <- 46
-item 22 ROUTINE - result array signature 32 params 3 slots 11 blocks 3 values 26
+item 29 ROUTINE - result array signature 39 params 3 slots 11 blocks 3 values 26
   elements 2 of usize
   slot 1 make_widget usize param 1
   slot 2 - usize param 2
@@ -12125,7 +12205,7 @@ item 22 ROUTINE - result array signature 32 params 3 slots 11 blocks 3 values 26
   slot 10 - address of struct (usize,usize,usize)
   slot 11 - u32 atoms {out_of_memory}
   block 1 scope 23 BLOCK length 15
-    1 STORAGE_ADDRESS usize storage datum 25 -
+    1 STORAGE_ADDRESS usize storage datum 32 -
     2 NUMBER usize 2
     3 STORE_FIELD slot 6 field 1 <- 1
     4 STORE_FIELD slot 6 field 2 <- 2
@@ -12135,7 +12215,7 @@ item 22 ROUTINE - result array signature 32 params 3 slots 11 blocks 3 values 26
     8 STORAGE_ADDRESS usize storage slot 5
     9 LOAD usize slot 10
     10 EVIDENCE_ADDRESS usize evidence 5
-    11 CALL usize callee 23 - signature 34 failure slot 8 <- 10 9 8
+    11 CALL usize callee 30 - signature 41 failure slot 8 <- 10 9 8
     12 STORE slot 9 <- 11
     13 LOAD u32 slot 8
     14 FAILURE_TEST bool <- 13
@@ -12153,7 +12233,7 @@ item 22 ROUTINE - result array signature 32 params 3 slots 11 blocks 3 values 26
     24 STORE_FIELD slot 4 field 1 <- 22
     25 STORE_FIELD slot 4 field 2 <- 23
     26 LEAVE
-item 23 ROUTINE - result usize signature 34 params 3 slots 13 blocks 3 values 35
+item 30 ROUTINE - result usize signature 41 params 3 slots 13 blocks 3 values 35
   slot 1 - usize param 1
   slot 2 state address of struct (usize,usize,usize) param 2
   slot 3 value aggregate fields [2]usize param 3
@@ -12161,7 +12241,7 @@ item 23 ROUTINE - result usize signature 34 params 3 slots 13 blocks 3 values 35
   slot 5 block usize
   slot 6 - u32 atoms {out_of_memory}
   slot 7 - usize
-  slot 8 - usize signature 8
+  slot 8 - usize signature 10
   slot 9 - address of struct (usize,usize,usize)
   slot 10 - usize
   slot 11 - u32 atoms {out_of_memory}
@@ -12169,7 +12249,7 @@ item 23 ROUTINE - result usize signature 34 params 3 slots 13 blocks 3 values 35
   slot 13 - address of struct ([2]usize)
   block 1 scope 27 BLOCK length 16
     1 LOAD usize slot 1
-    2 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 8 <- 1
+    2 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 10 <- 1
     3 STORE slot 8 <- 2
     4 LOAD usize slot 2
     5 STORE slot 9 <- 4
@@ -12179,7 +12259,7 @@ item 23 ROUTINE - result usize signature 34 params 3 slots 13 blocks 3 values 35
     9 LOAD usize slot 9
     10 LOAD usize slot 10
     11 LOAD usize slot 8
-    12 INDIRECT_CALL usize signature 8 failure slot 6 <- 11 9 10 8
+    12 INDIRECT_CALL usize signature 10 failure slot 6 <- 11 9 10 8
     13 STORE slot 7 <- 12
     14 LOAD u32 slot 6
     15 FAILURE_TEST bool <- 14
@@ -12205,7 +12285,7 @@ item 23 ROUTINE - result usize signature 34 params 3 slots 13 blocks 3 values 35
     33 COPY_ARRAY from address slot 13 to address slot 12
     34 LOAD usize slot 4
     35 LEAVE <- 34
-item 24 ROUTINE - result array signature 36 params 2 slots 3 blocks 1 values 2
+item 31 ROUTINE - result array signature 43 params 2 slots 3 blocks 1 values 2
   elements 2 of usize
   slot 1 used usize param 1
   slot 2 storage aggregate fields usize usize [2]usize param 2
@@ -12213,7 +12293,7 @@ item 24 ROUTINE - result array signature 36 params 2 slots 3 blocks 1 values 2
   block 1 scope 58 BLOCK length 2
     1 COPY_ARRAY from slot 2 field 3 to slot 3
     2 LEAVE
-item 25 DATUM - result array params 0 slots 0 blocks 1 values 1
+item 32 DATUM - result array params 0 slots 0 blocks 1 values 1
   elements 3 of u8
   image 79 75 0
   block 1 scope 1 PROGRAM length 1
