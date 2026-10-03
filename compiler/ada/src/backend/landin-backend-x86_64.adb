@@ -1911,21 +1911,29 @@ package body Landin.Backend.X86_64 is
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
-            Saved_Bytes : constant Landin.Targets.Byte_Count := 112;
+            GP_Bytes : constant Landin.Targets.Byte_Count :=
+              Landin.Targets.Byte_Count (Plan.GP_Used) * 8;
+            SSE_Bytes : constant Landin.Targets.Byte_Count :=
+              Landin.Targets.Byte_Count (Plan.SSE_Used) * 8;
+            Saved_Bytes : constant Landin.Targets.Byte_Count :=
+              Stack_Align (GP_Bytes + SSE_Bytes,
+                           Landin.Targets.Stack_Alignment (Facts), 112);
          begin
-            --  Save both banks before a copy or partial-chunk helper can
-            --  clobber them.  This temporary area does not become IR state.
+            --  The plan allocates each bank in order, including the hidden
+            --  result pointer.  Save only the used prefixes before a copy or
+            --  partial-chunk helper can clobber them.  This temporary area
+            --  does not become IR state.
             Reserve_Stack (Saved_Bytes, "c_entry");
-            for Index in 1 .. 6 loop
+            for Index in 1 .. Plan.GP_Used loop
                Emit ("movq "
                      & Argument_Register (Index, Landin.Targets.Byte_8)
                      & ", " & Displacement
                        (Landin.Targets.Byte_Count (Index - 1) * 8, "%rsp"));
             end loop;
-            for Index in 1 .. 8 loop
+            for Index in 1 .. Plan.SSE_Used loop
                Emit ("movq %xmm" & Trimmed (Natural'Image (Index - 1))
                      & ", " & Displacement
-                       (48 + Landin.Targets.Byte_Count (Index - 1) * 8,
+                       (GP_Bytes + Landin.Targets.Byte_Count (Index - 1) * 8,
                         "%rsp"));
             end loop;
             if Hidden = 1 then
@@ -1961,7 +1969,7 @@ package body Landin.Backend.X86_64 is
                            Emit ("movq " & Displacement
                                  ((if Place.Shape.Classes (Chunk)
                                        = C_ABI.SSE_Class
-                                   then Landin.Targets.Byte_Count'(48)
+                                   then GP_Bytes
                                    else Landin.Targets.Byte_Count'(0))
                                   + Landin.Targets.Byte_Count
                                     (Place.Registers (Chunk) - 1) * 8,
@@ -1974,8 +1982,11 @@ package body Landin.Backend.X86_64 is
                   end if;
                end;
             end loop;
-            Emit ("addq $" & Trimmed
-                  (Landin.Targets.Byte_Count'Image (Saved_Bytes)) & ", %rsp");
+            if Saved_Bytes > 0 then
+               Emit ("addq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Saved_Bytes))
+                     & ", %rsp");
+            end if;
          end Emit_C_Entry;
 
          procedure Emit_C_Call (Value : Landin.IR.Value_Id) is

@@ -54,6 +54,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
+   procedure C_Entry_Saves (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
    procedure Level_Selects_Shifts (Item : in out Landin.Testing.Context);
 
@@ -361,6 +362,41 @@ package body Landin.Tests.X86_Optimization_Suite is
       end loop;
    end Bounded_Probes;
 
+   procedure C_Entry_Saves (Item : in out Landin.Testing.Context) is
+      Empty : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Mixed : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower (Item, Empty,
+             "public extern(c) empty: () -> (r: i32) = "
+             & "r = 42 end empty");
+      declare
+         Text : constant String := Emitted (Empty);
+      begin
+         Landin.Testing.Check
+           (Item, not Contains (Text, "subq $112, %rsp")
+            and then not Contains (Text, "addq $112, %rsp")
+            and then not Contains (Text, "(%rsp)"),
+            "an empty C entry does not stage argument registers");
+      end;
+
+      Lower (Item, Mixed,
+             "public extern(c) mixed: (i: i64, f: f64) -> (r: i64) = "
+             & "r = i end mixed");
+      declare
+         Text : constant String := Emitted (Mixed);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "movq %rdi, 0(%rsp)")
+            and then Contains (Text, "movq %xmm0, 8(%rsp)")
+            and then Contains (Text, "movq 8(%rsp), %r10")
+            and then not Contains (Text, "movq %rsi, 8(%rsp)")
+            and then not Contains (Text, "movq %xmm1, 16(%rsp)"),
+            "a mixed C entry saves only the used register prefixes");
+      end;
+   end C_Entry_Saves;
+
    procedure Final_Folding (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -486,6 +522,8 @@ package body Landin.Tests.X86_Optimization_Suite is
          Pressure_And_C_Scalars'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "C entry saves", C_Entry_Saves'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "final folding", Final_Folding'Access);
       Landin.Testing.Register
