@@ -76,9 +76,9 @@ package Landin.Platform is
    --  the sibling file. On success it copies owner, group, and mode bits
    --  (including special bits). ACLs and xattrs cause safe refusal, as does
    --  failure to establish their absence. Linux may refuse ordinary users
-   --  who cannot inspect privileged attributes. Timestamps may change. It syncs
-   --  the file, not the parent directory, so crash durability of the renamed
-   --  directory entry is not guaranteed.
+   --  who cannot inspect privileged attributes. Timestamps may change.
+   --  It syncs the file, not the parent directory, so crash durability of
+   --  the renamed directory entry is not guaranteed.
    procedure Replace_File
      (Host    : Filesystem;
       Path    : String;
