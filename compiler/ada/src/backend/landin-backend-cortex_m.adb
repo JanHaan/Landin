@@ -1116,6 +1116,13 @@ package body Landin.Backend.Cortex_M is
          procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
          begin
+            --  Keep the adjacent address word attached to its label. A
+            --  pool inserted after that label makes the load read pool
+            --  instructions as a destination. These four emitted lines
+            --  account for at most sixteen bytes in the pool bound.
+            if Pool_Distance + 16 >= 512 then
+               Flush_Literals;
+            end if;
             Emit ("ldr r7, " & Id);
             Emit ("bx r7");
             Emit (".balign 4");
