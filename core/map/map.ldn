@@ -568,6 +568,7 @@ end insert
 public get: (key: type is hashable, item: type,
              value: map(key, item), wanted: key)
             -> (result: item from value) ! missing =
+    fail missing when value.count == 0
     slots: usize = capacity(value)
     fail missing when slots == 0
     mut at: usize = index_of(wanted, slots)
@@ -602,6 +603,7 @@ end get
 public remove: (key: type is hashable, item: type,
                 inout value: map(key, item), wanted: key)
                -> none ! missing =
+    fail missing when value.count == 0
     slots: usize = capacity(value)
     fail missing when slots == 0
     mut at: usize = index_of(wanted, slots)
