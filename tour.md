@@ -3647,10 +3647,12 @@ built-in mode value.
 There are no compile-time loops and no compile-time
 function calls. That line is deliberate.
 The builtin modules at [1560] look like an exception and are
-not one: their calls are directives to the compiler, the
-assembler and the linker, they take only fixed arguments,
-and nobody can write another. Nothing of yours runs while
-the program is being built. What that costs is a generated
+not one: their members are compiler-recognized operations,
+not user functions run during the build. Some inputs must be
+fixed, such as assertion conditions, library names and assembly
+text; atomic data and assembly input operands can be runtime
+values. Nobody can write another builtin module. Nothing of yours
+runs while the program is being built. What that costs is a generated
 table or an SoA layout, which comes from a program that
 writes source and is run by the build — twice so far, and a
 third would be worth taking seriously.
@@ -3698,8 +3700,12 @@ else.
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
-Their calls are builtin, take only fixed arguments, and
-cannot be written by hand.
+Their members are builtin and cannot be written by hand. The
+required fixed inputs depend on the operation: `compiler.assert`
+takes a fixed condition, `linker.library` a fixed name, and
+`assembler.block` fixed instruction text. Atomic and volatile
+pointer and value operands, and assembly inputs, can be runtime
+values; atomic ordering operands remain fixed compiler atoms.
 The hosted slice enables the compiler facts and assertions above and
 `linker.library` below. Scalar atomics and barriers follow D227. Cortex-M0
 also enables declaration placement annotations and an explicit firmware-entry
