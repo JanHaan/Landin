@@ -2,8 +2,8 @@
 --
 --  Nothing in the compiler may ask the host how wide a pointer is.  A
 --  32-bit target is described here and measured by tests on a 64-bit
---  development machine, which is the only way the Cortex-M path can be
---  designed before a Cortex-M backend exists.
+--  development machine, keeping Cortex-M layout independent of the
+--  compiler host.
 --
 --  These are machine facts, not language facts.  There is deliberately no
 --  list of Landin's scalar types here: which types exist, and how each one
@@ -55,8 +55,8 @@ package Landin.Targets is
    --  unequal and select different C transport and object formats.
    function Linux_Arm64 return Target_Facts;
 
-   --  ARMv6-M Thumb, base AAPCS soft-float. Layout/ABI planning only;
-   --  capability queries deliberately refuse code generation and C use.
+   --  ARMv6-M Thumb, base AAPCS soft-float. The Cortex-M0 backend emits
+   --  assembly; C signatures, records and variadic calls remain disabled.
    function Cortex_M return Target_Facts;
 
    --  A synthetic 32-bit little-endian description, used to keep layout and
