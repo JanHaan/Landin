@@ -28122,7 +28122,9 @@ package body Landin.Stages.Checking is
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Where,
                Message => "a text literal spells bytes, and this context"
-                          & " wants a slice of "
+                          & (if Descriptor.Kind = Ty.Pointer_Value
+                             then " wants a pointer to "
+                             else " wants a slice of ")
                           & (if Descriptor.Referent in Ty.Scalar_Name
                              then Ty.Spelling
                                (Ty.Scalar_Name (Descriptor.Referent))

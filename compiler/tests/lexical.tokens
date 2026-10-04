@@ -84933,6 +84933,30 @@ file negative/text-literal-needs-byte-slice/program.ldn tokens 5
   6 9 i32
   10 11 =
   12 20 "landin"
+file negative/text-literal-needs-pointer/program.ldn tokens 23
+  0 6 public
+  7 11 main
+  11 12 :
+  13 14 (
+  14 15 )
+  16 18 ->
+  19 20 (
+  20 24 code
+  24 25 :
+  26 29 i32
+  29 30 )
+  31 32 =
+  37 38 p
+  38 39 :
+  40 43 ptr
+  44 46 u8
+  47 48 =
+  49 54 "abc"
+  59 63 code
+  64 65 =
+  66 67 0
+  68 71 end
+  72 76 main
 file negative/text-literal-needs-read-only-slice/program.ldn tokens 8
   0 4 name
   4 5 :

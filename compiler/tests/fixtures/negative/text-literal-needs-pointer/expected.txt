@@ -1,0 +1,10 @@
+error[L0301]: a text literal spells bytes, and this context wants a pointer to u8
+  --> ../tests/fixtures/negative/text-literal-needs-pointer/program.ldn:2:17
+  |
+2 |     p: ptr u8 = "abc"
+  |                 ^^^^^
+  --> ../tests/fixtures/negative/text-literal-needs-pointer/program.ldn:2:8
+  |
+2 |     p: ptr u8 = "abc"
+  |        ^^^^^^ the reference type written here
+  = note: [0260]: a text literal takes `[]u8` from its context
