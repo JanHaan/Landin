@@ -255,9 +255,12 @@ class ParserTranscriptTests(unittest.TestCase):
         self.lines = CHECK.parser_lines()
         sections = []
         for name, functions in (
-                ("digits", ("parse_digits", "parse_digits", "parse_entry", "parse_sequence")),
-                ("recovery", ("recover_to_boundary", "parse_entry", "parse_sequence")),
-                ("nested", ("parse_sequence", "parse_entry", "parse_sequence")),
+                ("digits", ("parse_digits", "parse_digits", "parse_entry",
+                            "parse_and_append", "parse_sequence")),
+                ("recovery", ("recover_to_boundary", "parse_entry",
+                              "parse_and_append", "parse_sequence")),
+                ("nested", ("parse_sequence", "parse_entry",
+                            "parse_and_append", "parse_sequence")),
                 ("done", ("main",))):
             stack = functions if name == "done" else (*functions, "parse_file", "main")
             sections.append(f"LANDIN-BEGIN parser-{name}\n")
@@ -292,6 +295,7 @@ class ParserTranscriptTests(unittest.TestCase):
     def test_wrong_or_missing_recursive_frame_is_rejected(self) -> None:
         for old, new in (("#1 parse_digits", "#1 unrelated"),
                          ("#1 parse_entry", "#1 unrelated"),
+                         ("parse_and_append", "unrelated"),
                          ("parse_file", "unrelated")):
             with self.subTest(old=old), self.assertRaisesRegex(ValueError, "stack"):
                 CHECK.check_parser_transcript(self.transcript.replace(old, new), self.lines)

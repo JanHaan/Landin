@@ -662,9 +662,12 @@ def check_parser_transcript(transcript: str,
         require(phrase not in transcript,
                 f"parser GDB transcript contains {phrase!r}\n{transcript}")
     for name, functions in (
-            ("digits", ("parse_digits", "parse_digits", "parse_entry", "parse_sequence")),
-            ("recovery", ("recover_to_boundary", "parse_entry", "parse_sequence")),
-            ("nested", ("parse_sequence", "parse_entry", "parse_sequence")),
+            ("digits", ("parse_digits", "parse_digits", "parse_entry",
+                            "parse_and_append", "parse_sequence")),
+            ("recovery", ("recover_to_boundary", "parse_entry",
+                              "parse_and_append", "parse_sequence")),
+            ("nested", ("parse_sequence", "parse_entry",
+                            "parse_and_append", "parse_sequence")),
             ("done", ("main",))):
         scope = f"parser-{name}"
         filename = "main.ldn" if name == "done" else "parser.ldn"
