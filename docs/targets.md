@@ -632,8 +632,10 @@ arguments use the planner's aligned stack area plus private r0-r3 staging.
 The instruction envelope follows the official
 [ARMv6-M Architecture Reference Manual](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
 with executable legal/illegal encoding controls under the pinned assembler.
-Per-routine ELF input sections support placement and garbage collection by the
-external test linker; they do not enable a Landin section or keep directive.
+Per-routine ELF input sections let the external test linker place and
+garbage-collect routines. The compiler-owned Cortex firmware path also accepts
+`link(section: ...)` for explicit placement and `link(keep)` to retain the
+containing input section under the fixed flash/RAM map described below.
 The flash-to-SRAM control forces a real call veneer while preserving the
 selected core and physical RAM map.
 
