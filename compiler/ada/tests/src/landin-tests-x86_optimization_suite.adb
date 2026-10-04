@@ -53,6 +53,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Canonical_Bodies (Item : in out Landin.Testing.Context);
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
+   procedure Small_Array_Bounds (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
    procedure C_Entry_Saves (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
@@ -508,8 +509,37 @@ package body Landin.Tests.X86_Optimization_Suite is
       end;
    end Level_Selects_Shifts;
 
+   procedure Small_Array_Bounds (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower
+        (Item, Work,
+         "public probe: (i: usize) -> (r: u32) = "
+         & "mut words: [4]u32 = zeroed "
+         & "p: ptr mut u32 = addr words[i] "
+         & "p.val = 7 r = words[i] end probe");
+      for Reference in Boolean loop
+         declare
+            Text : constant String := Emitted
+              (Work, (if Reference then Opt.Reference_Options
+                      else Opt.Default_Options));
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Count (Text, "cmpq $4, %rax") = 2
+               and then Ada.Strings.Fixed.Count (Text, "_index:") = 2
+               and then Ada.Strings.Fixed.Count (Text, "ud2") = 2
+               and then not Contains (Text, "cmpq %rdx, %rax"),
+               "element address and load compare small bounds directly"
+               & " while retaining both traps");
+         end;
+      end loop;
+   end Small_Array_Bounds;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "x86 opt", "small array bounds", Small_Array_Bounds'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "selected instructions",
          Selected_Instructions'Access);

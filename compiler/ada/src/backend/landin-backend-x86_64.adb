@@ -2433,6 +2433,8 @@ package body Landin.Backend.X86_64 is
               is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
             procedure Emit_Panic (Reason : Landin.Panics.Kind);
             procedure Emit_Panic;
+            procedure Emit_Fixed_Bounds_Check
+              (Length : Landin.IR.Element_Total; Safe : String);
 
             procedure Emit_Panic (Reason : Landin.Panics.Kind) is
             begin
@@ -2453,6 +2455,26 @@ package body Landin.Backend.X86_64 is
             begin
                Emit_Panic (Landin.Panics.For_Value (Of_Unit, Item, Value));
             end Emit_Panic;
+
+            procedure Emit_Fixed_Bounds_Check
+              (Length : Landin.IR.Element_Total; Safe : String) is
+            begin
+               --  cmpq sign-extends its imm32 operand.  A larger unsigned
+               --  length must still be loaded as a full 64-bit value.
+               if Machine.Fits_Arithmetic_Immediate
+                 (Landin.Targets.Byte_Count (Length))
+               then
+                  Emit ("cmpq $" & Trimmed
+                    (Landin.IR.Element_Total'Image (Length)) & ", %rax");
+               else
+                  Emit ("movabsq $" & Trimmed
+                    (Landin.IR.Element_Total'Image (Length)) & ", %rdx");
+                  Emit ("cmpq %rdx, %rax");
+               end if;
+               Emit ("jb " & Safe);
+               Emit_Panic;
+               Put (Safe & ":");
+            end Emit_Fixed_Bounds_Check;
 
             procedure Packed_Atom
               (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
@@ -2628,16 +2650,7 @@ package body Landin.Backend.X86_64 is
                            --  address, which is [0430]'s existing pointer
                            --  non-guarantee and nothing worse.
                            if not Unchecked then
-                              Emit
-                                ("movabsq $"
-                                 & Trimmed
-                                     (Landin.IR.Element_Total'Image
-                                        (Length))
-                                 & ", %rdx");
-                              Emit ("cmpq %rdx, %rax");
-                              Emit ("jb " & Safe);
-                              Emit_Panic;
-                              Put (Safe & ":");
+                              Emit_Fixed_Bounds_Check (Length, Safe);
                            end if;
                            if Stride = 1 then
                               null;
@@ -4122,15 +4135,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                      Emit ("movq " & Value_Operand (Index) & ", %rax");
                      if not Unchecked then
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.IR.Element_Total'Image (Length))
-                           & ", %rdx");
-                        Emit ("cmpq %rdx, %rax");
-                        Emit ("jb " & Safe);
-                        Emit_Panic;
-                        Put (Safe & ":");
+                        Emit_Fixed_Bounds_Check (Length, Safe);
                      end if;
                      --  An `imul` immediate is a signed 32-bit field, and
                      --  D121's element may be wider than one, so a stride
