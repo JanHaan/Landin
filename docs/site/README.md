@@ -60,21 +60,17 @@ absorb silently, losing structure that no word count could miss.
 ./scripts/site.sh              # render, verify, package
 ```
 
-`.github/workflows/pages.yml` publishes when a site input changes on `main`,
-or when dispatched manually. It renders with the same `--verify` pass, fetches
-the licensed code face from object storage
-because that face is not in this repository, writes the `www.701.dev` CNAME and
-deploys to GitHub Pages. It is not a gate and runs no compiler test.
-`scripts/site.sh` renders and packages and does not publish; the `--publish`
-that uploaded to pages.sr.ht went with the SourceHut gate. Native
-acceptance and evidence export happen before promotion; see
-[`environments/native-ci/README.md`](../../environments/native-ci/README.md).
-Non-publishing renders remain available for previews.
 Publication is [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)
-and nothing else. It runs on site input changes pushed to `main`, renders with
-the same `--verify` pass, writes the `www.701.dev` CNAME and deploys to GitHub Pages.
-Its `concurrency` group serializes publications and never cancels one in
-flight, because a cancelled deploy can leave the site half-replaced.
+and nothing else. It runs when site inputs change on `main` or on manual dispatch, fetches the licensed code
+face from object storage, renders with the same `--verify` pass, writes the
+`www.701.dev` CNAME and deploys to GitHub Pages. It is not a gate and runs no
+compiler test. Its `concurrency` group serializes publications and never
+cancels one in flight, because a cancelled deploy can leave the site
+half-replaced.
+`scripts/site.sh` renders and packages for local previews; it does not
+publish. Its former `--publish` option uploaded to pages.sr.ht and went with
+the SourceHut gate. The retired acceptance procedure is recorded in
+[`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 
 The site is served at `www.701.dev`, and GitHub redirects `701.dev` to it.
 That is the one thing the move simplified: pages.sr.ht served one site per
@@ -88,40 +84,14 @@ from object storage before rendering. That fetch is fatal rather than
 best-effort: a silent fallback publishes a site set in the wrong face, which
 no word count can see.
 
-The Pages job's existing SSH identity must be allowed to write the lock tag in
-canonical `git.sr.ht`; read access to private fonts and write access to the
-GitHub mirror do not by themselves establish that permission. Manual publishers
-need the same canonical write permission and their configured Pages token.
-The lock carries a unique owner object, candidate commit and job identifier; it
-is operational coordination, never an acceptance tag or release designation.
-A busy job waits up to five minutes plus bounded Git calls, then refuses.
-Git calls, rendering and uploads have explicit timeouts.
-
-Before activating this protocol, finish or cancel every older Pages job and
-switch manual publishers to the new wrapper. Older scripts do not participate
-in the lock.
-
-A render or pre-upload approval failure releases its own lock with an exact
-Git lease. An upload failure or timeout retains it: the client cannot prove
-that the server stopped processing the request. A killed worker also leaves
-its lock in place. Do not remove a lock merely because it is old. Inspect the
-owning job and establish that no upload can still complete before recovering.
-Fetch the current lock to inspect its owner and copy its full object identity:
-
-```sh
-git fetch git@git.sr.ht:~sinnfrei/landin refs/tags/ci/publication-lock
-git cat-file tag FETCH_HEAD
-```
-
-After resolving that job and any uncertain server outcome, replace
-`EXPECTED_LOCK_OBJECT` below with the inspected object's identity. The exact
-lease prevents removal of a different worker's replacement lock. Then rerun
-publication from current approved canonical main, repairing both domains.
-
-```sh
-git push --force-with-lease=refs/tags/ci/publication-lock:EXPECTED_LOCK_OBJECT \
-    git@git.sr.ht:~sinnfrei/landin :refs/tags/ci/publication-lock
-```
+For a failed publication, inspect the `pages` run in GitHub Actions. The
+`build` job logs show font fetch, render and artifact upload failures; the
+`deploy` job logs and the `github-pages` environment show deployment status.
+If a deploy is still running or its result is unclear, check that run's status
+before starting recovery. Once the cause is resolved, run the `pages` workflow
+manually on `main` from GitHub Actions to publish the current commit. Its
+`concurrency` group handles overlap with another publication; recovery does
+not involve a SourceHut lock tag.
 
 The rendered pages and the tarball are not committed: they are generated,
 and a generated file in the history is a file that goes stale in the
