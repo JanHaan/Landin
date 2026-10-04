@@ -407,17 +407,21 @@ canonical IR for native generic, aggregate and control-flow source. Isolating
 the target contracts added no opcode or serialized IR field; the existing complete IR golden is unchanged.
 
 
-The Darwin backend gives every routine an x29/x30 frame record and every value
-a stack home. Native Landin calls use integer bit carriers, address-based
-aggregate copies and a separate w8 failure carrier. The Darwin C planner maps
-the same verified signatures onto Apple's independent register banks, HFA
-rules, indirect results and packed/variadic stack rules. These choices belong
-to the emitter; error propagation and cleanup edges arrive already verified.
-Neutral specialization and simplification run before all three emitters. Darwin
-currently uses baseline stack homes without the x86 register allocator or body
-folding. Its reports record frame size; backend quality optimization is not a
-parity claim. macOS source debugging consumes these same stack placement plans
-for DWARF locations.
+The shared arm64 backend gives every routine an x29/x30 frame record and
+keeps source slots in fixed frame homes. With optimization disabled, scalar
+IR values also have separate homes. Size and speed modes reuse nonoverlapping
+scalar homes; speed mode can keep eligible nonfloating temporaries in unused
+x19-x28 registers. Declared assembly registers remain excluded, addressable
+values stay in storage, and promoted registers are saved and described by CFI.
+Native Landin calls use integer bit carriers, address-based aggregate copies
+and a separate w8 failure carrier. The Darwin C planner maps the same verified
+signatures onto Apple's independent register banks, HFA rules, indirect
+results and packed/variadic stack rules. These choices belong to the emitter;
+error propagation and cleanup edges arrive already verified. Neutral
+specialization and simplification run before all native emitters. arm64 body
+folding remains separate from scalar home reuse. Reports record frame, spill,
+save and register use, while source debugging consumes the same placement
+plan for the fixed source slots.
 The shared `Backend.Dwarf` encoder uses neutral source identities and
 `Backend.Debug_Locations` availability; Mach-O sections, x29 CFI and dSYM
 packaging stay at the backend/toolchain boundary.
@@ -496,7 +500,7 @@ Debug information exposes a packed nominal as its unsigned `raw` carrier;
 field-level bit-array presentation is not claimed.
 
 
-Cortex-M selection uses pinned source places and reusable eight-byte homes for
+Cortex-M selection uses pinned source places and reusable width-sized homes for
 block-local scalar temporaries. Last reads come from the verifier's explicit
 operand runs; live operands cannot share a home, and a call cannot destroy a
 live value. Selection uses low-register scratch. Routines with calls or

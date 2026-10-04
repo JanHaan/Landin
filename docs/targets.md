@@ -211,8 +211,9 @@ A variant is a truthful tag plus named payload overlays; users select the
 active payload using the tag. LLDB canonicalizes scalar display names, such as
 `i32` to `int`. It does not evaluate Landin expressions. Source aliases from
 matches, named-result destructuring and loops remain inspectable in their
-live scopes. The native backend currently uses stack homes under baseline
-optimization; it does not claim x86's saved-register allocation. Uninitialized
+live scopes. Source slots keep stack homes in every optimization mode;
+arm64 may reuse scalar temporary homes or promote eligible temporaries into
+x19-x28 without changing those source locations. Uninitialized
 or unavailable variables have no valid location, and ranges end before frame
 restoration. The complete parser, containers and hosted application run in the
 native LLDB matrix, using the existing Linux source/value oracles.
@@ -503,7 +504,9 @@ Preserve r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and c
 flags as call-clobbered, maintain sp modulo four at all times and modulo eight
 at calls, and allocate no red zone below sp. The backend implements this record
 and checks framed construction through instruction stepping, including nested
-calls. Eligible leaves have separate SP-based unwind evidence. The earlier
+calls. Eligible leaves have separate SP-based unwind evidence, including selection
+of the interrupted hardware context. Ordinary unwinding still stops at
+interrupt entry. The earlier
 handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
 r11 chain or foreign-exception unwinding is promised. Code addresses retain
 the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
@@ -600,11 +603,13 @@ names or overwrites, which is what lets inputs and outputs move directly.
 
 ## arm64 assembly implementation
 
-`Backend.Arm64` keeps every value in a frame home, so a block needs no
-allocator: each input is loaded through its own register, which addresses its
-home first, and extended to the whole register (`sxtb`, `sxth`, `sxtw`); the
-text is emitted as written; and each output is stored through a register no
-waiting output holds. A block whose outputs hold all of x0-x17 moves its first
+`Backend.Arm64` keeps source slots and assembly operands in frame homes.
+Its optimized value plan reuses nonoverlapping scalar homes and may promote
+eligible nonfloating temporaries into otherwise unused x19-x28 registers.
+A block's declared registers are excluded from that plan. Each input is loaded
+through its own register, which addresses its home first, and extended to the
+whole register (`sxtb`, `sxth`, `sxtw`); the text is emitted as written; and
+each output is stored through a register no waiting output holds. A block whose outputs hold all of x0-x17 moves its first
 aside into d16, which every block may overwrite and none may name, and stores
 it last. A declared x19-x28 gets a frame home: the prologue stores it after
 reserving the frame, with a `.cfi_offset` from the CFA at x29+16, and every
