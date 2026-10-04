@@ -105,7 +105,7 @@ The aggregate gate covers each build, test and determinism host separately.
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | ubuntu-24.04 | the debug compiler's 800 cases at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `compiler` | ubuntu-24.04 | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
 | `linux-release-build` | ubuntu-24.04 | build the release executables once for the Linux release, Cortex-M and scaling jobs |
 | `release` | ubuntu-24.04 | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
