@@ -220,7 +220,7 @@ This is the maintained inventory of what the compiler does today:
   and variadic calls, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are
   refused by name.
-- **Targets.** Linux x86-64 and Darwin arm64 build and run hosted executables;
+- **Targets.** Linux x86-64, Linux arm64 and Darwin arm64 build and run hosted executables;
   Darwin keeps an explicit large-image loader limitation. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
   clearing, typed interrupt and naked functions, vector references, placement
@@ -238,7 +238,7 @@ This is the maintained inventory of what the compiler does today:
   `armv8.1-a` and hardware division at `armv7-m`, each executed at both
   levels, the last on QEMU's Cortex-M3.
 - **Code generation.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all three targets;
+  whatever the build directory, environment or order, on all four targets;
   the hosted linked image is not claimed. Compact numeric-array loops,
   explicit `layout(optimal)` placement and optional evidence-proved
   specialization are independent switches.
@@ -253,8 +253,8 @@ This is the maintained inventory of what the compiler does today:
   emulators, each against a generated oracle.
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
-arm64 through 0.2.0; the gate runs the corpus on all three targets today,
-natively on both hosts and under QEMU for Cortex-M, with GDB and
+arm64 through 0.2.0; the gate runs the corpus on all four targets today,
+natively on all three hosted targets and under QEMU for Cortex-M, with GDB and
 LLDB. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit.
