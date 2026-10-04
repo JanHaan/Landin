@@ -1,7 +1,7 @@
 class: negative
 summary: a conformance reports a repeated label after distinct entries
 program: main.ldn
-codes: L0301
+codes: L0341
 constructs: 1240
 targets: linux-x86-64, macos-arm64, synthetic-32
 expect: expected.txt

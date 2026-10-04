@@ -1,4 +1,4 @@
-error[L0301]: this conformance label is supplied twice
+error[L0341]: this conformance label is supplied twice
   --> ../tests/fixtures/negative/conformance-duplicate-label/main.ldn:4:50
   |
 4 | i32 is lookup (index: u32, item: i16, other: i8, item: i16)
