@@ -51,15 +51,15 @@ with Landin.Panics;
 --  entry point, so a datum's block is folded here rather than executed.
 --  Checking has already folded with target facts to validate the value;
 --  this backend folds the verified scalar datum instructions into its image.
---  What comes out is an object at its own alignment, in one of two sections,
---  and the value decides which rather than the type: one whose fold gives
---  a value other than zero is written into `.data`, and one that is all zero
---  is reserved in `.bss`, where it costs no bytes in the object or the image.
---  A binding with no
---  value holds zero, which D10 settled, so it is reserved; so is a fold that
---  reaches zero, and so is [0670]'s module state, which has no other value it
---  could hold.  A routine reaches one by name, RIP-relative, rather than
---  through a frame cell.
+--  What comes out is an
+--  object at its own alignment.  Read-only images go in `.rodata`; writable
+--  images go in `.data`, including aggregate and array images whose bytes
+--  are all zero.  An absent zero image is reserved in `.bss`, where it costs
+--  no bytes in the object or the image.  A binding with no value holds zero,
+--  which D10 settled, so it is reserved; so are scalar folds that reach zero,
+--  aggregates and arrays with omitted or whole-`zeroed` initializers, and
+--  [0670]'s module state, which has no other value it could hold.  A routine
+--  reaches one by name, RIP-relative, rather than through a frame cell.
 --
 --  Every opcode `Landin.IR` spells is emitted, so the case that dispatches
 --  them is exhaustive rather than ending in a defect: a new opcode fails to
