@@ -1955,22 +1955,6 @@ package body Landin.Driver is
                "a rooted module request needs exactly one entry directory");
          end if;
 
-         --  Informational actions and invalid requests wait for every
-         --  command-line diagnostic, then return before reading sources.
-         if Wants_Usage or else Wants_Identity or else Bad_Use then
-            if Bad_Use or else Landin.Stages.Failed (Context) then
-               Result.Report := Unbounded.To_Unbounded_String
-                 (Landin.Stages.Rendered_Report (Context));
-               Keep_Report;
-               Result.Status :=
-                 (if Bad_Use then Status_Misuse else Status_Reported);
-            else
-               Result.Output := Unbounded.To_Unbounded_String
-                 (if Wants_Usage then Usage else Identity);
-            end if;
-            return Result;
-         end if;
-
          --  Target facts and emission options are known before any source
          --  is loaded.  A source error must not hide an incompatible request.
          if Emit /= Emit_Nothing and then Rejected.Is_Empty then
@@ -2033,6 +2017,22 @@ package body Landin.Driver is
             Keep_Report;
             Result.Status :=
               (if Bad_Use then Status_Misuse else Status_Reported);
+            return Result;
+         end if;
+
+         --  Informational actions and invalid requests wait for every
+         --  command-line diagnostic, then return before reading sources.
+         if Wants_Usage or else Wants_Identity or else Bad_Use then
+            if Bad_Use or else Landin.Stages.Failed (Context) then
+               Result.Report := Unbounded.To_Unbounded_String
+                 (Landin.Stages.Rendered_Report (Context));
+               Keep_Report;
+               Result.Status :=
+                 (if Bad_Use then Status_Misuse else Status_Reported);
+            else
+               Result.Output := Unbounded.To_Unbounded_String
+                 (if Wants_Usage then Usage else Identity);
+            end if;
             return Result;
          end if;
 
