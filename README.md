@@ -95,7 +95,8 @@ document, binding and editor-grammar checks. On a failed Cortex-M job, it is
 configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. `.github/workflows/determinism.yml` checks that every host emits the
-same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>;
+same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>
+when a site input changes on `main` or when dispatched manually;
 neither runs a compiler test.
 `environments/native-ci/README.md` describes the retired arrangement. To
 render:

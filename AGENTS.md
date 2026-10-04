@@ -126,9 +126,10 @@ On a failed Cortex-M job, it is configured to upload diagnostic output if
 that output exists; uploaded artifacts are retained for 14 days. It is a
 safety net over every target.
 
-Three more workflows run on a push. `determinism.yml` requires every host in
-its matrix to emit the same bytes; it emits and hashes but never assembles,
-links or runs. `pages.yml` publishes <https://www.701.dev>. `links.yml`
+Three more workflows run on pushes matching their triggers. `determinism.yml`
+requires every host in its matrix to emit the same bytes; it emits and hashes
+but never assembles, links or runs. `pages.yml` publishes <https://www.701.dev>
+when a site input changes on `main`, or when dispatched manually. `links.yml`
 checks every link in every document, weekly and whenever a document changes.
 `release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
 assets that `nix build .#refine-bin` consumes.

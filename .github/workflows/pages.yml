@@ -16,6 +16,49 @@ name: pages
 on:
   push:
     branches: [main]
+    # Keep this list in step with render_html.py's DOCS/GUIDES and its
+    # other source reads (including llms.py and the examples' fixture metadata).
+    paths:
+      - '.github/workflows/pages.yml'
+      - 'spec.md'
+      - 'tour.md'
+      - 'prototype-1-driver.md'
+      - 'prototype-2-parser.md'
+      - 'prototype-3-containers.md'
+      - 'prototype-4-app.md'
+      - 'docs/documents.md'
+      - 'examples.md'
+      - 'README.md'
+      - 'ROADMAP.md'
+      - 'handoff.md'
+      - 'compiler/ada/README.md'
+      - 'core/README.md'
+      - 'devices/README.md'
+      - 'compiler/tests/driver/DERIVATION.md'
+      - 'docs/diagnostics.md'
+      - 'docs/format.md'
+      - 'docs/server.md'
+      - 'docs/ir.md'
+      - 'docs/targets.md'
+      - 'compiler/ada/TOOLCHAIN.md'
+      - 'docs/environments.md'
+      - 'environments/cortex-m/README.md'
+      - 'environments/native-ci/README.md'
+      - 'docs/process.md'
+      - 'highlight/README.md'
+      - 'compiler/tests/README.md'
+      - 'compiler/tests/registers.md'
+      - 'compiler/tests/harness-cases/README.md'
+      - 'docs/site/*.py'
+      - 'highlight/landin_highlight.py'
+      - 'assets/*.py'
+      - 'assets/icon.svg'
+      - 'assets/fonts/**'
+      - 'compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads'
+      - 'compiler/ada/src/diagnostics/landin-diagnostics-checking.ads'
+      - 'compiler/tests/diagnostics.catalogue'
+      - 'compiler/tests/fixtures/runtime/*/fixture.meta'
+      - 'compiler/tests/fixtures/runtime/sensors/*.ldn'
   workflow_dispatch:
 
 #  Only the deploy job publishes, so only it holds the pages and identity

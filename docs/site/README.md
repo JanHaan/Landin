@@ -60,8 +60,9 @@ absorb silently, losing structure that no word count could miss.
 ./scripts/site.sh              # render, verify, package
 ```
 
-`.github/workflows/pages.yml` publishes on every push to main. It renders with
-the same `--verify` pass, fetches the licensed code face from object storage
+`.github/workflows/pages.yml` publishes when a site input changes on `main`,
+or when dispatched manually. It renders with the same `--verify` pass, fetches
+the licensed code face from object storage
 because that face is not in this repository, writes the `www.701.dev` CNAME and
 deploys to GitHub Pages. It is not a gate and runs no compiler test.
 `scripts/site.sh` renders and packages and does not publish; the `--publish`
@@ -70,8 +71,8 @@ acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.
 Publication is [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)
-and nothing else. It runs on every push to `main`, renders with the same
-`--verify` pass, writes the `www.701.dev` CNAME and deploys to GitHub Pages.
+and nothing else. It runs on site input changes pushed to `main`, renders with
+the same `--verify` pass, writes the `www.701.dev` CNAME and deploys to GitHub Pages.
 Its `concurrency` group serializes publications and never cancels one in
 flight, because a cancelled deploy can leave the site half-replaced.
 

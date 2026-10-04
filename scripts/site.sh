@@ -8,8 +8,9 @@
 #
 #  This renders and packages; it does not publish.  Publication is
 #  .github/workflows/pages.yml, which deploys www.701.dev from GitHub
-#  Pages on every push to main.  The --publish option that uploaded to
-#  pages.sr.ht went with the SourceHut gate: its approval guard cannot
+#  Pages when a site input changes on main, or on manual dispatch. The
+#  --publish option that uploaded to pages.sr.ht went with the SourceHut
+#  gate: its approval guard cannot
 #  pass a revision no gate accepted, so from 0.2.0 it could only refuse.
 #
 #  Usage: scripts/site.sh
