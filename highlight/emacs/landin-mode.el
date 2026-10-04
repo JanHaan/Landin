@@ -18,7 +18,7 @@
     "fail" "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is"
     "layout" "lenof" "link" "little" "loop" "match" "mut" "not" "of" "option"
     "or" "ptr" "public" "range" "register" "return" "set" "sink"
-    "sizeof" "soa" "struct" "then" "try" "type" "unchecked" "undo"
+    "sizeof" "soa" "struct" "then" "try" "type" "unchecked" "undo" "uninit"
     "variant" "volatile" "when" "while" "with"))
 
 (defconst landin-mode-types
@@ -31,7 +31,7 @@
 
 (defgroup landin nil "Editing Landin source." :group 'languages)
 
-(defcustom landin-treesit-revision "a26f18b891379a68e31e5a87ac5b813cdfa8a943"
+(defcustom landin-treesit-revision "22e994a35c92d4a0b52fb64fcab27e6792a5e331"
   "Git revision used by `landin-ts-install-grammar'."
   :type 'string
   :group 'landin)
@@ -115,6 +115,7 @@
                  :language 'landin :feature 'constant
                  '((boolean_literal) @font-lock-constant-face
                    (zeroed_literal) @font-lock-constant-face
+                   (uninit_literal) @font-lock-constant-face
                    (integer_literal) @font-lock-number-face)))
     (treesit-major-mode-setup)))
 

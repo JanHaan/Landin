@@ -10,7 +10,7 @@ bad: () -> none =
     mut logger: any diag.log = any(addr collected)
     message: [1]u8 = [65]
     logger.note(text.first(message[0..<1]), diag.error, message[0..<1])
-      else (problem)
+        else (problem)
         _ = problem
     end
     retain(message[0..<1])

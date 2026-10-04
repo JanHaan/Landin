@@ -31,18 +31,18 @@ check_position_writes: () -> (ok: bool) =
     mut stream := diag.to(addr world, addr destination)
     logger: any diag.log = any(addr stream)
     logger.note(text.at(message_a[0..<2], 0), diag.warning, "A")
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
     logger.note(text.at(message_b[0..<2], 1234567890), diag.error, "B")
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
     largest: usize = 0 -% 1
     logger.note(text.at(message_c[0..<2], largest), diag.warning, "C")
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
@@ -67,6 +67,39 @@ emit_frame_note: (inout logger: any diag.log) -> none ! io.io_failed =
     message[0] = 90
 end emit_frame_note
 
+--  The owned-message boundary is exact: oversized errors are counted but
+--  not truncated, and the full fitting message survives source mutation.
+owned_message_limits: () -> (ok: bool) =
+    ok = false
+    mut notes := diag.new_log(capacity: 1)
+    limit_log: any diag.log = any(addr notes)
+    mut bytes: [257]u8 = zeroed
+    limit_log.note(text.first(bytes[0..<257]), diag.error, bytes[0..<257])
+        else (problem)
+        _ = problem
+        return
+    end
+    return when diag.stored(addr notes) <> 0
+      or diag.dropped(addr notes) <> 1 or not limit_log.failed()
+    bytes[255] = 201
+    limit_log.note(text.first(bytes[0..<256]), diag.warning, bytes[0..<256])
+        else (problem)
+        _ = problem
+        return
+    end
+    bytes[255] = 0
+    saved := diag.note_at(addr notes, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    tail: u8 = diag.message_byte(saved, usize(255)) else (problem)
+        _ = problem
+        return
+    end
+    ok = diag.stored(addr notes) == 1 and diag.dropped(addr notes) == 1
+         and diag.message_length(saved) == diag.message_capacity and tail == 201
+end owned_message_limits
+
 public main: () -> (code: i32) =
     code = 1
 
@@ -82,7 +115,7 @@ public main: () -> (code: i32) =
     third_index: usize = 2
     immutable_notes: diag.bounded(3) = collected
     immutable_note := diag.note_at(addr immutable_notes, second_index)
-      else (missing_immutable)
+        else (missing_immutable)
         _ = missing_immutable
         return
     end
@@ -106,17 +139,17 @@ public main: () -> (code: i32) =
         return
     end
     first_byte: u8 = diag.message_byte(first_note, first_index)
-      else (missing_first_byte)
+        else (missing_first_byte)
         _ = missing_first_byte
         return
     end
     second_byte: u8 = diag.message_byte(second_note, first_index)
-      else (missing_second_byte)
+        else (missing_second_byte)
         _ = missing_second_byte
         return
     end
     third_byte: u8 = diag.message_byte(third_note, first_index)
-      else (missing_third_byte)
+        else (missing_third_byte)
         _ = missing_third_byte
         return
     end
@@ -153,6 +186,9 @@ public main: () -> (code: i32) =
     if not check_position_writes() then
         return
     end if
+    if not owned_message_limits() then
+        return
+    end if
 
     emit_frame_note(streaming_log) else (unexpected_frame_stream_failure)
         _ = unexpected_frame_stream_failure
@@ -165,12 +201,12 @@ public main: () -> (code: i32) =
         _ = unexpected_frame_copy_failure
         return
     end
-    copied_note := diag.note_at(copied, usize(0)) else (missing_copied_note)
+    copied_note := diag.note_at(addr copied, usize(0)) else (missing_copied_note)
         _ = missing_copied_note
         return
     end
     copied_byte: u8 = diag.message_byte(copied_note, usize(0))
-      else (missing_copied_byte)
+        else (missing_copied_byte)
         _ = missing_copied_byte
         return
     end
@@ -180,7 +216,7 @@ public main: () -> (code: i32) =
         _ = unexpected_long_failure
         return
     end
-    if diag.stored(copied) <> 1 or diag.dropped(copied) <> 1
+    if diag.stored(addr copied) <> 1 or diag.dropped(addr copied) <> 1
       or not copied_log.failed() or copied_byte <> 68
     then
         return
@@ -201,7 +237,7 @@ public main: () -> (code: i32) =
     first_argument: usize = 0
     argument_source: ptr hosted.system = addr host
     path := io.argument_at(argument_source, first_argument)
-      else (argument_failure)
+        else (argument_failure)
         _ = argument_failure
         return
     end
@@ -219,8 +255,8 @@ public main: () -> (code: i32) =
     mut broken_log: any diag.log = any(addr broken)
     broken_log.note(text.first(message_a[0..<2]), diag.error,
                     message_a[0..<2])
-      else begin
-        code = 42
-        return
-    end
+        else begin
+            code = 42
+            return
+        end
 end main

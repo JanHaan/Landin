@@ -80,7 +80,7 @@ byte_release_case: () -> (ok: bool) =
     end
     mem.clear(storage)
     empty: bool = mem.initialized(storage) == 0
-      and mem.capacity(storage) == slots
+                  and mem.capacity(storage) == slots
     released_address: usize = begin
         released: ptr mut u8 = mem.dispose(storage) else (problem)
             _ = problem
@@ -94,7 +94,7 @@ byte_release_case: () -> (ok: bool) =
         is_absent(absent)
     end
     ok = before == 3 and refused and empty
-      and released_address == usize(start) and again
+         and released_address == usize(start) and again
 end byte_release_case
 
 public main: () -> (code: i32) =
@@ -136,7 +136,7 @@ public main: () -> (code: i32) =
         b := mem.bytes(bigger)
         c := mem.bytes(other)
         mut good: bool = lenof a == 1 and lenof b == 4096
-                          and lenof c == 1
+                         and lenof c == 1
         mut i: usize = 0
         while i < lenof b do
             good = good and b[i] == 0
@@ -148,7 +148,7 @@ public main: () -> (code: i32) =
         b[4095] = 31
         c[0] = 37
         good and a[0] == 17 and b[0] == 23 and b[4095] == 31
-          and c[0] == 37
+        and c[0] == 37
     end
     mut overflow: bool = false
     mut huge := mem.new_bytes(state, maximum) else (problem)
