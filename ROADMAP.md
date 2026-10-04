@@ -40,6 +40,11 @@ and `handoff.md` carry, because an item is finished long before the text
 that cites it is, and a citation that outlives its item is a question nobody
 can answer. `check.py` refuses such a citation anywhere else.
 
+`README.md` maintains the current compiler capability inventory. `handoff.md`
+and `AGENTS.md` point to it instead of maintaining parallel inventories;
+the `Done:` paragraphs here record completion evidence, not a second
+current-capability summary.
+
 ## Mechanics
 
 Phases are `R8`, `R9` and onward, in order, and each ends in one gate. Work

@@ -192,12 +192,9 @@ quick fixes from the compiler's own stages, as
 [`docs/server.md`](docs/server.md) describes, and the packages under
 `highlight/` start it.
 
-## What comes next
+## Current compiler capabilities
 
-Implementation proceeds in executable vertical slices rather than waiting for
-every design foundation to be settled in advance. The compiler builds on Linux
-x86-64 and macOS arm64, and the pinned container remains available for
-explicit environment troubleshooting. What it does today, by capability:
+This is the maintained inventory of what the compiler does today:
 
 - **The language.** Functions, aggregates and variants, block-valued control
   flow, lexical `defer` and failure-only `undo`, declared errors, every loop
@@ -274,6 +271,12 @@ size/auto by default; `--optimize=none --specialize=off` selects the reference,
 and `--build-report=PATH` requests deterministic off-target JSON. Build mode
 remains independent. `./scripts/quality.sh` measures the objects a built
 compiler produces.
+
+## What comes next
+
+Implementation proceeds in executable vertical slices rather than waiting for
+every design foundation to be settled in advance. The pinned container remains
+available for explicit environment troubleshooting.
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.
