@@ -61,7 +61,7 @@ end pop_list
 
 public push: (item: type is zeroable, fixed inline_slots: u32,
               provider: type is mem.allocator,
-              inout value: small(item, inline_slots),
+              escaping inout value: small(item, inline_slots),
               inout state: provider, escaping added: item)
              -> none ! mem.out_of_memory =
     if value.storage.spilled then
@@ -83,7 +83,8 @@ public push: (item: type is zeroable, fixed inline_slots: u32,
     while at < value.storage.count do
         --  Only the prefix has an item image. Reserve established room for
         --  every one of these pushes without another allocation.
-        try vec.push(fresh, state, value.storage.inline_values[at])
+        copied: item = value.storage.inline_values[at]
+        try vec.push(fresh, state, copied)
         inc at
     end while
     try vec.push(fresh, state, added)

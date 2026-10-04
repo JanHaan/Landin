@@ -3259,22 +3259,25 @@ release, makes no allocator call. These rules preserve the raw initialized
 prefix and publication order rather than exposing spare capacity as a slice.
 
 `core/small.small(t, capacity)` is the corresponding inline-capacity shape, with the
-written `t is zeroable` constraint [0550]. Its inline arm contains an honest
-initialized `[capacity]t`; a pointer item is therefore rejected even though
-`core/vec` accepts one. The spilled arm owns a `core/vec.list(t)`. A first
-spill allocates that list privately, copies the complete used inline prefix,
-admits the new value, and changes the variant arm only after all fallible work
-succeeds. Later growth is exactly `core/vec` growth. Zero inline capacity uses
-eight as its first nonzero capacity; otherwise first spill doubles `capacity` after a
-checked `usize` bound. Failed first spill or later growth leaves the active arm,
-length, capacity and initialized values unchanged.
+written `t is zeroable` constraint [0550]; a pointer item is therefore rejected
+even though `core/vec` accepts one. Its public wrapper contains private storage:
+an `[capacity]t` array whose unused slots have no readable item image, a count
+for its initialized prefix, a separate `core/vec.list(t)` spill descriptor, and
+a `spilled` flag. A first spill reserves a fresh list, copies the used inline
+prefix through an `escaping inout` container parameter, admits the new value,
+then publishes the descriptor and flag. Later growth uses `core/vec` growth.
+Zero inline capacity uses eight as its first nonzero capacity; otherwise first
+spill doubles `capacity` after a checked `usize` bound. Failed first spill or
+later growth leaves the published storage, length, capacity and initialized
+values unchanged.
 
 `small.used` takes the container `inout` and returns its initialized writable
-prefix `from` that place, whether the active arm is inline or spilled. The
+prefix `from` that place, whether storage is inline or spilled. The
 ordinary live-view rule [0830] consequently blocks spill and release until the
 view's last use. `pop` removes the tail without moving a spilled allocation;
 `release` frees an owned spilled extent exactly once and restores the empty
-inline arm. This is still [0860]'s shallow local guarantee: storing references
+inline state by resetting metadata, without clearing the array. This is still
+[0860]'s shallow local guarantee: storing references
 through some other alias would not establish whole-program escape safety.
 
 The two `core/mem` arena providers align the absolute returned address, not

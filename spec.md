@@ -15281,6 +15281,9 @@ Its explicit `uninit` inline array has a readable prefix bounded by `count`;
 its separate `core/vec.list(item)` descriptor owns spilled storage and reuses
 that list's transactional growth. The written `zeroable` constraint remains
 on the public alias and operations, but no longer causes eager inline clearing.
+`small.push` declares its `inout` container `escaping` so an aggregate copied
+from the initialized inline prefix may be retained in the fresh list during
+first spill; a plain non-escaping `inout` source is refused by L0314.
 Pop and release shorten the readable prefix without clearing unused slots;
 release disposes a spill and resets only metadata. Ordinary traversal and
 sorting use `vec.used`;
