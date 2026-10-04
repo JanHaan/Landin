@@ -2,13 +2,12 @@
 """Mutate the corpus and drive `refine lsp` with it, and keep what breaks it.
 
 Every positive, negative, runtime and ABI fixture directory with exactly one
-direct `.ldn` file, and every reproducer in `reproducers/`, is a seed.  Each
+direct `.ldn` file, and every reproducer in `reproducers/`, is a seed. Each
 mutant is one of seven mutations of one seed, chosen by a splitmix64 generator
 from its own seed number, so a seed number names one mutant on every host and
-every Python.
-The server is given each mutant as an editor would: the seed's source is
-opened, changed to the mutant, and then asked for hover, a definition,
-formatting and code actions at positions the same generator picks.
+every Python. The seed's file is opened under the repository root, changed
+to the mutant, and asked for hover, a definition, formatting and code actions
+at positions the same generator picks.
 
 A mutant is a hit when the server stops, or does not answer within the
 per-response bound, or answers a request with anything but a result or
@@ -40,6 +39,7 @@ import time
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE.parent / "fixtures"
+ROOT = HERE.parents[2]
 MASK = (1 << 64) - 1
 
 KEYWORDS = ("end begin match if then else elsif while do loop for in break "
@@ -109,7 +109,7 @@ def mutate(seed, text):
 
 
 def seeds():
-    """(label, text) for every seed source, in a fixed order.
+    """(label, path, text) for every seed source, in a fixed order.
 
     An editor holds text, not bytes, so a byte that is not UTF-8 is read as
     it would show one: U+FFFD.  The scanner's own byte checks are the
@@ -119,11 +119,11 @@ def seeds():
         for directory in sorted((FIXTURES / kind).iterdir()):
             sources = sorted(directory.glob("*.ldn"))
             if len(sources) == 1:
-                found.append((kind + "/" + directory.name,
+                found.append((kind + "/" + directory.name, sources[0],
                               sources[0].read_bytes().decode(
                                   "utf-8", "replace")))
     for path in sorted((HERE / "reproducers").glob("*.ldn")):
-        found.append(("reproducers/" + path.name,
+        found.append(("reproducers/" + path.name, path,
                       path.read_bytes().decode("utf-8", "replace")))
     return found
 
@@ -155,8 +155,11 @@ class Server:
         self.log = b""
         self.stderr_open = True
         self.transcript = []
+        self.diagnostics = []
         self.next_id = 1
-        self.request("initialize", {"capabilities": {}})
+        self.request("initialize", {"capabilities": {},
+                                    "initializationOptions": {
+                                        "roots": [ROOT.as_uri()]}})
         self.notify("initialized", {})
 
     def send(self, message):
@@ -220,6 +223,8 @@ class Server:
             if message.get("method") == "window/showMessage" and \
                     "defect" in message.get("params", {}).get("message", ""):
                 raise Broken("the server reported a defect")
+            if message.get("method") == "textDocument/publishDiagnostics":
+                self.diagnostics.append(message["params"])
             if "id" not in message:
                 continue
             if message["id"] != number:
@@ -286,9 +291,9 @@ def position(pick, text):
     return {"line": line, "character": pick.below(len(lines[line]) + 2)}
 
 
-def serve_one(server, seed, original, mutant):
+def serve_one(server, seed, path, original, mutant):
     """Give the server one mutant as an editor would."""
-    uri = "file:///fuzz/m%d/case.ldn" % seed
+    uri = path.as_uri()
     pick = Generator(seed ^ 0x5DEECE66D)
     server.notify("textDocument/didOpen", {"textDocument": {
         "uri": uri, "languageId": "landin", "version": 1, "text": original}})
@@ -308,6 +313,29 @@ def serve_one(server, seed, original, mutant):
         "range": {"start": start, "end": start},
         "context": {"diagnostics": []}})
     server.notify("textDocument/didClose", {"textDocument": document})
+
+
+def check_imports(server):
+    """Prove that rooted analysis reaches checking through fixture imports."""
+    path = (FIXTURES / "negative/core-failing-needs-mutable-inner/main.ldn")
+    uri = path.as_uri()
+    server.diagnostics.clear()
+    server.notify("textDocument/didOpen", {"textDocument": {
+        "uri": uri, "languageId": "landin", "version": 1,
+        "text": path.read_text(encoding="utf-8")}})
+    try:
+        # A response follows the diagnostics published for the open.
+        server.request("textDocument/hover", {
+            "textDocument": {"uri": uri},
+            "position": {"line": 9, "character": 48}})
+        if not any(report.get("uri") == uri and any(
+                diagnostic.get("code") == "L0340" and
+                diagnostic.get("range", {}).get("start", {}).get("line") == 9
+                for diagnostic in report.get("diagnostics", []))
+                for report in server.diagnostics):
+            raise Broken("import check did not reach L0340 at line 10")
+    finally:
+        server.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 
 
 def batch_one(refine, seconds, mutant):
@@ -354,7 +382,7 @@ def main():
             return batch_one(refine, arguments.seconds, text)
         server = Server(refine, arguments.memory, arguments.seconds)
         try:
-            serve_one(server, 0, text, text)
+            serve_one(server, 0, Path(arguments.reduce).resolve(), text, text)
             problem = ""
         except Broken as broken:
             problem = str(broken)
@@ -398,7 +426,20 @@ def main():
         print("HIT seed=%d src=%s :: %s" % (seed, label, problem),
               flush=True)
 
-    for label, original in seeds():
+    if not arguments.batch:
+        server = Server(refine, arguments.memory, arguments.seconds)
+        try:
+            check_imports(server)
+        except Broken as problem:
+            print("import check failed: %s" % problem, file=sys.stderr)
+            server.stop()
+            return 1
+        stopped = server.stop()
+        if stopped:
+            print("import check failed: %s" % stopped, file=sys.stderr)
+            return 1
+        server = None
+    for label, path, original in seeds():
         for _ in range(arguments.rounds):
             seed = arguments.seed + total
             total += 1
@@ -418,7 +459,7 @@ def main():
                                     arguments.seconds)
                     last = None
                 try:
-                    serve_one(server, seed, original, mutant)
+                    serve_one(server, seed, path, original, mutant)
                 except Broken as broken:
                     problem = str(broken)
                 transcript = server.transcript

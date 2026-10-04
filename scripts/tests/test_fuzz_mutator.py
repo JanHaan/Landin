@@ -47,7 +47,7 @@ class Mutator(unittest.TestCase):
 
     def test_the_seeds_are_the_corpus_and_the_reproducers(self):
         seeds = fuzz.seeds()
-        labels = [label for label, _ in seeds]
+        labels = [label for label, _, _ in seeds]
         self.assertEqual(len(labels), len(set(labels)))
         fixtures = ROOT / "compiler/tests/fixtures"
         for kind in ("positive", "negative", "runtime", "abi"):
@@ -61,7 +61,9 @@ class Mutator(unittest.TestCase):
             len(list((ROOT / "compiler/tests/fuzz/reproducers")
                      .glob("*.ldn"))))
         self.assertGreater(len(seeds), 1000)
-        for _, text in seeds:
+        for label, path, text in seeds:
+            self.assertTrue(path.is_file(), label)
+            self.assertTrue(path.is_relative_to(ROOT), label)
             text.encode("utf-8")
 
     def test_discovery_uses_one_direct_source_per_fixture(self):

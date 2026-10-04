@@ -501,9 +501,10 @@ run in the test program and through the executable on Linux and macOS; the
 memory suite runs eight sessions of twenty edits and stays flat.
 `compiler/tests/fuzz/fuzz.py` gives the single direct source from every
 one-source positive, negative, runtime and ABI fixture directory, plus every
-reproducer, mutated, to the server in the gate. This is source-text crash
-coverage, including sources that depend on imports or C companions; the lane
-does not execute those fixtures. Its first run found a
+reproducer, mutated, to the server at its real file URI with the checkout as
+import root. An unchanged imported fixture must report its expected checker
+diagnostic before the mutants run. This is source-text crash coverage; the
+lane does not execute the fixtures or their C companions. Its first run found a
 query of a module refused before the checker raising, which is fixed and
 pinned. Neovim, Helix, Emacs, Zed, VS Code, Vim, Sublime Text and Kate
 start the server, and Neovim and Emacs were run against it.
@@ -1008,7 +1009,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin stack homes have no register allocation. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
 | R551-15 | Scale and self-hosting | Nix provides a development shell and a flake built by hand, not cached derivations or CI. | An explicit decision to revisit Nix CI. | Builders, SDK identity, debugger permissions and cache provenance accounted for. | limit |
 | R551-16 | Scale and self-hosting | Large nested stage procedures, duplicate construction helpers and unused interfaces such as `Needs_Source` remain. | Replacing or splitting the affected stage, or a change it obstructs. | Refactoring behind existing seams with strict warnings, removing only demonstrated dead interfaces. | open |
-| R551-19 | Release readiness | No mutation coverage of the driver's options, targets other than the default, several files resolved as one module, or emission, linking and running of the mutants that are accepted. The frontend has source-text crash coverage: R10.50's `compiler/tests/fuzz/fuzz.py` drives the sole direct `.ldn` source of each positive, negative, runtime and ABI fixture directory, plus every reproducer, mutated with a fixed seed, through `refine lsp` in the gate, bounded per response and in memory. Imported files and C companions are not part of those server documents. | Before robustness or production claims. | Fixed seeds, bounded resources, stage and target reach, crash classes and minimal reproducers, for the driver and the backends as the frontend has them. | open |
+| R551-19 | Release readiness | No mutation coverage of the driver's options, targets other than the default, several editor documents resolved as one module, or emission, linking and running of the mutants that are accepted. The frontend has source-text crash coverage: R10.50's `compiler/tests/fuzz/fuzz.py` drives the sole direct `.ldn` source of each positive, negative, runtime and ABI fixture directory, plus every reproducer, mutated with a fixed seed, through `refine lsp` with rooted imports and an imported-fixture diagnostic check, bounded per response and in memory. C companions are not executed. | Before robustness or production claims. | Fixed seeds, bounded resources, stage and target reach, crash classes and minimal reproducers, for the driver and the backends as the frontend has them. | open |
 | R551-20 | Release readiness | Fake-host failure controls do not establish native device, capture or exhaustion failure paths. | Before claiming those native failure guarantees. | Controlled fault injection with cleanup and diagnostic oracles on each host. | open |
 | R551-22 | Release readiness | The code face was removed from all history and the acceptance tags re-issued; only the vendored Nunito Sans remains. Its redistribution, which the pages depend on, is not settled. | Before distribution, or a font policy change. | A distribution decision keeping the private-font boundary. | open |
 | R551-25 | Language evolution | Source-debug CFI is not a promise of foreign-exception unwinding. | An explicit proposal for runtime foreign unwinding. | Semantic, ABI and failure decisions, then native evidence. | limit |

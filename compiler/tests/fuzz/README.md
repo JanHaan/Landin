@@ -14,12 +14,12 @@ nix develop -c compiler/tests/fuzz/fuzz.py \
 
 The seeds are every positive, negative, runtime and ABI fixture directory
 with exactly one direct `.ldn` file, in class and directory order, then every
-reproducer below: 1,971 today (269 positive, 1,137 negative, 520 runtime,
-33 ABI and 12 reproducers). The seed is the source text, including for
-target-specific or rooted fixtures and ABI fixtures with C companions. The
-server sees that one document; it does not run the fixture or load its
-companions as a module. Multi-source fixture directories are excluded, and
-the discovery test checks this boundary for every class. Each seed is
+reproducer below. The seed is the source text, including for target-specific
+or rooted fixtures and ABI fixtures with C companions. The server sees one
+editor document at its real file URI and loads reachable imports using the
+checkout root. It does not execute the fixture or its C companions.
+Multi-source fixture directories are excluded, and the discovery test checks
+this boundary for every class. Each seed is
 mutated `--rounds` times, one mutant per seed number, counting up from
 `--seed`. A mutation is one of seven kinds: truncate the file, delete a
 line, duplicate a line, replace a word with a keyword, insert punctuation or
@@ -30,8 +30,13 @@ fixture tree; `scripts/tests/test_fuzz_mutator.py` holds the generator to
 splitmix64's published outputs and each kind to the bytes it makes. A source
 is read as an editor shows it, a byte that is not UTF-8 as U+FFFD.
 
-One server serves fifty mutants, each its own document. Each is opened as
-its seed's source, changed to the mutant, then asked for a hover, a
+The server is initialized with the checkout as its import root. Before the
+mutants, the driver opens `negative/core-failing-needs-mutable-inner` unchanged
+and requires its L0340 diagnostic at line 10. That diagnostic comes after
+`core/failing` and `core/heap` resolve; a run that loses imports fails here.
+
+One server serves fifty mutants, each its own document. Each is opened at
+its seed's real file URI, changed to the mutant, then asked for a hover, a
 definition, formatting and code actions at positions the seed picks, and
 closed. A mutant is a hit when the server stops, does not answer within
 `--seconds` (default 10), answers a request with anything but a result or a
@@ -91,27 +96,26 @@ not a second copy of those tests:
 
 | reproducer | mutated fixture | exit | codes |
 | --- | --- | --- | --- |
-| `min-100299.ldn` | `negative/caller-parameter-read-only` | 1 | L0301, L0303 |
+| `min-100299.ldn` | `negative/caller-parameter-read-only` | 1 | L0340, L0303 |
 | `min-100930.ldn` | `negative/function-field-unassigned` | 1 | L0201, L0302 |
-| `min-102470.ldn` | `negative/r440-origin-guarded-fail-value` | 1 | L0201, L0301 |
+| `min-102470.ldn` | `negative/r440-origin-guarded-fail-value` | 1 | L0201, L0340 |
 | `min-103330.ldn` | `negative/r640-zero-field` | 1 | L0201, L0302 |
-| `min-103712.ldn` | `negative/struct-array-field-element-zeroed-immutable` | 1 | L0301, L0303 |
+| `min-103712.ldn` | `negative/struct-array-field-element-zeroed-immutable` | 1 | L0340, L0303 |
 | `min-103790.ldn` | `negative/struct-array-field-repetition-element-mismatch` | 1 | L0201 |
-| `min-104991.ldn` | `positive/r440-origin-forwarding-positions` | 1 | L0302, L0201, L0301, L0316 |
+| `min-104991.ldn` | `positive/r440-origin-forwarding-positions` | 1 | L0302, L0201, L0340, L0316 |
 | `min-201739.ldn` | `negative/immutable-struct-field` | 1 | L0201, L0303 |
 | `min-205764.ldn` | `negative/struct-copy-across-types` | 1 | L0201 |
-| `min-207488.ldn` | `positive/r440-origin-untaken-cleanups` | 1 | L0201, L0301 |
-| `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0301 |
+| `min-207488.ldn` | `positive/r440-origin-untaken-cleanups` | 1 | L0201, L0340 |
+| `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0340 |
 | `min-207836.ldn` | `positive/struct-array-field-element-zeroed` | 1 | L0201, L0302 |
 
 ## What it is not
 
 The gate's lane drives the frontend through the server, one file per
-document, with the default target. A runtime or ABI seed tests the server's
-handling of that source text; it does not check the fixture's runtime or ABI
-behavior. Rooted imports and C companions are not assembled into the
-document's module. It does not cover the driver's options,
-a target other than the default, several files resolved as one module, or
+document and its reachable imports, with the default target. A runtime or
+ABI seed tests the server's handling of that source text, not runtime or ABI
+behavior. It does not cover the driver's options, a target other than the
+default, several editor documents resolved as one module, or
 emission, linking and running the mutants that are accepted. Its oracle is
 "does not crash", not "gives the right verdict", and every mutant it makes
 lies within one edit of a fixture. `ROADMAP.md` records what broader
