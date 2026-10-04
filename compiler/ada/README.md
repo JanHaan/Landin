@@ -179,7 +179,7 @@ different responsibilities.
 | `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view, including D185's condition-initializer outer scope and guarded-body binding scope and D186's caller-skipping positional call map | own the resolution table, or a code |
 | `Landin.Stages.Checking` | D247's routine-declaration and struct-field bounds, the type passes, concept and conformance collection, generic interning and instantiation, fixed-expression evaluation, inferred-error fixed points and checking-stage diagnostic order; the full list is under "The four long rows, in full" below | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
 | `Landin.Stages.Folding` | the shared constant folder for checked ordinary expressions in checking and lowering, a generic both stages instantiate with their tables and the few answers only each stage has: how a name reaches its tree, which scalar a conversion targets, a character's value, a float special's bits, and what to do when a module value is worked out from itself; integers and bools fold to their value, floats to their IEEE bit pattern, and an overflow is a distinct outcome from an unknown | report a diagnostic, hold a cycle set of its own, or fold anything the checker has not typed |
-| `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
+| `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, infer a nonliteral condition's value, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
@@ -699,8 +699,9 @@ checking, D143's closed compiler `zeroable` predicate, evidence provider
 finalization and `T.entry` evidence selection, D145--D147 any
 identity/construction/object-safety/permission/dynamic-selection checking,
 D161's contextual read-only byte-literal view, D181's canonical immutable
-hosted-text identities, D182's exact `u32`/`core/text.position` utf8-index
-selection, D183's identity-preserving utf8/utf16 range selection, D184's exact
+hosted-text identities, D259's exact `usize` ordinal and D182's distinct
+`core/text.position` byte-position utf8-index forms, D183's
+identity-preserving utf8/utf16 range selection, D184's exact
 immutable `u32` text-traversal Item, D185's ordinary binding check followed by
 its exact-bool condition requirement, D178/D179's complete collection
 traversal-element shapes and erased concept identity, D180's exact
@@ -725,9 +726,10 @@ D137/L0313 by-value recursion separation, and checking-stage diagnostic order.
 **`Landin.Stages.Lowering`** owns the walk that eagerly maps checker nominal,
 conformance and ready routine-instance identities into deterministic IR order,
 registers D161/D181's width-keyed content-pooled read-only text datums and
-static slice or cstring relocations, lowers D182's utf8 ordinal scan and
-checked direct position access, D183's retained-source UTF-8/UTF-16
-boundary-checked ranges, D184's retained-source UTF-8/UTF-16/cstring scalar
+static slice or cstring relocations, lowers D182's utf8 ordinal scan with
+D259's `usize` counter and D182's checked direct position access, D183's
+retained-source UTF-8/UTF-16 boundary-checked ranges, D184's
+retained-source UTF-8/UTF-16/cstring scalar
 traversal, and D185's stored condition bindings through ordinary
 target-neutral CFG and scalar operations, passes hidden evidence tables,
 builds direct plus used flattened erased tables, lowers selected generic and
@@ -794,7 +796,8 @@ exhaustive `match`, or bare `begin` block can produce a scalar, fixed-array or
 currently enabled aggregate value, or a function value with its recursive
 signature. Explicit fallthrough and return facts make only continuing arms
 fill one consumer-owned neutral join slot; returning arms use the ordinary
-named-result exit, and no condition is believed. A typed binding, assignment
+named-result exit. Written `true` and `false` fix their `if` or `elsif` edges;
+no other condition is believed. A typed binding, assignment
 or return supplies storage directly, while an argument or discard owns a fresh
 shaped temporary. Landin-convention aggregate argument and result contexts
 use that internal convention. D203/D204's separate C signature facts instead

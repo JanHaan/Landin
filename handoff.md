@@ -84,8 +84,9 @@ which makes static generics and runtime dispatch one mechanism seen from
 two sides. The evidence table is the foundation and specialising is an
 optimisation weighed per instantiation against code size. D211 distinguishes
 semantic instantiation from optional dispatch specialization: incoming evidence
-must be proved, hidden evidence/result ABI positions remain, and heterogeneous
-`any` dispatch needs no specialization. Size/auto defaults are independent of
+must be proved, hidden evidence positions selected by the checked instance body
+and hidden result positions remain, and heterogeneous `any` dispatch needs no
+specialization. Size/auto defaults are independent of
 build mode. `unchecked` establishes no optimizer facts. D210 reorders only an
 explicitly optimal struct on a strict padded-size win, and reports remain
 off-target rather than imposing runtime machinery on a 32 KB device.
@@ -228,8 +229,9 @@ assembly for three targets. What it covers, by capability:
   Generics take fixed parameters by compile-time substitution, with fixed
   conditional declarations and per-instance inferred errors. Concepts carry a
   whole-program conformance register and the closed compiler `zeroable`
-  family. One target-neutral evidence order serves hidden evidence arguments,
-  indirect concept calls, shared machine bodies and `any C`'s two-word pair
+  family. One target-neutral evidence order serves hidden evidence arguments
+  selected by each concrete instance body, indirect concept calls, shared
+  machine bodies and `any C`'s two-word pair
   with object-safe dispatch and flattened composed tables. Pointers and slices
   get local origins and borrows, `escaping`, `from` and consume checking.
   Directory modules have file-local import scopes, aliases, selected imports,

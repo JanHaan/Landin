@@ -1,0 +1,7 @@
+image: type (item: type) = layout(packed) struct
+    value: item at 0..7
+end image
+good: image(u8)
+first: image(u64)
+second: image(u64)
+good_again: image(u8)

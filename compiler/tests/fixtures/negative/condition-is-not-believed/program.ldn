@@ -1,5 +1,6 @@
 f: () -> (r: u32) =
-    if true then
+    known: bool = true
+    if known then
         r = 1
     end if
 end f

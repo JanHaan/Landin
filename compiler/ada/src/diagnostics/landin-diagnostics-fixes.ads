@@ -50,6 +50,15 @@ package Landin.Diagnostics.Fixes is
      with Pre => Landin.Source.Length (Word) = 3
                  and then Blanks.First = Word.Last;
 
+   --  Remove a whole line containing an unused local and its effect-free
+   --  literal initializer.  Exact: no reference names the binding and the
+   --  initializer performs no work (D251).
+   function Remove_Unused_Local
+     (Source : Landin.Source.Source_Id;
+      Line   : Landin.Source.Span;
+      Name   : String) return Fix
+     with Pre => Landin.Source.Length (Line) > 0;
+
    --  The `=` at Where, written inside an expression, becomes `==`.
    --  Likely: [0390] says an expression never assigns, so the one thing a
    --  `=` there can mean is a comparison, but the author may instead

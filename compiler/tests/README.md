@@ -540,8 +540,8 @@ held to its `codes`: a positive fixture's emission, and a runtime or ABI
 fixture's compilation, must report exactly those codes in that order, and
 without the key must report nothing, so a warning nobody pinned fails there.
 A negative fixture whose report is only warnings says `status: 0`, since a
-warning never refuses a program; `negative/mut-never-written` is the one that
-does.
+warning never refuses a program; `negative/mut-never-written` and
+`negative/unused-pure-local` both exercise this case.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,

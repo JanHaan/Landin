@@ -1,4 +1,5 @@
 with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Vectors;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
@@ -3404,8 +3405,20 @@ package body Landin.IR.Verifier is
       --  [0630]/[0640]: sets partition one declaration-identity vector.
       --  Validate it before a signature, slot or instruction asks membership.
       declare
+         type Encoding_Run is record
+            First : Natural;
+            Count : Natural;
+         end record;
+         function "<" (Left, Right : Encoding_Run) return Boolean
+           is (Left.First < Right.First);
+         package Encoding_Run_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Encoding_Run);
+         package Encoding_Run_Sorting is new
+           Encoding_Run_Vectors.Generic_Sorting;
+
          Members : Natural := 0;
          Encodings : Natural := 0;
+         Runs : Encoding_Run_Vectors.Vector;
       begin
          for Which in 1 .. Atom_Set_Count (Of_Unit) loop
             declare
@@ -3438,21 +3451,10 @@ package body Landin.IR.Verifier is
                   then
                      return (Kind => Atom_Set_Malformed, others => <>);
                   end if;
-                  for Prior in 1 .. Which - 1 loop
-                     declare
-                        Other : constant Atom_Set_Record :=
-                          Of_Unit.Atom_Sets (Prior);
-                     begin
-                        if Other.Encoding_Bits /= 0
-                          and then Held.Encodings_First
-                            < Other.Encodings_First + Other.Members.Count
-                          and then Other.Encodings_First
-                            < Held.Encodings_First + Held.Members.Count
-                        then
-                           return (Kind => Atom_Set_Malformed, others => <>);
-                        end if;
-                     end;
-                  end loop;
+                  Runs.Append
+                    (Encoding_Run'
+                       (First => Held.Encodings_First,
+                        Count => Held.Members.Count));
                   Encodings := Encodings + Held.Members.Count;
                   for Index in 1 .. Held.Members.Count loop
                      declare
@@ -3503,6 +3505,19 @@ package body Landin.IR.Verifier is
          elsif Encodings /= Natural (Of_Unit.Encodings.Length) then
             return (Kind => Atom_Set_Malformed, others => <>);
          end if;
+         --  Encoding runs may be appended in any set order.  Once sorted,
+         --  adjacency and the total count establish exact coverage.
+         Encoding_Run_Sorting.Sort (Runs);
+         declare
+            Next_First : Natural := 0;
+         begin
+            for Run of Runs loop
+               if Run.First /= Next_First then
+                  return (Kind => Atom_Set_Malformed, others => <>);
+               end if;
+               Next_First := Next_First + Run.Count;
+            end loop;
+         end;
       end;
 
       --  D117's descriptors partition one parameter vector.  Validate the

@@ -1005,7 +1005,7 @@ needs a recoverable `invalid_text` result.
 
 ### [0610] Indexing utf8 by an integer yields the codepoint there
 
-Indexing utf8 by a `u32` yields that codepoint as a `u32`, the type a
+Indexing utf8 by a `usize` yields that codepoint as a `u32`, the type a
 character literal [0250] and a traversal of the text [1320] already give it,
 and is a linear scan by codepoint ordinal. Indexing by the opaque
 `core/text.position` byte offset decodes the codepoint beginning there in
@@ -1277,7 +1277,9 @@ wherever the rest have a zero image.
 A nonzero fill needs at least one omitted field. All omitted fields have the
 same complete type, including array length and reference permission. Its value
 is evaluated once after the named values and copied into each remaining field
-in declaration order. A `zeroed` fill retains each field's own zero-image rule.
+in declaration order. If an unpacked array repetition fills just one remaining
+field, its element is evaluated before the array is written and it can build
+directly in that field. A `zeroed` fill retains each field's own zero-image rule.
 This is not a default value: [0980] refused those on
 declarations, because a new parameter would then fit every
 existing call silently. Here the choice is made at each
@@ -2839,7 +2841,7 @@ indexable: type = concept (t: type, idx: type, item_type: type)
     get: (s: t, i: idx) -> (item: item_type)
 end indexable
 
-utf8 is indexable (idx: u32,      item_type: u32, get: utf8_nth)
+utf8 is indexable (idx: usize,    item_type: u32, get: utf8_nth)
 utf8 is indexable (idx: position, item_type: u32, get: utf8_at_pos)
 
 ```
@@ -2986,18 +2988,26 @@ its automatic specialization uses the size threshold. Identical emitted bodies
 may share only when their complete machine meaning and address identity permit
 it. A smaller body does not authorize changing a C or Landin convention.
 
-The evidence includes target size and alignment as well as functions. The
-bootstrap keeps hidden evidence and aggregate-result ABI positions even where
-a proved entry call becomes direct; specialization is not an ABI-erasure
-promise. `--build-report=PATH` writes factual decisions, retained ABI/fallback,
+The evidence includes target size and alignment as well as functions. A
+checked concrete routine instance keeps hidden evidence positions only for
+tables read by direct constrained member selections in its body. An
+erased-only `any` construction uses a static table and needs no hidden evidence
+position. A proved direct entry call retains the positions selected by that
+body and any aggregate-result position; specialization does not erase a used
+ABI position. `--build-report=PATH` writes factual decisions, retained ABI/fallback,
 layout savings and frame/register/stack-traffic evidence separately from source
 diagnostics. It introduces no runtime report storage. Measured object bytes
 come from the Linux object-quality harness, not an IR cost estimate.
 
-The bootstrap compiler gives every constrained routine instance hidden
-table pointers for the direct constraint and its separate transitive
-constraint/parent closure, in generic-formal and concept declaration order. A table begins with
-the represented type's target `usize` size and alignment, then carries direct
+The bootstrap checks a constrained routine against its full direct and
+constraint/parent closure, but a concrete call passes only the table positions
+selected by direct constrained member calls in that instance's checked body.
+If two type formals use the same conformance, selecting one passes one hidden
+pointer; selecting both retains their separate positions. Those pointers
+follow depth-first concept declaration order within each formal, then
+generic-formal order. A body with no such selection has no hidden evidence
+arguments, even if it constructs `any` values. A table begins with the
+represented type's target `usize` size and alignment, then carries direct
 concept functions in concept declaration order. `t.entry(...)` loads that
 function word and uses the ordinary indirect-call and error conventions; the
 static type formal still occupies no source ABI position. Linux x86-64 emits
@@ -4298,12 +4308,14 @@ the full set of authority paths. D258 records this choice.
 ### [1690] One mechanism, two readings, is better than two mechanisms
 
 One mechanism, two readings, is better than two mechanisms.
-Generic code is a value plus evidence that its type
-satisfies a concept. When the compiler proves the concrete incoming evidence
-it can specialize dispatch; when it cannot, the evidence is carried and the
-type may be erased, which is what 'any C' expresses. D211's bootstrap keeps
-hidden evidence ABI positions even after dispatch specialization. Static
-generics and runtime dispatch share a foundation, not two unrelated features.
+Concept-constrained generic code is checked against evidence that its type
+satisfies a concept. A concrete instance carries hidden table arguments only
+for direct constrained member selections in its checked body; an erased-only
+`any` construction uses a static table and can need none. When the compiler
+proves the concrete incoming evidence it can specialize dispatch, retaining
+those selected hidden ABI positions. Otherwise dispatch remains indirect; an
+`any C` value carries evidence with its erased type. Static generics and
+runtime dispatch share a foundation, not two unrelated features.
 
 ### [1700] Atoms are the same idea wherever they appear
 

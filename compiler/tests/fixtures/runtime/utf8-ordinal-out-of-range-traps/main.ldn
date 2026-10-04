@@ -1,5 +1,5 @@
 public main: () -> (code: i32) =
     source: utf8 = "one"
-    missing: u32 = source[3]
+    missing: u32 = source[4294967296]
     code = i32(missing)
 end main

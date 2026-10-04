@@ -3,7 +3,7 @@ point: type = struct
     y: u32
 end point
 
---  [1910] believes no condition, and D16 merges a field the way it
+--  [1910] believes no nonliteral condition, and D16 merges a field the way it
 --  merges a name: assigned in one arm and not another is not assigned.
 f: (n: u32) -> (r: u32) =
     mut p: point

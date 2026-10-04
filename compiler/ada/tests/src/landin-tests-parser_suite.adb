@@ -25,8 +25,10 @@ package body Landin.Tests.Parser_Suite is
    package Fixtures renames Landin.Testing.Fixtures;
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Source.Byte_Offset;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Span;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Syntax.Parameter_Convention;
@@ -1423,6 +1425,8 @@ package body Landin.Tests.Parser_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Length : constant Positive := Landin.Syntax.Parser.Nesting_Limit * 40;
+      Assignment_Length : constant Positive :=
+        Landin.Syntax.Parser.Nesting_Limit * 160;
       Text  : Unbounded.Unbounded_String;
       Codes : Unbounded.Unbounded_String;
       Total : Natural;
@@ -1465,6 +1469,94 @@ package body Landin.Tests.Parser_Suite is
         (Item,
          Contains (Unbounded.To_String (Codes), "L0111"),
          "a pointer run past the limit uses the nesting code");
+
+      Text := Unbounded.To_Unbounded_String ("x: i32 = 1");
+      for Step in 1 .. Assignment_Length loop
+         Unbounded.Append
+           (Text, (case Step mod 3 is
+                     when 0 => " = 1",
+                     when 1 => " := 1",
+                     when others => " += 1"));
+      end loop;
+      Unbounded.Append (Text, ASCII.LF & "y: i32 = 2" & ASCII.LF);
+      Read_And_Parse
+        (Unbounded.To_String (Text), Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Held, "a long invalid assignment chain keeps tree invariants");
+      Landin.Testing.Check
+        (Item, Total = Assignment_Length,
+         "every assignment in the long chain receives one diagnostic");
+      Landin.Testing.Check
+        (Item, Nodes < Assignment_Length * 2,
+         "assignment recovery does not retain an unbounded error spine");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Codes), "L0111"),
+         "assignment recovery uses the nesting code past the limit");
+
+      declare
+         Boundary_Length : constant Positive :=
+           Landin.Syntax.Parser.Nesting_Limit + 3;
+         Offsets : array (1 .. Boundary_Length) of Landin.Source.Byte_Offset;
+      begin
+         Text := Unbounded.To_Unbounded_String ("x: i32 = 1");
+         for Step in Offsets'Range loop
+            Offsets (Step) :=
+              Landin.Source.Byte_Offset (Unbounded.Length (Text) + 1);
+            Unbounded.Append (Text, " = 1");
+         end loop;
+         Unbounded.Append (Text, ASCII.LF & "y: i32 = 2" & ASCII.LF);
+
+         declare
+            Sources : Landin.Source.Sets.Source_Set;
+            Names   : Landin.Source.Names.Table;
+            Stream  : Landin.Tokens.Token_Stream;
+            Found   : Landin.Diagnostics.Diagnostic_List;
+            Id      : constant Landin.Source.Source_Id :=
+              Sources.Add ("assignment-limit.ldn",
+                           Unbounded.To_String (Text));
+         begin
+            Landin.Tokens.Lexer.Lex
+              (Sources.Get (Id), Names, Stream);
+            declare
+               Parsed : constant Landin.Syntax.Tree :=
+                 Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
+                  "the declaration after the chain survives recovery");
+            end;
+
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), Boundary_Length,
+               "each boundary assignment has exactly one report");
+            if Landin.Diagnostics.Count (Found) = Boundary_Length then
+               declare
+                  Ordered : constant Landin.Diagnostics.Diagnostic_List :=
+                    Landin.Diagnostics.Sorted (Found);
+               begin
+                  for Step in Offsets'Range loop
+                     declare
+                        Report : constant Landin.Diagnostics.Diagnostic :=
+                          Landin.Diagnostics.Get (Ordered, Step);
+                     begin
+                        Landin.Testing.Check_Equal
+                          (Item, Landin.Diagnostics.Code (Report),
+                           (if Step = Landin.Syntax.Parser.Nesting_Limit + 1
+                            then "L0111" else "L0105"),
+                           "assignment report code at" & Step'Image);
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Diagnostics.Span_Of
+                             (Landin.Diagnostics.Primary (Report)) =
+                             (First => Offsets (Step),
+                              Last => Offsets (Step) + 1),
+                           "assignment report span at" & Step'Image);
+                     end;
+                  end loop;
+               end;
+            end if;
+         end;
+      end;
    end Deep_Chains_Are_Reported;
 
    ------------------------------------------------------------------

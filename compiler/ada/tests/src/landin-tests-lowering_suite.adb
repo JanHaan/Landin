@@ -1141,6 +1141,9 @@ package body Landin.Tests.Lowering_Suite is
    procedure Generic_Routine_Instances_Lower_Once_Per_Key
      (Item : in out Landin.Testing.Context);
 
+   procedure Generic_Instances_Keep_Only_Selected_Evidence
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Lower_As_Ordinary_Arrays
      (Item : in out Landin.Testing.Context)
    is
@@ -1270,6 +1273,371 @@ package body Landin.Tests.Lowering_Suite is
          Check_Terminators (Item, Unit, "generic routine instances");
       end;
    end Generic_Routine_Instances_Lower_Once_Per_Key;
+
+   procedure Generic_Instances_Keep_Only_Selected_Evidence
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "ordered: type = concept (t: type)" & LF
+         & "    less: (left: t, right: t) -> (yes: bool)" & LF
+         & "end ordered" & LF
+         & "sortable: type = concept (t: type) is ordered" & LF
+         & "end sortable" & LF
+         & "less_i32: (left: i32, right: i32) -> (yes: bool) =" & LF
+         & "    yes = left < right" & LF
+         & "end less_i32" & LF
+         & "i32 is ordered (less: less_i32)" & LF
+         & "i32 is sortable ()" & LF
+         & "identity: (t: type is sortable, value: t) -> (result: t) =" & LF
+         & "    result = value" & LF
+         & "end identity" & LF
+         & "is_less: (t: type is sortable, left: t, right: t)"
+         & " -> (yes: bool) =" & LF
+         & "    yes = t.less(left, right)" & LF
+         & "end is_less" & LF
+         & "use: () -> (yes: bool) =" & LF
+         & "    yes = is_less(identity(1), 2)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Unused : Natural := 0;
+         Selected : Natural := 0;
+         Calls : Natural := 0;
+      begin
+         for Number in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Number);
+            begin
+               if IR.Kind_Of (Unit, Id) = IR.Routine
+                 and then IR.Generic_Template_Of (Unit, Id)
+                   /= IR.No_Declaration
+               then
+                  if IR.Evidence_Binding_Count (Unit, Id) = 0 then
+                     Unused := Unused + 1;
+                     Landin.Testing.Check_Equal
+                       (Item, IR.Parameter_Count (Unit, Id), 1,
+                        "unused evidence adds no parameter");
+                  else
+                     Selected := Selected + 1;
+                     Landin.Testing.Check_Equal
+                       (Item, IR.Evidence_Binding_Count (Unit, Id), 1,
+                        "only the selected parent table is bound");
+                     Landin.Testing.Check_Equal
+                       (Item, IR.Parameter_Count (Unit, Id), 3,
+                        "selected table precedes two runtime parameters");
+                  end if;
+               end if;
+            end;
+         end loop;
+         for Number in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Number);
+            begin
+               if IR.Kind_Of (Unit, Id) = IR.Routine then
+                  for Position in 1 .. IR.Value_Count (Unit, Id) loop
+                     declare
+                        Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     begin
+                        if IR.Op_Of (Unit, Id, Value) = IR.Call
+                          and then IR.Generic_Template_Of
+                            (Unit, IR.Callee_Of (Unit, Id, Value))
+                              /= IR.No_Declaration
+                        then
+                           Calls := Calls + 1;
+                           Landin.Testing.Check_Equal
+                             (Item, IR.Operand_Count (Unit, Id, Value),
+                              IR.Parameter_Count
+                                (Unit, IR.Callee_Of (Unit, Id, Value)),
+                              "call arguments match selected evidence run");
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal (Item, Unused, 1, "one unused instance");
+         Landin.Testing.Check_Equal
+           (Item, Selected, 1, "one parent evidence instance");
+         Landin.Testing.Check_Equal (Item, Calls, 2, "two concrete calls");
+      end;
+   end Generic_Instances_Keep_Only_Selected_Evidence;
+
+   procedure Erased_Construction_Adds_No_Hidden_Evidence
+     (Item : in out Landin.Testing.Context);
+
+   procedure Erased_Construction_Adds_No_Hidden_Evidence
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+      Instance : IR.Item_Id := IR.No_Item;
+      Calls, Static_Tables : Natural := 0;
+   begin
+      Lower
+        (Work,
+         "readable: type = concept (t: type) "
+         & "read: (self: ptr mut t) -> (value: i32) end readable "
+         & "read_i32: (self: ptr mut i32) -> (value: i32) = "
+         & "value = self.val end read_i32 "
+         & "i32 is readable (read: read_i32) "
+         & "exercise: (item: type is readable, inout state: item) "
+         & "-> (result: i32) = "
+         & "erased: any readable = any(addr state) "
+         & "result = erased.read() end exercise "
+         & "main: () -> (result: i32) = mut value: i32 = 2 "
+         & "result = exercise(value) end main", Ran);
+      Landin.Testing.Check
+        (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+         "erased construction reaches lowering: "
+         & Landin.Stages.Rendered_Report (Work));
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Main : constant IR.Item_Id := Named_Item (Work, "main");
+      begin
+         for Number in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Number);
+            begin
+               if IR.Kind_Of (Unit, Id) = IR.Routine
+                 and then IR.Generic_Template_Of (Unit, Id)
+                   /= IR.No_Declaration
+               then
+                  Instance := Id;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Instance /= IR.No_Item,
+            "erased construction has a concrete generic instance");
+         if Instance = IR.No_Item then
+            return;
+         end if;
+         Landin.Testing.Check
+           (Item, IR.Evidence_Binding_Count (Unit, Instance) = 0
+             and then IR.Parameter_Count (Unit, Instance) = 1,
+            "erased construction has only the written inout parameter");
+         for Number in 1 .. IR.Value_Count (Unit, Instance) loop
+            if IR.Op_Of (Unit, Instance, IR.Value_Id (Number))
+              = IR.Evidence_Address
+            then
+               Static_Tables := Static_Tables + 1;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Static_Tables > 0,
+            "erased construction still obtains its static table");
+         for Number in 1 .. IR.Value_Count (Unit, Main) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Number);
+            begin
+               if IR.Op_Of (Unit, Main, Value) = IR.Call
+                 and then IR.Callee_Of (Unit, Main, Value) = Instance
+               then
+                  Calls := Calls + 1;
+                  Landin.Testing.Check_Equal
+                    (Item, IR.Operand_Count (Unit, Main, Value), 1,
+                     "erased-only generic call passes no evidence pointer");
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Calls, 1, "one concrete erased-only call");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+             = IR.Verifier.Nothing_Wrong,
+            "erased-only ABI verifies");
+      end;
+   end Erased_Construction_Adds_No_Hidden_Evidence;
+
+   procedure Shared_Conformance_Keeps_Selected_Formal_Positions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Conformance_Keeps_Selected_Formal_Positions
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "ordered: type = concept (t: type)" & LF
+         & "    less: (left: t, right: t) -> (yes: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (left: i32, right: i32) -> (yes: bool) =" & LF
+         & "    yes = left < right" & LF
+         & "end less_i32" & LF
+         & "i32 is ordered (less: less_i32)" & LF
+         & "first_less: (a: type is ordered, b: type is ordered,"
+         & " left: a, right: b) -> (yes: bool) =" & LF
+         & "    yes = a.less(left, left)" & LF
+         & "end first_less" & LF
+         & "both_less: (a: type is ordered, b: type is ordered,"
+         & " left: a, right: b) -> (yes: bool) =" & LF
+         & "    yes = a.less(left, left)" & LF
+         & "    yes = b.less(right, right)" & LF
+         & "end both_less" & LF
+         & "main: () -> (yes: bool) =" & LF
+         & "    left: i32 = 1" & LF
+         & "    right: i32 = 2" & LF
+         & "    yes = first_less(left, right)" & LF
+         & "    yes = both_less(left, right)" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check
+        (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+         "shared-conformance formals reach lowering: "
+         & Landin.Stages.Rendered_Report (Work));
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Main : constant IR.Item_Id := Named_Item (Work, "main");
+         First, Both : IR.Item_Id := IR.No_Item;
+         First_Calls, Both_Calls : Natural := 0;
+      begin
+         for Number in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Number);
+               Template : constant IR.Declaration_Id :=
+                 IR.Generic_Template_Of (Unit, Id);
+            begin
+               if Template /= IR.No_Declaration then
+                  declare
+                     Name : constant String := Landin.Source.Names.Spelling
+                       (Landin.Stages.Identities (Work).all,
+                        Landin.Resolution.Name_Of
+                          (Landin.Stages.Meanings (Work).all, Template));
+                  begin
+                     if Name = "first_less" then
+                        First := Id;
+                     elsif Name = "both_less" then
+                        Both := Id;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, First /= IR.No_Item and then Both /= IR.No_Item,
+            "both concrete instances were lowered");
+         if First = IR.No_Item or else Both = IR.No_Item then
+            return;
+         end if;
+         for Which in 1 .. 2 loop
+            declare
+               Instance : constant IR.Item_Id :=
+                 (if Which = 1 then First else Both);
+               Hidden : constant Natural :=
+                 (if Instance = First then 1 else 2);
+               Read : array (1 .. 2) of Boolean := [others => False];
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Evidence_Binding_Count (Unit, Instance) = Hidden
+                  and then IR.Parameter_Count (Unit, Instance) = Hidden + 2,
+                  "callee binds exactly the selected formal positions");
+               for Position in 1 .. Hidden loop
+                  Landin.Testing.Check_Equal
+                    (Item, IR.Nth_Evidence_Binding
+                       (Unit, Instance, Position).Parameter,
+                     Position, "evidence precedes written parameters");
+               end loop;
+               for Number in 1 .. IR.Value_Count (Unit, Instance) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Number);
+                  begin
+                     if IR.Op_Of (Unit, Instance, Value)
+                       = IR.Evidence_Function
+                     then
+                        declare
+                           Table_Load : constant IR.Value_Id :=
+                             IR.Nth_Operand (Unit, Instance, Value, 1);
+                        begin
+                           if IR.Op_Of (Unit, Instance, Table_Load) = IR.Load
+                           then
+                              for Position in 1 .. Hidden loop
+                                 if IR.Slot_Of
+                                   (Unit, Instance, Table_Load)
+                                     = IR.Nth_Parameter
+                                       (Unit, Instance, Position)
+                                 then
+                                    Read (Position) := True;
+                                 end if;
+                              end loop;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+               for Position in 1 .. Hidden loop
+                  Landin.Testing.Check
+                    (Item, Read (Position),
+                     "each retained evidence parameter is read");
+               end loop;
+            end;
+         end loop;
+         for Number in 1 .. IR.Value_Count (Unit, Main) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Number);
+            begin
+               if IR.Op_Of (Unit, Main, Value) = IR.Call then
+                  declare
+                     Callee : constant IR.Item_Id :=
+                       IR.Callee_Of (Unit, Main, Value);
+                  begin
+                     if Callee = First or else Callee = Both then
+                        declare
+                           Hidden : constant Natural :=
+                             (if Callee = First then 1 else 2);
+                        begin
+                           if Callee = First then
+                              First_Calls := First_Calls + 1;
+                           else
+                              Both_Calls := Both_Calls + 1;
+                           end if;
+                           Landin.Testing.Check_Equal
+                             (Item, IR.Operand_Count (Unit, Main, Value),
+                              Hidden + 2,
+                              "call supplies only selected evidence");
+                           for Position in 1 .. Hidden loop
+                              Landin.Testing.Check
+                                (Item, IR.Op_Of
+                                   (Unit, Main, IR.Nth_Operand
+                                      (Unit, Main, Value, Position))
+                                    = IR.Evidence_Address,
+                                 "evidence arguments lead the call");
+                           end loop;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, First_Calls = 1 and then Both_Calls = 1,
+            "each concrete instance has one call");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+             = IR.Verifier.Nothing_Wrong,
+            "selected formal evidence ABI verifies");
+      end;
+   end Shared_Conformance_Keeps_Selected_Formal_Positions;
 
    ------------------------------------------------------------------
 
@@ -9469,7 +9837,7 @@ package body Landin.Tests.Lowering_Suite is
         (Work,
          "part: type = struct" & LF & "    scalar: u32" & LF
          & "    rows: [2][2]u16" & LF & "end part" & LF
-         & "index: (text: utf8, position: u32) -> (result: u32) =" & LF
+         & "index: (text: utf8, position: usize) -> (result: u32) =" & LF
          & "    values: [1]part = [part(scalar: text[position]," & LF
          & "        rows: [[1, 2], [3, 4]])]" & LF
          & "    scalars: [1]u32 = [text[position]]" & LF
@@ -10203,7 +10571,7 @@ package body Landin.Tests.Lowering_Suite is
         ("utf8 index returns",
          "marker: () -> (r: usize) = r = 1 end marker" & LF
          & "f: (a: utf8) -> none = s := a[if begin return end then "
-         & "u32(0) else u32(1) end if] ignored := marker() end f" & LF);
+         & "usize(0) else usize(1) end if] ignored := marker() end f" & LF);
       Check_Source
         ("text source index returns",
          "marker: () -> (r: usize) = r = 1 end marker" & LF
@@ -10255,12 +10623,12 @@ package body Landin.Tests.Lowering_Suite is
       Check_Source
         ("utf8 index source returns",
          "marker: () -> (r: usize) = r = 1 end marker" & LF
-         & "f: (a: [2]utf8) -> none = s := a[begin return end][u32(0)] "
+         & "f: (a: [2]utf8) -> none = s := a[begin return end][usize(0)] "
          & "ignored := marker() end f" & LF);
       Check_Source
         ("ordinary utf8 index",
          "marker: () -> (r: usize) = r = 1 end marker" & LF
-         & "f: (a: utf8) -> none = s := a[u32(0)] ignored := marker() "
+         & "f: (a: utf8) -> none = s := a[usize(0)] ignored := marker() "
          & "end f" & LF,
          1);
       Check_Source
@@ -12569,6 +12937,71 @@ package body Landin.Tests.Lowering_Suite is
          & "end f", 0, 0);
    end Atom_Array_Fills_Keep_Narrow_Values;
 
+   procedure Single_Array_Repetition_Fill_Uses_Its_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure Single_Array_Repetition_Fill_Uses_Its_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Fields, Value : String;
+         Expected_Fills, Expected_Copies : Natural);
+
+      procedure Check_Source
+        (Label, Fields, Value : String;
+         Expected_Fills, Expected_Copies : Natural)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+         Fills, Copies : Natural := 0;
+      begin
+         Lower
+           (Work, "row: type = struct " & Fields & " end row "
+            & "f: () -> none = value: row = " & Value & " end f", Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            Label & " lowers: " & Landin.Stages.Rendered_Report (Work));
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Routine : constant IR.Item_Id := Named_Item (Work, "f");
+         begin
+            for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+               case IR.Op_Of (Unit, Routine, IR.Value_Id (Position)) is
+                  when IR.Fill_Array => Fills := Fills + 1;
+                  when IR.Copy_Array => Copies := Copies + 1;
+                  when others => null;
+               end case;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Fills, Expected_Fills, Label & " array fills");
+            Landin.Testing.Check_Equal
+              (Item, Copies, Expected_Copies, Label & " array copies");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Unit, Landin.Targets.Linux_X86_64).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " verifies");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("one repeated array",
+         "first: [16]u8 second: [16]u8",
+         "(first: [16 of 0], of [16 of 1])", 2, 0);
+      Check_Source
+        ("two omitted arrays",
+         "first: [16]u8 second: [16]u8 third: [16]u8",
+         "(first: [16 of 0], of [16 of 1])", 2, 2);
+      Check_Source
+        ("one array literal keeps ordinary temporary",
+         "first: [2]u8 second: [2]u8",
+         "(first: [2 of 0], of [1, 2])", 1, 1);
+   end Single_Array_Repetition_Fill_Uses_Its_Field;
+
    procedure Struct_Payload_Aliases_Initialize_Copies
      (Item : in out Landin.Testing.Context);
 
@@ -13426,6 +13859,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering", "atom array fills keep narrow values",
          Atom_Array_Fills_Keep_Narrow_Values'Access);
       Landin.Testing.Register
+        (Into, "lowering", "single array repetition fill uses its field",
+         Single_Array_Repetition_Fill_Uses_Its_Field'Access);
+      Landin.Testing.Register
         (Into, "lowering", "control ranges keep one store check",
          Control_Ranges_Keep_One_Store_Check'Access);
       Landin.Testing.Register
@@ -13596,6 +14032,15 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "generic routines lower once per key",
          Generic_Routine_Instances_Lower_Once_Per_Key'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "generic instances keep selected evidence",
+         Generic_Instances_Keep_Only_Selected_Evidence'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "erased construction adds no hidden evidence",
+         Erased_Construction_Adds_No_Hidden_Evidence'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "shared conformance keeps selected formals",
+         Shared_Conformance_Keeps_Selected_Formal_Positions'Access);
       Landin.Testing.Register
         (Into, "lowering", "parameterized structs lower as nominals",
          Parameterized_Structs_Lower_As_Concrete_Nominals'Access);

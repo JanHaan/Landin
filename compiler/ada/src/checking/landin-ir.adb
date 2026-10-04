@@ -915,6 +915,7 @@ package body Landin.IR is
         (Parameters => (First => 0, Count => 0),
          Results    => (First => 0, Count => 0),
          Sources    => (First => 0, Count => 0),
+         Source_Runs => (First => 0, Count => 0),
          Errors     => Errors,
          Machine    => Machine,
          Nonreturning => Nonreturning,
@@ -923,6 +924,14 @@ package body Landin.IR is
          Erased_Self => False);
 
       procedure Append (Parts : Signature_Part_Array; To_Run : in out Run);
+
+      type Count_Array is array (Positive range <>) of Natural;
+      Counts : Count_Array (1 .. Results'Length) := [others => 0];
+      Next_Position : Count_Array (Counts'Range);
+      Ordered : Return_Source_Array (1 .. Sources'Length);
+      Source_First : constant Natural := Natural (Into.Return_Sources.Length);
+      Valid_Count : Natural := 0;
+      Invalid_Position : Positive;
 
       procedure Append (Parts : Signature_Part_Array; To_Run : in out Run) is
       begin
@@ -937,11 +946,40 @@ package body Landin.IR is
    begin
       Append (Parameters, Made.Parameters);
       Append (Results, Made.Results);
+      Made.Sources := (First => Source_First, Count => Sources'Length);
       if Sources'Length > 0 then
-         Made.Sources.First := Natural (Into.Return_Sources.Length);
+         Made.Source_Runs :=
+           (First => Natural (Into.Return_Source_Runs.Length),
+            Count => Results'Length);
          for Source of Sources loop
+            if Source.Result in Counts'Range then
+               Counts (Source.Result) := Counts (Source.Result) + 1;
+            end if;
+         end loop;
+         --  Counting sort keeps each result's source order, even when the
+         --  supplied associations are interleaved between results.
+         for Result in Counts'Range loop
+            Next_Position (Result) := Valid_Count + 1;
+            Into.Return_Source_Runs.Append
+              (Run'(First => Source_First + Valid_Count,
+                    Count => Counts (Result)));
+            Valid_Count := Valid_Count + Counts (Result);
+         end loop;
+         Invalid_Position := Valid_Count + 1;
+         for Source of Sources loop
+            if Source.Result in Counts'Range then
+               Ordered (Next_Position (Source.Result)) := Source;
+               Next_Position (Source.Result) :=
+                 Next_Position (Source.Result) + 1;
+            else
+               --  Preserve out-of-range associations for existing callers
+               --  that copy the complete signature source run.
+               Ordered (Invalid_Position) := Source;
+               Invalid_Position := Invalid_Position + 1;
+            end if;
+         end loop;
+         for Source of Ordered loop
             Into.Return_Sources.Append (Source);
-            Made.Sources.Count := Made.Sources.Count + 1;
          end loop;
       end if;
       Into.Signatures.Append (Made);
@@ -1030,17 +1068,13 @@ package body Landin.IR is
      (Of_Unit : Unit; Signature : Signature_Id; Result : Positive)
       return Natural
    is
-      Sources : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Sources;
-      Count : Natural := 0;
+      Runs : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Source_Runs;
    begin
-      for Position in 1 .. Sources.Count loop
-         if Of_Unit.Return_Sources (Sources.First + Position).Result = Result
-         then
-            Count := Count + 1;
-         end if;
-      end loop;
-      return Count;
+      if Runs.Count = 0 then
+         return 0;
+      end if;
+      return Of_Unit.Return_Source_Runs (Runs.First + Result).Count;
    end Signature_Return_Source_Count;
 
    function Nth_Signature_Return_Source
@@ -1049,25 +1083,12 @@ package body Landin.IR is
       Result    : Positive;
       Index     : Positive) return Positive
    is
+      Runs : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Source_Runs;
       Sources : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Sources;
-      Seen : Natural := 0;
+        Of_Unit.Return_Source_Runs (Runs.First + Result);
    begin
-      for Position in 1 .. Sources.Count loop
-         declare
-            Source : constant Return_Source_Association :=
-              Of_Unit.Return_Sources (Sources.First + Position);
-         begin
-            if Source.Result = Result then
-               Seen := Seen + 1;
-               if Seen = Index then
-                  return Source.Parameter;
-               end if;
-            end if;
-         end;
-      end loop;
-      raise Landin.Compiler_Defect with
-        "an IR return source escaped its checked bound";
+      return Of_Unit.Return_Sources (Sources.First + Index).Parameter;
    end Nth_Signature_Return_Source;
 
    function Signature_Result

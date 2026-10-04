@@ -456,10 +456,11 @@ package body Landin.Stages.Lowering is
         1 .. Positive'Max
                (1, Landin.Checking.Conformance_Count (Types.all));
       type Evidence_Map is array (Source_Evidence) of IR.Evidence_Id;
-      type Evidence_Slot_Map is array (Source_Evidence) of IR.Slot_Id;
+      package Evidence_Slot_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => IR.Slot_Id);
       Evidence : Evidence_Map := [others => IR.No_Evidence];
       Any_Evidence : Evidence_Map := [others => IR.No_Evidence];
-      Evidence_Slots : Evidence_Slot_Map := [others => IR.No_Slot];
+      Evidence_Slots : Evidence_Slot_Vectors.Vector;
 
       subtype Source_Routine_Instance is Positive range
         1 .. Positive'Max
@@ -468,6 +469,52 @@ package body Landin.Stages.Lowering is
         array (Source_Routine_Instance) of IR.Signature_Id;
       Generic_Signatures : Generic_Signature_Map :=
         [others => IR.No_Signature];
+
+      package Evidence_Position_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Positive);
+      Evidence_Uses : array (Source_Routine_Instance)
+        of Evidence_Position_Sets.Set;
+      Evidence_Use_Count : array (Source_Routine_Instance) of Natural :=
+        [others => 0];
+
+      function Needed_Evidence_Count
+        (Instance : Landin.Checking.Routine_Instance_Id) return Natural
+      is (Evidence_Use_Count
+            (Landin.Checking.Routine_Identities.Position
+               (Types.all, Instance)));
+
+      function Nth_Needed_Evidence_Position
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Position : Positive) return Positive;
+
+      function Nth_Needed_Evidence_Position
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Position : Positive) return Positive
+      is
+         Seen : Natural := 0;
+         Uses : Evidence_Position_Sets.Set renames Evidence_Uses
+           (Landin.Checking.Routine_Identities.Position
+              (Types.all, Instance));
+      begin
+         for Index in 1 .. Landin.Checking.Routine_Evidence_Count
+           (Types.all, Instance)
+         loop
+            if Uses.Contains (Index) then
+               Seen := Seen + 1;
+               if Seen = Position then
+                  return Index;
+               end if;
+            end if;
+         end loop;
+         raise Landin.Compiler_Defect with "invalid needed evidence position";
+      end Nth_Needed_Evidence_Position;
+
+      function Nth_Needed_Evidence
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Position : Positive) return Landin.Checking.Conformance_Id
+      is (Landin.Checking.Nth_Routine_Evidence
+            (Types.all, Instance,
+             Nth_Needed_Evidence_Position (Instance, Position)));
 
       --  A constrained provider has hidden evidence parameters. Its table
       --  entry binds those parameters and retains the concept's written ABI.
@@ -1013,7 +1060,7 @@ package body Landin.Stages.Lowering is
          Source : constant IR.Signature_Id := Signature_For
            (Landin.Checking.Routine_Signature_Of (Types.all, Instance));
          Hidden : constant Natural :=
-           Landin.Checking.Routine_Evidence_Count (Types.all, Instance);
+           Needed_Evidence_Count (Instance);
          Parameter_Count : constant Natural :=
            IR.Signature_Parameter_Count (Unit.all, Source);
          Result_Count : constant Natural :=
@@ -4134,30 +4181,54 @@ package body Landin.Stages.Lowering is
                         Child : constant IR.Field_Shape :=
                           IR.Nth_Aggregate_Field
                             (Unit.all, Shape, First_Missing);
-                        Saved : constant IR.Slot_Id :=
-                          Shaped_Temporary (Child, Site_Of (Of_Tree, Fill));
-                        Place : constant Stored_Place :=
-                          Stored_At ((Kind => IR.Frame_Slot, Slot => Saved));
                      begin
-                        Write_Shaped_Value
-                          (Of_Tree, Fill, Scope, Child, Place);
-                        if Current = IR.No_Block then
-                           return;
-                        end if;
-                        for Field in Seen'Range loop
-                           if not Seen (Field) then
-                              if Child.Kind = IR.Scalar_Field_Shape then
-                                 Store_Shaped_Scalar
-                                   (Child_Place (Destination, Field), Child,
-                                    IR.Emit_Load
-                                      (Unit.all, Filling, Saved, Site), Site);
-                              else
-                                 Copy_Shaped_Storage
-                                   (Place, Child_Place (Destination, Field),
-                                    Child, Site);
-                              end if;
+                        if Construction_Field_Count (Of_Tree, Node)
+                             = Seen'Length - 1
+                          and then Child.Kind = IR.Array_Field_Shape
+                          and then Syn.Kind (Of_Tree, Fill)
+                            = Syn.Array_Repetition
+                          and then Stored_Shape
+                            (Child_Place (Destination, First_Missing), Child)
+                              .Packing.Bits = 0
+                        then
+                           --  Repetition evaluates its element before its
+                           --  first write. With one receiver there is no
+                           --  value to preserve for another omitted field.
+                           Write_Shaped_Value
+                             (Of_Tree, Fill, Scope, Child,
+                              Child_Place (Destination, First_Missing));
+                           if Current = IR.No_Block then
+                              return;
                            end if;
-                        end loop;
+                        else
+                           declare
+                              Saved : constant IR.Slot_Id := Shaped_Temporary
+                                (Child, Site_Of (Of_Tree, Fill));
+                              Place : constant Stored_Place := Stored_At
+                                ((Kind => IR.Frame_Slot, Slot => Saved));
+                           begin
+                              Write_Shaped_Value
+                                (Of_Tree, Fill, Scope, Child, Place);
+                              if Current = IR.No_Block then
+                                 return;
+                              end if;
+                              for Field in Seen'Range loop
+                                 if not Seen (Field) then
+                                    if Child.Kind = IR.Scalar_Field_Shape then
+                                       Store_Shaped_Scalar
+                                         (Child_Place (Destination, Field),
+                                          Child, IR.Emit_Load
+                                            (Unit.all, Filling, Saved, Site),
+                                          Site);
+                                    else
+                                       Copy_Shaped_Storage
+                                         (Place, Child_Place
+                                            (Destination, Field), Child, Site);
+                                    end if;
+                                 end if;
+                              end loop;
+                           end;
+                        end if;
                      end;
                   end;
                elsif Construction_Fill (Of_Tree, Node) /= Syn.No_Node then
@@ -4944,8 +5015,7 @@ package body Landin.Stages.Lowering is
          Evidence_Count : constant Natural :=
            (if Generic_Target = Landin.Checking.No_Routine_Instance
             then 0
-            else Landin.Checking.Routine_Evidence_Count
-              (Types.all, Generic_Target));
+            else Needed_Evidence_Count (Generic_Target));
          Evidence_Arguments : array
            (1 .. Positive'Max (1, Evidence_Count)) of IR.Value_Id :=
              [others => IR.No_Value];
@@ -5632,8 +5702,7 @@ package body Landin.Stages.Lowering is
          for Which in 1 .. Evidence_Count loop
             declare
                Source : constant Landin.Checking.Conformance_Id :=
-                 Landin.Checking.Nth_Routine_Evidence
-                   (Types.all, Generic_Target, Which);
+                 Nth_Needed_Evidence (Generic_Target, Which);
             begin
                Evidence_Arguments (Which) := IR.Emit_Evidence_Address
                  (Unit.all, Filling, Evidence_For (Source), Site);
@@ -6390,9 +6459,9 @@ package body Landin.Stages.Lowering is
 
          declare
             Wanted_Slot : constant IR.Slot_Id := IR.Add_Slot
-              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site);
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
             Count_Slot : constant IR.Slot_Id := IR.Add_Slot
-              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site);
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
             Wanted : constant IR.Value_Id := Lower_Expression
               (Of_Tree, Where, Scope);
             Test, Advance, Found : IR.Block_Id;
@@ -6407,7 +6476,7 @@ package body Landin.Stages.Lowering is
             IR.Emit_Store
               (Unit.all, Filling, Count_Slot,
                IR.Emit_Number
-                 (Unit.all, Filling, Ty.U32, 0, False, Site), Site);
+                 (Unit.all, Filling, Ty.Usize, 0, False, Site), Site);
             IR.Emit_Store
               (Unit.all, Filling, Offset_Slot,
                IR.Emit_Number
@@ -6451,8 +6520,8 @@ package body Landin.Stages.Lowering is
                   IR.Emit_Binary
                     (Unit.all, Filling, IR.Add, Count,
                      IR.Emit_Number
-                       (Unit.all, Filling, Ty.U32, 1, False, Site),
-                     Ty.U32, Site), Site);
+                       (Unit.all, Filling, Ty.Usize, 1, False, Site),
+                     Ty.Usize, Site), Site);
                Close_With_Jump (Test, Site);
             end;
 
@@ -6506,8 +6575,10 @@ package body Landin.Stages.Lowering is
             end Store_Result;
 
             --  A conversion into utf8 is the dynamic edge which establishes
-            --  D181's value invariant.  The shortest-form ranges also
-            --  exclude surrogates and codepoints above U+10FFFF.
+            --  D181's value invariant.  For cstring the validator measures
+            --  the prefix in the same pass, stopping at the first NUL.
+            --  The shortest-form ranges also exclude surrogates and
+            --  codepoints above U+10FFFF.
             procedure Validate_Utf8 is
                Cursor_Slot : constant IR.Slot_Id := IR.Add_Slot
                  (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
@@ -6584,19 +6655,19 @@ package body Landin.Stages.Lowering is
                            Site),
                         Ty.Usize, Site);
                   end if;
-                  declare
-                     Operand_1 : constant IR.Value_Id :=
-                       IR.Emit_Load (Unit.all, Filling, Base_Slot, Site);
-                     Operand_2 : constant IR.Value_Id :=
-                       IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
-                  begin
+                  if Conversion = Landin.Checking.C_String_To_Utf8 then
+                     Address := IR.Emit_Binary
+                       (Unit.all, Filling, IR.Add,
+                        IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
+                        Position, Ty.Usize, Site);
+                  else
                      Address := IR.Emit_Slice_Address
                        (Unit.all, Filling,
-                        Operand_1,
-                        Operand_2,
+                        IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
+                        IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
                         Position, Position, Slice_Shape (Of_Tree, Node), True,
                         Site, Required => True);
-                  end;
+                  end if;
                   return IR.Emit_Load_Indirect
                     (Unit.all, Filling, Address, Ty.U8, Site);
                end Byte_At;
@@ -6700,27 +6771,39 @@ package body Landin.Stages.Lowering is
                Close_With_Jump (Head, Site);
 
                Open (Head);
-               declare
-                  Operand_1 : constant IR.Value_Id :=
-                    IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site);
-                  Operand_2 : constant IR.Value_Id :=
-                    IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
-               begin
+               if Conversion = Landin.Checking.C_String_To_Utf8 then
+                  IR.Emit_Jump (Unit.all, Filling, Inspect, Site);
+               else
                   IR.Emit_Branch
                     (Unit.all, Filling,
                      IR.Emit_Binary
                        (Unit.all, Filling, IR.Equal_To,
-                        Operand_1,
-                        Operand_2,
+                        IR.Emit_Load
+                          (Unit.all, Filling, Cursor_Slot, Site),
+                        IR.Emit_Load
+                          (Unit.all, Filling, Length_Slot, Site),
                         Ty.Bool, Site),
                      Done, Inspect, Site);
-               end;
+               end if;
                IR.Leave_Block (Unit.all, Filling);
                Current := IR.No_Block;
 
                Open (Inspect);
                IR.Emit_Store
                  (Unit.all, Filling, Lead_Slot, Byte_At (0), Site);
+               if Conversion = Landin.Checking.C_String_To_Utf8 then
+                  declare
+                     Lead_Ready : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Lead_Is (IR.Equal_To, 0), Done, Lead_Ready, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+                     Open (Lead_Ready);
+                  end;
+               end if;
                IR.Emit_Branch
                  (Unit.all, Filling, Lead_Is (IR.Less_Than, 16#80#),
                   One, Non_ASCII, Site);
@@ -6842,6 +6925,12 @@ package body Landin.Stages.Lowering is
                end;
 
                Open (Done);
+               if Conversion = Landin.Checking.C_String_To_Utf8 then
+                  IR.Emit_Store
+                    (Unit.all, Filling, Length_Slot,
+                     IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site),
+                     Site);
+               end if;
                Store_Result;
             end Validate_Utf8;
 
@@ -6932,7 +7021,9 @@ package body Landin.Stages.Lowering is
                   IR.Emit_Store
                     (Unit.all, Filling, Base_Slot, Source, Site);
                end;
-               Scan_C_String;
+               if Conversion = Landin.Checking.C_String_To_Bytes then
+                  Scan_C_String;
+               end if;
             end if;
 
             if Conversion in Landin.Checking.Bytes_To_Utf8
@@ -8377,10 +8468,12 @@ package body Landin.Stages.Lowering is
                      Source : constant Landin.Checking.Conformance_Id :=
                        Landin.Checking.Evidence_Of
                          (Types.all, Of_Tree, Node);
-                     Position : constant Positive :=
-                       Landin.Checking.Conformance_Identities.Position
-                         (Types.all, Source);
-                     Slot : constant IR.Slot_Id := Evidence_Slots (Position);
+                     Run_Position : constant Natural :=
+                       Landin.Checking.Evidence_Run_Position_Of
+                         (Types.all, Of_Tree, Node);
+                     Slot : constant IR.Slot_Id :=
+                       (if Run_Position = 0 then IR.No_Slot
+                        else Evidence_Slots (Run_Position));
                      Dynamic : constant Boolean := Type_At
                        (Of_Tree, Syn.Target_Of (Of_Tree, Node))
                          = Ty.Any_Value;
@@ -14348,7 +14441,16 @@ package body Landin.Stages.Lowering is
             IR.Mark_Address_Exposed (Unit.all, Filling);
          end if;
          Slots := No_Slots;
-         Evidence_Slots := [others => IR.No_Slot];
+         Evidence_Slots.Clear;
+         if Landin.Checking.Current_Routine_View (Types.all)
+              /= Landin.Checking.No_Routine_Instance
+         then
+            for Index in 1 .. Landin.Checking.Routine_Evidence_Count
+              (Types.all, Landin.Checking.Current_Routine_View (Types.all))
+            loop
+               Evidence_Slots.Append (IR.No_Slot);
+            end loop;
+         end if;
          pragma Assert (Cleanup_Stack.Is_Empty);
          Cleanup_Stack.Clear;
 
@@ -14367,9 +14469,8 @@ package body Landin.Stages.Lowering is
             end;
          end if;
 
-         --  Evidence pointers are hidden runtime parameters after the
-         --  aggregate destination and before every written parameter.  Their
-         --  order is constrained generic-formal declaration order.
+         --  Only tables selected by this checked instance body have hidden
+         --  parameters. Retained tables keep the D144 closure order.
          declare
             View : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Current_Routine_View (Types.all);
@@ -14377,18 +14478,16 @@ package body Landin.Stages.Lowering is
             if View /= Landin.Checking.No_Routine_Instance
               and then Bound_Item = IR.No_Item
             then
-               for Which in 1 .. Landin.Checking.Routine_Evidence_Count
-                 (Types.all, View)
+               for Which in 1 .. Needed_Evidence_Count (View)
                loop
                   declare
+                     Run_Position : constant Positive :=
+                       Nth_Needed_Evidence_Position (View, Which);
                      Source : constant Landin.Checking.Conformance_Id :=
                        Landin.Checking.Nth_Routine_Evidence
-                         (Types.all, View, Which);
-                     Position : constant Positive :=
-                       Landin.Checking.Conformance_Identities.Position
-                         (Types.all, Source);
+                         (Types.all, View, Run_Position);
                   begin
-                     Evidence_Slots (Position) := IR.Add_Parameter
+                     Evidence_Slots (Run_Position) := IR.Add_Parameter
                        (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
                      IR.Bind_Evidence_Parameter
                        (Unit.all, Filling,
@@ -14582,7 +14681,7 @@ package body Landin.Stages.Lowering is
                View : constant Landin.Checking.Routine_Instance_Id :=
                  Landin.Checking.Current_Routine_View (Types.all);
                Hidden : constant Natural :=
-                 Landin.Checking.Routine_Evidence_Count (Types.all, View);
+                 Needed_Evidence_Count (View);
                Stored : constant Boolean := Gives_Type in
                  Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value;
                Count : constant Natural := IR.Parameter_Count
@@ -14607,8 +14706,7 @@ package body Landin.Stages.Lowering is
                   Argument_Count := Argument_Count + 1;
                   Arguments (Argument_Count) := IR.Emit_Evidence_Address
                     (Unit.all, Filling, Evidence_For
-                       (Landin.Checking.Nth_Routine_Evidence
-                          (Types.all, View, Which)), Site);
+                       (Nth_Needed_Evidence (View, Which)), Site);
                end loop;
                for Which in (if Stored then 2 else 1) .. Count loop
                   declare
@@ -15150,6 +15248,97 @@ package body Landin.Stages.Lowering is
          end loop;
       end;
 
+      --  A concrete body can select only evidence recorded in its checker
+      --  view. Inventory those selections before constructing physical
+      --  signatures, so all callers and provider thunks use the same run.
+      for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+      loop
+         declare
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth (Types.all, Position);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Instance)
+              = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of
+                      (Types.all, Instance);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Runs : constant Syn.Node_Id := Syn.Body_Of
+                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  Previous : Landin.Checking.Routine_Instance_Id;
+
+                  procedure Visit (Node : Syn.Node_Id);
+
+                  procedure Visit (Node : Syn.Node_Id) is
+                  begin
+                     --  Only a direct constrained selection loads an
+                     --  Evidence_Slot. An any construction or erased member
+                     --  selection uses a static erased table instead.
+                     if Syn.Kind (Of_Tree.all, Node) = Syn.Member_Selection
+                       and then Res.Verdict_Of
+                         (Meanings.all, Of_Tree.all, Node) /= Res.Bound
+                       and then Type_At
+                         (Of_Tree.all, Syn.Target_Of (Of_Tree.all, Node))
+                           /= Ty.Any_Value
+                     then
+                        declare
+                           Source : constant Landin.Checking.Conformance_Id :=
+                             Landin.Checking.Evidence_Of
+                               (Types.all, Of_Tree.all, Node);
+                        begin
+                           if Source /= Landin.Checking.No_Conformance then
+                              declare
+                                 Index : constant Positive :=
+                                   Positive
+                                     (Landin.Checking.Evidence_Run_Position_Of
+                                        (Types.all, Of_Tree.all, Node));
+                              begin
+                                 Evidence_Uses (Position).Include (Index);
+                              end;
+                           end if;
+                        end;
+                     end if;
+                     for Index in 1 .. Syn.Slot_Count (Of_Tree.all, Node) loop
+                        declare
+                           Child : constant Syn.Node_Id :=
+                             Syn.Slot (Of_Tree.all, Node, Index);
+                        begin
+                           if Child /= Syn.No_Node then
+                              Visit (Child);
+                           end if;
+                        end;
+                     end loop;
+                  end Visit;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Instance, Previous);
+                  if Runs /= Syn.No_Node then
+                     Visit (Runs);
+                  end if;
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+                  for Index in 1 .. Landin.Checking.Routine_Evidence_Count
+                    (Types.all, Instance)
+                  loop
+                     if Evidence_Uses (Position).Contains (Index)
+                     then
+                        Evidence_Use_Count (Position) :=
+                          Evidence_Use_Count (Position) + 1;
+                     end if;
+                  end loop;
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     raise;
+               end;
+            end if;
+         end;
+      end loop;
+
       --  Ready generic routine instances follow declaration-backed items in
       --  checker interning order.  Their source template remains provenance;
       --  the item itself is local and keyed by the opaque instance position.
@@ -15468,8 +15657,7 @@ package body Landin.Stages.Lowering is
                  "a selected evidence provider has no routine item";
             end if;
             if Provider_Instance /= Landin.Checking.No_Routine_Instance
-              and then Landin.Checking.Routine_Evidence_Count
-                (Types.all, Provider_Instance) > 0
+              and then Needed_Evidence_Count (Provider_Instance) > 0
             then
                declare
                   Index : constant Positive :=
@@ -15660,13 +15848,11 @@ package body Landin.Stages.Lowering is
                    (Types.all, Position);
                Actual : constant Landin.Checking.Actual_Key :=
                  Landin.Checking.Conformance_Target (Types.all, Source);
-               Seen : Boolean_Array
-                 (1 .. Positive'Max
-                   (1, Landin.Checking.Concept_Count (Types.all))) :=
-                     [others => False];
+               Represented : constant IR.Field_Shape :=
+                 Evidence_Shape (Actual);
             begin
                Evidence (Position) :=
-                 IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
+                 IR.Add_Evidence (Unit.all, Represented);
                for Provider_Position in
                  1 .. Landin.Checking.Conformance_Entry_Count
                         (Types.all, Source)
@@ -15676,10 +15862,17 @@ package body Landin.Stages.Lowering is
                end loop;
 
                if Used_Any_Evidence (Position) then
-                  Any_Evidence (Position) :=
-                    IR.Add_Evidence
-                      (Unit.all, Evidence_Shape (Actual), Erased => True);
-                  Add_Closure (Any_Evidence (Position), Source, Seen);
+                  declare
+                     Seen : Boolean_Array
+                       (1 .. Positive'Max
+                         (1, Landin.Checking.Concept_Count (Types.all))) :=
+                           [others => False];
+                  begin
+                     Any_Evidence (Position) :=
+                       IR.Add_Evidence
+                         (Unit.all, Represented, Erased => True);
+                     Add_Closure (Any_Evidence (Position), Source, Seen);
+                  end;
                end if;
             end;
          end loop;

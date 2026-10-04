@@ -1,0 +1,6 @@
+class: negative
+summary: C layout generic fields accept scalar actuals and report each repeated zero-length array actual
+constructs: 0520, 0670, 1350, 1580, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0346, L0346

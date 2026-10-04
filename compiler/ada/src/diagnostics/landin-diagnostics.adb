@@ -312,4 +312,16 @@ package body Landin.Diagnostics is
       return Moved;
    end Retargeted;
 
+   function With_Primary
+     (Item   : Diagnostic;
+      Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Diagnostic
+   is
+      Moved : Diagnostic := Item;
+   begin
+      Moved.Primary.Source := Source;
+      Moved.Primary.Where := Where;
+      return Moved;
+   end With_Primary;
+
 end Landin.Diagnostics;

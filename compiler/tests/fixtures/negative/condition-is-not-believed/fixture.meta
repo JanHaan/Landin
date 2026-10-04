@@ -1,5 +1,5 @@
 class: negative
-summary: [1910] no condition is believed, so a name assigned only under a true literal is not assigned after it
+summary: [1910] a name initialized to true is not a written Boolean literal at a branch
 constructs: 1910
 program: program.ldn
 targets: linux-x86-64, linux-arm64, macos-arm64

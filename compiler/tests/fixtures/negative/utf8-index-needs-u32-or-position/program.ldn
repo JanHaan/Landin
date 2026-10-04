@@ -1,3 +1,0 @@
-bad: (source: utf8, index: usize) -> (result: u32) =
-    result = source[index]
-end bad

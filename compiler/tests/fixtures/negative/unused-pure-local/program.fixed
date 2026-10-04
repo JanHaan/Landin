@@ -1,0 +1,8 @@
+side_effect: () -> (value: i32) =
+    value = 1
+end side_effect
+
+sample: () -> (result: i32) =
+    called: i32 = side_effect()
+    result = called
+end sample

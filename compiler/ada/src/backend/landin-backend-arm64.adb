@@ -4943,24 +4943,37 @@ package body Landin.Backend.Arm64 is
             declare
                Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
                  (Index);
+               Alias_Previous : constant Boolean := Index > 1
+                 and then Shares_Evidence_Table
+                   (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
+               Alias_Next : constant Boolean :=
+                 Index < Landin.IR.Evidence_Count (Of_Unit)
+                   and then Shares_Evidence_Table
+                     (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
                Bytes : Landin.Targets.Byte_Count;
                Alignment : Landin.Targets.Byte_Alignment;
             begin
-               Field_Extent (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit,
-                 Id),
-                 Facts, Bytes, Alignment);
-               Emit (".balign 8");
-               Put (Evidence_Symbol (Id) & ":");
-               Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
-                 (Bytes)));
-               Emit (".quad " & Trimmed (Landin.Targets.Byte_Alignment'Image
-                 (Alignment)));
-               for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
-                 (Of_Unit, Id) loop
-                  Emit (".quad " & Symbol
-                    (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
-                      Entry_Index)));
-               end loop;
+               if not Alias_Previous then
+                  Field_Extent
+                    (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
+                     Facts, Bytes, Alignment);
+                  Emit (".balign 8");
+                  Put (Evidence_Symbol (Id) & ":");
+                  if Alias_Next then
+                     Put (Evidence_Symbol
+                       (Landin.IR.Evidence_Id (Index + 1)) & ":");
+                  end if;
+                  Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
+                    (Bytes)));
+                  Emit (".quad " & Trimmed
+                    (Landin.Targets.Byte_Alignment'Image (Alignment)));
+                  for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
+                    (Of_Unit, Id) loop
+                     Emit (".quad " & Symbol
+                       (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
+                         Entry_Index)));
+                  end loop;
+               end if;
             end;
          end loop;
       end if;

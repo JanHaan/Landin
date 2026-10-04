@@ -111,6 +111,14 @@ package Landin.Backend is
    --  as it found it.
    function Extent (Of_Frame : Frame) return Landin.Targets.Byte_Count;
 
+   --  Adjacent direct and erased evidence identities can name one physical
+   --  table when the represented shape and provider words are identical.
+   function Shares_Evidence_Table
+     (Of_Unit : Landin.IR.Unit;
+      Direct, Erased : Landin.IR.Evidence_Id) return Boolean
+     with Pre => Landin.IR.Holds (Of_Unit, Direct)
+                 and then Landin.IR.Holds (Of_Unit, Erased);
+
    function Slot_Offset
      (Of_Frame : Frame; Slot : Landin.IR.Slot_Id)
      return Landin.Targets.Byte_Count;

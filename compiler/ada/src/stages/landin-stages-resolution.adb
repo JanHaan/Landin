@@ -1086,17 +1086,35 @@ package body Landin.Stages.Resolution is
                   Body_Scope : constant Landin.Resolution.Scope_Id :=
                     Landin.Resolution.Open_Scope
                       (Meanings.all, Landin.Resolution.Block, Inside);
+
+                  procedure Declare_Traversal (Binding : Syn.Node_Id);
+
+                  procedure Declare_Traversal (Binding : Syn.Node_Id) is
+                  begin
+                     if Binding = Syn.No_Node then
+                        return;
+                     end if;
+                     Declare_One
+                       (Of_Tree, Binding, Body_Scope,
+                        Resolve_Declared => False);
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Res.Declaration_At
+                            (Meanings.all, Syn.Source_Of (Of_Tree), Binding);
+                     begin
+                        if Id /= Res.No_Declaration then
+                           Res.Record_Traversal_Owner
+                             (Meanings.all, Of_Tree, Id, Node);
+                        end if;
+                     end;
+                  end Declare_Traversal;
                begin
                   Landin.Resolution.Record_Scope
                     (Meanings.all, Of_Tree, Runs, Body_Scope);
-                  Declare_One
-                    (Of_Tree, Syn.Traversal_Element (Of_Tree, Node),
-                     Body_Scope, Resolve_Declared => False);
-                  if Syn.Traversal_Index (Of_Tree, Node) /= Syn.No_Node then
-                     Declare_One
-                       (Of_Tree, Syn.Traversal_Index (Of_Tree, Node),
-                        Body_Scope, Resolve_Declared => False);
-                  end if;
+                  Declare_Traversal
+                    (Syn.Traversal_Element (Of_Tree, Node));
+                  Declare_Traversal
+                    (Syn.Traversal_Index (Of_Tree, Node));
                   Walk_Block (Of_Tree, Runs, Body_Scope);
                end;
                if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then

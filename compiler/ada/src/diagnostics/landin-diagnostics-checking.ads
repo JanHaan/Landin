@@ -111,7 +111,8 @@ package Landin.Diagnostics.Checking is
       Machine_Entry_Contract,
       Foreign_Boundary,
       Linkage_Contract,
-      Traversal_Source);
+      Traversal_Source,
+      Unused_Pure_Local);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -211,7 +212,9 @@ package Landin.Diagnostics.Checking is
             when Linkage_Contract =>
                Catalogue.Linkage_Contract,
             when Traversal_Source =>
-               Catalogue.Traversal_Source);
+               Catalogue.Traversal_Source,
+            when Unused_Pure_Local =>
+               Catalogue.Unused_Pure_Local);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

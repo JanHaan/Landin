@@ -42,6 +42,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    use type Reports.Decision_Reason;
    use type Opt.Specialization_Mode;
    use type Landin.Source.Source_Id;
+   use type Landin.Targets.Byte_Count;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Folded;
    use type IR.Verifier.Fault_Kind;
@@ -92,7 +93,8 @@ package body Landin.Tests.IR_Optimization_Suite is
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
       Split_Template : Boolean := False;
       Assembly_Output : Assembly_Case := No_Assembly;
-      Chain : Boolean := False);
+      Chain : Boolean := False;
+      Aggregate_Represented : Boolean := False);
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -395,7 +397,8 @@ package body Landin.Tests.IR_Optimization_Suite is
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
       Split_Template : Boolean := False;
       Assembly_Output : Assembly_Case := No_Assembly;
-      Chain : Boolean := False)
+      Chain : Boolean := False;
+      Aggregate_Represented : Boolean := False)
    is
       Site : constant Landin.Provenance.Origin :=
         IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
@@ -406,6 +409,8 @@ package body Landin.Tests.IR_Optimization_Suite is
       Hidden : IR.Slot_Id := IR.No_Slot;
       Signature, Empty : IR.Signature_Id;
       Expected, Other : IR.Evidence_Id;
+      Represented : IR.Field_Shape :=
+        (Element => Landin.Types.I32, others => <>);
       Block : IR.Block_Id;
       Table, Projection, Called : IR.Value_Id;
    begin
@@ -423,6 +428,20 @@ package body Landin.Tests.IR_Optimization_Suite is
       IR.Enter (Code, Provider, Block);
       IR.Emit_Leave (Code, Provider, IR.No_Value, Site);
       IR.Leave_Block (Code, Provider);
+      if Aggregate_Represented then
+         declare
+            Nominal : constant IR.Nominal_Type_Id :=
+              IR.Add_Nominal_Type (Code, 1);
+         begin
+            IR.Set_Nominal_Shape
+              (Code, Nominal,
+               [(Element => Landin.Types.U8, others => <>),
+                (Element => Landin.Types.U64, others => <>)]);
+            Represented :=
+              (Kind => IR.Aggregate_Field_Shape, Nominal => Nominal,
+               others => <>);
+         end;
+      end if;
       if Assembly_Output /= No_Assembly then
          Alternate := IR.Add_Item
            (Code, IR.Routine, IR.No_Declaration,
@@ -435,10 +454,10 @@ package body Landin.Tests.IR_Optimization_Suite is
          IR.Leave_Block (Code, Alternate);
       end if;
       Expected := IR.Add_Evidence
-        (Code, (Element => Landin.Types.I32, others => <>));
+        (Code, Represented);
       IR.Add_Evidence_Entry (Code, Expected, Provider, Empty);
       Other := IR.Add_Evidence
-        (Code, (Element => Landin.Types.I32, others => <>));
+        (Code, Represented);
       IR.Add_Evidence_Entry
         (Code, Other, (if Assembly_Output /= No_Assembly
                       then Alternate else Provider),
@@ -861,6 +880,23 @@ package body Landin.Tests.IR_Optimization_Suite is
             end;
          end loop;
       end loop;
+      declare
+         Code : IR.Unit;
+         Report : Reports.Report;
+      begin
+         Evidence_Unit
+           (Code, Work, Literal_Table, 2, False,
+            Aggregate_Represented => True);
+         IR.Specialization.Run
+           (Code, Landin.Stages.Target (Work),
+            (Opt.Speed, Opt.Off), Report);
+         for I in 1 .. 2 loop
+            Landin.Testing.Check
+              (Item, Reports.Nth_Specialization (Report, I)
+                 .Represented_Bytes = 16,
+               "repeated aggregate evidence keeps its represented cost");
+         end loop;
+      end;
    end Instance_Costs;
 
    procedure Template_Counts_Are_Independent

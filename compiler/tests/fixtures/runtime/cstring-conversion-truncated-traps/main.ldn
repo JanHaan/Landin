@@ -1,0 +1,13 @@
+extern(c) _landin_host_argument_at: (index: usize) -> (value: cstring)
+
+public main: () -> (code: i32) =
+    source: cstring = _landin_host_argument_at(0)
+    mut first: ptr mut u8 = ptr(usize(source))
+    mut terminator: ptr mut u8 = ptr(usize(source) + 1)
+    mut ignored: ptr mut u8 = ptr(usize(source) + 2)
+    first.val = 194
+    terminator.val = 0
+    ignored.val = 255
+    invalid: utf8 = utf8(source)
+    code = i32(lenof invalid)
+end main

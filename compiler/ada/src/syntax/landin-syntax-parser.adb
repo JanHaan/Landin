@@ -505,7 +505,8 @@ package body Landin.Syntax.Parser is
             function Parse_Delimited_Expression return Node_Id;
             function Parse_Expression_From
               (Seed : Node_Id;
-               Min  : Pre.Level := Pre.Level_Expression) return Node_Id;
+               Min  : Pre.Level := Pre.Level_Expression;
+               Recover_Assignment : Boolean := True) return Node_Id;
             function Parse_Unary return Node_Id;
             function Parse_Primary return Node_Id;
             function Parse_Struct_Literal
@@ -7185,11 +7186,13 @@ package body Landin.Syntax.Parser is
 
             function Parse_Expression_From
               (Seed : Node_Id;
-               Min  : Pre.Level := Pre.Level_Expression) return Node_Id
+               Min  : Pre.Level := Pre.Level_Expression;
+               Recover_Assignment : Boolean := True) return Node_Id
             is
                Left    : Node_Id := Seed;
                Chain : Natural := 0;
                Truncated : Boolean := False;
+               Assignment_Chain : Natural := 0;
                Chained : Boolean := False;
                First   : Landin.Source.Span := Landin.Source.Empty_Span;
             begin
@@ -7279,37 +7282,60 @@ package body Landin.Syntax.Parser is
                end loop;
 
                --  [0390]: an assignment token where an operator or closer
-               --  was
-               --  expected is assignment used as an expression, which is
-               --  a named rule with its own recovery -- swallow it -- and
-               --  not a token nothing allows.
+               --  was expected is assignment used as an expression.  Read
+               --  each right operand without recursively recovering the
+               --  next assignment; otherwise a long invalid chain uses one
+               --  host stack frame per operator.
                if Min = Pre.Level_Expression
-                 and then Peek in
-                   Tok.Equal | Tok.Colon_Equal | Tok.Compound_Assign
+                 and then Recover_Assignment
                then
-                  declare
-                     At_Op : constant Landin.Source.Span := Here;
-                     Right : Node_Id;
-                  begin
-                     Complain
-                       (Item    => Syn.Assignment_In_Expression,
-                        Where   => At_Op,
-                        Message => "assignment is a statement, never an"
-                                   & " expression",
-                        Note    => "[0390]: `==` compares; an assignment"
-                                   & " stands on its own",
-                        Fixes   =>
-                          (if Peek = Tok.Equal
-                           then [1 => Landin.Diagnostics.Fixes.Compare
-                                   (Origin_Of, At_Op)]
-                           else Landin.Diagnostics.No_Fixes));
-                     Advance;
-                     Right := Parse_Expression;
-                     Left := Add
-                       (Of_Kind  => Error_Expression,
-                        At_Token => At_Op,
-                        Children => [Left, Right]);
-                  end;
+                  while Peek in
+                    Tok.Equal | Tok.Colon_Equal | Tok.Compound_Assign
+                  loop
+                     declare
+                        At_Op : constant Landin.Source.Span := Here;
+                        Right : Node_Id;
+                     begin
+                        Assignment_Chain := Assignment_Chain + 1;
+                        if Assignment_Chain = Nesting_Limit + 1 then
+                           --  P3 permits one report at this token.  Place
+                           --  the limit report here before Advance, so it
+                           --  cannot suppress the next assignment's L0105.
+                           Complain
+                             (Item => Syn.Nesting_Too_Deep,
+                              Where => At_Op,
+                              Message => "this assignment recovery chain"
+                                         & " is longer than the compiler"
+                                         & " reads",
+                              Note => "an implementation limit, not a"
+                                      & " rule of the language",
+                              Related => Anchor (Result, Seed),
+                              Because => "the chain begins here");
+                        else
+                           Complain
+                             (Item    => Syn.Assignment_In_Expression,
+                              Where   => At_Op,
+                              Message => "assignment is a statement,"
+                                         & " never an expression",
+                              Note    => "[0390]: `==` compares; an assignment"
+                                         & " stands on its own",
+                              Fixes   =>
+                                (if Peek = Tok.Equal
+                                 then [1 => Landin.Diagnostics.Fixes.Compare
+                                         (Origin_Of, At_Op)]
+                                 else Landin.Diagnostics.No_Fixes));
+                        end if;
+                        Advance;
+                        Right := Parse_Expression_From
+                          (Parse_Unary, Recover_Assignment => False);
+                        if Assignment_Chain <= Nesting_Limit then
+                           Left := Add
+                             (Of_Kind  => Error_Expression,
+                              At_Token => At_Op,
+                              Children => [Left, Right]);
+                        end if;
+                     end;
+                  end loop;
                end if;
 
                return Left;

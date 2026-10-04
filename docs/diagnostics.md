@@ -1153,6 +1153,20 @@ every unnamed bit for `write_one`. A whole-image write cannot repair those
 bits by reading the device. The image may fit its carrier type; L0300 instead
 reports a value that its type or target cannot hold.
 
+### L0349
+
+An immutable local that is never used and is initialized by a direct scalar
+literal can be removed without changing the program's meaning (D251). The
+warning offers that removal as an exact fix when the declaration occupies its
+own line. A declaration whose initializer may perform work is not warned
+about.
+
+```landin
+unused: () -> none =
+    count: i32 = 42
+end unused
+```
+
 ## The backend and its toolchain
 
 ### L0500

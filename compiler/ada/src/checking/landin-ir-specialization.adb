@@ -5,7 +5,6 @@ with Landin.IR.Rewriting;
 with Landin.IR.Shape_Measurement;
 with Landin.IR.Specialization_Policy;
 with Landin.IR.Verifier;
-with Landin.Targets.Layouts;
 
 package body Landin.IR.Specialization is
    use type Landin.Optimization.Specialization_Mode;
@@ -29,7 +28,6 @@ package body Landin.IR.Specialization is
       Report : in out Landin.Build_Reports.Report)
    is
       package Reports renames Landin.Build_Reports;
-      package Layouts renames Landin.Targets.Layouts;
       use type Reports.Specialization_Decision;
       package Template_Counts is new Ada.Containers.Ordered_Maps
         (Key_Type => Declaration_Id, Element_Type => Natural);
@@ -141,12 +139,6 @@ package body Landin.IR.Specialization is
               (Into, Projection.Evidence, Projection.Evidence_Entry);
          end;
       end Direct_Target;
-
-      --  Costing retains its byte-count limit; target-object admissibility
-      --  and physical placement remain the backend's separate authority.
-      function Extent (Shape : Field_Shape) return Layouts.Field_Extent
-        is (Shape_Measurement.Extent
-              (Into, Shape, Facts, Landin.Targets.Byte_Count'Last));
 
       procedure Pin (Item : Item_Id; Place : Storage);
       procedure Pin (Item : Item_Id; Place : Storage) is
@@ -327,75 +319,88 @@ package body Landin.IR.Specialization is
             Pending_First := Pending_First + 1;
          end;
       end loop;
-      for I in 1 .. Count loop
-         declare
-            Item : constant Item_Id := Item_Id (I);
-            Decision : Reports.Specialization_Decision :=
-              (Item => Item, Template => Generic_Template_Of (Into, Item),
-               Instance_Position => Instance_Position_Of (Into, Item),
-               others => <>);
-            Entries : Natural := 0;
-            Has_Dispatch : Boolean := False;
-            Pointer_Bytes : constant Landin.Targets.Byte_Count :=
-              Landin.Targets.Byte_Count
-                (Landin.Targets.Bytes (Landin.Targets.Pointer_Size (Facts)));
-         begin
-            if Decision.Template /= No_Declaration then
-               for V in 1 .. Value_Count (Into, Item) loop
-                  declare
-                     Code : constant Instruction :=
-                       Code_At (Item, Value_Id (V));
-                  begin
-                     Decision.Estimated_Growth := Natural'Min
-                       (Natural'Last - Effects.Weight (Code.Op),
-                        Decision.Estimated_Growth) + Effects.Weight (Code.Op);
-                     Has_Dispatch := Has_Dispatch or else
-                       (Code.Op = Evidence_Function and then
-                        not Evidence_Is_Erased (Into, Code.Evidence));
-                     if Direct_Target (Item, Value_Id (V)) /= No_Item then
-                        Entries := Entries + 1;
-                        Decision.Loop_Depth := Natural'Min (4, Natural'Max
-                          (Decision.Loop_Depth, Code.Call_Depth));
-                     end if;
-                  end;
-               end loop;
-               for B in 1 .. Evidence_Binding_Count (Into, Item) loop
-                  declare
-                     Binding : constant Evidence_Binding :=
-                       Nth_Evidence_Binding (Into, Item, B);
-                     Bytes : constant Landin.Targets.Byte_Count := Extent
-                       (Evidence_Represented (Into, Binding.Evidence)).Size;
-                  begin
-                     Decision.Represented_Bytes :=
-                       Landin.Targets.Byte_Count'Min
-                         (Landin.Targets.Byte_Count'Last - Bytes,
-                          Decision.Represented_Bytes) + Bytes;
-                  end;
-               end loop;
-               Decision.Entry_Calls := Natural'Min (32, Entries);
-               Decision.Benefit := Specialization_Policy.Benefit
-                 (Entries, Decision.Loop_Depth,
-                  Natural (Landin.Targets.Byte_Count'Min
-                    (16, Decision.Represented_Bytes / Pointer_Bytes
-                       + (if Decision.Represented_Bytes mod Pointer_Bytes > 0
-                          then 1 else 0))));
-               if Options.Specialize = Landin.Optimization.Off then
-                  Decision.Reason := Reports.Disabled;
-               elsif not Has_Dispatch then
-                  Decision.Reason := Reports.No_Static_Dispatch;
-               elsif Exposed (I) then
-                  Decision.Reason := Reports.Address_Exposed;
-               elsif not Proven (I) then
-                  Decision.Reason := Reports.Unknown_Evidence;
-               elsif Entries = 0 then
-                  Decision.Reason := Reports.No_Static_Dispatch;
-               else
-                  Decision.Action := Reports.Specialized;
+      --  The unit's represented shapes stay fixed throughout costing. Share
+      --  one memo across bindings and instances, then discard it before any
+      --  specialization rewrite mutates the unit.
+      declare
+         Measurements : Shape_Measurement.Layout_Cache;
+      begin
+         for I in 1 .. Count loop
+            declare
+               Item : constant Item_Id := Item_Id (I);
+               Decision : Reports.Specialization_Decision :=
+                 (Item => Item, Template => Generic_Template_Of (Into, Item),
+                  Instance_Position => Instance_Position_Of (Into, Item),
+                  others => <>);
+               Entries : Natural := 0;
+               Has_Dispatch : Boolean := False;
+               Pointer_Bytes : constant Landin.Targets.Byte_Count :=
+                 Landin.Targets.Byte_Count
+                   (Landin.Targets.Bytes
+                      (Landin.Targets.Pointer_Size (Facts)));
+            begin
+               if Decision.Template /= No_Declaration then
+                  for V in 1 .. Value_Count (Into, Item) loop
+                     declare
+                        Code : constant Instruction :=
+                          Code_At (Item, Value_Id (V));
+                     begin
+                        Decision.Estimated_Growth := Natural'Min
+                          (Natural'Last - Effects.Weight (Code.Op),
+                           Decision.Estimated_Growth)
+                          + Effects.Weight (Code.Op);
+                        Has_Dispatch := Has_Dispatch or else
+                          (Code.Op = Evidence_Function and then
+                           not Evidence_Is_Erased (Into, Code.Evidence));
+                        if Direct_Target (Item, Value_Id (V)) /= No_Item then
+                           Entries := Entries + 1;
+                           Decision.Loop_Depth := Natural'Min (4, Natural'Max
+                             (Decision.Loop_Depth, Code.Call_Depth));
+                        end if;
+                     end;
+                  end loop;
+                  for B in 1 .. Evidence_Binding_Count (Into, Item) loop
+                     declare
+                        Binding : constant Evidence_Binding :=
+                          Nth_Evidence_Binding (Into, Item, B);
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Shape_Measurement.Cached_Field_Extent
+                            (Measurements, Into,
+                             Evidence_Represented (Into, Binding.Evidence),
+                             Facts, Landin.Targets.Byte_Count'Last).Size;
+                     begin
+                        Decision.Represented_Bytes :=
+                          Landin.Targets.Byte_Count'Min
+                            (Landin.Targets.Byte_Count'Last - Bytes,
+                             Decision.Represented_Bytes) + Bytes;
+                     end;
+                  end loop;
+                  Decision.Entry_Calls := Natural'Min (32, Entries);
+                  Decision.Benefit := Specialization_Policy.Benefit
+                    (Entries, Decision.Loop_Depth,
+                     Natural (Landin.Targets.Byte_Count'Min
+                       (16, Decision.Represented_Bytes / Pointer_Bytes
+                          + (if Decision.Represented_Bytes mod Pointer_Bytes
+                                > 0
+                             then 1 else 0))));
+                  if Options.Specialize = Landin.Optimization.Off then
+                     Decision.Reason := Reports.Disabled;
+                  elsif not Has_Dispatch then
+                     Decision.Reason := Reports.No_Static_Dispatch;
+                  elsif Exposed (I) then
+                     Decision.Reason := Reports.Address_Exposed;
+                  elsif not Proven (I) then
+                     Decision.Reason := Reports.Unknown_Evidence;
+                  elsif Entries = 0 then
+                     Decision.Reason := Reports.No_Static_Dispatch;
+                  else
+                     Decision.Action := Reports.Specialized;
+                  end if;
                end if;
-            end if;
-            Decisions (I) := Decision;
-         end;
-      end loop;
+               Decisions (I) := Decision;
+            end;
+         end loop;
+      end;
       --  Count eligible normalized instances, never call sites. Profitability
       --  cannot alter the evidence proof or source recursion acceptance.
       --  Each template is counted once before any profitability decision.
