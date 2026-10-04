@@ -990,6 +990,15 @@ module under `core/*` checks on every supported target, `core/cpu` checks on
 M-profile levels and is refused on other families, and a firmware build
 refuses a hosted import by name.
 
+Record the shared-root module inventory and supported-target matrix at
+closure. For every shared module, a small consumer must import and use it,
+then compile and link on every supported hosted and firmware target. Execute
+the consumers on native or emulator lanes where behavior needs target
+evidence, with success and failure oracles. Keep consumers separate where a
+combined image would exceed a constrained target's budget; an image-size
+refusal is not positive evidence that a shared module works. Every later
+target's gate must repeat this matrix for that target.
+
 ### R13.20 — The freestanding library
 
 Status: planned
@@ -1026,6 +1035,10 @@ oracles.
   separate. Every shared module checks on every supported target, each
   target-specific module checks only on its declared targets, firmware
   refuses hosted imports by name, and every facility has a consumer.
+
+- Every shared-root module has R13.10's positive per-target compile/link
+  evidence and applicable execution and failure checks. Target-specific
+  freestanding and hosted availability checks remain separate.
 
 ## R14 — Concurrency
 
