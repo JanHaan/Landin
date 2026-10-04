@@ -4434,10 +4434,11 @@ package body Landin.Tests.Driver_Suite is
          "the index is an answer");
       Landin.Testing.Check
         (Item, Contains (Listed, "L0001  retired")
-               and then Contains (Listed, "L0506  error"),
+               and then Contains (Listed, "L0506  error")
+               and then Contains (Listed, "L0507  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 90,
+        (Item, Occurrences (Listed, "" & LF), 91,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,

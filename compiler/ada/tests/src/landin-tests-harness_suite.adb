@@ -279,8 +279,14 @@ package body Landin.Tests.Harness_Suite is
         (Host, Include_Target_Workloads => False);
       Landin.Testing.Check_Equal
         (Item, Landin.Testing.Case_Count (Complete),
-         Landin.Testing.Case_Count (Host) + 2,
-         "host scope excludes the two target workload cases");
+         Landin.Testing.Case_Count (Host) + 3,
+         "host scope excludes the three target workload cases");
+      Landin.Testing.Check
+        (Item, Landin.Testing.Is_Registered
+           (Complete, "fixture execution", "unused hosted bridge is discarded")
+         and then not Landin.Testing.Is_Registered
+           (Host, "fixture execution", "unused hosted bridge is discarded"),
+         "host scope excludes native linked bridge execution");
       Landin.Testing.Check
         (Item, Landin.Testing.Is_Registered
            (Complete, "fixture execution", "runtime fixtures execute")
