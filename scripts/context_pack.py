@@ -269,16 +269,22 @@ def declaration_outline(source):
     lines = source.text.splitlines()
     rows = []
     suffix = source.path.suffix.lower()
+    ada = suffix in ADA_SUFFIXES
     for number, line in enumerate(lines, 1):
-        without_comment = (
-            strip_ada_comment(line) if suffix in ADA_SUFFIXES else line
-        )
-        matches = (
-            DECLARATION.match(without_comment)
-            or DEPENDENCY.match(without_comment)
-            if suffix in ADA_SUFFIXES
-            else C_DECLARATION.match(without_comment)
-        )
+        if ada:
+            # Both patterns are anchored keyword prefixes, which removing a
+            # trailing comment cannot create, so only candidate lines need
+            # the character-by-character comment scan.
+            if not (DECLARATION.match(line) or DEPENDENCY.match(line)):
+                continue
+            without_comment = strip_ada_comment(line)
+            matches = (
+                DECLARATION.match(without_comment)
+                or DEPENDENCY.match(without_comment)
+            )
+        else:
+            without_comment = line
+            matches = C_DECLARATION.match(without_comment)
         if matches:
             normalized = " ".join(without_comment.split())
             rows.append(f"{number}: {normalized}")

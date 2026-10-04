@@ -62,6 +62,22 @@ class ContextPackTests(unittest.TestCase):
         self.assertIn("2: package body Example is", outline)
         self.assertIn("3: procedure Run is", outline)
 
+    def test_outline_strips_comments_only_from_retained_rows(self):
+        text = (
+            "with Ada.Text_IO; -- console\n"
+            "-- procedure Hidden is\n"
+            "   X : String := \"type -- not a comment\";\n"
+            "   procedure Run (S : String := \"a--b\"); -- note\n"
+        )
+        source = CONTEXT_PACK.Source(
+            Path("example.adb"), "example.adb", text, "abc",
+        )
+        outline = CONTEXT_PACK.declaration_outline(source)
+        self.assertIn("1: with Ada.Text_IO;\n", outline)
+        self.assertNotIn("Hidden", outline)
+        self.assertNotIn("3:", outline)
+        self.assertIn('4: procedure Run (S : String := "a--b");\n', outline)
+
     def test_query_chunks_are_exact_source_slices(self):
         lines = [f"line_{number}\n" for number in range(1, 61)]
         lines[24] = "procedure Important_Check is\n"
