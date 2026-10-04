@@ -3505,8 +3505,9 @@ literal, named and computed module-known bool values, including scalar leaves
 of array and struct images. Runtime Linux code zero-extends the canonical
 one-byte bool and converts that zero or one into the selected SSE width. The
 neutral conversion verifier admits bool as a source for either numeric class.
-f16 remains refused, and [1975]'s external floating-point ABI remains deferred;
-neither boundary is changed by an internal scalar conversion.
+At this decision, f16 and [1975]'s external floating-point ABI remained
+deferred; the internal scalar conversion changed neither boundary. D204
+subsequently enabled f32 and f64 in the selected C ABI. f16 remains refused.
 
 **The alternatives:** reinterpret bool's byte as float bits, produce negative
 zero for false, route through a contextual integer conversion, or keep the
