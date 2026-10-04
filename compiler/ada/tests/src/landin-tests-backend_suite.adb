@@ -6413,21 +6413,29 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & ".section .rodata.landin_evidence_"),
-            3, "each direct or erased table selects its own section");
+            2, "each physical evidence table selects its own section");
          for Number in 1 .. 3 loop
-            declare
-               Suffix : constant String := Ada.Strings.Fixed.Trim
-                 (Number'Image, Ada.Strings.Both);
-            begin
-               Landin.Testing.Check
-                 (Item, Contains
-                    (Text, HT & ".section .rodata.landin_evidence_"
-                     & Suffix & ",""a"",%progbits" & LF
-                     & HT & ".balign 4" & LF
-                     & "Llandin_evidence_" & Suffix & ":" & LF),
-                  "table and section identities agree");
-            end;
+            if Number /= 2 then
+               declare
+                  Suffix : constant String := Ada.Strings.Fixed.Trim
+                    (Number'Image, Ada.Strings.Both);
+               begin
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Text, HT & ".section .rodata.landin_evidence_"
+                        & Suffix & ",""a"",%progbits" & LF
+                        & HT & ".balign 4" & LF
+                        & "Llandin_evidence_" & Suffix & ":" & LF),
+                     "physical table and section identities agree");
+               end;
+            end if;
          end loop;
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "Llandin_evidence_1:" & LF
+               & "Llandin_evidence_2:" & LF & HT & ".long 4" & LF
+               & HT & ".long 4" & LF & HT & ".long read_first" & LF),
+            "identical direct and erased tables share one complete section");
          Landin.Testing.Check
            (Item, Contains (Text, HT & ".long read_second" & LF)
              and then Contains (Text, HT & ".word Llandin_evidence_2" & LF),
