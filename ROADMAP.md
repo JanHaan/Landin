@@ -859,6 +859,13 @@ source interoperation remains in R13.20. [1630] and D248 must also be amended fo
 operands, with executed float-operand fixtures on every target with float
 registers.
 
+The recurring emulator gate must also execute a compiler-generated,
+non-division Thumb-2 operation at `armv8-m.main` and check its result. Linked
+disassembly must locate the selected instruction in the fixture's compiled
+function. The same source at default `armv6-m` must retain its baseline
+lowering without that instruction. This evidence supplements the M4F float,
+ABI and assembly-operand requirements above.
+
 ### R12.40 — RISC-V microcontrollers
 
 Status: planned
@@ -893,6 +900,29 @@ startup then provides, or CALL0 throughout, which has none.
 Exit evidence: the freestanding corpus on Espressif's QEMU in the gate, and a
 recorded run on each board.
 
+Extend D255 with one Xtensa family and two selectable levels: the ESP32 LX6
+configuration `xtensa-esp32` as default and the ESP32-S3 LX7 configuration
+`xtensa-esp32s3`. Backend design must establish their compatibility and one
+shared layout and C ABI, choosing the calling convention here rather than
+assuming it now. Record their feature sets when implemented, including a
+feature present only in the S3 configuration.
+
+Select levels through `--level=` and the server's `level` option, expose the
+features through `fixed if compiler.feature.NAME`, and refuse unknown or
+other-family selections with L0009. Pin assembler configurations that reject
+instructions outside each selected level, including the default, for both
+`assembler.block` and generated code.
+
+Completion requires CLI and server selection checks, a feature-dependent
+source taking different branches at the two levels, and unknown/foreign-level
+refusals. Execute the same source at both selected levels only on compatible
+chips, recording the baseline compatibility evidence before relying on an S3
+run for an LX6-level build. At each level, require assembly acceptance of an
+available instruction and refusal of a valid Xtensa instruction absent from
+that level. Record the assembler commands and refusals; a corpus run alone
+does not satisfy the item. Neither level is added to today's compiler table
+by this plan.
+
 ### R12.60 — Boards in the gate
 
 Status: planned
@@ -925,6 +955,11 @@ lanes it does not replace.
   provider and DMA visibility-point evidence from its first admitting item.
 - R12.10's bounded emission policy and small-shape controls pass before any
   profile larger than the retained 32 KiB image is admitted.
+
+- Xtensa LX6 and LX7 pass level selection, feature-fact and assembler-limit
+  checks, with execution on compatible chips as required by R12.50.
+- R12.30 passes non-division Thumb-2 execution, linked instruction-selection
+  inspection and the same-source ARMv6-M baseline control.
 
 ## R13 — The library
 
