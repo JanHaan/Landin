@@ -1682,7 +1682,7 @@ runtime/large-array-offset-is-addressed | linux-x86-64, linux-arm64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64, linux-arm64, macos-arm64
 runtime/lenof-named-fixed-arrays | linux-x86-64, linux-arm64, macos-arm64
 runtime/line-end-continues-expression | linux-x86-64, linux-arm64, macos-arm64
-runtime/literal-conditions-select-flow | linux-x86-64, linux-arm64, macos-arm64, cortex-m0
+runtime/literal-conditions-select-flow | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-index-reads-and-writes | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-index-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-store-traps | linux-x86-64, linux-arm64, macos-arm64
