@@ -788,6 +788,32 @@ package body Landin.Tests.IR_Optimization_Suite is
                "forwarded dispatch follows the late root");
          end;
       end loop;
+      --  The dependency graph must use the same post-assembly aliases as
+      --  direct dispatch, including a restoring store and unrelated outputs.
+      for Scenario in Overwritten .. Unrelated_Output loop
+         declare
+            Code : IR.Unit;
+            Report : Reports.Report;
+         begin
+            Evidence_Unit
+              (Code, Work, Literal_Table, Chain_Length, False,
+               Assembly_Output => Scenario, Chain => True);
+            IR.Specialization.Run
+              (Code, Landin.Stages.Target (Work),
+               (Opt.Speed, Opt.All_Eligible), Report);
+            Landin.Testing.Check_Equal
+              (Item, Count (Code, IR.Indirect_Call),
+               (if Scenario = Overwritten then Chain_Length else 0),
+               "forwarded dispatch respects assembly writes and restores");
+            for I in 1 .. Chain_Length loop
+               Landin.Testing.Check
+                 (Item, Reports.Nth_Specialization (Report, I).Action =
+                    (if Scenario = Overwritten then Reports.Declined
+                     else Reports.Specialized),
+                  "forwarded assembly evidence retains its decision");
+            end loop;
+         end;
+      end loop;
    end Forwarded_Evidence_Chain;
 
    procedure Instance_Costs (Item : in out Landin.Testing.Context) is
