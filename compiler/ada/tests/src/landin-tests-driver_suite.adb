@@ -2633,6 +2633,50 @@ package body Landin.Tests.Driver_Suite is
       end;
    end An_Unwritable_Output_Is_Reported;
 
+   procedure Failed_Assembly_Does_Not_Write_Source_Map
+     (Item : in out Landin.Testing.Context);
+
+   procedure Failed_Assembly_Does_Not_Write_Source_Map
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Executable in Boolean loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Arguments_Of ("main.ldn");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Host.Add_Directory
+              (if Executable then "out.s" else "out");
+            Args.Append ("--panic-map");
+            Args.Append
+              (if Executable then "--emit=exe" else "--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("out");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                    and then Contains
+                      (Report, "error[L0005]: cannot write: "
+                       & (if Executable then "out.s" else "out")),
+                  "assembly write failure names the failed path");
+               Landin.Testing.Check
+                 (Item, not Host.Exists ("out.sources.json")
+                    and then Host.Write_Count = 1
+                    and then Tools.Run_Count = 0,
+                  "a failed assembly write cannot create a source map");
+            end;
+         end;
+      end loop;
+   end Failed_Assembly_Does_Not_Write_Source_Map;
+
    procedure Fixed_Options_Are_Deterministic
      (Item : in out Landin.Testing.Context);
 
@@ -4899,6 +4943,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an unwritable output is reported",
          An_Unwritable_Output_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "failed assembly does not write source map",
+         Failed_Assembly_Does_Not_Write_Source_Map'Access);
       Landin.Testing.Register
         (Into, "driver", "Darwin emits native code and keeps debug refusal",
          Darwin_Contracts'Access);

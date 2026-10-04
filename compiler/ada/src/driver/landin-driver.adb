@@ -1100,6 +1100,7 @@ package body Landin.Driver is
 
             Written : Landin.Platform.Write_Status;
             Map_Id : Unbounded.Unbounded_String;
+            Map_JSON : Unbounded.Unbounded_String;
             Evidence : Landin.Build_Reports.Report;
             Digests : aliased Landin.Source_Digests.Cache
               (Landin.Source.Source_Id (Landin.Stages.Source_Count (Context)));
@@ -1499,13 +1500,7 @@ package body Landin.Driver is
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
-                     Host.Write_File
-                       (Map_Path, Unbounded.To_String (Map.JSON), Written);
-                     if Written /= Landin.Platform.Write_Ok then
-                        Note_Failure
-                          (Code_Unwritable, "cannot write: " & Map_Path);
-                        return;
-                     end if;
+                     Map_JSON := Map.JSON;
                   end;
                end if;
                Host.Write_File
@@ -1514,6 +1509,15 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unwritable, "cannot write: " & Assembly_Path);
                   return;
+               end if;
+               if Emit_Map then
+                  Host.Write_File
+                    (Map_Path, Unbounded.To_String (Map_JSON), Written);
+                  if Written /= Landin.Platform.Write_Ok then
+                     Note_Failure
+                       (Code_Unwritable, "cannot write: " & Map_Path);
+                     return;
+                  end if;
                end if;
             end;
 
