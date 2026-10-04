@@ -1742,6 +1742,55 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Missing_Toolchain_Precedes_Compilation;
 
+   procedure Missing_Toolchain_Preserves_Stage_Report_Source
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Toolchain_Preserves_Stage_Report_Source
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Rooted in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Source_Path : constant String :=
+              (if Rooted then "entry/main.ldn" else "main.ldn");
+            Args : Landin.Platform.Path_List :=
+              ["--emit=exe", "--toolchain=absent-gcc",
+               "--stage-report=" & Source_Path];
+         begin
+            if Rooted then
+               Host.Add_Directory ("entry");
+               Args.Append ("--root=entry");
+               Args.Append ("entry");
+            else
+               Args.Append (Source_Path);
+            end if;
+            Host.Add_File (Source_Path, Entry_Program);
+            Tools.Set_Available (False);
+
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Reported,
+                  "missing toolchain is reported before source loading");
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "error[L0500]: cannot run absent-gcc"),
+                  "the missing-toolchain diagnostic is retained");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0,
+                  "a colliding stage report cannot overwrite a source");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "the missing toolchain starts no process");
+            end;
+         end;
+      end loop;
+   end Missing_Toolchain_Preserves_Stage_Report_Source;
+
    --  The whole invocation, in order.  A containment check would pass on a
    --  command line that had lost its output.
    procedure An_Executable_Runs_The_Triplet_Driver
@@ -4796,6 +4845,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "missing toolchain precedes compilation",
          Missing_Toolchain_Precedes_Compilation'Access);
+      Landin.Testing.Register
+        (Into, "driver", "missing toolchain preserves stage report source",
+         Missing_Toolchain_Preserves_Stage_Report_Source'Access);
       Landin.Testing.Register
         (Into, "driver", "an executable runs the triplet driver",
          An_Executable_Runs_The_Triplet_Driver'Access);

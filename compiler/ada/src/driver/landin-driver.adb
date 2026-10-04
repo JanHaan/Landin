@@ -908,10 +908,12 @@ package body Landin.Driver is
             end if;
          end Watch_Stage;
 
-         --  Written whenever the request was well formed, a refused program
-         --  included: where a refusal's time and storage went is exactly
-         --  what a bound is measured by.  The sizes are the compilation's
-         --  own counts and are the same on every run; the rows are not.
+         --  Written when source loading began, a refused program included:
+         --  where a refusal's time and storage went is exactly what a bound
+         --  is measured by. A preflight refusal has no loaded source list to
+         --  protect from an overlapping report path, and no measured stage.
+         --  The sizes are the compilation's own counts and are the same on
+         --  every run; the rows are not.
          procedure Write_Stage_Report is
             Path : constant String := Unbounded.To_String (Stage_Report_Path);
             Written : Landin.Platform.Write_Status;
@@ -920,7 +922,9 @@ package body Landin.Driver is
               (Ada.Strings.Fixed.Trim
                  (Natural'Image (Value), Ada.Strings.Both));
          begin
-            if not Stage_Report_Seen or else Bad_Use then
+            if not Stage_Report_Seen or else Bad_Use
+              or else Skip_Compilation
+            then
                return;
             end if;
             --  A failed read has no source in Context, but its requested
