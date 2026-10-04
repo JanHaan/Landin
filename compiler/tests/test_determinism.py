@@ -20,14 +20,15 @@ are run, and in THE HOST THEY RUN ON.
 
 Tier 1, TARGET CODE, is deterministic under that whole relation:
 
-  * the assembly emitted without `--debug`;
+  * the assembly emitted without `--debug` when no source map is produced;
   * the build report, apart from its `sources[].path_hex` entries.
 
 Tier 2, SOURCE-IDENTIFYING ARTIFACTS, is deterministic under Tier 1's relation
-narrowed by a fixed absolute compilation directory and a fixed source-path
-spelling:
+narrowed by a fixed source-path spelling (and, with `--debug`, a fixed
+absolute compilation directory):
 
   * `--debug=full` and `--debug=lines` assembly;
+  * no-debug assembly when caller coordinates or `--panic-map` produce a map;
   * the source/panic map, and `sources[].path_hex` in the build report.
 
 Tier 2 is a declared record, not a defect.  DWARF's `comp_dir` and `.file` are
@@ -69,7 +70,9 @@ not the compiler.  Tier 2's fixed source-path spelling is an INPUT, `caller`
 locations put a digest of the caller files into the assembly, and two
 absolute paths disagree that way on one host as readily as on two.  A
 cross-host check that does not pin the spelling is measuring its own working
-directory.
+directory.  This script also checks that copied caller sources with changed
+path spelling retain the same instructions while their map identity and
+assembly digest change together.
 
 Cortex-M firmware ELF, object, assembly, linker script and linker map identity
 across build directories is claimed too, and is checked where the ARM
@@ -86,6 +89,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -276,9 +280,9 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
     require(again_report.read_bytes() == runs[0][1],
             label + ": repeated build report differs")
 
-    #  The panic map records caller-spelled paths and nothing about where
-    #  the compilation ran, so it is Tier 1 under the same rule as the
-    #  report -- and it must name the assembly it claims to map.
+    #  For this caller-free corpus, the panic map records fixed caller-spelled
+    #  paths and nothing about where the compilation ran.  It must name the
+    #  assembly it claims to map.
     maps = []
     for directory, name in ((alpha, "pm"), (beta, "pm-other")):
         assembly = directory / (name + ".s")
@@ -309,6 +313,57 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
             label + ": debug assembly differs under a fixed directory")
     debug_residue(fixed.read_bytes(), moved.read_bytes(), alpha, beta,
                   label + "/debug")
+
+
+def caller_mapped_paths(refine: Path, source: Path, target: str, area: Path):
+    """A moved caller source changes its map identity, not its instructions."""
+    directories = (area / "alpha", area / "beta")
+    for directory in directories:
+        directory.mkdir(parents=True)
+        shutil.copyfile(source, directory / "main.ldn")
+
+    for explicit_map in (False, True):
+        label = target + ("/panic-map" if explicit_map else "/caller-map")
+        runs = []
+        for directory in directories:
+            assembly_path = directory / ("explicit.s" if explicit_map
+                                         else "default.s")
+            compile(refine, directory / "main.ldn", assembly_path,
+                    target=target, profile=("size", "auto"), cwd=directory,
+                    panic_map=explicit_map)
+            map_path = directory / (assembly_path.name + ".sources.json")
+            require(map_path.is_file(), label + ": emitted no source map")
+            assembly = assembly_path.read_bytes()
+            panic_map = map_path.read_bytes()
+            check_map_binds_assembly(panic_map, assembly, label)
+            parsed = json.loads(panic_map)
+            require(len(parsed["files"]) == 1 and
+                    parsed["files"][0]["path_hex"] ==
+                    str(directory / "main.ldn").encode().hex(),
+                    label + ": map lost the caller-spelled source path")
+            require(parsed["build_id"].encode() in assembly,
+                    label + ": assembly lost its map identity")
+            normalized, count = re.subn(
+                rb"(?m)^# Landin caller files [0-9a-f]{64}$",
+                b"# Landin caller files <identity>", assembly)
+            require(count == 1, label + ": assembly has no unique map identity")
+            normalized = normalized.replace(
+                b'.ascii "' + parsed["build_id"].encode() + b'"',
+                b'.ascii "<identity>"')
+            runs.append((assembly, normalized, parsed))
+
+        left, right = runs
+        require(left[1] == right[1],
+                label + ": instructions changed with source-path spelling")
+        require(left[0] != right[0],
+                label + ": assembly failed to follow source-path spelling")
+        require(left[2]["build_id"] != right[2]["build_id"],
+                label + ": build identity failed to follow source-path spelling")
+        require(left[2]["assembly_sha256"] != right[2]["assembly_sha256"],
+                label + ": assembly digest failed to follow source-path spelling")
+        for field in ("file_id", "source_sha256"):
+            require(left[2]["files"][0][field] == right[2]["files"][0][field],
+                    label + ": map " + field + " changed with source-path spelling")
 
 
 def linked_image(refine: Path, source, target: str, area: Path, label: str):
@@ -391,6 +446,14 @@ def main() -> int:
                     failures.append(str(failure))
             print(f"determinism: {target} passed {len(CORPUS) + 1} closures "
                   f"over {len(PROFILES)} profiles", flush=True)
+
+            index += 1
+            try:
+                caller_mapped_paths(
+                    refine, fixtures / "caller-is-an-ordinary-name" / "main.ldn",
+                    target, area / str(index))
+            except Failure as failure:
+                failures.append(str(failure))
 
         #  The one target this host can also link.  Not skipped when the host
         #  is the other one: the other host's acceptance run checks it there.

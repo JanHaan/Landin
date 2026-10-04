@@ -373,11 +373,12 @@ and in what order they run.
 
 | artifact | deterministic under | records |
 |---|---|---|
-| assembly without `--debug` | equivalent closures | nothing about where it was built |
+| assembly without `--debug` and without a source map | equivalent closures | nothing about where it was built |
+| assembly without `--debug`, with caller coordinates or `--panic-map` | equivalent closures with source-path spelling fixed | the source-map build identity in a comment and, on some targets, a section |
 | build report | equivalent closures, apart from `sources[].path_hex` | the caller-spelled source paths, and a content hash beside each |
-| panic map (`*.sources.json`) | equivalent closures, apart from `path_hex` | the caller-spelled paths, and the SHA-256 of the assembly it maps |
+| source/panic map (`*.sources.json`) | equivalent closures with source-path spelling fixed; also compilation directory fixed when `--debug` is set | caller-spelled paths, a build identity hashed over the file entries and assembly, and the SHA-256 of the final assembly |
 | `--debug=full`, `--debug=lines` assembly | equivalent closures with the compilation directory and source spelling fixed | DWARF `comp_dir` and `.file`, and the build identity hashed over them |
-| Cortex-M firmware ELF, object, assembly, linker script and linker map | equivalent closures, checked in [`devices.py`](../environments/cortex-m/devices.py) | — |
+| Cortex-M device fixture ELF, object, assembly, linker script and linker map | paired builds with fixed source-path spelling in [`devices.py`](../environments/cortex-m/devices.py) | — |
 | hosted linked executable | **not claimed** | the platform driver's own temporary object name |
 
 The last row is measured, not assumed. On the pinned Linux toolchain two links
@@ -397,6 +398,18 @@ find source. What the gate does instead is pin how they may vary — when only
 the compilation directory moves, the debug assembly may differ in the recorded
 directory and the identity derived from it and in nothing else, so an
 instruction that followed the build directory fails.
+
+Caller coordinates emit a source map even at the default `--debug=none`.
+Changing only the source-path spelling changes its `path_hex` file entries,
+the map's `build_id`, the identity comment and any identity section in
+assembly, and therefore the map's `assembly_sha256`. `--panic-map` has the
+same path dependence. The path-independent assembly claim applies only when
+no source map is produced; a changed caller path does not change the program
+instructions.
+
+The Cortex-M device check builds each fixture in two output directories with
+the same relative source-path spelling. Its artifact comparison therefore
+does not claim identity when the source-path spelling changes.
 
 ## Cortex-M environment boundary
 
