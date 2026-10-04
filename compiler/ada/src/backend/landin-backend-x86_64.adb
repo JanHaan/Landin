@@ -71,10 +71,9 @@ package body Landin.Backend.X86_64 is
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
 
    --  A datum's value, held as the bit pattern the target will store.  A
-   --  module value is folded rather than run [1940], and `Landin.IR`'s own
-   --  header says why the folding lands here: the checker declines the
-   --  bitwise and shift levels because [0320]'s zero-fill needs a width,
-   --  and a width needs a target.  This is that width's side of the seam.
+   --  module value is folded rather than run [1940].  Checking already
+   --  folded with target facts to validate it; this backend folds the
+   --  verified scalar datum instructions to make the stored image.
    --
    --  The widest enabled type is 64 bits, so one modular type covers every
    --  fold and narrower ones are masked back to their own width after each

@@ -122,17 +122,17 @@ with Landin.Packed;
 --  entry point" and [1940] says a module value is a literal, an operator
 --  of [1820] over literals, or another module binding -- so a datum's
 --  block describes its value and is not code.  It is carried as
---  instructions rather than as one folded constant for a narrower reason
---  than it first looks.  [1940] now says a module value is folded and
---  refused when no type holds the answer, and the checker does that -- so
---  a datum that reaches here has a value the compiler knows.  But the
---  checker declines to fold the bitwise and shift levels, because
---  [0320]'s zero-fill beyond the width needs a width and a width needs a
---  target; so `k: u32 = 1 << 40` arrives folded by nobody.  Carrying
---  instructions covers that case without this package learning what a
---  width is.  D177 is the deliberate bool exception: aggregate image
---  lowering already owns the complete [1820] fold, so a module bool carries
---  that folder's canonical zero-or-one image beside an otherwise empty datum
+--  instructions rather than as one folded constant because checking's
+--  target-aware fold validates the value but does not store a scalar
+--  numeric image in the IR.  It folds [0320]'s shifts and [0330]'s bitwise
+--  operators at the operand type's width, so `k: u32 = 1 << 40` is known
+--  to be zero during checking.  Lowering still records the typed expression
+--  as datum instructions, and the backend folds those verified instructions
+--  into bytes.  The instructions keep the source expression and its origins
+--  in this target-neutral representation without this package encoding a
+--  target-width result.  D177 is the deliberate bool exception: aggregate
+--  image lowering already owns the complete [1820] fold, so a module bool
+--  carries that folder's canonical zero-or-one image beside an empty datum
 --  block.  Routine short-circuit CFG therefore never becomes data.
 
 with Ada.Containers;
@@ -277,8 +277,9 @@ package Landin.IR is
       Store_Variant_Field,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
-      --  the answer belongs to whoever has one.  This is the same seam
-      --  the bitwise and shift levels of a module fold already sit on.
+      --  the answer belongs to a stage with target facts.  Checking can
+      --  fold it, while IR carries the operation for datum emission, as it
+      --  does for bitwise operations and shifts in numeric scalar datums.
       Measure_Size,
       Measure_Align,
       --  [1820]'s prefix operators.

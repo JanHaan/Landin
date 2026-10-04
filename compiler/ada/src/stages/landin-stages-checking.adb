@@ -32304,11 +32304,11 @@ package body Landin.Stages.Checking is
 
          --  D188: [1940]'s image has no moment in which to trap, so a
          --  module binding of [0660]'s range subtype must have a value this
-         --  fold reaches.  That refusal is deliberate and narrow: the fold
-         --  declines the bitwise and shift levels because [0320] needs a
-         --  width and a width needs a target, and a value that passed
-         --  checking unchecked would reach the backend's datum evaluator
-         --  with nowhere left to report it.
+         --  fold reaches.  The folder has target facts and evaluates
+         --  [0320]'s shifts and [0330]'s bitwise operators at the operand
+         --  width.  Refuse an unknown result here rather than let it reach
+         --  the backend's datum evaluator with no place to report a range
+         --  failure.
          declare
             Wanted_Constraint : constant Landin.Checking.Constraint_Id :=
               Landin.Checking.Constraint_Of

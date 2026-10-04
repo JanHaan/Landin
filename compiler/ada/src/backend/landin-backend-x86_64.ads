@@ -48,13 +48,14 @@ with Landin.Panics;
 --  storage copy, while a callee returning none leaves nothing to take.
 --
 --  A module value is data and not code.  [1460] says nothing runs before the
---  entry point, so a datum's block is folded here rather than executed, and
---  the fold lands here because `Landin.IR`'s header says the checker leaves
---  the bitwise and shift levels to whoever has a width.  What comes out is an
---  object at its own alignment, in one of two sections, and the value decides
---  which rather than the type: one whose fold gives a value other than zero
---  is written into `.data`, and one that is all zero is reserved in `.bss`,
---  where it costs no bytes in the object or the image.  A binding with no
+--  entry point, so a datum's block is folded here rather than executed.
+--  Checking has already folded with target facts to validate the value;
+--  this backend folds the verified scalar datum instructions into its image.
+--  What comes out is an object at its own alignment, in one of two sections,
+--  and the value decides which rather than the type: one whose fold gives
+--  a value other than zero is written into `.data`, and one that is all zero
+--  is reserved in `.bss`, where it costs no bytes in the object or the image.
+--  A binding with no
 --  value holds zero, which D10 settled, so it is reserved; so is a fold that
 --  reaches zero, and so is [0670]'s module state, which has no other value it
 --  could hold.  A routine reaches one by name, RIP-relative, rather than
