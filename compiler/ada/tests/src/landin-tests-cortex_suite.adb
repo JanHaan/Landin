@@ -48,6 +48,9 @@ package body Landin.Tests.Cortex_Suite is
    use type T.Capabilities.Debug_Format;
 
    LF : constant Character := Character'Val (10);
+   HT : constant Character := Character'Val (9);
+   function Contains (Text, Needle : String) return Boolean
+     is (Ada.Strings.Fixed.Index (Text, Needle) > 0);
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Configurer : aliased Landin.Stages.Configuration.Instance;
    Resolver : aliased Landin.Stages.Resolution.Instance;
@@ -1438,13 +1441,14 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context) is
    begin
-      for Mode in 1 .. 4 loop
+      for Mode in 1 .. 5 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
             Body_Text : constant String :=
-              "mut bytes: [" & (if Mode = 4 then "4048" else "5000")
+              "mut bytes: [" & (if Mode = 4 then "4064"
+                                elsif Mode = 5 then "4072" else "5000")
               & "]u8 = zeroed bytes[0] = 1 _ = bytes[0] ";
          begin
             Host.Add_File ("p.ldn",
@@ -1466,11 +1470,11 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
-                  (if Mode in 1 .. 2 then Landin.Driver.Status_Reported
+                  (if Mode in 1 .. 2 | 5 then Landin.Driver.Status_Reported
                    else Landin.Driver.Status_Success),
                   "firmware frame mode" & Mode'Image & ": "
                   & U.To_String (Result.Report));
-               if Mode in 1 .. 2 then
+               if Mode in 1 .. 2 | 5 then
                   Landin.Testing.Check
                     (Item, U.Index (Result.Report, "L0507") > 0,
                      "oversized known frame has its own diagnostic");
@@ -2038,7 +2042,7 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check
                  (Item, Count ("_return:") = 2
-                    and then Count ("b .Lcm_i") >= 5,
+                    and then Count ("_return" & LF) = 5,
                   "five scalar, aggregate, and failure exits share two"
                   & " return blocks");
                Landin.Testing.Check

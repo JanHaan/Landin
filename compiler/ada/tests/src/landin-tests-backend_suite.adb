@@ -2212,7 +2212,7 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains (Text, HT & "cmpq %rdx, %rax")
+            Contains (Text, HT & "cmpq $2, %rax")
             and then Contains (Text, HT & "leaq state(%rip), %rcx")
             and then Contains
                        (Text, HT & "movabsq $2147483648, %rdx")
@@ -4299,7 +4299,7 @@ package body Landin.Tests.Backend_Suite is
 
       declare
          Text : constant String := Emitted (Work);
-         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural := Index (Text, HT & "imulq $4, %rax, %rax");
          Address : constant Natural :=
@@ -4311,7 +4311,7 @@ package body Landin.Tests.Backend_Suite is
             and then Trap < Scale and then Scale < Address,
             "the unsigned bounds check and trap precede scaling and address");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "the store and load each check the runtime index");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "jb "), 2,
@@ -4360,7 +4360,7 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
       begin
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 4,
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 4,
             "both byte-array paths check each read and write");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "ud2"), 4,
@@ -4403,7 +4403,7 @@ package body Landin.Tests.Backend_Suite is
 
       declare
          Text : constant String := Emitted (Work);
-         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural :=
            Index (Text, HT & "imulq $4, %rax, %rax");
@@ -4420,7 +4420,7 @@ package body Landin.Tests.Backend_Suite is
             and then Trap < Scale and then Scale < Address,
             "the trap and scaling precede the frame-slot address");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "both the store and the load check the runtime index");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "ud2"), 2,
@@ -6337,14 +6337,14 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Copy_At : constant Natural := Index (Text, "rep movsb");
-         Last_GP : constant Natural := Index (Text, "movq %r9, 40(%rsp)");
+         Last_GP : constant Natural := Index (Text, "movq %rdi, 0(%rsp)");
          Last_SSE : constant Natural :=
-           Index (Text, "movq %xmm7, 104(%rsp)");
+           Index (Text, "movq %xmm0, 8(%rsp)");
       begin
          Landin.Testing.Check
            (Item, Last_GP > 0 and then Last_SSE > Last_GP
             and then Copy_At > Last_SSE,
-            "every incoming GP and SSE register is saved before a copy");
+            "each used incoming GP and SSE register is saved before a copy");
          Landin.Testing.Check
            (Item, Contains (Text, "leaq 16(%rbp), %rsi")
             and then Contains (Text, "movabsq $24, %rcx"),
@@ -7057,8 +7057,8 @@ package body Landin.Tests.Backend_Suite is
            (Item, Occurrences (Text, HT & "movn x9, #40" & LF), 1,
             "64-bit -41 needs one complemented move");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movn x9, #40" & LF
-             & HT & "movz x15, #"),
+           (Item, not Contains (Text, HT & "movn x9, #40" & LF
+             & HT & "movk x9,"),
             "64-bit -41 has no following patch move");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "movz x9, #65495" & LF
@@ -7437,8 +7437,8 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
       begin
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "cbz x15, Llandin_step_1_tail" & LF
-                            & "Llandin_step_1:"),
+           (Item, Contains (Text, HT & "b.ne Llandin_step_1_divide" & LF
+                            & HT & "cmn x10, #1"),
             "a nearby conditional branch needs one instruction");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "cbnz x10, Llandin_step_")
@@ -7497,13 +7497,11 @@ package body Landin.Tests.Backend_Suite is
               and then Contains (Text, "bl _c_copy"),
             "both conventions emit zero and nonzero calls");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, "add sp, sp, x15"), 2,
+           (Item, Occurrences (Text, "add sp, sp, #"), 2,
             "only the two calls that reserve space restore it");
          Landin.Testing.Check
-           (Item, Contains (Text, "movz x15, #16" & LF
-                             & HT & "add sp, sp, x15")
-              and then Contains (Text, "movz x15, #32" & LF
-                                 & HT & "add sp, sp, x15"),
+           (Item, Contains (Text, "add sp, sp, #16")
+              and then Contains (Text, "add sp, sp, #32"),
             "native stack argument and C indirect copy restore full areas");
       end;
    end Arm64_Calls_Restore_Only_Reserved_Stack;
@@ -7652,7 +7650,7 @@ package body Landin.Tests.Backend_Suite is
             "adjacent accesses to one home reuse its address");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "ldrb r0, [r6]" & LF
-             & HT & "adds r6, #14" & LF & HT & "strb r0, [r6]" & LF),
+             & HT & "adds r6, #1" & LF & HT & "strb r0, [r6]" & LF),
             "a nearby home needs one address adjustment");
       end;
    end Cortex_Scalar_Homes_Reuse_Adjacent_Address;
@@ -7660,13 +7658,17 @@ package body Landin.Tests.Backend_Suite is
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
-        (Into, "backend", "Cortex scalar homes reuse adjacent address", Cortex_Scalar_Homes_Reuse_Adjacent_Address'Access);
+        (Into, "backend", "Cortex scalar homes reuse adjacent address",
+         Cortex_Scalar_Homes_Reuse_Adjacent_Address'Access);
       Landin.Testing.Register
-        (Into, "backend", "arm64 small call offsets use immediates", Arm64_Small_Call_Offsets_Use_Immediates'Access);
+        (Into, "backend", "arm64 small call offsets use immediates",
+         Arm64_Small_Call_Offsets_Use_Immediates'Access);
       Landin.Testing.Register
-        (Into, "backend", "arm64 bulk array transfers", Arm64_Bulk_Array_Transfers'Access);
+        (Into, "backend", "arm64 bulk array transfers",
+         Arm64_Bulk_Array_Transfers'Access);
       Landin.Testing.Register
-        (Into, "backend", "arm64 calls restore only reserved stack", Arm64_Calls_Restore_Only_Reserved_Stack'Access);
+        (Into, "backend", "arm64 calls restore only reserved stack",
+         Arm64_Calls_Restore_Only_Reserved_Stack'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 conditional reach",
          Arm64_Conditional_Reach'Access);

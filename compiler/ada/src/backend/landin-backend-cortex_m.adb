@@ -315,9 +315,12 @@ package body Landin.Backend.Cortex_M is
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts) return Boolean is
-      --  Emit_Routine reserves 16 bytes for incoming register homes and
-      --  pushes 24 bytes of saved registers beyond Extent (Layout).
-      Overhead : constant Landin.Targets.Byte_Count := 16 + 24;
+      Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
+        (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+      --  Match Emit_Routine: round used incoming register homes to eight
+      --  bytes and add the six words pushed for the saved registers.
+      Overhead : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8 + 24;
    begin
       if Landin.IR.Is_External (Of_Unit, Item)
         or else Landin.IR.Signature_Machine
@@ -405,11 +408,7 @@ package body Landin.Backend.Cortex_M is
 
 
 
-      procedure Put (Line : String) is
-      begin
-         Unbounded.Append (Out_Text, Line & LF);
-         Emission_Line := Emission_Line + 1;
-      end Put;
+
 
       procedure Emit (Instruction : String) is
       begin
@@ -802,6 +801,23 @@ package body Landin.Backend.Cortex_M is
       --  ELF debug-only labels must not perturb ld's local-symbol hash table
       --  and consequently the order of generated flash/RAM veneers.
       Debug_Prefix : constant String := Unused_Local_Prefix (".Llandin_");
+
+      procedure Put (Line : String) is
+      begin
+         Unbounded.Append (Out_Text, Line & LF);
+         --  Debug records cannot change r6 or introduce an executable
+         --  entry. Preserve adjacent-home reuse across those records.
+         if Line'Length > 0
+           and then Ada.Strings.Fixed.Index
+             (Line, Character'Val (9) & ".loc ") /= Line'First
+           and then Ada.Strings.Fixed.Index
+             (Line, Character'Val (9) & ".cfi_") /= Line'First
+           and then Ada.Strings.Fixed.Index
+             (Line, Debug_Prefix & "debug_") /= Line'First
+         then
+            Emission_Line := Emission_Line + 1;
+         end if;
+      end Put;
 
       function Fresh return String is
       begin

@@ -4861,7 +4861,8 @@ package body Landin.Backend.Arm64 is
       if Debug /= null then
          Preamble_After := Natural (Lines.Length);
          Unbounded.Append (Preamble_Text, Dwarf.Preamble
-           (Debug.all, Local_Prefix, Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
+           (Debug.all, Local_Prefix,
+            Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare

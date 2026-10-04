@@ -873,7 +873,8 @@ package body Landin.Backend.Dwarf is
                     (Slot_Expression (Plan, Frame_Plan, Slot,
                        Is_Address (Of_Unit, Item, Slot), False));
                   Location_List (Loc, Expr, Debug_Locations.Available
-                    (Availability, Of_Unit, Meanings, Info, Item, Slot, Parameter));
+                    (Availability, Of_Unit, Meanings, Info,
+                     Item, Slot, Parameter));
                end;
             end loop;
          end Variables;
