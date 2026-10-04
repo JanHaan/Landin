@@ -1834,6 +1834,27 @@ int main(void) { return f(36) != 37; }
                 self.assertIn(f"public file_bytes: e = {len(logical) + 1}",
                               (output / "bindings.ldn").read_text())
 
+    def test_symlinked_output_directory_preserves_target(self) -> None:
+        parent = self.root / "symlinked-output"
+        sysroot, includes, output = self.make_tree(parent, header="int f(void);\n",
+                                                  selected_policy=self.selection(self.function("f")))
+        target = parent / "target"
+        target.mkdir()
+        names = ("bindings.ldn", "adapters.c", "exports.h", "bindings.json")
+        original = {name: ("old " + name).encode() for name in names}
+        for name, content in original.items():
+            (target / name).write_bytes(content)
+        output.symlink_to(target, target_is_directory=True)
+
+        process = subprocess.run(self.command(parent, sysroot, includes, output),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(process.returncode, 2, process.stderr)
+        self.assertEqual(process.stderr,
+                         "bindings: error: output directory must not be a symbolic link\n")
+        self.assertTrue(output.is_symlink())
+        self.assertEqual({name: (target / name).read_bytes() for name in names}, original)
+        self.assertEqual({entry.name for entry in target.iterdir()}, set(names))
+
     def test_publication_preflight_and_injected_failure_preserve_output_set(self) -> None:
         parent = self.root / "publication"
         sysroot, includes, output = self.make_tree(parent, header="int f(void);\n",

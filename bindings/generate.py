@@ -2872,7 +2872,8 @@ def parse_arguments(argv: Sequence[str]) -> ToolInputs:
         defines.append(value)
     policy_path = pathlib.Path(args.policy).expanduser().resolve()
     require(policy_path.is_file(), f"--policy {args.policy!r} is not a regular file")
-    out_dir = pathlib.Path(args.out_dir).expanduser().resolve()
+    # Keep the final path component intact so preflight_output can reject links.
+    out_dir = pathlib.Path(args.out_dir).expanduser().absolute()
     return ToolInputs(clang, args.target, sysroot, headers, include_dirs,
                       system_include_dirs, defines, policy_path, out_dir)
 

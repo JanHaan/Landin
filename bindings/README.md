@@ -35,8 +35,9 @@ The generator writes exactly four files:
 
 Generation stages all four files, checks the target facts, validates every
 selected declaration and policy, and compiles `adapters.c` with the same Clang
-invocation before replacing any destination file. Destination entries are
-preflighted; a replacement failure rolls back the replaced prefix from backups.
+invocation before replacing any destination file. The output directory itself
+must not be a symbolic link. Destination entries are preflighted; a replacement
+failure rolls back the replaced prefix from backups.
 If rollback itself fails, the error names the retained recovery backup rather
 than claiming the old set was restored. This is failure recovery, not an atomic
 four-file snapshot for concurrent readers; do not consume outputs during generation.
