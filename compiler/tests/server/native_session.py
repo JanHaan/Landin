@@ -92,6 +92,9 @@ def run(refine, name):
             workspace.mkdir()
         uri = "file://" + urllib.parse.quote(str(workspace), safe="/")
         transcript = transcript.replace(PREFIX, uri)
+        transcript = transcript.replace(
+            "file://localhost/workspace",
+            "file://localhost" + urllib.parse.quote(str(workspace), safe="/"))
         chunks, expected, status = parse(transcript)
 
         process = subprocess.Popen([refine, "lsp", "--stdio"],

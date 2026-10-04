@@ -66,7 +66,8 @@ package Landin.Server.Documents is
    procedure Close (Into : in out Store; URI : String);
 
    --  Project this URI's text over its path before reading or analysing it.
-   --  Distinct file URIs may name the same path.
+   --  Distinct file URIs may name the same path. Changed says whether the
+   --  selected bytes differ from the previous overlay at this path.
    procedure Activate
      (Into : in out Store; URI : String; Changed : out Boolean);
 

@@ -364,6 +364,7 @@ package body Landin.Driver.Loading is
             begin
                for Directory of Reached loop
                   declare
+                     Entries : Landin.Platform.Path_List;
                      Status  : Landin.Platform.List_Status;
                   begin
                      Cached_Listing (Directory, Entries, Status);

@@ -187,7 +187,7 @@ package body Landin.Server.Documents is
    begin
       Into.Held.Read_File
         (Unbounded.To_String (Held.Path), Previous, Status);
-      Changed := Previous /= Held.Text;
+      Changed := not Unbounded."=" (Previous, Held.Text);
       Into.Held.Hold
         (Unbounded.To_String (Held.Path), Unbounded.To_String (Held.Text));
       Into.Active_URI := Unbounded.To_Unbounded_String (URI);

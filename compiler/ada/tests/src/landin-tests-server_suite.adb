@@ -1231,45 +1231,55 @@ package body Landin.Tests.Server_Suite is
    begin
       Host.Add_File ("/w/m.ldn", Text);
       declare
-         Context : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-         Answer : Landin.Server.Analysis.Result;
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result);
+
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result)
+         is
+         begin
+            Landin.Testing.Check
+              (Item, Answer.Resolved and then Answer.Checked
+                     and then Answer.Found.Count > 0,
+               "the name error leaves both tables available");
+            Landin.Testing.Check_Equal
+              (Item, Codes_Of (Answer.Found), "L0201",
+               "only the original resolution error is published");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Definition
+                       (Context, Answer, 1, Missing)
+                     = Landin.Server.Navigation.No_Place,
+               "the missing name has no definition");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Hover
+                       (Context, Answer, 1, Missing).Length = 0,
+               "the missing name has no hover");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Definition
+                       (Context, Answer, 1, Reference)
+                     = (1, (Parameter, Parameter + 1)),
+               "the unrelated parameter still has a definition");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                       (Landin.Server.Navigation.Hover
+                          (Context, Answer, 1, Reference).Text,
+                        "x: u8") > 0,
+               "the unrelated parameter still has a hover");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                       (Landin.Server.Navigation.Hover
+                          (Context, Answer, 1, Expression).Text,
+                        "u8") > 0,
+               "the unrelated expression still has a type");
+         end Visit;
       begin
          Landin.Server.Analysis.Analyse
-           (Context, Host, One_File ("/w/m.ldn"), Answer);
-         Landin.Testing.Check
-           (Item, Answer.Resolved and then Answer.Checked
-                  and then Answer.Found.Count > 0,
-            "the name error leaves both tables available");
-         Landin.Testing.Check_Equal
-           (Item, Codes_Of (Answer.Found), "L0201",
-            "only the original resolution error is published");
-         Landin.Testing.Check
-           (Item, Landin.Server.Navigation.Definition
-                    (Context, Answer, 1, Missing)
-                  = Landin.Server.Navigation.No_Place,
-            "the missing name has no definition");
-         Landin.Testing.Check
-           (Item, Landin.Server.Navigation.Hover
-                    (Context, Answer, 1, Missing).Length = 0,
-            "the missing name has no hover");
-         Landin.Testing.Check
-           (Item, Landin.Server.Navigation.Definition
-                    (Context, Answer, 1, Reference)
-                  = (1, (Parameter, Parameter + 1)),
-            "the unrelated parameter still has a definition");
-         Landin.Testing.Check
-           (Item, Ada.Strings.Fixed.Index
-                    (Landin.Server.Navigation.Hover
-                       (Context, Answer, 1, Reference).Text,
-                     "x: u8") > 0,
-            "the unrelated parameter still has a hover");
-         Landin.Testing.Check
-           (Item, Ada.Strings.Fixed.Index
-                    (Landin.Server.Navigation.Hover
-                       (Context, Answer, 1, Expression).Text,
-                     "u8") > 0,
-            "the unrelated expression still has a type");
+           (Landin.Targets.Linux_X86_64,
+            Landin.Targets.Levels.Default_Level
+              (Landin.Targets.Linux_X86_64),
+            Host, One_File ("/w/m.ldn"), Visit'Access);
       end;
    end An_Unresolved_Name_Leaves_Other_Navigation;
 

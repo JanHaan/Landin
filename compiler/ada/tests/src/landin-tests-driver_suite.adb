@@ -13,7 +13,6 @@ package body Landin.Tests.Driver_Suite is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
-   use type Landin.Platform.Read_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Read_Status;
 

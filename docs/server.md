@@ -159,7 +159,10 @@ answered from the documents as they stand when it arrives. Checked modules
 stay available for hover, definition and code actions, even when queries
 alternate between open modules. An open, change or close discards the checked
 modules; diagnostics then rebuild those affected, and later queries rebuild
-any others they need. The cache holds at most one compilation per open module,
+any others they need. Distinct file URIs naming one path retain separate
+buffers. A query selects its URI's buffer; switching to different bytes
+also discards checked modules, including those importing that path.
+The cache holds at most one compilation per open module,
 and discards all of them when the session ends. This is a compilation-count
 bound, not a fixed byte limit: separate entries may duplicate imports.
 

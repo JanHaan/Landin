@@ -95,7 +95,7 @@ package body Landin.Tests.Host_Reports_Suite is
              (Context, Assembly, Digests => Digests'Access);
          JSON : constant String := Reports.Sources.JSON
            (Report, Context, Landin.Optimization.Reference_Options,
-            Digests'Access);
+            Digests => Digests'Access);
       begin
          Landin.Testing.Check_Equal
            (Item, US.To_String (Map.Assembly), Expected_Assembly,
