@@ -103,6 +103,7 @@ The aggregate gate covers each build, test and determinism host separately.
 
 | job | runner | runs |
 |---|---|---|
+| `inputs` | ubuntu-24.04 | verify whether a recent complete main run can cover a declared explanatory edit |
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
 | `compiler` | ubuntu-24.04 | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
@@ -119,7 +120,7 @@ The aggregate gate covers each build, test and determinism host separately.
 | `lldb` | macos-26 | the LLDB sessions |
 | `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
-| `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-26 | the called workflow emits the fixture manifest on each host and compares them |
+| `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-15 | the called workflow emits the fixture manifest on each host and compares them |
 
 A release compile error surfaces in its host's build job; debug compile
 errors surface in the debug verification jobs. Before
