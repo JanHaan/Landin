@@ -35791,6 +35791,51 @@ file negative/conformance-collision/main.ldn tokens 22
   72 79 ordered
   80 81 (
   81 82 )
+file negative/conformance-duplicate-label/main.ldn tokens 44
+  0 6 lookup
+  6 7 :
+  8 12 type
+  13 14 =
+  15 22 concept
+  23 24 (
+  24 25 t
+  25 26 :
+  27 31 type
+  31 32 ,
+  33 38 index
+  38 39 :
+  40 44 type
+  44 45 ,
+  46 50 item
+  50 51 :
+  52 56 type
+  56 57 ,
+  58 63 other
+  63 64 :
+  65 69 type
+  69 70 )
+  71 74 end
+  75 81 lookup
+  83 86 i32
+  87 89 is
+  90 96 lookup
+  97 98 (
+  98 103 index
+  103 104 :
+  105 108 u32
+  108 109 ,
+  110 114 item
+  114 115 :
+  116 119 i16
+  119 120 ,
+  121 126 other
+  126 127 :
+  128 130 i8
+  130 131 ,
+  132 136 item
+  136 137 :
+  138 141 i16
+  141 142 )
 file negative/conformance-entry-signature-mismatch/main.ldn tokens 60
   0 7 ordered
   7 8 :

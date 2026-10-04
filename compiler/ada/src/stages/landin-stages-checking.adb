@@ -15967,37 +15967,40 @@ package body Landin.Stages.Checking is
                         Node     => Node);
                   end Make_Probe;
                begin
-                  for Right in 2 .. Syn.Conformance_Entry_Count
-                    (Of_Tree, Node)
-                  loop
-                     for Left in 1 .. Right - 1 loop
-                        declare
-                           Earlier : constant Syn.Node_Id :=
-                             Syn.Nth_Conformance_Entry
-                               (Of_Tree, Node, Left);
-                           Later : constant Syn.Node_Id :=
-                             Syn.Nth_Conformance_Entry
-                               (Of_Tree, Node, Right);
-                        begin
-                           if Syn.Name (Of_Tree, Earlier)
-                                = Syn.Name (Of_Tree, Later)
+                  declare
+                     type Entry_Array is array (Positive range <>)
+                       of Syn.Node_Id;
+                     Entries : Entry_Array
+                       (1 .. Syn.Conformance_Entry_Count (Of_Tree, Node));
+                  begin
+                     --  Fetch each syntax entry once before comparing pairs.
+                     for Position in Entries'Range loop
+                        Entries (Position) := Syn.Nth_Conformance_Entry
+                          (Of_Tree, Node, Position);
+                     end loop;
+                     for Right in 2 .. Entries'Last loop
+                        for Left in 1 .. Right - 1 loop
+                           if Syn.Name (Of_Tree, Entries (Left))
+                                = Syn.Name (Of_Tree, Entries (Right))
                            then
                               Bad.Report
                                 (Item    => Bad.Conformance_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Anchor (Of_Tree, Later),
+                                 Where   => Syn.Anchor
+                                   (Of_Tree, Entries (Right)),
                                  Message => "this conformance label is"
                                             & " supplied twice",
                                  Note    => "[1240]: every concept input and"
                                             & " entry is supplied once",
-                                 Related => Syn.Origin (Of_Tree, Earlier),
+                                 Related => Syn.Origin
+                                   (Of_Tree, Entries (Left)),
                                  Because => "first supplied here",
                                  Into    => Found);
                               Valid := False;
                            end if;
-                        end;
+                        end loop;
                      end loop;
-                  end loop;
+                  end;
 
                   for Given in 1 .. Syn.Conformance_Entry_Count
                     (Of_Tree, Node)
