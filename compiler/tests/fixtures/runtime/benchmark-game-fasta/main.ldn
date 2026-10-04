@@ -52,7 +52,7 @@ end select_symbol
 
 write_repeated: (inout host: hosted.system, stream: io.file,
                  source: []u8, count: usize) -> none ! io.io_failed =
-    mut line: [60]u8 = zeroed
+    mut line: [61]u8 = zeroed
     mut emitted: usize = 0
     mut source_at: usize = 0
     first: usize = 0
@@ -66,9 +66,9 @@ write_repeated: (inout host: hosted.system, stream: io.file,
                 source_at = 0
             end if
         end for
-        output: []u8 = line[0..<width]
+        line[width] = 10
+        output: []u8 = line[0..<width + 1]
         try io.write(host, stream, output)
-        try io.write(host, stream, "\n")
         emitted += width
     end while
 end write_repeated
@@ -76,7 +76,7 @@ end write_repeated
 write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
-    mut line: [60]u8 = zeroed
+    mut line: [61]u8 = zeroed
     mut emitted: usize = 0
     first: usize = 0
 
@@ -86,9 +86,9 @@ write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
             random: f64 = next_random(seed)
             line[at] = select_symbol(symbols, cumulative, random)
         end for
-        output: []u8 = line[0..<width]
+        line[width] = 10
+        output: []u8 = line[0..<width + 1]
         try io.write(host, stream, output)
-        try io.write(host, stream, "\n")
         emitted += width
     end while
 end write_random
