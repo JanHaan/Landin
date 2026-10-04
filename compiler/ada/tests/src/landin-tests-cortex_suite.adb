@@ -1017,6 +1017,61 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Driver_Boundaries;
 
+   procedure Hard_Trap_Emission (Item : in out Landin.Testing.Context);
+
+   procedure Hard_Trap_Emission (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 2 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn",
+              (if Mode = 1 then
+                 "public f: () -> (r: u32) = r = 7 end f"
+               else
+                 "public f: (d: u32) -> (r: u32) = r = 7 / d end f"));
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "Cortex trap assembly: " & U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Text : constant String := Host.Written ("p.s");
+                     Reference : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, "_trap");
+                     Definition : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, "_trap:");
+                  begin
+                     if Mode = 1 then
+                        Landin.Testing.Check
+                          (Item, Definition = 0
+                           and then Ada.Strings.Fixed.Index
+                             (Text, "udf #1") = 0,
+                           "trap-free routine has no hard trap");
+                     else
+                        Landin.Testing.Check
+                          (Item, Reference > 0 and then Definition > Reference
+                           and then Ada.Strings.Fixed.Index
+                             (Text, "udf #1") > 0,
+                           "division guard retains its hard trap");
+                     end if;
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Hard_Trap_Emission;
+
    procedure Source_Debugging (Item : in out Landin.Testing.Context);
 
    procedure Source_Debugging (Item : in out Landin.Testing.Context) is
@@ -2261,6 +2316,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "driver boundaries",
          Driver_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "hard trap emission",
+         Hard_Trap_Emission'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "lowered source carriers",
          Source_Carriers'Access);

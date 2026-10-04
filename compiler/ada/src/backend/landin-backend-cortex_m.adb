@@ -1227,6 +1227,7 @@ package body Landin.Backend.Cortex_M is
          Home_Ready : Boolean := False;
          Home_Line : Natural := 0;
          Home_Offset : Landin.Targets.Byte_Count := 0;
+         Hard_Trap_Used : Boolean := False;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -1236,6 +1237,7 @@ package body Landin.Backend.Cortex_M is
             if Panic = null or else Landin.Panics.Handler (Panic.all)
               = Landin.IR.No_Item
             then
+               Hard_Trap_Used := True;
                return Hard_Trap;
             end if;
             declare
@@ -3834,6 +3836,7 @@ package body Landin.Backend.Cortex_M is
             Address ("r6", Local_Prefix & "landin_panic_active");
             Emit ("ldr r7, [r6]");
             Emit ("cmp r7, #0");
+            Hard_Trap_Used := True;
             Branch ("ne", Hard_Trap);
             Emit ("movs r7, #1");
             Emit ("str r7, [r6]");
@@ -3926,8 +3929,10 @@ package body Landin.Backend.Cortex_M is
             Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
             Emit ("udf #1");
          end loop;
-         Put (Hard_Trap & ":");
-         Emit ("udf #1");
+         if Hard_Trap_Used then
+            Put (Hard_Trap & ":");
+            Emit ("udf #1");
+         end if;
          if Exit_Count > 1 then
             Put (Return_Label & ":");
             Epilogue;
