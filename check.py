@@ -305,11 +305,12 @@ def live_example_tokens(text):
         return []  # The grammar check owns an unreadable lexical vocabulary.
     signs = grammar_signs(trees)
     out = []
-    for block in re.finditer(r"^```landin\n(.*?)^```", live, re.M | re.S):
-        source = block.group(1).encode("utf-8").decode("latin-1")
+    for kind, line, chunk in sections(live.splitlines(keepends=True)):
+        if kind != "landin":
+            continue
+        source = "".join(chunk).encode("utf-8").decode("latin-1")
         tokens, problem = landin_tokens(source, signs)
         if tokens is None:
-            line = text.count("\n", 0, block.start()) + 1
             out.append((line, "live Landin example: " + problem))
     return out
 
