@@ -165,6 +165,10 @@ class Decide(unittest.TestCase):
         self.run["event"] = "pull_request"
         self.assertFalse(self.decide())
 
+    def test_a_future_run_is_no_record(self):
+        self.run["run_started_at"] = (NOW + timedelta(seconds=1)).isoformat()
+        self.assertFalse(self.decide())
+
     def test_a_run_on_another_branch_is_no_record(self):
         self.run["head_branch"] = "topic"
         self.assertFalse(self.decide())

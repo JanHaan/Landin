@@ -125,7 +125,7 @@ def full_run(run, listing, required, now):
             or run.get("conclusion") != "success"):
         return False
     started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
-    if now - started > MAX_AGE:
+    if not timedelta(0) <= now - started <= MAX_AGE:
         return False
     jobs = listing.get("jobs", [])
     if listing.get("total_count") != len(jobs):
