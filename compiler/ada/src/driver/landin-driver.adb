@@ -1376,22 +1376,24 @@ package body Landin.Driver is
                raise Compiler_Defect with "panic plan changed after checking";
             end if;
 
-            for Index in 1 .. Landin.IR.Nominal_Type_Count
-              (Landin.Stages.Code (Context).all)
-            loop
-               declare
-                  Unit : Landin.IR.Unit renames
-                    Landin.Stages.Code (Context).all;
-                  Id : constant Landin.IR.Nominal_Type_Id :=
-                    Landin.IR.Nth_Nominal_Type (Unit, Index);
-               begin
-                  if Landin.IR.Has_Nominal_Shape (Unit, Id) then
-                     Landin.Build_Reports.Append_Layout
-                       (Evidence, Index, Landin.IR.Layout_Of (Unit, Id),
-                        Landin.Backend.Nominal_Layout (Unit, Id, Facts));
-                  end if;
-               end;
-            end loop;
+            if Report_Seen then
+               for Index in 1 .. Landin.IR.Nominal_Type_Count
+                 (Landin.Stages.Code (Context).all)
+               loop
+                  declare
+                     Unit : Landin.IR.Unit renames
+                       Landin.Stages.Code (Context).all;
+                     Id : constant Landin.IR.Nominal_Type_Id :=
+                       Landin.IR.Nth_Nominal_Type (Unit, Index);
+                  begin
+                     if Landin.IR.Has_Nominal_Shape (Unit, Id) then
+                        Landin.Build_Reports.Append_Layout
+                          (Evidence, Index, Landin.IR.Layout_Of (Unit, Id),
+                           Landin.Backend.Nominal_Layout (Unit, Id, Facts));
+                     end if;
+                  end;
+               end loop;
+            end if;
 
             --  A verified frame may still exceed the displacement encoding
             --  of this backend.  Ask before anything is written, for
