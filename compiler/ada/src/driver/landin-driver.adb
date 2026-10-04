@@ -526,6 +526,7 @@ package body Landin.Driver is
       Lines_Debug : Boolean := False;
       Panic_Map : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
+      Skip_Compilation : Boolean := False;
       Index     : Positive := 1;
    begin
       if Natural (Arguments.Length) = 0 then
@@ -1064,6 +1065,17 @@ package body Landin.Driver is
             Landin.Diagnostics.Add_Note (Item, Advice);
             Landin.Stages.Report (Context, Item);
          end Note_No_Toolchain;
+
+         procedure Note_Unavailable_Toolchain (Driver : String);
+
+         procedure Note_Unavailable_Toolchain (Driver : String) is
+         begin
+            Note_No_Toolchain
+              ("cannot run " & Driver & " for target "
+               & Landin.Targets.Name (Facts),
+               "install a toolchain named " & Driver
+               & ", or name another with --toolchain=NAME");
+         end Note_Unavailable_Toolchain;
 
          procedure Emit_Requested;
 
@@ -1735,11 +1747,7 @@ package body Landin.Driver is
                           Ada.Exceptions.Exception_Message (Failure);
                      begin
                         if Starts_With (Why, "tool not found") then
-                           Note_No_Toolchain
-                             ("cannot run " & Driver & " for target "
-                              & Landin.Targets.Name (Facts),
-                              "install a toolchain named " & Driver
-                              & ", or name another with --toolchain=NAME");
+                           Note_Unavailable_Toolchain (Driver);
                         else
                            Note_Failure
                              (Code_Toolchain_Failed,
@@ -1969,60 +1977,68 @@ package body Landin.Driver is
             return Result;
          end if;
 
-         Stage_Began;
-         if Natural (Roots.Length) > 0 then
-            if Natural (Inputs.Length) = 1 then
-               Loading.Load_Reachable_Program
-                 (Context, Host, Roots, Inputs.Element (1));
-            end if;
-         else
-            Loading.Load_Files (Context, Host, Inputs);
-         end if;
-
-         --  A rooted request scans and parses each module as it is found,
-         --  to read its imports, so its syntax is inside this row.
-         Stage_Ended ("loading");
-
-         --  An empty module is legal, but it supplies nothing to emit.
-         --  Keep the check-only request legal and refuse emission before
-         --  any existing output at the requested path can appear current.
-         if Natural (Roots.Length) > 0
-           and then Landin.Stages.Source_Count (Context) = 0
+         --  Availability is already determined by the selected target and
+         --  command line. Report a missing driver before reading sources or
+         --  producing any of an executable request's artifacts. Run checks
+         --  again when it starts, in case PATH changes meanwhile.
+         if Emit = Emit_Executable
            and then not Bad_Use
            and then not Landin.Stages.Failed (Context)
          then
-            if Emit = Emit_Executable then
-               Note_No_Entry
-                 (For_Firmware =>
-                    Landin.Targets.Architecture_Of (Facts)
-                      = Landin.Targets.Cortex_M0);
-            elsif Emit = Emit_Assembly then
-               Bad_Use := True;
-               Note_Failure
-                 (Code_Unknown_Option, "--emit needs a source to compile");
-            end if;
+            declare
+               Driver : constant String :=
+                 Landin.Backend.Toolchain.Driver_For
+                   (Facts, Unbounded.To_String (Toolchain));
+            begin
+               if Driver = "" then
+                  Note_No_Toolchain
+                    ("target " & Landin.Targets.Name (Facts)
+                     & " names no toolchain",
+                     "name one with --toolchain=NAME");
+                  Skip_Compilation := True;
+               elsif not Tools.Available (Driver) then
+                  Note_Unavailable_Toolchain (Driver);
+                  Skip_Compilation := True;
+               end if;
+            end;
          end if;
 
-         --  Every source that was read is scanned and parsed together, as
-         --  one compilation: the language is checked whole, and a stage
-         --  that saw one file at a time could not be replaced later by one
-         --  that resolves a name across two.
-         if Landin.Stages.Source_Count (Context) > 0
-           and then not Landin.Stages.Failed (Context)
-         then
-            Checking.Run (Context, Panic, Watch_Stage'Access);
+         if not Skip_Compilation then
+            Stage_Began;
+            if Natural (Roots.Length) > 0 then
+               if Natural (Inputs.Length) = 1 then
+                  Loading.Load_Reachable_Program
+                    (Context, Host, Roots, Inputs.Element (1));
+               end if;
+            else
+               Loading.Load_Files (Context, Host, Inputs);
+            end if;
 
-            --  The backend runs on nothing that was refused, for the same
-            --  reason the lowering does: an unaccepted program has no Unit
-            --  worth emitting, and a file written from one would be a
-            --  plausible artefact of a failed compilation.
-            if Emit /= Emit_Nothing
-              and then not Bad_Use
+            --  A rooted request scans and parses each module as it is found,
+            --  to read its imports, so its syntax is inside this row.
+            Stage_Ended ("loading");
+
+            --  Every source that was read is scanned and parsed together, as
+            --  one compilation: the language is checked whole, and a stage
+            --  that saw one file at a time could not be replaced later by one
+            --  that resolves a name across two.
+            if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               Stage_Began;
-               Emit_Requested;
-               Stage_Ended ("emission");
+               Checking.Run (Context, Panic, Watch_Stage'Access);
+
+               --  The backend runs on nothing that was refused, for the same
+               --  reason the lowering does: an unaccepted program has no Unit
+               --  worth emitting, and a file written from one would be a
+               --  plausible artefact of a failed compilation.
+               if Emit /= Emit_Nothing
+                 and then not Bad_Use
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  Stage_Began;
+                  Emit_Requested;
+                  Stage_Ended ("emission");
+               end if;
             end if;
          end if;
          Write_Stage_Report;

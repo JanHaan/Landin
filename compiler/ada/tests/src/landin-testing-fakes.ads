@@ -127,6 +127,12 @@ package Landin.Testing.Fakes is
    type Fake_Tool_Runner is
      limited new Landin.Platform.Tool_Runner with private;
 
+   procedure Set_Available
+     (Host : in out Fake_Tool_Runner; Found : Boolean);
+
+   overriding function Available
+     (Host : Fake_Tool_Runner; Program : String) return Boolean;
+
    --  Select a result that every subsequent call returns.  This also
    --  abandons any ordered results that have not yet been consumed.
    --
@@ -345,6 +351,7 @@ private
    type Fake_Tool_Runner is limited new Landin.Platform.Tool_Runner
    with record
       State : Recorder_Owner;
+      Tool_Available : Boolean := True;
    end record;
 
    package Offset_Vectors is new Ada.Containers.Vectors

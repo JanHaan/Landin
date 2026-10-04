@@ -179,6 +179,11 @@ package Landin.Platform is
 
    type Tool_Runner is limited interface;
 
+   --  A read-only preflight for an executable request. Run still resolves
+   --  the program again, since PATH may change between these two calls.
+   function Available (Host : Tool_Runner; Program : String)
+     return Boolean is abstract;
+
    procedure Run
      (Host      : Tool_Runner;
       Program   : String;

@@ -549,6 +549,20 @@ package body Landin.Testing.Fakes is
    function Run_Count (Host : Fake_Tool_Runner) return Natural
      is (Natural (Host.State.Data.Calls.Length));
 
+   procedure Set_Available
+     (Host : in out Fake_Tool_Runner; Found : Boolean) is
+   begin
+      Host.Tool_Available := Found;
+   end Set_Available;
+
+   overriding function Available
+     (Host : Fake_Tool_Runner; Program : String) return Boolean
+   is
+      pragma Unreferenced (Program);
+   begin
+      return Host.Tool_Available;
+   end Available;
+
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode
    is

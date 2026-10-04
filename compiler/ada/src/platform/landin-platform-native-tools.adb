@@ -75,6 +75,17 @@ package body Landin.Platform.Native.Tools is
       Host.Limit := Seconds;
    end Set_Limit;
 
+   overriding function Available
+     (Host : Native_Tool_Runner; Program : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+      Located : OS.String_Access := OS.Locate_Exec_On_Path (Program);
+      Found : constant Boolean := Located /= null;
+   begin
+      OS.Free (Located);
+      return Found;
+   end Available;
+
    overriding procedure Run
      (Host      : Native_Tool_Runner;
       Program   : String;

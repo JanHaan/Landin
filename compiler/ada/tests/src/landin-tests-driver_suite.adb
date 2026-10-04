@@ -1706,6 +1706,42 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Assembly_Is_Written_Without_A_Tool;
 
+   procedure Missing_Toolchain_Precedes_Compilation
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Toolchain_Precedes_Compilation
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : constant Landin.Platform.Path_List :=
+        ["main.ldn", "--emit=exe", "--toolchain=absent-gcc"];
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Host.Raise_On_Read;
+      Tools.Set_Available (False);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a missing selected toolchain is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "error[L0500]: cannot run absent-gcc")
+              and then Contains (Report, "install a toolchain"),
+            "the preflight keeps the missing-tool diagnostic and advice");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0,
+            "the missing toolchain prevents artifact writes");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0,
+            "the missing toolchain starts no process");
+      end;
+   end Missing_Toolchain_Precedes_Compilation;
+
    --  The whole invocation, in order.  A containment check would pass on a
    --  command line that had lost its output.
    procedure An_Executable_Runs_The_Triplet_Driver
@@ -4757,6 +4793,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "assembly is written without a tool",
          Assembly_Is_Written_Without_A_Tool'Access);
+      Landin.Testing.Register
+        (Into, "driver", "missing toolchain precedes compilation",
+         Missing_Toolchain_Precedes_Compilation'Access);
       Landin.Testing.Register
         (Into, "driver", "an executable runs the triplet driver",
          An_Executable_Runs_The_Triplet_Driver'Access);
