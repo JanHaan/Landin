@@ -608,7 +608,7 @@ def parser_lines() -> dict[str, int]:
         "digits": source_line(PARSER_SOURCE,
                               "if text.ordinal(cursor) == text.ordinal(ends)"),
         "recovery": source_line(PARSER_SOURCE,
-                                "return when parser.look.what == lexer.newline"),
+                                "while parser.look.what <> lexer.newline"),
         "nested": source_line(PARSER_SOURCE,
                               "if parser.look.what == lexer.end_of_input"),
         "done": source_line(PARSER_FIXTURE / "main.ldn", "code = 42"),
