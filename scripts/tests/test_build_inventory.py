@@ -229,10 +229,11 @@ if os.environ.get("FAKE_EDIT_ON_PROJECT") == project:
     source.write_text(source.read_text() + "edited during build\\n")
 build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
 (build / "bin").mkdir(parents=True, exist_ok=True)
-for name in ("refine", "landin_tests"):
-    path = build / "bin" / name
-    path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
-    path.chmod(0o755)
+project = sys.argv[sys.argv.index("-P") + 1]
+name = {"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}[project]
+path = build / "bin" / name
+path.write_text("#!/bin/sh\\nexit 0\\n")
+path.chmod(0o755)
 ''')
         self.executable(fake / "gprconfig", '''#!/usr/bin/env python3
 import os, pathlib, sys
@@ -260,6 +261,7 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     "LANDIN_BUILD_INCREMENTAL": "yes"}
         self.build = ada / "build/test/debug"
         self.manifest = self.build / "source-manifest.txt"
+        self.tests_manifest = self.build / "tests-manifest.txt"
         self.configuration = ada / ".build-locks/test-debug.cgpr"
 
     @staticmethod
@@ -326,6 +328,48 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(subprocess.check_output([executable], text=True), "new\n")
         self.assertEqual(len(self.calls()), 4)
         self.assertNotEqual(self.manifest.read_text(), previous)
+
+    def test_compiler_only_then_full_builds_test_project(self):
+        first = self.run_build("--compiler-only", "-j4")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual([call[call.index("-P") + 1]
+                          for call in self.calls()], ["refine.gpr"])
+        self.assertIn("-j4", self.calls()[0])
+        self.assertNotIn("--compiler-only", self.calls()[0])
+        self.assertFalse(self.tests_manifest.exists())
+
+        current = self.run_build("--compiler-only")
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertIn("developer build is current", current.stdout)
+        self.assertEqual(len(self.calls()), 1)
+
+        full = self.run_build()
+        self.assertEqual(full.returncode, 0, full.stderr)
+        self.assertEqual([call[call.index("-P") + 1]
+                          for call in self.calls()],
+                         ["refine.gpr", "refine.gpr", "landin_tests.gpr"])
+        self.assertEqual(self.tests_manifest.read_text(),
+                         self.manifest.read_text())
+        current = self.run_build()
+        self.assertIn("developer build is current", current.stdout)
+        self.assertEqual(len(self.calls()), 3)
+
+    def test_compiler_only_change_invalidates_old_test_executable(self):
+        self.assertEqual(self.run_build().returncode, 0)
+        old = self.tests_manifest.read_text()
+        source = self.root / "compiler/ada/src/main.adb"
+        source.write_text("updated compiler\n")
+        only = self.run_build("--compiler-only")
+        self.assertEqual(only.returncode, 0, only.stderr)
+        self.assertTrue((self.build / "bin/landin_tests").exists())
+        self.assertEqual(self.tests_manifest.read_text(), old)
+        self.assertNotEqual(self.manifest.read_text(), old)
+        full = self.run_build()
+        self.assertEqual(full.returncode, 0, full.stderr)
+        self.assertEqual(self.calls()[-1][self.calls()[-1].index("-P") + 1],
+                         "landin_tests.gpr")
+        self.assertEqual(self.tests_manifest.read_text(),
+                         self.manifest.read_text())
 
     def test_selected_identity_changes_clean_both_build_modes(self):
         for incremental in ("yes", "no"):

@@ -49,7 +49,7 @@ jobs:
           platform: ${{ matrix.platform }}
 
       - name: Build refine
-        run: ./scripts/build.sh -j4
+        run: ./scripts/build.sh --compiler-only -j4
 
       - name: Emit this host's manifest
         run: |

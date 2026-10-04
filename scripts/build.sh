@@ -1,5 +1,5 @@
 #!/bin/sh
-#  Build `refine` and the test program.
+#  Build `refine` and the test program, or only `refine` with --compiler-only.
 #
 #  Staleness is decided by content, not by timestamps.  The ordinary gate
 #  rebuilds from clean when content changes.  scripts/dev-build.sh selects
@@ -9,7 +9,7 @@
 #  Two rules from a review repair.  One build per tag and mode at a time: an OS lock
 #  beside the build tree serialises concurrent runs, because two
 #  gprbuilds sharing one object directory corrupted each other's archive.
-#  A manifest is written only after both projects built, and a build tree
+#  A manifest is written only after the selected projects built, and a build tree
 #  without one is a failed or interrupted build and is rebuilt from clean,
 #  because gprbuild would otherwise reuse its half-written objects by
 #  timestamp.
@@ -20,6 +20,15 @@ landin_build_lock mode "$@"
 
 landin_require gprbuild
 landin_require gprconfig
+
+Compiler_Only=no
+for Argument do
+    shift
+    case "$Argument" in
+        --compiler-only) Compiler_Only=yes ;;
+        *) set -- "$@" "$Argument" ;;
+    esac
+done
 
 #  Both projects must consume the snapshot whose identity the manifest records.
 #  A caller-supplied configuration would escape that native toolchain boundary.
@@ -35,6 +44,7 @@ done
 "$LANDIN_ROOT/scripts/toolchain.sh"
 
 Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
+Tests_Manifest="$LANDIN_BUILD_DIR/tests-manifest.txt"
 Configuration="$LANDIN_ADA_DIR/.build-locks/$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE.cgpr"
 
 #  Everything that invalidates an object: the sources and project files,
@@ -143,7 +153,10 @@ if [ "$Incremental" = "yes" ] \
    && [ -f "$Manifest" ] \
    && [ "$Current" = "$Previous" ] \
    && [ -x "$LANDIN_BUILD_DIR/bin/refine" ] \
-   && [ -x "$LANDIN_BUILD_DIR/bin/landin_tests" ]
+   && { [ "$Compiler_Only" = "yes" ] \
+        || { [ -x "$LANDIN_BUILD_DIR/bin/landin_tests" ] \
+             && [ -f "$Tests_Manifest" ] \
+             && [ "$(cat "$Tests_Manifest")" = "$Current" ]; }; }
 then
     echo "landin: checksum manifest unchanged; developer build is current"
     echo "built: $LANDIN_BUILD_DIR/bin/refine"
@@ -160,13 +173,18 @@ fi
 mkdir -p "$LANDIN_BUILD_DIR"
 
 #  An edit during the build leaves objects the manifest would not describe;
-#  the manifest goes only when both projects built from the tree as it was
-#  when this run began, and is published in one rename.
+#  the manifest goes only when the selected projects built from the tree as it
+#  was when this run began.  The test stamp records separately whether the
+#  test executable belongs to this snapshot after a compiler-only build.
 rm -f "$Manifest"
 
 cd "$LANDIN_ADA_DIR"
 gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
-gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
+if [ "$Compiler_Only" = "no" ]; then
+    gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
+    printf '%s\n' "$Current" > "$Tests_Manifest.tmp"
+    mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"
+fi
 
 Finished="$(landin_manifest)" || exit
 if [ "$Finished" != "$Current" ]; then

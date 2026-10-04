@@ -260,7 +260,7 @@ jobs:
         run: python3 environments/cortex-m/test.py
 
       - name: Build refine
-        run: ./scripts/build.sh -j4
+        run: ./scripts/build.sh --compiler-only -j4
 
       - name: Every Cortex-M lane
         run: |
@@ -374,7 +374,7 @@ jobs:
           platform: aarch64-darwin
 
       - name: Build refine
-        run: ./scripts/build.sh -j3
+        run: ./scripts/build.sh --compiler-only -j3
 
       - name: Hosted parity
         run: |
@@ -412,7 +412,7 @@ jobs:
           platform: aarch64-darwin
 
       - name: Build refine
-        run: ./scripts/build.sh -j3
+        run: ./scripts/build.sh --compiler-only -j3
 
       - name: LLDB source debugging
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"

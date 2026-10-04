@@ -53,6 +53,9 @@ python3 check.py prototype-2-parser.md
 ./scripts/build.sh
 ./scripts/test.sh
 
+# Build only refine for a consumer that does not run the Ada test program.
+./scripts/build.sh --compiler-only
+
 # Fast checksum-safe developer feedback.  The selectors are exact names;
 # these runs are visibly FILTERED and do not replace the complete suite.
 ./scripts/dev-test.sh --suite='fixture execution'
@@ -195,7 +198,8 @@ from clean when the manifest disagrees, because an edited-and-reverted file
 keeps a newer mtime than the object built from it and gprbuild would serve the
 stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
 checksum mode; source inventory or project-file changes still force a clean
-tree.
+tree. A compiler-only build records `refine` as current without claiming that
+`landin_tests` is current; the next full build still builds the test program.
 
 ## Sources of truth
 

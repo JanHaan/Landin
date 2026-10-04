@@ -18,7 +18,7 @@ export LANDIN_BUILD_MODE
 
 landin_build_lock mode "$@"
 
-"$LANDIN_ROOT/scripts/build.sh" -q
+"$LANDIN_ROOT/scripts/build.sh" --compiler-only -q
 
 exec python3 "$LANDIN_ROOT/scripts/scaling.py" \
     --refine "$LANDIN_BUILD_DIR/bin/refine" "$@"

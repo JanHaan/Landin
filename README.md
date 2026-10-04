@@ -155,6 +155,9 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/test.sh
 ```
 
+Use `./scripts/build.sh --compiler-only` when only `refine` is needed. The
+default build still produces the Ada test program for `scripts/test.sh`.
+
 On macOS, use `./scripts/dev-test.sh --host --target=linux-x86-64` for compiler checks and add an
 exact `--suite` or `--case` selector while editing. Every selected case must
 pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
