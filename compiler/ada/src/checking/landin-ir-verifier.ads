@@ -45,6 +45,8 @@
 --  historical no-facts entries stay for callers whose IR carries no
 --  images at all.
 
+with System.Storage_Elements;
+
 with Landin.Targets;
 
 package Landin.IR.Verifier is
@@ -186,5 +188,21 @@ package Landin.IR.Verifier is
 
    --  For a message and for a test that wants to say which rule it meant.
    function Describe (Of_Kind : Fault_Kind) return String;
+
+private
+   --  Instance-owned test seam, reachable through the test-only child.
+   --  No command-line switch or global allocation-failure state.
+   type Scratch_Probe is record
+      Fail_At, Reached, Allocations, Releases, Live : Natural := 0;
+      Live_Bytes, Peak_Bytes : System.Storage_Elements.Storage_Count := 0;
+   end record;
+
+   function Checked_Scratch_Bytes
+     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
+      return System.Storage_Elements.Storage_Count;
+
+   function Check_With_Probe
+     (Of_Unit : Unit; Facts : Landin.Targets.Target_Facts;
+      Probe : access Scratch_Probe) return Fault;
 
 end Landin.IR.Verifier;

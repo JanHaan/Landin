@@ -41,8 +41,8 @@ programs.
 python3 check.py
 
 # Build the release compiler and hold it to its scaling bound: the median
-# frontend and emission times may each grow at most 2.5 times per doubling of
-# the program.
+# frontend and emission times, and peak compiler memory, may each grow at
+# most 2.5 times per doubling of the program.
 ./scripts/scaling.sh
 
 # Check one specification/prototype file (the narrowest supported test scope)
@@ -105,7 +105,7 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `cortex-m` | ubuntu-24.04 | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
-| `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when the frontend's or emission's time grows more than 2.5 times per doubling |
+| `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
 | `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism, report identity and the scripted server sessions |
 | `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `lldb` | macos-26 | the LLDB sessions |

@@ -11,10 +11,12 @@
 --  Declaration_Ids for Add_Item; the sources are strings in memory.
 
 with Ada.Strings.Fixed;
+with System.Storage_Elements;
 
 with Landin.IR.Dump;
 with Landin.IR.Testing_Support;
 with Landin.IR.Verifier;
+with Landin.IR.Verifier.Testing_Support;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -5865,6 +5867,89 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Pointee_Graphs_Are_Checked;
 
+   procedure Scratch_Arithmetic_And_Zero_Uses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scratch_Arithmetic_And_Zero_Uses
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Unused_Address, Wrong_Place, Missing_Parameter_Signature);
+      use System.Storage_Elements;
+      package Probe renames V.Testing_Support;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Bytes : Storage_Count;
+      pragma Unreferenced (Bytes);
+      Failed : Boolean := False;
+   begin
+      Landin.Testing.Check
+        (Item, Probe.Scratch_Bytes (0, Storage_Count'Last) = 0
+         and then Probe.Scratch_Bytes (1, Storage_Count'Last)
+           = Storage_Count'Last
+         and then Probe.Scratch_Bytes (2, Storage_Count'Last / 2)
+           = Storage_Count'Last - 1,
+         "checked byte arithmetic admits its representable boundary");
+      begin
+         Bytes := Probe.Scratch_Bytes (2, Storage_Count'Last / 2 + 1);
+      exception
+         when Storage_Error =>
+            Failed := True;
+      end;
+      Landin.Testing.Check
+        (Item, Failed, "byte overflow is host exhaustion before allocation");
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         declare
+            Unit : IR.Unit;
+            Routine : IR.Item_Id;
+            Address : IR.Slot_Id;
+            Block : IR.Block_Id;
+            Unused : IR.Value_Id;
+            Seen : Probe.Observation;
+            pragma Unreferenced (Unused);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+            if Scenario = Missing_Parameter_Signature then
+               Address := IR.Add_Parameter
+                 (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site,
+                  Pointee => IR.Add_Pointee
+                    (Unit, (Element => Landin.Types.U32, others => <>)));
+            else
+               Address := IR.Add_Address_Slot
+                 (Unit, Routine, (Element => Landin.Types.U32, others => <>),
+                  Site);
+            end if;
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            if Scenario = Wrong_Place then
+               Unused := IR.Emit_Place_Address
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Address), Site);
+            end if;
+            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Seen := Probe.Observe (Unit, Landin.Targets.Linux_X86_64);
+            Landin.Testing.Check
+              (Item, Seen.Found.Kind =
+                 (case Scenario is
+                     when Wrong_Place => V.Address_Value_Disagrees,
+                     when Missing_Parameter_Signature =>
+                       V.Routine_Signature_Disagrees,
+                     when Unused_Address => V.Nothing_Wrong),
+               "zero-use fault: " & Scenario'Image & " / "
+               & V.Describe (Seen.Found.Kind));
+            Landin.Testing.Check_Equal
+              (Item, Seen.Allocations, 0,
+               "one block with no pointer reads needs no scratch");
+         end;
+      end loop;
+   end Scratch_Arithmetic_And_Zero_Uses;
+
    procedure Address_Initialisation_Is_Checked
      (Item : in out Landin.Testing.Context);
 
@@ -5947,6 +6032,55 @@ package body Landin.Tests.Verifier_Suite is
                (if Scenario in Both_Arms | Initialised_Loop
                 then V.Nothing_Wrong else V.Address_Value_Disagrees),
                "address must-initialisation: " & Scenario'Image);
+            declare
+               package Probe renames V.Testing_Support;
+               use type V.Fault;
+               use type System.Storage_Elements.Storage_Count;
+               Good : constant Probe.Observation :=
+                 Probe.Observe (Unit, Landin.Targets.Linux_X86_64);
+            begin
+               Landin.Testing.Check
+                 (Item, not Good.Exhausted and then Good.Live = 0
+                  and then Good.Live_Bytes = 0
+                  and then Good.Allocations = Good.Releases
+                  and then Good.Found = V.Check (Unit),
+                  "scratch owners release on both sound and faulty IR");
+               Landin.Testing.Check
+                 (Item, Good.Allocations > 3 and then Good.Peak_Bytes > 0,
+                  "the pointer case exercises dataflow scratch owners");
+               if Scenario in One_Arm | Uninitialised_Loop then
+                  declare
+                     First_Block : constant IR.Block_Id :=
+                       (if Scenario = One_Arm then Blocks (4) else Blocks (2));
+                  begin
+                     Landin.Testing.Check
+                       (Item, Good.Found.Item = Routine
+                        and then Good.Found.Block = First_Block
+                        and then Good.Found.Value = IR.Nth_Value
+                          (Unit, Routine, First_Block, 1),
+                        "reversed use lists preserve the earliest fault");
+                  end;
+               end if;
+               for Fail_At in 1 .. Good.Reached loop
+                  declare
+                     Seen : constant Probe.Observation := Probe.Observe
+                       (Unit, Landin.Targets.Linux_X86_64, Fail_At);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Seen.Exhausted and then Seen.Reached = Fail_At,
+                        "each allocation boundary can fail as "
+                        & "host exhaustion");
+                     Landin.Testing.Check
+                       (Item, Seen.Live = 0 and then Seen.Live_Bytes = 0
+                        and then Seen.Allocations = Seen.Releases,
+                        "partial verifier scratch releases exactly once");
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Probe.Observe (Unit, Landin.Targets.Linux_X86_64).Found
+                    = Good.Found,
+                  "failed probes do not change the next verification");
+            end;
          end;
       end loop;
    end Address_Initialisation_Is_Checked;
@@ -8327,6 +8461,9 @@ package body Landin.Tests.Verifier_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "scratch arithmetic and zero uses",
+         Scratch_Arithmetic_And_Zero_Uses'Access);
       Landin.Testing.Register
         (Into, "verifier", "pointer union nominals are checked",
          Pointer_Union_Nominals_Are_Checked'Access);

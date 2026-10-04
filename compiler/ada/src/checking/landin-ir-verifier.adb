@@ -2,13 +2,13 @@ with Ada.Containers.Hashed_Maps;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
-with Landin.IR.Control_Flow;
 with Landin.Types;
 with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
 
 package body Landin.IR.Verifier is
 
+   use type System.Storage_Elements.Storage_Count;
    use type Landin.Machine.Convention;
    use type Landin.Targets.Architecture;
 
@@ -269,10 +269,25 @@ package body Landin.IR.Verifier is
             when Halt          => 0,
             when Fail          => 1);
 
+   function Checked_Scratch_Bytes
+     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
+      return System.Storage_Elements.Storage_Count
+   is
+      use System.Storage_Elements;
+   begin
+      if Width /= 0 and then Storage_Count (Count)
+        > Storage_Count'Last / Width
+      then
+         raise Storage_Error with "verifier scratch size is not representable";
+      end if;
+      return Storage_Count (Count) * Width;
+   end Checked_Scratch_Bytes;
+
    function Check
      (Of_Unit    : Unit;
       Facts      : Landin.Targets.Target_Facts;
-      Check_Image : Boolean) return Fault;
+      Check_Image : Boolean;
+      Probe : access Scratch_Probe := null) return Fault;
 
    function Check (Of_Unit : Unit) return Fault
      is (Check (Of_Unit,
@@ -288,10 +303,16 @@ package body Landin.IR.Verifier is
       Facts   : Landin.Targets.Target_Facts) return Fault
      is (Check (Of_Unit, Facts, Check_Image => True));
 
+   function Check_With_Probe
+     (Of_Unit : Unit; Facts : Landin.Targets.Target_Facts;
+      Probe : access Scratch_Probe) return Fault
+     is (Check (Of_Unit, Facts, Check_Image => True, Probe => Probe));
+
    function Check
      (Of_Unit    : Unit;
       Facts      : Landin.Targets.Target_Facts;
-      Check_Image : Boolean) return Fault is
+      Check_Image : Boolean;
+      Probe : access Scratch_Probe := null) return Fault is
 
       Field_Length_Fault : constant Fault_Kind :=
         Aggregate_Field_Image_Length_Disagrees;
@@ -304,6 +325,81 @@ package body Landin.IR.Verifier is
       --  A symbol's first signature represents every compatible declaration;
       --  retain whether any earlier item supplied its one allowed body.
       Symbols : Linked_Symbols.Map;
+
+      procedure Checkpoint;
+      procedure Checkpoint is
+      begin
+         if Probe /= null then
+            Probe.Reached := Probe.Reached + 1;
+            if Probe.Reached = Probe.Fail_At then
+               raise Storage_Error with "injected verifier scratch failure";
+            end if;
+         end if;
+      end Checkpoint;
+
+      generic
+         type Element is private;
+         Initial : Element;
+      package Scratch_Arrays is
+         type Elements is array (Positive range <>) of Element;
+         type Elements_Access is access Elements;
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Data : Elements_Access := null;
+            Bytes : System.Storage_Elements.Storage_Count := 0;
+         end record;
+         overriding procedure Finalize (Value : in out Owner);
+         procedure Allocate (Value : in out Owner; Count : Natural);
+      end Scratch_Arrays;
+
+      package body Scratch_Arrays is
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Object => Elements, Name => Elements_Access);
+
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            if Value.Data /= null then
+               Free (Value.Data);
+               if Probe /= null then
+                  Probe.Releases := Probe.Releases + 1;
+                  Probe.Live := Probe.Live - 1;
+                  Probe.Live_Bytes := Probe.Live_Bytes - Value.Bytes;
+               end if;
+            end if;
+         end Finalize;
+
+         procedure Allocate (Value : in out Owner; Count : Natural) is
+            Bytes : constant System.Storage_Elements.Storage_Count :=
+              Checked_Scratch_Bytes
+                (Count, Element'Object_Size / System.Storage_Unit);
+         begin
+            if Count = 0 then
+               return;
+            end if;
+            if Value.Data /= null then
+               raise Landin.Compiler_Defect with
+                 "scratch owner allocated twice";
+            end if;
+            Checkpoint;
+            --  Publish the allocation immediately to its controlled owner.
+            --  Fill in place: no input-sized initialization/return temporary.
+            Value.Data := new Elements (1 .. Count);
+            Value.Bytes := Bytes;
+            if Probe /= null then
+               Probe.Allocations := Probe.Allocations + 1;
+               Probe.Live := Probe.Live + 1;
+               Probe.Live_Bytes := Probe.Live_Bytes + Bytes;
+               Probe.Peak_Bytes := System.Storage_Elements.Storage_Count'Max
+                 (Probe.Peak_Bytes, Probe.Live_Bytes);
+            end if;
+            Checkpoint;
+            for Held of Value.Data.all loop
+               Held := Initial;
+            end loop;
+         end Allocate;
+      end Scratch_Arrays;
+
+      package Flags is new Scratch_Arrays (Boolean, False);
+      package Indices is new Scratch_Arrays (Natural, 0);
 
       function Run_Fits (Held : Run; Total : Natural) return Boolean
         is (Held.First <= Total
@@ -2704,92 +2800,233 @@ package body Landin.IR.Verifier is
          return Nothing_Wrong;
       end Pointer_Fault;
 
-      --  This must analysis is limited to proof-carrying local addresses and
-      --  source pointer scalars. It does not claim to initialise memory they
-      --  point at, or repeat the source checker's aggregate/element analysis.
-      --  Its bounds count source slots and blocks, never target elements.
-      function Pointer_Provenance (Item : Item_Id) return Fault
-      is
+      --  Index stores and reads, then follow uninitialized paths for each
+      --  read slot. All input-sized scratch has explicit heap ownership;
+      --  there is no block-by-slot matrix or returned control-flow record.
+      function Pointer_Provenance (Item : Item_Id) return Fault is
          Blocks : constant Natural := Block_Count (Of_Unit, Item);
+         Slots : constant Natural := Slot_Count (Of_Unit, Item);
+         Values : constant Natural := Value_Count (Of_Unit, Item);
+         Live, Stores_In_Block : Flags.Owner;
+         Queue : Indices.Owner;
+         Use_Total : Natural := 0;
+         Failure_Block, Failure_Position : Natural := 0;
 
          function Tracked (Slot : Slot_Id) return Boolean
            is (Slot /= No_Slot
                and then (Is_Address (Of_Unit, Item, Slot)
                  or else Pointee_Of (Of_Unit, Item, Slot) /= No_Pointee));
 
-         --  Only a tracked slot's state is ever read, so each block keeps
-         --  a bit for those alone, numbered in slot order; zero is none.
-         type Slot_Numbers is array (1 .. Slot_Count (Of_Unit, Item))
-           of Natural;
+         function Is_Tracked_Use (Slot : Slot_Id) return Boolean
+           is (Slot /= No_Slot and then Holds (Of_Unit, Item, Slot)
+               and then Tracked (Slot));
 
-         Tracked_Count : Natural := 0;
-
-         function Numbered return Slot_Numbers;
-
-         function Numbered return Slot_Numbers is
-            Result : Slot_Numbers := [others => 0];
+         --  Runs, terminators and target IDs were checked before this walk.
+         --  Read their successors directly; no predecessor index is needed.
+         function Successor (Block, Index : Positive) return Block_Id;
+         function Successor (Block, Index : Positive) return Block_Id is
+            Last : constant Value_Id := Nth_Value
+              (Of_Unit, Item, Block_Id (Block),
+               Length (Of_Unit, Item, Block_Id (Block)));
+            Op : constant Opcode := Op_Of (Of_Unit, Item, Last);
          begin
-            for Slot in Result'Range loop
-               if Tracked (Slot_Id (Slot)) then
+            if Index = 1 and then Op in Jump | Branch then
+               return Target_Of (Of_Unit, Item, Last);
+            elsif Index = 2 and then Op = Branch then
+               return Alternative_Of (Of_Unit, Item, Last);
+            end if;
+            return No_Block;
+         end Successor;
+
+         procedure Enqueue (Used : in out Natural; Block : Block_Id);
+         procedure Enqueue (Used : in out Natural; Block : Block_Id) is
+         begin
+            if Used >= Blocks then
+               raise Landin.Compiler_Defect with
+                 "pointer worklist exceeded its checked block count";
+            end if;
+            Used := Used + 1;
+            Queue.Data (Used) := Natural (Block);
+         end Enqueue;
+
+         procedure Count_Use (Slot : Slot_Id);
+         procedure Count_Use (Slot : Slot_Id) is
+         begin
+            if Is_Tracked_Use (Slot) then
+               if Use_Total = Natural'Last then
+                  raise Storage_Error with "pointer use index exhausted";
+               end if;
+               Use_Total := Use_Total + 1;
+            end if;
+         end Count_Use;
+
+         procedure Analyze;
+         procedure Analyze is
+            type Use_Record is record
+               Block, Position : Positive;
+               Needs_Entry : Boolean;
+               Next : Natural;
+            end record;
+            package Uses is new Scratch_Arrays
+              (Use_Record, (1, 1, False, 0));
+            Reads : Uses.Owner;
+            Number, First_Store, First_Use, Next_Store,
+              Last_Store_Here : Indices.Owner;
+            Entry_Initialized : Flags.Owner;
+            Tracked_Count, Use_Added : Natural := 0;
+
+            procedure Record_Use
+              (Slot : Slot_Id; Block, Position : Positive);
+            procedure Record_Use
+              (Slot : Slot_Id; Block, Position : Positive) is
+               S : Natural;
+            begin
+               if Is_Tracked_Use (Slot) then
+                  S := Number.Data (Positive (Slot));
+                  Use_Added := Use_Added + 1;
+                  Reads.Data (Use_Added) :=
+                    (Block, Position, Last_Store_Here.Data (S) /= Block,
+                     First_Use.Data (S));
+                  First_Use.Data (S) := Use_Added;
+               end if;
+            end Record_Use;
+         begin
+            --  No arrays indexed by slots or values exist on the zero-use
+            --  path. Numbering is filled in place, never returned by value.
+            Indices.Allocate (Number, Slots);
+            for S in 1 .. Slots loop
+               if Tracked (Slot_Id (S)) then
                   Tracked_Count := Tracked_Count + 1;
-                  Result (Slot) := Tracked_Count;
+                  Number.Data (S) := Tracked_Count;
                end if;
             end loop;
-            return Result;
-         end Numbered;
-
-         Number : constant Slot_Numbers := Numbered;
-         type Slot_State is array (1 .. Tracked_Count) of Boolean
-           with Pack;
-         type Block_State is array (1 .. Blocks) of Slot_State;
-         Entry_State : Slot_State := [others => False];
-
-         --  Mark a stored slot; an untracked one has no bit to mark.
-         procedure Store (Into : in out Slot_State; Slot : Slot_Id);
-
-         procedure Store (Into : in out Slot_State; Slot : Slot_Id) is
-         begin
-            if Number (Positive (Slot)) /= 0 then
-               Into (Number (Positive (Slot))) := True;
+            Indices.Allocate (First_Store, Tracked_Count);
+            Indices.Allocate (First_Use, Tracked_Count);
+            Indices.Allocate (Last_Store_Here, Tracked_Count);
+            Indices.Allocate (Next_Store, Values);
+            Flags.Allocate (Entry_Initialized, Tracked_Count);
+            Flags.Allocate (Stores_In_Block, Blocks);
+            Uses.Allocate (Reads, Use_Total);
+            if Blocks = 1 then
+               Flags.Allocate (Live, Blocks);
+               Indices.Allocate (Queue, Blocks);
             end if;
-         end Store;
-         type Block_State_Access is access Block_State;
-         procedure Free is new Ada.Unchecked_Deallocation
-           (Object => Block_State, Name => Block_State_Access);
-         package States is
-            type Owner is new Ada.Finalization.Limited_Controlled with record
-               Data : Block_State_Access :=
-                 new Block_State'(others => [others => True]);
-            end record;
-            overriding procedure Finalize (Value : in out Owner);
-         end States;
-         package body States is
-            overriding procedure Finalize (Value : in out Owner) is
-            begin
-               Free (Value.Data);
-            end Finalize;
-         end States;
-         Output_Owner, Input_Owner : States.Owner;
-         Outputs : Block_State renames Output_Owner.Data.all;
-         Inputs : Block_State renames Input_Owner.Data.all;
-         Graph : constant Control_Flow.Graph :=
-           Control_Flow.Make (Of_Unit, Item);
-         Queue : array (1 .. Blocks) of Positive;
-         Queued : array (1 .. Blocks) of Boolean := [others => False];
-         Read_At, Write_At : Positive := 1;
-         Pending : Natural := 0;
-
-         procedure Enqueue (Block : Positive);
-
-         procedure Enqueue (Block : Positive) is
-         begin
-            if not Queued (Block) then
-               Queue (Write_At) := Block;
-               Write_At := (if Write_At = Blocks then 1 else Write_At + 1);
-               Pending := Pending + 1;
-               Queued (Block) := True;
-            end if;
-         end Enqueue;
+            for P in 1 .. Parameter_Count (Of_Unit, Item) loop
+               declare
+                  Slot : constant Slot_Id := Nth_Parameter (Of_Unit, Item, P);
+               begin
+                  if Tracked (Slot) then
+                     Entry_Initialized.Data
+                       (Number.Data (Positive (Slot))) := True;
+                  end if;
+               end;
+            end loop;
+            for B in 1 .. Blocks loop
+               for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+                  declare
+                     V : constant Value_Id := Nth_Value
+                       (Of_Unit, Item, Block_Id (B), P);
+                     Code : constant Instruction := Of_Unit.Code
+                       (Of_Unit.Items (Positive (Item)).Values.First
+                        + Positive (V));
+                  begin
+                     if Code.Source.Kind = Runtime_Address then
+                        Record_Use (Code.Source.Address, B, P);
+                     end if;
+                     if Code.Destination.Kind = Runtime_Address then
+                        Record_Use (Code.Destination.Address, B, P);
+                     end if;
+                     if Code.Op in Load | Load_Field | Store_Field
+                       | Load_Element | Store_Element | Load_Indirect
+                       | Store_Indirect
+                     then
+                        Record_Use (Code.Slot, B, P);
+                     end if;
+                     if Code.Op = Landin.IR.Store and then Tracked (Code.Slot)
+                     then
+                        declare
+                           S : constant Positive := Number.Data
+                             (Positive (Code.Slot));
+                        begin
+                           Last_Store_Here.Data (S) := B;
+                           Next_Store.Data (Positive (V)) :=
+                             First_Store.Data (S);
+                           First_Store.Data (S) := Positive (V);
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end loop;
+            for S in 1 .. Tracked_Count loop
+               if First_Use.Data (S) /= 0
+                 and then not Entry_Initialized.Data (S)
+               then
+                  for B in 1 .. Blocks loop
+                     Stores_In_Block.Data (B) := False;
+                     Live.Data (B) := False;
+                  end loop;
+                  declare
+                     Store_Value : Natural := First_Store.Data (S);
+                     Read_At : Natural := 0;
+                     Used : Natural := 1;
+                     Use_Index : Natural := First_Use.Data (S);
+                  begin
+                     while Store_Value /= 0 loop
+                        Stores_In_Block.Data (Positive
+                          (Block_Of
+                             (Of_Unit, Item, Value_Id (Store_Value)))) :=
+                            True;
+                        Store_Value := Next_Store.Data (Store_Value);
+                     end loop;
+                     Live.Data (1) := True;
+                     Queue.Data (1) := 1;
+                     while Read_At < Used loop
+                        Read_At := Read_At + 1;
+                        declare
+                           B : constant Positive := Queue.Data (Read_At);
+                        begin
+                           if not Stores_In_Block.Data (B) then
+                              for Index in 1 .. 2 loop
+                                 declare
+                                    Next : constant Block_Id :=
+                                      Successor (B, Index);
+                                 begin
+                                    if Next /= No_Block
+                                      and then not Live.Data (Positive (Next))
+                                    then
+                                       Live.Data (Positive (Next)) := True;
+                                       --  Mark before enqueueing: at most B
+                                       --  entries, even for cycles/duplicate
+                                       --  edges. Never increment past B.
+                                       Enqueue (Used, Next);
+                                    end if;
+                                 end;
+                              end loop;
+                           end if;
+                        end;
+                     end loop;
+                     while Use_Index /= 0 loop
+                        declare
+                           Use_At : constant Use_Record :=
+                             Reads.Data (Use_Index);
+                        begin
+                           if Use_At.Needs_Entry
+                             and then Live.Data (Use_At.Block)
+                             and then (Failure_Block = 0
+                               or else Use_At.Block < Failure_Block
+                               or else (Use_At.Block = Failure_Block
+                                 and then Use_At.Position < Failure_Position))
+                           then
+                              Failure_Block := Use_At.Block;
+                              Failure_Position := Use_At.Position;
+                           end if;
+                           Use_Index := Use_At.Next;
+                        end;
+                     end loop;
+                  end;
+               end if;
+            end loop;
+         end Analyze;
       begin
          for P in 1 .. Parameter_Count (Of_Unit, Item) loop
             if Tracked (Nth_Parameter (Of_Unit, Item, P))
@@ -2798,76 +3035,77 @@ package body Landin.IR.Verifier is
                return (Kind => Routine_Signature_Disagrees,
                        Item => Item, others => <>);
             end if;
-            Store (Entry_State, Nth_Parameter (Of_Unit, Item, P));
          end loop;
-         for B in 1 .. Blocks loop
-            if not Control_Flow.Is_Reachable (Graph, Block_Id (B)) then
-               return (Kind => Block_Unreachable, Item => Item,
-                       Block => Block_Id (B), others => <>);
-            end if;
-            Enqueue (B);
-         end loop;
-         while Pending > 0 loop
+         if Blocks > 1 then
+            Flags.Allocate (Live, Blocks);
+            Indices.Allocate (Queue, Blocks);
+            Live.Data (1) := True;
+            Queue.Data (1) := 1;
             declare
-               B : constant Positive := Queue (Read_At);
-               State : Slot_State :=
-                 (if B = 1 then Entry_State else [others => True]);
-               Edge : Natural := Control_Flow.First_Predecessor
-                 (Graph, Block_Id (B));
+               Read_At : Natural := 0;
+               Used : Natural := 1;
             begin
-               Read_At := (if Read_At = Blocks then 1 else Read_At + 1);
-               Pending := Pending - 1;
-               Queued (B) := False;
-               if B /= 1 then
-                  while Edge /= 0 loop
-                     declare
-                        Prior : constant Positive := Positive
-                          (Control_Flow.Predecessor (Graph, Edge));
-                     begin
-                        for S in State'Range loop
-                           State (S) := State (S) and Outputs (Prior) (S);
-                        end loop;
-                     end;
-                     Edge := Control_Flow.Next_Predecessor (Graph, Edge);
-                  end loop;
-               end if;
-               Inputs (B) := State;
-               for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
-                  declare
-                     V : constant Value_Id := Nth_Value
-                       (Of_Unit, Item, Block_Id (B), P);
-                  begin
-                     if Op_Of (Of_Unit, Item, V) = Landin.IR.Store then
-                        Store (State, Slot_Of (Of_Unit, Item, V));
-                     end if;
-                  end;
-               end loop;
-               if State /= Outputs (B) then
-                  Outputs (B) := State;
+               while Read_At < Used loop
+                  Read_At := Read_At + 1;
                   for Index in 1 .. 2 loop
                      declare
-                        Next : constant Block_Id := Control_Flow.Successor
-                          (Graph, Block_Id (B), Index);
+                        Next : constant Block_Id :=
+                          Successor (Queue.Data (Read_At), Index);
                      begin
-                        if Next /= No_Block then
-                           Enqueue (Positive (Next));
+                        if Next /= No_Block
+                          and then not Live.Data (Positive (Next))
+                        then
+                           Live.Data (Positive (Next)) := True;
+                           Enqueue (Used, Next);
                         end if;
                      end;
                   end loop;
-               end if;
+               end loop;
             end;
+            for B in 1 .. Blocks loop
+               if not Live.Data (B) then
+                  return (Kind => Block_Unreachable, Item => Item,
+                          Block => Block_Id (B), others => <>);
+               end if;
+            end loop;
+         end if;
+         --  Count exactly the tracked uses after structural validation.
+         --  Guard each increment rather than computing an unchecked 3*V.
+         for B in 1 .. Blocks loop
+            for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+               declare
+                  V : constant Value_Id := Nth_Value
+                    (Of_Unit, Item, Block_Id (B), P);
+                  Code : constant Instruction := Of_Unit.Code
+                    (Of_Unit.Items (Positive (Item)).Values.First
+                     + Positive (V));
+               begin
+                  if Code.Source.Kind = Runtime_Address then
+                     Count_Use (Code.Source.Address);
+                  end if;
+                  if Code.Destination.Kind = Runtime_Address then
+                     Count_Use (Code.Destination.Address);
+                  end if;
+                  if Code.Op in Load | Load_Field | Store_Field
+                    | Load_Element | Store_Element | Load_Indirect
+                    | Store_Indirect
+                  then
+                     Count_Use (Code.Slot);
+                  end if;
+               end;
+            end loop;
          end loop;
+         if Use_Total > 0 then
+            Analyze;
+         end if;
          for B in 1 .. Blocks loop
             declare
-               State : Slot_State := Inputs (B);
                function Missing (Place : Storage) return Boolean
                  is (case Place.Kind is
                         when Runtime_Address =>
                           not Holds (Of_Unit, Item, Place.Address)
                           or else not Is_Address
-                            (Of_Unit, Item, Place.Address)
-                          or else not State
-                            (Number (Positive (Place.Address))),
+                            (Of_Unit, Item, Place.Address),
                         when Frame_Slot =>
                           Holds (Of_Unit, Item, Place.Slot)
                           and then Is_Address (Of_Unit, Item, Place.Slot),
@@ -2886,17 +3124,11 @@ package body Landin.IR.Verifier is
                         return (Bad, Item, Block_Id (B), V);
                      elsif Missing (Code.Source) or else Missing
                        (Code.Destination)
-                       or else (Code.Op in Load | Load_Field | Store_Field
-                         | Load_Element | Store_Element | Load_Indirect
-                         | Store_Indirect
-                         and then Tracked (Code.Slot)
-                         and then not State (Number (Positive (Code.Slot))))
+                       or else (B = Failure_Block
+                         and then P = Failure_Position)
                      then
                         return (Address_Value_Disagrees,
                                 Item, Block_Id (B), V);
-                     end if;
-                     if Code.Op = Landin.IR.Store then
-                        Store (State, Code.Slot);
                      end if;
                   end;
                end loop;
@@ -4512,9 +4744,11 @@ package body Landin.IR.Verifier is
             Id : constant Item_Id := Item_Id (Which);
             Is_Datum : constant Boolean := Kind_Of (Of_Unit, Id) = Datum;
             Blocks : constant Natural := Block_Count (Of_Unit, Id);
-            Reached : array (1 .. Positive'Max (1, Blocks)) of Boolean :=
-              [others => False];
+            Reached : Flags.Owner;
          begin
+            if Blocks > 1 then
+               Flags.Allocate (Reached, Blocks);
+            end if;
             declare
                Attr : constant Landin.Machine.Placement :=
                  Placement_Of (Of_Unit, Id);
@@ -5636,7 +5870,9 @@ package body Landin.IR.Verifier is
 
             --  [1550]: block 1 is where an item starts, and every other
             --  block is reached from one before it.
-            Reached (1) := True;
+            if Blocks > 1 then
+               Reached.Data (1) := True;
+            end if;
 
             for B in 1 .. Blocks loop
                declare
@@ -6568,15 +6804,17 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
-                              Reached
-                                (Positive
-                                   (Target_Of (Of_Unit, Id, V))) := True;
-
-                              if Op = Branch then
-                                 Reached
+                              if Blocks > 1 then
+                                 Reached.Data
                                    (Positive
-                                      (Alternative_Of
-                                         (Of_Unit, Id, V))) := True;
+                                      (Target_Of (Of_Unit, Id, V))) := True;
+
+                                 if Op = Branch then
+                                    Reached.Data
+                                      (Positive
+                                         (Alternative_Of
+                                            (Of_Unit, Id, V))) := True;
+                                 end if;
                               end if;
 
                            when others =>
@@ -8234,7 +8472,7 @@ package body Landin.IR.Verifier is
             end loop;
 
             for B in 2 .. Blocks loop
-               if not Reached (B) then
+               if not Reached.Data (B) then
                   return (Kind => Block_Unreachable, Item => Id,
                           Block => Block_Id (B), others => <>);
                end if;

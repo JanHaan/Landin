@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""How the compiler's time grows with the size of the program it checks.
+"""How the compiler's time and peak memory grow with program size.
 
 Each family below generates a program at 1,000, 2,000, 4,000, 8,000 and
 16,000 declarations and asks the compiler to check it and emit its assembly:
@@ -7,14 +7,15 @@ scan, parse, resolve, type and flow checking and lowering to verified IR,
 which is the frontend, and then optimization and the backend, which is
 emission.  The compiler's own `--stage-report` says how much processor time
 each stage took, which leaves out process start, reading the sources and
-the harness.  Five runs per input, and the median of them.
+the harness.  Five runs per input give median times and the largest peak.
 
-The verdict is a ratio: the median at one size over the median at half that
-size, for every doubling in every family, taken for the frontend and for
-emission separately so that a cheap stage cannot hide a growing one.  A ratio compares two runs on the
-same machine a few seconds apart, so it does not depend on how fast the
-runner is, and a pass that grows with the square of the program shows up as
-four no matter what the machine is.  A ratio above the limit fails.
+The verdict compares every doubling in every family.  Frontend and emission
+use the median processor time; peak memory uses the largest reported peak
+among the runs at each size.  Each has its own ratio and a ratio above its
+limit fails.  Ratios compare runs on the same machine a few seconds apart,
+reducing dependence on host speed. Quadratic growth approaches a ratio
+of four once fixed costs cease to dominate. This is neither an absolute
+memory ceiling nor a bound on programs outside these workloads.
 
 Noise is handled three ways.  Processor time rather than wall time, so a
 busy neighbour that takes the core away costs nothing that is counted.  The
@@ -31,8 +32,9 @@ shows up there.  They have no ratio, only a time and a peak.
 The generated programs are written into a temporary directory and never
 into the repository; the same size always produces the same bytes.
 
-This is standard-library Python, like `check.py`, and needs a built
-compiler: `--refine=PATH`, or the release build under
+This uses standard-library Python and a small POSIX C launcher, built with
+`CC` (default `cc`). The launcher prevents the generator's resident memory
+from becoming an inherited compiler peak. It needs a built compiler: `--refine=PATH`, or the release build under
 `compiler/ada/build/<tag>/release/bin/refine`.
 """
 
@@ -40,7 +42,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import signal
 import statistics
 import subprocess
 import sys
@@ -55,6 +59,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIZES = (1000, 2000, 4000, 8000, 16000)
 RUNS = 5
 LIMIT = 2.5
+MEMORY_LIMIT = 2.5
 
 #  The stages the ratios are taken over: everything that reads the source,
 #  and everything that turns the verified IR into assembly.
@@ -254,8 +259,43 @@ def default_refine() -> str:
     return os.path.join(build, tag, "release", "bin", "refine")
 
 
+def build_launcher(work: str) -> str:
+    """A native fork prevents the Python generator's RSS becoming the peak."""
+    launcher = os.path.join(work, "scaling-exec")
+    completed = subprocess.run(
+        [os.environ.get("CC", "cc"), "-std=c99", "-O2",
+         os.path.join(ROOT, "scripts", "scaling_exec.c"), "-o", launcher],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if completed.returncode:
+        raise RuntimeError("could not build the peak-memory launcher: "
+                           + completed.stderr.decode("utf-8", "replace"))
+    return launcher
+
+
+def run_compiler(command: list[str], timeout: float) -> subprocess.CompletedProcess:
+    # The launcher and compiler share this fresh process group. A timeout
+    # must stop both; killing only the launcher would leave the compiler live.
+    with subprocess.Popen(command, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, start_new_session=True) as child:
+        try:
+            stdout, stderr = child.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # The entire process group already exited.
+            child.communicate()
+            raise
+        return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
+def valid_peak(value) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > 0)
+
+
 def measure(refine: str, root: str, entry: str, report: str,
-            timeout: float) -> dict:
+            timeout: float, launcher: str | None = None) -> dict:
     """One compilation; the frontend's and emission's processor seconds, the
     peak resident set in KiB and the compilation's sizes, from the
     compiler's own report."""
@@ -266,9 +306,8 @@ def measure(refine: str, root: str, entry: str, report: str,
     except FileNotFoundError:
         pass
     started = time.monotonic()
-    completed = subprocess.run(command, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, timeout=timeout,
-                               check=False)
+    completed = run_compiler(([launcher] + command if launcher else command),
+                             timeout)
     if completed.returncode != 0:
         raise RuntimeError(
             "%s exited %d after %.1fs\n%s" % (
@@ -285,6 +324,11 @@ def measure(refine: str, root: str, entry: str, report: str,
     missing = [name for name in FRONTEND + EMISSION if name not in stages]
     if missing:
         raise RuntimeError("the stage report lacks " + ", ".join(missing))
+    for row in data["stages"]:
+        peak = row.get("peak_kib")
+        if not valid_peak(peak):
+            raise RuntimeError("no positive peak memory measurement for stage "
+                               + str(row.get("stage")))
     result = {part: sum(stages[name]["processor_us"] for name in names) / 1e6
               for part, names in PARTS}
     result.update(
@@ -296,10 +340,12 @@ def measure(refine: str, root: str, entry: str, report: str,
 
 
 def median_of(refine: str, root: str, entry: str, work: str, runs: int,
-              timeout: float) -> dict:
+              timeout: float, launcher: str | None = None) -> dict:
     samples = [measure(refine, root, entry,
-                       os.path.join(work, "stages.json"), timeout)
+                       os.path.join(work, "stages.json"), timeout, launcher)
                for _ in range(runs)]
+    if any(not valid_peak(sample.get("peak_kib")) for sample in samples):
+        raise RuntimeError("no positive peak memory measurement in a sample")
     result = {part: statistics.median(sample[part] for sample in samples)
               for part, _ in PARTS}
     result.update(
@@ -309,7 +355,7 @@ def median_of(refine: str, root: str, entry: str, work: str, runs: int,
         peak_kib=max(sample["peak_kib"] for sample in samples),
         sizes=samples[0]["sizes"],
         samples={part: [sample[part] for sample in samples]
-                 for part, _ in PARTS})
+                 for part in [name for name, _ in PARTS] + ["peak_kib"]})
     return result
 
 
@@ -328,7 +374,12 @@ def main(argv: list[str]) -> int:
                         help="the compiler to measure (default: the"
                              " release build)")
     parser.add_argument("--runs", type=int, default=RUNS)
-    parser.add_argument("--limit", type=float, default=LIMIT)
+    parser.add_argument("--limit", type=float, default=LIMIT,
+                        help="maximum frontend and emission time ratio"
+                             " per doubling (default: 2.5)")
+    parser.add_argument("--memory-limit", type=float, default=MEMORY_LIMIT,
+                        help="maximum peak-memory ratio per doubling"
+                             " (default: 2.5)")
     parser.add_argument("--largest", type=int, default=SIZES[-1],
                         help="stop at this size (for a quick look; the"
                              " verdict needs the whole range)")
@@ -347,6 +398,10 @@ def main(argv: list[str]) -> int:
         return 2
     if arguments.runs < 1:
         parser.error("--runs must be at least one")
+    if (not math.isfinite(arguments.limit) or arguments.limit <= 0
+            or not math.isfinite(arguments.memory_limit)
+            or arguments.memory_limit <= 0):
+        parser.error("ratio limits must be finite and positive")
     known = {name for name, _ in FAMILIES}
     for name in arguments.family or ():
         if name not in known:
@@ -358,9 +413,16 @@ def main(argv: list[str]) -> int:
                 if not arguments.family or name in arguments.family]
 
     record = {"refine": refine, "runs": arguments.runs,
-              "limit": arguments.limit, "families": {}, "derived": {}}
+              "limit": arguments.limit,
+              "memory_limit": arguments.memory_limit,
+              "families": {}, "derived": {}}
     failures = []
     with tempfile.TemporaryDirectory(prefix="landin-scaling-") as work:
+        try:
+            launcher = build_launcher(work)
+        except (OSError, RuntimeError) as error:
+            print(f"scaling: {error}", file=sys.stderr)
+            return 2
         for name, build in families:
             rows = []
             print(f"{name}:")
@@ -369,14 +431,21 @@ def main(argv: list[str]) -> int:
                 write_program(directory, build(size))
                 try:
                     result = median_of(refine, directory, directory, work,
-                                       arguments.runs, arguments.timeout)
+                                       arguments.runs, arguments.timeout, launcher)
                 except (RuntimeError, subprocess.TimeoutExpired) as error:
                     failures.append(f"{name} at {size}: {error}")
+                    print(f"  {size:>6}  failed")
+                    break
+                if not valid_peak(result.get("peak_kib")):
+                    failures.append(
+                        f"{name} at {size}: no positive peak memory measurement")
                     print(f"  {size:>6}  failed")
                     break
                 ratios = {part: (result[part] / rows[-1][part]
                                  if rows and rows[-1][part] > 0 else None)
                           for part, _ in PARTS}
+                ratios["peak_kib"] = (result["peak_kib"] / rows[-1]["peak_kib"]
+                                     if rows else None)
                 result.update(size=size, ratios=ratios)
                 rows.append(result)
                 shown = "".join(
@@ -384,8 +453,11 @@ def main(argv: list[str]) -> int:
                     + (f"{ratios[part]:5.2f}x" if ratios[part] is not None
                        else "      ")
                     for part, _ in PARTS)
+                memory_shown = (f" {ratios['peak_kib']:5.2f}x"
+                                if ratios["peak_kib"] is not None else "      ")
                 print(f"  {size:>6}{shown}"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB"
+                      f"{memory_shown}"
                       f"  {result['sizes']['declarations']:>6} declarations")
                 for part, _ in PARTS:
                     ratio = ratios[part]
@@ -394,6 +466,12 @@ def main(argv: list[str]) -> int:
                             f"{name}: {part} {rows[-2]['size']} -> {size}"
                             f" grew {ratio:.2f}x, more than"
                             f" {arguments.limit}x")
+                ratio = ratios["peak_kib"]
+                if ratio is not None and ratio > arguments.memory_limit:
+                    failures.append(
+                        f"{name}: peak memory {rows[-2]['size']} -> {size}"
+                        f" grew {ratio:.2f}x, more than"
+                        f" {arguments.memory_limit}x")
             record["families"][name] = rows
 
         if not arguments.no_derived:
@@ -402,7 +480,7 @@ def main(argv: list[str]) -> int:
                 try:
                     result = median_of(refine, ROOT,
                                        os.path.join(ROOT, relative), work,
-                                       arguments.runs, arguments.timeout)
+                                       arguments.runs, arguments.timeout, launcher)
                 except (RuntimeError, subprocess.TimeoutExpired) as error:
                     failures.append(f"{name}: {error}")
                     print(f"  {name:<22}  failed")
