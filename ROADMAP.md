@@ -719,15 +719,22 @@ separate peripheral model or independent control. Each distinct SVD form used
 by the selected registers, including structural expansion and inheritance
 where present, is exercised by these checks; unsupported forms have negative
 refusal controls. Every capacity verdict is rerun against each selected
-profile with the 32 KiB reference retained. The Cortex-M
-gate runs with SR-01's migrated `arm-eabi-gcc` toolchain, and every Cortex-M
+profile with the 32 KiB reference retained.
+
+The Cortex-M gate runs with SR-01's migrated `arm-eabi-gcc` toolchain, and every Cortex-M
 record, including firmware hashes and disassemblies, is rebaselined in the
 same toolchain change.
-Check the
-RP2040 SVD interrupt-to-vector mapping against the linked firmware image:
+
+Check the RP2040 SVD interrupt-to-vector mapping against the linked firmware image:
 `USBCTRL_IRQ` is IRQ5, so a typed handler at absolute slot 21 must compile,
 occupy that vector word and execute when IRQ5 is delivered. Verify the
 constrained reference profile still refuses slot 21 and emits zero there.
+
+Fixture
+checks select RP2040 and the second generated family by device identity and
+compare each selected boot image format fact with an independently recorded
+expectation for that device; a wrong or absent format fails the checks. The
+firmware ELF alone does not establish this selection.
 
 ### R12.20 — The first board
 
