@@ -624,7 +624,7 @@ public remove: (key: type is hashable, item: type,
                 if record.previous_used < slots then
                     mut previous: bucket =
                         (mem.get(value.buckets, record.previous_used)
-                            else (problem)
+                        else (problem)
                             _ = problem
                             fail missing
                         end)
@@ -640,7 +640,7 @@ public remove: (key: type is hashable, item: type,
                 if record.next_used < slots then
                     mut next: bucket =
                         (mem.get(value.buckets, record.next_used)
-                            else (problem)
+                        else (problem)
                             _ = problem
                             fail missing
                         end)

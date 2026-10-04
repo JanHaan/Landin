@@ -45,6 +45,12 @@ arena_path: () -> (ok: bool) =
     small.push(values, state, 22) else 0
     mut inline_free: bool = mem.arena_used(state) == 0
     small.push(values, state, 23) else 0
+    spill_extent: usize = mem.arena_used(state)
+    mut spill_address: usize = 0
+    begin
+        view := small.used(values)
+        spill_address = usize(addr view[0])
+    end
     small.push(values, state, 24) else 0
     small.push(values, state, 25) else 0
     begin
@@ -52,9 +58,16 @@ arena_path: () -> (ok: bool) =
         ok = inline_free and small.length(addr values) == 5
              and small.capacity(addr values) == 8
              and view[0] == 21 and view[2] == 23 and view[4] == 25
-             and mem.arena_used(state) == 12 * sizeof i32
+             --  The first spill acquires four slots; its top arena block
+             --  grows to eight in place, without retaining another block.
+             and spill_extent == 4 * sizeof i32
+             and usize(addr view[0]) == spill_address
+             and mem.arena_used(state) == 8 * sizeof i32
     end
     small.release(values, state)
+    ok = ok and small.length(addr values) == 0
+         and small.capacity(addr values) == 2
+         and mem.arena_used(state) == 8 * sizeof i32
 end arena_path
 
 fixed_path: () -> (ok: bool) =
