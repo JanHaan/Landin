@@ -427,14 +427,13 @@
               "stackclashprotection"
             ];
 
-            #  The build tag keeps this shell's object files out of the
-            #  ones the macOS loop and the linux/amd64 container leave in
-            #  the same checkout.
+            #  Keep each host's shell objects apart in a shared checkout,
+            #  as well as apart from the macOS loop and Linux container.
             shellHook = ''
               export LANDIN_GNAT_HOME="${gnat}"
               export LANDIN_GPRBUILD_HOME="${gprbuild}"
-              export LANDIN_BUILD_TAG=nix
-              echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix'"
+              export LANDIN_BUILD_TAG=nix-${system}
+              echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'"
               echo "landin: ./scripts/toolchain.sh prints what is actually on PATH"
             '';
           };

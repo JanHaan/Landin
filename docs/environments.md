@@ -251,8 +251,11 @@ and the source build `.#refine` and gains the prebuilt compiler with the
 first release that publishes it. The aarch64-linux shell is evaluated on
 x86-64, not yet built on arm64 hardware; Nix CI stays deferred.
 
-It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
-other environments leave in the same checkout. `python3` comes with
+The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
+`nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
+therefore use separate object trees and locks, apart from the other
+environments' trees. The `nix build` derivation still uses `nix` in its
+isolated build directory. `python3` comes with
 it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it
 also selects `llvmPackages."19".clang` and `glibc.dev` from the package set
 fixed by `flake.lock`, matching the Debian environments' Clang major without
