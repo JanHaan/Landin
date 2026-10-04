@@ -950,9 +950,31 @@ class ClangDriver:
             source = b"".join(reversed(pieces))
         probe = translation.with_name("enum-probe.i")
         probe.write_bytes(source + b"\n" + "\n".join(queries).encode("utf-8") + b"\n")
-        queried = ASTModel(self.parse_ast(probe))
-        values = {name: value for enum in queried.enums
-                  for name, value in Generator.enum_values(enum)}
+        process = self.run(("-Xclang", "-ast-dump=json", "-Xclang",
+                            f"-ast-dump-filter={prefix}type_", "-fsyntax-only", str(probe)),
+                           context="probing enum types")
+        # Clang emits one JSON object per matching declaration, not an array.
+        # Filtering here avoids dumping and indexing the rest of the translation.
+        try:
+            output = process.stdout.decode("utf-8")
+            decoder = json.JSONDecoder()
+            position = 0
+            values: dict[str, int] = {}
+            expected = {f"{prefix}type_{index}" for index in range(len(enums))}
+            while position < len(output):
+                while position < len(output) and output[position].isspace():
+                    position += 1
+                if position == len(output):
+                    break
+                node, position = decoder.raw_decode(output, position)
+                require(isinstance(node, dict) and node.get("kind") == "EnumConstantDecl",
+                        "Clang emitted an unexpected enum probe declaration")
+                name = node.get("name")
+                require(name in expected and name not in values,
+                        "Clang emitted an unexpected enum probe constant")
+                values[name] = Generator.enum_values(EnumInfo({"inner": [node]}, "", ""))[0][1]
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise BindingError(f"Clang emitted invalid enum probe AST: {error}") from error
         for index, enum in enumerate(enums):
             code = values.get(f"{prefix}type_{index}", 0)
             require(1 <= code <= len(candidates),

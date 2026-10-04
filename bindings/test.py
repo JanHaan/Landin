@@ -269,6 +269,29 @@ class PolicyNameTests(unittest.TestCase):
                     self.assertEqual(loaded.entries[0].landin_name, expected)
 
 
+class EnumProbeTests(unittest.TestCase):
+    def test_probe_reads_only_filtered_constants(self) -> None:
+        module = runpy.run_path(str(GENERATOR))
+        candidates = [name for name in module["BUILTIN_LAYOUT"]
+                      if name not in {"float", "double", "_Bool"}]
+        names = ("unsigned int", "long")
+        output = "\n".join(json.dumps({
+            "kind": "EnumConstantDecl", "name": f"landin_enum_probe_type_{index}",
+            "inner": [{"kind": "ConstantExpr", "value": str(candidates.index(name) + 1)}],
+        }) for index, name in enumerate(names)).encode()
+        driver = object.__new__(module["ClangDriver"])
+        enums = [module["EnumInfo"]({}, "", tag) for tag in ("First", "Second")]
+        with tempfile.TemporaryDirectory() as directory:
+            translation = pathlib.Path(directory) / "translation.i"
+            translation.write_text("enum First { A }; enum Second { B };\n")
+            with mock.patch.object(driver, "run", return_value=subprocess.CompletedProcess(
+                    [], 0, output)) as run, mock.patch.object(
+                    driver, "parse_ast", side_effect=AssertionError("full AST requested")):
+                driver.query_enum_types(mock.Mock(identifiers=set()), translation, enums)
+        self.assertEqual([enum.compatible_type for enum in enums], list(names))
+        self.assertIn("-ast-dump-filter=landin_enum_probe_type_", run.call_args.args[0])
+
+
 class GeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
