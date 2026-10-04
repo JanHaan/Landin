@@ -163,19 +163,19 @@ package body Landin.Tests.Toolchain_Suite is
    begin
       --  Joined terminates every element, so the expectation does too.
       Landin.Testing.Check_Equal
-        (Item, Natural (Plain.Length), 4, "four arguments and no more");
+        (Item, Natural (Plain.Length), 5, "five arguments and no more");
       Landin.Testing.Check_Equal
         (Item, Landin.Platform.Joined (Plain),
          "main.s" & LF & "-o" & LF & "main" & LF
-         & "-Wa,-march=generic64" & LF,
-         "the plain invocation is the input, -o, the output and the level");
+         & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
+         "the plain invocation collects unused sections at the level");
 
       Landin.Testing.Check_Equal
-        (Item, Natural (Molded.Length), 5, "the linker adds exactly one");
+        (Item, Natural (Molded.Length), 6, "the linker adds exactly one");
       Landin.Testing.Check_Equal
         (Item, Landin.Platform.Joined (Molded),
          "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF
-         & "-Wa,-march=generic64" & LF,
+         & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
          "a named linker becomes -fuse-ld= and nothing else moves");
    end A_Linker_Is_Passed_Through_The_Driver;
 
@@ -267,14 +267,14 @@ package body Landin.Tests.Toolchain_Suite is
               Landin.Targets.Linux_X86_64);
       begin
          Landin.Testing.Check_Equal
-           (Item, Natural (Args.Length), 8,
+           (Item, Natural (Args.Length), 9,
             "file spelling adds no argument or response-file expansion");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Args),
             Expected_Assembly & LF & "-l:libsupport.a" & LF
             & "-l:libsupport.a" & LF & "-o" & LF & Expected_Output & LF
             & "-fuse-ld=mold" & LF & "-Wl,--build-id=0xa1b2" & LF
-            & "-Wa,-march=generic64" & LF,
+            & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
             "literal paths preserve ordered libraries and driver options");
       end Check;
    begin
