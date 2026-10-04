@@ -1193,13 +1193,27 @@ Measured first, and then only where the measurement says.
 Status: planned
 Depends on: none
 
-Benchmarks with recorded time and size per target, tracked by the gate, and a
-build report that counts the same things on every backend. This takes on
-R730-24. A measured code-quality cost attributable to assembly's fixed memory
-effect is recorded against SR-09 before any narrower effect is proposed.
+Benchmarks with recorded time and size for every supported target, each CPU
+feature level of its family, and all nine independent combinations of
+`--optimize=none|size|speed` and `--specialize=off|auto|all`, including none/off
+and size/auto. Track the matrix in the recurring gate, with a build report
+that counts the same things on every backend. Each baseline identifies its
+target, selected `--level`, optimization/specialization pair, workload and
+measurement runner. This takes on R730-24. A measured code-quality cost
+attributable to assembly's fixed memory effect is recorded against SR-09
+before any narrower effect is proposed.
 
-Exit evidence: baselines recorded for every target, and the gate failing on a
-regression beyond a stated tolerance.
+Cover every supported family level, including the default and any later-added
+levels. Today these are x86-64 v1 through v4, `armv8-a` and `armv8.1-a`, and
+`armv6-m`, `armv7-m` and `armv7e-m` where the target family applies. The
+measurement runner must support and execute the selected level; lack of
+support cannot silently substitute a lower level or skip a measurement.
+
+Exit evidence: record time and size baselines for the complete
+target/level/profile matrix on the same workloads. Compare each combination
+against its own baseline and fail the gate if either measure regresses beyond
+its stated tolerance. Measure the matrix's recurring cost; no cost saving or
+existing coverage of this future matrix is claimed.
 
 ### R16.20 — Register allocation
 
@@ -1210,12 +1224,19 @@ Allocation for the arm64 backend's stack homes and the remaining x86-64 and
 Cortex-M cases, the bounds check an indexed increment keeps, and the atomic
 and barrier lowering, which is baseline. This takes on R551-12.
 
-Exit evidence: measured improvement against R16.10's baselines with unchanged
-behaviour, ABI and debugger evidence.
+Exit evidence: measured improvement for affected target/level/profile
+combinations against their matching R16.10 baselines, with unchanged
+behavior, ABI and debugger evidence. Every supported combination remains
+under the same time and size regression gate, including unaffected levels
+and profiles.
 
 ### R16 gate
 
-- Every optimization is measured against a recorded baseline.
+- Every supported target, CPU feature level and all nine optimization/
+  specialization combinations are measured on the same workloads against
+  their own recorded time and size baselines. Either measure exceeding its
+  stated tolerance fails; unsupported runners cannot skip or substitute a
+  selected level.
 
 ## The concurrency execution model
 
