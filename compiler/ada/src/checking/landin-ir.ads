@@ -25,19 +25,19 @@ with Landin.Packed;
 --  and therefore a tree cannot test, while the verifier exists to reject
 --  malformed IR.
 --
---  No phi and no block parameter, and that is a fact about the kernel
---  rather than a deferral.  Two paragraphs decide it.  [1820]'s `primary`
---  spells literal, identifier, call and a parenthesised expression and no
---  `if`, so a branch is never an expression whose value is wanted --
---  [1080]'s reading of one is described in the tour and is not enabled.
---  And [1840] says "a name declared in one arm is not visible in another
---  and not after the branch closes", so nothing declared inside an arm
---  can be read below it.  Between them: the only thing that survives a
---  merge is a name declared outside the branch, and a name is a slot.
---  When [1080] is enabled a value crosses a merge for the first time,
---  and that is the evidence that makes a merge mechanism necessary.  Not
---  the absence of loops: a loop needs a back edge and changes nothing
---  about what crosses a merge.
+--  No phi and no block parameter.  [1080] permits `if`, `match`, bare
+--  blocks and loops in expression positions, so their results do cross
+--  control-flow merges.  Under D125, reachable fallthrough arms of `if`
+--  and `match`, and the final expression of a bare block, write storage
+--  owned by the consumer: a scalar or function join slot, or a shared
+--  aggregate destination.  Under D158, each taken `break with` writes
+--  its target loop's join slot (or fills its aggregate destination),
+--  runs cleanup, and jumps to the post-loop block.  The continuation
+--  loads a scalar or uses the filled destination.  [1840] still keeps
+--  names declared inside an arm out of other arms and the continuation;
+--  names declared outside it are slots too.  Across all these edges,
+--  including loop back edges, slot contents carry information while IR
+--  values remain block-local.  No phi or block parameter is needed.
 --
 --  Values are block-local, which is the same decision said from the
 --  other side.  [0410] makes `and` and `or` short-circuit, and [0300]
@@ -52,11 +52,11 @@ with Landin.Packed;
 --  than its parent's" -- and it survives loops, because a loop does not
 --  make a value cross a block.
 --
---  What it costs, said plainly: a store and a load per short-circuit and
---  per merged name, which is unoptimised code.  Promoting a slot to a
---  value belongs to baseline code generation, where the register
---  allocator is, and deterministic baseline code generation comes before
---  competitive optimization.
+--  What it costs, said plainly: stores and loads around short-circuit and
+--  scalar control joins, as well as merged names, are unoptimised code.
+--  Promoting a slot to a value belongs to baseline code generation, where
+--  the register allocator is, and deterministic baseline code generation
+--  comes before competitive optimization.
 --
 --  A value's identity is the position, inside its item, of the
 --  instruction that defines it.  There is no second numbering: a
@@ -94,8 +94,10 @@ with Landin.Packed;
 --  Landin.Resolution itself makes for not resolving type names.  What
 --  source debugging cannot get by asking is which instructions a scope
 --  covers, so a block names its scope and that is the whole of it.  The
---  kernel has no bare block [1090], so a block's scope is a function
---  body, an arm, an `else`, or the scope enclosing a merge.
+--  kernel has bare blocks [1090]: their body blocks carry their own
+--  scope, while their exit blocks carry the enclosing scope.  Function
+--  bodies, arms, `else` bodies and loop bodies likewise use their
+--  resolved scopes; merge blocks use the scope surrounding the control.
 --
 --  What is deliberately not here.  There is no array from Node_Id to
 --  Value_Id: the parser anticipated one, and the lowering wants a value
