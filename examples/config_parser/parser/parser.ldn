@@ -74,6 +74,24 @@ recover_to_boundary: (source: []u8, inout parser: parser_state) -> none =
     end while
 end recover_to_boundary
 
+skip_group: (source: []u8, inout parser: parser_state) -> none =
+    mut pending: usize = 1
+    advance(source, parser)
+    loop do
+        return when parser.look.what == lexer.end_of_input
+        if parser.look.what == lexer.right_brace then
+            dec pending
+            advance(source, parser)
+            return when pending == 0
+        else
+            if parser.look.what == lexer.left_brace then
+                inc pending
+            end if
+            advance(source, parser)
+        end if
+    end loop
+end skip_group
+
 lower_depth: (inout parser: parser_state) -> none =
     dec parser.depth
 end lower_depth
@@ -188,7 +206,7 @@ recover_entry_failure:
     match problem
         too_deep: begin
             try report(logger, parser.look.begins, nested_too_deep[0..<22])
-            recover_to_boundary(source, parser)
+            skip_group(source, parser)
             return
         end
         mem.out_of_memory: fail mem.out_of_memory
