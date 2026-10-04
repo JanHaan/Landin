@@ -49,7 +49,9 @@ package Landin.Backend.Toolchain is
    --  toolchain and none was given, which is the one case that cannot be
    --  attempted rather than merely failing.
    --  Darwin retains the full source/assembly digest without filenames.
-   --  ELF supplies the same digest through the GNU linker build-id option.
+   --  Linux ELF passes the same digest through a GNU linker build ID.
+   --  Cortex-M0 ELF stores it in a nonallocated .landin_id section for
+   --  debugger matching and disables GNU linker build IDs.
    function Identity_Section
      (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String;
 
