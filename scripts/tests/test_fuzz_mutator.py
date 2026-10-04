@@ -9,8 +9,9 @@ makes of a fixed text, and the seed list to the corpus it is read from.
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "compiler/tests/fuzz"))
@@ -84,11 +85,45 @@ class Mutator(unittest.TestCase):
             (root / "reproducers" / "a_hit.ldn").write_text("first")
             with patch.object(fuzz, "FIXTURES", fixtures), \
                     patch.object(fuzz, "HERE", root):
-                self.assertEqual(fuzz.seeds(), [
+                self.assertEqual([(label, text) for label, _, text in fuzz.seeds()], [
                     (kind + "/a", kind + "\ufffd")
                     for kind in ("positive", "negative", "runtime", "abi")
                 ] + [("reproducers/a_hit.ldn", "first"),
                      ("reproducers/z_hit.ldn", "last")])
+    def test_reduction_does_not_load_a_sibling_hit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "hit-1.ldn").write_text("target")
+            (out / "hit-2.ldn").write_text("broken sibling")
+            server = Mock()
+            server.stop.return_value = ""
+            seen = []
+
+            def inspect(_, seed, path, original, mutant):
+                self.assertEqual(seed, 0)
+                self.assertEqual(original, "trial")
+                self.assertEqual(mutant, "trial")
+                self.assertEqual(path.read_text(), "trial")
+                self.assertEqual(list(path.parent.glob("*.ldn")), [path])
+                self.assertNotEqual(path.parent, out)
+                seen.append(path)
+
+            with patch.object(fuzz, "Server", return_value=server), \
+                    patch.object(fuzz, "serve_one", side_effect=inspect):
+                self.assertEqual(
+                    fuzz.reduce_one("refine", 0, 10, out, "trial"), "")
+            self.assertEqual(len(seen), 1)
+            self.assertFalse(seen[0].exists())
+            server.stop.assert_called_once_with()
+
+    def test_reduction_retains_shutdown_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            server = Mock()
+            server.stop.return_value = "server exited after shutdown, status 70"
+            with patch.object(fuzz, "Server", return_value=server), \
+                    patch.object(fuzz, "serve_one"):
+                self.assertIn("status 70", fuzz.reduce_one(
+                    "refine", 0, 10, Path(directory), "trial"))
 
 
 if __name__ == "__main__":

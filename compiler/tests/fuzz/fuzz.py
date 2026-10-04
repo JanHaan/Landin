@@ -35,6 +35,7 @@ import resource
 import select
 import subprocess
 import sys
+import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -354,6 +355,22 @@ def batch_one(refine, seconds, mutant):
     return ""
 
 
+def reduce_one(refine, memory, seconds, out, text):
+    """Test a reduction in a module containing only the trial source."""
+    with tempfile.TemporaryDirectory(prefix="reduce-", dir=out) as directory:
+        path = Path(directory).resolve() / "case.ldn"
+        path.write_bytes(text.encode("utf-8", "surrogateescape"))
+        server = Server(refine, memory, seconds)
+        problem = ""
+        try:
+            serve_one(server, 0, path, text, text)
+        except Broken as broken:
+            problem = str(broken)
+        finally:
+            stopped = server.stop()
+        return problem or stopped
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--refine", required=True)
@@ -375,19 +392,11 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     def breaks(text):
-        """Whether a fresh server, given text as it was given the hit,
-        breaks.  The original is the text itself: what is opened and what
-        it is changed to are the same, so nothing but text can matter."""
+        """Whether a fresh server breaks on this trial in isolation."""
         if arguments.batch:
             return batch_one(refine, arguments.seconds, text)
-        server = Server(refine, arguments.memory, arguments.seconds)
-        try:
-            serve_one(server, 0, Path(arguments.reduce).resolve(), text, text)
-            problem = ""
-        except Broken as broken:
-            problem = str(broken)
-        stopped = server.stop()
-        return problem or stopped
+        return reduce_one(refine, arguments.memory, arguments.seconds,
+                          out, text)
 
     if arguments.reduce:
         text = Path(arguments.reduce).read_text(encoding="utf-8",

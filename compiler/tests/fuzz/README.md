@@ -54,7 +54,9 @@ that document's mutant and transcript as a hit.
 `--batch` runs the original oracle instead: `refine FILE` on each mutant,
 where an exit other than 0 or 1, a run past the bound or a defect line is a
 hit. `--reduce FILE` deletes runs of lines from a hit, sixteen down to one,
-for as long as a fresh server given the text still breaks, and writes
+for as long as a fresh server given the text still breaks. Each trial is
+opened in its own temporary module under `OUT`, so other saved hits cannot
+affect it; the checkout remains the import root. The result is written to
 `OUT/reduced.ldn`. Before trusting that the reduced file shows the same
 defect as the original, compare the two server logs.
 
