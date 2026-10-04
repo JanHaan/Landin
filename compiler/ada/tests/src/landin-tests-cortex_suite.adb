@@ -1060,6 +1060,50 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Source_Debugging;
 
+   procedure Fixed_Fills_Enter_Their_Loops
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Fills_Enter_Their_Loops
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("p.ldn",
+        "main: () -> (r: u32) = "
+        & "a: [4]u8 = [of 7] "
+        & "b: [4]u8 = [1, 2, of 3] "
+        & "r = u32(a[0]) + u32(b[3]) end main");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("p.s");
+            begin
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index (Text, "movs r4, #4") > 0
+                    and then Ada.Strings.Fixed.Index
+                      (Text, "movs r4, #2") > 0,
+                  "full and suffix fills use their fixed element counts");
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index (Text, "cmp r4, #0") = 0,
+                  "fixed fills do not test their positive counts");
+            end;
+         end if;
+      end;
+   end Fixed_Fills_Enter_Their_Loops;
+
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
    procedure Local_Branches (Item : in out Landin.Testing.Context);
 
@@ -2167,6 +2211,9 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "fixed fills enter their loops",
+         Fixed_Fills_Enter_Their_Loops'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "fixed zero stores", Fixed_Zero_Stores'Access);
       Landin.Testing.Register

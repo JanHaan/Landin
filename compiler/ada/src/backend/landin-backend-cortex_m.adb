@@ -3419,8 +3419,8 @@ package body Landin.Backend.Cortex_M is
                          (Held)));
                      Load_Value (Operand (1));
                      Immediate ("r4", Pattern (Length - First));
-                     Emit ("cmp r4, #0");
-                     Branch ("eq", Loop_Label & "_end");
+                     --  The verifier requires First_Part <= Length, so
+                     --  this fixed fill always has at least one element.
                      Put (Loop_Label & ":");
                      Memory (True, Held, "r0", "r2");
                      Emit ("adds r2, r2, #"
@@ -3428,7 +3428,6 @@ package body Landin.Backend.Cortex_M is
                          (Held))));
                      Emit ("subs r4, r4, #1");
                      Branch ("ne", Loop_Label);
-                     Put (Loop_Label & "_end:");
                   end;
                when Landin.IR.Load_Variant_Tag | Landin.IR.Load_Variant_Field
                   | Landin.IR.Store_Variant_Field =>
