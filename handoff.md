@@ -143,7 +143,9 @@ interface files, header parsing.
 - **Atoms are the same idea wherever they appear.**
 - **Check once, then carry the proof.** A buffer that passed the
   alignment test becomes a `dma_buffer`, and the interface asks for
-  nothing else.
+  nothing else. The checked value carries the proof; a preceding guard
+  on an ordinary integer does not itself give that integer a range
+  subtype or remove the check when it enters one (D188).
 - **How a new feature earns its place.** Can an existing mechanism
   express it? Then a library. Can the compiler work it out? Then no
   syntax. Must the programmer say it, and does saying it remove another

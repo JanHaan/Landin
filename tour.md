@@ -1138,6 +1138,12 @@ relaxation [0440]. To keep a checked value in storage, wrap it: a `distinct`
 type that only a checking function constructs is the proof carried [1730]
 (D236).
 
+A guard on an ordinary integer does not give it a range subtype. If invalid
+input is handled with a `fail` guard and the successful path then stores the
+integer as `percent`, that store still has a trapping check. Once the value is
+in a `percent` place, passing it to another `percent` place carries the proof
+without a second check (D188).
+
 ### [0670] Struct, block form and inline form
 
 Struct, block form and inline form. Same thing. The inline
@@ -4345,6 +4351,8 @@ passed the alignment test becomes a dma_buffer, and the
 DMA interface asks for nothing else. distinct types, range
 subtypes and error sets are enough to do this; it needs no
 feature of its own, only the habit.
+For a range subtype, the proof starts with a checked subtype value, not with
+a guard on an ordinary integer (D188).
 
 ## WHAT LANDIN DELIBERATELY DOES NOT HAVE
 
