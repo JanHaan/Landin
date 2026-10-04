@@ -400,7 +400,8 @@ package body Landin.Tests.IR_Optimization_Suite is
       Site : constant Landin.Provenance.Origin :=
         IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
       Generic_Items : array (1 .. Instances) of IR.Item_Id;
-      Parameters : array (Generic_Items'Range) of IR.Slot_Id;
+      Parameters, Locals, Outputs :
+        array (Generic_Items'Range) of IR.Slot_Id;
       Root, Provider, Alternate : IR.Item_Id;
       Hidden : IR.Slot_Id := IR.No_Slot;
       Signature, Empty : IR.Signature_Id;
@@ -451,6 +452,17 @@ package body Landin.Tests.IR_Optimization_Suite is
            (Code, Generic_Items (I), Landin.Types.Usize,
             IR.No_Declaration, Site);
          IR.Bind_Evidence_Parameter (Code, Generic_Items (I), 1, Expected);
+         if Assembly_Output /= No_Assembly then
+            Locals (I) := IR.Add_Slot
+              (Code, Generic_Items (I), Landin.Types.Usize,
+               IR.No_Declaration, Site);
+            Outputs (I) := Locals (I);
+            if Assembly_Output = Unrelated_Output then
+               Outputs (I) := IR.Add_Slot
+                 (Code, Generic_Items (I), Landin.Types.Usize,
+                  IR.No_Declaration, Site);
+            end if;
+         end if;
       end loop;
       Root := IR.Add_Item
         (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
@@ -467,21 +479,14 @@ package body Landin.Tests.IR_Optimization_Suite is
          Table := IR.Emit_Load (Code, Generic_Items (I), Parameters (I), Site);
          if Assembly_Output /= No_Assembly then
             declare
-               Local : constant IR.Slot_Id := IR.Add_Slot
-                 (Code, Generic_Items (I), Landin.Types.Usize,
-                  IR.No_Declaration, Site);
-               Output : IR.Slot_Id := Local;
+               Local : constant IR.Slot_Id := Locals (I);
+               Output : constant IR.Slot_Id := Outputs (I);
                Other_Table : IR.Value_Id;
                Ignore : IR.Value_Id;
             begin
                IR.Emit_Store (Code, Generic_Items (I), Local, Table, Site);
                Other_Table := IR.Emit_Evidence_Address
                  (Code, Generic_Items (I), Other, Site);
-               if Assembly_Output = Unrelated_Output then
-                  Output := IR.Add_Slot
-                    (Code, Generic_Items (I), Landin.Types.Usize,
-                     IR.No_Declaration, Site);
-               end if;
                Ignore := IR.Emit_Assembly
                  (Code, Generic_Items (I),
                   Landin.Source.Names.Intern
