@@ -369,6 +369,8 @@ READERS = {
     "flake.nix": "nix develop and nix build, not the gate",
     ".github/workflows/gate.yml": "a comment describing this policy",
     ".github/workflows/links.yml": "its own workflow",
+    ".github/workflows/pages.yml": "its own publishing workflow",
+    "scripts/links_inputs.py": "links.yml scope selection; controls always run",
     ".github/workflows/release.yml": "a v* tag",
     "lychee.toml": "links.yml",
     "highlight/pyproject.toml": "a comment naming ROADMAP.md",

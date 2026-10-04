@@ -68,7 +68,7 @@ python3 check.py prototype-2-parser.md
 ./scripts/site.sh
 
 # On a nix machine, a shell holding the pinned toolchain and python3.  It
-# reads environments/pins.sh and tags its objects `nix`, so it does not
+# reads environments/pins.sh and tags its objects `nix-${system}`, so it does not
 # collide with the other environments; see docs/environments.md.
 nix develop
 
