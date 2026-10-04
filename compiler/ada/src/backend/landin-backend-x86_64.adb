@@ -581,6 +581,96 @@ package body Landin.Backend.X86_64 is
 
       Local_Prefix : constant String := Unused_Local_Prefix;
 
+      Float_Decode_Used : array (Landin.Types.Float_Name) of Boolean :=
+        [others => False];
+
+      function Float_Decode_Label
+        (From : Landin.Types.Float_Name) return String
+      is (Local_Prefix & "landin_float_decode_"
+          & (case From is
+               when Landin.Types.F32 => "f32",
+               when Landin.Types.F64 => "f64"));
+
+      --  Input: IEEE carrier bits in %rax. Output: sign in %r8, truncated
+      --  magnitude in %rdx, carry set only for NaN, infinity or exponent
+      --  overflow. The caller retains its own destination check and panic
+      --  site. Only caller-saved registers are touched.
+      procedure Emit_Float_Decode (From : Landin.Types.Float_Name);
+
+      procedure Emit_Float_Decode (From : Landin.Types.Float_Name) is
+         Fraction_Bits : constant Natural :=
+           (if From = Landin.Types.F32 then 23 else 52);
+         Exponent_All : constant Natural :=
+           (if From = Landin.Types.F32 then 255 else 2_047);
+         Bias : constant Natural :=
+           (if From = Landin.Types.F32 then 127 else 1_023);
+         Sign_Shift : constant Natural :=
+           (if From = Landin.Types.F32 then 31 else 63);
+         Fraction_Mask : constant Landin.Types.Magnitude :=
+           (if From = Landin.Types.F32 then 8_388_607
+            else 4_503_599_627_370_495);
+         Hidden : constant Landin.Types.Magnitude := 2 ** Fraction_Bits;
+         Decode_Entry : constant String := Float_Decode_Label (From);
+         Shift_Right : constant String := Decode_Entry & "_right";
+         Ready : constant String := Decode_Entry & "_ready";
+         Zero : constant String := Decode_Entry & "_zero";
+         Bad : constant String := Decode_Entry & "_bad";
+      begin
+         Put (Character'Val (9) & ".type " & Decode_Entry & ", @function");
+         Put (Decode_Entry & ":");
+         Emit ("movq %rax, %r8");
+         Emit ("shrq $" & Trimmed (Natural'Image (Sign_Shift)) & ", %r8");
+         Emit ("movq %rax, %rcx");
+         Emit ("shrq $" & Trimmed (Natural'Image (Fraction_Bits))
+               & ", %rcx");
+         Emit ("andq $" & Trimmed (Natural'Image (Exponent_All))
+               & ", %rcx");
+         Emit ("movq %rax, %rdx");
+         Emit ("movabsq $"
+               & Trimmed (Landin.Types.Magnitude'Image (Fraction_Mask))
+               & ", %r9");
+         Emit ("andq %r9, %rdx");
+         Emit ("cmpq $" & Trimmed (Natural'Image (Exponent_All))
+               & ", %rcx");
+         Emit ("je " & Bad);
+         Emit ("testq %rcx, %rcx");
+         Emit ("jz " & Zero);
+         Emit ("cmpq $" & Trimmed (Natural'Image (Bias)) & ", %rcx");
+         Emit ("jb " & Zero);
+         Emit ("subq $" & Trimmed (Natural'Image (Bias)) & ", %rcx");
+         Emit ("cmpq $63, %rcx");
+         Emit ("ja " & Bad);
+         Emit ("movabsq $"
+               & Trimmed (Landin.Types.Magnitude'Image (Hidden))
+               & ", %r9");
+         Emit ("addq %r9, %rdx");
+         Emit ("cmpq $" & Trimmed (Natural'Image (Fraction_Bits))
+               & ", %rcx");
+         Emit ("jb " & Shift_Right);
+         Emit ("subq $" & Trimmed (Natural'Image (Fraction_Bits))
+               & ", %rcx");
+         Emit ("shlq %cl, %rdx");
+         Emit ("jmp " & Ready);
+         Put (Shift_Right & ":");
+         Emit ("movq $" & Trimmed (Natural'Image (Fraction_Bits))
+               & ", %r9");
+         Emit ("subq %rcx, %r9");
+         Emit ("movq %r9, %rcx");
+         Emit ("shrq %cl, %rdx");
+         Put (Ready & ":");
+         Emit ("clc");
+         Emit ("ret");
+         Put (Zero & ":");
+         Emit ("xorq %rdx, %rdx");
+         Emit ("clc");
+         Emit ("ret");
+         Put (Bad & ":");
+         Emit ("stc");
+         Emit ("ret");
+         Put (Character'Val (9) & ".size " & Decode_Entry & ", .-"
+               & Decode_Entry);
+      end Emit_Float_Decode;
+
       --  Linker identity, not assembly syntax.  This is also available before
       --  allocation, when discovery decides which runtime names to reserve.
       function Source_Symbol (Item : Landin.IR.Item_Id) return String;
@@ -3187,71 +3277,79 @@ package body Landin.Backend.X86_64 is
                               & Value_Operand (Source)
                               & (if From = Landin.Types.F32
                                  then ", %eax" else ", %rax"));
-                           Emit ("movq %rax, %r8");
-                           Emit
-                             ("shrq $" & Trimmed (Natural'Image (Sign_Shift))
-                              & ", %r8");
-                           Emit ("movq %rax, %rcx");
-                           Emit
-                             ("shrq $"
-                              & Trimmed (Natural'Image (Fraction_Bits))
-                              & ", %rcx");
-                           Emit
-                             ("andq $"
-                              & Trimmed (Natural'Image (Exponent_All))
-                              & ", %rcx");
-                           Emit ("movq %rax, %rdx");
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Types.Magnitude'Image
-                                     (Fraction_Mask))
-                              & ", %r9");
-                           Emit ("andq %r9, %rdx");
+                           if Options.Optimize = Landin.Optimization.Size
+                           then
+                              Float_Decode_Used (From) := True;
+                              Emit ("call " & Float_Decode_Label (From));
+                              Emit ("jc " & Trap);
+                           else
+                              Emit ("movq %rax, %r8");
+                              Emit
+                                ("shrq $"
+                                 & Trimmed (Natural'Image (Sign_Shift))
+                                 & ", %r8");
+                              Emit ("movq %rax, %rcx");
+                              Emit
+                                ("shrq $"
+                                 & Trimmed (Natural'Image (Fraction_Bits))
+                                 & ", %rcx");
+                              Emit
+                                ("andq $"
+                                 & Trimmed (Natural'Image (Exponent_All))
+                                 & ", %rcx");
+                              Emit ("movq %rax, %rdx");
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image
+                                        (Fraction_Mask))
+                                 & ", %r9");
+                              Emit ("andq %r9, %rdx");
 
-                           Emit
-                             ("cmpq $"
-                              & Trimmed (Natural'Image (Exponent_All))
-                              & ", %rcx");
-                           Emit ("je " & Trap);
-                           Emit ("testq %rcx, %rcx");
-                           Emit ("jz " & Zero);
-                           Emit
-                             ("cmpq $" & Trimmed (Natural'Image (Bias))
-                              & ", %rcx");
-                           Emit ("jb " & Zero);
-                           Emit
-                             ("subq $" & Trimmed (Natural'Image (Bias))
-                              & ", %rcx");
-                           Emit ("cmpq $63, %rcx");
-                           Emit ("ja " & Trap);
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Types.Magnitude'Image (Hidden))
-                              & ", %r9");
-                           Emit ("addq %r9, %rdx");
-                           Emit
-                             ("cmpq $"
-                              & Trimmed (Natural'Image (Fraction_Bits))
-                              & ", %rcx");
-                           Emit ("jb " & Shift_Right);
-                           Emit
-                             ("subq $"
-                              & Trimmed (Natural'Image (Fraction_Bits))
-                              & ", %rcx");
-                           Emit ("shlq %cl, %rdx");
-                           Emit ("jmp " & Magnitude_Ready);
-                           Put (Shift_Right & ":");
-                           Emit
-                             ("movq $"
-                              & Trimmed (Natural'Image (Fraction_Bits))
-                              & ", %r9");
-                           Emit ("subq %rcx, %r9");
-                           Emit ("movq %r9, %rcx");
-                           Emit ("shrq %cl, %rdx");
+                              Emit
+                                ("cmpq $"
+                                 & Trimmed (Natural'Image (Exponent_All))
+                                 & ", %rcx");
+                              Emit ("je " & Trap);
+                              Emit ("testq %rcx, %rcx");
+                              Emit ("jz " & Zero);
+                              Emit
+                                ("cmpq $" & Trimmed (Natural'Image (Bias))
+                                 & ", %rcx");
+                              Emit ("jb " & Zero);
+                              Emit
+                                ("subq $" & Trimmed (Natural'Image (Bias))
+                                 & ", %rcx");
+                              Emit ("cmpq $63, %rcx");
+                              Emit ("ja " & Trap);
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image (Hidden))
+                                 & ", %r9");
+                              Emit ("addq %r9, %rdx");
+                              Emit
+                                ("cmpq $"
+                                 & Trimmed (Natural'Image (Fraction_Bits))
+                                 & ", %rcx");
+                              Emit ("jb " & Shift_Right);
+                              Emit
+                                ("subq $"
+                                 & Trimmed (Natural'Image (Fraction_Bits))
+                                 & ", %rcx");
+                              Emit ("shlq %cl, %rdx");
+                              Emit ("jmp " & Magnitude_Ready);
+                              Put (Shift_Right & ":");
+                              Emit
+                                ("movq $"
+                                 & Trimmed (Natural'Image (Fraction_Bits))
+                                 & ", %r9");
+                              Emit ("subq %rcx, %r9");
+                              Emit ("movq %r9, %rcx");
+                              Emit ("shrq %cl, %rdx");
 
-                           Put (Magnitude_Ready & ":");
+                              Put (Magnitude_Ready & ":");
+                           end if;
                            Emit ("testq %rdx, %rdx");
                            Emit ("jz " & Zero);
                            Emit ("testq %r8, %r8");
@@ -7221,6 +7319,12 @@ package body Landin.Backend.X86_64 is
                Any_Written := True;
             end if;
          end;
+      end loop;
+
+      for From in Landin.Types.Float_Name loop
+         if Float_Decode_Used (From) then
+            Emit_Float_Decode (From);
+         end if;
       end loop;
 
       --  D161: read-only images sit in `.rodata`, so a write through a

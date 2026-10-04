@@ -8395,6 +8395,61 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Exits_Share_One_Epilogue;
 
+   procedure Size_Float_Conversions_Share_Decode
+     (Item : in out Landin.Testing.Context);
+
+   procedure Size_Float_Conversions_Share_Decode
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Landin.Optimization.Objective;
+      Source : constant String :=
+        "small: (value: f64) -> (result: i8) =" & LF
+        & "    result = i8(value)" & LF
+        & "end small" & LF
+        & "wide: (value: f64) -> (result: u64) =" & LF
+        & "    result = u64(value)" & LF
+        & "end wide" & LF
+        & "single: (value: f32) -> (result: u64) =" & LF
+        & "    result = u64(value)" & LF
+        & "end single" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      for Level in Landin.Optimization.Objective loop
+         declare
+            Text : constant String := Landin.Backend.X86_64.Text
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Stages.Target (Work),
+               (Optimize => Level,
+                Specialize => Landin.Optimization.Off));
+            function Count (Part : String) return Natural
+              is (Ada.Strings.Fixed.Count (Text, Part));
+         begin
+            if Level = Landin.Optimization.Size then
+               Landin.Testing.Check
+                 (Item,
+                  Count ("call .Llandin_float_decode_f64") = 2
+                    and then Count ("call .Llandin_float_decode_f32") = 1,
+                  "each size conversion calls its source-width decoder");
+               Landin.Testing.Check
+                 (Item,
+                  Count (".Llandin_float_decode_f64:") = 1
+                    and then Count (".Llandin_float_decode_f32:") = 1,
+                  "each decoder is emitted once per compilation unit");
+            else
+               Landin.Testing.Check
+                 (Item, Count ("landin_float_decode_") = 0,
+                  "reference and speed conversions retain inline decode");
+            end if;
+         end;
+      end loop;
+   end Size_Float_Conversions_Share_Decode;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -8412,6 +8467,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "arm64 conditional reach",
          Arm64_Conditional_Reach'Access);
+      Landin.Testing.Register
+        (Into, "backend", "size float conversions share decode",
+         Size_Float_Conversions_Share_Decode'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
