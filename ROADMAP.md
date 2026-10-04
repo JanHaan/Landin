@@ -628,6 +628,10 @@ GDB sessions, and execute the higher-level consumers only on a runner whose
 support for all selected features is confirmed. Missing higher-level runtime
 evidence is unverified, never supplied by baseline or Darwin success.
 
+Audit the completed Linux arm64 lane for an executed assembly block with an
+integer operand and an IR verifier refusal for an invalid arm64 register.
+Retain both as recurring gate checks; this audit does not reopen R11.20.
+
 ### R11.30 — FreeBSD x86-64 and arm64
 
 Status: planned
@@ -642,6 +646,29 @@ and unwinding.
 Exit evidence: separate gate verdicts for the runtime corpus and scripted
 source-debugger sessions in the FreeBSD x86-64 and FreeBSD arm64 virtual
 machines.
+
+Each FreeBSD architecture must execute an assembly block with an integer
+operand and have an IR verifier refusal for an invalid target register.
+
+On a FreeBSD x86-64 guest with verified `x86-64-v3` support, execute the
+variable-shift fixture at both `x86-64-v1` and `x86-64-v3`. Inspect its shift
+code in each linked executable: require BMI2 (`shlx`, `shrx` or `sarx`) at v3
+and none at v1. Missing guest support fails this lane rather than skipping it.
+
+The FreeBSD arm64 lane selects both `armv8-a` and `armv8.1-a`, verifies that
+the baseline assembler refuses an LSE instruction, and checks that an atomic
+fixture uses an exclusive loop at baseline and LSE without that loop at the
+higher level. Confirm LSE support before executing the higher-level fixture.
+If the usual VM lacks it, a named LSE-capable FreeBSD arm64 host supplies the
+higher-level execution verdict on every recurring gate run; a one-time run
+or a skipped higher-level verdict cannot satisfy completion.
+
+A nonempty C ABI fixture set must execute separately on FreeBSD x86-64 and
+FreeBSD arm64 against independently compiled C peers for each architecture.
+Cover imported and exported calls, integer and floating-point values,
+`layout(c)` aggregates, callbacks and variadic calls. Report each architecture's
+ABI verdict separately from its runtime and debugger verdicts, and fail if
+its ABI fixture selection is empty.
 
 ### R11.40 — RISC-V rv64 Linux
 
@@ -664,6 +691,15 @@ at the extended level and its baseline sequence at `rv64gc`. An
 `assembler.block` using that instruction must assemble at the extended level
 and be refused at `rv64gc`. The selected execution lane must support the
 extension.
+
+Execute an assembly block with an integer operand and require an IR verifier
+refusal for an invalid RV64 register in the same gate. Record the selected
+RV64 Linux LP64D C calling, layout and capability facts in `spec.md`, and
+expose the matching scalar aliases through `core/c`. A nonempty C ABI fixture
+set must execute against independently compiled C peers, covering calls in
+both directions, integer and floating-point values, aggregates, callbacks
+and variadic calls. Report its ABI verdict separately and refuse an empty
+selection.
 
 ### R11.50 — Convert to a written type
 
@@ -694,6 +730,14 @@ derive or refuse as decided.
   sessions in the gate, with a separate verdict for each architecture.
 - RISC-V passes the baseline and nondefault extension-level evidence in
   R11.40 on its selected execution lane.
+
+- Each new hosted target executes an assembly block with an integer operand
+  and has an IR verifier refusal for its register rules. R11.25 audits and
+  retains that evidence for completed Linux arm64 support.
+- FreeBSD x86-64 passes baseline/v3 execution and linked BMI2-selection checks;
+  FreeBSD arm64 passes baseline/LSE checks with recurring capable-host execution.
+- FreeBSD x86-64, FreeBSD arm64 and RV64 Linux each have a separate nonempty,
+  executing C ABI verdict against independently compiled C peers.
 
 ## R12 — Microcontrollers
 
@@ -822,6 +866,11 @@ gate, beside the emulator lanes it does not replace.
 
 - RP2040, RP2350, an STM32 board, ESP32, ESP32-S3 and ESP32-C run
   compiler-owned firmware in emulation and on hardware.
+
+- Each new freestanding target/profile executes an assembly block with an
+  integer operand and has an IR verifier refusal for an invalid register in
+  its target gate: each new Cortex-M profile, each RV32 target, and both
+  Xtensa LX6 and LX7. This evidence is required before its milestone completes.
 
 ## R13 — The library
 
