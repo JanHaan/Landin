@@ -92,6 +92,8 @@ public main: () -> (code: i32) =
     return when not repeated_matches()
     code = 13
     return when not clear_reuses_storage()
+    code = 14
+    return when not message_growth()
     code = 42
 
 end main
@@ -340,6 +342,39 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     end
     ok = refused and vec.length(pending.bytes) == 700 and pending.delivered == 700
 end messages_in
+
+--  Growing records should allocate only when retained capacity doubles.
+--  Appending LF must fit the capacity reserved for the whole record.
+message_growth: () -> (ok: bool) =
+    ok = false
+    mut host := heap.host()
+    mut counted := failing.count_down(addr host, usize(100))
+    mut pending := app.new_message()
+    defer app.drop_message(counted, pending)
+    source: []u8 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    for length in usize(1)..<usize(65) do
+        app.clear_message(pending)
+        app.append_line(counted, pending, source[0..<length]) else (problem)
+            _ = problem
+            return
+        end
+        return when not message_matches(pending, source, length)
+    end for
+    ok = failing.successes(counted) <= 5
+end message_growth
+
+message_matches: (value: app.message, source: []u8, length: usize)
+                 -> (ok: bool) =
+    ok = false
+    return when vec.length(value.bytes) <> length + 1
+      or vec.capacity(value.bytes) < length + 1
+    bytes := vec.used(value.bytes)
+    return when bytes[length] <> 10
+    for at in usize(0)..<length do
+        return when bytes[at] <> source[at]
+    end for
+    ok = true
+end message_matches
 
 finite_regions: () -> (ok: bool) =
     ok = false

@@ -44,7 +44,9 @@ private raw storage, then admits the terminator; it never zeroes bytes that the
 copy will overwrite. The reader returns a `from reading` view,
 consumed before its next refill. Count delivery classifies that borrowed line
 without copying it. For text delivery, `process` copies each kept line into an
-owned message and appends one LF before calling an ordinary erased destination.
+owned message with one LF, reserving the complete record before changing it.
+The retained message capacity grows geometrically. Dispatch then calls an
+ordinary erased destination.
 The message keeps its completed delivery cursor across failure. Text delivery
 uses `world.write_some` on the remaining suffix. Each successful attempt
 returns its positive byte count, even for a short write, and advances the

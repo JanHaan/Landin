@@ -66,8 +66,10 @@ provider calls on success and despite a partial-prefix delivery failure.
 Further cases cover a 9998-byte line with one-byte reads, trailing and final
 unterminated lines, empty input, copied
 configuration after argument mutation, arbitrary binary message copying and
-retry, transactional append exhaustion, nested regions over explicit finite
-backing, exact metadata-exhaustion consumption on a monotonic parent, allocation-failure sweeps including metadata failures, and terminal
+retry, geometrically growing whole-record messages, transactional append
+exhaustion, nested regions over explicit finite backing, exact
+metadata-exhaustion consumption on a monotonic parent, allocation-failure
+sweeps including metadata failures, and terminal
 read/write/close/configuration failures with exact handle/allocation accounting.
 The count path also runs with a finite arena that holds the reader line but
 cannot hold two additional full-line message extents.

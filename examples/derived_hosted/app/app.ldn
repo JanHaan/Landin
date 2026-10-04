@@ -24,8 +24,7 @@ public process: (provider: type is mem.allocator, inout allocator: provider,
         end for
         if pass then
             if not cfg.count_only then
-                try append(allocator, pending, line)
-                try append(allocator, pending, "\n")
+                try append_line(allocator, pending, line)
             end if
             --  One explicit retry. The buffered cursor survives failure;
             --  a second failure is terminal and normal cleanup still runs.
