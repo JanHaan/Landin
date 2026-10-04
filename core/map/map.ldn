@@ -24,11 +24,14 @@ slot_dead: u8 = 2
 
 --  Buckets are always initialized. Keys and values occupy two independent
 --  dense initialized prefixes, and each used/dead bucket names its prefix
---  position. Reusing a tombstone replaces that position rather than forging
---  a sparse initialized K or V slice.
+--  position. Used buckets also form a doubly linked walk in insertion order;
+--  the map's capacity is the end marker for every link. Reusing a tombstone
+--  replaces its dense position and appends it to that walk.
 bucket: type = struct
     state: u8
     dense_index: usize
+    previous_used: usize
+    next_used: usize
 end bucket
 
 --  This is deliberately a public composition, not an encapsulated object.
@@ -36,20 +39,23 @@ end bucket
 --  initialized K/V prefixes (including removed dense entries), and can copy
 --  inferred whole bucket values despite bucket's private identity. They must
 --  preserve equal capacities, a fully initialized bucket array, paired K/V
---  prefixes, one valid used/dead bucket per dense position, and exact
---  count/tombstone totals when composing below the map operations.
+--  prefixes, one valid used/dead bucket per dense position, exact
+--  count/tombstone totals, and a linked walk of exactly the used buckets
+--  when composing below the map operations.
 public map: type (key: type is hashable, item: type) = struct
     buckets: mem.storage(bucket)
     keys: mem.storage(key)
     values: mem.storage(item)
     count: usize
     tombstones: usize
+    first_used: usize
+    last_used: usize
 end map
 
 --  Enumeration deliberately exposes ordinary public value shapes, matching
---  map's public-composition boundary above. A cursor is a bounded manual
---  bucket position, not an ownership or snapshot token: it has no map identity
---  or generation check and is not transferable between maps. Any mutation,
+--  map's public-composition boundary above. A cursor is a manual
+--  live-bucket position, not an ownership or snapshot token: it has no map
+--  identity or generation check and is not transferable between maps. Any mutation,
 --  including insert, remove, rehash and release_map, invalidates an active
 --  walk; callers must discard its cursor and restart.
 public cursor: type = struct
@@ -71,7 +77,8 @@ public new_map: (key: type is hashable, item: type)
     empty_keys := empty_storage(value: key)
     empty_values := empty_storage(value: item)
     result = (buckets: empty_buckets, keys: empty_keys,
-              values: empty_values, count: 0, tombstones: 0)
+              values: empty_values, count: 0, tombstones: 0,
+              first_used: 0, last_used: 0)
 end new_map
 
 public length: (key: type is hashable, item: type,
@@ -85,40 +92,42 @@ public capacity: (key: type is hashable, item: type,
 end capacity
 
 public entries: () -> (position: cursor) =
-    position = (next_slot: 0)
+    --  This marker means "start at the map's head" on the first call. It is
+    --  distinct from every possible bucket capacity and from the exhausted
+    --  marker, which is the capacity of the map being walked.
+    position = (next_slot: 0 -% 1)
 end entries
 
---  Each call advances monotonically and examines at most the map's remaining
---  bucket count. Across an unmodified walk, every live entry is returned once
---  and the scan costs O(capacity). The result retains `from value` because K
+--  Each call follows one live link. Across an unmodified walk, every live
+--  entry is returned once in insertion order and the walk costs O(count),
+--  including the exhausted call. The result retains `from value` because K
 --  or V may hold references into the map's initialized storage.
 public next_entry: (key: type is hashable, item: type,
                     value: map(key, item), inout position: cursor)
                    -> (result: entry(key, item) from value) ! end_of_entries =
     slots: usize = capacity(value)
-    while position.next_slot < slots do
-        at: usize = position.next_slot
-        inc position.next_slot
-        record: bucket = (mem.get(value.buckets, at) else (problem)
-            _ = problem
-            fail end_of_entries
-        end)
-        if record.state == slot_used then
-            found_key: key = (mem.get(value.keys, record.dense_index)
-                else (problem)
-                _ = problem
-                fail end_of_entries
-            end)
-            found_item: item = (mem.get(value.values, record.dense_index)
-                else (problem)
-                _ = problem
-                fail end_of_entries
-            end)
-            result = (key: found_key, item: found_item)
-            return
-        end if
-    end while
-    fail end_of_entries
+    if position.next_slot == 0 -% 1 then
+        position.next_slot = value.first_used
+    end if
+    fail end_of_entries when position.next_slot >= slots
+    record: bucket = (mem.get(value.buckets, position.next_slot)
+        else (problem)
+        _ = problem
+        fail end_of_entries
+    end)
+    fail end_of_entries when record.state <> slot_used
+    position.next_slot = record.next_used
+    found_key: key = (mem.get(value.keys, record.dense_index)
+        else (problem)
+        _ = problem
+        fail end_of_entries
+    end)
+    found_item: item = (mem.get(value.values, record.dense_index)
+        else (problem)
+        _ = problem
+        fail end_of_entries
+    end)
+    result = (key: found_key, item: found_item)
 end next_entry
 
 byte_extent: (value: type, slots: usize)
@@ -219,6 +228,7 @@ install_at: (key: type is hashable, item: type,
              inout value: map(key, item), at: usize, was_dead: bool,
              escaping added_key: key, escaping added_value: item)
             -> (placed: bool) =
+    slots: usize = capacity(value)
     mut dense: usize = 0
     if was_dead then
         record: bucket = (mem.get(value.buckets, at) else (problem)
@@ -258,11 +268,29 @@ install_at: (key: type is hashable, item: type,
         end if
     end if
 
-    replacement_bucket: bucket = (state: slot_used, dense_index: dense)
+    replacement_bucket: bucket =
+        (state: slot_used, dense_index: dense,
+         previous_used: value.last_used, next_used: slots)
     if not replace_value(value.buckets, at, replacement_bucket) then
         placed = false
         return
     end if
+    if value.last_used < slots then
+        mut tail: bucket = (mem.get(value.buckets, value.last_used)
+            else (problem)
+            _ = problem
+            placed = false
+            return
+        end)
+        tail.next_used = at
+        if not replace_value(value.buckets, value.last_used, tail) then
+            placed = false
+            return
+        end if
+    else
+        value.first_used = at
+    end if
+    value.last_used = at
     inc value.count
     if was_dead then
         dec value.tombstones
@@ -399,7 +427,9 @@ rehash: (key: type is hashable, item: type,
 
     mut initialized: usize = 0
     while initialized < want do
-        empty_bucket: bucket = (state: slot_free, dense_index: 0)
+        empty_bucket: bucket =
+            (state: slot_free, dense_index: 0,
+             previous_used: want, next_used: want)
         admitted: usize = mem.admit
             (new_buckets, empty_bucket)
             else (problem)
@@ -421,56 +451,73 @@ rehash: (key: type is hashable, item: type,
     undo discard_storage(new_values, state)
 
     old_slots: usize = capacity(value)
-    mut old_at: usize = 0
+    mut old_at: usize = value.first_used
     mut migrated: usize = 0
-    while old_at < old_slots do
+    mut new_first: usize = want
+    mut new_last: usize = want
+    while migrated < value.count do
+        fail mem.out_of_memory when old_at >= old_slots
         old_bucket: bucket = (mem.get(value.buckets, old_at) else (problem)
             _ = problem
             fail mem.out_of_memory
         end)
-        if old_bucket.state == slot_used then
-            old_key: key = (mem.get(value.keys, old_bucket.dense_index)
+        fail mem.out_of_memory when old_bucket.state <> slot_used
+        old_key: key = (mem.get(value.keys, old_bucket.dense_index)
+            else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end)
+        mut target: usize = index_of(old_key, want)
+        mut searched: usize = 0
+        while searched < want do
+            target_bucket: bucket = (mem.get(new_buckets, target)
                 else (problem)
                 _ = problem
                 fail mem.out_of_memory
             end)
-            mut target: usize = index_of(old_key, want)
-            mut searched: usize = 0
-            while searched < want do
-                target_bucket: bucket = (mem.get(new_buckets, target)
-                    else (problem)
-                    _ = problem
-                    fail mem.out_of_memory
-                end)
-                break when target_bucket.state == slot_free
-                target = next_index(target, want)
-                inc searched
-            end while
-            fail mem.out_of_memory when searched == want
+            break when target_bucket.state == slot_free
+            target = next_index(target, want)
+            inc searched
+        end while
+        fail mem.out_of_memory when searched == want
 
-            key_dense: usize = (mem.transfer
-                (value.keys, old_bucket.dense_index, new_keys)
+        key_dense: usize = (mem.transfer
+            (value.keys, old_bucket.dense_index, new_keys)
+            else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end)
+        value_dense: usize = (mem.transfer
+            (value.values, old_bucket.dense_index, new_values)
+            else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end)
+        fail mem.out_of_memory when key_dense <> value_dense
+        moved_bucket: bucket =
+            (state: slot_used, dense_index: key_dense,
+             previous_used: new_last, next_used: want)
+        if not replace_value(new_buckets, target, moved_bucket) then
+            fail mem.out_of_memory
+        end if
+        if new_last < want then
+            mut tail: bucket = (mem.get(new_buckets, new_last)
                 else (problem)
                 _ = problem
                 fail mem.out_of_memory
             end)
-            value_dense: usize = (mem.transfer
-                (value.values, old_bucket.dense_index, new_values)
-                else (problem)
-                _ = problem
-                fail mem.out_of_memory
-            end)
-            fail mem.out_of_memory when key_dense <> value_dense
-            moved_bucket: bucket =
-                (state: slot_used, dense_index: key_dense)
-            if not replace_value(new_buckets, target, moved_bucket) then
+            tail.next_used = target
+            if not replace_value(new_buckets, new_last, tail) then
                 fail mem.out_of_memory
             end if
-            inc migrated
+        else
+            new_first = target
         end if
-        inc old_at
+        new_last = target
+        old_at = old_bucket.next_used
+        inc migrated
     end while
-    fail mem.out_of_memory when migrated <> value.count
+    fail mem.out_of_memory when old_at <> old_slots
 
     --  Migration has succeeded. Everything below is infallible: retire all
     --  three old extents exactly once and publish the replacement last.
@@ -482,6 +529,8 @@ rehash: (key: type is hashable, item: type,
     value.values = new_values
     value.count = migrated
     value.tombstones = 0
+    value.first_used = new_first
+    value.last_used = new_last
 end rehash
 
 public insert: (key: type is hashable, item: type,
@@ -570,8 +619,41 @@ public remove: (key: type is hashable, item: type,
                 fail missing
             end)
             if key.eq(existing, wanted) then
+                if record.previous_used < slots then
+                    mut previous: bucket =
+                        (mem.get(value.buckets, record.previous_used)
+                            else (problem)
+                            _ = problem
+                            fail missing
+                        end)
+                    previous.next_used = record.next_used
+                    if not replace_value(value.buckets,
+                                         record.previous_used, previous)
+                    then
+                        fail missing
+                    end if
+                else
+                    value.first_used = record.next_used
+                end if
+                if record.next_used < slots then
+                    mut next: bucket =
+                        (mem.get(value.buckets, record.next_used)
+                            else (problem)
+                            _ = problem
+                            fail missing
+                        end)
+                    next.previous_used = record.previous_used
+                    if not replace_value(value.buckets, record.next_used,
+                                         next)
+                    then
+                        fail missing
+                    end if
+                else
+                    value.last_used = record.previous_used
+                end if
                 dead_bucket: bucket =
-                    (state: slot_dead, dense_index: record.dense_index)
+                    (state: slot_dead, dense_index: record.dense_index,
+                     previous_used: slots, next_used: slots)
                 if not replace_value(value.buckets, at, dead_bucket) then
                     fail missing
                 end if

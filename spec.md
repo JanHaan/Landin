@@ -16186,7 +16186,9 @@ equal key did not occur later in the chain.
 
 **Chosen:** `core/map.map(K, V)` owns three `mem.storage` allocations. The
 first is a completely initialized array of bucket records whose module-private
-type contains a scalar free/used/dead tag and a dense index. The other two are equally long
+type contains a scalar free/used/dead tag, a dense index and previous/next
+live-bucket links. The map stores the head and tail; capacity is the link's
+end marker. The other two are equally long
 initialized prefixes of K and V. A bucket that has never held an entry has no
 dense index in use. First occupation appends one actual K and V before marking
 the bucket used. Removal marks the bucket dead without reading, zeroing or
@@ -16202,29 +16204,33 @@ parameters, and get returns `V from map`. Construction, insert, get, remove,
 length, capacity, entry enumeration and release comprise this bounded public
 surface; the growth and rehash operations remain private. `entries()` starts
 a cursor; `next_entry` receives the map and an `inout` cursor and returns an
-`entry(K, V) from map`, or reports `end_of_entries`. It scans bucket positions
-in order, at most capacity positions across an unchanged map's complete walk,
-and yields only used entries, never free or dead positions. An empty or
-exhausted walk reports `end_of_entries` without reading a key or value.
+`entry(K, V) from map`, or reports `end_of_entries`. It follows only used
+bucket links in insertion order, at most length links across an unchanged
+map's complete walk, and never visits free or dead positions. Removing an
+entry unlinks it; reusing a tombstone appends it; rehash preserves the order.
+An empty or exhausted walk reports `end_of_entries` without reading a key or
+value.
 Reference-bearing entry fields retain the map origin; copying an entry does
 not detach its references. Scalar copies retain no reference origin [1910].
 
-A cursor is a manually managed position, not a checked association with one
-map or generation. Start a new cursor after mutation and do not transfer an
+A cursor is a manually managed live-bucket position, not a checked association
+with one map or generation. Start a new cursor after mutation and do not transfer an
 in-progress walk to another map. Mutation invalidates the walk even when
 capacity does not change. The compiler's local reference checks remain in
 force, but do not enforce this cursor protocol.
 
-`map` itself is a public struct composition. Its three storages and two
-counters are public fields. A module-private bucket identity and
+`map` itself is a public struct composition. Its three storages, two
+counters and live-bucket head/tail are public fields. A module-private bucket
+identity and
 `mem.storage`'s opaque raw representation do not encapsulate those fields:
 callers can use `mem` to reach the typed initialized K/V prefixes, including
 removed dense entries, and an inferred bucket view can copy or overwrite whole
 bucket values without naming their type. A caller that composes at this level
 must manually preserve equal capacities, a fully initialized bucket array,
 equal K/V prefix lengths, exactly one used or dead bucket with an in-range
-dense index for each prefix position, and count/tombstone totals equal to the
-used/dead records. The compiler neither enforces those map invariants nor
+dense index for each prefix position, count/tombstone totals equal to the
+used/dead records, and a finite doubly linked walk through exactly the used
+records. The compiler neither enforces those map invariants nor
 supplies a deep-safety guarantee.
 
 The semantic conformance contract, also not compiler-proved, requires `eq` to
@@ -16240,9 +16246,10 @@ dead bucket is available and the bounded probe finds it. This uses no new
 extent and keeps the three initialized prefixes within capacity. A
 tombstone-free table doubles on insertion pressure after a checked maximum
 bound. Lookup,
-removal, placement and migration each probe at most capacity
+removal and placement each probe at most capacity
 records and wrap without adding one to the final index. Placement records the
-first dead bucket until a free bucket or the probe bound is reached. Insert
+first dead bucket until a free bucket or the probe bound is reached. Migration
+follows live links and probes the replacement at most capacity times per entry. Insert
 first performs a bounded search for an equal used key, remembering the first
 dead bucket and the first free bucket reached. If found, it replaces that
 dense value and returns before load pressure or any allocator call; if absent,
@@ -16268,6 +16275,11 @@ untouched. After migration, only infallible drain, exact free and field
 publication steps remain. The success path frees each old extent once; release
 frees each current extent once and resets the map to its empty shape. Growth
 retains all three refusal and rollback positions.
+The live links add two `usize` fields per bucket and a head/tail pair per map. Insert appends and remove
+unlinks in constant time after finding the bucket; a complete unchanged walk
+follows exactly the live count, including when removal leaves most buckets
+dead. Bucket-position order was dropped because maintaining that order in a
+linked walk would require searching the live list on insertion.
 
 **Why dense prefixes:** they use D151's existing honest raw-storage state
 machine without pretending sparse K/V slots contain values. A dead bucket's

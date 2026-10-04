@@ -680,7 +680,7 @@ executable map instead reuses available dead or free buckets during churn.
 The executable D198 map grows only when a tombstone-free table is crowded. Its
 growth uses three fallible acquisitions and a publication-last rollback
 transaction. Its `entries()` cursor and
-`next_entry` operation enumerate live key/value pairs rather than the raw
+`next_entry` operation follow linked live buckets in insertion order rather than the raw
 dense prefix, which still contains removed values. Reference-bearing entries
 remain `from map`; a scalar copy retains no view. Cursors are manual positions:
 restart after mutation and never resume one on a different map. This supplies

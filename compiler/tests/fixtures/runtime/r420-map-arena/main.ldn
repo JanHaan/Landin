@@ -33,7 +33,7 @@ end has
 public main: () -> (code: i32) =
     --  The first eight-slot table and its sixteen-slot replacement fit. The
     --  next bucket extent does not, even before its key and value extents.
-    mut backing: [1000]u8 = zeroed
+    mut backing: [1600]u8 = zeroed
     mut arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
     mut value := map.new_map(key: arena_key, item: i32)
 

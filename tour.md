@@ -3211,23 +3211,26 @@ ownership of elements remains manual.
 
 `entries()` creates an enumeration cursor. `next_entry` receives the map and
 an `inout` cursor and returns a key/value `entry(key_type, value_type) from map`, or reports
-`end_of_entries`. A complete walk scans each bucket at most once and exposes
-only live entries. References in a returned entry still derive from the map;
+`end_of_entries`. A complete walk follows only live bucket links in insertion
+order, so its work follows the number of live entries even after removals.
+References in a returned entry still derive from the map;
 scalar copies do not retain a view [0840]. The cursor is a manually managed
 position, not a checked map/generation identity: restart after any mutation,
 and do not resume a cursor on a different map. Local reference checks do not
 replace that protocol.
 
 `map` is a public struct composition, not an encapsulated or deep-safe object.
-Its bucket, key and value storages and its counters are public fields. The
-private identity of the bucket record and the opaque representation of
+Its bucket, key and value storages, counters and live head/tail are public
+fields. The private identity of the bucket record and the opaque representation
+of
 `mem.storage` do not make the map private: `mem` operations expose the typed
 initialized key/value prefixes, including removed dense entries, and inferred
 views can copy and overwrite whole bucket records. Code that composes below
 the map operations must manually preserve equal storage capacities, a fully
 initialized bucket array, paired key/value prefixes, exactly one used or dead
-bucket with a valid index for each dense position, and counters equal to the
-numbers of used and dead records. The compiler does not enforce those
+bucket with a valid index for each dense position, counters equal to the
+numbers of used and dead records, and a linked walk through exactly the used
+buckets. The compiler does not enforce those
 container invariants.
 
 The supplied equality must be an equivalence relation. Equal keys must produce
