@@ -3678,9 +3678,12 @@ debug information that the design spends its precision on. The
 cost is owned deliberately — every target is work that nobody
 else does.
 
-The Cortex-M0 backend emits ARMv6-M Thumb assembly using the selected
-little-endian, soft-float target contract. The firmware request now emits its
-own reset, vector image and constrained linker script, copies initialized RAM
+The `cortex_m0` backend emits ARMv6-M Thumb assembly at its default
+`armv6-m` level. Selecting `armv7-m` or `armv7e-m` lets it emit instructions
+from that higher M-profile level, which the processor must support. All three
+levels share the little-endian, soft-float target contract. The firmware
+request emits its own reset, vector image and constrained linker script,
+copies initialized RAM
 and RAM code, and clears BSS before entering source code. Its tests execute
 that path separately from the older external backend harness. Freestanding
 library delivery remains a separate roadmap item; [1990] specifies the exact

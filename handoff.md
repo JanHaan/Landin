@@ -256,10 +256,11 @@ assembly for three targets. What it covers, by capability:
   adapters cover the supported enum, union, bitfield, global/TLS and
   incoming-varargs boundaries; unsupported C forms receive explicit refusals.
 - **Targets.** Linux x86-64 and Darwin arm64 build and run hosted executables,
-  Darwin with an explicit large-image loader limitation. Cortex-M0 lowers to
-  ARMv6-M Thumb with 32-bit layouts, the external AAPCS and Landin's internal
-  ABI, r11 frame chains and soft scalar arithmetic. D229 enables its
-  compiler-owned reset, data/RAM-code copying, BSS clearing, typed
+  Darwin with an explicit large-image loader limitation. The `cortex_m0`
+  backend defaults to ARMv6-M Thumb and can select the higher `armv7-m` or
+  `armv7e-m` level; all three share 32-bit layouts, the external AAPCS,
+  Landin's internal ABI, r11 frame chains and soft-float arithmetic. D229
+  enables its compiler-owned reset, data/RAM-code copying, BSS clearing, typed
   interrupt/naked functions, vector references, placement/retention and fixed
   assembly with explicit effects, within the selected 32 KiB flash, 16 KiB RAM
   and 4 KiB stack reservation. The

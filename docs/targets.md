@@ -391,10 +391,12 @@ remain unchanged.
 
 ## Cortex-M0 layout and ABI planning
 
-`Targets.Cortex_M` (`cortex-m0`) selects ARMv6-M Thumb,
+`Targets.Cortex_M` (`cortex-m0`) defaults to ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
-checks source and emits ARMv6-M assembly against these facts. The toolchain
-identity is `arm-none-eabi`. Executable requests require the explicit
+checks source and emits ARMv6-M assembly at the default `armv6-m` level;
+selecting `armv7-m` or `armv7e-m` permits instructions from that higher level
+while retaining the same layout and ABI. The toolchain identity is
+`arm-none-eabi`. Executable requests require the explicit
 `--firmware-entry=NAME` source identity (D229); missing or invalid entries report
 L0502. C signatures, records, varargs and standalone object output remain
 disabled; the explicit `lines` source-debug contract is described above.
