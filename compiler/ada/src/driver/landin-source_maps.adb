@@ -17,7 +17,8 @@ package body Landin.Source_Maps is
      (Context : in out Landin.Stages.Compilation;
       Assembly : String;
       All_Sources : Boolean := False;
-      Panic : access constant Landin.Panics.Plan := null) return Artifact
+      Panic : access constant Landin.Panics.Plan := null;
+      Digests : access Landin.Source_Digests.Cache := null) return Artifact
    is
       Files : US.Unbounded_String;
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
@@ -44,7 +45,10 @@ package body Landin.Source_Maps is
               & Landin.Source.Source_Id'Image (Id)
               & ",""path_hex"":""" & Hex (Landin.Source.Name (Snap))
               & """,""source_sha256"":"""
-              & GNAT.SHA256.Digest (Landin.Source.Text (Snap)) & """");
+              & (if Digests = null
+                 then GNAT.SHA256.Digest (Landin.Source.Text (Snap))
+                 else Landin.Source_Digests.Digest (Digests.all, Snap))
+              & """");
             if Panic /= null then
                US.Append (Files, ",""panic_base"":"
                  & Landin.Panics.Site_Number'Image

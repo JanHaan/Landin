@@ -17,6 +17,12 @@ package Landin.Platform.Native is
    overriding function Same_File
      (Host : Native_Filesystem; Left, Right : String) return Boolean;
 
+   overriding function Existing_File_Key
+     (Host : Native_Filesystem; Path : String) return String;
+
+   overriding function Identity_Of
+     (Host : Native_Filesystem; Path : String) return File_Identity;
+
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean;
 
@@ -48,6 +54,16 @@ package Landin.Platform.Native is
      (Host   : Native_Filesystem;
       Path   : String;
       Status : out Remove_Status);
+
+   overriding procedure Move_File
+     (Host   : Native_Filesystem;
+      From, To : String;
+      Status : out Move_Status);
+
+   overriding procedure Lock_Output
+     (Host : Native_Filesystem; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Native_Filesystem; Handle : Integer);
 
    overriding procedure List_Directory
      (Host    : Native_Filesystem;

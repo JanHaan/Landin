@@ -18,6 +18,8 @@
   (error "Landin mode did not install comment syntax"))
 (landin-test-face-at "public" 'font-lock-keyword-face)
 (landin-test-face-at "u23" 'font-lock-type-face)
+(dolist (module '("compiler" "assembler" "linker"))
+  (landin-test-face-at module 'font-lock-builtin-face))
 (landin-test-face-at "documentation comment" 'font-lock-doc-face)
 (landin-test-face-at "nested block comment" 'font-lock-comment-face)
 (landin-test-face-at "escaped" 'font-lock-string-face)

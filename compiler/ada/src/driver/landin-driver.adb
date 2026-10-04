@@ -1,5 +1,7 @@
+with Ada.Containers.Indefinite_Hashed_Sets;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
+with Ada.Strings.Hash;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
@@ -27,6 +29,7 @@ with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
+with Landin.Source_Digests;
 with Landin.Source_Maps;
 with Landin.Stages;
 with Landin.Syntax;
@@ -40,6 +43,11 @@ package body Landin.Driver is
    use type Landin.Targets.Architecture;
 
    package Unbounded renames Ada.Strings.Unbounded;
+
+   package Path_Sets is new Ada.Containers.Indefinite_Hashed_Sets
+     (Element_Type        => String,
+      Hash                => Ada.Strings.Hash,
+      Equivalent_Elements => "=");
 
    LF : constant Character := Character'Val (10);
 
@@ -55,8 +63,11 @@ package body Landin.Driver is
    use type Landin.IR.Item_Kind;
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Remove_Status;
+   use type Landin.Platform.Move_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
+   use type Landin.Platform.File_Identity;
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Targets.Capabilities.Debug_Format;
 
@@ -130,6 +141,7 @@ package body Landin.Driver is
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
+      & "  -o=PATH             write to a path beginning with -" & LF
       & "  --toolchain=NAME    driver to run with --emit=exe" & LF
       & "  --linker=NAME       pass -fuse-ld=NAME with --emit=exe" & LF
       & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
@@ -293,6 +305,7 @@ package body Landin.Driver is
       Found   : Landin.Diagnostics.Diagnostic_List;
       Sources : Landin.Source.Sets.Source_Set;
       Named   : Landin.Platform.Path_List;
+      Seen    : Path_Sets.Set;
       Check   : Boolean := False;
       Misused : Boolean := False;
 
@@ -369,11 +382,12 @@ package body Landin.Driver is
                Misused := True;
                Refuse (Code_Unknown_Option,
                        "fmt formats files, not directories: " & Argument);
-            elsif Named.Contains (Argument) then
+            elsif Seen.Contains (Argument) then
                Misused := True;
                Refuse (Code_Unknown_Option,
                        "fmt is given one source twice: " & Argument);
             else
+               Seen.Insert (Argument);
                Named.Append (Argument);
             end if;
          end;
@@ -496,6 +510,7 @@ package body Landin.Driver is
       Wants_Identity : Boolean := False;
       Emit      : Emit_Kind := Emit_Nothing;
       Output    : Unbounded.Unbounded_String;
+      Output_Problem : Unbounded.Unbounded_String;
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
       Toolchain_Seen, Linker_Seen : Boolean := False;
@@ -511,6 +526,7 @@ package body Landin.Driver is
       Lines_Debug : Boolean := False;
       Panic_Map : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
+      Skip_Compilation : Boolean := False;
       Index     : Positive := 1;
    begin
       if Natural (Arguments.Length) = 0 then
@@ -552,8 +568,8 @@ package body Landin.Driver is
       --  success.
       --
       --  An index and not a cursor, because `-o` takes the argument after
-      --  it.  Every other option carries its value with an `=`, which is
-      --  the shape `--target=` set and every later option kept.
+      --  it.  `-o=PATH` keeps a leading dash in a literal path unambiguous.
+      --  Every other option carries its value with an `=`.
       while Index <= Natural (Arguments.Length) loop
          declare
             Argument : constant String := Arguments.Element (Index);
@@ -703,6 +719,15 @@ package body Landin.Driver is
                   end if;
                end;
 
+            elsif Starts_With (Argument, "-o=") then
+               if Output_Seen or else After (Argument, "-o=") = "" then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Output_Seen := True;
+               Output := Unbounded.To_Unbounded_String
+                 (After (Argument, "-o="));
+
             elsif Argument = "-o" then
                if Output_Seen then
                   Unknowns.Append (Argument);
@@ -714,6 +739,11 @@ package body Landin.Driver is
                --  reading of a request that is simply unfinished.
                if Index = Natural (Arguments.Length) then
                   Unknowns.Append (Argument);
+                  Bad_Use := True;
+               elsif Starts_With (Arguments.Element (Index + 1), "-") then
+                  Output_Problem := Unbounded.To_Unbounded_String
+                    ("-o needs a path before " & Arguments.Element
+                       (Index + 1));
                   Bad_Use := True;
                else
                   Index := Index + 1;
@@ -743,7 +773,9 @@ package body Landin.Driver is
                  and then Emit = Emit_Nothing)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
-        or else (Output_Seen and then
+        or else (Output_Seen
+                 and then Unbounded.Length (Output_Problem) = 0
+                 and then
                  (Emit = Emit_Nothing or Unbounded.Length (Output) = 0))
       then
          Unknowns.Append ("incompatible compilation action");
@@ -876,10 +908,12 @@ package body Landin.Driver is
             end if;
          end Watch_Stage;
 
-         --  Written whenever the request was well formed, a refused program
-         --  included: where a refusal's time and storage went is exactly
-         --  what a bound is measured by.  The sizes are the compilation's
-         --  own counts and are the same on every run; the rows are not.
+         --  Written when source loading began, a refused program included:
+         --  where a refusal's time and storage went is exactly what a bound
+         --  is measured by. A preflight refusal has no loaded source list to
+         --  protect from an overlapping report path, and no measured stage.
+         --  The sizes are the compilation's own counts and are the same on
+         --  every run; the rows are not.
          procedure Write_Stage_Report is
             Path : constant String := Unbounded.To_String (Stage_Report_Path);
             Written : Landin.Platform.Write_Status;
@@ -888,9 +922,22 @@ package body Landin.Driver is
               (Ada.Strings.Fixed.Trim
                  (Natural'Image (Value), Ada.Strings.Both));
          begin
-            if not Stage_Report_Seen or else Bad_Use then
+            if not Stage_Report_Seen or else Bad_Use
+              or else Skip_Compilation
+            then
                return;
             end if;
+            --  A failed read has no source in Context, but its requested
+            --  path must still be protected from the report writer.
+            for Input of Inputs loop
+               if Host.Paths_Overlap (Path, Input) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "stage report collides with source: " & Path);
+                  return;
+               end if;
+            end loop;
             for Index in 1 .. Landin.Stages.Source_Count (Context) loop
                if Host.Paths_Overlap
                  (Path, Landin.Source.Name
@@ -1023,6 +1070,17 @@ package body Landin.Driver is
             Landin.Stages.Report (Context, Item);
          end Note_No_Toolchain;
 
+         procedure Note_Unavailable_Toolchain (Driver : String);
+
+         procedure Note_Unavailable_Toolchain (Driver : String) is
+         begin
+            Note_No_Toolchain
+              ("cannot run " & Driver & " for target "
+               & Landin.Targets.Name (Facts),
+               "install a toolchain named " & Driver
+               & ", or name another with --toolchain=NAME");
+         end Note_Unavailable_Toolchain;
+
          procedure Emit_Requested;
 
 
@@ -1042,7 +1100,10 @@ package body Landin.Driver is
 
             Written : Landin.Platform.Write_Status;
             Map_Id : Unbounded.Unbounded_String;
+            Map_JSON : Unbounded.Unbounded_String;
             Evidence : Landin.Build_Reports.Report;
+            Digests : aliased Landin.Source_Digests.Cache
+              (Landin.Source.Source_Id (Landin.Stages.Source_Count (Context)));
             Product_Path : constant String :=
               (if Unbounded.Length (Output) > 0
                then Unbounded.To_String (Output)
@@ -1087,7 +1148,8 @@ package body Landin.Driver is
                     (Report_Path,
                      Landin.Build_Reports.Sources.JSON
                        (Evidence, Context, Optimization,
-                        Unbounded.To_String (Firmware)), Written);
+                        Unbounded.To_String (Firmware), Digests'Access),
+                      Written);
                   if Written /= Landin.Platform.Write_Ok then
                      Note_Failure
                        (Code_Unwritable, "cannot write: " & Report_Path);
@@ -1201,9 +1263,16 @@ package body Landin.Driver is
                or else Lines_Debug /= Cortex)
             then
                Note_No_Toolchain
-                 ("unsupported source debugger mode for target "
-                  & Landin.Targets.Name (Facts),
-                  (if Cortex then "use --debug=lines or --debug=none"
+                 ((if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                         = Landin.Targets.Capabilities.No_Debug_Format
+                   then "target " & Landin.Targets.Name (Facts)
+                        & " has no source debug format"
+                   else "unsupported source debugger mode for target "
+                        & Landin.Targets.Name (Facts)),
+                  (if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                         = Landin.Targets.Capabilities.No_Debug_Format
+                   then "describe a target with a backend, or drop --emit"
+                   elsif Cortex then "use --debug=lines or --debug=none"
                    else "use --debug=full or --debug=none"));
                return;
             end if;
@@ -1256,7 +1325,8 @@ package body Landin.Driver is
                then
                   Note_No_Toolchain
                     ("firmware does not admit linker.library",
-                     "only the selected private Arm runtime is linked");
+                     "remove linker.library declarations; only the"
+                     & " selected private Arm runtime is linked");
                   return;
                end if;
             end if;
@@ -1308,22 +1378,24 @@ package body Landin.Driver is
                raise Compiler_Defect with "panic plan changed after checking";
             end if;
 
-            for Index in 1 .. Landin.IR.Nominal_Type_Count
-              (Landin.Stages.Code (Context).all)
-            loop
-               declare
-                  Unit : Landin.IR.Unit renames
-                    Landin.Stages.Code (Context).all;
-                  Id : constant Landin.IR.Nominal_Type_Id :=
-                    Landin.IR.Nth_Nominal_Type (Unit, Index);
-               begin
-                  if Landin.IR.Has_Nominal_Shape (Unit, Id) then
-                     Landin.Build_Reports.Append_Layout
-                       (Evidence, Index, Landin.IR.Layout_Of (Unit, Id),
-                        Landin.Backend.Nominal_Layout (Unit, Id, Facts));
-                  end if;
-               end;
-            end loop;
+            if Report_Seen then
+               for Index in 1 .. Landin.IR.Nominal_Type_Count
+                 (Landin.Stages.Code (Context).all)
+               loop
+                  declare
+                     Unit : Landin.IR.Unit renames
+                       Landin.Stages.Code (Context).all;
+                     Id : constant Landin.IR.Nominal_Type_Id :=
+                       Landin.IR.Nth_Nominal_Type (Unit, Index);
+                  begin
+                     if Landin.IR.Has_Nominal_Shape (Unit, Id) then
+                        Landin.Build_Reports.Append_Layout
+                          (Evidence, Index, Landin.IR.Layout_Of (Unit, Id),
+                           Landin.Backend.Nominal_Layout (Unit, Id, Facts));
+                     end if;
+                  end;
+               end loop;
+            end if;
 
             --  A verified frame may still exceed the displacement encoding
             --  of this backend.  Ask before anything is written, for
@@ -1427,17 +1499,12 @@ package body Landin.Driver is
                        Landin.Source_Maps.Create
                          (Context, Unbounded.To_String (Emitted),
                           All_Sources => Debug_Enabled,
-                          Panic => (if Panic_Map then Panic'Access else null));
+                          Panic => (if Panic_Map then Panic'Access else null),
+                          Digests => Digests'Access);
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
-                     Host.Write_File
-                       (Map_Path, Unbounded.To_String (Map.JSON), Written);
-                     if Written /= Landin.Platform.Write_Ok then
-                        Note_Failure
-                          (Code_Unwritable, "cannot write: " & Map_Path);
-                        return;
-                     end if;
+                     Map_JSON := Map.JSON;
                   end;
                end if;
                Host.Write_File
@@ -1446,6 +1513,15 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unwritable, "cannot write: " & Assembly_Path);
                   return;
+               end if;
+               if Emit_Map then
+                  Host.Write_File
+                    (Map_Path, Unbounded.To_String (Map_JSON), Written);
+                  if Written /= Landin.Platform.Write_Ok then
+                     Note_Failure
+                       (Code_Unwritable, "cannot write: " & Map_Path);
+                     return;
+                  end if;
                end if;
             end;
 
@@ -1465,6 +1541,59 @@ package body Landin.Driver is
                Ran : Landin.Platform.Tool_Result;
                Libraries : Landin.Platform.Path_List;
                Libraries_Ready : Boolean;
+               Backup : Unbounded.Unbounded_String;
+               Prior_Identity : Landin.Platform.File_Identity;
+               Prepared : Boolean := False;
+               Removed : Landin.Platform.Remove_Status;
+               Moved : Landin.Platform.Move_Status;
+               Lock_Handle : Integer := -1;
+
+               procedure Release_Lock;
+
+               procedure Release_Lock is
+               begin
+                  if Lock_Handle >= 0 then
+                     Host.Unlock_Output (Lock_Handle);
+                     Lock_Handle := -1;
+                  end if;
+               end Release_Lock;
+
+               procedure Restore_Output;
+
+               procedure Restore_Output is
+               begin
+                  if not Prepared then
+                     return;
+                  end if;
+                  if Unbounded.Length (Backup) > 0
+                    and then not Host.Exists (Unbounded.To_String (Backup))
+                    and then Host.Identity_Of (Target_Path) = Prior_Identity
+                  then
+                     --  The tool moved the old inode back itself.
+                     Prepared := False;
+                     return;
+                  end if;
+                  Host.Remove_File (Target_Path, Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                        (Code_Toolchain_Failed,
+                        "cannot clear failed executable: " & Target_Path
+                        & (if Unbounded.Length (Backup) > 0
+                           then "; prior executable retained at "
+                             & Unbounded.To_String (Backup)
+                           else ""));
+                  elsif Unbounded.Length (Backup) > 0 then
+                     Host.Move_File
+                       (Unbounded.To_String (Backup), Target_Path, Moved);
+                     if Moved /= Landin.Platform.Moved then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot restore prior executable from "
+                           & Unbounded.To_String (Backup));
+                     end if;
+                  end if;
+                  Prepared := False;
+               end Restore_Output;
             begin
                if Driver = "" then
                   Note_No_Toolchain
@@ -1524,6 +1653,86 @@ package body Landin.Driver is
                         Unbounded.To_String (Ran.Output));
                      return;
                   end if;
+
+                  Host.Lock_Output (Target_Path, Lock_Handle);
+                  if Lock_Handle < 0 then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot lock executable destination: "
+                        & Target_Path);
+                     return;
+                  end if;
+
+                  --  A zero-exit tool must produce a new pathname for this
+                  --  invocation. Keep the old file aside until that is
+                  --  established, even when the new bytes are identical.
+                  if Host.Exists (Target_Path) then
+                     Prior_Identity := Host.Identity_Of (Target_Path);
+                     if not Prior_Identity.Valid then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot identify prior executable: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                     for Index in 1 .. 100 loop
+                        declare
+                           Candidate : constant String := Target_Path
+                             & ".landin-backup-"
+                             & Ada.Strings.Fixed.Trim
+                                 (Positive'Image (Index), Ada.Strings.Both);
+                           Conflicts : Boolean := Host.Exists (Candidate)
+                             or else (Report_Seen and then
+                               Host.Paths_Overlap (Candidate, Report_Path));
+                        begin
+                           for Path of Destinations loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap (Candidate, Path);
+                           end loop;
+                           for Source in 1 .. Landin.Stages.Source_Count
+                             (Context)
+                           loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap
+                                  (Candidate, Landin.Source.Name
+                                     (Landin.Stages.Source
+                                        (Context,
+                                         Landin.Stages.Nth_Source
+                                           (Context, Source))));
+                           end loop;
+                           if not Conflicts then
+                              Host.Move_File
+                                (Target_Path, Candidate, Moved);
+                              if Moved = Landin.Platform.Moved then
+                                 Backup := Unbounded.To_Unbounded_String
+                                   (Candidate);
+                                 exit;
+                              end if;
+                           end if;
+                        end;
+                     end loop;
+                     if Unbounded.Length (Backup) = 0 then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot preserve prior executable: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                  else
+                     Host.Remove_File (Target_Path, Removed);
+                     if Removed = Landin.Platform.Not_Removable then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot clear executable output: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                  end if;
+                  Prepared := True;
+                  Tools.Prepare_Output (Host, Target_Path);
                   Tools.Run
                     (Program   => Driver,
                      Arguments =>
@@ -1539,6 +1748,7 @@ package body Landin.Driver is
                      Capture   => Landin.Platform.Merged);
                exception
                   when Failure : Landin.External_Tool_Failed =>
+                     Restore_Output;
                      --  The adapter says why.  Only a tool that is not
                      --  there is the reader's to install; a capture file
                      --  that could not be removed is a host fault after
@@ -1549,11 +1759,7 @@ package body Landin.Driver is
                           Ada.Exceptions.Exception_Message (Failure);
                      begin
                         if Starts_With (Why, "tool not found") then
-                           Note_No_Toolchain
-                             ("cannot run " & Driver & " for target "
-                              & Landin.Targets.Name (Facts),
-                              "install a toolchain named " & Driver
-                              & ", or name another with --toolchain=NAME");
+                           Note_Unavailable_Toolchain (Driver);
                         else
                            Note_Failure
                              (Code_Toolchain_Failed,
@@ -1561,7 +1767,11 @@ package body Landin.Driver is
                               & Why);
                         end if;
                      end;
+                     Release_Lock;
                      return;
+                  when others =>
+                     Restore_Output;
+                     raise;
                end;
 
                --  How the run ended is asked before what it returned,
@@ -1569,17 +1779,50 @@ package body Landin.Driver is
                --  field beside it holds zero.  Reading that alone would
                --  make a dead assembler a success that wrote nothing.
                if Ran.Ended /= Landin.Platform.Exited then
+                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " was stopped before it could finish" & LF
                      & Unbounded.To_String (Ran.Output));
                elsif Ran.Exit_Code /= 0 then
+                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " failed with status"
                      & Integer'Image (Ran.Exit_Code) & LF
                      & Unbounded.To_String (Ran.Output));
+               elsif not Tools.Output_Produced (Host, Target_Path) then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " reported success but produced no executable"
+                     & " at " & Target_Path & LF
+                     & Unbounded.To_String (Ran.Output));
+               elsif Unbounded.Length (Backup) > 0
+                 and then
+                   (Host.Same_File
+                      (Target_Path, Unbounded.To_String (Backup))
+                    or else Host.Identity_Of (Target_Path) = Prior_Identity)
+               then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " left executable output aliasing its prior"
+                     & " backup at " & Target_Path);
+               elsif Unbounded.Length (Backup) > 0 then
+                  Host.Remove_File (Unbounded.To_String (Backup), Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot remove prior executable backup: "
+                        & Unbounded.To_String (Backup));
+                  end if;
                end if;
+               Release_Lock;
+            exception
+               when others =>
+                  Release_Lock;
+                  raise;
             end;
             Write_Build_Report;
          end Emit_Requested;
@@ -1674,6 +1917,11 @@ package body Landin.Driver is
             end if;
          end if;
 
+         if Unbounded.Length (Output_Problem) > 0 then
+            Note_Failure
+              (Code_Unknown_Option, Unbounded.To_String (Output_Problem));
+         end if;
+
          --  A request to emit with nothing to compile exited zero and
          --  wrote nothing, which a script read as success.  An empty root
          --  named the filesystem root and searched it.
@@ -1741,39 +1989,68 @@ package body Landin.Driver is
             return Result;
          end if;
 
-         Stage_Began;
-         if Natural (Roots.Length) > 0 then
-            if Natural (Inputs.Length) = 1 then
-               Loading.Load_Reachable_Program
-                 (Context, Host, Roots, Inputs.Element (1));
-            end if;
-         else
-            Loading.Load_Files (Context, Host, Inputs);
-         end if;
-
-         --  A rooted request scans and parses each module as it is found,
-         --  to read its imports, so its syntax is inside this row.
-         Stage_Ended ("loading");
-
-         --  Every source that was read is scanned and parsed together, as
-         --  one compilation: the language is checked whole, and a stage
-         --  that saw one file at a time could not be replaced later by one
-         --  that resolves a name across two.
-         if Landin.Stages.Source_Count (Context) > 0
+         --  Availability is already determined by the selected target and
+         --  command line. Report a missing driver before reading sources or
+         --  producing any of an executable request's artifacts. Run checks
+         --  again when it starts, in case PATH changes meanwhile.
+         if Emit = Emit_Executable
+           and then not Bad_Use
            and then not Landin.Stages.Failed (Context)
          then
-            Checking.Run (Context, Panic, Watch_Stage'Access);
+            declare
+               Driver : constant String :=
+                 Landin.Backend.Toolchain.Driver_For
+                   (Facts, Unbounded.To_String (Toolchain));
+            begin
+               if Driver = "" then
+                  Note_No_Toolchain
+                    ("target " & Landin.Targets.Name (Facts)
+                     & " names no toolchain",
+                     "name one with --toolchain=NAME");
+                  Skip_Compilation := True;
+               elsif not Tools.Available (Driver) then
+                  Note_Unavailable_Toolchain (Driver);
+                  Skip_Compilation := True;
+               end if;
+            end;
+         end if;
 
-            --  The backend runs on nothing that was refused, for the same
-            --  reason the lowering does: an unaccepted program has no Unit
-            --  worth emitting, and a file written from one would be a
-            --  plausible artefact of a failed compilation.
-            if Emit /= Emit_Nothing
+         if not Skip_Compilation then
+            Stage_Began;
+            if Natural (Roots.Length) > 0 then
+               if Natural (Inputs.Length) = 1 then
+                  Loading.Load_Reachable_Program
+                    (Context, Host, Roots, Inputs.Element (1));
+               end if;
+            else
+               Loading.Load_Files (Context, Host, Inputs);
+            end if;
+
+            --  A rooted request scans and parses each module as it is found,
+            --  to read its imports, so its syntax is inside this row.
+            Stage_Ended ("loading");
+
+            --  Every source that was read is scanned and parsed together, as
+            --  one compilation: the language is checked whole, and a stage
+            --  that saw one file at a time could not be replaced later by one
+            --  that resolves a name across two.
+            if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               Stage_Began;
-               Emit_Requested;
-               Stage_Ended ("emission");
+               Checking.Run (Context, Panic, Watch_Stage'Access);
+
+               --  The backend runs on nothing that was refused, for the same
+               --  reason the lowering does: an unaccepted program has no Unit
+               --  worth emitting, and a file written from one would be a
+               --  plausible artefact of a failed compilation.
+               if Emit /= Emit_Nothing
+                 and then not Bad_Use
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  Stage_Began;
+                  Emit_Requested;
+                  Stage_Ended ("emission");
+               end if;
             end if;
          end if;
          Write_Stage_Report;

@@ -42,6 +42,12 @@ package Landin.Platform.Overlays is
    overriding function Same_File
      (Host : Overlay; Left, Right : String) return Boolean;
 
+   overriding function Existing_File_Key
+     (Host : Overlay; Path : String) return String;
+
+   overriding function Identity_Of
+     (Host : Overlay; Path : String) return File_Identity;
+
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean;
 
@@ -67,6 +73,16 @@ package Landin.Platform.Overlays is
      (Host   : Overlay;
       Path   : String;
       Status : out Remove_Status);
+
+   overriding procedure Move_File
+     (Host   : Overlay;
+      From, To : String;
+      Status : out Move_Status);
+
+   overriding procedure Lock_Output
+     (Host : Overlay; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Overlay; Handle : Integer);
 
    overriding procedure List_Directory
      (Host    : Overlay;

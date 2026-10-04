@@ -177,7 +177,7 @@ def kate() -> str:
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <!-- {GENERATED} -->
 <!DOCTYPE language SYSTEM "language.dtd">
-<language name="Landin" section="Sources" extensions="*.ldn" mimetype="text/x-landin" version="1" kateversion="5.0" author="Landin contributors" license="MIT OR Apache-2.0">
+<language name="Landin" section="Sources" extensions="*.ldn" mimetype="text/x-landin" version="2" kateversion="5.0" author="Landin contributors" license="MIT OR Apache-2.0">
   <highlighting>
     <list name="keywords">{items(KEYWORDS)}</list>
     <list name="types">{items(TYPES)}</list>
@@ -193,6 +193,7 @@ def kate() -> str:
         <keyword String="modules" attribute="Import"/>
         <RegExpr String="\\b[ui](0|[1-9][0-9]{{0,2}})\\b" attribute="Data Type"/>
         <RegExpr String="\\b(0[xX][0-9A-Fa-f_]+|0[bB][01_]+|0[oO][0-7_]+|[0-9][0-9_]*)\\b" attribute="Number"/>
+        <RegExpr String="(&quot;{{3,}})" attribute="String" context="Raw String"/>
         <DetectChar char="&quot;" attribute="String" context="String"/>
         <DetectChar char="'" attribute="Char" context="Char"/>
       </context>
@@ -204,6 +205,9 @@ def kate() -> str:
       <context name="String" attribute="String" lineEndContext="#pop">
         <HlCStringChar attribute="Special Character"/>
         <DetectChar char="&quot;" context="#pop"/>
+      </context>
+      <context name="Raw String" attribute="String" lineEndContext="#stay">
+        <StringDetect String="%1" dynamic="true" context="#pop"/>
       </context>
       <context name="Char" attribute="Char" lineEndContext="#pop">
         <HlCChar attribute="Special Character"/>

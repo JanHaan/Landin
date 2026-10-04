@@ -569,6 +569,29 @@ package body Landin.Server.Answers is
       Written : J.Builder;
       Maps    : Position_Maps
         (1 .. Landin.Source.Source_Id (Sources.Count));
+
+      --  Both ranges are half-open.  A cursor or an empty diagnostic names
+      --  a position instead of bytes, so it also touches a range containing
+      --  that position (but not one ending there).
+      function Touches
+        (Where : Landin.Source.Span; First, Last : Integer) return Boolean;
+
+      function Touches
+        (Where : Landin.Source.Span; First, Last : Integer) return Boolean
+      is
+         Start : constant Natural := Natural (Where.First);
+         Stop  : constant Natural := Natural (Where.Last);
+      begin
+         if Start = Stop then
+            return First <= Start
+              and then (Start < Last
+                        or else (First = Last and then First = Start));
+         elsif First = Last then
+            return Start <= First and then First < Stop;
+         else
+            return Start < Last and then First < Stop;
+         end if;
+      end Touches;
    begin
       if Source = Landin.Source.No_Source then
          return "[]";
@@ -609,8 +632,7 @@ package body Landin.Server.Answers is
                  Diag.Span_Of (Diag.Primary (Item));
             begin
                if Diag.Source_Of (Diag.Primary (Item)) = Source
-                 and then Natural (Where.First) <= Last
-                 and then First <= Natural (Where.Last)
+                 and then Touches (Where, First, Last)
                then
                   for Position in 1 .. Diag.Fix_Count (Item) loop
                      declare

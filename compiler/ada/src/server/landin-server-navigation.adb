@@ -5,7 +5,6 @@ with Landin.Checking.Spelling;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source.Names;
-with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Tokens;
 with Landin.Types;
@@ -114,33 +113,59 @@ package body Landin.Server.Navigation is
       return Unbounded.To_String (Found);
    end Doc_Comment;
 
-   --  The innermost node of Of_Tree whose extent holds Offset, preferring
-   --  a name: nodes are in post-order, so a child comes before its parent
-   --  and the first that holds Offset among the smallest is the innermost.
-   function Node_At
-     (Of_Tree : Syn.Tree; Offset : Landin.Source.Byte_Offset)
-      return Syn.Node_Id;
-
    function Node_At
      (Of_Tree : Syn.Tree; Offset : Landin.Source.Byte_Offset)
       return Syn.Node_Id
    is
       Best   : Syn.Node_Id := Syn.No_Node;
       Length : Landin.Source.Byte_Offset := Landin.Source.Byte_Offset'Last;
+
+      procedure Search (Node : Syn.Node_Id);
+
+      procedure Search (Node : Syn.Node_Id) is
+         Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
+      begin
+         --  Slot's containment contract means a missed parent excludes its
+         --  whole subtree.  Siblings may overlap, so visit each candidate.
+         if Offset < Where.First or else Offset >= Where.Last then
+            return;
+         end if;
+
+         if not Syn.Is_Error (Syn.Kind (Of_Tree, Node))
+           and then (Where.Last - Where.First < Length
+                     or else (Where.Last - Where.First = Length
+                              and then Node < Best))
+         then
+            Best := Node;
+            Length := Where.Last - Where.First;
+         end if;
+
+         for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            declare
+               Child : constant Syn.Node_Id :=
+                 Syn.Slot (Of_Tree, Node, Index);
+            begin
+               if Child /= Syn.No_Node then
+                  Search (Child);
+               end if;
+            end;
+         end loop;
+
+         --  A call's recovery clause is a child held outside its slots.
+         if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+         then
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+            begin
+               if Recovery /= Syn.No_Node then
+                  Search (Recovery);
+               end if;
+            end;
+         end if;
+      end Search;
    begin
-      for Node in 1 .. Syn.Last_Node (Of_Tree) loop
-         declare
-            Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
-         begin
-            if Offset >= Where.First and then Offset < Where.Last
-              and then Where.Last - Where.First < Length
-              and then not Syn.Is_Error (Syn.Kind (Of_Tree, Node))
-            then
-               Best := Node;
-               Length := Where.Last - Where.First;
-            end if;
-         end;
-      end loop;
+      Search (Syn.Root (Of_Tree));
       return Best;
    end Node_At;
 
@@ -186,7 +211,7 @@ package body Landin.Server.Navigation is
       Offset  : Landin.Source.Byte_Offset) return Place
    is
    begin
-      if not Answer.Checked
+      if not Answer.Resolved
         or else not Landin.Syntax.Forest.Contains
           (Landin.Stages.Trees (Context).all, Source)
         or else Landin.Server.Analysis.Is_Held

@@ -2,6 +2,7 @@ with Ada.Directories;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces.C;
+with Interfaces;
 with System;
 
 package body Landin.Platform.Native is
@@ -47,6 +48,60 @@ package body Landin.Platform.Native is
       return Same_Existing_Object
         (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) = 1;
    end Same_File;
+
+   overriding function Existing_File_Key
+     (Host : Native_Filesystem; Path : String) return String
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Key_Of
+        (Name   : Interfaces.C.char_array;
+         Key    : out Interfaces.C.char_array;
+         Length : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_existing_file_key";
+      Buffer_Size : constant Interfaces.C.size_t := 128;
+      Buffer : Interfaces.C.char_array (0 .. 127);
+   begin
+      if Path = ""
+        or else (for some Byte of Path => Byte = Character'Val (0))
+      then
+         return "";
+      end if;
+      if Key_Of (Interfaces.C.To_C (Path), Buffer, Buffer_Size) /= 0 then
+         return "";
+      end if;
+      return Interfaces.C.To_Ada (Buffer);
+   end Existing_File_Key;
+
+   overriding function Identity_Of
+     (Host : Native_Filesystem; Path : String) return File_Identity
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Get_Identity
+        (Name : Interfaces.C.char_array;
+         Device, Inode : access Interfaces.Unsigned_64)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_file_identity";
+      Result : File_Identity;
+      Device : aliased Interfaces.Unsigned_64;
+      Inode : aliased Interfaces.Unsigned_64;
+   begin
+      if Path = "" or else
+        (for some Byte of Path => Byte = Character'Val (0))
+      then
+         return Result;
+      end if;
+      Result.Valid := Get_Identity
+        (Interfaces.C.To_C (Path), Device'Access, Inode'Access) = 1;
+      if Result.Valid then
+         Result.Device := Device;
+         Result.Inode := Inode;
+      end if;
+      return Result;
+   end Identity_Of;
 
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean
@@ -155,10 +210,15 @@ package body Landin.Platform.Native is
             Stream_IO.Read (File, Buffer, Last);
             exit when Last < Buffer'First;
 
-            for Index in Buffer'First .. Last loop
-               Unbounded.Append
-                 (Content, Character'Val (Natural (Buffer (Index))));
-            end loop;
+            declare
+               Chunk : String (1 .. Natural (Last));
+            begin
+               for Index in Buffer'First .. Last loop
+                  Chunk (Natural (Index)) :=
+                    Character'Val (Natural (Buffer (Index)));
+               end loop;
+               Unbounded.Append (Content, Chunk);
+            end;
 
             exit when Last < Buffer'Last;
          end;
@@ -255,20 +315,61 @@ package body Landin.Platform.Native is
       Status : out Remove_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Unlink_File (Name : Interfaces.C.char_array)
+        return Interfaces.C.int
+        with Import, Convention => C, External_Name => "landin_unlink_file";
+      Result : Interfaces.C.int;
    begin
-      if not Directories.Exists (Path) then
-         Status := Already_Absent;
-      elsif Directories.Kind (Path) = Directories.Directory then
-         Status := Not_Removable;
-      else
-         Directories.Delete_File (Path);
-         Status := Removed;
-      end if;
-   exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
-         | Ada.IO_Exceptions.Device_Error =>
-         Status := Not_Removable;
+      Result := Unlink_File (Interfaces.C.To_C (Path));
+      Status := (if Result = 1 then Removed
+                 elsif Result = 0 then Already_Absent
+                 else Not_Removable);
    end Remove_File;
+
+   overriding procedure Move_File
+     (Host   : Native_Filesystem;
+      From, To : String;
+      Status : out Move_Status)
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Move_No_Replace
+        (Source, Destination : Interfaces.C.char_array)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_move_file_noreplace";
+      Result : Interfaces.C.int;
+   begin
+      Result := Move_No_Replace
+        (Interfaces.C.To_C (From), Interfaces.C.To_C (To));
+      Status := (if Result = 1 then Moved
+                 elsif Result = 0 then Move_Source_Absent
+                 else Not_Movable);
+   end Move_File;
+
+   overriding procedure Lock_Output
+     (Host : Native_Filesystem; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Host);
+      function Lock_Directory (Name : Interfaces.C.char_array)
+        return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_lock_output_directory";
+   begin
+      Handle := Integer (Lock_Directory (Interfaces.C.To_C (Path)));
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Native_Filesystem; Handle : Integer)
+   is
+      pragma Unreferenced (Host);
+      procedure Unlock_Directory (Value : Interfaces.C.int)
+        with Import, Convention => C,
+             External_Name => "landin_unlock_output_directory";
+   begin
+      Unlock_Directory (Interfaces.C.int (Handle));
+   end Unlock_Output;
 
    ---------------------------------------------------------------------
    --  List_Directory
@@ -284,16 +385,23 @@ package body Landin.Platform.Native is
       Status  : out List_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
 
       package Sorting is new Path_Vectors.Generic_Sorting ("<" => "<");
 
       Search : Directories.Search_Type;
       Item   : Directories.Directory_Entry_Type;
+      function Access_Denied
+        (Path : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_directory_access_denied";
    begin
       Entries := Path_Vectors.Empty_Vector;
 
       if not Directories.Exists (Path) then
-         Status := Directory_Not_Found;
+         Status :=
+           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
+            then Directory_Not_Readable else Directory_Not_Found);
          return;
       end if;
 
@@ -325,8 +433,12 @@ package body Landin.Platform.Native is
       Status := List_Ok;
 
    exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
-         Status := Directory_Not_Found;
+      when Ada.IO_Exceptions.Name_Error =>
+         Status :=
+           (if Access_Denied (Interfaces.C.To_C (Path)) /= 0
+            then Directory_Not_Readable else Directory_Not_Found);
+      when Ada.IO_Exceptions.Use_Error | Ada.IO_Exceptions.Device_Error =>
+         Status := Directory_Not_Readable;
    end List_Directory;
 
    overriding function Sample (Host : Native_Meter) return Resource_Sample

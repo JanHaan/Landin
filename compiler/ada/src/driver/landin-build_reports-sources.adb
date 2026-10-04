@@ -15,7 +15,8 @@ package body Landin.Build_Reports.Sources is
      (Of_Report : Report;
       Context : in out Landin.Stages.Compilation;
       Options : Landin.Optimization.Options;
-      Firmware : String := "") return String
+      Firmware : String := "";
+      Digests : access Landin.Source_Digests.Cache := null) return String
    is
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : US.Unbounded_String;
@@ -41,7 +42,10 @@ package body Landin.Build_Reports.Sources is
               & Landin.Source.Source_Id'Image (Id)
               & ",""path_hex"":""" & Hex (Landin.Source.Name (Snapshot))
               & """,""sha256"":"""
-              & GNAT.SHA256.Digest (Landin.Source.Text (Snapshot)) & """}");
+              & (if Digests = null
+                 then GNAT.SHA256.Digest (Landin.Source.Text (Snapshot))
+                 else Landin.Source_Digests.Digest (Digests.all, Snapshot))
+              & """}");
          end;
       end loop;
       US.Append (Result, "],""items"":[" & LF);

@@ -42,6 +42,8 @@ package Landin.Server.Analysis is
       --  Each `name=value` a `--option=` would give.  Valid and distinct:
       --  the caller has refused anything else.
       Options         : Landin.Platform.Path_List;
+      --  A selected Cortex-M0 build entry, empty when none was requested.
+      Firmware_Entry  : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    package Hold_Vectors is new Ada.Containers.Indefinite_Vectors
@@ -54,8 +56,10 @@ package Landin.Server.Analysis is
       --  Each source's held regions, by Source_Id; empty for one analysed
       --  as it is.
       Held   : Hold_Vectors.Vector;
-      --  Whether the stages ran past syntax, so names and types may be
-      --  asked of the compilation.
+      --  Resolution may have usable bindings even when it reported an
+      --  unresolved name.  Checking may then be run for navigation alone.
+      Resolved : Boolean := False;
+      --  Whether the checking table was prepared for hover queries.
       Checked : Boolean := False;
       --  Directories an unresolved import could appear in under the roots.
       Missing_Directories : Landin.Platform.Path_List;

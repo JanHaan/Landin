@@ -384,7 +384,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      =>
                "[1420]: no ordered import root contains the requested module",
             when Module_Directory_Invalid =>
-               "[1410]: an entry module must be a readable directory",
+               "[1410], [1420]: a module directory is invalid or unreadable",
             when Not_Formatted         =>
                "D252: a source `refine fmt --check` finds out of the layout",
             when Unknown_Level         =>
@@ -584,11 +584,11 @@ package Landin.Diagnostics.Catalogue is
                "[1150]/D180: a for source is a range, a traversable"
                & " value or one exact iterable conformance",
             when No_Toolchain          =>
-               "[1550]: no assembler and linker for the target on this"
-               & " host",
+               "[1550]: the requested output cannot be made with the"
+               & " target, settings or available toolchain",
             when Toolchain_Failed      =>
-               "[1550]: the platform assembler or linker refused what"
-               & " was emitted",
+               "[1550]: assembler or linker refusal, or executable"
+               & " output lifecycle failure",
             when Entry_Point_Missing   =>
                "[1970] [1990]: a missing or invalid hosted main or"
                & " explicitly selected firmware entry",

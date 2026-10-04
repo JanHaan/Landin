@@ -65,9 +65,12 @@ package body Landin.Diagnostics.Explanations is
                & "d exactly. When a directory near the missing segment is "
                & "there, the diagnostic offers it as a likely fix.",
             when Catalogue.Module_Directory_Invalid =>
-               "With `--root=`, the entry module is a directory [1410], "
-               & "and the operand given is not a readable one. Pass the di"
-               & "rectory, not a file inside it.",
+               "With `--root=`, the entry module must be a readable dire"
+               & "ctory [1410]. Pass the directory, not a file inside it. "
+               & "This code also reports an import root or intermediate di"
+               & "rectory that cannot be listed while searching in root or"
+               & "der [1420]. Check the named path and its permissions; a "
+               & "genuinely absent module is reported by L0006.",
             when Catalogue.Not_Formatted =>
                "`refine fmt --check` found a source that is not in the l"
                & "ayout D252 decides and `docs/format.md` shows. The diagn"
@@ -638,13 +641,22 @@ package body Landin.Diagnostics.Explanations is
                & "ble_iterable` when both exist and may use ordinary `iter"
                & "able` when there is no fallible conformance.",
             when Catalogue.No_Toolchain =>
-               "No assembler and linker for the selected target were fou"
-               & "nd on this host [1550]. The note names the program looke"
-               & "d for; `--toolchain=` names another.",
+               "The requested output cannot be made with the selected ta"
+               & "rget, settings or available toolchain [1550]. The diagno"
+               & "stic and its note identify the cause: the target has no "
+               & "backend, its source debug mode is unsupported, firmware "
+               & "forbids `linker.library`, no toolchain is selected, or t"
+               & "he named tool is unavailable. Choose a target with a bac"
+               & "kend, change the debug or firmware configuration, or sel"
+               & "ect or install a toolchain as the note directs. `--toolc"
+               & "hain=` only helps when a toolchain is absent or unavaila"
+               & "ble.",
             when Catalogue.Toolchain_Failed =>
-               "The platform assembler or linker refused what the compil"
-               & "er emitted [1550]. The tool's own output follows the dia"
-               & "gnostic.",
+               "Executable emission failed [1550]. The assembler or link"
+               & "er may have refused the emitted code, or the requested o"
+               & "utput could not be produced, verified, or restored. The "
+               & "note describes the failure, names paths needed for recov"
+               & "ery, and includes tool output when available.",
             when Catalogue.Entry_Point_Missing =>
                "`--emit=exe` needs an entry: a hosted `main` of the one "
                & "shape [1970] in the entry module, or the firmware routin"

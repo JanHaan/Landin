@@ -19,6 +19,9 @@ package Landin.Platform.Native.Tools is
    --  process that deliberately leaves its group.
    procedure Set_Limit (Host : in out Native_Tool_Runner; Seconds : Duration);
 
+   overriding function Available
+     (Host : Native_Tool_Runner; Program : String) return Boolean;
+
    --  A tool that cannot be started, or whose capture cannot be read, raises
    --  External_Tool_Failed. A tool that ran and failed reports its exit code,
    --  which the driver can describe. Capture files belong to this adapter.
@@ -28,6 +31,13 @@ package Landin.Platform.Native.Tools is
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged);
+
+   overriding function Output_Produced
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean;
+
+   overriding procedure Prepare_Output
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String);
 
 private
 

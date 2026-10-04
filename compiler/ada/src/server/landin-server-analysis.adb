@@ -2,17 +2,21 @@ with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Strings.Fixed;
 with Ada.Unchecked_Deallocation;
 
+with Landin.Backend.Entry_Point;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
 with Landin.Driver.Checking;
 with Landin.Driver.Loading;
+with Landin.IR;
 with Landin.Modules;
 with Landin.Panics;
 with Landin.Platform.Overlays;
 with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Stages.Syntax;
+with Landin.Syntax.Forest;
+with Landin.Stages.Checking;
 
 package body Landin.Server.Analysis is
 
@@ -21,8 +25,10 @@ package body Landin.Server.Analysis is
    package Rows renames Landin.Diagnostics.Catalogue;
 
    use type Diag.Severity;
-   use type Landin.Modules.Module_Id;
    use type Landin.Source.Source_Id;
+   use type Landin.IR.Item_Id;
+   use type Landin.Modules.Module_Id;
+   use type Landin.Resolution.Declaration_Sort;
    use type Holes.Verdict;
 
    package Plan_Maps is new Ada.Containers.Indefinite_Ordered_Maps
@@ -31,18 +37,31 @@ package body Landin.Server.Analysis is
    package Name_Vectors is new Ada.Containers.Indefinite_Vectors
      (Index_Type => Positive, Element_Type => String);
 
-   --  Whether a stage before the checker refused something: the scan, the
-   --  parse, the configuration or names, each of which stops the run before
-   --  the checker has typed anything.  A code says where it was born and
-   --  not which stage raised it, so the stages are asked by their tables:
-   --  resolution prepared its table only if every earlier stage passed,
-   --  and the checker its own only if resolution did.
-   function Has_Frontend_Error
-     (Context : in out Landin.Stages.Compilation) return Boolean
-     is (not Landin.Resolution.Is_Prepared
-               (Landin.Stages.Meanings (Context).all)
-         or else not Landin.Checking.Is_Prepared
-               (Landin.Stages.Types (Context).all));
+   --  Only an unresolved name leaves the other declarations and their
+   --  bindings unambiguous.  A duplicate or failed import can change what
+   --  another reference means, so it keeps the usual refused-module rule.
+   function Only_Unresolved_Names
+     (Found : Diag.Diagnostic_List) return Boolean;
+
+   function Only_Unresolved_Names
+     (Found : Diag.Diagnostic_List) return Boolean
+   is
+      Saw_Error : Boolean := False;
+   begin
+      for Index in 1 .. Found.Count loop
+         declare
+            Item : constant Diag.Diagnostic := Found.Get (Index);
+         begin
+            if Diag.Level (Item) = Diag.Error then
+               Saw_Error := True;
+               if Diag.Code (Item) /= Rows.Code (Rows.Unresolved_Name) then
+                  return False;
+               end if;
+            end if;
+         end;
+      end loop;
+      return Saw_Error;
+   end Only_Unresolved_Names;
 
    procedure Free is new Ada.Unchecked_Deallocation
      (Landin.Stages.Compilation, Compilation_Access);
@@ -51,6 +70,75 @@ package body Landin.Server.Analysis is
    begin
       Free (Context);
    end Release;
+
+   --  Apply the same IR entry predicate as a selected firmware build.  A
+   --  wrong-shaped declaration gives the diagnostic its source anchor.
+   procedure Check_Firmware_Entry
+     (Context : in out Landin.Stages.Compilation; Selected : String);
+
+   procedure Check_Firmware_Entry
+     (Context : in out Landin.Stages.Compilation; Selected : String)
+   is
+      package Res renames Landin.Resolution;
+      Grouped : Landin.Modules.Table renames
+        Landin.Stages.Modules (Context).all;
+      Meanings : Res.Table renames Landin.Stages.Meanings (Context).all;
+      Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span;
+   begin
+      if Landin.Backend.Entry_Point.Firmware_Start
+        (Landin.Stages.Code (Context).all, Meanings, Grouped,
+         Landin.Stages.Identities (Context).all, Selected) /= Landin.IR.No_Item
+      then
+         return;
+      end if;
+
+      for Index in 1 .. Landin.Modules.Source_Count (Grouped) loop
+         if Landin.Modules.Module_Of
+           (Grouped, Landin.Source.Source_Id (Index))
+             = Landin.Modules.Entry_Module
+         then
+            Source := Landin.Source.Source_Id (Index);
+            exit;
+         end if;
+      end loop;
+      for Index in 1 .. Res.Declaration_Count (Meanings) loop
+         declare
+            Id : constant Res.Declaration_Id := Res.Declaration_Id (Index);
+            From : constant Landin.Source.Source_Id :=
+              Res.Source_Of (Meanings, Id);
+            Node : constant Landin.Syntax.Node_Id :=
+              Res.Node_Of (Meanings, Id);
+         begin
+            if Res.Sort_Of (Meanings, Id) in
+              Res.Module_Function .. Res.Module_Binding
+              and then Natural (From)
+                <= Landin.Modules.Source_Count (Grouped)
+              and then Landin.Modules.Module_Of (Grouped, From)
+                = Landin.Modules.Entry_Module
+              and then Landin.Source.Names.Spelling
+                (Landin.Stages.Identities (Context).all,
+                 Res.Name_Of (Meanings, Id)) = Selected
+              and then Landin.Configuration.Is_Active
+                (Landin.Stages.Configurations (Context).all, From, Node)
+            then
+               Source := From;
+               Where := Landin.Syntax.Anchor
+                 (Landin.Syntax.Forest.Tree_Of
+                    (Landin.Stages.Trees (Context).all, From).all, Node);
+               exit;
+            end if;
+         end;
+      end loop;
+      Landin.Stages.Report
+        (Context, Diag.Make
+           (Landin.Diagnostics.Catalogue.Code
+              (Landin.Diagnostics.Catalogue.Entry_Point_Missing),
+            Diag.Error, Source, Where,
+            "firmware requires --firmware-entry=" & Selected
+            & " naming a nongeneric entry-module definition"
+            & " () -> none or noreturn with an empty error set"));
+   end Check_Firmware_Entry;
 
    procedure Analyse
      (For_Target : Landin.Targets.Target_Facts;
@@ -71,6 +159,9 @@ package body Landin.Server.Analysis is
       Entry_Directory : constant String :=
         Unbounded.To_String (Asked.Entry_Directory);
       Standing : Boolean := False;
+      Resolution_Report : Diag.Diagnostic_List;
+      Keep_Resolution_Report : Boolean := False;
+      Names_Only : Boolean := False;
       Missing : aliased Landin.Platform.Path_List;
       procedure Apply_Options (Context : in out Landin.Stages.Compilation);
 
@@ -125,9 +216,41 @@ package body Landin.Server.Analysis is
            and then not Landin.Stages.Failed (Context)
          then
             Landin.Driver.Checking.Run (Context, Panic);
-            --  Names and types exist only where every frontend stage ran,
-            --  which is exactly when nothing before the checker refused.
-            Answer.Checked := not Has_Frontend_Error (Context);
+            if not Landin.Stages.Failed (Context)
+              and then Unbounded.Length (Asked.Firmware_Entry) > 0
+            then
+               Check_Firmware_Entry
+                 (Context, Unbounded.To_String (Asked.Firmware_Entry));
+            end if;
+            Names_Only := Only_Unresolved_Names
+              (Landin.Stages.Report (Context));
+            if Landin.Resolution.Is_Prepared
+                (Landin.Stages.Meanings (Context).all)
+              and then Names_Only
+              and then not Landin.Checking.Is_Prepared
+                (Landin.Stages.Types (Context).all)
+            then
+               --  A name error stops the build pipeline, but bindings in
+               --  unrelated code remain valid.  Let the checker fill the
+               --  editor's type table; its follow-on diagnostics are not
+               --  part of the build's report for this refused program.
+               Resolution_Report := Landin.Stages.Report (Context);
+               Keep_Resolution_Report := True;
+               declare
+                  Checker : Landin.Stages.Checking.Instance;
+                  Outcome : Landin.Stages.Stage_Outcome;
+               begin
+                  Checker.Run (Context, Outcome);
+               end;
+            end if;
+            Answer.Resolved := Landin.Resolution.Is_Prepared
+              (Landin.Stages.Meanings (Context).all)
+              and then
+                (Names_Only or else Landin.Checking.Is_Prepared
+                   (Landin.Stages.Types (Context).all));
+            Answer.Checked := Answer.Resolved
+              and then Landin.Checking.Is_Prepared
+                (Landin.Stages.Types (Context).all);
          end if;
          Answer.Missing_Directories := Missing;
 
@@ -151,7 +274,8 @@ package body Landin.Server.Analysis is
          --  whatever the compilation reported that touches no held region.
          declare
             Report : constant Diag.Diagnostic_List :=
-              Landin.Stages.Report (Context);
+              (if Keep_Resolution_Report then Resolution_Report
+               else Landin.Stages.Report (Context));
             Merged : Diag.Diagnostic_List;
          begin
             if Standing then

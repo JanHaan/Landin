@@ -6,6 +6,7 @@
 with Ada.Strings.Unbounded;
 with Landin.Stages;
 with Landin.Panics;
+with Landin.Source_Digests;
 
 package Landin.Source_Maps is
    type Artifact is record
@@ -18,5 +19,6 @@ package Landin.Source_Maps is
      (Context : in out Landin.Stages.Compilation;
       Assembly : String;
       All_Sources : Boolean := False;
-      Panic : access constant Landin.Panics.Plan := null) return Artifact;
+      Panic : access constant Landin.Panics.Plan := null;
+      Digests : access Landin.Source_Digests.Cache := null) return Artifact;
 end Landin.Source_Maps;

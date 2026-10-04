@@ -10,7 +10,7 @@ L0003  Live     a source that is missing or cannot be read
 L0004  Live     a target no description names
 L0005  Live     an output file that cannot be written
 L0006  Live     [1420]: no ordered import root contains the requested module
-L0007  Live     [1410]: an entry module must be a readable directory
+L0007  Live     [1410], [1420]: a module directory is invalid or unreadable
 L0008  Live     D252: a source `refine fmt --check` finds out of the layout
 L0009  Live     D255: a CPU feature level the selected target does not have
 L0010  Live     [1830]: the tour describes this and the kernel omits it
@@ -88,7 +88,7 @@ L0346  Live     [1580]: a C boundary signature, layout or variadic call the C AB
 L0347  Live     [1610]/[1640]: a link symbol, helper import or placement outside its contract
 L0348  Live     [1150]/D180: a for source is a range, a traversable value or one exact iterable conformance
 L0500  Live     [1550]: no assembler and linker for the target on this host
-L0501  Live     [1550]: the platform assembler or linker refused what was emitted
+L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
 L0502  Live     [1970] [1990]: a missing or invalid hosted main or explicitly selected firmware entry
 L0503  Retired  retired: the register-only internal calling limit
 L0504  Live     a verified frame outside x86-64's signed displacement encoding

@@ -22,11 +22,6 @@ package body Landin.Server.Holes is
    use type Tok.Token_Index;
    use type Tok.Token_Kind;
 
-   function Before (Left, Right : Landin.Source.Span) return Boolean
-     is (Left.First < Right.First);
-
-   package Sorting is new Span_Vectors.Generic_Sorting ("<" => Before);
-
    function Within (Held : Span_List; Where : Landin.Source.Span)
      return Boolean
    is
@@ -239,41 +234,63 @@ package body Landin.Server.Holes is
             end;
          end loop;
 
-         --  Every error must lie in a held region, and only a region an
-         --  error lies in is stood in for.
-         for Index in 1 .. Found.Count loop
-            declare
-               Item  : constant Landin.Diagnostics.Diagnostic :=
-                 Found.Get (Index);
-               Where : constant Landin.Source.Span :=
-                 Landin.Diagnostics.Span_Of
-                   (Landin.Diagnostics.Primary (Item));
-               Held  : Boolean := False;
-            begin
-               if Landin.Diagnostics.Level (Item) = Landin.Diagnostics.Error
-               then
-                  for Position in 1 .. Natural (Regions.Length) loop
-                     if Inside (Regions.Element (Position), Where) then
-                        Held := True;
-                        if not Answer.Held.Contains
-                          (Regions.Element (Position))
+         --  Top-level declarations are parsed in source order.  Their
+         --  bodies cannot overlap, so Regions and Blanks share that order.
+         --  Find each error's one possible body by its ending offset,
+         --  then gather the marked bodies in source order.  This also
+         --  avoids searching Held again for repeated errors in a body.
+         declare
+            Last_Region : constant Natural := Natural (Regions.Length);
+            Has_Error   : array (1 .. Last_Region) of Boolean :=
+              [others => False];
+         begin
+            for Index in 1 .. Found.Count loop
+               declare
+                  Item : constant Landin.Diagnostics.Diagnostic :=
+                    Found.Get (Index);
+               begin
+                  if Landin.Diagnostics.Level (Item)
+                    = Landin.Diagnostics.Error
+                  then
+                     declare
+                        Where : constant Landin.Source.Span :=
+                          Landin.Diagnostics.Span_Of
+                            (Landin.Diagnostics.Primary (Item));
+                        Low  : Natural := 1;
+                        High : Natural := Last_Region + 1;
+                     begin
+                        while Low < High loop
+                           declare
+                              Middle : constant Natural :=
+                                Low + (High - Low) / 2;
+                           begin
+                              if Regions.Element (Middle).Last <= Where.First
+                              then
+                                 Low := Middle + 1;
+                              else
+                                 High := Middle;
+                              end if;
+                           end;
+                        end loop;
+                        if Low > Last_Region
+                          or else not Inside (Regions.Element (Low), Where)
                         then
-                           Answer.Held.Append (Regions.Element (Position));
-                           Blanked.Append (Blanks.Element (Position));
+                           return Answer;
                         end if;
-                     end if;
-                  end loop;
-                  if not Held then
-                     Answer.Held.Clear;
-                     return Answer;
+                        Has_Error (Low) := True;
+                     end;
                   end if;
-               end if;
-            end;
-         end loop;
-      end;
+               end;
+            end loop;
 
-      Sorting.Sort (Answer.Held);
-      Sorting.Sort (Blanked);
+            for Position in Has_Error'Range loop
+               if Has_Error (Position) then
+                  Answer.Held.Append (Regions.Element (Position));
+                  Blanked.Append (Blanks.Element (Position));
+               end if;
+            end loop;
+         end;
+      end;
 
       --  Each body's bytes become blanks, its line ends stay, and the
       --  stand-in's four words are written into the blanks in order, each

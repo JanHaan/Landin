@@ -43,13 +43,14 @@ there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
 the test program compiles.
 
-Three more options choose what `--target=`, `--level=` and `--option=`
-choose:
+Build settings choose what `--target=`, `--level=`, `--option=` and
+`--firmware-entry=` choose:
 
 ```json
 {"roots": ["file:///home/me/landin"],
  "target": "cortex-m0",
- "level": "armv7-m"}
+ "level": "armv7-m",
+ "firmwareEntry": "start"}
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
@@ -66,6 +67,11 @@ containing `true`, `false`, or signed decimal integer text that fits the
 declared type. A value the server refuses is reported once, through
 `window/showMessage`, and the rest are used.
 
+`firmwareEntry` is a nonempty routine name for `cortex-m0`. When selected,
+analysis checks the same entry shape as a firmware build and publishes
+`L0502` at an invalid candidate, or at the first entry-module source if it
+is missing. With no selection, analysis makes no firmware entry claim.
+
 ## What it answers
 
 | request | answer |
@@ -74,7 +80,7 @@ declared type. A value the server refuses is reported once, through
 | `textDocument/definition` | where the name under the cursor is declared |
 | `textDocument/hover` | what the name or expression under the cursor is, and its doc comment |
 | `textDocument/formatting` | D252's layout, as edits |
-| `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix |
+| `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix; ranges have exclusive ends, while an empty range acts as a cursor position |
 
 A diagnostic carries its catalogue code, a link to its explanation on the
 reading copy of [`docs/diagnostics.md`](diagnostics.md), every secondary
@@ -105,6 +111,13 @@ written, and any other name with its type as the checker's reports spell it,
 then its doc comment: the run of `---` lines directly above a declaration
 that begins its line [2000]. Over an expression, hover shows its type. Inside
 a routine body that does not parse, both answer nothing.
+
+When the only resolution errors are unresolved names, the server keeps the
+bindings of other names and checks for hover types. Definition and hover still
+answer in unaffected code. The unresolved name has no definition or type, and
+diagnostics remain the same as a build's resolution diagnostics; any type
+errors found during this extra editor check are not published until the names
+are resolved.
 
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
@@ -146,7 +159,10 @@ answered from the documents as they stand when it arrives. Checked modules
 stay available for hover, definition and code actions, even when queries
 alternate between open modules. An open, change or close discards the checked
 modules; diagnostics then rebuild those affected, and later queries rebuild
-any others they need. The cache holds at most one compilation per open module,
+any others they need. Distinct file URIs naming one path retain separate
+buffers. A query selects its URI's buffer; switching to different bytes
+also discards checked modules, including those importing that path.
+The cache holds at most one compilation per open module,
 and discards all of them when the session ends. This is a compilation-count
 bound, not a fixed byte limit: separate entries may duplicate imports.
 

@@ -355,6 +355,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
         (Name, Stage_Path : String; Executable : Boolean := False;
          With_Map : Boolean := False; Target : String := "";
          Map_Alias : Boolean := False);
+      procedure Unloaded_Source
+        (Name, Input, Report : String; Unreadable : Boolean := False);
 
       procedure Refused (Name : String; A, B, C : String := "") is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -415,6 +417,33 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Landin.Testing.Check_Equal
            (Item, Tools.Run_Count, 0, Name & " invokes no tool");
       end Refused_Artifact;
+
+      procedure Unloaded_Source
+        (Name, Input, Report : String; Unreadable : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         if Unreadable then
+            Host.Add_Unreadable (Input);
+         end if;
+         Host.Add_Alias (Input, Report);
+         Args.Append ("main.ldn");
+         Args.Append (Input);
+         Args.Append ("--stage-report=" & Report);
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse, Name);
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Result.Report),
+                       "stage report collides with source"),
+            Name & " reports the collision");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, Name & " writes nothing");
+      end Unloaded_Source;
    begin
       Refused ("an empty stage report path", "--stage-report=");
       Refused ("a repeated stage report",
@@ -485,6 +514,15 @@ package body Landin.Tests.Optimization_Driver_Suite is
                        """format"":""landin-stage-report-1"""),
             "the separate stage report is written");
       end;
+      Unloaded_Source
+        ("a missing source cannot become a stage report",
+         "missing.ldn", "missing.ldn");
+      Unloaded_Source
+        ("an unreadable source cannot become a stage report",
+         "unreadable.ldn", "unreadable.ldn", Unreadable => True);
+      Unloaded_Source
+        ("a missing source alias cannot become a stage report",
+         "missing.ldn", "alias.ldn");
 
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;

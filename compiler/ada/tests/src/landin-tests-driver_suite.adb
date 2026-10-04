@@ -160,6 +160,8 @@ package body Landin.Tests.Driver_Suite is
       Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Emit   : Landin.Platform.Path_List := Arguments_Of ("--emit=exe");
       Rooted : constant Landin.Platform.Path_List := Arguments_Of ("--root=");
+      Rooted_Emit : constant Landin.Platform.Path_List :=
+        Both ("--root=root", "--emit=exe");
    begin
       Emit.Append ("-o");
       Emit.Append ("app");
@@ -188,6 +190,17 @@ package body Landin.Tests.Driver_Suite is
             Contains (Unbounded.To_String (Result.Report),
                       "names no directory"),
             "the report says the root is empty");
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Rooted_Emit, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+            and then Contains (Report, "error[L0002]:")
+            and then not Contains (Report, "error[L0502]:"),
+            "a rooted emit without an operand remains misuse");
       end;
    end Emission_Without_Sources_Is_Misuse;
 
@@ -380,6 +393,81 @@ package body Landin.Tests.Driver_Suite is
            (Item, Text, "", "and nothing is reported about it");
       end;
    end An_Empty_Source_Is_Accepted;
+
+   procedure Empty_Rooted_Emission_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Empty_Rooted_Emission_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      procedure Preserved (Path, Expected : String);
+
+      procedure Preserved (Path, Expected : String) is
+         Content : Unbounded.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Host.Read_File (Path, Content, Status);
+         Landin.Testing.Check
+           (Item, Status = Landin.Platform.Read_Ok
+            and then Unbounded.To_String (Content) = Expected,
+            Path & " keeps its existing contents");
+      end Preserved;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("entry");
+      Host.Add_File ("out.s", "old assembly");
+      Host.Add_File ("app", "old executable");
+      Host.Add_File ("app.s", "old executable assembly");
+      Host.Add_File ("notes.txt", "user data");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("--root=root", "entry"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Unbounded.Length (Result.Report) = 0,
+            "an empty rooted module is legal without emission");
+      end;
+
+      for Executable in Boolean loop
+         declare
+            Args : Landin.Platform.Path_List :=
+              Arguments_Of ("--root=root");
+            Result : Landin.Driver.Outcome;
+         begin
+            Args.Append
+              (if Executable then "--emit=exe" else "--emit=asm");
+            Args.Append ("-o");
+            Args.Append (if Executable then "app" else "out.s");
+            Args.Append ("entry");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item,
+               Result.Status =
+                 (if Executable then Landin.Driver.Status_Reported
+                  else Landin.Driver.Status_Misuse)
+               and then Occurrences
+                 (Unbounded.To_String (Result.Report), "error[") = 1
+               and then Contains
+                 (Unbounded.To_String (Result.Report),
+                  (if Executable then "error[L0502]:"
+                   else "error[L0002]:")),
+               "an empty rooted module refuses the requested emit mode");
+            Landin.Testing.Check
+              (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "empty rooted emission has no output or tool effects");
+            Preserved ("out.s", "old assembly");
+            Preserved ("app", "old executable");
+            Preserved ("app.s", "old executable assembly");
+            Preserved ("notes.txt", "user data");
+         end;
+      end loop;
+   end Empty_Rooted_Emission_Is_Refused;
 
    ------------------------------------------------------------------
    --  Directory modules and ordered roots
@@ -627,6 +715,150 @@ package body Landin.Tests.Driver_Suite is
             "the first root wins for one logical module name");
       end;
    end Roots_Are_Searched_In_Order;
+
+   procedure Unlistable_Import_Roots_Are_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unlistable_Import_Roots_Are_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String := "import pkg/sub" & LF;
+
+      procedure Check_Search
+        (Locked_Path : String; With_Second : Boolean);
+
+      procedure Check_Search
+        (Locked_Path : String; With_Second : Boolean)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_File ("entry/main.ldn", Source);
+         Host.Add_Directory ("first");
+         if Locked_Path = "first/pkg" then
+            Host.Add_Unlistable_Directory (Locked_Path);
+         else
+            Host.Add_Unlistable_Directory ("first");
+         end if;
+         Host.Add_Directory ("second");
+         Host.Add_Directory ("second/pkg");
+         Host.Add_Directory ("second/pkg/sub");
+         Host.Add_File ("second/pkg/sub/bad.ldn", "@" & LF);
+         Args.Append ("--root=first");
+         if With_Second then
+            Args.Append ("--root=second");
+         end if;
+         Args.Append ("entry");
+
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String :=
+              Unbounded.To_String (Result.Report);
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "an unlistable import root refuses the request");
+            Landin.Testing.Check
+              (Item, Contains (Report, "L0007")
+               and then Contains
+                 (Report, "import directory cannot be listed: "
+                  & Locked_Path)
+               and then not Contains (Report, "L0006")
+               and then not Contains (Report, "second/pkg/sub/bad.ldn"),
+               "the first inaccessible segment is reported before fallback");
+            Host.Read_File ("entry/main.ldn", Content, Read);
+            Landin.Testing.Check
+              (Item, Read = Landin.Platform.Read_Ok
+               and then Unbounded.To_String (Content) = Source
+               and then Host.Write_Count = 0,
+               "the source snapshot and files are unchanged");
+         end;
+      end Check_Search;
+   begin
+      Check_Search ("first", True);
+      Check_Search ("first", False);
+      Check_Search ("first/pkg", True);
+   end Unlistable_Import_Roots_Are_Reported;
+
+   procedure Absent_Import_Roots_Allow_Fallback
+     (Item : in out Landin.Testing.Context);
+
+   procedure Absent_Import_Roots_Allow_Fallback
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_File ("entry/main.ldn", "import pkg/sub" & LF);
+      Host.Add_Directory ("second");
+      Host.Add_Directory ("second/pkg");
+      Host.Add_Directory ("second/pkg/sub");
+      Host.Add_File ("second/pkg/sub/main.ldn", "value: i32 = 1" & LF);
+      Args.Append ("--root=absent");
+      Args.Append ("--root=second");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "an absent first root permits a later module");
+      end;
+   end Absent_Import_Roots_Allow_Fallback;
+
+   procedure Shared_Import_Prefixes_Are_Listed_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Import_Prefixes_Are_Listed_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("first");
+      Host.Add_Directory ("first/pkg");
+      Host.Add_Directory ("first/pkg/a");
+      Host.Add_Directory ("second");
+      Host.Add_Directory ("second/pkg");
+      Host.Add_Directory ("second/pkg/b");
+      Host.Add_File
+        ("entry/main.ldn", "import pkg/a" & LF & "import pkg/b" & LF);
+      Args.Append ("--root=first");
+      Args.Append ("--root=second");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "each import selects the first root with its full path");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("first"), 1,
+            "the first root is listed once for shared prefixes");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("first/pkg"), 1,
+            "the first root's shared prefix is listed once");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("second"), 1,
+            "the second root is listed once");
+         Landin.Testing.Check_Equal
+           (Item, Host.List_Count ("second/pkg"), 1,
+            "the second root's prefix is listed once");
+      end;
+   end Shared_Import_Prefixes_Are_Listed_Once;
 
    procedure Private_Imported_Names_Are_Diagnosed
      (Item : in out Landin.Testing.Context);
@@ -1473,6 +1705,91 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Assembly_Is_Written_Without_A_Tool;
 
+   procedure Missing_Toolchain_Precedes_Compilation
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Toolchain_Precedes_Compilation
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : constant Landin.Platform.Path_List :=
+        ["main.ldn", "--emit=exe", "--toolchain=absent-gcc"];
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Host.Raise_On_Read;
+      Tools.Set_Available (False);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a missing selected toolchain is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "error[L0500]: cannot run absent-gcc")
+              and then Contains (Report, "install a toolchain"),
+            "the preflight keeps the missing-tool diagnostic and advice");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0,
+            "the missing toolchain prevents artifact writes");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0,
+            "the missing toolchain starts no process");
+      end;
+   end Missing_Toolchain_Precedes_Compilation;
+
+   procedure Missing_Toolchain_Preserves_Stage_Report_Source
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Toolchain_Preserves_Stage_Report_Source
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Rooted in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Source_Path : constant String :=
+              (if Rooted then "entry/main.ldn" else "main.ldn");
+            Args : Landin.Platform.Path_List :=
+              ["--emit=exe", "--toolchain=absent-gcc",
+               "--stage-report=" & Source_Path];
+         begin
+            if Rooted then
+               Host.Add_Directory ("entry");
+               Args.Append ("--root=entry");
+               Args.Append ("entry");
+            else
+               Args.Append (Source_Path);
+            end if;
+            Host.Add_File (Source_Path, Entry_Program);
+            Tools.Set_Available (False);
+
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Reported,
+                  "missing toolchain is reported before source loading");
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "error[L0500]: cannot run absent-gcc"),
+                  "the missing-toolchain diagnostic is retained");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0,
+                  "a colliding stage report cannot overwrite a source");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "the missing toolchain starts no process");
+            end;
+         end;
+      end loop;
+   end Missing_Toolchain_Preserves_Stage_Report_Source;
+
    --  The whole invocation, in order.  A containment check would pass on a
    --  command line that had lost its output.
    procedure An_Executable_Runs_The_Triplet_Driver
@@ -1676,15 +1993,20 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Contains (Report, "install a toolchain") = Missing
                   and then (Missing or else Contains (Report, Why)),
                   "only a missing tool asks the user to install one");
+               Landin.Testing.Check
+                 (Item, not Host.Output_Locked,
+                  "adapter failure releases the output directory lock");
             end;
             declare
-               Outcome : Landin.Platform.Tool_Result;
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (Both ("main.ldn", "--emit=exe"), Host, Tools);
             begin
-               Tools.Run ("fake", Landin.Platform.No_Arguments, Outcome);
                Landin.Testing.Check
-                 (Item, Outcome.Ended = Landin.Platform.Exited
-                  and then Outcome.Exit_Code = 0,
-                  "injected external failures apply to one run only");
+                 (Item, Result.Status = Landin.Driver.Status_Success
+                  and then not Host.Output_Locked,
+                  "a second invocation in this process acquires and releases"
+                  & " the same directory lock");
             end;
          end;
       end loop;
@@ -1718,6 +2040,77 @@ package body Landin.Tests.Driver_Suite is
             "carrying what the tool actually said");
       end;
    end A_Failing_Toolchain_Is_Reported;
+
+   procedure Executable_Output_Belongs_To_This_Run
+     (Item : in out Landin.Testing.Context);
+
+   procedure Executable_Output_Belongs_To_This_Run
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario is (Missing, Stale, Identical, Failed, Moved_Back);
+   begin
+      for Case_Kind in Scenario loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Both ("main.ldn", "--emit=exe");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            if Case_Kind /= Missing then
+               Host.Add_File ("program", "fake executable");
+            end if;
+            Tools.Set_Output_Produced
+              (Case_Kind = Identical);
+            if Case_Kind = Moved_Back then
+               Tools.Set_Move_Backup_Back;
+            end if;
+            if Case_Kind = Failed then
+               Tools.Set_Result (1, "link refused");
+            end if;
+            Args.Append ("-o");
+            Args.Append ("program");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 1,
+                  "each output verdict follows a tool invocation");
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Case_Kind = Identical then Landin.Driver.Status_Success
+                   else Landin.Driver.Status_Reported),
+                  "only the produced output succeeds");
+               if Case_Kind in Missing | Stale then
+                  Landin.Testing.Check
+                    (Item, Contains (Report, "L0501")
+                     and then Contains (Report, "produced no executable")
+                     and then Contains (Report, "program"),
+                     "a zero-exit omission names the missing output");
+               end if;
+               if Case_Kind = Moved_Back then
+                  Landin.Testing.Check
+                    (Item, Contains (Report, "L0501")
+                     and then Contains (Report, "aliasing its prior"),
+                     "moving the backup back does not count as production");
+                  Landin.Testing.Check
+                    (Item, not Host.Exists ("program.landin-backup-1"),
+                     "the moved backup name is absent");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Host.Written ("program"),
+                  (if Case_Kind = Identical then "fake executable" else ""),
+                  "a failed attempt does not publish a new executable");
+               Landin.Testing.Check
+                 (Item, Host.Exists ("program") = (Case_Kind /= Missing),
+                  "a prior executable survives a failed attempt");
+            end;
+         end;
+      end loop;
+   end Executable_Output_Belongs_To_This_Run;
 
    --  A tool a signal killed has no exit status at all, and reading the one
    --  beside it would read zero.  The driver asks how the run ended before
@@ -1868,6 +2261,20 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Contains (Unbounded.To_String (Result.Report), "L0500"),
             "and says which rule");
+      end;
+
+      Args.Append ("--debug=full");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Report, "L0500")
+            and then Contains (Report, "has no source debug format")
+            and then Contains (Report, "describe a target with a backend"),
+            "a target without debug support recommends a capable target");
       end;
    end A_Target_With_No_Backend_Emits_Nothing;
 
@@ -2111,6 +2518,89 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Dangling_Output_Is_Misuse;
 
+   procedure An_Option_Cannot_Be_An_Output_Path
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Option_Cannot_Be_An_Output_Path
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Case_Number in 1 .. 2 loop
+         declare
+            Option : constant String :=
+              (if Case_Number = 1 then "--target=cortex-m0"
+               else "--help");
+            Host   : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args   : Landin.Platform.Path_List :=
+              Arguments_Of ("--emit=asm");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Args.Append ("-o");
+            Args.Append (Option);
+            Args.Append ("main.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Misuse,
+                  "an option after -o is misuse");
+               Landin.Testing.Check
+                 (Item, Contains (Report, "L0002")
+                  and then Contains (Report, "-o needs a path before "
+                                     & Option),
+                  "the diagnostic identifies the missing output path");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0,
+                  "a rejected output operand emits no artifact");
+            end;
+         end;
+      end loop;
+   end An_Option_Cannot_Be_An_Output_Path;
+
+   procedure Dash_Leading_Output_Paths_Are_Explicit
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dash_Leading_Output_Paths_Are_Explicit
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Form in 1 .. 2 loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Arguments_Of ("--emit=asm");
+            Path  : constant String :=
+              (if Form = 1 then "--target=cortex-m0"
+               else "./-artifact.s");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            if Form = 1 then
+               Args.Append ("-o=" & Path);
+            else
+               Args.Append ("-o");
+               Args.Append (Path);
+            end if;
+            Args.Append ("main.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "an explicit dash-leading path is accepted");
+               Landin.Testing.Check
+                 (Item, Contains (Host.Written (Path), "main:"),
+                  "assembly is written to the literal path");
+            end;
+         end;
+      end loop;
+   end Dash_Leading_Output_Paths_Are_Explicit;
+
    --  Output failure is injected through the platform seam: native
    --  permissions are host policy and cannot make a deterministic case.
    procedure An_Unwritable_Output_Is_Reported
@@ -2141,6 +2631,50 @@ package body Landin.Tests.Driver_Suite is
             "and no bytes are retained");
       end;
    end An_Unwritable_Output_Is_Reported;
+
+   procedure Failed_Assembly_Does_Not_Write_Source_Map
+     (Item : in out Landin.Testing.Context);
+
+   procedure Failed_Assembly_Does_Not_Write_Source_Map
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Executable in Boolean loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Arguments_Of ("main.ldn");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Host.Add_Directory
+              (if Executable then "out.s" else "out");
+            Args.Append ("--panic-map");
+            Args.Append
+              (if Executable then "--emit=exe" else "--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("out");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                    and then Contains
+                      (Report, "error[L0005]: cannot write: "
+                       & (if Executable then "out.s" else "out")),
+                  "assembly write failure names the failed path");
+               Landin.Testing.Check
+                 (Item, not Host.Exists ("out.sources.json")
+                    and then Host.Write_Count = 1
+                    and then Tools.Run_Count = 0,
+                  "a failed assembly write cannot create a source map");
+            end;
+         end;
+      end loop;
+   end Failed_Assembly_Does_Not_Write_Source_Map;
 
    procedure Fixed_Options_Are_Deterministic
      (Item : in out Landin.Testing.Context);
@@ -4119,6 +4653,47 @@ package body Landin.Tests.Driver_Suite is
                             "source not found: ./fmt"),
             "a source called fmt is named by a path");
       end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("path.ldn", Laid_Out);
+         Host.Add_File ("./path.ldn", Laid_Out);
+         Host.Add_File ("alias.ldn", Laid_Out);
+         Host.Add_Alias ("path.ldn", "./path.ldn");
+         Host.Add_Alias ("path.ldn", "alias.ldn");
+         declare
+            Checked : constant Landin.Driver.Outcome := Run
+              (Host, Words (["--check", "path.ldn", "./path.ldn",
+                             "alias.ldn"]));
+         begin
+            Landin.Testing.Check
+              (Item, Checked.Status = Landin.Driver.Status_Success
+                     and then Natural (Checked.Named.Length) = 3
+                     and then Checked.Named.Element (1) = "path.ldn"
+                     and then Checked.Named.Element (2) = "./path.ldn"
+                     and then Checked.Named.Element (3) = "alias.ldn",
+               "distinct spellings and aliases keep their input order");
+         end;
+         declare
+            Refused : constant Landin.Driver.Outcome := Run
+              (Host, Words (["path.ldn", "./path.ldn", "path.ldn",
+                             "--wat", "path.ldn"]));
+            Report : constant String :=
+              Unbounded.To_String (Refused.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Refused.Status = Landin.Driver.Status_Misuse
+                     and then Landin.Diagnostics.Count (Refused.Found) = 3
+                     and then Contains
+                       (Report, "fmt is given one source twice: path.ldn")
+                     and then Contains
+                       (Report, "fmt takes no option but --check, once: --wat")
+                     and then Refused.Named.Is_Empty
+                     and then Host.Write_Count = 0,
+               "exact repeats and options report every misuse before I/O");
+         end;
+      end;
    end Fmt_Is_A_Subcommand;
 
    --  `refine lsp` and `refine lsp --stdio` start a server, which refine
@@ -4269,11 +4844,23 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "an empty source is accepted",
          An_Empty_Source_Is_Accepted'Access);
       Landin.Testing.Register
+        (Into, "driver", "empty rooted emission is refused",
+         Empty_Rooted_Emission_Is_Refused'Access);
+      Landin.Testing.Register
         (Into, "driver", "reachable modules are loaded",
          Reachable_Modules_Are_Loaded'Access);
       Landin.Testing.Register
         (Into, "driver", "roots are searched in order",
          Roots_Are_Searched_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "unlistable import roots are reported",
+         Unlistable_Import_Roots_Are_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "absent import roots allow fallback",
+         Absent_Import_Roots_Allow_Fallback'Access);
+      Landin.Testing.Register
+        (Into, "driver", "shared import prefixes are listed once",
+         Shared_Import_Prefixes_Are_Listed_Once'Access);
       Landin.Testing.Register
         (Into, "driver", "private imported names are diagnosed",
          Private_Imported_Names_Are_Diagnosed'Access);
@@ -4299,6 +4886,12 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "assembly is written without a tool",
          Assembly_Is_Written_Without_A_Tool'Access);
       Landin.Testing.Register
+        (Into, "driver", "missing toolchain precedes compilation",
+         Missing_Toolchain_Precedes_Compilation'Access);
+      Landin.Testing.Register
+        (Into, "driver", "missing toolchain preserves stage report source",
+         Missing_Toolchain_Preserves_Stage_Report_Source'Access);
+      Landin.Testing.Register
         (Into, "driver", "an executable runs the triplet driver",
          An_Executable_Runs_The_Triplet_Driver'Access);
       Landin.Testing.Register
@@ -4310,6 +4903,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a failing toolchain is reported",
          A_Failing_Toolchain_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "executable output belongs to this run",
+         Executable_Output_Belongs_To_This_Run'Access);
       Landin.Testing.Register
         (Into, "driver", "a killed toolchain is reported",
          A_Killed_Toolchain_Is_Reported'Access);
@@ -4338,8 +4934,17 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "a dangling output is misuse",
          A_Dangling_Output_Is_Misuse'Access);
       Landin.Testing.Register
+        (Into, "driver", "an option cannot be an output path",
+         An_Option_Cannot_Be_An_Output_Path'Access);
+      Landin.Testing.Register
+        (Into, "driver", "dash-leading output paths are explicit",
+         Dash_Leading_Output_Paths_Are_Explicit'Access);
+      Landin.Testing.Register
         (Into, "driver", "an unwritable output is reported",
          An_Unwritable_Output_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "failed assembly does not write source map",
+         Failed_Assembly_Does_Not_Write_Source_Map'Access);
       Landin.Testing.Register
         (Into, "driver", "Darwin emits native code and keeps debug refusal",
          Darwin_Contracts'Access);

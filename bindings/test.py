@@ -217,6 +217,58 @@ class TargetContractTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ("-print-target-triple",))
 
 
+class PolicyNameTests(unittest.TestCase):
+    def test_malformed_names_report_context_before_clang_or_output_creation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
+            root = pathlib.Path(temporary)
+            header = root / "api.h"
+            header.write_text("typedef int Widget;\n", encoding="utf-8")
+            for index, (name, explicit) in enumerate((
+                    (" ", False), (" \t ", True), ("@", False),
+                    ("@ \t", True), (" @ @ ", True))):
+                with self.subTest(name=name, explicit=explicit):
+                    selected = policy()
+                    entry = {"kind": "alias", "name": name}
+                    if explicit:
+                        entry["landin_name"] = "widget"
+                    selected["declarations"] = [entry]
+                    policy_path = root / f"policy-{index}.json"
+                    policy_path.write_text(json.dumps(selected), encoding="utf-8")
+                    output = root / f"generated-{index}"
+                    process = subprocess.run([
+                        sys.executable, str(GENERATOR), "--clang", sys.executable,
+                        "--target", TARGET, "--sysroot", str(root),
+                        "--header", str(header), "--policy", str(policy_path),
+                        "--out-dir", str(output),
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    self.assertEqual(process.returncode, 2, process.stderr)
+                    self.assertEqual(process.stdout, "")
+                    self.assertEqual(process.stderr,
+                        f"bindings: error: policy declaration 1 (alias {name!r}): "
+                        "name must contain a non-whitespace, non-@ character\n")
+                    self.assertFalse(output.exists())
+
+    def test_supported_names_and_explicit_landin_names_still_load(self) -> None:
+        module = runpy.run_path(str(GENERATOR))
+        with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
+            path = pathlib.Path(temporary) / "policy.json"
+            for name, explicit, expected in (
+                    ("Widget", None, "widget"),
+                    ("@Widget", None, "widget"),
+                    ("struct Widget", None, "widget"),
+                    ("@Widget", "chosen", "chosen")):
+                with self.subTest(name=name, explicit=explicit):
+                    selected = policy()
+                    entry = {"kind": "alias", "name": name}
+                    if explicit is not None:
+                        entry["landin_name"] = explicit
+                    selected["declarations"] = [entry]
+                    path.write_text(json.dumps(selected), encoding="utf-8")
+                    loaded = module["Policy"].load(path)
+                    self.assertEqual(loaded.entries[0].name, name)
+                    self.assertEqual(loaded.entries[0].landin_name, expected)
+
+
 class GeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -322,7 +374,7 @@ class GeneratorTests(unittest.TestCase):
 
         peer = subprocess.run([
             str(self.clang), "-std=c11", "-Wall", "-Wextra", "-Werror",
-            "-pthread", "-fsyntax-only", "-I", str(FIXTURE),
+            "-Wno-error=unused-command-line-argument", "-pthread", "-fsyntax-only", "-I", str(FIXTURE),
             str(FIXTURE / "peer.c"),
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.assertEqual(peer.returncode, 0, peer.stderr)
@@ -355,7 +407,8 @@ class GeneratorTests(unittest.TestCase):
         shutil.copyfile(source / "api.h", logical / "api.h")
         target_compile = [
             str(self.clang), f"--target={TARGET}", f"--sysroot={source / 'sysroot'}",
-            "-std=c11", "-nostdinc", "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+            "-std=c11", "-nostdinc", "-Wall", "-Wextra", "-Werror",
+            "-Wno-error=unused-command-line-argument", "-fsyntax-only",
             "-I", str(output), "-I", str(source), "-isystem", str(source / "includes"),
             "-isystem", str(self.resource_include), str(output / "adapters.c"),
         ]
@@ -611,6 +664,46 @@ int main(void)
         outer = next(item for item in metadata["declarations"]
                      if item.get("c_name") == "Outer")
         self.assertEqual(outer["representation"], "c-owned-opaque")
+
+    def test_record_dependency_chain_is_classified_once(self) -> None:
+        count = 16
+        header = "typedef struct R0 { int value; } R0;\n"
+        header += "".join(
+            f"typedef struct R{index} {{ R{index - 1} value; }} R{index};\n"
+            for index in range(1, count))
+        header += f"extern R{count - 1} get_outer(void);\n"
+        parent = self.root / "dependency-chain"
+        selected = self.selection(self.function("get_outer"))
+        sysroot, includes, output = self.make_tree(
+            parent, header=header, selected_policy=selected)
+        module = runpy.run_path(str(GENERATOR))
+        inputs = module["parse_arguments"](
+            self.command(parent, sysroot, includes, output)[2:])
+        include_map = parent / "header-map"
+        include_map.mkdir()
+        module["create_include_map"](include_map, inputs.headers)
+        translation = parent / "translation.c"
+        module["write_translation_unit"](translation, inputs.headers)
+        driver = module["ClangDriver"](inputs, include_map)
+        ast = module["ASTModel"](driver.parse_ast(driver.preprocess(translation)))
+        generator = module["Generator"](
+            ast, module["Policy"].load(inputs.policy_path), inputs.headers)
+
+        with mock.patch.object(generator, "record_classification",
+                               wraps=generator.record_classification) as classify, \
+             mock.patch.object(generator, "validate_function_shape",
+                               wraps=generator.validate_function_shape) as validate:
+            generator.collect_dependencies()
+            self.assertEqual(len(generator.needed_records), count)
+            self.assertLessEqual(classify.call_count, 2 * count)
+            first_calls = classify.call_count
+            generator.collect_dependencies()
+            self.assertEqual(classify.call_count, first_calls)
+            self.assertEqual(validate.call_count, 1)
+
+        bindings, _, _, _ = generator.generate()
+        self.assertIn("public r15: type = layout(c) struct", bindings)
+        self.assertIn("public r0: type = layout(c) struct", bindings)
 
     def test_const_global_has_read_only_address_adapter(self) -> None:
         selected = {
@@ -1808,6 +1901,41 @@ int main(void) { return f(36) != 37; }
         self.assertIn("stale policy", process.stderr)
         for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
             self.assertEqual((output / name).read_text(encoding="utf-8"), "sentinel\n")
+
+    def test_duplicate_policy_keys_are_rejected_before_generation(self) -> None:
+        parent = self.root / "duplicate-keys"
+        selected = self.selection(self.function("hold", parameters={
+            "p": annotation(retention="stored"),
+        }))
+        sysroot, includes, output = self.make_tree(
+            parent, header="void hold(int *p);\n", selected_policy=selected)
+        output.mkdir()
+        sentinel = output / "bindings.ldn"
+        sentinel.write_text("sentinel\n", encoding="utf-8")
+        original = json.dumps(selected)
+        for old, replacement, key in (
+            ('"schema_version": 1', '"schema_version": 1, "schema_version": 1',
+             "schema_version"),
+            ('"target": "x86_64-pc-linux-gnu"',
+             '"target": "x86_64-pc-linux-gnu", "target": "x86_64-pc-linux-gnu"',
+             "target"),
+            ('"direction": "import"', '"direction": "import", "direction": "import"',
+             "direction"),
+            ('"retention": "stored"', '"retention": "stored", "retention": "call"',
+             "retention"),
+        ):
+            with self.subTest(key=key):
+                self.assertIn(old, original)
+                (parent / "policy.json").write_text(
+                    original.replace(old, replacement, 1), encoding="utf-8")
+                process = subprocess.run(
+                    self.command(parent, sysroot, includes, output),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(f"duplicate JSON key '{key}'", process.stderr)
+                self.assertEqual(sentinel.read_text(encoding="utf-8"), "sentinel\n")
+                self.assertEqual(sorted(path.name for path in output.iterdir()),
+                                 ["bindings.ldn"])
 
 
 if __name__ == "__main__":

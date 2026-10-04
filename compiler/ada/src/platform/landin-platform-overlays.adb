@@ -52,6 +52,15 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Same_File (Left, Right));
 
+   overriding function Existing_File_Key
+     (Host : Overlay; Path : String) return String
+     is (Host.Under.Existing_File_Key (Path));
+
+   overriding function Identity_Of
+     (Host : Overlay; Path : String) return File_Identity
+     is (if Host.Held.Contains (Path) then (others => <>)
+         else Host.Under.Identity_Of (Path));
+
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean
      is (not Host.Held.Contains (Path)
@@ -105,6 +114,32 @@ package body Landin.Platform.Overlays is
    begin
       Status := Not_Removable;
    end Remove_File;
+
+   overriding procedure Move_File
+     (Host   : Overlay;
+      From, To : String;
+      Status : out Move_Status)
+   is
+      pragma Unreferenced (Host, From, To);
+   begin
+      Status := Not_Movable;
+   end Move_File;
+
+   overriding procedure Lock_Output
+     (Host : Overlay; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Handle := -1;
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Overlay; Handle : Integer)
+   is
+      pragma Unreferenced (Host, Handle);
+   begin
+      null;
+   end Unlock_Output;
 
    --  The host's listing with every held entry of the same directory
    --  merged into its sorted place, once.

@@ -90,7 +90,8 @@ calling-convention compatibility. `landin/compiler` is implicit and is never imp
 
 ## Policy
 
-A policy is UTF-8 JSON. Unknown and missing keys are errors. The top-level
+A policy is UTF-8 JSON. Duplicate keys at any depth, unknown keys, and missing
+keys are errors. The top-level
 shape is:
 
 ```json
@@ -115,7 +116,10 @@ error; it is never silently skipped.
 
 All entries accept `kind`, `name`, and an optional `landin_name`. The default
 Landin name is a safe form of the C name. Names that would collide in Landin
-must be disambiguated explicitly. Opaque-object, callback-cell, variable and
+must be disambiguated explicitly. Policy `name` values made only of whitespace
+and `@` are rejected, including when `landin_name` is explicit.
+
+Opaque-object, callback-cell, variable and
 by-value-wrapper C locals and parameters are allocated independently of public
 Landin names, avoiding every identifier in
 the header AST (including nested typedefs and existing suffix variants) and
@@ -411,7 +415,10 @@ Current deliberate limits are visible rather than completion shortcuts:
 python3 bindings/test.py
 ```
 
-The suite requires an external Clang. It uses an empty explicit Linux sysroot,
+The suite requires an external Clang; the pinned Linux Nix development shell
+provides one. Syntax-only adapter checks keep C warnings fatal while allowing
+unused command-line options from the Nix Clang wrapper to remain warnings.
+It uses an empty explicit Linux sysroot,
 self-contained headers, and Clang's explicitly named resource headers. It
 checks relocated byte-for-byte generation, path-free metadata, ABI guards,
 precise refusal paths, and no replacement on failure. It compiles generated C

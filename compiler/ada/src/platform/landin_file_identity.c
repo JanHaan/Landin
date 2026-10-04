@@ -12,10 +12,16 @@
 #endif
 #endif
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
+#include <stdio.h>
+
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #ifdef __APPLE__
@@ -30,8 +36,101 @@
 
 int landin_same_file(const char *left, const char *right);
 int landin_same_existing_file(const char *left, const char *right);
+int landin_existing_file_key(const char *path, char *key, size_t length);
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
+int landin_directory_access_denied(const char *path);
+
+/* A failed Ada.Directories.Exists can mean either absence or a parent that
+   refused traversal. Probe only that failure path, preserving the host's
+   errno rather than guessing from an empty listing. */
+int landin_directory_access_denied(const char *path)
+{
+    DIR *directory = opendir(path);
+    int denied;
+
+    if (directory) {
+        closedir(directory);
+        return 0;
+    }
+    denied = errno == EACCES || errno == EPERM;
+    return denied;
+}
+
+int landin_file_identity(const char *path, uint64_t *device, uint64_t *inode)
+{
+    struct stat object;
+    if (stat(path, &object) != 0)
+        return 0;
+    *device = (uint64_t)object.st_dev;
+    *inode = (uint64_t)object.st_ino;
+    return 1;
+}
+
+/* A directory lock has no replaceable lock-file inode. All cooperating
+   compiler invocations naming a destination in this directory serialize
+   backup, tool run, verification and recovery. The descriptor closes on
+   process death. */
+int landin_lock_output_directory(const char *path)
+{
+    char copy[PATH_MAX], resolved[PATH_MAX], *slash;
+    const char *parent;
+    int fd;
+    if (!*path || strlen(path) >= sizeof(copy))
+        return -1;
+    strcpy(copy, path);
+    slash = strrchr(copy, '/');
+    if (slash) {
+        *slash = '\0';
+        parent = slash == copy ? "/" : copy;
+    } else {
+        parent = ".";
+    }
+    if (!realpath(parent, resolved))
+        return -1;
+    fd = open(resolved, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    while (flock(fd, LOCK_EX) != 0) {
+        if (errno == EINTR)
+            continue;
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+void landin_unlock_output_directory(int fd)
+{
+    if (fd >= 0)
+        close(fd);
+}
+
+/* link creates the destination only if no entry is present, including a
+   dangling symlink. Both names are beside one another, so no cross-device
+   move is needed. Return 1 on success, 0 for missing source, -1 otherwise. */
+int landin_move_file_noreplace(const char *from, const char *to)
+{
+    struct stat source;
+    if (lstat(from, &source) != 0)
+        return errno == ENOENT ? 0 : -1;
+    if (S_ISDIR(source.st_mode))
+        return -1;
+    if (link(from, to) != 0)
+        return -1;
+    if (unlink(from) != 0) {
+        unlink(to);
+        return -1;
+    }
+    return 1;
+}
+
+int landin_unlink_file(const char *path)
+{
+    if (unlink(path) == 0)
+        return 1;
+    return errno == ENOENT ? 0 : -1;
+}
 
 struct destination {
     struct stat object;
@@ -243,4 +342,18 @@ int landin_same_existing_file(const char *left, const char *right)
     if (stat(left, &a) != 0 || stat(right, &b) != 0)
         return -1;
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+}
+
+/* One stat per input. The textual form keeps the host's dev_t/ino_t layout
+   out of the Ada ABI; a failed lookup yields no key. */
+int landin_existing_file_key(const char *path, char *key, size_t length)
+{
+    struct stat found;
+    int written;
+
+    if (stat(path, &found) != 0)
+        return -1;
+    written = snprintf(key, length, "%jx:%jx",
+                       (uintmax_t)found.st_dev, (uintmax_t)found.st_ino);
+    return written >= 0 && (size_t)written < length ? 0 : -1;
 }

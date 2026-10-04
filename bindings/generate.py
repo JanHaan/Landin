@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any, Iterable, Mapping, Sequence
 
 SCHEMA_VERSION = 1
@@ -592,9 +592,15 @@ class Policy:
             data_bytes = path.read_bytes()
         except OSError as error:
             raise BindingError(f"cannot read policy {path}: {error.strerror}") from error
+        def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, value in pairs:
+                require(key not in result, f"policy: duplicate JSON key {key!r}")
+                result[key] = value
+            return result
         try:
             data_text = data_bytes.decode("utf-8")
-            data = json.loads(data_text)
+            data = json.loads(data_text, object_pairs_hook=unique_keys)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise BindingError(f"policy is not valid UTF-8 JSON: {error}") from error
         require(isinstance(data, dict), "policy: top level must be an object")
@@ -632,12 +638,17 @@ class Policy:
                     f"policy declaration {index}: unknown kind {kind!r}")
             require(isinstance(name, str) and name,
                     f"policy declaration {index}: name must be a nonempty string")
+            context = f"policy declaration {index} ({kind} {name!r})"
+            require(any(character != "@" and not character.isspace() for character in name),
+                    f"{context}: name must contain a non-whitespace, non-@ character")
             duplicate = (kind, name)
             require(duplicate not in seen,
                     f"policy declaration {index}: duplicate selection {kind} {name!r}")
             seen.add(duplicate)
-            context = f"policy declaration {index} ({kind} {name!r})"
-            landin_name = raw.get("landin_name", sanitize_landin(name.lstrip("@").split()[-1]))
+            if "landin_name" in raw:
+                landin_name = raw["landin_name"]
+            else:
+                landin_name = sanitize_landin(name.lstrip("@").split()[-1])
             landin_name = require_landin_name(landin_name, context)
             cls._validate_entry(raw, kind, context)
             entries.append(PolicyEntry(kind, name, landin_name, raw, index))
@@ -929,8 +940,14 @@ class ClangDriver:
                 f"{code} * __builtin_types_compatible_p({c_name}, {candidate})"
                 for code, candidate in enumerate(candidates, 1))
             queries.append(f"enum {{ {prefix}type_{index} = {expression} }};")
-        for offset, insertion in sorted(edits, reverse=True):
-            source = source[:offset] + insertion + source[offset:]
+        if edits:
+            pieces: list[bytes] = []
+            end = len(source)
+            for offset, insertion in sorted(edits, reverse=True):
+                pieces.extend((source[offset:end], insertion))
+                end = offset
+            pieces.append(source[:end])
+            source = b"".join(reversed(pieces))
         probe = translation.with_name("enum-probe.i")
         probe.write_bytes(source + b"\n" + "\n".join(queries).encode("utf-8") + b"\n")
         queried = ASTModel(self.parse_ast(probe))
@@ -948,7 +965,10 @@ class ClangDriver:
         # describe SDK annotations, not the explicit adapter pointer policy.
         sdk_warnings = (("-Wno-nullability-completeness",)
                         if self.inputs.target == DARWIN_TARGET else ())
-        self.run(("-iquote", str(staging), "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+        # The Nix Clang wrapper adds linker options even for syntax-only runs.
+        # Keep adapter warnings fatal; only unused driver options may warn.
+        self.run(("-iquote", str(staging), "-Wall", "-Wextra", "-Werror",
+                  "-Wno-error=unused-command-line-argument", "-fsyntax-only",
                   *sdk_warnings, str(adapters)), context="validating generated adapters")
 
 @dataclasses.dataclass
@@ -997,6 +1017,9 @@ class Generator:
         self.needed_enums: set[str] = set()
         self.needed_aliases: set[str] = set()
         self.needed_callbacks: set[str] = set()
+        self._pending_dependencies: deque[tuple[str, str]] = deque()
+        self._record_classifications: dict[str, str] = {}
+        self._root_dependencies_collected = False
         self.optional_types: dict[str, OptionalType] = {}
         self.c_functions: list[CFunction] = []
         self.c_definitions: list[str] = []
@@ -1037,7 +1060,7 @@ class Generator:
                 require(record.identity not in self.record_entries,
                         f"{entry.context}: record aliases select the same C declaration twice")
                 self.record_entries[record.identity] = entry
-                self.needed_records.add(record.identity)
+                self._need_record(record.identity)
             elif entry.kind == "enum":
                 enum = self.ast.enum(entry.name)
                 require(enum is not None,
@@ -1060,12 +1083,12 @@ class Generator:
                     require(resolved.kind == "callback",
                             f"{entry.context}: selected typedef is not a function pointer")
                     self.callback_entries[entry.name] = entry
-                    self.needed_callbacks.add(entry.name)
+                    self._need_callback(entry.name)
                 else:
                     require(resolved.kind not in {"callback", "record", "enum"},
                             f"{entry.context}: aggregate, enum, or function-pointer typedef must use its matching policy kind")
                     self.alias_entries[entry.name] = entry
-                    self.needed_aliases.add(entry.name)
+                    self._need_alias(entry.name)
             elif entry.kind in {"function", "incoming_varargs"}:
                 require(entry.name not in callable_names,
                         f"{entry.context}: C function is selected more than once across callable policy kinds")
@@ -1325,6 +1348,9 @@ class Generator:
         return False
 
     def record_classification(self, record: RecordInfo) -> str:
+        cached = self._record_classifications.get(record.identity)
+        if cached is not None:
+            return cached
         entry = self.record_entries.get(record.identity)
         for typedef_name in record.typedef_names:
             self.ensure_typedef_unattributed(
@@ -1336,6 +1362,7 @@ class Generator:
             reference_policy = entry.raw.get("fields", {}) if entry else {}
             require(not reference_policy,
                     f"record {record.display_name!r}: incomplete record has no fields; policy is stale")
+            self._record_classifications[record.identity] = "incomplete-opaque"
             return "incomplete-opaque"
         attribute = self.record_has_forbidden_attribute(record)
         if attribute:
@@ -1384,10 +1411,14 @@ class Generator:
         if requested == "native":
             require(native_possible,
                     f"record {record.display_name!r}: selected native representation is incompatible with union, bitfield, unnamed, or nullable field")
+            self._record_classifications[record.identity] = "native-layout-c"
             return "native-layout-c"
         if requested == "opaque":
+            self._record_classifications[record.identity] = "c-owned-opaque"
             return "c-owned-opaque"
-        return "native-layout-c" if native_possible else "c-owned-opaque"
+        classification = "native-layout-c" if native_possible else "c-owned-opaque"
+        self._record_classifications[record.identity] = classification
+        return classification
 
     def landin_name_for_record(self, record: RecordInfo) -> str:
         entry = self.record_entries.get(record.identity)
@@ -1405,23 +1436,38 @@ class Generator:
         entry = self.alias_entries.get(name) or self.callback_entries.get(name)
         return entry.landin_name if entry else sanitize_landin(name)
 
+    def _need_record(self, identity: str) -> None:
+        if identity not in self.needed_records:
+            self.needed_records.add(identity)
+            self._pending_dependencies.append(("record", identity))
+
+    def _need_alias(self, name: str) -> None:
+        if name not in self.needed_aliases:
+            self.needed_aliases.add(name)
+            self._pending_dependencies.append(("alias", name))
+
+    def _need_callback(self, name: str) -> None:
+        if name not in self.needed_callbacks:
+            self.needed_callbacks.add(name)
+            self._pending_dependencies.append(("callback", name))
+
     def register_type(self, ctype: CType, *, by_value: bool = True) -> None:
         if ctype.kind == "alias":
             if ctype.name in self.ast.records_by_typedef:
                 record = self.ast.records_by_typedef[ctype.name]
                 if by_value:
-                    self.needed_records.add(record.identity)
+                    self._need_record(record.identity)
             elif ctype.name in self.ast.enums_by_typedef:
                 self.needed_enums.add(self.ast.enums_by_typedef[ctype.name].identity)
             elif self.resolve_alias(ctype).kind == "callback":
-                self.needed_callbacks.add(ctype.name)
+                self._need_callback(ctype.name)
             else:
-                self.needed_aliases.add(ctype.name)
+                self._need_alias(ctype.name)
                 self.register_type(ctype.child, by_value=by_value)  # type: ignore[arg-type]
             return
         resolved = self.resolve_alias(ctype)
         if resolved.kind == "record" and by_value:
-            self.needed_records.add(resolved.name)
+            self._need_record(resolved.name)
         elif resolved.kind == "enum":
             self.needed_enums.add(resolved.name)
         elif resolved.kind == "array" and resolved.child:
@@ -1438,30 +1484,27 @@ class Generator:
                 self.register_type(parameter, by_value=True)
 
     def collect_dependencies(self) -> None:
-        for entry, node in self.function_entries + self.incoming_entries:
-            params, result = self.validate_function_shape(entry, node)
-            for parameter in params:
-                self.register_type(self.ctype_for_parameter(parameter), by_value=True)
-            self.register_type(result, by_value=True)
-        for entry, node in self.variable_entries:
-            ctype = self.types.from_info(node["type"])
-            self.ensure_supported(ctype, entry.context)
-            self.register_type(ctype, by_value=True)
-        changed = True
-        while changed:
-            before = (len(self.needed_records), len(self.needed_enums),
-                      len(self.needed_aliases), len(self.needed_callbacks))
-            for identity in list(self.needed_records):
-                record = self.records_by_id[identity]
+        if not self._root_dependencies_collected:
+            for entry, node in self.function_entries + self.incoming_entries:
+                params, result = self.validate_function_shape(entry, node)
+                for parameter in params:
+                    self.register_type(self.ctype_for_parameter(parameter), by_value=True)
+                self.register_type(result, by_value=True)
+            for entry, node in self.variable_entries:
+                ctype = self.types.from_info(node["type"])
+                self.ensure_supported(ctype, entry.context)
+                self.register_type(ctype, by_value=True)
+            self._root_dependencies_collected = True
+        while self._pending_dependencies:
+            kind, name = self._pending_dependencies.popleft()
+            if kind == "record":
+                record = self.records_by_id[name]
                 if record.complete:
                     self.record_classification(record)
                     for field in record.fields:
                         self.register_type(self.types.from_info(field["type"]), by_value=True)
-            for name in list(self.needed_aliases) + list(self.needed_callbacks):
+            else:
                 self.register_type(self.types.alias(name).child, by_value=True)  # type: ignore[arg-type]
-            after = (len(self.needed_records), len(self.needed_enums),
-                     len(self.needed_aliases), len(self.needed_callbacks))
-            changed = before != after
 
     def layout_of(self, ctype: CType, stack: tuple[str, ...] = ()) -> tuple[int, int]:
         resolved = self.resolve_alias(ctype)

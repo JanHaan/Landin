@@ -1,3 +1,5 @@
+with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
@@ -23,9 +25,13 @@ package body Landin.Driver.Loading is
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
+   use type Unbounded.Unbounded_String;
 
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
+
+   package Path_Sets is new Ada.Containers.Indefinite_Ordered_Sets
+     (Element_Type => String);
 
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
      Landin.Diagnostics.Catalogue.Code
@@ -62,42 +68,71 @@ package body Landin.Driver.Loading is
       Host    : Landin.Platform.Filesystem'Class;
       Paths   : Landin.Platform.Path_List)
    is
-      Loaded : Landin.Platform.Path_List;
+      Loaded    : Landin.Platform.Path_List;
+      Unkeyed   : Landin.Platform.Path_List;
+      Spellings : Path_Sets.Set;
+      Keys      : Path_Sets.Set;
+
+      function Already_Loaded (Path, Key : String) return Boolean;
+
+      function Already_Loaded (Path, Key : String) return Boolean is
+      begin
+         if Key /= "" then
+            if Keys.Contains (Key) then
+               return True;
+            end if;
+            --  A host that could not key an earlier successful read may
+            --  still prove this path aliases it by pairwise comparison.
+            return (for some Previous of Unkeyed =>
+                      Host.Same_File (Path, Previous));
+         end if;
+         return (for some Previous of Loaded =>
+                   Host.Same_File (Path, Previous));
+      end Already_Loaded;
    begin
       for Path of Paths loop
-         --  Preserve the first successful spelling and snapshot.
-         --  Uncertain identities still take the ordinary read path.
-         if not (for some Previous of Loaded =>
-                   Path = Previous
-                   or else Host.Same_File (Path, Previous))
-         then
+         if not Spellings.Contains (Path) then
             declare
-               Content : Unbounded.Unbounded_String;
-               Status  : Landin.Platform.Read_Status;
+               Key : constant String := Host.Existing_File_Key (Path);
             begin
-               Host.Read_File (Path, Content, Status);
+               --  Preserve the first successful spelling and snapshot.
+               --  Uncertain identities still take the ordinary read path.
+               if not Already_Loaded (Path, Key) then
+                  declare
+                     Content : Unbounded.Unbounded_String;
+                     Status  : Landin.Platform.Read_Status;
+                  begin
+                     Host.Read_File (Path, Content, Status);
 
-               case Status is
-                  when Landin.Platform.Read_Ok =>
-                     declare
-                        Id : constant Landin.Source.Source_Id :=
-                          Landin.Stages.Add_Source
-                            (Context, Path,
-                             Unbounded.To_String (Content));
-                        pragma Unreferenced (Id);
-                     begin
-                        Loaded.Append (Path);
-                     end;
+                     case Status is
+                        when Landin.Platform.Read_Ok =>
+                           declare
+                              Id : constant Landin.Source.Source_Id :=
+                                Landin.Stages.Add_Source
+                                  (Context, Path,
+                                   Unbounded.To_String (Content));
+                              pragma Unreferenced (Id);
+                           begin
+                              Loaded.Append (Path);
+                              Spellings.Include (Path);
+                              if Key = "" then
+                                 Unkeyed.Append (Path);
+                              else
+                                 Keys.Include (Key);
+                              end if;
+                           end;
 
-                  when Landin.Platform.Not_Found =>
-                     Note_Failure
-                       (Context, "source not found: " & Path);
+                        when Landin.Platform.Not_Found =>
+                           Note_Failure
+                             (Context, "source not found: " & Path);
 
-                  when Landin.Platform.Not_Readable =>
-                     Note_Failure
-                       (Context,
-                        "source not readable: " & Path);
-               end case;
+                        when Landin.Platform.Not_Readable =>
+                           Note_Failure
+                             (Context,
+                              "source not readable: " & Path);
+                     end case;
+                  end;
+               end if;
             end;
          end if;
       end loop;
@@ -112,13 +147,94 @@ package body Landin.Driver.Loading is
       Previous        : access Landin.Stages.Compilation := null;
       Watch_Syntax    : access procedure (Name : String) := null)
    is
+      type Directory_Listing is record
+         Entries : Landin.Platform.Path_List;
+         Status  : Landin.Platform.List_Status;
+      end record;
+
+      package Listing_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Directory_Listing);
+      package Child_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Boolean);
+
+      Listings : Listing_Maps.Map;
+      Children : Child_Maps.Map;
+
+      procedure Cached_Listing
+        (Directory : String;
+         Entries   : out Landin.Platform.Path_List;
+         Status    : out Landin.Platform.List_Status);
+      procedure Find_Child_Directory
+        (Directory : String;
+         Child     : String;
+         Found     : out Boolean;
+         Status    : out Landin.Platform.List_Status);
+
+      procedure Cached_Listing
+        (Directory : String;
+         Entries   : out Landin.Platform.Path_List;
+         Status    : out Landin.Platform.List_Status)
+      is
+      begin
+         if Listings.Contains (Directory) then
+            declare
+               Saved : constant Directory_Listing :=
+                 Listings.Element (Directory);
+            begin
+               Entries := Saved.Entries;
+               Status := Saved.Status;
+            end;
+         else
+            Host.List_Directory (Directory, Entries, Status);
+            Listings.Insert (Directory, (Entries, Status));
+         end if;
+      end Cached_Listing;
+
+      --  Include the parent's exact spelling in the key: distinct root
+      --  spellings can produce the same joined child path.  Cache successful
+      --  parent lookups only; a failed listing keeps its status in Listings.
+      procedure Find_Child_Directory
+        (Directory : String;
+         Child     : String;
+         Found     : out Boolean;
+         Status    : out Landin.Platform.List_Status)
+      is
+         Path : constant String := Joined_Path (Directory, Child);
+         Key  : constant String :=
+           Natural'Image (Directory'Length) & ":" & Directory & Child;
+      begin
+         Status := Landin.Platform.List_Ok;
+         if Children.Contains (Key) then
+            Found := Children.Element (Key);
+            return;
+         end if;
+
+         declare
+            Entries : Landin.Platform.Path_List;
+         begin
+            Cached_Listing (Directory, Entries, Status);
+            Found := False;
+            if Status /= Landin.Platform.List_Ok then
+               return;
+            end if;
+            for Child_Name of Entries loop
+               if Child_Name = Child then
+                  Found := Host.Is_Directory (Path);
+                  exit;
+               end if;
+            end loop;
+            Children.Insert (Key, Found);
+         end;
+      end Find_Child_Directory;
+
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id) return String;
       function Select_Module_Directory
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
-         Root_At : out Natural) return String;
+         Root_At : out Natural;
+         Unlistable : out Unbounded.Unbounded_String) return String;
 
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
@@ -150,10 +266,12 @@ package body Landin.Driver.Loading is
       function Select_Module_Directory
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
-         Root_At : out Natural) return String
+         Root_At : out Natural;
+         Unlistable : out Unbounded.Unbounded_String) return String
       is
       begin
          Root_At := 0;
+         Unlistable := Unbounded.Null_Unbounded_String;
          for Root_Index in 1 .. Natural (Roots.Length) loop
             declare
                Current : Unbounded.Unbounded_String :=
@@ -171,22 +289,20 @@ package body Landin.Driver.Loading is
                             (Of_Tree,
                              Landin.Syntax.Nth_Import_Segment
                                (Of_Tree, Node, Position)));
-                     Entries : Landin.Platform.Path_List;
                      Status  : Landin.Platform.List_Status;
                      Found   : Boolean := False;
                   begin
-                     Host.List_Directory
-                       (Unbounded.To_String (Current), Entries, Status);
+                     Find_Child_Directory
+                       (Unbounded.To_String (Current), Segment,
+                        Found, Status);
+                     if Status = Landin.Platform.Directory_Not_Readable then
+                        Unlistable := Current;
+                        return "";
+                     end if;
                      if Status /= Landin.Platform.List_Ok then
                         Matched := False;
                         exit;
                      end if;
-                     for Child_Name of Entries loop
-                        if Child_Name = Segment then
-                           Found := True;
-                           exit;
-                        end if;
-                     end loop;
                      if not Found then
                         Matched := False;
                         exit;
@@ -194,12 +310,6 @@ package body Landin.Driver.Loading is
                      Current := Unbounded.To_Unbounded_String
                        (Joined_Path
                           (Unbounded.To_String (Current), Segment));
-                     if not Host.Is_Directory
-                       (Unbounded.To_String (Current))
-                     then
-                        Matched := False;
-                        exit;
-                     end if;
                   end;
                end loop;
                if Matched then
@@ -257,7 +367,7 @@ package body Landin.Driver.Loading is
                      Entries : Landin.Platform.Path_List;
                      Status  : Landin.Platform.List_Status;
                   begin
-                     Host.List_Directory (Directory, Entries, Status);
+                     Cached_Listing (Directory, Entries, Status);
                      if Status = Landin.Platform.List_Ok then
                         for Child_Name of Entries loop
                            if Child_Name = Written then
@@ -479,12 +589,36 @@ package body Landin.Driver.Loading is
                         elsif Target = Landin.Modules.No_Module then
                            declare
                               Selected_Root : Natural;
+                              Unlistable : Unbounded.Unbounded_String;
                               Directory_Path : constant String :=
                                 Select_Module_Directory
                                   (Tree.all, Import_Node,
-                                   Selected_Root);
+                                   Selected_Root, Unlistable);
                            begin
-                              if Directory_Path = "" then
+                              if Unlistable /=
+                                Unbounded.Null_Unbounded_String
+                              then
+                                 declare
+                                    Found : Landin.Diagnostics
+                                      .Diagnostic_List;
+                                 begin
+                                    Module_Diagnostics.Report
+                                      (Item    => Module_Diagnostics
+                                         .Module_Directory_Invalid,
+                                       Source  => Source_Id,
+                                       Where   => Landin.Syntax.Where
+                                         (Tree.all, Import_Node),
+                                       Message => "import directory cannot"
+                                         & " be listed: "
+                                         & Unbounded.To_String (Unlistable),
+                                       Note    => "[1420]: roots are"
+                                         & " searched in supplied order",
+                                       Into    => Found);
+                                    Landin.Stages.Report
+                                      (Context,
+                                       Landin.Diagnostics.Get (Found, 1));
+                                 end;
+                              elsif Directory_Path = "" then
                                  if Missing_Directories /= null then
                                     for Root of Roots loop
                                        Missing_Directories.Append

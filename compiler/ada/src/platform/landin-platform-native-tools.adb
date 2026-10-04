@@ -75,6 +75,17 @@ package body Landin.Platform.Native.Tools is
       Host.Limit := Seconds;
    end Set_Limit;
 
+   overriding function Available
+     (Host : Native_Tool_Runner; Program : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+      Located : OS.String_Access := OS.Locate_Exec_On_Path (Program);
+      Found : constant Boolean := Located /= null;
+   begin
+      OS.Free (Located);
+      return Found;
+   end Available;
+
    overriding procedure Run
      (Host      : Native_Tool_Runner;
       Program   : String;
@@ -197,6 +208,7 @@ package body Landin.Platform.Native.Tools is
          Deadline : constant Ada.Real_Time.Time :=
            Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
          Reaped : Interfaces.C.int := 0;
+         Wait_Interval : Duration := 0.001;
       begin
          if Start_Tool
            (List, Interfaces.C.int (FD),
@@ -231,7 +243,10 @@ package body Landin.Platform.Native.Tools is
                Exceeded_Limit := True;
                exit;
             end if;
-            delay 0.02;
+            --  Check shortly after spawning: a tool that exits just after
+            --  the first poll should not wait for the long-running cadence.
+            delay Wait_Interval;
+            Wait_Interval := Duration'Min (Wait_Interval * 2, 0.02);
          end loop;
 
          if Reaped < 0 then
@@ -298,5 +313,22 @@ package body Landin.Platform.Native.Tools is
          Release_Arguments;
          raise;
    end Run;
+
+   overriding function Output_Produced
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean
+   is
+      pragma Unreferenced (Host);
+   begin
+      return Files.Exists (Path) and then not Files.Is_Directory (Path);
+   end Output_Produced;
+
+   overriding procedure Prepare_Output
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+   is
+      pragma Unreferenced (Host, Files, Path);
+   begin
+      null;
+   end Prepare_Output;
 
 end Landin.Platform.Native.Tools;

@@ -405,9 +405,9 @@ attached to a diagnostic; `refine explain` for every catalogue code; and lints
 as warnings in the catalogue, with codes, rather than a second tool with a
 second opinion.
 
-Exit evidence: each edit pinned by a fixture that applies it and then compiles
-clean, every catalogue code explained, and every lint a catalogued code with a
-negative fixture.
+Exit evidence: each kind of edit and every alternative offered by a pinned
+fixture is applied and compiles clean, every catalogue code is explained, and
+every lint is a catalogued code with a negative fixture.
 
 Done: a diagnostic carries fixes beside its notes, each a kind, an exact or
 likely applicability, a help sentence and edits: byte spans of one or several
@@ -420,8 +420,9 @@ alignment distance, innermost scope first, and never offer a name out of scope
 or inaccessible: L0201 for values, types, module members and selected imports,
 L0308, a misspelt argument label, a misspelt keyword and a missing module.
 L0109 is offered its declared name exactly, L0303 `mut`, L0105 `==`. Eleven
-negative fixtures apply every kind of fix through the `fixes` suite and compile
-the result clean. `refine explain` is a subcommand printing
+negative fixtures apply every kind of fix and every offered alternative through
+the `fixes` suite and compile each result clean; one fixture offers three tied
+spellings. `refine explain` is a subcommand printing
 `docs/diagnostics.md`, generated into the compiler as an exhaustive case, so
 every code is explained and each example is compiled to its own code. D251
 admits a warning only as the compiler's judgement with the exact fix that
@@ -451,8 +452,9 @@ the examples before any was written, and `docs/format.md` shows each with a
 program as written and as formatted, which the `formatting` suite holds
 `Landin.Formatting` to. The formatter returns space-only edits in byte order,
 the shape R10.50's formatting request answers with, and refuses a source that
-does not parse with its own report; it scans its own result and raises a
-defect if a token or comment moved. A line comment now ends at its last
+does not parse with its own report; it scans a changed result and raises a
+defect if a token or comment moved, while byte-identical output needs no
+second scan. A line comment now ends at its last
 visible byte, so no trailing blank belongs to a comment. `refine fmt` rewrites
 files and `refine fmt --check` reports L0008. Over all 2,114 sources in the
 repository the 80 that fail to scan or parse are refused and every other keeps

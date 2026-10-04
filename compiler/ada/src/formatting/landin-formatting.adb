@@ -849,7 +849,11 @@ package body Landin.Formatting is
       end loop;
       Replace (Tail, (if Things.Is_Empty then "" else [LF]));
 
-      if not Same_Things (Things, Bytes, US.To_String (Output)) then
+      --  Identical bytes have the same tokens and comments as the input
+      --  already scanned by Format.  Changed output still needs a scan.
+      if US.To_String (Output) /= Bytes
+        and then not Same_Things (Things, Bytes, US.To_String (Output))
+      then
          raise Landin.Compiler_Defect
            with "formatting changed a token or a comment";
       end if;

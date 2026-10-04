@@ -21,7 +21,7 @@ from pygments.lexer import Lexer
 from pygments.token import (Comment, Keyword, Name, Number, Operator, String,
                             Text)
 
-from landin_highlight import CLASSES, Scanner, collect_symbols
+from landin_highlight import CLASSES, Scanner, collect_symbols, source_lines
 
 #  Every class the scanner emits, mapped onto the token Pygments styles.
 TOKENS = {
@@ -59,7 +59,7 @@ class LandinLexer(Lexer):
     url = "https://www.701.dev"
 
     def get_tokens_unprocessed(self, text):
-        lines = text.splitlines(keepends=True)
+        lines = list(source_lines(text))
 
         #  The file's own type and atom names, so that a name it declares
         #  reads as one everywhere it is used.  This is the reason the

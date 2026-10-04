@@ -35,8 +35,11 @@ int landin_channel_pending(void)
     watched.revents = 0;
     for (;;) {
         int ready = poll(&watched, 1, 0);
-        if (ready >= 0)
+        if (ready >= 0) {
+            if (ready > 0 && (watched.revents & POLLNVAL))
+                return -1;
             return ready > 0 ? 1 : 0;
+        }
         if (errno != EINTR)
             return -1;
     }

@@ -122,8 +122,11 @@ diagnostic offers it as a likely fix.
 
 ### L0007
 
-With `--root=`, the entry module is a directory [1410], and the operand given
-is not a readable one. Pass the directory, not a file inside it.
+With `--root=`, the entry module must be a readable directory [1410]. Pass
+the directory, not a file inside it. This code also reports an import root or
+intermediate directory that cannot be listed while searching in root order
+[1420]. Check the named path and its permissions; a genuinely absent module
+is reported by L0006.
 
 ### L0008
 
@@ -1149,13 +1152,20 @@ reports a value that its type or target cannot hold.
 
 ### L0500
 
-No assembler and linker for the selected target were found on this host
-[1550]. The note names the program looked for; `--toolchain=` names another.
+The requested output cannot be made with the selected target, settings or
+available toolchain [1550]. The diagnostic and its note identify the cause:
+the target has no backend, its source debug mode is unsupported, firmware
+forbids `linker.library`, no toolchain is selected, or the named tool is
+unavailable. Choose a target with a backend, change the debug or firmware
+configuration, or select or install a toolchain as the note directs.
+`--toolchain=` only helps when a toolchain is absent or unavailable.
 
 ### L0501
 
-The platform assembler or linker refused what the compiler emitted [1550]. The
-tool's own output follows the diagnostic.
+Executable emission failed [1550]. The assembler or linker may have refused
+the emitted code, or the requested output could not be produced, verified, or
+restored. The note describes the failure, names paths needed for recovery,
+and includes tool output when available.
 
 ### L0502
 

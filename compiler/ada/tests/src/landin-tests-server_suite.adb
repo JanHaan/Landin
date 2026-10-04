@@ -25,6 +25,8 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Stages;
+with Landin.Syntax;
+with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
@@ -141,6 +143,43 @@ package body Landin.Tests.Server_Suite is
                = Holes.Sound,
          "a source that parses is analysed as it is");
    end A_Broken_Body_Is_Stood_In_For;
+
+   procedure Several_Broken_Bodies_Are_Stood_In_For
+     (Item : in out Landin.Testing.Context);
+
+   procedure Several_Broken_Bodies_Are_Stood_In_For
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "first: () -> none =" & LF
+        & "    x := 1 + 2 * 3 -" & LF
+        & "end first" & LF
+        & "sound: () -> none = end sound" & LF
+        & "second: () -> none =" & LF
+        & "    x := 2 + 3 * 4 -" & LF
+        & "end second" & LF
+        & "third: () -> none =" & LF
+        & "    x := 3 + 4 * 5 -" & LF
+        & "end third" & LF;
+      Plan : constant Holes.Plan := Holes.Plan_For (Text);
+   begin
+      Landin.Testing.Check
+        (Item, Plan.Outcome = Holes.Stood_In,
+         "all broken bodies can be stood in for");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Plan.Held.Length), 3,
+         "one held region per broken body");
+      if Natural (Plan.Held.Length) = 3 then
+         Landin.Testing.Check
+           (Item, Plan.Held.Element (1).Last < Plan.Held.Element (2).First
+                  and then Plan.Held.Element (2).Last
+                    < Plan.Held.Element (3).First,
+            "held regions stay in source order across a sound body");
+      end if;
+      Landin.Testing.Check_Equal
+        (Item, Ada.Strings.Fixed.Count (Plan.Text, "loop do end loop"), 3,
+         "each broken body receives a stand-in");
+   end Several_Broken_Bodies_Are_Stood_In_For;
 
    --  Each source here has an error a stand-in must not hide.
    procedure Only_A_Body_Is_Stood_In_For
@@ -1056,6 +1095,79 @@ package body Landin.Tests.Server_Suite is
    procedure Queries_Of_A_Refused_Module_Answer_Nothing
      (Item : in out Landin.Testing.Context);
 
+   procedure Cursor_Lookup_Keeps_The_Post_Order_Choice
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cursor_Lookup_Keeps_The_Post_Order_Choice
+     (Item : in out Landin.Testing.Context)
+   is
+      package Syn renames Landin.Syntax;
+      use type Syn.Node_Id;
+
+      Text : constant String :=
+        "f: (x: u8) -> (y: u8) =" & LF
+        & "    y = x" & LF
+        & "end f" & LF
+        & "g: () -> (z: u8) =" & LF
+        & "    z = f (2)" & LF
+        & "end g" & LF
+        & "missing, denied: atom" & LF
+        & "problems: type = missing | denied" & LF
+        & "fallible: (x: u8) -> (y: u8) ! problems =" & LF
+        & "    fail missing when x == 0" & LF
+        & "    y = x" & LF
+        & "end fallible" & LF
+        & "h: () -> (v: u8) =" & LF
+        & "    v = fallible (1) else 0" & LF
+        & "end h" & LF;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+   begin
+      Host.Add_File ("/w/m.ldn", Text);
+      declare
+         Context : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Answer  : Landin.Server.Analysis.Result;
+      begin
+         Landin.Server.Analysis.Analyse
+           (Context, Host, One_File ("/w/m.ldn"), Answer);
+         Landin.Testing.Check (Item, Answer.Checked, "source is checked");
+         declare
+            Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Context).all, 1);
+         begin
+            for Offset in Landin.Source.Byte_Offset range 0 .. Text'Length
+            loop
+               declare
+                  Expected : Syn.Node_Id := Syn.No_Node;
+                  Length   : Landin.Source.Byte_Offset :=
+                    Landin.Source.Byte_Offset'Last;
+               begin
+                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Tree.all)
+                  loop
+                     declare
+                        Where : constant Landin.Source.Span :=
+                          Syn.Where (Tree.all, Node);
+                     begin
+                        if Offset >= Where.First and then Offset < Where.Last
+                          and then Where.Last - Where.First < Length
+                          and then not Syn.Is_Error (Syn.Kind (Tree.all, Node))
+                        then
+                           Expected := Node;
+                           Length := Where.Last - Where.First;
+                        end if;
+                     end;
+                  end loop;
+                  Landin.Testing.Check
+                    (Item, Landin.Server.Navigation.Node_At
+                             (Tree.all, Offset) = Expected,
+                     "same node at byte" & Offset'Image);
+               end;
+            end loop;
+         end;
+      end;
+   end Cursor_Lookup_Keeps_The_Post_Order_Choice;
+
    procedure Queries_Of_A_Refused_Module_Answer_Nothing
      (Item : in out Landin.Testing.Context)
    is
@@ -1096,11 +1208,89 @@ package body Landin.Tests.Server_Suite is
       end;
    end Queries_Of_A_Refused_Module_Answer_Nothing;
 
+   procedure An_Unresolved_Name_Leaves_Other_Navigation
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Unresolved_Name_Leaves_Other_Navigation
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Text : constant String :=
+        "bad: () -> none = missing () end bad" & LF
+        & "good: (x: u8) -> (y: u8) = y = x + 1 end good" & LF;
+      Missing : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "missing") - Text'First);
+      Parameter : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "x: u8") - Text'First);
+      Reference : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "x + 1") - Text'First);
+      Expression : constant Landin.Source.Byte_Offset := Reference + 2;
+   begin
+      Host.Add_File ("/w/m.ldn", Text);
+      declare
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result);
+
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result)
+         is
+         begin
+            Landin.Testing.Check
+              (Item, Answer.Resolved and then Answer.Checked
+                     and then Answer.Found.Count > 0,
+               "the name error leaves both tables available");
+            Landin.Testing.Check_Equal
+              (Item, Codes_Of (Answer.Found), "L0201",
+               "only the original resolution error is published");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Definition
+                       (Context, Answer, 1, Missing)
+                     = Landin.Server.Navigation.No_Place,
+               "the missing name has no definition");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Hover
+                       (Context, Answer, 1, Missing).Length = 0,
+               "the missing name has no hover");
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Definition
+                       (Context, Answer, 1, Reference)
+                     = (1, (Parameter, Parameter + 1)),
+               "the unrelated parameter still has a definition");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                       (Landin.Server.Navigation.Hover
+                          (Context, Answer, 1, Reference).Text,
+                        "x: u8") > 0,
+               "the unrelated parameter still has a hover");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                       (Landin.Server.Navigation.Hover
+                          (Context, Answer, 1, Expression).Text,
+                        "u8") > 0,
+               "the unrelated expression still has a type");
+         end Visit;
+      begin
+         Landin.Server.Analysis.Analyse
+           (Landin.Targets.Linux_X86_64,
+            Landin.Targets.Levels.Default_Level
+              (Landin.Targets.Linux_X86_64),
+            Host, One_File ("/w/m.ldn"), Visit'Access);
+      end;
+   end An_Unresolved_Name_Leaves_Other_Navigation;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "server", "a broken body is stood in for",
          A_Broken_Body_Is_Stood_In_For'Access);
+      Landin.Testing.Register
+        (Into, "server", "several broken bodies are stood in for",
+         Several_Broken_Bodies_Are_Stood_In_For'Access);
       Landin.Testing.Register
         (Into, "server", "only a body is stood in for",
          Only_A_Body_Is_Stood_In_For'Access);
@@ -1143,6 +1333,12 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "queries of a refused module answer nothing",
          Queries_Of_A_Refused_Module_Answer_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "server", "cursor lookup keeps the post order choice",
+         Cursor_Lookup_Keeps_The_Post_Order_Choice'Access);
+      Landin.Testing.Register
+        (Into, "server", "an unresolved name leaves other navigation",
+         An_Unresolved_Name_Leaves_Other_Navigation'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

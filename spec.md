@@ -13745,6 +13745,10 @@ once, so cycles are legal. Symlink identity and root defaults are outside this
 guarantee. The explicit-file request remains a compatibility mode forming one
 synthetic module when no roots are supplied.
 
+If a root or intermediate directory cannot be listed, the import reports that
+failure before considering later roots. An absent directory or missing exact
+segment remains a search miss, so a later root may supply the module.
+
 Only after graph closure do configuration, resolution, checking and lowering
 run over that canonical source order. “Whole program” is exactly this reached
 graph, so unused reached conformances collide and unreachable or shadowed-root

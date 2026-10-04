@@ -39,6 +39,7 @@ package Landin.Server.Documents is
    type Document is record
       URI     : Ada.Strings.Unbounded.Unbounded_String;
       Path    : Ada.Strings.Unbounded.Unbounded_String;
+      Text    : Ada.Strings.Unbounded.Unbounded_String;
       Version : Long_Long_Integer := 0;
    end record;
 
@@ -48,9 +49,10 @@ package Landin.Server.Documents is
    type Store
      (Under : not null access constant Landin.Platform.Filesystem'Class)
    is limited record
-      Open  : Document_Maps.Map;            --  by URI
-      Held  : Landin.Platform.Overlays.Overlay (Under);
-      Roots : Landin.Platform.Path_List;    --  in search order
+      Open       : Document_Maps.Map;            --  by URI
+      Held       : Landin.Platform.Overlays.Overlay (Under);
+      Active_URI : Ada.Strings.Unbounded.Unbounded_String;
+      Roots      : Landin.Platform.Path_List;    --  in search order
    end record;
 
    procedure Open
@@ -62,6 +64,12 @@ package Landin.Server.Documents is
       Text : String);
 
    procedure Close (Into : in out Store; URI : String);
+
+   --  Project this URI's text over its path before reading or analysing it.
+   --  Distinct file URIs may name the same path. Changed says whether the
+   --  selected bytes differ from the previous overlay at this path.
+   procedure Activate
+     (Into : in out Store; URI : String; Changed : out Boolean);
 
    function Is_Open (From : Store; URI : String) return Boolean;
 
@@ -80,8 +88,9 @@ package Landin.Server.Documents is
    function Module_Key (From : Store; URI : String) return String
      with Pre => Is_Open (From, URI);
 
-   --  The URI a report about Path is published under: the open document
-   --  held there, or Path's own `file:` URI.
-   function URI_For (From : Store; Path : String) return String;
+   --  The URI a report about Path is published under: the preferred or
+   --  active document held there, another open document, or Path's URI.
+   function URI_For
+     (From : Store; Path : String; Preferred : String := "") return String;
 
 end Landin.Server.Documents;

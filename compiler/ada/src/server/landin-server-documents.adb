@@ -140,6 +140,7 @@ package body Landin.Server.Documents is
       Into.Open.Include
         (URI, (URI     => Unbounded.To_Unbounded_String (URI),
                Path    => Unbounded.To_Unbounded_String (Path),
+               Text    => Unbounded.To_Unbounded_String (Text),
                Version => Version));
       Into.Held.Hold (Path, Text);
    end Open;
@@ -151,6 +152,7 @@ package body Landin.Server.Documents is
       Held : Document := Into.Open.Element (URI);
    begin
       Held.Version := Version;
+      Held.Text := Unbounded.To_Unbounded_String (Text);
       Into.Open.Replace (URI, Held);
       Into.Held.Hold (Unbounded.To_String (Held.Path), Text);
    end Change;
@@ -158,11 +160,38 @@ package body Landin.Server.Documents is
    procedure Close (Into : in out Store; URI : String) is
    begin
       if Into.Open.Contains (URI) then
-         Into.Held.Release
-           (Unbounded.To_String (Into.Open.Element (URI).Path));
-         Into.Open.Delete (URI);
+         declare
+            Path : constant String :=
+              Unbounded.To_String (Into.Open.Element (URI).Path);
+         begin
+            Into.Open.Delete (URI);
+            if Unbounded.To_String (Into.Active_URI) = URI then
+               Into.Active_URI := Unbounded.Null_Unbounded_String;
+            end if;
+            Into.Held.Release (Path);
+            for Held of Into.Open loop
+               if Unbounded.To_String (Held.Path) = Path then
+                  Into.Held.Hold (Path, Unbounded.To_String (Held.Text));
+                  exit;
+               end if;
+            end loop;
+         end;
       end if;
    end Close;
+
+   procedure Activate
+     (Into : in out Store; URI : String; Changed : out Boolean) is
+      Held : constant Document := Into.Open.Element (URI);
+      Previous : Unbounded.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+   begin
+      Into.Held.Read_File
+        (Unbounded.To_String (Held.Path), Previous, Status);
+      Changed := not Unbounded."=" (Previous, Held.Text);
+      Into.Held.Hold
+        (Unbounded.To_String (Held.Path), Unbounded.To_String (Held.Text));
+      Into.Active_URI := Unbounded.To_Unbounded_String (URI);
+   end Activate;
 
    function Is_Open (From : Store; URI : String) return Boolean
      is (From.Open.Contains (URI));
@@ -202,12 +231,14 @@ package body Landin.Server.Documents is
                    Unbounded.To_Unbounded_String (Directory_Of (Path)),
                  Roots => From.Roots,
                  Files => Landin.Platform.No_Arguments,
-                 Options => Landin.Platform.No_Arguments);
+                 Options => Landin.Platform.No_Arguments,
+                 Firmware_Entry => Unbounded.Null_Unbounded_String);
       end if;
       return (Entry_Directory => Unbounded.Null_Unbounded_String,
               Roots => Landin.Platform.No_Arguments,
               Files => Landin.Platform.Arguments (Path),
-              Options => Landin.Platform.No_Arguments);
+              Options => Landin.Platform.No_Arguments,
+              Firmware_Entry => Unbounded.Null_Unbounded_String);
    end Request_For;
 
    function Module_Key (From : Store; URI : String) return String
@@ -215,8 +246,18 @@ package body Landin.Server.Documents is
          then Directory_Of (Held_Path (From, URI))
          else Held_Path (From, URI));
 
-   function URI_For (From : Store; Path : String) return String is
+   function URI_For
+     (From : Store; Path : String; Preferred : String := "") return String
+   is
+      Chosen : constant String :=
+        (if Preferred /= "" then Preferred
+         else Unbounded.To_String (From.Active_URI));
    begin
+      if From.Open.Contains (Chosen)
+        and then Unbounded.To_String (From.Open.Element (Chosen).Path) = Path
+      then
+         return Chosen;
+      end if;
       for Held of From.Open loop
          if Unbounded.To_String (Held.Path) = Path then
             return Unbounded.To_String (Held.URI);

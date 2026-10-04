@@ -8,6 +8,7 @@ with Ada.Containers.Vectors;
 with Ada.Exceptions;
 with Ada.Finalization;
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 with Landin.Platform;
 
@@ -22,6 +23,10 @@ package Landin.Testing.Fakes is
    --  Trailing directory separators do not create a different entry.
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String);
 
+   --  A directory whose entry is visible but whose contents cannot be listed.
+   procedure Add_Unlistable_Directory
+     (Host : in out Fake_Filesystem; Path : String);
+
    --  A path that exists and refuses to be read, which is how the driver's
    --  unreadable-source diagnostic gets tested.
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String);
@@ -29,6 +34,8 @@ package Landin.Testing.Fakes is
    function Written (Host : Fake_Filesystem; Path : String) return String;
    --  Counts attempts, including refused and empty writes.
    function Write_Count (Host : Fake_Filesystem) return Natural;
+   function List_Count
+     (Host : Fake_Filesystem; Path : String) return Natural;
 
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean;
@@ -40,6 +47,15 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem; Left, Right : String);
    overriding function Same_File
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
+
+   overriding function Existing_File_Key
+     (Host : Fake_Filesystem; Path : String) return String;
+
+   overriding function Identity_Of
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity;
+
+   function Output_Locked (Host : Fake_Filesystem) return Boolean;
 
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
@@ -69,6 +85,16 @@ package Landin.Testing.Fakes is
      (Host   : Fake_Filesystem;
       Path   : String;
       Status : out Landin.Platform.Remove_Status);
+
+   overriding procedure Move_File
+     (Host   : Fake_Filesystem;
+      From, To : String;
+      Status : out Landin.Platform.Move_Status);
+
+   overriding procedure Lock_Output
+     (Host : Fake_Filesystem; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Fake_Filesystem; Handle : Integer);
 
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
@@ -100,6 +126,12 @@ package Landin.Testing.Fakes is
 
    type Fake_Tool_Runner is
      limited new Landin.Platform.Tool_Runner with private;
+
+   procedure Set_Available
+     (Host : in out Fake_Tool_Runner; Found : Boolean);
+
+   overriding function Available
+     (Host : Fake_Tool_Runner; Program : String) return Boolean;
 
    --  Select a result that every subsequent call returns.  This also
    --  abandons any ordered results that have not yet been consumed.
@@ -159,6 +191,22 @@ package Landin.Testing.Fakes is
       Result    : out Landin.Platform.Tool_Result;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
 
+   --  A fake successful run stands in for writing the requested output.
+   --  Cases about a lying tool can turn that promise off.
+   procedure Set_Output_Produced
+     (Host : in out Fake_Tool_Runner; Produced : Boolean);
+
+   --  Simulate a zero-exit tool moving the reserved old output back.
+   procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner);
+
+   overriding function Output_Produced
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String) return Boolean;
+
+   overriding procedure Prepare_Output
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String);
+
    --  Which capture mode the last run asked for, so a caller that must
    --  keep the streams apart can be held to it.
    function Last_Capture
@@ -207,16 +255,27 @@ private
 
    package Unbounded renames Ada.Strings.Unbounded;
 
-   type Entry_Kind is (A_File, A_Directory, An_Unreadable_File);
+   type Entry_Kind is
+     (A_File, A_Directory, An_Unreadable_File,
+      An_Unlistable_Directory);
 
    type File_Entry is record
       Path    : Unbounded.Unbounded_String;
       Content : Unbounded.Unbounded_String;
       Kind    : Entry_Kind := A_File;
+      Identity : Interfaces.Unsigned_64 := 0;
    end record;
 
    package File_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => File_Entry);
+
+   type List_Call is record
+      Path  : Unbounded.Unbounded_String;
+      Count : Natural := 0;
+   end record;
+
+   package List_Call_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => List_Call);
 
    type Store is record
       Files : File_Vectors.Vector;
@@ -232,6 +291,10 @@ private
       Refuses_Write : Boolean := False;
       Refuses_Removal : Boolean := False;
       Write_Attempts : Natural := 0;
+      List_Calls     : List_Call_Vectors.Vector;
+
+      Next_Identity : Interfaces.Unsigned_64 := 1;
+      Output_Is_Locked : Boolean := False;
    end record;
 
    type Store_Access is access Store;
@@ -265,6 +328,10 @@ private
    type Recorder is record
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
+      Produces_Output : Boolean := True;
+      Moves_Backup_Back : Boolean := False;
+      Output_Store : Store_Access := null;
+      Output_Path : Unbounded.Unbounded_String;
       Script      : Result_Vectors.Vector;
       Raises      : Boolean := False;
       Run_Exception : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;
@@ -284,6 +351,7 @@ private
    type Fake_Tool_Runner is limited new Landin.Platform.Tool_Runner
    with record
       State : Recorder_Owner;
+      Tool_Available : Boolean := True;
    end record;
 
    package Offset_Vectors is new Ada.Containers.Vectors

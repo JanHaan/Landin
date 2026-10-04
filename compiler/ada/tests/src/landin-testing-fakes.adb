@@ -3,6 +3,9 @@ with Ada.Unchecked_Deallocation;
 package body Landin.Testing.Fakes is
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Write_Status;
+   use type Landin.Platform.Termination;
+   use type Interfaces.Unsigned_64;
 
    overriding procedure Finalize (Owner : in out Store_Owner) is
       procedure Free is new Ada.Unchecked_Deallocation (Store, Store_Access);
@@ -42,7 +45,7 @@ package body Landin.Testing.Fakes is
             Stored : constant String := Unbounded.To_String (Item.Path);
          begin
             if Stored = Path
-              or else (Item.Kind = A_Directory
+              or else (Item.Kind in A_Directory | An_Unlistable_Directory
                        and then Stored = Directory_Path (Path))
             then
                return Index;
@@ -65,11 +68,15 @@ package body Landin.Testing.Fakes is
       Kind : Entry_Kind)
    is
       Existing : constant Natural := Find (Host, Path);
-      Item     : constant File_Entry :=
+      Item     : File_Entry :=
         (Path    => Unbounded.To_Unbounded_String (Path),
          Content => Unbounded.To_Unbounded_String (Text),
-         Kind    => Kind);
+         Kind    => Kind,
+         Identity => 0);
    begin
+      Item.Identity := Host.Writes.Data.Next_Identity;
+      Host.Writes.Data.Next_Identity :=
+        Host.Writes.Data.Next_Identity + 1;
       if Existing = 0 then
          Host.Writes.Data.Files.Append (Item);
       else
@@ -89,6 +96,12 @@ package body Landin.Testing.Fakes is
       Add (Host, Directory_Path (Path), "", A_Directory);
    end Add_Directory;
 
+   procedure Add_Unlistable_Directory
+     (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Add (Host, Directory_Path (Path), "", An_Unlistable_Directory);
+   end Add_Unlistable_Directory;
+
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String) is
    begin
       Add (Host, Path, "", An_Unreadable_File);
@@ -107,6 +120,18 @@ package body Landin.Testing.Fakes is
    function Write_Count (Host : Fake_Filesystem) return Natural
      is (Host.Writes.Data.Write_Attempts);
 
+   function List_Count
+     (Host : Fake_Filesystem; Path : String) return Natural
+   is
+   begin
+      for Call of Host.Writes.Data.List_Calls loop
+         if Unbounded.To_String (Call.Path) = Path then
+            return Call.Count;
+         end if;
+      end loop;
+      return 0;
+   end List_Count;
+
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean
      is (Find (Host, Path) /= 0);
@@ -122,6 +147,32 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Filesystem; Left, Right : String) return Boolean
      is (Host.Exists (Left) and then Host.Exists (Right)
          and then Host.Paths_Overlap (Left, Right));
+
+   overriding function Existing_File_Key
+     (Host : Fake_Filesystem; Path : String) return String
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      --  Declared alias pairs do not provide a complete equivalence class.
+      return "";
+   end Existing_File_Key;
+
+   overriding function Identity_Of
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity
+   is
+      Index : constant Natural := Find (Host, Path);
+   begin
+      if Index = 0 then
+         return (others => <>);
+      end if;
+      return (Device => 1,
+              Inode => Host.Writes.Data.Files (Index).Identity,
+              Valid => True);
+   end Identity_Of;
+
+   function Output_Locked (Host : Fake_Filesystem) return Boolean
+     is (Host.Writes.Data.Output_Is_Locked);
 
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
@@ -151,7 +202,8 @@ package body Landin.Testing.Fakes is
       Index : constant Natural := Find (Host, Path);
    begin
       return Index /= 0
-        and then Host.Writes.Data.Files.Element (Index).Kind = A_Directory;
+        and then Host.Writes.Data.Files.Element (Index).Kind
+          in A_Directory | An_Unlistable_Directory;
    end Is_Directory;
 
    procedure Raise_On_Read
@@ -188,7 +240,8 @@ package body Landin.Testing.Fakes is
          when A_File =>
             Content := Host.Writes.Data.Files.Element (Index).Content;
             Status := Landin.Platform.Read_Ok;
-         when A_Directory | An_Unreadable_File =>
+         when A_Directory | An_Unlistable_Directory |
+              An_Unreadable_File =>
             Status := Landin.Platform.Not_Readable;
       end case;
    end Read_File;
@@ -205,15 +258,20 @@ package body Landin.Testing.Fakes is
       Status  : out Landin.Platform.Write_Status)
    is
       Existing : constant Natural := Find (Host, Path);
-      Entry_Value : constant File_Entry :=
+      Entry_Value : File_Entry :=
         (Path    => Unbounded.To_Unbounded_String (Path),
          Content => Unbounded.To_Unbounded_String (Content),
-         Kind    => A_File);
+         Kind    => A_File,
+         Identity => 0);
    begin
+      Entry_Value.Identity := Host.Writes.Data.Next_Identity;
+      Host.Writes.Data.Next_Identity :=
+        Host.Writes.Data.Next_Identity + 1;
       Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
       if Host.Writes.Data.Refuses_Write
         or else (Existing /= 0
-                 and then Host.Writes.Data.Files (Existing).Kind = A_Directory)
+                 and then Host.Writes.Data.Files (Existing).Kind
+                   in A_Directory | An_Unlistable_Directory)
       then
          Status := Landin.Platform.Not_Writable;
          return;
@@ -265,13 +323,59 @@ package body Landin.Testing.Fakes is
          Status := Landin.Platform.Not_Removable;
       elsif Existing = 0 then
          Status := Landin.Platform.Already_Absent;
-      elsif Host.Writes.Data.Files (Existing).Kind = A_Directory then
+      elsif Host.Writes.Data.Files (Existing).Kind
+        in A_Directory | An_Unlistable_Directory
+      then
          Status := Landin.Platform.Not_Removable;
       else
          Host.Writes.Data.Files.Delete (Existing);
          Status := Landin.Platform.Removed;
       end if;
    end Remove_File;
+
+   overriding procedure Move_File
+     (Host   : Fake_Filesystem;
+      From, To : String;
+      Status : out Landin.Platform.Move_Status)
+   is
+      Existing : constant Natural := Find (Host, From);
+      Destination : constant Natural := Find (Host, To);
+      Item : File_Entry;
+   begin
+      if Existing = 0 then
+         Status := Landin.Platform.Move_Source_Absent;
+      elsif Host.Writes.Data.Refuses_Removal or else Destination /= 0
+        or else Host.Writes.Data.Files (Existing).Kind = A_Directory
+      then
+         Status := Landin.Platform.Not_Movable;
+      else
+         Item := Host.Writes.Data.Files (Existing);
+         Item.Path := Unbounded.To_Unbounded_String (To);
+         Host.Writes.Data.Files.Replace_Element (Existing, Item);
+         Status := Landin.Platform.Moved;
+      end if;
+   end Move_File;
+
+   overriding procedure Lock_Output
+     (Host : Fake_Filesystem; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Path);
+   begin
+      if Host.Writes.Data.Output_Is_Locked then
+         Handle := -1;
+      else
+         Host.Writes.Data.Output_Is_Locked := True;
+         Handle := 0;
+      end if;
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Fake_Filesystem; Handle : Integer)
+   is
+      pragma Unreferenced (Handle);
+   begin
+      Host.Writes.Data.Output_Is_Locked := False;
+   end Unlock_Output;
 
    ---------------------------------------------------------------------
    --  List_Directory
@@ -298,8 +402,27 @@ package body Landin.Testing.Fakes is
    begin
       Entries := Landin.Platform.Path_Vectors.Empty_Vector;
 
+      for Call of Host.Writes.Data.List_Calls loop
+         if Unbounded.To_String (Call.Path) = Path then
+            Call.Count := Call.Count + 1;
+            exit;
+         end if;
+      end loop;
+      if List_Count (Host, Path) = 0 then
+         Host.Writes.Data.List_Calls.Append
+           (List_Call'
+              (Path => Unbounded.To_Unbounded_String (Path), Count => 1));
+      end if;
+
       if Index = 0 then
          Status := Landin.Platform.Directory_Not_Found;
+         return;
+      end if;
+
+      if Host.Writes.Data.Files.Element (Index).Kind =
+        An_Unlistable_Directory
+      then
+         Status := Landin.Platform.Directory_Not_Readable;
          return;
       end if;
 
@@ -426,6 +549,20 @@ package body Landin.Testing.Fakes is
    function Run_Count (Host : Fake_Tool_Runner) return Natural
      is (Natural (Host.State.Data.Calls.Length));
 
+   procedure Set_Available
+     (Host : in out Fake_Tool_Runner; Found : Boolean) is
+   begin
+      Host.Tool_Available := Found;
+   end Set_Available;
+
+   overriding function Available
+     (Host : Fake_Tool_Runner; Program : String) return Boolean
+   is
+      pragma Unreferenced (Program);
+   begin
+      return Host.Tool_Available;
+   end Available;
+
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode
    is
@@ -485,7 +622,124 @@ package body Landin.Testing.Fakes is
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,
             Capture   => Capture));
+      if Host.State.Data.Output_Store /= null then
+         if Host.State.Data.Moves_Backup_Back
+           and then Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 0
+         then
+            declare
+               Store_Value : constant Store_Access :=
+                 Host.State.Data.Output_Store;
+               Path : constant String :=
+                 Unbounded.To_String (Host.State.Data.Output_Path);
+            begin
+               for Index in 1 .. Natural (Store_Value.Files.Length) loop
+                  if Unbounded.To_String
+                    (Store_Value.Files.Element (Index).Path) =
+                    Path & ".landin-backup-1"
+                  then
+                     declare
+                        Item : File_Entry :=
+                          Store_Value.Files.Element (Index);
+                     begin
+                        Item.Path := Unbounded.To_Unbounded_String (Path);
+                        Store_Value.Files.Replace_Element (Index, Item);
+                     end;
+                     exit;
+                  end if;
+               end loop;
+            end;
+         elsif Host.State.Data.Produces_Output
+           and then Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 0
+         then
+            declare
+               Store_Value : constant Store_Access :=
+                 Host.State.Data.Output_Store;
+               Path : constant String :=
+                 Unbounded.To_String (Host.State.Data.Output_Path);
+               Item : File_Entry :=
+                 (Unbounded.To_Unbounded_String (Path),
+                  Unbounded.To_Unbounded_String ("fake executable"),
+                  A_File, 0);
+               Found : Natural := 0;
+            begin
+               Item.Identity := Store_Value.Next_Identity;
+               Store_Value.Next_Identity := Store_Value.Next_Identity + 1;
+               for Index in 1 .. Natural (Store_Value.Files.Length) loop
+                  if Unbounded.To_String
+                    (Store_Value.Files.Element (Index).Path) = Path
+                  then
+                     Found := Index;
+                     exit;
+                  end if;
+               end loop;
+               if Store_Value.Refuses_Write
+                 or else (Found /= 0
+                   and then Store_Value.Files.Element (Found).Kind =
+                     A_Directory)
+               then
+                  null;
+               elsif Found = 0 then
+                  Store_Value.Files.Append (Item);
+               else
+                  Store_Value.Files.Replace_Element (Found, Item);
+               end if;
+               if not Store_Value.Refuses_Write
+                 and then (Found = 0
+                   or else Store_Value.Files.Element (Found).Kind /=
+                     A_Directory)
+               then
+                  Found := 0;
+                  for Index in 1 .. Natural (Store_Value.Items.Length) loop
+                     if Unbounded.To_String
+                       (Store_Value.Items.Element (Index).Path) = Path
+                     then
+                        Found := Index;
+                        exit;
+                     end if;
+                  end loop;
+                  if Found = 0 then
+                     Store_Value.Items.Append (Item);
+                  else
+                     Store_Value.Items.Replace_Element (Found, Item);
+                  end if;
+               end if;
+            end;
+         end if;
+         Host.State.Data.Output_Store := null;
+      end if;
    end Run;
+
+   procedure Set_Output_Produced
+     (Host : in out Fake_Tool_Runner; Produced : Boolean)
+   is
+   begin
+      Host.State.Data.Produces_Output := Produced;
+   end Set_Output_Produced;
+
+   procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner) is
+   begin
+      Host.State.Data.Moves_Backup_Back := True;
+   end Set_Move_Backup_Back;
+
+   overriding function Output_Produced
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+   begin
+      return Files.Exists (Path) and then not Files.Is_Directory (Path);
+   end Output_Produced;
+
+   overriding procedure Prepare_Output
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String)
+   is
+   begin
+      Host.State.Data.Output_Store := Fake_Filesystem (Files).Writes.Data;
+      Host.State.Data.Output_Path := Unbounded.To_Unbounded_String (Path);
+   end Prepare_Output;
 
    ---------------------------------------------------------------------
    --  Channel

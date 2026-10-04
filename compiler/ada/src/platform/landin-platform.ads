@@ -12,6 +12,7 @@
 
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
+with Interfaces;
 
 package Landin.Platform is
 
@@ -23,7 +24,10 @@ package Landin.Platform is
    type Read_Status is (Read_Ok, Not_Found, Not_Readable);
    type Write_Status is (Write_Ok, Not_Writable);
    type Remove_Status is (Removed, Already_Absent, Not_Removable);
-   type List_Status is (List_Ok, Directory_Not_Found, Not_A_Directory);
+   type Move_Status is (Moved, Move_Source_Absent, Not_Movable);
+   type List_Status is
+     (List_Ok, Directory_Not_Found, Not_A_Directory,
+      Directory_Not_Readable);
 
    ---------------------------------------------------------------------
    --  Filesystem
@@ -51,6 +55,25 @@ package Landin.Platform is
    --  Like Paths_Overlap, this assumes no concurrent namespace replacement.
    function Same_File
      (Host : Filesystem; Left, Right : String) return Boolean is abstract;
+
+   --  A stable key for a proven existing object, equal for every spelling
+   --  of that object and different for distinct objects. Empty means the
+   --  host cannot establish a key; callers then use Same_File. The key is
+   --  only meaningful within one host and one stable namespace.
+   function Existing_File_Key (Host : Filesystem; Path : String)
+     return String is abstract;
+
+   --  Snapshot an existing file's identity before a tool can rename it.
+   --  An invalid identity never matches. Native hosts use device and inode;
+   --  this detects the old output even after its backup name disappears.
+   type File_Identity is record
+      Device : Interfaces.Unsigned_64 := 0;
+      Inode  : Interfaces.Unsigned_64 := 0;
+      Valid  : Boolean := False;
+   end record;
+
+   function Identity_Of
+     (Host : Filesystem; Path : String) return File_Identity is abstract;
 
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
@@ -91,6 +114,20 @@ package Landin.Platform is
      (Host   : Filesystem;
       Path   : String;
       Status : out Remove_Status) is abstract;
+
+   --  Move one file without replacing an existing destination. Used to keep
+   --  an earlier executable while a tool produces a fresh one.
+   procedure Move_File
+     (Host   : Filesystem;
+      From, To : String;
+      Status : out Move_Status) is abstract;
+
+   --  Serialize executable publication in the destination directory.
+   --  The handle remains held through tool execution and recovery.
+   procedure Lock_Output
+     (Host : Filesystem; Path : String; Handle : out Integer) is abstract;
+   procedure Unlock_Output
+     (Host : Filesystem; Handle : Integer) is abstract;
 
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.
@@ -142,12 +179,29 @@ package Landin.Platform is
 
    type Tool_Runner is limited interface;
 
+   --  A read-only preflight for an executable request. Run still resolves
+   --  the program again, since PATH may change between these two calls.
+   function Available (Host : Tool_Runner; Program : String)
+     return Boolean is abstract;
+
    procedure Run
      (Host      : Tool_Runner;
       Program   : String;
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
+
+   --  Tell a test runner which output its next Run may create. Native tools
+   --  use their -o argument; this seam keeps fake production inside Run.
+   procedure Prepare_Output
+     (Host : Tool_Runner; Files : Filesystem'Class; Path : String) is abstract;
+
+   --  Answer whether a successful run left the named output as a file.
+   --  The caller clears that path before Run, so this is evidence from this
+   --  invocation rather than mere evidence of an earlier file.
+   function Output_Produced
+     (Host : Tool_Runner; Files : Filesystem'Class; Path : String)
+      return Boolean is abstract;
 
    ---------------------------------------------------------------------
    --  Resource measurement

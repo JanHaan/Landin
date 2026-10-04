@@ -107,6 +107,16 @@ CLASSES = {
 }
 
 
+def source_lines(text: str):
+    """Split only at Landin line endings: LF, CR LF, and CR."""
+    start = 0
+    for ending in re.finditer(r"\r\n|[\r\n]", text):
+        yield text[start:ending.end()]
+        start = ending.end()
+    if start < len(text):
+        yield text[start:]
+
+
 class Scanner:
     """A line-at-a-time token scanner for Landin source.
 
@@ -160,7 +170,7 @@ class Scanner:
         return True
 
     # -- one line --------------------------------------------------------
-    def scan(self, text: str):
+    def scan(self, text: str, *, classify_words=True):
         """Yield (class, text) for one line, left to right and complete.
 
         Concatenating the second element of every pair returns the line, so
@@ -233,15 +243,17 @@ class Scanner:
                 yield "n", body
                 pos = m.end()
             elif kind == "word":
-                cls = self.word_class(body, text, pos, m.end())
-                if cls is None and not declaration_checked:
-                    #  Once this word is in the prefix, _statement_start
-                    #  rejects every later name.  Check the declaration
-                    #  suffix and prefix at most once per line.
-                    declaration_checked = True
-                    if (DECL_AFTER.match(text[m.end():])
-                            and self._statement_start(text[:pos])):
-                        cls = "d"
+                cls = None
+                if classify_words:
+                    cls = self.word_class(body, text, pos, m.end())
+                    if cls is None and not declaration_checked:
+                        #  Once this word is in the prefix, _statement_start
+                        #  rejects every later name.  Check the declaration
+                        #  suffix and prefix at most once per line.
+                        declaration_checked = True
+                        if (DECL_AFTER.match(text[m.end():])
+                                and self._statement_start(text[:pos])):
+                            cls = "d"
                 yield cls, body
                 pos = m.end()
             elif kind == "op":
@@ -287,12 +299,13 @@ NAMED_VAL = re.compile(r"\(?\s*([a-z_]\w*)\s*=\s*(?:0[xX][0-9A-Fa-f_]+|\d)")
 def collect_symbols(lines):
     """Type and atom names, so a name the file declares reads as one."""
     types, atoms = set(), set()
+    scanner = Scanner()
     for line in lines:
-        if line.lstrip().startswith("--"):
-            body = line.lstrip()[2:].lstrip("-( ")
-            if not re.match(r"^\[?\d{0,4}\]?\s*[a-z_]\w*\s*:\s*(type|atom)\b", body):
-                continue
-            line = body
+        # Keep the declaration regexes anchored to the original line while
+        # treating every comment and literal as whitespace.  The scanner
+        # carries nested-comment and raw-delimiter state across lines.
+        line = "".join(" " * len(body) if kind in ("c", "cd", "q") else body
+                       for kind, body in scanner.scan(line, classify_words=False))
         m = DECL_TYPE.match(line)
         if m:
             types.add(m.group(1))

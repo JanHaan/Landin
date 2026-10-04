@@ -13,15 +13,18 @@ package body Landin.Testing.Fixes is
      (Index_Type => Positive, Element_Type => Diag.Edit,
       "=" => Diag."=");
 
-   --  The edits of Source, in byte order, from the first fix of every
-   --  diagnostic.
+   --  The edits of Source, in byte order, from the selected fixes.
    function Collected
      (Found  : Diag.Diagnostic_List;
-      Source : Landin.Source.Source_Id) return Edit_Vectors.Vector;
+      Source : Landin.Source.Source_Id;
+      Choice_Diagnostic : Natural;
+      Choice_Fix        : Positive) return Edit_Vectors.Vector;
 
    function Collected
      (Found  : Diag.Diagnostic_List;
-      Source : Landin.Source.Source_Id) return Edit_Vectors.Vector
+      Source : Landin.Source.Source_Id;
+      Choice_Diagnostic : Natural;
+      Choice_Fix        : Positive) return Edit_Vectors.Vector
    is
       Result : Edit_Vectors.Vector;
    begin
@@ -31,12 +34,14 @@ package body Landin.Testing.Fixes is
          begin
             if Diag.Fix_Count (Item) > 0 then
                declare
-                  First : constant Diag.Fix := Diag.Nth_Fix (Item, 1);
+                  Selected : constant Diag.Fix := Diag.Nth_Fix
+                    (Item, (if Index = Choice_Diagnostic then Choice_Fix
+                            else 1));
                begin
-                  for Position in 1 .. Diag.Edit_Count (First) loop
+                  for Position in 1 .. Diag.Edit_Count (Selected) loop
                      declare
                         One : constant Diag.Edit :=
-                          Diag.Nth_Edit (First, Position);
+                          Diag.Nth_Edit (Selected, Position);
                         At_Index : Positive := 1;
                      begin
                         if Diag.Source_Of (One) = Source then
@@ -60,16 +65,22 @@ package body Landin.Testing.Fixes is
 
    function Edits
      (Found  : Diag.Diagnostic_List;
-      Source : Landin.Source.Source_Id) return Boolean
-     is (not Collected (Found, Source).Is_Empty);
+      Source : Landin.Source.Source_Id;
+      Choice_Diagnostic : Natural := 0;
+      Choice_Fix        : Positive := 1) return Boolean
+     is (not Collected
+           (Found, Source, Choice_Diagnostic, Choice_Fix).Is_Empty);
 
    function Applied
      (Found   : Diag.Diagnostic_List;
       Source  : Landin.Source.Source_Id;
       Text    : String;
-      Clashed : out Boolean) return String
+      Clashed : out Boolean;
+      Choice_Diagnostic : Natural := 0;
+      Choice_Fix        : Positive := 1) return String
    is
-      Ordered : constant Edit_Vectors.Vector := Collected (Found, Source);
+      Ordered : constant Edit_Vectors.Vector := Collected
+        (Found, Source, Choice_Diagnostic, Choice_Fix);
       Result  : Unbounded.Unbounded_String :=
         Unbounded.To_Unbounded_String (Text);
    begin

@@ -12,7 +12,8 @@ import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from landin_highlight import BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES, Scanner
+from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES,
+                              Scanner, collect_symbols, source_lines)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -136,7 +137,8 @@ def scanner_smoke(source: str) -> None:
     assert has("q", "this is part of the raw literal")
     assert has("k", "public")
     assert has("t", "u23")
-    assert has("b", "compiler")
+    for module in BUILTIN_MODULES:
+        assert has("b", module), f"scanner omits builtin module {module}"
     assert has("s", "member")
     assert has("n", "0x2a")
 
@@ -156,6 +158,52 @@ def scanner_declaration_smoke() -> None:
     assert ("d", "value") not in Scanner().scan("other; value: u32")
 
 
+def symbol_collection_smoke() -> None:
+    lines = [
+        "before: type = struct",
+        "--( outer block",
+        "hidden_type: type = struct",
+        "--( nested block",
+        "hidden_atom: atom",
+        ")--",
+        "still_hidden: type = struct",
+        ")-- after: type = struct",
+        'raw: utf8 = """"',
+        "raw_type: type = struct",
+        '"""',  # A shorter delimiter cannot close the raw literal.
+        "raw_atom: atom",
+        '"""" after_raw: atom',
+        "colors: type = red | blue --( false_atom = 9 )--",
+        "-- line_type: type = struct",
+        "--- doc_atom: atom",
+        '"quoted_type: type = struct"',
+        "local_before: atom --( another block",
+        ")-- local_after: type = struct",
+        'raw3: utf8 = """',
+        "raw3_type: type = struct",
+        '""" raw3_after: type = struct',
+        "use: before = 0",
+        "use: after = 0",
+        "use: hidden_type = 0",
+        "use: raw_type = 0",
+        "use: raw_atom = 0",
+    ]
+    types, atoms = collect_symbols(lines)
+    assert types == {"before", "after", "colors", "local_after",
+                     "raw3_after"}, types
+    assert atoms == {"after_raw", "local_before", "red", "blue"}, atoms
+
+    scanner = Scanner(types, atoms)
+    scanned = [list(scanner.scan(line)) for line in lines]
+    assert ("c", "hidden_type: type = struct") in scanned[2]
+    assert ("q", "raw_type: type = struct") in scanned[9]
+    assert ("t", "before") in scanned[22]
+    assert ("t", "after") in scanned[23]
+    assert (None, "hidden_type") in scanned[24]
+    assert (None, "raw_type") in scanned[25]
+    assert (None, "raw_atom") in scanned[26]
+
+
 def pygments_smoke(source: str) -> None:
     try:
         from pygments.token import Comment, Keyword, Name, Number, String
@@ -169,6 +217,49 @@ def pygments_smoke(source: str) -> None:
     assert any(token in String and "escaped" in text for token, text in tokens)
     assert any(token in Comment and "nested block comment" in text for token, text in tokens)
     assert any(token in Name.Builtin and text == "compiler" for token, text in tokens)
+
+    #  Unicode separators remain inside a Landin line comment. A false split
+    #  would also invent a type declaration and colour its later use.
+    source = "-- comment\u2028x: type\ny: x"
+    spans = list(LandinLexer().get_tokens_unprocessed(source))
+    assert "".join(piece for _, _, piece in spans) == source
+    assert any(token in Comment and piece == "-- comment\u2028x: type"
+               for _, token, piece in spans)
+    assert not any(token in Keyword.Type and piece == "x"
+                   for _, token, piece in spans)
+
+
+def kate_raw_smoke(kate: ET.ElementTree) -> None:
+    contexts = {
+        context.attrib["name"]: context
+        for context in kate.findall("./highlighting/contexts/context")
+    }
+    normal_rules = list(contexts["Normal"])
+    opener = next(rule for rule in normal_rules
+                  if rule.attrib.get("context") == "Raw String")
+    ordinary = next(rule for rule in normal_rules
+                    if rule.tag == "DetectChar" and rule.attrib.get("char") == '"')
+    assert opener.tag == "RegExpr" and normal_rules.index(opener) < normal_rules.index(ordinary)
+    assert opener.attrib["attribute"] == "String"
+
+    raw = contexts["Raw String"]
+    assert raw.attrib["attribute"] == "String"
+    assert raw.attrib["lineEndContext"] == "#stay"
+    (closer,) = list(raw)
+    assert closer.tag == "StringDetect"
+    assert closer.attrib == {"String": "%1", "dynamic": "true", "context": "#pop"}
+
+    opening = re.compile(opener.attrib["String"])
+    assert opening.match('"ordinary"') is None
+    for delimiter, body in (
+        ('"""', 'raw\n-- this is part of the raw literal\n'),
+        ('""""', 'raw\n""" -- still raw\n'),
+    ):
+        source = delimiter + body + delimiter + " public"
+        match = opening.match(source)
+        assert match is not None and match.group(1) == delimiter
+        closing = closer.attrib["String"].replace("%1", match.group(1))
+        assert source.find(closing, match.end()) == len(delimiter + body)
 
 
 def main() -> int:
@@ -194,11 +285,20 @@ def main() -> int:
     assert zed["grammars"]["landin"]["path"] == "highlight/tree-sitter"
     assert zed_language["path_suffixes"] == ["ldn"]
     assert kate.getroot().attrib["extensions"] == "*.ldn"
+    kate_raw_smoke(kate)
     assert notepad.getroot().find("UserLang").attrib["ext"] == "ldn"
 
     lexical = (ROOT / "tests/lexical.ldn").read_text(encoding="utf-8")
+    separators = "\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+    comment = "-- comment" + separators + "x: type"
+    assert list(source_lines(comment + "\r\ny: x\rz: x\n")) == [
+        "-- comment" + separators + "x: type\r\n", "y: x\r", "z: x\n"]
+    assert "x" not in collect_symbols([comment])[0]
+    assert list(Scanner(*collect_symbols([comment])).scan(comment)) == [
+        ("c", comment)]
     scanner_smoke(lexical)
     scanner_declaration_smoke()
+    symbol_collection_smoke()
     pygments_smoke(lexical)
     samples = {
         "storage.type.builtin.landin": "u23",
@@ -219,6 +319,15 @@ def main() -> int:
     check_grammar_revision(helix, zed, emacs)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
+    modules = re.search(
+        r"\(defconst landin-mode-builtin-modules\s+'\(([^)]*)\)\)", emacs, re.S)
+    assert modules, "Emacs builtin module vocabulary is missing"
+    assert set(re.findall(r'"([^"]+)"', modules.group(1))) == BUILTIN_MODULES, (
+        "Emacs builtin modules differ from the scanner")
+    assert re.search(
+        r"\(,\(regexp-opt landin-mode-builtin-modules 'symbols\)"
+        r"\s*\.\s*font-lock-builtin-face\)", emacs), (
+        "Emacs builtin modules have no font-lock rule")
     textmate = json.dumps(grammar)
     for word in BUILTIN_MODULES:
         assert word in textmate, f"TextMate vocabulary omits {word}"
