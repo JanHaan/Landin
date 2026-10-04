@@ -3092,29 +3092,41 @@ package body Landin.Tests.Driver_Suite is
          Check (Executable, True, False);
       end loop;
       declare
-         Host : Landin.Testing.Fakes.Fake_Filesystem;
-         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Hosted : constant Landin.Platform.Path_List :=
+           ["linux-x86-64", "linux-arm64", "darwin-arm64"];
       begin
-         Host.Add_File
-           ("renamed.ldn", "public link(symbol: ""elsewhere"") main:"
-            & " () -> (code: i32) =" & LF & "    code = 0" & LF
-            & "end main" & LF);
-         declare
-            Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
-              (Both ("renamed.ldn", "--emit=exe"), Host, Tools);
-            Report : constant String := Unbounded.To_String (Result.Report);
-         begin
-            Landin.Testing.Check
-              (Item, Result.Status = Landin.Driver.Status_Reported
-                 and then Occurrences (Report, "error[") = 1
-                 and then Contains (Report, "L0502")
-                 and then not Contains (Report, "L0301")
-                 and then Contains (Report, "--> renamed.ldn:1:34" & LF)
-                 and then Tools.Run_Count = 0
-                 and then Host.Written
-                   (Landin.Driver.Default_Executable & ".s") = "",
-               "renamed native main keeps the missing-entry refusal");
-         end;
+         for Target of Hosted loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Args : constant Landin.Platform.Path_List :=
+                 ["renamed.ldn", "--emit=exe", "--target=" & Target,
+                  "--toolchain=false"];
+            begin
+               Host.Add_File
+                 ("renamed.ldn", "public link(symbol: ""elsewhere"") main:"
+                  & " () -> (code: i32) =" & LF & "    code = 0" & LF
+                  & "end main" & LF);
+               Tools.Set_Available (True);
+               Tools.Raise_On_Run;
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute (Args, Host, Tools);
+                  Report : constant String :=
+                    Unbounded.To_String (Result.Report);
+               begin
+                  Landin.Testing.Check
+                    (Item, Result.Status = Landin.Driver.Status_Reported
+                       and then Occurrences (Report, "error[") = 1
+                       and then Contains (Report, "L0502")
+                       and then not Contains (Report, "L0301")
+                       and then Contains (Report, "--> renamed.ldn:1:34" & LF)
+                       and then Tools.Run_Count = 0
+                       and then Host.Write_Count = 0,
+                     Target & ": renamed main is refused before linking");
+               end;
+            end;
+         end loop;
       end;
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;

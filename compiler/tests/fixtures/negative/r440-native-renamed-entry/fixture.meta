@@ -4,6 +4,8 @@ program: main.ldn
 constructs: 1610, 1970
 codes: L0502
 expect: expected.txt
-args: ../tests/fixtures/negative/r440-native-renamed-entry/main.ldn --target=linux-x86-64 --emit=exe
+# The entry refusal precedes linking. A present but failing tool satisfies
+# availability on every host without permitting a successful native link.
+args: ../tests/fixtures/negative/r440-native-renamed-entry/main.ldn --emit=exe --toolchain=false
 status: 1
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64, macos-arm64

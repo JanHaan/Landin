@@ -720,7 +720,7 @@ negative/r440-link-assembly-expression | linux-x86-64, linux-arm64
 negative/r440-link-does-not-change-convention | linux-x86-64, linux-arm64
 negative/r440-link-duplicate-definitions | linux-x86-64, linux-arm64
 negative/r440-link-incompatible-declarations | linux-x86-64, linux-arm64
-negative/r440-native-renamed-entry | linux-x86-64
+negative/r440-native-renamed-entry | linux-x86-64, linux-arm64, macos-arm64
 negative/r440-null-pointer-call-else-fallback-escape | linux-x86-64, linux-arm64, synthetic-32
 negative/r440-null-pointer-folded-zero | linux-x86-64, linux-arm64, synthetic-32
 negative/r440-null-pointer-unchecked-zero | linux-x86-64, linux-arm64, synthetic-32

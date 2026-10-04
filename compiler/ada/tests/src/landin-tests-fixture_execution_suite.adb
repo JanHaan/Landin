@@ -844,12 +844,15 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end if;
 
          Args.Append (Source);
-         Args.Append ("--target=linux-x86-64");
          Args.Append ("--emit=exe");
          Args.Append ("-o");
          Args.Append (Built);
+         if Lanes.Toolchain /= "" then
+            Args.Append ("--toolchain=" & Lanes.Toolchain);
+         end if;
          Produce_Output
-           (Host, Runner, Refine_Path, Name, Built, Args, Item, Ready);
+           (Host, Runner, Refine_Path, Name, Built, Lane_Arguments (Args),
+            Item, Ready);
          if not Ready then
             return;
          end if;
@@ -872,8 +875,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end loop;
          end if;
 
-         Runner.Run (Built, Landin.Platform.No_Arguments, Ran,
-                     Landin.Platform.Merged);
+         Run_Program
+           (Runner, Built, Landin.Platform.No_Arguments, Ran,
+            Landin.Platform.Merged);
          Landin.Testing.Check
            (Item, Ran.Ended = Landin.Platform.Exited
             and then Ran.Exit_Code = 0
