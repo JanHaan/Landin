@@ -343,13 +343,15 @@ new exhaustion guarantee is introduced.
 platform's assembler and linker. The relation that sentence needs is stated
 here and gated by
 [`compiler/tests/test_determinism.py`](../compiler/tests/test_determinism.py),
-which the gate runs with both compiler build modes on Linux and on macOS.
+which the gate runs with both compiler build modes on Linux and on macOS. The
+test exercises each target's default CPU feature level.
 
 Two compilations are *equivalent closures* when they agree on the source
-bytes, the module closure, the target, `--optimize`, `--specialize`,
-`--build-mode` and the pinned compiler. They may differ in the absolute build
-directory, the working directory, the output path and name, the whole
-environment and in how often and in what order they run.
+bytes, the module closure, the target, the selected CPU feature level (default
+or explicit), `--optimize`, `--specialize`, `--build-mode` and the pinned
+compiler. They may differ in the absolute build directory, the working
+directory, the output path and name, the whole environment and in how often
+and in what order they run.
 
 | artifact | deterministic under | records |
 |---|---|---|

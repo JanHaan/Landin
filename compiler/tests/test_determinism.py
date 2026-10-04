@@ -7,14 +7,16 @@ weakest equivalence there is: `compiler/tests/quality/check.py` runs one
 command twice in one directory.  A property that only holds when nothing
 differs is not a determinism property, and a claim without a stated
 equivalence relation is not a claim.  This states the relation and checks it
-on linux-x86-64, darwin-arm64 and cortex-m0 alike.
+on linux-x86-64, darwin-arm64 and cortex-m0 alike, at each target's default
+CPU feature level.
 
 Two compilations are EQUIVALENT CLOSURES when they agree on the source bytes,
-the module closure, the target, `--optimize`, `--specialize`, `--build-mode`
-and the pinned compiler.  They are free to differ in the absolute build
-directory, the working directory, the output path and file name, the whole
-environment (locale, timezone, SOURCE_DATE_EPOCH, everything), in how often
-and in what order they are run, and in THE HOST THEY RUN ON.
+the module closure, the target, the selected CPU feature level (default or
+explicit), `--optimize`, `--specialize`, `--build-mode` and the pinned compiler.
+They are free to differ in the absolute build directory, the working
+directory, the output path and file name, the whole environment (locale,
+timezone, SOURCE_DATE_EPOCH, everything), in how often and in what order they
+are run, and in THE HOST THEY RUN ON.
 
 Tier 1, TARGET CODE, is deterministic under that whole relation:
 
