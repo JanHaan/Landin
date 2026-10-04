@@ -72,6 +72,9 @@ analysis checks the same entry shape as a firmware build and publishes
 `L0502` at an invalid candidate, or at the first entry-module source if it
 is missing. With no selection, analysis makes no firmware entry claim.
 
+When several settings are refused, each error appears on its own line
+in that one notification.
+
 ## What it answers
 
 | request | answer |
@@ -93,6 +96,14 @@ has not opened is still shown, and one that is fixed is cleared. Closing the
 last open file of a module clears sources only that module reported. Sources
 also reported by another open module are reanalysed through that module.
 
+When the editor reports a disk change through
+`workspace/didChangeWatchedFiles`, the server rechecks every open module
+whose last report read that path, even if that file is not open. It asks
+clients that support dynamic watched-file registration to watch `**/*.ldn`.
+An open buffer still takes precedence over the file on disk. Editors that
+do not send watched-file notifications must arrange that notification to
+refresh diagnostics after an external write.
+
 A quick fix is preferred when it is exact: its rule decides the replacement,
 and applying it keeps what the program means, so an editor may apply it
 unasked. A likely fix, such as a respelling, is offered and not preferred.
@@ -101,7 +112,8 @@ than one file.
 
 Formatting ignores the editor's tab size and indentation preference: there is
 one layout, D252's. A source that does not parse is not formatted, and the
-answer is null; its diagnostics already say why.
+answer is null; diagnostics report why when the server checks the changed
+module.
 
 Definitions and hover answer from the names and types the module was checked
 with. A definition is the declared name itself, wherever it is written, and a
@@ -151,17 +163,27 @@ CR [1750]. A byte that is not part of well-formed UTF-8 counts as one
 character, as an editor that shows it as a replacement character counts it.
 A position past the end of its line is the line's end.
 
+A change is incremental: the server applies each range to the text it holds
+without copying the text around it. Until the next analysis, retained string
+payloads occupy no more than twice the visible text bytes, excluding slice
+metadata, allocator overhead, checked compilations and temporary copies: a
+stale copy is dropped when the document changes, and the text is copied out
+once deletions outweigh it. A notification with any malformed change, or a
+range that ends before it starts, is ignored whole.
+
 ## When it analyses
 
-After every change, but only once the editor has stopped sending: a burst of
-edits is analysed once, when no more input is waiting, and a request is
-answered from the documents as they stand when it arrives. Checked modules
-stay available for hover, definition and code actions, even when queries
-alternate between open modules. An open, change or close discards the checked
-modules; diagnostics then rebuild those affected, and later queries rebuild
-any others they need. Distinct file URIs naming one path retain separate
-buffers. A query selects its URI's buffer; switching to different bytes
-also discards checked modules, including those importing that path.
+After every buffer or reported disk change, but only once the editor has
+stopped sending: a burst of edits is analysed once, when no more input is
+waiting, and a request is answered from the documents as they stand when it
+arrives. Formatting answers from the held text before analysis; diagnostics
+follow when input is idle. Checked modules stay available for hover, definition
+and code actions, even when queries alternate between open modules. An open,
+change, close or watched disk change discards the checked modules; diagnostics
+then rebuild those affected, and later queries rebuild any others they need.
+Distinct file URIs naming one path retain separate buffers. A query selects its
+URI's buffer; switching to different bytes also discards checked modules,
+including those importing that path.
 The cache holds at most one compilation per open module,
 and discards all of them when the session ends. This is a compilation-count
 bound, not a fixed byte limit: separate entries may duplicate imports.
@@ -176,9 +198,21 @@ The `memory` suite checks repeated sessions and edits for accumulation.
 On Linux/glibc, `compiler/tests/server/measure_memory.py` compares two built
 compilers over four modules sharing an import, two with broken bodies. It
 records live allocated bytes at idle, peak resident memory, repeated and
-alternating queries, twenty edits, import open/close and session teardown.
+alternating queries, twenty edits, a 256-edit burst, import open/close and
+session teardown. The burst uses ranges when advertised and equivalent full
+replacements otherwise. Live allocation and peak RSS include slice metadata
+and allocator overhead; neither isolates a single cache.
 Pass `--baseline`, `--refine` and `--output` to retain the comparison. The
 probe is a temporary host library; it does not alter either compiler.
+
+During one publication round with several stale modules, previously
+published paths identify shared imports. Only those paths enter an
+exact-text syntax cache, with held editor bytes snapshotted after pending
+edits are flushed. The syntax cache is released at the end of the round;
+checked module compilations may remain cached. Name resolution and checking
+still run per module because their answers depend on its whole program and
+options. Shared parses and any stand-in transfer temporarily overlap those
+checked compilations; neither cache has a fixed byte bound.
 
 ## Limits
 
@@ -211,6 +245,12 @@ says how to install each. `refine` must be on the editor's path, as
 | Vim | `highlight/vim` registers it with vim-lsp when vim-lsp is installed |
 | Sublime Text | `highlight/sublime/LSP-refine.sublime-settings`, for the LSP package |
 | Kate | `highlight/kate/lsp-client.json`, for the LSP Client plugin |
+
+The shipped Neovim configuration uses the nearest `.git` directory as its
+root. Without Git it uses Neovim's working directory for files beneath that
+directory, or the opened file's directory otherwise. Start Neovim in a
+Git-free project's root so imports in sibling modules are visible. Neovim's
+`vim.lsp.config` can override `root_dir` when a project needs other roots.
 
 `highlight/test_adapters.py` holds every one of these to `refine lsp`, and
 `highlight/test.sh` starts the server through Neovim and Emacs when

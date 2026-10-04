@@ -14,7 +14,6 @@ with Landin.Panics;
 with Landin.Platform.Overlays;
 with Landin.Resolution;
 with Landin.Source.Names;
-with Landin.Stages.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Stages.Checking;
 
@@ -147,7 +146,8 @@ package body Landin.Server.Analysis is
       Asked   : Request;
       Context : out Compilation_Access;
       Answer  : out Result;
-      Watch_Syntax : access procedure (Name : String) := null)
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache : access Landin.Stages.Syntax.Parse_Cache := null)
    is
       Original_Owner : Compilation_Access := null;
       Stand_In_Owner : Compilation_Access := null;
@@ -195,14 +195,14 @@ package body Landin.Server.Analysis is
          if Rooted then
             Landin.Driver.Loading.Load_Reachable_Program
               (Context, From, Asked.Roots, Entry_Directory,
-               Missing'Access, Previous, Watch_Syntax);
+               Missing'Access, Previous, Watch_Syntax, Cache);
          else
             Landin.Driver.Loading.Load_Files (Context, From, Asked.Files);
             if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
                Landin.Stages.Syntax.Run_Using
-                 (Context, Outcome, Previous, Watch_Syntax);
+                 (Context, Outcome, Previous, Watch_Syntax, Cache);
             end if;
          end if;
       end Load;
@@ -469,13 +469,15 @@ package body Landin.Server.Analysis is
       Asked   : Request;
       Visit   : not null access procedure
         (Context : in out Landin.Stages.Compilation; Answer : Result);
-      Watch_Syntax : access procedure (Name : String) := null)
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache : access Landin.Stages.Syntax.Parse_Cache := null)
    is
       Context : Compilation_Access := null;
       Answer : Result;
    begin
       Analyse
-        (For_Target, At_Level, Host, Asked, Context, Answer, Watch_Syntax);
+        (For_Target, At_Level, Host, Asked, Context, Answer, Watch_Syntax,
+         Cache);
       Visit (Context.all, Answer);
       Release (Context);
    exception

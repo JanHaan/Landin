@@ -8,5 +8,7 @@ and exercises declarations, nesting, contextual words, calls and control flow.
 `textmate-smoke.mjs` feeds the lexical fixture to VS Code's actual TextMate
 engine. `vim-smoke.vim` and `emacs-smoke.el` open it in a real editor and
 assert file recognition, comment settings, and representative syntax groups.
+`emacs-treesit-smoke.el` opens the structural fixture with the compiled grammar
+and checks tree-sitter mode and representative font-lock faces.
 `../test.sh` runs them when their small test dependencies or editors are
 installed. Nothing here builds or invokes `refine`.

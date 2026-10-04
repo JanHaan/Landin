@@ -1,10 +1,11 @@
 --  What the editor holds open, and where each file belongs.
 --
---  A document is a URI, a version and its whole text, replaced by every
---  change: the server asks for full synchronisation, so a change is the
---  buffer as it now is and never an edit to apply.  The open documents are
---  held over the host's filesystem by path, so the loader reads a buffer
---  exactly where it would read the saved file.
+--  A document is a URI, a version and editable text.  Ranged changes
+--  update slices without copying the unchanged text.  Before analysis,
+--  the current bytes are held over the host's filesystem by path, so the
+--  loader reads a buffer exactly where it would read the saved file; a
+--  change drops the held copy it makes stale rather than keep it until
+--  then.
 --
 --  A file belongs where `refine` would compile it [1410]-[1420]: a `file:`
 --  URI's directory is its entry module, loaded under the server's roots.
@@ -12,11 +13,14 @@
 --  alone, as `refine FILE` would analyse it.
 
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Finalization;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform;
 with Landin.Platform.Overlays;
 with Landin.Server.Analysis;
+with Landin.Server.Positions;
+with Landin.Server.Texts;
 
 package Landin.Server.Documents is
 
@@ -36,11 +40,13 @@ package Landin.Server.Documents is
    --  named by its URI, so it is always analysed alone.
    function Untitled_Path (URI : String) return String;
 
+   type Buffer_Access is access Landin.Server.Texts.Buffer;
+
    type Document is record
       URI     : Ada.Strings.Unbounded.Unbounded_String;
       Path    : Ada.Strings.Unbounded.Unbounded_String;
-      Text    : Ada.Strings.Unbounded.Unbounded_String;
       Version : Long_Long_Integer := 0;
+      Data    : Buffer_Access;
    end record;
 
    package Document_Maps is new Ada.Containers.Indefinite_Ordered_Maps
@@ -48,20 +54,36 @@ package Landin.Server.Documents is
 
    type Store
      (Under : not null access constant Landin.Platform.Filesystem'Class)
-   is limited record
+   is new Ada.Finalization.Limited_Controlled with record
       Open       : Document_Maps.Map;            --  by URI
       Held       : Landin.Platform.Overlays.Overlay (Under);
       Active_URI : Ada.Strings.Unbounded.Unbounded_String;
       Roots      : Landin.Platform.Path_List;    --  in search order
    end record;
 
+   overriding procedure Finalize (Into : in out Store);
+
    procedure Open
      (Into : in out Store; URI : String; Version : Long_Long_Integer;
       Text : String);
 
-   procedure Change
-     (Into : in out Store; URI : String; Version : Long_Long_Integer;
-      Text : String);
+   --  A change replaces the whole text, an edit one range of it.  The
+   --  version is set apart, once a notification has been applied.
+   procedure Change (Into : in out Store; URI : String; Text : String);
+
+   procedure Edit
+     (Into : in out Store; URI : String;
+      First, Last : Landin.Server.Positions.Position;
+      Unit : Landin.Server.Positions.Encoding; Text : String)
+     with Pre => Landin.Server.Texts.In_Order (First, Last);
+
+   procedure Set_Version
+     (Into : in out Store; URI : String; Version : Long_Long_Integer);
+
+   --  Copy dirty editable text to the overlay at the analysis boundary.
+   --  Until then a changed document's held text is empty: every reader of
+   --  the overlay must flush first.
+   procedure Flush (Into : in out Store);
 
    procedure Close (Into : in out Store; URI : String);
 

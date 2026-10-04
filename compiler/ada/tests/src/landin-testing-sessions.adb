@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 
 with Landin.Platform;
 with Landin.Platform.Native;
+with Landin.Server.Documents;
 with Landin.Server.Sessions;
 with Landin.Server.Transport;
 with Landin.Testing.Fakes;
@@ -139,6 +140,8 @@ package body Landin.Testing.Sessions is
       Content  : Unbounded.Unbounded_String;
       Read     : Landin.Platform.Read_Status;
       Pauses   : Offset_Vectors.Vector;
+      Last_Pause : Natural := 0;
+      Has_Pause : Boolean := False;
 
       procedure Count_Analysis;
 
@@ -204,7 +207,31 @@ package body Landin.Testing.Sessions is
          elsif Starts (Line, "chunk: ") then
             Chunk := Positive'Value (After (Line, "chunk: "));
          elsif Line = "pause" then
-            Pauses.Append (Unbounded.Length (Script));
+            Last_Pause := Unbounded.Length (Script);
+            Has_Pause := True;
+            Pauses.Append (Last_Pause);
+         elsif Starts (Line, "disk: ") then
+            declare
+               Split : constant Natural := Ada.Strings.Fixed.Index
+                 (Line, " | ");
+            begin
+               if not Has_Pause or else Split = 0 then
+                  Problem ("disk edit needs a preceding pause: " & Line);
+                  return Answer;
+               end if;
+               declare
+                  Path : constant String := Landin.Server.Documents.Path_Of
+                    (Line (Line'First + 6 .. Split - 1));
+               begin
+                  if Path = "" then
+                     Problem ("disk edit needs a file URI: " & Line);
+                     return Answer;
+                  end if;
+                  Landin.Testing.Fakes.Edit_At
+                    (Channel, Last_Pause, Host'Unchecked_Access, Path,
+                     Unescaped (Line (Split + 3 .. Line'Last)));
+               end;
+            end;
          elsif Line'Length > 0 and then not Starts (Line, "#") then
             Problem ("session.lsp has a line that is none of its forms: "
                      & Line);

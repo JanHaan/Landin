@@ -1,0 +1,5 @@
+import lib/numbers
+
+main: () -> (status: i32) =
+    status = i32 (numbers.double (21))
+end main

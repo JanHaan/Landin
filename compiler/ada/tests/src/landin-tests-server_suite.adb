@@ -11,6 +11,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Driver;
+with Landin.Json;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Analysis;
@@ -19,14 +20,15 @@ with Landin.Server.Holes;
 with Landin.Server.Navigation;
 with Landin.Server.Positions;
 with Landin.Server.Sessions;
+with Landin.Server.Texts;
 with Landin.Server.Transport;
-with Landin.Json;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
@@ -50,8 +52,10 @@ package body Landin.Tests.Server_Suite is
    use type Landin.Server.Navigation.Place;
    use type Landin.Source.Byte_Offset;
    use type Landin.Platform.Write_Status;
+   use type Landin.Platform.Read_Status;
    use type Landin.Source.Span;
    use type Fixtures.Fixture_Class;
+   use type Diag.Diagnostic_List;
 
    LF : constant Character := ASCII.LF;
 
@@ -795,6 +799,199 @@ package body Landin.Tests.Server_Suite is
       end;
    end Positions_Count_What_Was_Agreed;
 
+   --  A burst of edits before analysis must retain only the text it
+   --  still shows: the original bytes once, and of the inserted strings
+   --  only those a slice still names.
+   procedure Small_Edits_Keep_Large_Text_Sliced
+     (Item : in out Landin.Testing.Context);
+
+   procedure Small_Edits_Keep_Large_Text_Sliced
+     (Item : in out Landin.Testing.Context)
+   is
+      package P renames Landin.Server.Positions;
+      package Texts renames Landin.Server.Texts;
+      Buffer : Texts.Buffer;
+      Source : constant String (1 .. 1_048_576) := [others => 'x'];
+   begin
+      Texts.Open (Buffer, Source);
+      for Edit in 1 .. 100 loop
+         Texts.Edit (Buffer, (0, 0), (0, 0), P.UTF_16, "z");
+      end loop;
+      Landin.Testing.Check
+        (Item, Texts.Stored_Bytes (Buffer) = Source'Length + 100
+          and then Texts.Stored_Strings (Buffer) = 101,
+         "100 insertions keep the original and 100 inserted bytes");
+      declare
+         Result : constant String := Texts.Content (Buffer);
+      begin
+         Landin.Testing.Check
+           (Item, Result'Length = Source'Length + 100
+             and then Result (1 .. 100) = [1 .. 100 => 'z']
+             and then Result (101 .. Result'Last) = Source,
+            "one materialization has the complete edited source");
+      end;
+
+      --  Typing over one character again and again: each replacement
+      --  supersedes the last, which nothing names any more.
+      Texts.Open (Buffer, Source);
+      for Edit in 1 .. 100 loop
+         Texts.Edit
+           (Buffer, (0, 7), (0, 8), P.UTF_16,
+            [1 => Character'Val (Character'Pos ('a') + Edit mod 26)]);
+         Landin.Testing.Check
+           (Item, Texts.Stored_Bytes (Buffer) = Source'Length + 1
+             and then Texts.Stored_Strings (Buffer) = 2,
+            "replacement" & Edit'Image & " keeps one inserted byte");
+      end loop;
+      declare
+         Result : constant String := Texts.Content (Buffer);
+      begin
+         Landin.Testing.Check
+           (Item, Result'Length = Source'Length
+             and then Result (8) =
+               Character'Val (Character'Pos ('a') + 100 mod 26)
+             and then Result (1 .. 7) = Source (1 .. 7)
+             and then Result (9 .. Result'Last) = Source (9 .. Source'Last),
+            "the same range replaced 100 times shows the last text");
+      end;
+
+      --  Deleting what an edit inserted, and the original around it.
+      Texts.Edit (Buffer, (0, 0), (0, 100), P.UTF_16, "");
+      Landin.Testing.Check
+        (Item, Texts.Stored_Strings (Buffer) = 1
+          and then Texts.Length (Buffer) = Source'Length - 100,
+         "a deletion over an inserted string frees it");
+
+      --  Full replacements free what they replace.
+      for Version in 1 .. 8 loop
+         Texts.Replace
+           (Buffer, [1 .. Source'Length =>
+                       Character'Val (Character'Pos ('a') + Version)]);
+         Landin.Testing.Check
+           (Item, Texts.Stored_Bytes (Buffer) = Source'Length
+             and then Texts.Stored_Strings (Buffer) = 1,
+            "one full source retained after replacement" & Version'Image);
+      end loop;
+   end Small_Edits_Keep_Large_Text_Sliced;
+
+   --  A range is read as Positions reads one.  The slices are counted
+   --  without assembling them, so check them against Offset_Of on the
+   --  same text: line ends of each kind, characters of every width in both
+   --  units, and positions past a line, past the text and inside a
+   --  character, each in a buffer split across several strings.
+   procedure Edits_Count_As_Positions_Do
+     (Item : in out Landin.Testing.Context);
+
+   procedure Edits_Count_As_Positions_Do
+     (Item : in out Landin.Testing.Context)
+   is
+      package P renames Landin.Server.Positions;
+      package Texts renames Landin.Server.Texts;
+      Text : constant String :=
+        "a" & Character'Val (16#C3#) & Character'Val (16#A9#) & "b"
+        & ASCII.CR & ASCII.LF
+        & Character'Val (16#F0#) & Character'Val (16#9D#)
+        & Character'Val (16#84#) & Character'Val (16#9E#) & "c" & ASCII.CR
+        & Character'Val (16#E2#) & Character'Val (16#82#)
+        & Character'Val (16#AC#) & Character'Val (16#FF#) & ASCII.LF
+        & "end";
+      Buffer : Texts.Buffer;
+      Agreed : Boolean := True;
+   begin
+      for Unit in P.Encoding loop
+         for Line in 0 .. 4 loop
+            for Column in 0 .. 8 loop
+               --  A buffer of single-byte strings: the hardest walk.
+               Texts.Open (Buffer, "");
+               for Index in reverse Text'Range loop
+                  Texts.Edit (Buffer, (0, 0), (0, 0), P.UTF_8,
+                              Text (Index .. Index));
+               end loop;
+               declare
+                  Offset : constant Natural := Natural
+                    (P.Offset_Of (Text, (Line, Column), Unit));
+                  Edited : constant String :=
+                    Text (Text'First .. Text'First + Offset - 1) & "#"
+                    & Text (Text'First + Offset .. Text'Last);
+               begin
+                  Texts.Edit (Buffer, (Line, Column), (Line, Column), Unit,
+                              "#");
+                  if Texts.Content (Buffer) /= Edited then
+                     Agreed := False;
+                  end if;
+               end;
+            end loop;
+         end loop;
+      end loop;
+      Landin.Testing.Check
+        (Item, Agreed, "every insertion lands where Offset_Of puts it");
+   end Edits_Count_As_Positions_Do;
+
+   --  Deleting nearly all of a large document before analysis must not
+   --  keep the old text: neither in the string its last byte is a slice
+   --  of, nor in the copy held for the loader, which analysis replaces.
+   procedure Near_Total_Deletion_Keeps_No_Old_Text
+     (Item : in out Landin.Testing.Context);
+
+   procedure Near_Total_Deletion_Keeps_No_Old_Text
+     (Item : in out Landin.Testing.Context)
+   is
+      package P renames Landin.Server.Positions;
+      package Documents renames Landin.Server.Documents;
+      package Texts renames Landin.Server.Texts;
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Store : Documents.Store (Host'Access);
+      URI : constant String := "untitled:near-total-deletion";
+      Source : constant String (1 .. 1_048_576) := [others => 'x'];
+      Content : Unbounded.Unbounded_String;
+      Read : Landin.Platform.Read_Status;
+
+      --  Read what the loader would, into Content and Read.
+      procedure Read_Held;
+
+      procedure Read_Held is
+      begin
+         Store.Held.Read_File
+           (Documents.Held_Path (Store, URI), Content, Read);
+      end Read_Held;
+   begin
+      Documents.Open (Store, URI, 1, Source);
+      Documents.Edit
+        (Store, URI, (0, 0), (0, Source'Length - 1), P.UTF_16, "");
+      declare
+         Data : constant Documents.Buffer_Access :=
+           Store.Open.Element (URI).Data;
+      begin
+         Landin.Testing.Check
+           (Item, Texts.Length (Data.all) = 1
+             and then Texts.Stored_Bytes (Data.all) = 1
+             and then Texts.Stored_Strings (Data.all) = 1,
+            "one byte left is one byte stored");
+         Read_Held;
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Read_Ok
+             and then Unbounded.Length (Content) = 0,
+            "the held copy of the old text is let go");
+
+         --  The same deletion as a burst of small ones from the front.
+         Documents.Open (Store, URI, 2, Source);
+         for Edit in 1 .. 1_000 loop
+            Documents.Edit
+              (Store, URI, (0, 0), (0, 1_048), P.UTF_16, "");
+            Landin.Testing.Check
+              (Item, Texts.Stored_Bytes (Store.Open.Element (URI).Data.all)
+                 <= 2 * Texts.Length (Store.Open.Element (URI).Data.all),
+               "deletion" & Edit'Image & " keeps at most twice the text");
+         end loop;
+         Documents.Flush (Store);
+         Read_Held;
+         Landin.Testing.Check
+           (Item, Unbounded.Length (Content) = Source'Length - 1_048_000
+             and then Unbounded.Element (Content, 1) = 'x',
+            "analysis holds the text that is left");
+      end;
+   end Near_Total_Deletion_Keeps_No_Old_Text;
+
    ---------------------------------------------------------------------
    --  Sessions
    ---------------------------------------------------------------------
@@ -1087,6 +1284,33 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check_Equal
         (Item, Doc ("---( lexical doc" & LF & "f: u8 = 0" & LF),
          "( lexical doc", "a parenthesis after the opener is doc text");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- first" & LF & "---" & LF & "f: u8 = 0"),
+         "first", "empty lines nearest the declaration remain omitted");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("---" & LF & "--- last" & LF & "f: u8 = 0"),
+         LF & "last", "empty lines above text retain their separator");
+      declare
+         Text : Unbounded.Unbounded_String;
+         Expected : Unbounded.Unbounded_String;
+      begin
+         for Index in 1 .. 200 loop
+            declare
+               Line : constant String := "line" & Index'Image;
+            begin
+               Unbounded.Append (Text, "--- " & Line & LF);
+               if Index > 1 then
+                  Unbounded.Append (Expected, LF);
+               end if;
+               Unbounded.Append (Expected, Line);
+            end;
+         end loop;
+         Unbounded.Append (Text, "f: u8 = 0" & LF);
+         Landin.Testing.Check_Equal
+           (Item, Doc (Unbounded.To_String (Text)),
+            Unbounded.To_String (Expected),
+            "a long run keeps every doc line in source order");
+      end;
    end Doc_Comments_Are_The_Run_Above;
 
    --  A source refused before the checker ran has no names or types, so
@@ -1295,6 +1519,246 @@ package body Landin.Tests.Server_Suite is
       end;
    end An_Unresolved_Name_Leaves_Other_Navigation;
 
+   procedure Idle_And_Single_Publications_Skip_Cache
+     (Item : in out Landin.Testing.Context);
+
+   procedure Idle_And_Single_Publications_Skip_Cache
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Status : Landin.Server.Sessions.Exit_Status;
+      Statistics : aliased Landin.Server.Sessions.Publication_Statistics;
+      URI : constant String := "file:///w/main.ldn";
+      Input : constant String :=
+        Transport.Framed
+          ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+           & """params"":{""capabilities"":{}}}")
+        & Transport.Framed
+          ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+           & """params"":{""textDocument"":{""uri"":""" & URI
+           & """,""version"":1,""text"":""value: u8 = 1\n""}}}")
+        & Transport.Framed
+          ("{""jsonrpc"":""2.0"",""id"":2,""method"":""textDocument/hover"","
+           & """params"":{""textDocument"":{""uri"":""" & URI
+           & """},""position"":{""line"":0,""character"":1}}}")
+        & Transport.Framed
+          ("{""jsonrpc"":""2.0"",""id"":3,""method"":""textDocument/hover"","
+           & """params"":{""textDocument"":{""uri"":""" & URI
+           & """},""position"":{""line"":0,""character"":1}}}")
+        & Transport.Framed
+          ("{""jsonrpc"":""2.0"",""id"":4,""method"":""shutdown""}")
+        & Transport.Framed
+          ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+   begin
+      Host.Add_File ("/w/main.ldn", "value: u8 = 1" & LF);
+      Channel.Script (Input);
+      Landin.Server.Sessions.Serve
+        (Channel, Host'Access, Status, Statistics => Statistics'Access);
+      Landin.Testing.Check
+        (Item, Status = 0, "the scripted session exits normally");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+          (Channel.Output, """id"":3") > 0,
+         "the second query was answered");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Uncached_Publications, 1,
+         "one stale module uses ordinary analysis");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Cached_Publications, 0,
+         "one stale module never starts cached analysis");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Held_Snapshots, 0,
+         "idle requests and a single stale module snapshot no buffers");
+      Landin.Testing.Check
+        (Item, Statistics.Empty_Rounds >= 2,
+         "the later query and shutdown exercise empty rounds");
+   end Idle_And_Single_Publications_Skip_Cache;
+
+   procedure Shared_Edit_Caches_Only_The_Import
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Edit_Caches_Only_The_Import
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      Channel : Landin.Testing.Fakes.Fake_Channel;
+      Status : Landin.Server.Sessions.Exit_Status;
+      Statistics : aliased Landin.Server.Sessions.Publication_Statistics;
+      Script : Unbounded.Unbounded_String;
+      Library_URI : constant String :=
+        "file:///w/lib/numbers/numbers.ldn";
+      One_URI : constant String := "file:///w/one/main.ldn";
+      Two_URI : constant String := "file:///w/two/main.ldn";
+      Library_Text : constant String :=
+        "public double: (x: u8) -> (y: u8) = x + x end double" & LF;
+      Entry_Text : constant String :=
+        "import lib/numbers" & LF
+        & "main: () -> (status: i32) =" & LF
+        & "    status = i32 (numbers.double (21))" & LF
+        & "end main" & LF;
+
+      procedure Send (Message : String);
+      procedure Open_Doc (URI, Content : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+
+      procedure Open_Doc (URI, Content : String) is
+      begin
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI)
+               & ",""version"":1,""text"":"
+               & Landin.Json.Quoted (Content) & "}}}");
+      end Open_Doc;
+   begin
+      Host.Add_Directory ("/w");
+      Host.Add_Directory ("/w/one");
+      Host.Add_Directory ("/w/two");
+      Host.Add_Directory ("/w/lib");
+      Host.Add_Directory ("/w/lib/numbers");
+      Host.Add_File ("/w/one/main.ldn", Entry_Text);
+      Host.Add_File ("/w/two/main.ldn", Entry_Text);
+      Host.Add_File ("/w/lib/numbers/numbers.ldn", Library_Text);
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},"
+            & """rootUri"":""file:///w""}}");
+      Open_Doc (One_URI, Entry_Text);
+      Open_Doc (Two_URI, Entry_Text);
+      Open_Doc (Library_URI, Library_Text);
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""textDocument/hover"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (One_URI)
+            & "},""position"":{""line"":1,""character"":1}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (Library_URI)
+            & ",""version"":2},""contentChanges"":[{""text"":"
+            & Landin.Json.Quoted (Library_Text) & "}]}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":3,""method"":""textDocument/hover"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (One_URI)
+            & "},""position"":{""line"":1,""character"":1}}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":4,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve
+        (Channel, Host'Access, Status, Statistics => Statistics'Access);
+      Landin.Testing.Check
+        (Item, Status = 0, "the shared-import session exits normally");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Uncached_Publications, 3,
+         "the first publication has no previous paths to share");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Cached_Publications, 3,
+         "the edit republishes each dependent and the library");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Held_Snapshots, 1,
+         "only the shared held import is snapshotted");
+      Landin.Testing.Check_Equal
+        (Item, Statistics.Reused_Parses, 2,
+         "both dependent entries reuse the library parse");
+   end Shared_Edit_Caches_Only_The_Import;
+
+   procedure Shared_Import_Parse_Is_Reused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Import_Parse_Is_Reused
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Cache : aliased Landin.Stages.Syntax.Parse_Cache;
+      Library_Text : constant String :=
+        "public double: (x: u8) -> (y: u8) = x + x end double" & LF;
+
+      function Analyse_Entry
+        (Directory : String;
+         Cached    : Boolean) return Landin.Server.Analysis.Result;
+
+      function Analyse_Entry
+        (Directory : String;
+         Cached    : Boolean) return Landin.Server.Analysis.Result
+      is
+         Context : Landin.Server.Analysis.Compilation_Access;
+         Asked : Landin.Server.Analysis.Request;
+         Answer : Landin.Server.Analysis.Result;
+      begin
+         Asked.Roots.Append ("/w");
+         Asked.Entry_Directory := Unbounded.To_Unbounded_String (Directory);
+         if Cached then
+            Landin.Server.Analysis.Analyse
+              (Landin.Targets.Linux_X86_64,
+                Landin.Targets.Levels.Default_Level
+                  (Landin.Targets.Linux_X86_64),
+                Host, Asked, Context, Answer, Cache => Cache'Access);
+         else
+            Landin.Server.Analysis.Analyse
+              (Landin.Targets.Linux_X86_64,
+                Landin.Targets.Levels.Default_Level
+                  (Landin.Targets.Linux_X86_64),
+                Host, Asked, Context, Answer);
+         end if;
+         Landin.Server.Analysis.Release (Context);
+         return Answer;
+      end Analyse_Entry;
+   begin
+      Host.Add_Directory ("/w");
+      Host.Add_Directory ("/w/one");
+      Host.Add_Directory ("/w/two");
+      Host.Add_Directory ("/w/lib");
+      Host.Add_Directory ("/w/lib/numbers");
+      Host.Add_File
+        ("/w/lib/numbers/numbers.ldn", Library_Text);
+      Host.Add_File ("/w/one/unique.ldn", "unique: u8 = 1" & LF);
+      Host.Add_File
+        ("/w/one/main.ldn",
+         "import lib/numbers" & LF
+         & "main: () -> (status: i32) =" & LF
+         & "    status = i32 (numbers.doubel (21))" & LF
+         & "end main" & LF);
+      Host.Add_File
+        ("/w/two/main.ldn",
+         "import lib/numbers" & LF
+         & "main: () -> (status: i32) =" & LF
+         & "    status = i32 (numbers.dobule (21))" & LF
+         & "end main" & LF);
+      declare
+         Plain  : constant Landin.Server.Analysis.Result :=
+           Analyse_Entry ("/w/two", False);
+      begin
+         --  The editor's held bytes survive a disk read failure during the
+         --  round.  Both entries must use the one snapshot supplied here.
+         Landin.Stages.Syntax.Hold
+           (Cache, "/w/lib/numbers/numbers.ldn", Library_Text);
+         Landin.Stages.Syntax.Limit_To
+           (Cache, "/w/lib/numbers/numbers.ldn");
+         Host.Add_Unreadable ("/w/lib/numbers/numbers.ldn");
+         declare
+            First  : constant Landin.Server.Analysis.Result :=
+              Analyse_Entry ("/w/one", True);
+            Second : constant Landin.Server.Analysis.Result :=
+              Analyse_Entry ("/w/two", True);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Syntax.Reuse_Count (Cache), 1,
+               "the shared import is parsed once across two entries");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Syntax.Stored_Count (Cache), 1,
+               "only the shared import is copied into the cache");
+            Landin.Testing.Check_Equal
+              (Item, Codes_Of (First.Found), "L0201",
+               "the first entry keeps its own diagnostic");
+            Landin.Testing.Check
+              (Item, Second.Found = Plain.Found
+                     and then Second.Checked = Plain.Checked,
+               "held bytes and cached parse preserve the full report");
+         end;
+      end;
+   end Shared_Import_Parse_Is_Reused;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1328,6 +1792,15 @@ package body Landin.Tests.Server_Suite is
         (Into, "server", "positions count what was agreed",
          Positions_Count_What_Was_Agreed'Access);
       Landin.Testing.Register
+        (Into, "server", "small edits keep large text sliced",
+         Small_Edits_Keep_Large_Text_Sliced'Access);
+      Landin.Testing.Register
+        (Into, "server", "edits count as positions do",
+         Edits_Count_As_Positions_Do'Access);
+      Landin.Testing.Register
+        (Into, "server", "near-total deletion keeps no old text",
+         Near_Total_Deletion_Keeps_No_Old_Text'Access);
+      Landin.Testing.Register
         (Into, "server", "every session runs as written",
          Every_Session_Runs_As_Written'Access);
       Landin.Testing.Register
@@ -1351,6 +1824,15 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "an unresolved name leaves other navigation",
          An_Unresolved_Name_Leaves_Other_Navigation'Access);
+      Landin.Testing.Register
+        (Into, "server", "shared import parse is reused",
+         Shared_Import_Parse_Is_Reused'Access);
+      Landin.Testing.Register
+        (Into, "server", "idle and single publications skip cache",
+         Idle_And_Single_Publications_Skip_Cache'Access);
+      Landin.Testing.Register
+        (Into, "server", "shared edit caches only the import",
+         Shared_Edit_Caches_Only_The_Import'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

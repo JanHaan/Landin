@@ -53,6 +53,19 @@ package Landin.Server.Positions is
       Where : Position;
       Unit  : Encoding) return Landin.Source.Byte_Offset;
 
+   --  For text that is not one string, the pieces Offset_Of counts with.
+   --  Width is the byte length of the character that begins with Lead,
+   --  given the bytes after it (-1 past the end), by Unicode's well-formed
+   --  table: 1 for a byte that begins nothing well formed.
+   function Width
+     (Lead, Second, Third, Fourth : Integer) return Positive;
+
+   --  How many units a character of Bytes bytes is.
+   function Units (Bytes : Positive; Unit : Encoding) return Positive
+     is (case Unit is
+           when UTF_8  => Bytes,
+           when UTF_16 => (if Bytes = 4 then 2 else 1));
+
 private
 
    type Endpoint is record

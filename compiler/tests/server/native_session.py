@@ -49,8 +49,8 @@ def unescaped(text):
 
 
 def parse(transcript):
-    """(chunks of input split at each pause, expected messages, status)."""
-    chunks, current, expected, status = [], b"", [], None
+    """(chunks of input split at each pause, disk edits, messages, status)."""
+    chunks, edits, current, expected, status = [], [], b"", [], None
     for line in transcript.split("\n")[:-1]:
         if line.startswith("-> "):
             current += framed(line[3:])
@@ -58,13 +58,18 @@ def parse(transcript):
             current += unescaped(line[5:])
         elif line == "pause":
             chunks.append(current)
+            edits.append([])
             current = b""
+        elif line.startswith("disk: "):
+            uri, content = line[6:].split(" | ", 1)
+            edits[-1].append((urllib.parse.urlparse(uri).path,
+                              unescaped(content)))
         elif line.startswith("<- "):
             expected.append(line[3:])
         elif line.startswith("exit: "):
             status = int(line[6:])
     chunks.append(current)
-    return chunks, expected, status
+    return chunks, edits, expected, status
 
 
 def messages(output):
@@ -95,7 +100,7 @@ def run(refine, name):
         transcript = transcript.replace(
             "file://localhost/workspace",
             "file://localhost" + urllib.parse.quote(str(workspace), safe="/"))
-        chunks, expected, status = parse(transcript)
+        chunks, edits, expected, status = parse(transcript)
 
         process = subprocess.Popen([refine, "lsp", "--stdio"],
                                    stdin=subprocess.PIPE,
@@ -122,6 +127,8 @@ def run(refine, name):
                         break
                     output += data
                     quiet_since = time.monotonic()
+            for path, content in edits[index]:
+                Path(path).write_bytes(content)
         #  communicate flushes and closes standard input itself, and a
         #  Python before 3.13 refuses to flush one already closed.
         try:

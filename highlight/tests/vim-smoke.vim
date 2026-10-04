@@ -23,6 +23,23 @@ call s:AssertGroup('nested block comment', 'landinBlockComment')
 call s:AssertGroup('escaped', 'landinString')
 call s:AssertGroup('raw$', 'landinRawString')
 
+enew
+setlocal shiftwidth=4 expandtab
+setfiletype landin
+call assert_equal('GetLandinIndent()', &l:indentexpr, 'Landin indent expression')
+
+function! s:AssertBodyIndent(header, expected)
+  call setline(1, [a:header, 'body = 1'])
+  normal! 2G==
+  call assert_equal(a:expected, indent(2), a:header . ' body indent')
+endfunction
+
+call s:AssertBodyIndent('    while i < 2 do', 8)
+call s:AssertBodyIndent('    for element in source do', 8)
+call s:AssertBodyIndent('    if ready then', 8)
+call s:AssertBodyIndent('    result =', 8)
+call s:AssertBodyIndent('    undo', 4)
+
 if !empty(v:errors)
   for error in v:errors
     echoerr error

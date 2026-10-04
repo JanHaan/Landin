@@ -1,10 +1,55 @@
+with Ada.Unchecked_Deallocation;
 with Landin.Diagnostics.Lexical;
 with Landin.Source;
-with Landin.Syntax.Forest;
 with Landin.Tokens.Lexer;
-with Landin.Tokens.Spacing;
 
 package body Landin.Stages.Syntax is
+
+   package Unbounded renames Ada.Strings.Unbounded;
+   procedure Free is new Ada.Unchecked_Deallocation
+     (Cache_Entry, Entry_Access);
+
+   overriding procedure Finalize (Cache : in out Parse_Cache) is
+   begin
+      for First of Cache.Entries loop
+         declare
+            Cached : Entry_Access := First;
+         begin
+            while Cached /= null loop
+               declare
+                  Next : constant Entry_Access := Cached.Next;
+               begin
+                  Free (Cached);
+                  Cached := Next;
+               end;
+            end loop;
+         end;
+      end loop;
+      Cache.Entries.Clear;
+   end Finalize;
+
+   function Reuse_Count (Cache : Parse_Cache) return Natural
+     is (Cache.Reused);
+
+   function Stored_Count (Cache : Parse_Cache) return Natural
+     is (Cache.Stored);
+
+   procedure Limit_To (Cache : in out Parse_Cache; Path : String) is
+   begin
+      Cache.Allowed.Include (Path);
+   end Limit_To;
+
+   procedure Hold (Cache : in out Parse_Cache; Path, Text : String) is
+   begin
+      Cache.Held.Include (Path, Text);
+   end Hold;
+
+   function Holds (Cache : Parse_Cache; Path : String) return Boolean
+     is (Cache.Held.Contains (Path));
+
+   function Held_Text (Cache : Parse_Cache; Path : String) return String
+     is (Cache.Held.Element (Path));
+
 
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
@@ -26,7 +71,8 @@ package body Landin.Stages.Syntax is
      (Whole    : in out Compilation'Class;
       Outcome  : out Stage_Outcome;
       Previous : access Compilation := null;
-      Watch    : access procedure (Name : String) := null)
+      Watch    : access procedure (Name : String) := null;
+      Cache    : access Parse_Cache'Class := null)
    is
       --  The one view every helper below takes; see Landin.Stages.Run.
       Context : Compilation renames Compilation (Whole);
@@ -74,21 +120,57 @@ package body Landin.Stages.Syntax is
                declare
                   Stream : Landin.Tokens.Token_Stream;
                   Found  : Landin.Diagnostics.Diagnostic_List;
+                  Hit    : Entry_Access := null;
                begin
-                  if Watch /= null then
-                     Watch (Landin.Source.Name (Snapshot));
+                  if Cache /= null
+                    and then (Cache.Allowed.Is_Empty
+                              or else Cache.Allowed.Contains
+                                (Landin.Source.Name (Snapshot)))
+                    and then Cache.Entries.Contains
+                      (Landin.Source.Name (Snapshot))
+                  then
+                     Hit := Cache.Entries.Element
+                       (Landin.Source.Name (Snapshot));
+                     while Hit /= null
+                       and then Unbounded.To_String (Hit.Text)
+                         /= Landin.Source.Text (Snapshot)
+                     loop
+                        Hit := Hit.Next;
+                     end loop;
                   end if;
-                  Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
-                  Landin.Diagnostics.Lexical.Report (Stream, Found);
 
-                  --  One tree per source, in source order.
-                  Landin.Syntax.Forest.Add
-                    (Trees.all, Stream, Names.all, Found);
+                  if Hit = null then
+                     if Watch /= null then
+                        Watch (Landin.Source.Name (Snapshot));
+                     end if;
+                     Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
+                     Landin.Diagnostics.Lexical.Report (Stream, Found);
 
-                  --  Space remains beside the tree after the stream ends.
-                  Landin.Tokens.Spacing.Add (Spaces.all, Stream);
+                     --  One tree and space row per source, in source order.
+                     Landin.Syntax.Forest.Add
+                       (Trees.all, Stream, Names.all, Found);
+                     Landin.Tokens.Spacing.Add (Spaces.all, Stream);
+                  else
+                     Cache.Reused := Cache.Reused + 1;
+                     Landin.Syntax.Forest.Copy_Add
+                       (Trees.all, Hit.Trees,
+                        Landin.Source.Source_Id (1), Hit.Names, Names.all);
+                     Landin.Tokens.Spacing.Copy_Add
+                       (Spaces.all, Hit.Spaces, Landin.Source.Source_Id (1));
+                     for Position in
+                       1 .. Landin.Diagnostics.Count (Hit.Found)
+                     loop
+                        Landin.Diagnostics.Append
+                          (Found,
+                           Landin.Diagnostics.Retargeted
+                             (Landin.Diagnostics.Get (Hit.Found, Position),
+                              Id));
+                     end loop;
+                  end if;
 
-                  --  An unsound recovery tree needs an error diagnostic.
+                  --  Recovery retains only diagnosed error nodes.
+                  --  Keep this invariant in release builds too: an undiagnosed
+                  --  unsound tree must never advance to checking or lowering.
                   declare
                      Parsed : constant not null access constant
                        Landin.Syntax.Tree := Trees.Tree_Of (Id);
@@ -102,13 +184,52 @@ package body Landin.Stages.Syntax is
                      end if;
                   end;
 
-                  --  Sorted per source, appended in source order: a report
-                  --  is read top to bottom of the file it is about.
+                  --  Sorted per source, appended in source order: a report is
+                  --  read top to bottom of the file it is about.
                   declare
                      Ordered : constant Landin.Diagnostics.Diagnostic_List :=
                        Landin.Diagnostics.Sorted (Found);
                   begin
-                     for Position in 1 .. Landin.Diagnostics.Count (Ordered)
+                     if Cache /= null and then Hit = null
+                       and then (Cache.Allowed.Is_Empty
+                                 or else Cache.Allowed.Contains
+                                   (Landin.Source.Name (Snapshot)))
+                     then
+                        declare
+                           Cached : constant Entry_Access := new Cache_Entry;
+                        begin
+                           Cached.Text := Unbounded.To_Unbounded_String
+                             (Landin.Source.Text (Snapshot));
+                           Landin.Syntax.Forest.Copy_Add
+                             (Cached.Trees, Trees.all, Id, Names.all,
+                              Cached.Names);
+                           Landin.Tokens.Spacing.Copy_Add
+                             (Cached.Spaces, Spaces.all, Id);
+                           for Position in
+                          1 .. Landin.Diagnostics.Count (Ordered)
+                           loop
+                              Landin.Diagnostics.Append
+                                (Cached.Found,
+                                 Landin.Diagnostics.Retargeted
+                                   (Landin.Diagnostics.Get (Ordered, Position),
+                                    Landin.Source.Source_Id (1)));
+                           end loop;
+                           declare
+                              Path : constant String := Landin.Source.Name
+                                (Snapshot);
+                           begin
+                              if Cache.Entries.Contains (Path) then
+                                 Cached.Next := Cache.Entries.Element (Path);
+                                 Cache.Entries.Replace (Path, Cached);
+                              else
+                                 Cache.Entries.Insert (Path, Cached);
+                              end if;
+                              Cache.Stored := Cache.Stored + 1;
+                           end;
+                        end;
+                     end if;
+                     for Position in
+                       1 .. Landin.Diagnostics.Count (Ordered)
                      loop
                         Report
                           (Context,
@@ -122,5 +243,14 @@ package body Landin.Stages.Syntax is
 
       Outcome := (if Failed (Context) then Stop else Continue);
    end Run_Using;
+
+   procedure Run_With_Cache
+     (Whole   : in out Compilation'Class;
+      Cache   : in out Parse_Cache;
+      Outcome : out Stage_Outcome)
+   is
+   begin
+      Run_Using (Whole, Outcome, Cache => Cache'Access);
+   end Run_With_Cache;
 
 end Landin.Stages.Syntax;

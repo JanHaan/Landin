@@ -13,7 +13,6 @@ with Landin.Diagnostics.Suggestions;
 with Landin.Modules;
 with Landin.Source;
 with Landin.Source.Names;
-with Landin.Stages.Syntax;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 
@@ -145,7 +144,8 @@ package body Landin.Driver.Loading is
       Entry_Directory : String;
       Missing_Directories : access Landin.Platform.Path_List := null;
       Previous        : access Landin.Stages.Compilation := null;
-      Watch_Syntax    : access procedure (Name : String) := null)
+      Watch_Syntax    : access procedure (Name : String) := null;
+      Cache           : access Landin.Stages.Syntax.Parse_Cache := null)
    is
       type Directory_Listing is record
          Entries : Landin.Platform.Path_List;
@@ -502,7 +502,18 @@ package body Landin.Driver.Loading is
                         Content : Unbounded.Unbounded_String;
                         Status  : Landin.Platform.Read_Status;
                      begin
-                        Host.Read_File (Path, Content, Status);
+                        if Cache /= null
+                          and then Directory /= Entry_Directory
+                          and then Landin.Stages.Syntax.Holds
+                            (Cache.all, Path)
+                        then
+                           Content := Unbounded.To_Unbounded_String
+                             (Landin.Stages.Syntax.Held_Text
+                                (Cache.all, Path));
+                           Status := Landin.Platform.Read_Ok;
+                        else
+                           Host.Read_File (Path, Content, Status);
+                        end if;
                         if Status = Landin.Platform.Read_Ok then
                            declare
                               Id : constant Landin.Source.Source_Id :=
@@ -532,7 +543,7 @@ package body Landin.Driver.Loading is
                   Syntax_Outcome : Landin.Stages.Stage_Outcome;
                begin
                   Landin.Stages.Syntax.Run_Using
-                    (Context, Syntax_Outcome, Previous, Watch_Syntax);
+                    (Context, Syntax_Outcome, Previous, Watch_Syntax, Cache);
                end;
             end if;
             exit when Landin.Stages.Failed (Context);

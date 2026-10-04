@@ -357,10 +357,11 @@ Checking and resolution recognise their own trees and keys by a serial, not
 by an address a freed table's successor could reuse. Checking the derived log
 filter left 13.1 MB allocated per check and per emission; the `memory` suite
 now runs twenty checks and four emissions with debugging information in one
-process and leaves nothing behind, with a control that three kept
-compilations are counted. The count is the allocator's live bytes: `mallinfo2`
-on Linux, and on Darwin the zones' enumerated in-use ranges, because a
-GNAT-linked binary records SDK 10.21 and under it `size_in_use` keeps freed
+process, permits at most 64 KiB of bounded settling, and rejects growth
+continuing across both parts of each measured tail. A control verifies that
+three kept compilations are counted. The count is the allocator's live bytes:
+`mallinfo2` on Linux, and on Darwin the zones' enumerated in-use ranges,
+because a GNAT-linked binary records SDK 10.21 and under it `size_in_use` keeps freed
 blocks counted. `scripts/driver_manifest.py` held every commit to its parent:
 all 8,127 entries agree — status, report, assembly, build report and source
 map for every fixture on every target — and the largest scaling ratio is 2.19
@@ -490,7 +491,7 @@ bounded run over mutated corpus sources that never crashes the server, which
 takes on the frontend part of R551-19.
 
 Done: `refine lsp` is a language server over standard input and output, a
-subcommand like `explain` and `fmt`, with full synchronisation:
+subcommand like `explain` and `fmt`, with incremental synchronisation:
 diagnostics with their codes, explanations and related information,
 definitions, hover with types as the checker spells them and doc comments,
 D252's formatting as edits, and R10.30's fixes as quick fixes, preferred
@@ -498,11 +499,14 @@ when exact. It reads with the driver's own loader and checks with its own
 stages, now `Landin.Driver.Loading` and `Landin.Driver.Checking`, through
 buffers held over the filesystem; a file belongs to its directory's module
 under the editor's roots. Checked modules remain available for navigation
-until a document opens, changes or closes; the cache holds at most one
+until a document opens, changes or closes, or a watched disk file changes;
+the cache holds at most one
 compilation per open module, not a fixed byte budget. A sound analysis uses
 one compilation; an eligible broken body causes a second compilation that
 takes unchanged syntax trees from the first. The original is then released;
 the checked result may remain cached. A burst of edits is analysed once.
+One multi-module publication round may additionally cache exact parsed
+shared imports; that temporary cache is released when the round ends.
 D253 answers past a hole only inside a routine body: the server checks a
 stand-in with each broken body blanked and `loop do end loop` written in it,
 so no stage changed and `refine` reports as before.
@@ -510,7 +514,8 @@ so no stage changed and `refine` reports as before.
 bounded, framing is bounded, and positions are converted in one package, in
 UTF-8 or UTF-16. The scripted sessions under `compiler/tests/server/`
 run in the test program and through the executable on Linux and macOS; the
-memory suite runs eight sessions of twenty edits and stays flat.
+memory suite runs eight sessions of twenty edits, with no net growth across
+the last three measured sessions.
 `compiler/tests/fuzz/fuzz.py` gives the single direct source from every
 one-source positive, negative, runtime and ABI fixture directory, plus every
 reproducer, mutated, to the server with the checkout as import root.

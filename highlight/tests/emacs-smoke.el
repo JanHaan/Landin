@@ -23,4 +23,30 @@
 (landin-test-face-at "documentation comment" 'font-lock-doc-face)
 (landin-test-face-at "nested block comment" 'font-lock-comment-face)
 (landin-test-face-at "escaped" 'font-lock-string-face)
+
+(dolist (width '(3 4 5))
+  (with-temp-buffer
+    (let ((delimiter (make-string width ?\")))
+      (insert delimiter "if true -- marker\n" delimiter)
+      (landin-mode)
+      (goto-char (point-min))
+      (unless (and (landin--match-raw-string (point-max))
+                   (= (match-beginning 0) (point-min))
+                   (= (match-end 0) (point-max)))
+        (error "raw literal delimiter of %d quotes was not matched" width))
+      (font-lock-ensure)
+      (landin-test-face-at "if true" 'font-lock-string-face)
+      (landin-test-face-at "marker" 'font-lock-string-face))))
+
+(dolist (comment '("-- \"\"\"\"\n"
+                   "--( block\n\"\"\"\"\n)--\n"))
+  (with-temp-buffer
+    (insert comment "public main: () -> none =\n")
+    (landin-mode)
+    (goto-char (point-min))
+    (when (landin--match-raw-string (point-max))
+      (error "comment quote run was matched as a raw literal"))
+    (font-lock-ensure)
+    (landin-test-face-at "public" 'font-lock-keyword-face)))
+
 (kill-emacs 0)

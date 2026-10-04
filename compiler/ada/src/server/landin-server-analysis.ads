@@ -16,9 +16,9 @@
 --  any other syntax error is reported exactly as `refine` reports it.
 --
 --  The caller may retain the checked compilation until invalidation.
---  The temporary original is released after syntax transfer; nothing here
---  keeps a table
---  between two analyses.
+--  The temporary original is released after syntax transfer. An optional
+--  caller-owned parse cache shares exact-text syntax for one publication
+--  round; resolution and checking still belong to each compilation.
 
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
@@ -28,6 +28,7 @@ with Landin.Platform;
 with Landin.Server.Holes;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Targets.Levels;
 
@@ -76,7 +77,8 @@ package Landin.Server.Analysis is
       Asked   : Request;
       Context : out Compilation_Access;
       Answer  : out Result;
-      Watch_Syntax : access procedure (Name : String) := null);
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache : access Landin.Stages.Syntax.Parse_Cache := null);
 
    --  Visit the checked compilation before it is freed.  A broken body may
    --  require a second compilation with stand-ins; a sound source uses the
@@ -88,7 +90,8 @@ package Landin.Server.Analysis is
       Asked   : Request;
       Visit   : not null access procedure
         (Context : in out Landin.Stages.Compilation; Answer : Result);
-      Watch_Syntax : access procedure (Name : String) := null);
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache : access Landin.Stages.Syntax.Parse_Cache := null);
 
    --  Whether Where in Source lies in one of its held regions.
    function Is_Held

@@ -50,6 +50,14 @@ package Landin.Tokens.Spacing is
      with Pre => Count (From) > Count (Into),
           Post => Count (Into) = Count (Into)'Old + 1;
 
+   --  Copy a source's space and comments into the next source slot.
+   procedure Copy_Add
+     (Into : in out Table;
+      From : Table;
+      Id   : Landin.Source.Source_Id)
+     with Pre  => Contains (From, Id),
+          Post => Count (Into) = Count (Into)'Old + 1;
+
    function Space_Count
      (Of_Table : Table; Id : Landin.Source.Source_Id) return Natural
      with Pre => Contains (Of_Table, Id);

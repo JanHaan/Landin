@@ -2,7 +2,7 @@
 --
 --  What the server offers, and nothing else:
 --
---  * full document synchronisation, open, change and close;
+--  * incremental document synchronisation, open, change and close;
 --  * diagnostics published for every source of an analysed module, with
 --    the catalogue code, a link to its explanation, related information
 --    from each secondary label and each note in the message;
@@ -33,12 +33,22 @@ package Landin.Server.Sessions is
    --  of input, or framing that cannot be read.
    subtype Exit_Status is Natural range 0 .. 1;
 
+   --  Optional work counts for performance regressions in scripted sessions.
+   type Publication_Statistics is record
+      Empty_Rounds          : Natural := 0;
+      Held_Snapshots        : Natural := 0;
+      Cached_Publications   : Natural := 0;
+      Uncached_Publications : Natural := 0;
+      Reused_Parses         : Natural := 0;
+   end record;
+
    --  Serve one editor over Channel, reading files through Host.
    --  On_Analysis observes each whole-program check, for the test harness.
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
       Host    : not null access constant Landin.Platform.Filesystem'Class;
       Status  : out Exit_Status;
-      On_Analysis : access procedure := null);
+      On_Analysis : access procedure := null;
+      Statistics : access Publication_Statistics := null);
 
 end Landin.Server.Sessions;

@@ -133,6 +133,31 @@ fi
 if command -v emacs >/dev/null 2>&1; then
     LANDIN_HIGHLIGHT_ROOT="$root/highlight" \
       emacs --batch -Q -l "$root/highlight/tests/emacs-smoke.el"
+    if command -v cc >/dev/null 2>&1 && \
+       emacs --batch -Q --eval \
+         '(unless (and (require '\''treesit nil t) (treesit-available-p)) (kill-emacs 1))' \
+         >/dev/null 2>&1; then
+        emacs_runtime="$test_tmp/emacs"
+        mkdir -p "$emacs_runtime"
+        if test "$(uname -s)" = Darwin; then
+            emacs_shared=-dynamiclib
+            emacs_suffix=dylib
+        else
+            emacs_shared=-shared
+            emacs_suffix=so
+        fi
+        cc -O2 -fPIC "$emacs_shared" \
+          -I"$root/highlight/tree-sitter/src" \
+          -o "$emacs_runtime/libtree-sitter-landin.$emacs_suffix" \
+          "$root/highlight/tree-sitter/src/parser.c" \
+          "$root/highlight/tree-sitter/src/scanner.c"
+        LANDIN_HIGHLIGHT_ROOT="$root/highlight" \
+        LANDIN_TREE_SITTER_LIB="$emacs_runtime" \
+          emacs --batch -Q -l "$root/highlight/tests/emacs-treesit-smoke.el"
+        echo "Emacs tree-sitter mode and highlighting smoke clean"
+    else
+        echo "C compiler or Emacs tree-sitter support absent; live Emacs tree-sitter smoke skipped"
+    fi
 else
     echo "Emacs absent; native Emacs smoke skipped"
 fi
@@ -151,13 +176,40 @@ fi
 if test -n "${LANDIN_REFINE-}"; then
     server_bin="$test_tmp/server-bin"
     server_work="$test_tmp/server-work"
-    mkdir -p "$server_bin" "$server_work/.git"
+    server_plain="$test_tmp/server-plain"
+    mkdir -p "$server_bin" "$server_work/.git" \
+             "$server_plain/app" "$server_plain/lib/numbers" \
+             "$server_plain/solo"
     ln -s "$LANDIN_REFINE" "$server_bin/refine"
     printf 'twice: (x: u8) -> (y: u8) =\n    y = x + true\nend twice\n' \
       > "$server_work/smoke.ldn"
+    printf 'import lib/numbers\n' > "$server_plain/app/main.ldn"
+    printf 'twice: (x: u8) -> (y: u8) =\n    y = x + true\nend twice\n' \
+      > "$server_plain/app/extra.ldn"
+    printf 'public double: (x: u8) -> (y: u8) = x + true end double\n' \
+      > "$server_plain/lib/numbers/numbers.ldn"
+    printf 'main: () -> (status: i32) = 0 end main\n' \
+      > "$server_plain/solo/main.ldn"
+    printf 'twice: (x: u8) -> (y: u8) = x + true end twice\n' \
+      > "$server_plain/solo/extra.ldn"
     if command -v nvim >/dev/null 2>&1; then
         (cd "$server_work" && PATH="$server_bin:$PATH" \
           LANDIN_FIXTURE="$server_work/smoke.ldn" \
+          LANDIN_EXPECT_ROOT="$server_work" \
+          nvim -n --headless --clean \
+          --cmd "set runtimepath^=$root/highlight/nvim" \
+          -l "$root/highlight/tests/nvim-lsp-smoke.lua")
+        (cd "$server_plain" && PATH="$server_bin:$PATH" \
+          LANDIN_FIXTURE="$server_plain/app/main.ldn" \
+          LANDIN_DIAGNOSTIC_FILES="$server_plain/app/extra.ldn;$server_plain/lib/numbers/numbers.ldn" \
+          LANDIN_EXPECT_ROOT="$server_plain" \
+          nvim -n --headless --clean \
+          --cmd "set runtimepath^=$root/highlight/nvim" \
+          -l "$root/highlight/tests/nvim-lsp-smoke.lua")
+        (cd "$server_work" && PATH="$server_bin:$PATH" \
+          LANDIN_FIXTURE="$server_plain/solo/main.ldn" \
+          LANDIN_DIAGNOSTIC_FILES="$server_plain/solo/extra.ldn" \
+          LANDIN_EXPECT_ROOT="$server_plain/solo" \
           nvim -n --headless --clean \
           --cmd "set runtimepath^=$root/highlight/nvim" \
           -l "$root/highlight/tests/nvim-lsp-smoke.lua")

@@ -385,6 +385,7 @@ def main() -> int:
         "tree-sitter/src/parser.c",
         "tests/lexical.ldn",
         "tests/emacs-lsp-smoke.el",
+        "tests/emacs-treesit-smoke.el",
         "tests/nvim-lsp-smoke.lua",
         "tests/nvim-smoke.lua",
         "tests/structural.ldn",

@@ -20,7 +20,7 @@
 -> {"jsonrpc":"2.0","id":17,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://localhost/workspace/alias.ldn"},"position":{"line":0,"character":34}}}
 -> {"jsonrpc":"2.0","id":18,"method":"shutdown","params":{}}
 -> {"jsonrpc":"2.0","method":"exit"}
-<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
+<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":2},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/alias.ldn","version":1,"diagnostics":[]}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://localhost/workspace/alias.ldn","version":1,"diagnostics":[]}}
 <- {"jsonrpc":"2.0","id":2,"result":{"contents":{"kind":"markdown","value":"```landin\nx: u8\n```"},"range":{"start":{"line":0,"character":32},"end":{"line":0,"character":33}}}}

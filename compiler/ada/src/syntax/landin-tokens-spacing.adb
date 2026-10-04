@@ -39,6 +39,16 @@ package body Landin.Tokens.Spacing is
       From.Owned.Rows.Replace_Element (Index, null);
    end Transfer_Next;
 
+   procedure Copy_Add
+     (Into : in out Table;
+      From : Table;
+      Id   : Landin.Source.Source_Id)
+   is
+      Row : constant Space_Access := From.Owned.Rows.Element (Positive (Id));
+   begin
+      Into.Owned.Rows.Append (new Space_Array'(Row.all));
+   end Copy_Add;
+
    function Row_Of
      (Of_Table : Table; Id : Landin.Source.Source_Id) return Space_Access
      is (Of_Table.Owned.Rows.Element (Positive (Id)));

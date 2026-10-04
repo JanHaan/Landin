@@ -8,52 +8,49 @@ package body Landin.Server.Positions is
    package Endpoint_Sorting is new Endpoint_Vectors.Generic_Sorting
      ("<" => Before);
 
-   --  The byte length of the character starting at Index, by Unicode's
-   --  well-formed table: 1 for a byte that begins nothing well formed.
-   function Width (Text : String; Index : Positive) return Positive;
-
-   function Width (Text : String; Index : Positive) return Positive is
-      function Byte (Offset : Natural) return Natural
-        is (Character'Pos (Text (Index + Offset)));
-      function Continues (Offset : Natural; Low, High : Natural)
-        return Boolean
-        is (Index + Offset <= Text'Last
-            and then Byte (Offset) in Low .. High);
+   function Width
+     (Lead, Second, Third, Fourth : Integer) return Positive
+   is
    begin
-      case Byte (0) is
+      case Lead is
          when 16#C2# .. 16#DF# =>
-            return (if Continues (1, 16#80#, 16#BF#) then 2 else 1);
+            return (if Second in 16#80# .. 16#BF# then 2 else 1);
          when 16#E0# =>
-            return (if Continues (1, 16#A0#, 16#BF#)
-                      and then Continues (2, 16#80#, 16#BF#) then 3 else 1);
+            return (if Second in 16#A0# .. 16#BF#
+                      and then Third in 16#80# .. 16#BF# then 3 else 1);
          when 16#E1# .. 16#EC# | 16#EE# .. 16#EF# =>
-            return (if Continues (1, 16#80#, 16#BF#)
-                      and then Continues (2, 16#80#, 16#BF#) then 3 else 1);
+            return (if Second in 16#80# .. 16#BF#
+                      and then Third in 16#80# .. 16#BF# then 3 else 1);
          when 16#ED# =>
-            return (if Continues (1, 16#80#, 16#9F#)
-                      and then Continues (2, 16#80#, 16#BF#) then 3 else 1);
+            return (if Second in 16#80# .. 16#9F#
+                      and then Third in 16#80# .. 16#BF# then 3 else 1);
          when 16#F0# =>
-            return (if Continues (1, 16#90#, 16#BF#)
-                      and then Continues (2, 16#80#, 16#BF#)
-                      and then Continues (3, 16#80#, 16#BF#) then 4 else 1);
+            return (if Second in 16#90# .. 16#BF#
+                      and then Third in 16#80# .. 16#BF#
+                      and then Fourth in 16#80# .. 16#BF# then 4 else 1);
          when 16#F1# .. 16#F3# =>
-            return (if Continues (1, 16#80#, 16#BF#)
-                      and then Continues (2, 16#80#, 16#BF#)
-                      and then Continues (3, 16#80#, 16#BF#) then 4 else 1);
+            return (if Second in 16#80# .. 16#BF#
+                      and then Third in 16#80# .. 16#BF#
+                      and then Fourth in 16#80# .. 16#BF# then 4 else 1);
          when 16#F4# =>
-            return (if Continues (1, 16#80#, 16#8F#)
-                      and then Continues (2, 16#80#, 16#BF#)
-                      and then Continues (3, 16#80#, 16#BF#) then 4 else 1);
+            return (if Second in 16#80# .. 16#8F#
+                      and then Third in 16#80# .. 16#BF#
+                      and then Fourth in 16#80# .. 16#BF# then 4 else 1);
          when others =>
             return 1;
       end case;
    end Width;
 
-   --  How many units a character of Bytes bytes is.
-   function Units (Bytes : Positive; Unit : Encoding) return Positive
-     is (case Unit is
-           when UTF_8  => Bytes,
-           when UTF_16 => (if Bytes = 4 then 2 else 1));
+   --  The byte length of the character starting at Index.
+   function Width (Text : String; Index : Positive) return Positive;
+
+   function Width (Text : String; Index : Positive) return Positive is
+      function Byte (Offset : Natural) return Integer
+        is (if Index + Offset <= Text'Last
+            then Character'Pos (Text (Index + Offset)) else -1);
+   begin
+      return Width (Byte (0), Byte (1), Byte (2), Byte (3));
+   end Width;
 
    procedure Register
      (Map : in out Position_Map; Offset : Landin.Source.Byte_Offset)
