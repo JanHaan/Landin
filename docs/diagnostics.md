@@ -687,7 +687,9 @@ name: []u8 = "bad\q"
 ### L0321
 
 A float literal needs its fraction, and an exponent where its form requires
-one [0210] [0220] [0230].
+one [0210] [0220] [0230]. It also needs a separator before a following name
+[1770], so a width suffix such as `f32` makes the whole literal malformed:
+drop the suffix and let the binding's type give the width.
 
 ```landin
 ratio: f64 = 1e10

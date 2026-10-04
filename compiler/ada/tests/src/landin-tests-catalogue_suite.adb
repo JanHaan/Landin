@@ -213,7 +213,8 @@ package body Landin.Tests.Catalogue_Suite is
         & "1 | r: f64 = 0x1.0p+" & LF
         & "  |          ^^^^^^^" & LF
         & "  = note: a float has digits on both sides of its dot and a"
-        & " complete exponent when one is required [0210] [0220] [0230]"
+        & " complete exponent when one is required, and no name runs"
+        & " straight into it [0210] [0220] [0230] [1770]"
         & LF;
    begin
       Lex_And_Report ("r: f64 = 0x1.0p+", Sources, Report);

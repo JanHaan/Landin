@@ -107,8 +107,9 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "a float has digits on both sides of its dot and a"
-                     & " complete exponent when one is required"
-                     & " [0210] [0220] [0230]");
+                     & " complete exponent when one is required, and no"
+                     & " name runs straight into it"
+                     & " [0210] [0220] [0230] [1770]");
 
                when Landin.Tokens.Malformed_Character_Literal_Run =>
                   Add_Note

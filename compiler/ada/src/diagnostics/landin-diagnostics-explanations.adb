@@ -357,7 +357,11 @@ package body Landin.Diagnostics.Explanations is
                & "ine, or bytes that are not UTF-8 [0270] [1750].",
             when Catalogue.Malformed_Float_Literal =>
                "A float literal needs its fraction, and an exponent wher"
-               & "e its form requires one [0210] [0220] [0230].",
+               & "e its form requires one [0210] [0220] [0230]. It also ne"
+               & "eds a separator before a following name [1770], so a wid"
+               & "th suffix such as `f32` makes the whole literal malforme"
+               & "d: drop the suffix and let the binding's type give the w"
+               & "idth.",
             when Catalogue.Malformed_Character_Literal =>
                "A character literal holds exactly one Unicode scalar val"
                & "ue [0250] [0270].",

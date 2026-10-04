@@ -500,8 +500,9 @@ package Landin.Diagnostics.Catalogue is
                "[0270] [1750]: a text literal contains a malformed escape"
                & " or invalid source encoding",
             when Malformed_Float_Literal =>
-               "[0210] [0220] [0230]: a float has a complete fraction"
-               & " and exponent when required",
+               "[0210] [0220] [0230] [1770]: a float has a complete"
+               & " fraction and exponent when required, and ends before a"
+               & " name",
             when Malformed_Character_Literal =>
                "[0250] [0270]: a character literal spells exactly one"
                & " Unicode scalar value",
