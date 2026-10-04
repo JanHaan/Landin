@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: shared index-tree edges count paths and reject u32 leaf-count overflow before publication
+summary: shared index-tree edges count past u32 and reject target-size leaf-count overflow before publication
 program: main.ldn
 root: ../../../../..
 status: 42

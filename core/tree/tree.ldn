@@ -1,15 +1,15 @@
 import core/mem
 import core/vec
 
-identifier: type = distinct u32
+identifier: type = distinct usize
 public node_id: type = identifier
 
-public id: (ordinal: u32) -> (value: identifier) =
+public id: (ordinal: usize) -> (value: identifier) =
     value = identifier(ordinal)
 end id
 
-public ordinal: (value: identifier) -> (number: u32) =
-    number = u32(value)
+public ordinal: (value: identifier) -> (number: usize) =
+    number = usize(value)
 end ordinal
 public no_such_node: atom
 public invalid_children: atom
@@ -18,13 +18,14 @@ public too_many_leaves: atom
 
 node_value: type = struct
     name: utf8
-    leaves: u32
+    leaves: usize
     --  Sum of every node's leaf total through this node. Each node has a
-    --  u32 identifier, so even a full tree of maximum-sized totals fits u64.
-    through: u64
+    --  target-sized identifier; two words hold every possible cumulative sum.
+    through_low: usize
+    through_high: usize
     kind: variant
         leaf |
-        branch: (first: node_id, count: u32)
+        branch: (first: node_id, count: usize)
     end kind
 end node_value
 public node: type = node_value
@@ -43,25 +44,30 @@ public length: (value: tree_value) -> (count: usize) =
 end length
 
 next_id: (count: usize) -> (id: node_id) ! too_many_nodes =
-    maximum: u64 = 4294967295
-    fail too_many_nodes when u64(count) > maximum
-    id = identifier(u32(count))
+    maximum: usize = 0 -% 1
+    fail too_many_nodes when count == maximum
+    id = identifier(count)
 end next_id
 
 public add_leaf: (provider: type is mem.allocator, inout value: tree_value,
                   inout state: provider, escaping name: utf8)
                  -> (id: node_id) ! mem.out_of_memory | too_many_nodes =
     id = try next_id(length(value))
-    mut previous: u64 = 0
+    mut previous_low: usize = 0
+    mut previous_high: usize = 0
     if length(value) > 0 then
         last: node_value = (vec.get(value.nodes, length(value) - 1) else (problem)
             _ = problem
             --  A nonempty list always has its last node.
             fail too_many_nodes
         end)
-        previous = last.through
+        previous_low = last.through_low
+        previous_high = last.through_high
     end if
-    added: node_value = (name: name, leaves: 1, through: previous + 1,
+    next_low: usize = previous_low +% 1
+    if next_low == 0 then inc previous_high end if
+    added: node_value = (name: name, leaves: 1, through_low: next_low,
+                         through_high: previous_high,
                          kind: leaf)
     try vec.push(value.nodes, state, added)
 end add_leaf
@@ -72,53 +78,60 @@ end add_leaf
 --  would. An empty child interval has total zero.
 public add_branch: (provider: type is mem.allocator, inout value: tree_value,
                     inout state: provider, escaping name: utf8,
-                    first: node_id, count: u32)
+                    first: node_id, count: usize)
                    -> (id: node_id)
                    ! mem.out_of_memory | too_many_nodes
                    | invalid_children | too_many_leaves =
     id = try next_id(length(value))
-    begins: usize = usize(u32(first))
+    begins: usize = usize(usize(first))
     amount: usize = usize(count)
     available: usize = length(value)
     fail invalid_children when begins > available
     fail invalid_children when amount > available - begins
-    mut before: u64 = 0
+    mut before_low: usize = 0
+    mut before_high: usize = 0
     if begins > 0 then
         predecessor: node_value = (vec.get(value.nodes, begins - 1) else (problem)
             _ = problem
             fail invalid_children
         end)
-        before = predecessor.through
+        before_low = predecessor.through_low
+        before_high = predecessor.through_high
     end if
-    mut through: u64 = 0
+    mut through_low: usize = 0
+    mut through_high: usize = 0
     if available > 0 then
         last: node_value = (vec.get(value.nodes, available - 1) else (problem)
             _ = problem
             fail invalid_children
         end)
-        through = last.through
+        through_low = last.through_low
+        through_high = last.through_high
     end if
-    mut total: u32 = 0
+    mut total: usize = 0
     if amount > 0 then
         end_node: node_value = (vec.get(value.nodes, begins + amount - 1)
             else (problem)
             _ = problem
             fail invalid_children
         end)
-        sum: u64 = end_node.through - before
-        maximum: u32 = 0 -% 1
-        fail too_many_leaves when sum > u64(maximum)
-        total = u32(sum)
+        total = end_node.through_low -% before_low
+        mut high: usize = end_node.through_high - before_high
+        if end_node.through_low < before_low then dec high end if
+        fail too_many_leaves when high <> 0
     end if
+    next_low: usize = through_low +% total
+    if next_low < through_low then inc through_high end if
     added: node_value =
-        (name: name, leaves: total, through: through + u64(total),
+        (name: name, leaves: total, through_low: next_low,
+         through_high: through_high,
          kind: branch(first: first, count: count))
     try vec.push(value.nodes, state, added)
 end add_branch
 
 public get: (value: tree_value, id: node_id)
             -> (result: node_value from value) ! no_such_node =
-    result = vec.get(value.nodes, usize(u32(id))) else (problem)
+    result = vec.get(value.nodes, usize(usize(id))) else (problem)
         _ = problem
         fail no_such_node
     end
@@ -129,7 +142,7 @@ public name: (value: node_value) -> (text: utf8 from value) =
 end name
 
 public count_leaves: (value: tree_value, id: node_id)
-                     -> (count: u32) ! no_such_node =
+                     -> (count: usize) ! no_such_node =
     selected: node_value = get(value, id) else (problem)
         _ = problem
         fail no_such_node

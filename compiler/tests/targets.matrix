@@ -238,7 +238,7 @@ negative/core-text-frame-slice-escape | linux-x86-64, linux-arm64, macos-arm64, 
 negative/core-text-private-position | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-text-written-frame | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-tree-frame-name | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
-negative/core-tree-id-out-of-range | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/core-tree-id-out-of-range | synthetic-32
 negative/core-tree-node-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-vec-used-frame | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-vec-used-live-growth | linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -1404,3 +1404,9 @@ rehash makes three allocations that can each fail; the second
 failing has to free one, the third has to free two.
 
 ---
+
+The prototype's `core/tree` sketch chose compact `u32` edges. The executable
+`core/tree` now uses `distinct usize` IDs, `usize` branch interval counts and
+cached leaf totals. A 64-bit tree can therefore name nodes and count shared
+paths beyond `u32`; a 32-bit tree keeps 32-bit fields. The sketch above
+remains as the original design pressure.

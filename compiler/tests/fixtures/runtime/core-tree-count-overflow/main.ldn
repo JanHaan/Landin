@@ -7,7 +7,7 @@ label: utf8 = "node"
 public main: () -> (code: i32) =
     code = 1
     mut host := heap.host()
-    budget: usize = 10
+    budget: usize = 20
     mut state := failing.count_down(addr host, budget)
     mut value := tree.new_tree()
     first: tree.node_id = tree.add_leaf(value, state, label) else (problem)
@@ -19,63 +19,66 @@ public main: () -> (code: i32) =
         return
     end
     return when tree.ordinal(first) <> 0
+    wide: tree.node_id = tree.id(4294967296)
+    return when tree.ordinal(wide) <> 4294967296
     mut last: tree.node_id = second
-    mut left: u64 = 1
-    mut right: u64 = 1
-    two: u32 = 2
+    mut left: usize = 1
+    mut right: usize = 1
+    two: usize = 2
+    maximum: usize = 0 -% 1
     mut overflow: bool = false
     mut unchanged: bool = false
+    mut wide_count: bool = false
     mut at: usize = 0
-    while at < 50 do
-        expected: u64 = left + right
+    while at < 100 do
+        predicted_overflow: bool = right > maximum - left
+        mut expected: usize = 0
+        if not predicted_overflow then expected = left + right end if
         before: usize = tree.length(value)
-        start: tree.node_id = tree.id(u32(before - 2))
+        start: tree.node_id = tree.id(before - 2)
         added: tree.node_id = tree.add_branch(value, state, label, start, two)
             else (problem)
-                _ = problem
-                overflow = true
+                overflow = problem == tree.too_many_leaves
                 last
             end
-        if overflow then
+        if predicted_overflow then
             unchanged = tree.length(value) == before
-            return when expected <= 4294967295
             break
         end if
-        count: u32 = tree.count_leaves(value, added) else (problem)
+        return when overflow
+        count: usize = tree.count_leaves(value, added) else (problem)
             _ = problem
             return
         end
-        return when u64(count) <> expected
+        return when count <> expected
+        if count > 4294967295 then wide_count = true end if
         left = right
         right = expected
         last = added
         inc at
     end while
-    final: u32 = tree.count_leaves(value, last) else (problem)
+    final: usize = tree.count_leaves(value, last) else (problem)
         _ = problem
         return
     end
-    --  The cumulative total now exceeds u32, but this child interval does not.
-    one: u32 = 1
+    --  The cumulative total now exceeds usize, but this child interval does not.
+    one: usize = 1
     small: tree.node_id = tree.add_branch(value, state, label, first, one)
         else (problem)
             _ = problem
             return
         end
-    small_count: u32 = tree.count_leaves(value, small) else 0
+    small_count: usize = tree.count_leaves(value, small) else 0
     mut invalid: bool = false
-    maximum: u32 = 0 -% 1
-    _ = tree.count_leaves(value, tree.id(maximum)) else (problem)
-        _ = problem
-        invalid = true
+    _ = tree.count_leaves(value, wide) else (problem)
+        invalid = problem == tree.no_such_node
         0
     end
     before_release: usize = tree.length(value)
     tree.release(value, state)
-    if overflow and unchanged and invalid and before_release == 48
-       and final == 2971215073 and small_count == 1
-       and failing.attempts(state) == 4
-       and failing.frees(state) == 4 and failing.live(state) == 0
+    if overflow and unchanged and invalid and wide_count and before_release == 94
+       and final == 12200160415121876738 and small_count == 1
+       and failing.attempts(state) == failing.frees(state) and failing.live(state) == 0
     then
         code = 42
     end if
