@@ -855,7 +855,10 @@ with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
 and R730-02, R730-07, R730-09 and SR-05.
 
 Exit evidence: each facility's consumer running on its targets with failure
-oracles and measured cost on the constrained profiles.
+oracles and measured cost on the constrained profiles. For Cortex-M C, this
+includes generating bindings from a pinned device C header for the Cortex-M0
+ABI and running a firmware consumer through those generated declarations and
+adapters.
 
 ### R13.30 — The hosted library
 
@@ -1138,7 +1141,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against the emulator lanes' oracles, which stay mandatory. | scheduled R12.60 |
 | R730-03 | Release readiness | D227's ordering trials and bounded store-buffer models are evidence, not a formal proof; no wait-free or timing bound is claimed. | Before a claim beyond the bounded models, or any timing bound. | A stated proof or checked model agreeing with the native trials. | open |
 | R730-06 | Release readiness | Stack paint and SP observation are measurements, not worst-case bounds; 64 spare flash bytes is a fit, not a budget; reset assumes no NMI or fault in its window. | Before a production budget, worst-case stack or fault-tolerant reset claim. | A workload and interrupt model with a checked bound, and reset-window behaviour with executable evidence. | open |
-| R730-07 | Broader standard library | Cortex-M0 C source capabilities, `core/c` and header generation are disabled; 33 shared programs are general-C restrictions there. | A freestanding program that must call or be called from C. | An ILP32 `core/c`, Cortex-M0 C signatures enabled and executable C-boundary fixtures, with the 33 restrictions re-decided. | scheduled R13.20 |
+| R730-07 | Broader standard library | Cortex-M0 C source capabilities, `core/c` and header generation are disabled; 33 shared programs are general-C restrictions there. | A freestanding program that must call or be called from C. | An ILP32 `core/c`, Cortex-M0 C signatures, generated bindings from a pinned device C header under a checked Cortex-M0 ABI, and executable firmware fixtures using the generated declarations and adapters with failure oracles; the 33 restrictions re-decided. | scheduled R13.20 |
 | R730-13 | Release readiness | Source and debug identity selection is matching, not authentication or protection against concurrent replacement. | Before stronger provenance or attestation claims. | An attestation design with verified restore; the seven negative selections stay. | limit |
 | R730-17 | Language evolution | A call returning a plain pointer cannot fill a several-atom pointer union through an atom `else`; D235 keeps it refused. | A program that needs that recovery to widen. | D235 amended with a recovery lowering and evidence on every target. | open |
 | R730-20 | Language evolution | D237 leaves u128, i128 and f16 out. | A program that needs 128-bit arithmetic or binary16 values. | D237's recorded plan on every target. | open |
