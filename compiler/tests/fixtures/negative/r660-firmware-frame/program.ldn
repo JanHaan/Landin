@@ -1,0 +1,5 @@
+start: () -> none =
+    mut bytes: [5000]u8 = zeroed
+    bytes[0] = 1
+    _ = bytes[0]
+end start

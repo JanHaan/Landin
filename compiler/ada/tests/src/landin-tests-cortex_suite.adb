@@ -48,6 +48,9 @@ package body Landin.Tests.Cortex_Suite is
    use type T.Capabilities.Debug_Format;
 
    LF : constant Character := Character'Val (10);
+   HT : constant Character := Character'Val (9);
+   function Contains (Text, Needle : String) return Boolean
+     is (Ada.Strings.Fixed.Index (Text, Needle) > 0);
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Configurer : aliased Landin.Stages.Configuration.Instance;
    Resolver : aliased Landin.Stages.Resolution.Instance;
@@ -206,6 +209,224 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
+   procedure Outgoing_Calls (Item : in out Landin.Testing.Context);
+
+   procedure Outgoing_Calls (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      HT : constant Character := Character'Val (9);
+   begin
+      Host.Add_File ("p.ldn",
+        "f0: () -> none = end f0 "
+        & "f1: (a: u32) -> none = end f1 "
+        & "f2: (a: u32, b: u32) -> none = end f2 "
+        & "f3: (a: u32, b: u32, c: u32) -> none = end f3 "
+        & "f4: (a: u32, b: u32, c: u32, d: u32) -> none = end f4 "
+        & "f5: (a: u32, b: u32, c: u32, d: u32, e: u32) "
+        & "-> none = end f5 "
+        & "pair: type = struct x: u32 y: u32 end pair "
+        & "ret: (a: u32, b: u32, c: u32, d: u32) -> (p: pair) "
+        & "= p = (x: a + c, y: b + d) end ret "
+        & "bad: atom problem: type = bad "
+        & "fails: (a: u32) -> (r: u32) ! problem = a end fails "
+        & "public main: () -> (code: i32) = "
+        & "f0() f1(1) f2(1, 2) f3(1, 2, 3) "
+        & "f4(1, 2, 3, 4) f5(1, 2, 3, 4, 5) "
+        & "made := ret(1, 2, 3, 4) cb := f2 cb(5, 6) "
+        & "value := fails(7) else 8 "
+        & "code = i32(made.x + made.y + value) end main");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--optimize=size");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status /= Landin.Driver.Status_Success then
+            return;
+         end if;
+      end;
+      declare
+         Assembly : constant String := Host.Written ("p.s");
+
+         function Site (Previous, Branch : String) return String;
+         procedure Check_Call
+           (Previous, Branch, Load : String; Bytes : Positive);
+
+         function Site (Previous, Branch : String) return String is
+            Marker : constant String :=
+              (if Previous = "main:" then Previous else HT & Previous);
+            Start_At : constant Natural :=
+              Ada.Strings.Fixed.Index (Assembly, Marker)
+                + Marker'Length;
+            End_At : constant Natural :=
+              Ada.Strings.Fixed.Index
+                (Assembly, HT & Branch, From => Start_At);
+         begin
+            if Start_At <= Marker'Length or else End_At = 0 then
+               return "";
+            end if;
+            return Assembly (Start_At .. End_At + Branch'Length);
+         end Site;
+
+         procedure Check_Call
+           (Previous, Branch, Load : String; Bytes : Positive) is
+            Text : constant String := Site (Previous, Branch);
+            Amount : constant String := Ada.Strings.Fixed.Trim
+              (Bytes'Image, Ada.Strings.Both);
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Text, "sub sp, #" & Amount) > 0,
+               Branch & " reserves aligned homes");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Text, Load & LF & HT & Branch) > 0,
+               Branch & " loads only planned registers");
+            if Branch /= "bl fails" then
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Assembly, Branch & LF & HT & "add sp, #" & Amount) > 0,
+                  Branch & " releases aligned homes");
+            end if;
+         end Check_Call;
+      begin
+         --  The zero-argument call follows its block label directly.
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("main:", "bl f0"), "sub sp, #16") = 0,
+            "zero-register call reserves no outgoing homes");
+         Check_Call ("bl f0", "bl f1", "ldr r0, [r6]", 8);
+         Check_Call ("bl f1", "bl f2", "ldmia r6!, {r0, r1}", 8);
+         Check_Call ("bl f2", "bl f3", "ldmia r6!, {r0, r1, r2}", 16);
+         Check_Call
+           ("bl f3", "bl f4", "ldmia r6!, {r0, r1, r2, r3}", 16);
+         Check_Call
+           ("bl f4", "bl f5", "ldmia r6!, {r0, r1, r2, r3}", 24);
+         Check_Call
+           ("bl f5", "bl ret", "ldmia r6!, {r0, r1, r2, r3}", 24);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("bl f5", "bl ret"),
+               "mov r6, sp" & LF & HT & "adds r6, #8" & LF & HT
+               & "str r0, [r6]") > 0,
+            "hidden result address occupies r0 above stack arguments");
+         Check_Call
+           ("bl ret", "blx r4", "ldmia r6!, {r0, r1}", 8);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Site ("bl ret", "blx r4"), "mov r4, r0") > 0,
+            "indirect target survives argument reload");
+         Check_Call ("blx r4", "bl fails", "ldr r0, [r6]", 8);
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Assembly, "bl fails" & LF & HT & "mov r4, r12") > 0,
+            "error carrier survives the call");
+      end;
+   end Outgoing_Calls;
+
+   procedure Fixed_Zero_Stores (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Zero_Stores (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("zero.ldn",
+        "public main: () -> (code: i32) =" & LF
+        & "    aligned32: [8]u32 = zeroed" & LF
+        & "    aligned12: [3]u32 = zeroed" & LF
+        & "    tail: [5]u8 = zeroed" & LF
+        & "    mut empty: [0]u8 = zeroed" & LF
+        & "    empty = zeroed" & LF
+        & "    if aligned32[0] == 0 and aligned12[2] == 0"
+        & " and tail[4] == 0 then" & LF
+        & "        code = 42" & LF
+        & "    else" & LF
+        & "        code = 1" & LF
+        & "    end if" & LF
+        & "end main" & LF);
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("zero.s");
+      Args.Append ("zero.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("zero.s");
+               function Loop_Body (Count : Positive) return String;
+               function Occurrences (Needle : String) return Natural;
+               function Loop_Body (Count : Positive) return String is
+                  At_Count : constant Natural := Ada.Strings.Fixed.Index
+                    (Text, "movs r4, #" & Ada.Strings.Fixed.Trim
+                       (Count'Image, Ada.Strings.Both));
+               begin
+                  if At_Count = 0 then
+                     return "";
+                  end if;
+                  return Text
+                    (At_Count .. Natural'Min (Text'Last, At_Count + 95));
+               end Loop_Body;
+               function Occurrences (Needle : String) return Natural is
+                  From : Positive := Text'First;
+                  At_Next : Natural;
+                  Seen : Natural := 0;
+               begin
+                  loop
+                     At_Next := Ada.Strings.Fixed.Index
+                       (Text (From .. Text'Last), Needle);
+                     exit when At_Next = 0;
+                     Seen := Seen + 1;
+                     exit when At_Next + Needle'Length > Text'Last;
+                     From := At_Next + Needle'Length;
+                  end loop;
+                  return Seen;
+               end Occurrences;
+            begin
+               for Which in 1 .. 2 loop
+                  declare
+                     Count : constant Positive :=
+                       (if Which = 1 then 8 else 3);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Contains (Loop_Body (Count),
+                        "str r5, [r0]" & LF & HT & "adds r0, #4"),
+                        "aligned clear uses " & Count'Image
+                          & " word stores");
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Contains (Loop_Body (5),
+                    "strb r5, [r0]" & LF & HT & "adds r0, #1"),
+                  "five-byte clear stays bytewise");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences ("str r5, [r0]"), 2,
+                  "only aligned clears use word stores");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences ("strb r5, [r0]"), 1,
+                  "five-byte clear is the only byte loop");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "assembly inspection invokes no target tools");
+            end;
+         end if;
+      end;
+   end Fixed_Zero_Stores;
+
    procedure Register_Staging (Item : in out Landin.Testing.Context);
 
    procedure Register_Staging (Item : in out Landin.Testing.Context) is
@@ -1225,6 +1446,62 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Firmware_Path;
 
+   procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context);
+
+   procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 5 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Body_Text : constant String :=
+              "mut bytes: [" & (if Mode = 4 then "4064"
+                                elsif Mode = 5 then "4072" else "5000")
+              & "]u8 = zeroed bytes[0] = 1 _ = bytes[0] ";
+         begin
+            Host.Add_File ("p.ldn",
+              (if Mode = 2 then
+                 "large: () -> none = " & Body_Text & "end large "
+                 & "start: () -> none = large() end start"
+               else "start: () -> none = " & Body_Text & "end start"));
+            Args.Append ("--target=cortex-m0");
+            if Mode /= 3 then
+               Args.Append ("--firmware-entry=start");
+            end if;
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Mode in 1 .. 2 | 5 then Landin.Driver.Status_Reported
+                   else Landin.Driver.Status_Success),
+                  "firmware frame mode" & Mode'Image & ": "
+                  & U.To_String (Result.Report));
+               if Mode in 1 .. 2 | 5 then
+                  Landin.Testing.Check
+                    (Item, U.Index (Result.Report, "L0507") > 0,
+                     "oversized known frame has its own diagnostic");
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "oversized frame is refused before writing");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 1,
+                     "fitting frame or bare target writes assembly");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "assembly needs no tool");
+            end;
+         end;
+      end loop;
+   end Firmware_Frame_Limit;
+
    procedure Machine_Directives (Item : in out Landin.Testing.Context);
 
    procedure Machine_Directives (Item : in out Landin.Testing.Context) is
@@ -1318,11 +1595,16 @@ package body Landin.Tests.Cortex_Suite is
              & "_ = assembler.block(""nop"", 0) end h",
            when 48 => "h: (x: u32) -> none = "
              & "_ = assembler.block(text: ""nop"", operand: x) end h",
+           when 49 => "link(section: "".rodata.shared"") "
+             & "first: u8 = 1 "
+             & "link(section: "".rodata.shared"", keep) "
+             & "second: u8 = 2 "
+             & "link(section: "".rodata.third"") third: u8 = 3",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 48 loop
+      for Case_Number in 1 .. 49 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1347,15 +1629,35 @@ package body Landin.Tests.Cortex_Suite is
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
                   --  26: a hosted operand-free block lowers like any other.
-                  (if Case_Number in 1 | 26 | 38 | 45
+                  (if Case_Number in 1 | 26 | 38 | 45 | 49
                    then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number not in 1 | 26 | 38 | 45 then
+               if Case_Number not in 1 | 26 | 38 | 45 | 49 then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");
+               elsif Case_Number = 49 then
+                  declare
+                     Assembly : U.Unbounded_String;
+                     Status : Landin.Platform.Read_Status;
+                  begin
+                     Host.Read_File ("p.s", Assembly, Status);
+                     Landin.Testing.Check
+                       (Item, Status = Landin.Platform.Read_Ok,
+                        "shared-section assembly is written");
+                     Landin.Testing.Check_Equal
+                       (Item, Ada.Strings.Fixed.Count
+                         (U.To_String (Assembly),
+                          ".section .rodata.shared,""aR"",%progbits"),
+                        2, "later keep retains both shared-section items");
+                     Landin.Testing.Check_Equal
+                       (Item, Ada.Strings.Fixed.Count
+                         (U.To_String (Assembly),
+                          ".section .rodata.third,""a"",%progbits"),
+                        1, "unrelated explicit section remains unretained");
+                  end;
                end if;
                Landin.Testing.Check_Equal
                  (Item, Tools.Run_Count, 0, "assembly checks run no tool");
@@ -1710,8 +2012,71 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Assembly_IR;
 
+   procedure Shared_Returns (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Returns (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("p.ldn",
+        "bad: atom "
+        & "pair: type = struct value: u32 end pair "
+        & "scalar: (x: u32) -> (r: u32) ! bad = "
+        & "r = x return when x == 0 fail bad when x == 1 "
+        & "r = x + 1 end scalar "
+        & "aggregate: (x: u32) -> (r: pair) = "
+        & "r = pair(value: x) return when x == 0 "
+        & "r = pair(value: x + 1) end aggregate "
+        & "single: () -> none = end single");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--optimize=size");
+      Args.Append ("--debug=lines");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("p.s");
+               function Count (Part : String) return Natural
+                 is (Ada.Strings.Fixed.Count (Text, Part));
+            begin
+               Landin.Testing.Check
+                 (Item, Count ("_return:") = 2
+                    and then Count ("_return" & LF) = 5,
+                  "five scalar, aggregate, and failure exits share two"
+                  & " return blocks");
+               Landin.Testing.Check
+                 (Item, Count ("mov sp, r6") = 3
+                    and then Count ("bx lr") = 3,
+                  "single exit stays inline and shared exits restore once");
+               Landin.Testing.Check
+                 (Item, Count ("mov r12, r0") = 1
+                    and then Count ("mov r12, r4") = 5,
+                  "failure carrier and successful return preparations differ");
+               Landin.Testing.Check
+                 (Item, Count (".cfi_remember_state") = 3
+                    and then Count (".cfi_restore_state") = 3,
+                  "each teardown restores its framed debug CFI state");
+            end;
+         end if;
+      end;
+   end Shared_Returns;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "fixed zero stores", Fixed_Zero_Stores'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "outgoing calls", Outgoing_Calls'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "scalar spill homes",
          Scalar_Spill_Homes'Access);
@@ -1724,6 +2089,8 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "literal pooling", Literal_Pooling'Access);
       Landin.Testing.Register
+        (Into, "cortex ABI", "shared returns", Shared_Returns'Access);
+      Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine directives", Machine_Directives'Access);
@@ -1732,6 +2099,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "linked firmware evidence",
          Linked_Firmware_Evidence'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "firmware frame limit",
+         Firmware_Frame_Limit'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register

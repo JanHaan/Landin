@@ -1,0 +1,9 @@
+class: negative
+summary: A known ordinary firmware frame must fit the selected 4 KiB stack reservation
+program: program.ldn
+constructs: 1990
+targets: cortex-m
+codes: L0507
+args: --target=cortex-m0 --firmware-entry=start --emit=asm ../tests/fixtures/negative/r660-firmware-frame/program.ldn
+expect: expected.txt
+status: 1

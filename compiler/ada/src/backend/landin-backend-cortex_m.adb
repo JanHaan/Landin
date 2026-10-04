@@ -1,14 +1,17 @@
 with Ada.Containers.Vectors;
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;
+with Ada.Containers.Hashed_Sets;
 with Landin.Backend.Firmware;
 with Landin.Backend.Dwarf;
 with Landin.Provenance;
 with Landin.Machine;
 with Landin.Layouts;
+with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
+with Landin.Targets.Firmware;
 with Ada.Strings.Fixed;
 with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Work_Arrays;
@@ -22,6 +25,7 @@ package body Landin.Backend.Cortex_M is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Scalar_Size;
    use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
@@ -31,6 +35,7 @@ package body Landin.Backend.Cortex_M is
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
+   use type Landin.IR.Storage_Kind;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -306,6 +311,31 @@ package body Landin.Backend.Cortex_M is
       when Stack_Limit_Exceeded => return False;
    end Frame_Is_Addressable;
 
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean is
+      Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
+        (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+      --  Match Emit_Routine: round used incoming register homes to eight
+      --  bytes and add the six words pushed for the saved registers.
+      Overhead : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8 + 24;
+   begin
+      if Landin.IR.Is_External (Of_Unit, Item)
+        or else Landin.IR.Signature_Machine
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+            = Landin.Machine.Naked_Routine
+      then
+         return True;
+      end if;
+      return Extent (Allocated_Frame
+        (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
+          Landin.Targets.Firmware.Stack_Size - Overhead;
+   exception
+      when Stack_Limit_Exceeded => return False;
+   end Frame_Fits_Firmware_Stack;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -349,6 +379,7 @@ package body Landin.Backend.Cortex_M is
       --  bytes, including alignment and at most 32 pool words.
       Pool_Distance : Natural := 0;
       Pool_Generation : Natural := 0;
+      Emission_Line : Natural := 0;
       pragma Unreferenced (Options);
 
       function Fresh return String;
@@ -366,7 +397,10 @@ package body Landin.Backend.Cortex_M is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Release (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
-      procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
+      procedure Copy_Two_Words;
+      procedure Zero_Bytes
+        (Bytes : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment);
       function High (Register : String) return String;
       procedure Frame_Address_Through
         (Offset : Landin.Targets.Byte_Count; Register : String);
@@ -374,10 +408,7 @@ package body Landin.Backend.Cortex_M is
 
 
 
-      procedure Put (Line : String) is
-      begin
-         Unbounded.Append (Out_Text, Line & LF);
-      end Put;
+
 
       procedure Emit (Instruction : String) is
       begin
@@ -623,10 +654,38 @@ package body Landin.Backend.Cortex_M is
          Emit ("bne " & Id);
       end Copy_Bytes;
 
-      procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
+      --  Only for proven disjoint, word-aligned eight-byte ranges.  The
+      --  ordinary byte loop retains the forward-copy behavior for aliases.
+      procedure Copy_Two_Words is
+      begin
+         Emit ("ldr r4, [r2]");
+         Emit ("str r4, [r0]");
+         Emit ("ldr r4, [r2, #4]");
+         Emit ("str r4, [r0, #4]");
+      end Copy_Two_Words;
+
+      procedure Zero_Bytes
+        (Bytes : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment) is
          Id : constant String := Fresh;
       begin
          if Bytes = 0 then
+            return;
+         end if;
+         if Alignment >= 4 and then Bytes >= 4 then
+            Immediate ("r4", Pattern (Bytes / 4));
+            Emit ("movs r5, #0");
+            Put (Id & ":");
+            Emit ("str r5, [r0]");
+            Emit ("adds r0, #4");
+            Emit ("subs r4, #1");
+            Emit ("bne " & Id);
+            for Tail in 1 .. Bytes mod 4 loop
+               Emit ("strb r5, [r0]");
+               if Tail < Bytes mod 4 then
+                  Emit ("adds r0, #1");
+               end if;
+            end loop;
             return;
          end if;
          Immediate ("r4", Pattern (Bytes));
@@ -650,6 +709,31 @@ package body Landin.Backend.Cortex_M is
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
+
+      package Section_Sets is new Ada.Containers.Hashed_Sets
+        (Element_Type        => Landin.Source.Names.Name_Id,
+         Hash                => Landin.Source.Names.Hash,
+         Equivalent_Elements => Landin.Source.Names."=");
+      Retained_Sections : Section_Sets.Set;
+
+      --  A later item may retain a section selected by an earlier item.
+      procedure Collect_Retained_Sections;
+      procedure Collect_Retained_Sections is
+      begin
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Attr : constant Landin.Machine.Placement :=
+                 Landin.IR.Placement_Of
+                   (Of_Unit, Landin.IR.Item_Id (Index));
+            begin
+               if Attr.Keep
+                 and then Attr.Section /= Landin.Source.Names.No_Name
+               then
+                  Retained_Sections.Include (Attr.Section);
+               end if;
+            end;
+         end loop;
+      end Collect_Retained_Sections;
 
       function Is_C_Item (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
@@ -717,6 +801,23 @@ package body Landin.Backend.Cortex_M is
       --  ELF debug-only labels must not perturb ld's local-symbol hash table
       --  and consequently the order of generated flash/RAM veneers.
       Debug_Prefix : constant String := Unused_Local_Prefix (".Llandin_");
+
+      procedure Put (Line : String) is
+      begin
+         Unbounded.Append (Out_Text, Line & LF);
+         --  Debug records cannot change r6 or introduce an executable
+         --  entry. Preserve adjacent-home reuse across those records.
+         if Line'Length > 0
+           and then Ada.Strings.Fixed.Index
+             (Line, Character'Val (9) & ".loc ") /= Line'First
+           and then Ada.Strings.Fixed.Index
+             (Line, Character'Val (9) & ".cfi_") /= Line'First
+           and then Ada.Strings.Fixed.Index
+             (Line, Debug_Prefix & "debug_") /= Line'First
+         then
+            Emission_Line := Emission_Line + 1;
+         end if;
+      end Put;
 
       function Fresh return String is
       begin
@@ -967,23 +1068,12 @@ package body Landin.Backend.Cortex_M is
            (if Attr.Section = Landin.Source.Names.No_Name
             then Prefix & "landin_" & Trimmed (Item'Image)
             else Landin.Source.Names.Spelling (Names, Attr.Section));
-         Retained : Boolean := Attr.Keep;
+         Retained : constant Boolean := Attr.Keep or else
+           (Attr.Section /= Landin.Source.Names.No_Name
+            and then Retained_Sections.Contains (Attr.Section));
          BSS : constant Boolean :=
            Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First;
       begin
-         if Attr.Section /= Landin.Source.Names.No_Name then
-            for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-               declare
-                  Other : constant Landin.Machine.Placement :=
-                    Landin.IR.Placement_Of
-                      (Of_Unit, Landin.IR.Item_Id (Index));
-               begin
-                  if Other.Section = Attr.Section then
-                     Retained := Retained or else Other.Keep;
-                  end if;
-               end;
-            end loop;
-         end if;
          Emit (".section " & Name & ",""" & Flags
            & (if Retained then "R" else "") & """,%"
            & (if BSS then "nobits" else "progbits"));
@@ -1028,6 +1118,7 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Before_Emit : constant Natural := Instruction_Count;
          Routine_Start : constant Positive := Unbounded.Length (Out_Text) + 1;
          type Branch_Site is record
@@ -1053,6 +1144,8 @@ package body Landin.Backend.Cortex_M is
          Homes : constant Landin.Targets.Byte_Count :=
            Extent (Layout) + Home_Bytes;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
+         Return_Label : constant String := Label (Item, 1) & "_return";
+         Exit_Count : Natural := 0;
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          Ordinary : constant Boolean := Landin.IR.Signature_Machine
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
@@ -1066,6 +1159,9 @@ package body Landin.Backend.Cortex_M is
          package Edge_Vectors is new Ada.Containers.Vectors
            (Positive, Panic_Edge);
          Edges : Edge_Vectors.Vector;
+         Home_Ready : Boolean := False;
+         Home_Line : Natural := 0;
+         Home_Offset : Landin.Targets.Byte_Count := 0;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -1112,12 +1208,16 @@ package body Landin.Backend.Cortex_M is
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
+         procedure Scalar_Memory
+           (Store : Boolean; Size : Held_Size;
+            Offset : Landin.Targets.Byte_Count; Register : String);
          procedure Branch (Condition, Target : String);
          procedure Jump (Target : String);
          procedure Long_Jump (Target : String);
          procedure Shorten_Local_Branches;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
+         procedure Return_From_Routine;
 
          procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
@@ -1332,12 +1432,47 @@ package body Landin.Backend.Cortex_M is
                Unbounded.Append (Out_Text, Rewritten);
             end if;
          end Shorten_Local_Branches;
+         --  r6 is available across adjacent scalar accesses.  Any emitted
+         --  line between them may change it or introduce another entry path,
+         --  so only reuse the address when the previous access ended the
+         --  output.  A nearby home needs at most one immediate adjustment.
+         procedure Scalar_Memory
+           (Store : Boolean; Size : Held_Size;
+            Offset : Landin.Targets.Byte_Count; Register : String) is
+         begin
+            if Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Offset = Home_Offset
+            then
+               null;
+            elsif Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Offset > Home_Offset
+              and then Offset - Home_Offset <= 255
+            then
+               Emit ("subs r6, #" & Trimmed
+                 (Landin.Targets.Byte_Count'Image (Offset - Home_Offset)));
+            elsif Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Home_Offset > Offset
+              and then Home_Offset - Offset <= 255
+            then
+               Emit ("adds r6, #" & Trimmed
+                 (Landin.Targets.Byte_Count'Image (Home_Offset - Offset)));
+            else
+               Frame_Address (Offset);
+            end if;
+            Memory (Store, Size, Register, "r6");
+            Home_Ready := Register /= "r6";
+            Home_Line := Emission_Line;
+            Home_Offset := Offset;
+         end Scalar_Memory;
 
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0") is
          begin
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (False, Size_Of_Value (Value), Register, "r6");
+            Scalar_Memory (False, Size_Of_Value (Value),
+              Value_Offset (Layout, Value), Register);
          end Load_Value;
 
          procedure Store_Value
@@ -1371,26 +1506,24 @@ package body Landin.Backend.Cortex_M is
                   Put (Done & ":");
                end;
             end if;
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (True, Size_Of_Value (Value), Register, "r6");
+            Scalar_Memory (True, Size_Of_Value (Value),
+              Value_Offset (Layout, Value), Register);
          end Store_Value;
 
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (False, Size_Of
+            Scalar_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "r6");
+              Slot_Offset (Layout, Slot), Register);
          end Load_Slot;
 
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (True, Size_Of
+            Scalar_Memory (True, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "r6");
+              Slot_Offset (Layout, Slot), Register);
          end Store_Slot;
 
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind)
@@ -1438,6 +1571,18 @@ package body Landin.Backend.Cortex_M is
                Emit (".cfi_restore_state");
             end if;
          end Epilogue;
+
+         procedure Return_From_Routine is
+         begin
+            if Exit_Count > 1 then
+               --  The literal follows bx, so its PC-relative load is always
+               --  in range, even across large or opaque assembly blocks.
+               --  r7 is restored by the shared epilogue before returning.
+               Jump (Return_Label);
+            else
+               Epilogue;
+            end if;
+         end Return_From_Routine;
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -1489,6 +1634,18 @@ package body Landin.Backend.Cortex_M is
             Field  : Natural;
             Nested : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count;
+         function Root_Word_Aligned
+           (Place : Landin.IR.Storage) return Boolean;
+         function Same_Root
+           (Left, Right : Landin.IR.Storage) return Boolean;
+         function Disjoint_Roots
+           (Left, Right : Landin.IR.Storage;
+            Bytes : Landin.Targets.Byte_Count) return Boolean;
+         function Clear_Alignment
+           (Place  : Landin.IR.Storage;
+            Field  : Natural;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.Targets.Byte_Alignment;
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
@@ -1717,7 +1874,8 @@ package body Landin.Backend.Cortex_M is
             if Payload_Field > 0 then
                Offset := Offset + Landin.Backend.Variant_Payload_Field_Offset
                  (Of_Unit, Landin.IR.Shape_At (Of_Unit, Shape, Nested),
-                  Positive (Which), Positive (Payload_Field), Facts);
+                  Positive (Which), Positive (Payload_Field), Facts,
+                  Path_Layouts);
             end if;
             Add_Offset (Register, Offset);
          end Part_Address;
@@ -1819,6 +1977,114 @@ package body Landin.Backend.Cortex_M is
             end case;
          end Whole_Clear_Extent;
 
+         --  These are whole-array roots.  Module array alignment comes from
+         --  its emitted .balign; frame offsets are relative to aligned r11.
+         function Root_Word_Aligned (Place : Landin.IR.Storage)
+           return Boolean is
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Root_Shape_Of (Place, 0), Facts,
+                     Size, Alignment);
+                  return Alignment >= 4;
+               when Landin.IR.Frame_Slot =>
+                  return Slot_Offset (Layout, Place.Slot) mod 4 = 0;
+               when Landin.IR.Runtime_Address =>
+                  return False;
+            end case;
+         end Root_Word_Aligned;
+
+         function Same_Root
+           (Left, Right : Landin.IR.Storage) return Boolean is
+         begin
+            if Left.Kind /= Right.Kind then
+               return False;
+            end if;
+            case Left.Kind is
+               when Landin.IR.Module_Datum =>
+                  return Left.Datum = Right.Datum;
+               when Landin.IR.Frame_Slot =>
+                  return Left.Slot = Right.Slot;
+               when Landin.IR.Runtime_Address =>
+                  return False;
+            end case;
+         end Same_Root;
+
+         function Disjoint_Roots
+           (Left, Right : Landin.IR.Storage;
+            Bytes : Landin.Targets.Byte_Count) return Boolean is
+         begin
+            if Left.Kind = Landin.IR.Runtime_Address
+              or else Right.Kind = Landin.IR.Runtime_Address
+            then
+               return False;
+            elsif Left.Kind /= Right.Kind then
+               return True;
+            elsif Left.Kind = Landin.IR.Module_Datum then
+               return Left.Datum /= Right.Datum;
+            else
+               declare
+                  A : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Left.Slot);
+                  B : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Right.Slot);
+               begin
+                  return (if A >= B then A - B >= Bytes
+                          else B - A >= Bytes);
+               end;
+            end if;
+         end Disjoint_Roots;
+         --  A runtime address may be supplied with weaker alignment than
+         --  its shape.  Static storage and frame slots follow the target
+         --  layout, including the offsets of their reached child fields.
+         function Clear_Alignment
+           (Place  : Landin.IR.Storage;
+            Field  : Natural;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.Targets.Byte_Alignment
+         is
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            if Place.Kind = Landin.IR.Runtime_Address then
+               return 1;
+            end if;
+            if Field = 0 and then Nested'Length = 0 then
+               case Place.Kind is
+                  when Landin.IR.Module_Datum =>
+                     if Landin.IR.Result_Of (Of_Unit, Place.Datum)
+                          = Landin.Types.Aggregate
+                     then
+                        declare
+                           Placed : Landin.Targets.Placement;
+                           Ignored : Landin.Targets.Byte_Count;
+                        begin
+                           Place_Fields (Place.Datum, Placed, 0, Ignored);
+                           return Landin.Targets.Alignment_Of (Placed);
+                        end;
+                     end if;
+                  when Landin.IR.Frame_Slot =>
+                     if Landin.IR.Is_Aggregate
+                          (Of_Unit, Item, Place.Slot)
+                     then
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Place.Slot, Facts,
+                           Size, Alignment);
+                        return Alignment;
+                     end if;
+                  when Landin.IR.Runtime_Address =>
+                     null;
+               end case;
+            end if;
+            Landin.Backend.Field_Extent
+              (Of_Unit, Reached_Shape (Place, Field, Nested), Facts,
+               Size, Alignment);
+            return Alignment;
+         end Clear_Alignment;
+
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape
@@ -1846,7 +2112,8 @@ package body Landin.Backend.Cortex_M is
            (Shape : Landin.IR.Field_Shape;
             Path  : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count
-           is (Landin.Backend.Path_Offset (Of_Unit, Shape, Path, Facts));
+           is (Landin.Backend.Path_Offset
+                 (Of_Unit, Shape, Path, Facts, Path_Layouts));
 
          --  [1630] on ARMv6-M.  Each input is loaded through its own
          --  register, so loading needs no other; the text runs; each output
@@ -1988,28 +2255,51 @@ package body Landin.Backend.Cortex_M is
                Input : Landin.IR.Value_Id := Landin.IR.No_Value);
 
             --  r0/r1 is a little-endian word pair; r2 is already in 0..63.
-            --  ARMv6-M has no RRX, so carry between right-shifted words is
-            --  an explicit low-bit extraction. Only r2/r3 are scratch.
+            --  ARMv6-M has no RRX. Split at a word boundary and use register
+            --  shifts to transfer the crossing bits. Only r2/r3 are scratch.
             procedure Shift_Pair (Left : Boolean; Signed : Boolean := False)
             is
-               Loop_Name : constant String := Fresh;
+               Small : constant String := Fresh;
+               Done : constant String := Fresh;
             begin
-               Emit ("cmp r2, #0");
-               Emit ("beq " & Loop_Name & "_done");
-               Put (Loop_Name & ":");
+               Emit ("cmp r2, #32");
+               Emit ("bcc " & Small);
+               Emit ("subs r2, #32");
                if Left then
-                  Emit ("lsls r0, r0, #1");
-                  Emit ("adcs r1, r1");
+                  Emit ("mov r1, r0");
+                  Emit ("movs r0, #0");
+                  Emit ("lsls r1, r2");
                else
-                  Emit ("lsls r3, r1, #31");
+                  Emit ("mov r0, r1");
+                  if Signed then
+                     Emit ("asrs r1, r1, #31");
+                     Emit ("asrs r0, r2");
+                  else
+                     Emit ("movs r1, #0");
+                     Emit ("lsrs r0, r2");
+                  end if;
+               end if;
+               Emit ("b " & Done);
+               Put (Small & ":");
+               if Left then
+                  Emit ("mov r3, r0");
+                  Emit ("lsls r0, r2");
+                  Emit ("lsls r1, r2");
+                  Emit ("rsbs r2, r2, #0");
+                  Emit ("adds r2, #32");
+                  Emit ("lsrs r3, r2");
+                  Emit ("orrs r1, r3");
+               else
+                  Emit ("mov r3, r1");
                   Emit ((if Signed then "asrs" else "lsrs")
-                    & " r1, r1, #1");
-                  Emit ("lsrs r0, r0, #1");
+                    & " r1, r2");
+                  Emit ("lsrs r0, r2");
+                  Emit ("rsbs r2, r2, #0");
+                  Emit ("adds r2, #32");
+                  Emit ("lsls r3, r2");
                   Emit ("orrs r0, r3");
                end if;
-               Emit ("subs r2, #1");
-               Emit ("bne " & Loop_Name);
-               Put (Loop_Name & "_done:");
+               Put (Done & ":");
             end Shift_Pair;
 
             procedure Packed_Atom
@@ -2422,6 +2712,12 @@ package body Landin.Backend.Cortex_M is
                         end if;
                         Emit ("bl __aeabi_" & (if Wide then "d" else "f")
                           & (if Multiply then "mul" else "div"));
+                     elsif Op = Landin.IR.Wrapping_Multiply
+                       and then not Wide
+                     then
+                        --  The low word is the whole wrapping result.  Thumb
+                        --  MULS uses only low registers and writes that word.
+                        Emit ("muls r0, r2, r0");
                      elsif Multiply then
                         if not Wide then
                            if Signed then
@@ -2931,6 +3227,8 @@ package body Landin.Backend.Cortex_M is
                   declare
                      Source : constant Landin.IR.Storage :=
                        Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Field : constant Natural :=
                        Landin.IR.Source_Field_Of (Of_Unit, Item, Value);
                      Nested : constant Landin.IR.Path_Step_Array :=
@@ -2946,7 +3244,7 @@ package body Landin.Backend.Cortex_M is
                           Bytes, Alignment);
                      end if;
                      Storage_Address
-                       (Landin.IR.Destination_Of (Of_Unit, Item, Value),
+                       (Destination,
                         Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
                           "r0",
                         (if Op = Landin.IR.Copy_Array then
@@ -2957,7 +3255,34 @@ package body Landin.Backend.Cortex_M is
                              (Of_Unit, Item, Value) else 0),
                         Landin.IR.Path_Of (Of_Unit, Item, Value));
                      Storage_Address (Source, Field, "r2", Nested => Nested);
-                     Copy_Bytes (Bytes);
+                     if Op = Landin.IR.Copy_Array
+                       and then Bytes = 8
+                       and then Field = 0 and then Nested'Length = 0
+                       and then Landin.IR.Element_Field_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Variant_Case_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Variant_Payload_Field_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Path_Of
+                         (Of_Unit, Item, Value)'Length = 0
+                       and then Source.Kind /= Landin.IR.Runtime_Address
+                       and then Destination.Kind /= Landin.IR.Runtime_Address
+                     then
+                        if Same_Root (Source, Destination) then
+                           null;
+                        elsif Root_Word_Aligned (Source)
+                          and then Root_Word_Aligned (Destination)
+                          and then Disjoint_Roots
+                            (Source, Destination, Bytes)
+                        then
+                           Copy_Two_Words;
+                        else
+                           Copy_Bytes (Bytes);
+                        end if;
+                     else
+                        Copy_Bytes (Bytes);
+                     end if;
                   end;
                when Landin.IR.Clear_Array | Landin.IR.Select_Variant =>
                   declare
@@ -2980,7 +3305,9 @@ package body Landin.Backend.Cortex_M is
                      end if;
                      Storage_Address (Destination, Field, "r0", Nested =>
                        Nested);
-                     Zero_Bytes (Bytes);
+                     Zero_Bytes
+                       (Bytes, Clear_Alignment
+                          (Destination, Field, Nested));
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "r2", Nested => Nested);
@@ -3141,8 +3468,13 @@ package body Landin.Backend.Cortex_M is
                      Offset : constant Natural := (if Indirect then 1 else 0);
                      Hidden : constant Natural :=
                        (if Call.Result.Shape.Indirect then 1 else 0);
+                     --  Stack arguments stay at sp; round the register
+                     --  homes to the call boundary's eight-byte alignment.
+                     Register_Bytes : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count
+                         ((Call.Core_Used + 1) / 2 * 8);
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Call.Stack_Bytes + 16;
+                       Call.Stack_Bytes + Register_Bytes;
                   begin
                      Reserve (Bytes);
                      if Hidden > 0 then
@@ -3179,9 +3511,17 @@ package body Landin.Backend.Cortex_M is
                         Load_Value (Operand (1));
                         Emit ("mov r4, r0");
                      end if;
-                     Emit ("mov r6, sp");
-                     Add_Offset ("r6", Call.Stack_Bytes);
-                     Emit ("ldmia r6!, {r0, r1, r2, r3}");
+                     if Call.Core_Used > 0 then
+                        Emit ("mov r6, sp");
+                        Add_Offset ("r6", Call.Stack_Bytes);
+                        case Call.Core_Used is
+                           when 1 => Emit ("ldr r0, [r6]");
+                           when 2 => Emit ("ldmia r6!, {r0, r1}");
+                           when 3 => Emit ("ldmia r6!, {r0, r1, r2}");
+                           when 4 => Emit ("ldmia r6!, {r0, r1, r2, r3}");
+                           when 0 => null;
+                        end case;
+                     end if;
                      if Indirect then
                         Emit ("blx r4");
                      else
@@ -3278,7 +3618,7 @@ package body Landin.Backend.Cortex_M is
                   end if;
                   Emit ("movs r4, #0");
                   Emit ("mov r12, r4");
-                  Epilogue;
+                  Return_From_Routine;
                when Landin.IR.Halt =>
                   if Panic = null or else Landin.Panics.Handler (Panic.all)
                     = Landin.IR.No_Item
@@ -3291,10 +3631,27 @@ package body Landin.Backend.Cortex_M is
                when Landin.IR.Fail =>
                   Load_Value (Operand (1));
                   Emit ("mov r12, r0");
-                  Epilogue;
+                  Return_From_Routine;
             end case;
          end Instruction;
       begin
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Item, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value
+                      (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               begin
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    in Landin.IR.Leave | Landin.IR.Fail
+                  then
+                     Exit_Count := Exit_Count + 1;
+                  end if;
+               end;
+            end loop;
+         end loop;
          Select_Section (Item, ".text.", "ax");
          Emit (".globl " & Symbol (Item));
          Emit (".balign 2");
@@ -3453,6 +3810,10 @@ package body Landin.Backend.Cortex_M is
          end loop;
          Put (Hard_Trap & ":");
          Emit ("udf #1");
+         if Exit_Count > 1 then
+            Put (Return_Label & ":");
+            Epilogue;
+         end if;
          Flush_Literals;
          Pool_Active := False;
          if Debug /= null then
@@ -4033,6 +4394,7 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Recursive_Image_Datum
         (Item : Landin.IR.Item_Id)
       is
+         Datum_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Placed : Landin.Targets.Placement;
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
@@ -4284,7 +4646,8 @@ package body Landin.Backend.Cortex_M is
                            (Of_Unit, Item, Image, Payload);
                      At_Payload : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Selected, Payload, Facts);
+                         (Of_Unit, Shape, Selected, Payload, Facts,
+                          Datum_Layouts);
                      Payload_Size : Landin.Targets.Byte_Count;
                      Payload_Alignment : Landin.Targets.Byte_Alignment;
                   begin
@@ -4680,6 +5043,7 @@ package body Landin.Backend.Cortex_M is
       then
          raise Compiler_Defect with "Cortex emission needs an M profile";
       end if;
+      Collect_Retained_Sections;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item

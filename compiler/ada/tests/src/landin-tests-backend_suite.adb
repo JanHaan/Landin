@@ -52,8 +52,7 @@ package body Landin.Tests.Backend_Suite is
    function Index (Text : String; Needle : String) return Natural is
      (Ada.Strings.Fixed.Index (Text, Needle));
 
-   --  How many times a needle occurs, which is how a case says a section
-   --  directive was written once rather than once per object in it.
+   --  How many times a needle occurs.
    function Occurrences (Text : String; Needle : String) return Natural;
 
    function Occurrences (Text : String; Needle : String) return Natural is
@@ -74,6 +73,29 @@ package body Landin.Tests.Backend_Suite is
 
       return Seen;
    end Occurrences;
+
+   --  Linux x86-64 gives each object its own input section so the hosted
+   --  link can collect it.  Whether the section opened last before Label
+   --  is one of Kind's (`.data`, `.bss`, `.rodata`) says where it lives.
+   function In_Section (Text, Kind, Label : String) return Boolean;
+
+   function In_Section (Text, Kind, Label : String) return Boolean is
+      Directive : constant String := ASCII.HT & ".section ";
+      At_Label : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, ASCII.LF & Label & ":" & ASCII.LF);
+      Opened : Natural;
+   begin
+      if At_Label = 0 then
+         return False;
+      end if;
+      Opened := Ada.Strings.Fixed.Index
+        (Text (Text'First .. At_Label), Directive, Ada.Strings.Backward);
+      return Opened > 0
+        and then Opened + Directive'Length + Kind'Length <= At_Label
+        and then Text (Opened + Directive'Length
+                       .. Opened + Directive'Length + Kind'Length)
+          = Kind & ".";
+   end In_Section;
 
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Alignment;
@@ -139,6 +161,7 @@ package body Landin.Tests.Backend_Suite is
 
       Expected : constant String :=
         HT & ".text" & LF
+        & HT & ".section .text.landin_routine_1,""ax"",@progbits" & LF
         & HT & ".globl main" & LF
         & HT & ".type main, @function" & LF
         & "main:" & LF
@@ -1077,7 +1100,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Expected : constant String :=
-           HT & ".data" & LF
+           HT & ".section .data.landin_datum_1,""aw"",@progbits" & LF
            & HT & ".globl answer" & LF
            & HT & ".type answer, @object" & LF
            & HT & ".align 4" & LF
@@ -1120,7 +1143,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Expected : constant String :=
-           HT & ".bss" & LF
+           HT & ".section .bss.landin_datum_1,""aw"",@nobits" & LF
            & HT & ".globl state" & LF
            & HT & ".type state, @object" & LF
            & HT & ".align 4" & LF
@@ -1301,8 +1324,7 @@ package body Landin.Tests.Backend_Suite is
                "the 32-bit image writes fields and zero layout gaps");
             Landin.Testing.Check
               (Item,
-               Contains (Text, "blank:" & LF)
-               and then Occurrences (Text, HT & ".data" & LF) = 1
+               In_Section (Text, ".data", "blank")
                and then not Contains
                  (Text, "blank:" & LF & HT & ".zero 16" & LF),
                "an explicit all-zero literal remains written data");
@@ -2190,7 +2212,7 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains (Text, HT & "cmpq %rdx, %rax")
+            Contains (Text, HT & "cmpq $2, %rax")
             and then Contains (Text, HT & "leaq state(%rip), %rcx")
             and then Contains
                        (Text, HT & "movabsq $2147483648, %rdx")
@@ -3017,11 +3039,42 @@ package body Landin.Tests.Backend_Suite is
          begin
             Landin.Testing.Check
               (Item,
-               Occurrences (Text, HT & "movabsq $0, %rcx") = 2
-               and then Contains (Text, HT & "rep stosb")
-               and then Contains (Text, HT & "rep movsb"),
-               "clearing and copying the empty field are zero-byte ops");
+               not Contains (Text, HT & "leaq")
+               and then not Contains (Text, HT & "xorl %eax, %eax")
+               and then not Contains (Text, HT & "movabsq $0, %rcx")
+               and then not Contains (Text, HT & "cld")
+               and then not Contains (Text, HT & "rep stosb")
+               and then not Contains (Text, HT & "rep movsb"),
+               "empty field clear and copy emit no transfer setup");
          end;
+      end;
+
+      declare
+         Source_Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Source_Ran : Natural;
+      begin
+         Lower
+           (Source_Work,
+            "f: () -> none =" & LF
+            & "    a: [0]u8 = zeroed" & LF
+            & "    b: [0]u8 = a" & LF
+            & "end f" & LF, Source_Ran);
+         Landin.Testing.Check_Equal
+           (Item, Source_Ran, 5, "whole empty arrays lower");
+         if not Landin.Stages.Failed (Source_Work) then
+            declare
+               Text : constant String := Emitted (Source_Work);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  not Contains (Text, HT & "leaq")
+                  and then not Contains (Text, HT & "cld")
+                  and then not Contains (Text, HT & "rep stosb")
+                  and then not Contains (Text, HT & "rep movsb"),
+                  "whole empty array clear and copy emit no transfer");
+            end;
+         end if;
       end;
    end An_Empty_Array_Slot_Field_Has_Identity_Extent;
 
@@ -3809,18 +3862,21 @@ package body Landin.Tests.Backend_Suite is
                       & HT & ".long 42" & LF),
             "a value that is not zero is still written down");
 
-         --  The sections are one run each, so each directive is written
-         --  once however many objects it holds.
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
-            "the reserved section is opened once");
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".data" & LF), 1,
-            "and the written one is too");
+         --  Each object is its own collectable section, of the kind its
+         --  image selects.
          Landin.Testing.Check
            (Item,
-            Index (Text, HT & ".data" & LF) < Index (Text, HT & ".bss" & LF),
-            "written data comes before reserved, so each stays one run");
+            In_Section (Text, ".bss", "state")
+            and then In_Section (Text, ".bss", "counter"),
+            "the zeroed objects are in reserved sections");
+         Landin.Testing.Check
+           (Item, In_Section (Text, ".data", "answer"),
+            "and the written one is in a written section");
+         Landin.Testing.Check
+           (Item,
+            Index (Text, HT & ".section .data.")
+              < Index (Text, HT & ".section .bss."),
+            "written data comes before reserved");
       end;
    end Zero_Data_Is_Reserved_And_Not_Written;
 
@@ -3856,11 +3912,13 @@ package body Landin.Tests.Backend_Suite is
            (Item,
             Contains (Text, "flag:" & LF & HT & ".zero 1" & LF),
             "false is reserved");
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
-            "both contextual zeros share the reserved section");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & ".data" & LF),
+           (Item,
+            In_Section (Text, ".bss", "number")
+            and then In_Section (Text, ".bss", "flag"),
+            "both contextual zeros are in reserved sections");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & ".section .data."),
             "no written data image is emitted");
       end;
    end A_Zeroed_Module_Scalar_Stays_In_Bss;
@@ -3932,7 +3990,9 @@ package body Landin.Tests.Backend_Suite is
                          & HT & ".zero " & Wide & LF),
                "and a pointer-width element follows the target");
             Landin.Testing.Check
-              (Item, Contains (Text, HT & ".bss" & LF),
+              (Item,
+               In_Section (Text, ".bss", "buffer")
+               and then In_Section (Text, ".bss", "wide"),
                "a zeroed array is reserved and not written");
          end;
       end Check_Target;
@@ -3972,10 +4032,9 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains
-              (Text,
-               HT & ".data" & LF),
-            "one .data section holds the images");
+            In_Section (Text, ".data", "numbers")
+            and then In_Section (Text, ".data", "base"),
+            ".data sections hold the images");
          Landin.Testing.Check
            (Item,
             Contains
@@ -3991,7 +4050,7 @@ package body Landin.Tests.Backend_Suite is
             "the array image is one directive per source-order element");
          Landin.Testing.Check
            (Item,
-            Contains (Text, HT & ".bss" & LF)
+            In_Section (Text, ".bss", "reserved")
               and then Contains
                          (Text,
                           "reserved:" & LF
@@ -4006,8 +4065,8 @@ package body Landin.Tests.Backend_Suite is
             "an explicitly zeroed array stays reserved storage");
          Landin.Testing.Check
            (Item,
-            Index (Text, HT & ".data" & LF)
-              < Index (Text, HT & ".bss" & LF),
+            Index (Text, HT & ".section .data.")
+              < Index (Text, HT & ".section .bss."),
             "written data comes before reserved");
       end;
    end A_Module_Array_Literal_Becomes_Data_Image;
@@ -4037,9 +4096,9 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
          Shared : constant String := ".Llandin_anonymous_3";
       begin
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".section .rodata" & LF), 1,
-            "read-only literal data has one section");
+         Landin.Testing.Check
+           (Item, In_Section (Text, ".rodata", Shared),
+            "read-only literal data is in a read-only section");
          Landin.Testing.Check
            (Item,
             Contains
@@ -4240,7 +4299,7 @@ package body Landin.Tests.Backend_Suite is
 
       declare
          Text : constant String := Emitted (Work);
-         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural := Index (Text, HT & "imulq $4, %rax, %rax");
          Address : constant Natural :=
@@ -4252,7 +4311,7 @@ package body Landin.Tests.Backend_Suite is
             and then Trap < Scale and then Scale < Address,
             "the unsigned bounds check and trap precede scaling and address");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "the store and load each check the runtime index");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "jb "), 2,
@@ -4267,6 +4326,53 @@ package body Landin.Tests.Backend_Suite is
             "the guarded addresses carry a u32 write and read");
       end;
    end A_Computed_Element_Is_Checked_Before_Its_Address;
+
+   procedure Unit_Stride_Indexes_Use_The_Checked_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unit_Stride_Indexes_Use_The_Checked_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "mut bytes: [4]u8" & LF
+         & "plain: (i: usize) -> (r: u8) =" & LF
+         & "    bytes[i] = 7" & LF
+         & "    r = bytes[i]" & LF
+         & "end plain" & LF
+         & "through_address: (inout values: [4]u8, i: usize)"
+         & " -> (r: u8) =" & LF
+         & "    values[i] = 7" & LF
+         & "    r = values[i]" & LF
+         & "end through_address" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 4,
+            "both byte-array paths check each read and write");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "ud2"), 4,
+            "each failed byte-array bound traps");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "addq %rax, %rcx"), 4,
+            "each checked index is added to its array base");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "imulq $1, %rax, %rax"),
+            "neither indexed path multiplies a unit stride");
+      end;
+   end Unit_Stride_Indexes_Use_The_Checked_Value;
 
    --  D22: a computed local array element traps like the module one and
    --  then reaches its own frame slot rather than a datum symbol.  The
@@ -4297,7 +4403,7 @@ package body Landin.Tests.Backend_Suite is
 
       declare
          Text : constant String := Emitted (Work);
-         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural :=
            Index (Text, HT & "imulq $4, %rax, %rax");
@@ -4314,7 +4420,7 @@ package body Landin.Tests.Backend_Suite is
             and then Trap < Scale and then Scale < Address,
             "the trap and scaling precede the frame-slot address");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+           (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "both the store and the load check the runtime index");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "ud2"), 2,
@@ -4966,6 +5072,81 @@ package body Landin.Tests.Backend_Suite is
             "an ordinary i8 remainder comes from its implicit register");
       end;
    end Signed_Remainder_Handles_Minimum_Modulo_Minus_One;
+
+   procedure Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide
+     (Item : in out Landin.Testing.Context)
+   is
+      Powers : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Other : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Minus_One : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Powers,
+         "q: (x: i64) -> (r: i64) =" & LF
+         & "    r = x / -8" & LF & "end q" & LF
+         & "m: (x: i64) -> (r: i64) =" & LF
+         & "    r = x % 8" & LF & "end m" & LF
+         & "u: (x: u64) -> (r: u64) =" & LF
+         & "    r = x / 8" & LF & "end u" & LF
+         & "v: (x: u64) -> (r: u64) =" & LF
+         & "    r = x % 9223372036854775808" & LF & "end v" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Powers);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "sarq $3, %rax")
+              and then Contains (Text, HT & "shrq $3, %rax")
+              and then Contains (Text, HT & "andq %rdx, %rax")
+              and then not Contains (Text, HT & "divq ")
+              and then not Contains (Text, HT & "idivq ")
+              and then not Contains (Text, HT & "cmpq $0, "),
+            "power-of-two divisors use shifts without divide or zero checks");
+      end;
+
+      Lower
+        (Other,
+         "q: (x: u64) -> (r: u64) =" & LF
+         & "    r = x / 10" & LF & "end q" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Other);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "divq ")
+              and then not Contains (Text, HT & "cmpq $0, "),
+            "other fixed divisors omit the impossible zero check");
+      end;
+
+      Lower
+        (Minus_One,
+         "q: (x: i64) -> (r: i64) =" & LF
+         & "    r = x / -1" & LF & "end q" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Minus_One);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movabsq $9223372036854775808, %rdx")
+              and then Contains (Text, HT & "cmpq %rdx, %rax")
+              and then Contains (Text, HT & "ud2")
+              and then not Contains (Text, HT & "idivq "),
+            "fixed minus one keeps the signed overflow trap");
+      end;
+   end Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide;
 
    --  One-operand `mul` forms a full unsigned product in the implicit
    --  accumulator pair.  Carry is clear exactly when its high half is zero,
@@ -5771,7 +5952,13 @@ package body Landin.Tests.Backend_Suite is
    begin
       Lower
         (Work,
-         "malloc: () -> none = end malloc" & LF
+         "no_allocation: atom" & LF
+         & "allocation: type = no_allocation | ptr mut u8" & LF
+         & "extern(c) _landin_host_heap_allocate:"
+         & " (size: usize, alignment: usize) -> (block: allocation)" & LF
+         & "extern(c) _landin_host_heap_release:"
+         & " (block: ptr mut u8) -> none" & LF
+         & "malloc: () -> none = end malloc" & LF
          & "free: () -> none = end free" & LF
          & "public main: () -> (code: i32) =" & LF
          & "    malloc()" & LF
@@ -5840,6 +6027,89 @@ package body Landin.Tests.Backend_Suite is
             "only main calls the same aligned C argument initializer");
       end;
    end A_Hosted_Heap_Shim_Checks_Before_Libc;
+
+   procedure Hosted_Bridges_Emit_Only_Requested_Helpers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Hosted_Bridges_Emit_Only_Requested_Helpers
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Import
+        (Declaration, Present, Absent : String);
+
+      procedure Check_Import
+        (Declaration, Present, Absent : String)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower (Work, Declaration & LF, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, "import lowered");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Present & ":" & LF)
+               and then not Contains (Text, Absent & ":" & LF)
+               and then Contains
+                 (Text, "_landin_host_initialize_arguments:" & LF)
+               and then Occurrences
+                 (Text, HT & ".type _landin_host_") = 2,
+               "the initializer and imported helper receive bodies");
+            Landin.Testing.Check
+              (Item, Contains (Text, ".Llandin_host_argv:" & LF),
+               "retained bridge support exposes startup state");
+         end;
+      end Check_Import;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work, "public main: () -> (code: i32) = code = 0 end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "main lowered");
+      if not Landin.Stages.Failed (Work) then
+         declare
+            Hosted : constant IR.Item_Id :=
+              Landin.Backend.Entry_Point.Hosted_Main
+                (Landin.Stages.Code (Work).all,
+                 Landin.Stages.Meanings (Work).all,
+                 Landin.Stages.Modules (Work).all,
+                 Landin.Stages.Identities (Work).all);
+            Text : constant String := Landin.Backend.X86_64.Text
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Stages.Target (Work), Hosted_Entry => Hosted);
+         begin
+            Landin.Testing.Check
+              (Item, Contains
+                 (Text, "_landin_host_initialize_arguments:" & LF)
+               and then Occurrences
+                 (Text, HT & ".type _landin_host_") = 1
+               and then not Contains
+                 (Text, "_landin_host_argument_count:" & LF)
+               and then not Contains
+                 (Text, "_landin_host_heap_allocate:" & LF)
+               and then not Contains (Text, "jmp open" & LF),
+               "hosted startup retains only its initializer");
+         end;
+      end if;
+
+      Check_Import
+        ("extern(c) _landin_host_text_length: (data: ptr u8)"
+         & " -> (length: usize)",
+         "_landin_host_text_length", "_landin_host_heap_allocate");
+      Check_Import
+        ("extern(c) _landin_host_argument_count: () -> (n: usize)",
+         "_landin_host_argument_count", "_landin_host_text_length");
+   end Hosted_Bridges_Emit_Only_Requested_Helpers;
 
    procedure C_Classification_And_Assignment_Agree
      (Item : in out Landin.Testing.Context);
@@ -6067,14 +6337,14 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Copy_At : constant Natural := Index (Text, "rep movsb");
-         Last_GP : constant Natural := Index (Text, "movq %r9, 40(%rsp)");
+         Last_GP : constant Natural := Index (Text, "movq %rdi, 0(%rsp)");
          Last_SSE : constant Natural :=
-           Index (Text, "movq %xmm7, 104(%rsp)");
+           Index (Text, "movq %xmm0, 8(%rsp)");
       begin
          Landin.Testing.Check
            (Item, Last_GP > 0 and then Last_SSE > Last_GP
             and then Copy_At > Last_SSE,
-            "every incoming GP and SSE register is saved before a copy");
+            "each used incoming GP and SSE register is saved before a copy");
          Landin.Testing.Check
            (Item, Contains (Text, "leaq 16(%rbp), %rsi")
             and then Contains (Text, "movabsq $24, %rcx"),
@@ -6509,7 +6779,7 @@ package body Landin.Tests.Backend_Suite is
               (Text, HT & ".type _landin_host_initialize_arguments,") = 1
             and then not Contains
               (Text, HT & "call _landin_host_initialize_arguments" & LF),
-            "C startup gets one isolated initializer, never a callback hook");
+            "C startup gets one hidden initializer, never a callback hook");
          Landin.Testing.Check
            (Item, Contains
               (Text, "_landin_host_initialize_arguments:" & LF
@@ -6525,7 +6795,7 @@ package body Landin.Tests.Backend_Suite is
             and then Contains
               (Text, ".Llandin_host_arguments_invalid:" & LF
                & HT & "ud2" & LF),
-            "first initialization validates and stores the actual C carriers");
+            "first initialization validates and stores the C carriers");
          Landin.Testing.Check
            (Item, Contains
               (Text, "_landin_host_argument_count:" & LF
@@ -6745,6 +7015,75 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Darwin_Wide_Parts_Keep_Target_Offsets;
 
+   procedure Arm64_Immediates_Use_The_Shorter_Move_Sequence
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Immediates_Use_The_Shorter_Move_Sequence
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work, "public values: () -> (negative: i64, narrow: i32," & LF
+         & " small: i8, all_ones: u64, zero: u64, shifted: u64," & LF
+         & " mixed: u64, sparse: u64) =" & LF
+         & "    negative = -41" & LF
+         & "    narrow = -41" & LF
+         & "    small = -7" & LF
+         & "    all_ones = 18446744073709551615" & LF
+         & "    zero = 0" & LF
+         & "    shifted = 0xffffffffffff1234" & LF
+         & "    mixed = 0xffff1234abcdffff" & LF
+         & "    sparse = 0x0001000000000000" & LF
+         & "end values" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "immediate source lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "movn x9, #40" & LF), 1,
+            "64-bit -41 needs one complemented move");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "movn x9, #40" & LF
+             & HT & "movk x9,"),
+            "64-bit -41 has no following patch move");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #65495" & LF
+             & HT & "movk x9, #65535, lsl #16" & LF),
+            "32-bit -41 keeps its zero upper half");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #249" & LF),
+            "8-bit negative keeps its zero upper bits");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #0" & LF)
+             and then Contains (Text, HT & "movz x9, #0" & LF),
+            "all ones and zero each use one move");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #60875" & LF),
+            "a low non-ones chunk uses a complemented seed");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #21554, lsl #16" & LF
+             & HT & "movk x9, #4660, lsl #32" & LF),
+            "mixed chunks keep their positions and values");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #1, lsl #48" & LF),
+            "a sparse positive value seeds at its nonzero chunk");
+      end;
+   end Arm64_Immediates_Use_The_Shorter_Move_Sequence;
+
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
    --  at every width, inside the same fences, and the default emits the
    --  exclusive-monitor loop it always did; the Cortex-M profile at armv7-m
@@ -6862,6 +7201,59 @@ package body Landin.Tests.Backend_Suite is
         (Item, Occurrences (Seven, "udf") = Occurrences (Base_M, "udf"),
          "every division guard is kept at both levels");
    end A_Level_Selects_Its_Instructions;
+
+   procedure Cortex_Wrapping_Products_Use_Low_Word
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Wrapping_Products_Use_Low_Word
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Source : constant String :=
+        "public products: (a: u8, b: u8, c: i8, d: i8,"
+        & " e: u16, f: u16, g: i16, h: i16,"
+        & " i: u32, j: u32, k: i32, l: i32,"
+        & " m: u64, n: u64) ->"
+        & " (p: u8, q: i8, r: u16, s: i16, t: u32,"
+        & " u: i32, v: u64, w: u32) =" & LF
+        & "    p = a *% b" & LF
+        & "    q = c *% d" & LF
+        & "    r = e *% f" & LF
+        & "    s = g *% h" & LF
+        & "    t = i *% j" & LF
+        & "    u = k *% l" & LF
+        & "    v = m *% n" & LF
+        & "    w = i * j" & LF
+        & "end products" & LF;
+   begin
+      Lower (Work, Source, Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "parameterized products lower");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Targets.Cortex_M,
+         Landin.Optimization.Reference_Options, Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "muls r0, r2, r0"), 6,
+            "narrow wrapping products use Thumb multiplication");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "bl __aeabi_lmul"), 2,
+            "wide wrapping and checked products keep the helper");
+      end;
+   end Cortex_Wrapping_Products_Use_Low_Word;
 
    --  [1630] on x86-64: the text as written with `{name}` filled, each
    --  input extended into its register before it and each output stored
@@ -7017,8 +7409,269 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Assembly_Saves_What_It_Declares;
 
+   procedure Arm64_Conditional_Reach
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Conditional_Reach
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work, "public divide: (a: i32, b: i32) -> (r: i32) =" & LF
+         & "    r = a / b" & LF
+         & "    assembler.block(""nop"")" & LF
+         & "end divide" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "b.ne Llandin_step_1_divide" & LF
+                            & HT & "cmn x10, #1"),
+            "a nearby conditional branch needs one instruction");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "cbnz x10, Llandin_step_")
+              and then Contains (Text, HT & "b L1_1_trap" & LF),
+            "a branch across opaque assembly keeps its long form");
+      end;
+   end Arm64_Conditional_Reach;
+
+   procedure Arm64_Calls_Restore_Only_Reserved_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Calls_Restore_Only_Reserved_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "wide: type = layout(c) struct" & LF
+         & "    bytes: [24]u8" & LF & "end wide" & LF
+         & "mut state: wide" & LF
+         & "extern(c) c_zero: () -> (r: i32)" & LF
+         & "extern(c) c_copy: (value: wide) -> none" & LF
+         & "native_zero: () -> (r: i32) = 7 end native_zero" & LF
+         & "native_nine: (a0: i64, a1: i64, a2: i64, a3: i64,"
+         & " a4: i64, a5: i64, a6: i64, a7: i64, a8: i64)"
+         & " -> none = _ = a8 end native_nine" & LF
+         & "public probe: () -> none =" & LF
+         & "    _ = native_zero()" & LF
+         & "    _ = c_zero()" & LF
+         & "    native_nine(1, 2, 3, 4, 5, 6, 7, 8, 9)" & LF
+         & "    c_copy(state)" & LF
+         & "end probe" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "four calls lower");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "bl _native_zero")
+              and then Contains (Text, "bl _c_zero")
+              and then Contains (Text, "bl _native_nine")
+              and then Contains (Text, "bl _c_copy"),
+            "both conventions emit zero and nonzero calls");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "add sp, sp, #"), 2,
+            "only the two calls that reserve space restore it");
+         Landin.Testing.Check
+           (Item, Contains (Text, "add sp, sp, #16")
+              and then Contains (Text, "add sp, sp, #32"),
+            "native stack argument and C indirect copy restore full areas");
+      end;
+   end Arm64_Calls_Restore_Only_Reserved_Stack;
+
+   procedure Arm64_Bulk_Array_Transfers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Bulk_Array_Transfers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "public main: () -> (code: i32) =" & LF
+         & "    mut source: [10]u8 = zeroed" & LF
+         & "    mut destination: [10]u8 = zeroed" & LF
+         & "    destination = source" & LF
+         & "    destination = destination" & LF
+         & "    mut large: [2048]u64 = zeroed" & LF
+         & "    code = i32(destination[0]) + i32(large[0])" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "array source lowers");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "array source is legal IR");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "orr x11, x9, x10")
+              and then Contains (Text, "tst x11, #7")
+              and then Contains (Text, "ldr x12, [x10], #8")
+              and then Contains (Text, "str x12, [x9], #8"),
+            "aligned copies use a word loop after checking both addresses");
+         Landin.Testing.Check
+           (Item, Contains (Text, "ldrb w12, [x10], #1")
+              and then Contains (Text, "strb w12, [x9], #1")
+              and then Contains (Text, "movz x11, #2"),
+            "copies retain the unaligned path and two-byte tail");
+         Landin.Testing.Check
+           (Item, Contains (Text, "tst x9, #7")
+              and then Contains (Text, "str xzr, [x9], #8")
+              and then Contains (Text, "strb wzr, [x9], #1")
+              and then Contains (Text, "movz x11, #2048"),
+            "large clears use word counts and retain byte fallback");
+      end;
+   end Arm64_Bulk_Array_Transfers;
+
+   procedure Arm64_Small_Call_Offsets_Use_Immediates
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Small_Call_Offsets_Use_Immediates
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Parameters : constant String :=
+        "(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, "
+        & "a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) "
+        & "-> (result: i64)";
+      Arguments : constant String :=
+        "(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)";
+   begin
+      Lower
+        (Work,
+         "native_ten: " & Parameters & " =" & LF
+         & "    result = a8 + a9" & LF
+         & "end native_ten" & LF
+         & "extern(c) c_ten: " & Parameters & LF
+         & "public check: () -> (result: i64) =" & LF
+         & "    result = native_ten" & Arguments
+         & " + c_ten" & Arguments & LF
+         & "end check" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String
+           (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "str x9, [sp, #0]")
+             and then Contains (Text, "str x9, [sp, #8]"),
+            "native stack arguments use scaled store offsets");
+         Landin.Testing.Check
+           (Item, Contains (Text, "add x9, sp, #8"),
+            "C stack destinations use an immediate address");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Count (Text, "add sp, sp, #16") = 2,
+            "both calls restore their small stack areas with immediates");
+      end;
+   end Arm64_Small_Call_Offsets_Use_Immediates;
+
+   procedure Cortex_Scalar_Homes_Reuse_Adjacent_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Scalar_Homes_Reuse_Adjacent_Address
+     (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower (Work,
+        "public f: () -> (r: u8) =" & LF
+        & "    a: u8 = 7" & LF
+        & "    r = a" & LF
+        & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "strb r0, [r6]" & LF
+             & HT & "ldrb r0, [r6]" & LF),
+            "adjacent accesses to one home reuse its address");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ldrb r0, [r6]" & LF
+             & HT & "adds r6, #1" & LF & HT & "strb r0, [r6]" & LF),
+            "a nearby home needs one address adjustment");
+      end;
+   end Cortex_Scalar_Homes_Reuse_Adjacent_Address;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "Cortex scalar homes reuse adjacent address",
+         Cortex_Scalar_Homes_Reuse_Adjacent_Address'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 small call offsets use immediates",
+         Arm64_Small_Call_Offsets_Use_Immediates'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 bulk array transfers",
+         Arm64_Bulk_Array_Transfers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 calls restore only reserved stack",
+         Arm64_Calls_Restore_Only_Reserved_Stack'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 conditional reach",
+         Arm64_Conditional_Reach'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
@@ -7029,8 +7682,14 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
       Landin.Testing.Register
+        (Into, "backend", "arm64 immediates use shorter move sequences",
+         Arm64_Immediates_Use_The_Shorter_Move_Sequence'Access);
+      Landin.Testing.Register
         (Into, "backend", "a level selects its instructions",
          A_Level_Selects_Its_Instructions'Access);
+      Landin.Testing.Register
+        (Into, "backend", "Cortex wrapping products use low word",
+         Cortex_Wrapping_Products_Use_Low_Word'Access);
       Landin.Testing.Register
         (Into, "backend", "imported function addresses use the GOT",
          Imported_Function_Addresses_Use_The_GOT'Access);
@@ -7076,6 +7735,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a hosted heap shim checks before libc",
          A_Hosted_Heap_Shim_Checks_Before_Libc'Access);
+      Landin.Testing.Register
+        (Into, "backend", "hosted bridges emit only requested helpers",
+         Hosted_Bridges_Emit_Only_Requested_Helpers'Access);
       Landin.Testing.Register
         (Into, "backend", "any dispatch uses a flattened real table",
          Any_Dispatch_Uses_A_Flattened_Real_Table'Access);
@@ -7130,6 +7792,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a computed element is checked before its address",
          A_Computed_Element_Is_Checked_Before_Its_Address'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unit stride indexes use the checked value",
+         Unit_Stride_Indexes_Use_The_Checked_Value'Access);
       Landin.Testing.Register
         (Into, "backend",
          "a computed local element reaches its slot",
@@ -7309,6 +7974,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed remainder handles minimum modulo minus one",
          Signed_Remainder_Handles_Minimum_Modulo_Minus_One'Access);
+      Landin.Testing.Register
+        (Into, "backend", "fixed divisors avoid unneeded checks and divide",
+         Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned multiply uses the full product",
          Unsigned_Multiply_Uses_The_Full_Product'Access);

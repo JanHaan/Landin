@@ -375,6 +375,9 @@ package body Landin.Backend.Toolchain is
       if Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Linux_X86_64_ELF
       then
+         --  Hosted bridges occupy separate input text sections.  Drop an
+         --  imported helper when no retained code or C object uses it.
+         Landin.Platform.Add (List, "-Wl,--gc-sections");
          Landin.Platform.Add
            (List, "-Wa,-march=" & X86_Assembler_Architecture (Level));
          if not Is_Default (Level, Facts) then

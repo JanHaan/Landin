@@ -55,15 +55,26 @@ sixteen-byte aligned and x18 is unused. Native Landin calls use eight integer
 bit carriers then stack slots, address-based aggregate transport and a separate
 w8 declared-error carrier. The backend emits already verified cleanup edges.
 Stack growth touches each 4 KiB page. Frame/incoming/outgoing/copy preflight
-retains a signed-2-GiB budget. Conditional branches expand through adjacent
-inverted branches; the baseline still requires direct branches to fit the
-architecture's 128-MiB reach. The recorded broader resource/scaling
-limitations remain; this adds no recovery guarantee for arbitrary exhaustion.
+retains a signed-2-GiB budget. Conditional transfers to local labels use one
+direct branch when conservative byte accounting proves the target is in range
+(±32 KiB for test-bit branches, ±1 MiB for other conditional branches).
+Distant or unproven targets retain an adjacent inverted conditional branch
+followed by `b`; that branch still requires the architecture's 128-MiB reach.
+The recorded broader resource/scaling limitations remain; this adds no
+recovery guarantee for arbitrary exhaustion.
 
 Darwin's minimal hosted bridge supplies argument access, malloc-backed aligned
 allocation, open/read/write/close and immediate errno capture through `__error`.
 It uses Apple's open flags and variadic placement. The platform's ordinary
 startup and libSystem come from the native Apple driver.
+
+Linux x86-64 emits each routine, datum, conformance table and hosted bridge
+in its own ELF input section and links with `-Wl,--gc-sections`. An
+executable keeps only what the entry, a C object or another kept section
+reaches: a bridge that is declared but never called, or reached only from an
+unreachable routine or datum, is absent along with its libc dependency. The
+hidden argument initializer is emitted with any bridge support ([1975]), so a
+C-owned startup can still call it.
 
 Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
 and GNU build-id arguments. Darwin queries the selected driver with
@@ -679,6 +690,9 @@ source definition; its exported symbol may differ. `Backend.Firmware` generates
 the reset source and linker script for the existing 32 KiB flash/16 KiB RAM
 profile. The top 4 KiB of RAM is reserved for stacks, with eight-byte-aligned
 initial MSP `0x20004000`. Static images cannot overlap `0x20003000`.
+The driver refuses a known compiler-framed routine larger than the 4 KiB reservation,
+counting its saved registers and reserved homes. This per-routine check does
+not bound stack use through calls or interrupt nesting.
 The 48-word vector image starts at zero. There is no VTOR relocation, FPU,
 exclusive-access implementation or change of board. D229 owns the exact
 implemented/reserved slots, typed handlers and ordinary/naked obligations.

@@ -1192,3 +1192,9 @@ Firmware static images exceed what the assembler is given to materialize
 
 The panic handler is invalid, or the program has more check sites than their
 identifier space holds [1670].
+
+### L0507
+
+One routine's saved registers and local frame exceed the selected 4 KiB firmware
+stack reservation [1990]. Move large local storage elsewhere or make it smaller.
+This check does not bound calls or interrupt nesting.

@@ -1,3 +1,35 @@
+wrap_u8: (left: u8, right: u8) -> (result: u8) =
+    result = left *% right
+end wrap_u8
+
+wrap_u16: (left: u16, right: u16) -> (result: u16) =
+    result = left *% right
+end wrap_u16
+
+wrap_u32: (left: u32, right: u32) -> (result: u32) =
+    result = left *% right
+end wrap_u32
+
+wrap_u64: (left: u64, right: u64) -> (result: u64) =
+    result = left *% right
+end wrap_u64
+
+wrap_i8: (left: i8, right: i8) -> (result: i8) =
+    result = left *% right
+end wrap_i8
+
+wrap_i16: (left: i16, right: i16) -> (result: i16) =
+    result = left *% right
+end wrap_i16
+
+wrap_i32: (left: i32, right: i32) -> (result: i32) =
+    result = left *% right
+end wrap_i32
+
+wrap_i64: (left: i64, right: i64) -> (result: i64) =
+    result = left *% right
+end wrap_i64
+
 public main: () -> (code: i32) =
     unsigned_8: u8 = 255 *% 2
     unsigned_16: u16 = 65535 *% 2
@@ -16,6 +48,16 @@ public main: () -> (code: i32) =
         and signed_16 == -2
         and signed_32 == -2
         and signed_64 == -2
+        and wrap_u8(255, 2) == 254
+        and wrap_u16(65535, 2) == 65534
+        and wrap_u32(4294967295, 2) == 4294967294
+        and wrap_u64(18446744073709551615, 2) ==
+            18446744073709551614
+        and wrap_i8(-128, -1) == -128
+        and wrap_i16(-32768, -1) == -32768
+        and wrap_i32(-2147483648, -1) == -2147483648
+        and wrap_i64(-9223372036854775808, -1) ==
+            -9223372036854775808
     then
         code = 42
     else

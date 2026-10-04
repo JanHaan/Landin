@@ -1,3 +1,43 @@
+signed_8_fixed_quotient: (x: i8) -> (r: i8) =
+    r = x / 8
+end signed_8_fixed_quotient
+
+signed_8_fixed_remainder: (x: i8) -> (r: i8) =
+    r = x % -8
+end signed_8_fixed_remainder
+
+signed_16_fixed_quotient: (x: i16) -> (r: i16) =
+    r = x / -256
+end signed_16_fixed_quotient
+
+signed_32_fixed_remainder: (x: i32) -> (r: i32) =
+    r = x % 1024
+end signed_32_fixed_remainder
+
+signed_64_fixed_quotient: (x: i64) -> (r: i64) =
+    r = x / 4611686018427387904
+end signed_64_fixed_quotient
+
+unsigned_8_fixed_remainder: (x: u8) -> (r: u8) =
+    r = x % 128
+end unsigned_8_fixed_remainder
+
+unsigned_64_fixed_quotient: (x: u64) -> (r: u64) =
+    r = x / 9223372036854775808
+end unsigned_64_fixed_quotient
+
+unsigned_64_fixed_remainder: (x: u64) -> (r: u64) =
+    r = x % 9223372036854775808
+end unsigned_64_fixed_remainder
+
+nonpower_fixed_quotient: (x: u64) -> (r: u64) =
+    r = x / 10
+end nonpower_fixed_quotient
+
+minus_one_fixed_remainder: (x: i64) -> (r: i64) =
+    r = x % -1
+end minus_one_fixed_remainder
+
 public main: () -> (code: i32) =
     unsigned_8_quotient: u8 = 253 / 6
     unsigned_8_remainder: u8 = 253 % 6
@@ -32,6 +72,24 @@ public main: () -> (code: i32) =
         and signed_32_remainder == -1
         and signed_64_quotient == -2
         and signed_64_remainder == -1
+        and signed_8_fixed_quotient(-128) == -16
+        and signed_8_fixed_quotient(-7) == 0
+        and signed_8_fixed_quotient(127) == 15
+        and signed_8_fixed_remainder(-127) == -7
+        and signed_8_fixed_remainder(127) == 7
+        and signed_16_fixed_quotient(-32768) == 128
+        and signed_16_fixed_quotient(32767) == -127
+        and signed_32_fixed_remainder(-2147483648) == 0
+        and signed_32_fixed_remainder(-7) == -7
+        and signed_64_fixed_quotient(-9223372036854775808) == -2
+        and signed_64_fixed_quotient(9223372036854775807) == 1
+        and unsigned_8_fixed_remainder(255) == 127
+        and unsigned_64_fixed_quotient(18446744073709551615) == 1
+        and unsigned_64_fixed_remainder(18446744073709551615)
+            == 9223372036854775807
+        and nonpower_fixed_quotient(18446744073709551615)
+            == 1844674407370955161
+        and minus_one_fixed_remainder(-9223372036854775808) == 0
     then
         code = 42
     else

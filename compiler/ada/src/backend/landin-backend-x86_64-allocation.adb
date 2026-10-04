@@ -1,4 +1,5 @@
 with Ada.Containers;
+with Landin.Backend.C_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.Targets.Layouts;
 with Landin.Types;
@@ -361,13 +362,37 @@ package body Landin.Backend.X86_64.Allocation is
                           and then Landin.IR.Signature_Uses_C_ABI
                             (Of_Unit, Signature)
                         then
-                           Pin_Value (Value);
-                           for Position in 1 .. Landin.IR.Operand_Count
-                             (Of_Unit, Item, Value)
-                           loop
-                              Pin_Value (Landin.IR.Nth_Operand
-                                (Of_Unit, Item, Value, Position));
-                           end loop;
+                           declare
+                              Plan : constant Landin.Backend.C_ABI.Plan :=
+                                Landin.Backend.C_ABI.Call_Plan
+                                  (Of_Unit, Item, Value, Facts);
+                              Offset : constant Natural :=
+                                (if Op = Landin.IR.Indirect_Call then 1
+                                 else 0);
+                              Hidden : constant Natural :=
+                                (if Plan.Result.Shape.Aggregate then 1
+                                 else 0);
+                           begin
+                              --  The result is addressed by C result
+                              --  marshalling.  Keep the indirect target,
+                              --  hidden destination and aggregate carriers
+                              --  in their existing homes.  Scalar arguments
+                              --  are read as values, including stack-bound
+                              --  and floating-point arguments.
+                              Pin_Value (Value);
+                              for Position in 1 .. Offset + Hidden loop
+                                 Pin_Value (Landin.IR.Nth_Operand
+                                   (Of_Unit, Item, Value, Position));
+                              end loop;
+                              for Position in Plan.Arguments'Range loop
+                                 if Plan.Arguments (Position).Shape.Aggregate
+                                 then
+                                    Pin_Value (Landin.IR.Nth_Operand
+                                      (Of_Unit, Item, Value,
+                                       Position + Offset + Hidden));
+                                 end if;
+                              end loop;
+                           end;
                         end if;
                      end;
                   when Landin.IR.Leave =>

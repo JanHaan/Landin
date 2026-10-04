@@ -676,7 +676,12 @@ package body Landin.Diagnostics.Explanations is
                & "r hold it in fewer, larger values.",
             when Catalogue.Panic_Contract_Invalid =>
                "The panic handler is invalid, or the program has more ch"
-               & "eck sites than their identifier space holds [1670].");
+               & "eck sites than their identifier space holds [1670].",
+            when Catalogue.Firmware_Frame_Exceeds_Stack =>
+               "One routine's saved registers and local frame exceed the"
+               & " selected 4 KiB firmware stack reservation [1990]. Move "
+               & "large local storage elsewhere or make it smaller. This c"
+               & "heck does not bound calls or interrupt nesting.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -1246,6 +1251,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Image_Materialization_Limit =>
                "",
             when Catalogue.Panic_Contract_Invalid =>
+               "",
+            when Catalogue.Firmware_Frame_Exceeds_Stack =>
                "");
 
 end Landin.Diagnostics.Explanations;

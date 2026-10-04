@@ -1824,7 +1824,7 @@ package body Landin.Tests.Driver_Suite is
             "the driver is found by the target's triplet");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
-            "main.s" & LF & "-o" & LF & "main" & LF
+            "main.s" & LF & "-o" & LF & "main" & LF & "-Wl,--gc-sections" & LF
             & "-Wa,-march=generic64" & LF,
             "and is handed the assembly it wrote, the output asked for and"
             & " the level it assumes");
@@ -1870,6 +1870,7 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
             "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF
+            & "-Wl,--gc-sections" & LF
             & "-Wa,-march=generic64" & LF,
             "and the linker rides through as one more argument");
       end;

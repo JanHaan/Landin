@@ -92,3 +92,4 @@ L0503  Retired  error   no-fix   false empty-ok    0..0 0     -                 
 L0504  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-cortex_suite.adb,test:landin-tests-driver_suite.adb
 L0505  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/r660-materialization,test:landin-tests-cortex_suite.adb
 L0506  Live     error   no-fix   false empty-ok    0..0 0     landin-driver-checking.adb          negative/r670-panic-handler,test:landin-tests-driver_suite.adb
+L0507  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/r660-firmware-frame,test:landin-tests-cortex_suite.adb

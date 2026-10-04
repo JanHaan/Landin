@@ -38,6 +38,15 @@ package body Landin.Backend.Dispatch is
       end case;
    end Frame_Is_Addressable;
 
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean is
+   begin
+      return Landin.Backend.Cortex_M.Frame_Fits_Firmware_Stack
+        (Of_Unit, Item, Facts);
+   end Frame_Fits_Firmware_Stack;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

@@ -19,6 +19,13 @@ package Landin.Backend.Cortex_M is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean;
 
+   --  One compiler-framed routine's saved registers and homes must fit
+   --  the selected firmware stack. This is not a call-depth bound.
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

@@ -1,6 +1,9 @@
 with Ada.Containers.Vectors;
+with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Strings.Hash;
 with Landin.Provenance;
 with Landin.Layouts;
+with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
@@ -230,13 +233,16 @@ package body Landin.Backend.Arm64 is
         & (if Indirect then HT & ".byte 0x06" & LF else "");
    end Debug_Slot;
 
+   type Debug_Frame_Access is access all Frame;
    --  One encoder, instantiated once per object format, since the section
    --  names and the compilation unit's addressing are generic constants.
    function Mach_O_Debug_Sections is new Landin.Backend.Dwarf.Sections
-     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
+     (Frame, Debug_Frame_Access, Debug_Frame_Access,
+      Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
 
    function ELF_Debug_Sections is new Landin.Backend.Dwarf.Sections
-     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, False);
+     (Frame, Debug_Frame_Access, Debug_Frame_Access,
+      Debug_Plan, Debug_Frame, Debug_Slot, 29, False);
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
@@ -342,31 +348,94 @@ package body Landin.Backend.Arm64 is
         Landin.Targets.Capabilities.Object_Format_Of (Facts);
       System : constant Hosted_ABI.Hosted_System :=
         Landin.Targets.Capabilities.Hosted_System_Of (Facts);
-      Out_Text : Unbounded.Unbounded_String;
+      type Line_Entry is record
+         Text : Unbounded.Unbounded_String;
+         Offset : Long_Long_Integer;
+         Segment : Natural;
+      end record;
+      package Line_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Line_Entry);
+      Lines : Line_Vectors.Vector;
+      type Label_Position is record
+         Offset : Long_Long_Integer;
+         Segment : Natural;
+      end record;
+      package Label_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+        (Key_Type => String, Element_Type => Label_Position,
+         Hash => Ada.Strings.Hash, Equivalent_Keys => "=");
+      Labels : Label_Maps.Map;
+      type Branch_Entry is record
+         First : Positive;
+         Target : Unbounded.Unbounded_String;
+         Direct : Unbounded.Unbounded_String;
+         Reach : Long_Long_Integer;
+      end record;
+      package Branch_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Branch_Entry);
+      Branches : Branch_Vectors.Vector;
+      Preamble_Text : Unbounded.Unbounded_String;
+      Preamble_After : Natural := 0;
+      Debug_Text : Unbounded.Unbounded_String;
+      Offset : Long_Long_Integer := 0;
+      Segment : Natural := 0;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
 
-      procedure Put (Line : String);
+      procedure Put (Line : String; Known : Boolean := False);
       procedure Emit (Instruction : String);
       function Fresh return String;
       procedure Immediate (Register : String; Value : Pattern);
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count);
+      procedure Stack_Address
+        (Register : String; Offset : Landin.Targets.Byte_Count);
+      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String);
+      procedure Frame_Memory
+        (Store : Boolean; Size : Held_Size; Register : String;
+         Offset : Landin.Targets.Byte_Count);
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x15");
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
 
-      procedure Put (Line : String) is
+      procedure Put (Line : String; Known : Boolean := False) is
+         Instruction : constant String := Trimmed (Line);
       begin
-         Unbounded.Append (Out_Text, Line & LF);
+         Lines.Append (Line_Entry'
+           (Text => Unbounded.To_Unbounded_String (Line),
+            Offset => Offset, Segment => Segment));
+         if Line'Length > 0 and then Line (Line'Last) = ':' then
+            Labels.Include
+              (Line (Line'First .. Line'Last - 1),
+               (Offset => Offset, Segment => Segment));
+         elsif Instruction = ".p2align 2" then
+            --  Alignment may change after an earlier branch is shortened.
+            Offset := Offset + 3;
+         elsif Known and then Instruction'Length > 0
+           and then Instruction (Instruction'First) /= '.'
+         then
+            Offset := Offset + 4;
+         elsif Instruction'Length = 0
+           or else Ada.Strings.Fixed.Index (Instruction, ".cfi_") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".loc ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".file ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".globl ") = 1
+           or else Ada.Strings.Fixed.Index (Instruction, ".arch ") = 1
+         then
+            null;
+         else
+            --  An opaque instruction, a section change, or a directive
+            --  whose size is not bounded separates branch-range regions.
+            Segment := Segment + 1;
+            Offset := 0;
+         end if;
       end Put;
 
       --  A platform directive, which on some object formats is nothing.
@@ -406,7 +475,7 @@ package body Landin.Backend.Arm64 is
             elsif Mnemonic = "tbnz" then "tbz" else "");
       begin
          if Inverse = "" then
-            Put (Character'Val (9) & Instruction);
+            Put (Character'Val (9) & Instruction, Known => True);
          else
             --  Conditional branches have shorter reach than B.  Keep their
             --  immediate target adjacent even in expanded cleanup routines.
@@ -415,10 +484,20 @@ package body Landin.Backend.Arm64 is
                Last_Space : constant Natural := Ada.Strings.Fixed.Index
                  (Instruction, " ", Ada.Strings.Backward);
             begin
+               Branches.Append
+                 (Branch_Entry'
+                   (First => Positive (Natural (Lines.Length) + 1),
+                   Target => Unbounded.To_Unbounded_String
+                     (Instruction (Last_Space + 1 .. Instruction'Last)),
+                   Direct => Unbounded.To_Unbounded_String
+                     (Character'Val (9) & Instruction),
+                   Reach => (if Mnemonic in "tbz" | "tbnz"
+                             then 32 * 1024 - 4 else 1024 * 1024 - 4)));
                Put (Character'Val (9) & Inverse
-                 & Instruction (Space .. Last_Space) & Skip);
+                 & Instruction (Space .. Last_Space) & Skip, Known => True);
                Put (Character'Val (9) & "b "
-                 & Instruction (Last_Space + 1 .. Instruction'Last));
+                 & Instruction (Last_Space + 1 .. Instruction'Last),
+                 Known => True);
                Put (Skip & ":");
             end;
          end if;
@@ -426,27 +505,106 @@ package body Landin.Backend.Arm64 is
 
 
       procedure Immediate (Register : String; Value : Pattern) is
+         Zero_Chunks : Natural := 0;
+         Ones_Chunks : Natural := 0;
+         Use_Movn : Boolean;
+         Fill : Pattern;
+         Seeded : Boolean := False;
       begin
-         Emit ("movz " & Register & ", #"
-               & Trimmed (Pattern'Image (Value and 65535)));
-         for Index in 1 .. 3 loop
-            if (Value / 2 ** (Index * 16) and 65535) /= 0 then
-               Emit ("movk " & Register & ", #"
-                     & Trimmed (Pattern'Image
-                       (Value / 2 ** (Index * 16) and 65535))
-                     & ", lsl #" & Trimmed (Natural'Image (Index * 16)));
-            end if;
+         for Index in 0 .. 3 loop
+            declare
+               Chunk : constant Pattern :=
+                 Value / 2 ** (Index * 16) and 65535;
+            begin
+               if Chunk = 0 then
+                  Zero_Chunks := Zero_Chunks + 1;
+               elsif Chunk = 65535 then
+                  Ones_Chunks := Ones_Chunks + 1;
+               end if;
+            end;
          end loop;
+
+         --  A move-wide seed supplies every untouched chunk.  Use the
+         --  complement seed only when it leaves fewer chunks for MOVK.
+         Use_Movn := Ones_Chunks > Zero_Chunks;
+         Fill := (if Use_Movn then 65535 else 0);
+         for Index in 0 .. 3 loop
+            declare
+               Chunk : constant Pattern :=
+                 Value / 2 ** (Index * 16) and 65535;
+               Shift : constant String :=
+                 (if Index = 0 then "" else ", lsl #"
+                  & Trimmed (Natural'Image (Index * 16)));
+            begin
+               if Chunk /= Fill then
+                  if not Seeded then
+                     Emit ((if Use_Movn then "movn " else "movz ")
+                           & Register & ", #"
+                           & Trimmed (Pattern'Image
+                             (if Use_Movn then 65535 - Chunk else Chunk))
+                           & Shift);
+                     Seeded := True;
+                  else
+                     Emit ("movk " & Register & ", #"
+                           & Trimmed (Pattern'Image (Chunk)) & Shift);
+                  end if;
+               end if;
+            end;
+         end loop;
+         if not Seeded then
+            if Use_Movn then
+               Emit ("movn " & Register & ", #0");
+            else
+               Emit ("movz " & Register & ", #0");
+            end if;
+         end if;
       end Immediate;
 
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count) is
       begin
          if Offset > 0 then
-            Immediate ("x16", Pattern (Offset));
-            Emit ("add " & Register & ", " & Register & ", x16");
+            if Offset <= 4095 then
+               Emit ("add " & Register & ", " & Register & ", #"
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Offset)));
+            elsif Offset mod 4096 = 0 and then Offset / 4096 <= 4095 then
+               Emit ("add " & Register & ", " & Register & ", #"
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Offset / 4096))
+                 & ", lsl #12");
+            else
+               Immediate ("x16", Pattern (Offset));
+               Emit ("add " & Register & ", " & Register & ", x16");
+            end if;
          end if;
       end Add_Offset;
+
+      procedure Stack_Address
+        (Register : String; Offset : Landin.Targets.Byte_Count) is
+      begin
+         if Offset = 0 then
+            Emit ("mov " & Register & ", sp");
+         elsif Offset <= 4095 then
+            Emit ("add " & Register & ", sp, #"
+              & Trimmed (Landin.Targets.Byte_Count'Image (Offset)));
+         elsif Offset mod 4096 = 0 and then Offset / 4096 <= 4095 then
+            Emit ("add " & Register & ", sp, #"
+              & Trimmed (Landin.Targets.Byte_Count'Image (Offset / 4096))
+              & ", lsl #12");
+         else
+            Emit ("mov " & Register & ", sp");
+            Add_Offset (Register, Offset);
+         end if;
+      end Stack_Address;
+
+      procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
+      begin
+         if Bytes > 0 then
+            Add_Offset ("sp", Bytes);
+         else
+            Immediate ("x15", 0);
+            Emit ("add sp, sp, x15");
+         end if;
+      end Restore_Stack;
 
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
@@ -477,6 +635,31 @@ package body Landin.Backend.Arm64 is
                & " " & Reg & ", [" & Base & "]");
       end Memory;
 
+      procedure Frame_Memory
+        (Store : Boolean; Size : Held_Size; Register : String;
+         Offset : Landin.Targets.Byte_Count)
+      is
+         Reg : constant String :=
+           (if Size = Landin.Targets.Byte_8 then Register
+            else "w" & Register (Register'First + 1 .. Register'Last));
+      begin
+         if Offset <= 256 then
+            --  The signed unscaled byte offset reaches x29 - 256 without
+            --  changing the frame pointer or requiring a scratch register.
+            Emit ((if Store then "stur" else "ldur")
+                  & (case Size is
+                       when Landin.Targets.Byte_1 => "b",
+                       when Landin.Targets.Byte_2 => "h",
+                       when others => "")
+                  & " " & Reg & ", [x29, #"
+                  & Trimmed (Integer'Image (-Integer (Offset)))
+                  & "]");
+         else
+            Frame_Address (Offset);
+            Memory (Store, Size, Register, "x15");
+         end if;
+      end Frame_Memory;
+
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x15") is
       begin
@@ -485,20 +668,25 @@ package body Landin.Backend.Arm64 is
       end Frame_Address;
 
       procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
-         Loop_Label : constant String := Fresh;
       begin
          if Bytes = 0 then
             return;
          end if;
          --  Touch each intervening page without using the reserved x18.
-         Immediate ("x15", Pattern (Bytes / 4096));
-         Emit ("cbz x15, " & Loop_Label & "_tail");
-         Put (Loop_Label & ":");
-         Emit ("sub sp, sp, #1, lsl #12");
-         Emit ("str xzr, [sp]");
-         Emit ("subs x15, x15, #1");
-         Emit ("b.ne " & Loop_Label);
-         Put (Loop_Label & "_tail:");
+         if Bytes >= 4096 then
+            declare
+               Loop_Label : constant String := Fresh;
+            begin
+               Immediate ("x15", Pattern (Bytes / 4096));
+               Emit ("cbz x15, " & Loop_Label & "_tail");
+               Put (Loop_Label & ":");
+               Emit ("sub sp, sp, #1, lsl #12");
+               Emit ("str xzr, [sp]");
+               Emit ("subs x15, x15, #1");
+               Emit ("b.ne " & Loop_Label);
+               Put (Loop_Label & "_tail:");
+            end;
+         end if;
          if Bytes mod 4096 > 0 then
             Emit ("sub sp, sp, #"
                   & Trimmed (Landin.Targets.Byte_Count'Image
@@ -508,11 +696,31 @@ package body Landin.Backend.Arm64 is
       end Reserve;
 
       --  x9 destination, x10 source; private scratch leaves argument banks
-      --  intact while copying by-value parameters at routine entry.
+      --  intact while copying by-value parameters at routine entry.  The
+      --  forward direction also preserves the existing exact self-copy.
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Bytes >= 8 then
+            --  A selected field or runtime address need not be word-aligned.
+            --  Keep its byte path rather than assuming alignment from size.
+            Emit ("orr x11, x9, x10");
+            Emit ("tst x11, #7");
+            Emit ("b.ne " & Loop_Label & "_bytes");
+            Immediate ("x11", Pattern (Bytes / 8));
+            Put (Loop_Label & "_words:");
+            Emit ("ldr x12, [x10], #8");
+            Emit ("str x12, [x9], #8");
+            Emit ("subs x11, x11, #1");
+            Emit ("b.ne " & Loop_Label & "_words");
+            Immediate ("x11", Pattern (Bytes mod 8));
+            Emit ("b " & Loop_Label & "_tail");
+            Put (Loop_Label & "_bytes:");
+         end if;
          Immediate ("x11", Pattern (Bytes));
+         if Bytes >= 8 then
+            Put (Loop_Label & "_tail:");
+         end if;
          Emit ("cbz x11, " & Loop_Label & "_end");
          Put (Loop_Label & ":");
          Emit ("ldrb w12, [x10], #1");
@@ -525,7 +733,22 @@ package body Landin.Backend.Arm64 is
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Bytes >= 8 then
+            Emit ("tst x9, #7");
+            Emit ("b.ne " & Loop_Label & "_bytes");
+            Immediate ("x11", Pattern (Bytes / 8));
+            Put (Loop_Label & "_words:");
+            Emit ("str xzr, [x9], #8");
+            Emit ("subs x11, x11, #1");
+            Emit ("b.ne " & Loop_Label & "_words");
+            Immediate ("x11", Pattern (Bytes mod 8));
+            Emit ("b " & Loop_Label & "_tail");
+            Put (Loop_Label & "_bytes:");
+         end if;
          Immediate ("x11", Pattern (Bytes));
+         if Bytes >= 8 then
+            Put (Loop_Label & "_tail:");
+         end if;
          Emit ("cbz x11, " & Loop_Label & "_end");
          Put (Loop_Label & ":");
          Emit ("strb wzr, [x9], #1");
@@ -995,6 +1218,7 @@ package body Landin.Backend.Arm64 is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Layout : constant Frame := Routine_Frame
            (Of_Unit, Item, Facts, 16#7fff_ffff#);
          Saves : constant Saved_Set := Declared (Of_Unit, Item);
@@ -1063,8 +1287,8 @@ package body Landin.Backend.Arm64 is
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9") is
          begin
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (False, Size_Of_Value (Value), Register, "x15");
+            Frame_Memory (False, Size_Of_Value (Value), Register,
+                          Value_Offset (Layout, Value));
          end Load_Value;
 
          procedure Store_Value
@@ -1098,26 +1322,24 @@ package body Landin.Backend.Arm64 is
                   Put (Done & ":");
                end;
             end if;
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (True, Size_Of_Value (Value), Register, "x15");
+            Frame_Memory (True, Size_Of_Value (Value), Register,
+                          Value_Offset (Layout, Value));
          end Store_Value;
 
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (False, Size_Of
+            Frame_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "x15");
+              Register, Slot_Offset (Layout, Slot));
          end Load_Slot;
 
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (True, Size_Of
+            Frame_Memory (True, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "x15");
+              Register, Slot_Offset (Layout, Slot));
          end Store_Slot;
 
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind)
@@ -1485,7 +1707,8 @@ package body Landin.Backend.Arm64 is
             if Payload_Field > 0 then
                Offset := Offset + Landin.Backend.Variant_Payload_Field_Offset
                  (Of_Unit, Landin.IR.Shape_At (Of_Unit, Shape, Nested),
-                  Positive (Which), Positive (Payload_Field), Facts);
+                  Positive (Which), Positive (Payload_Field), Facts,
+                  Path_Layouts);
             end if;
             Add_Offset (Register, Offset);
          end Part_Address;
@@ -1614,17 +1837,19 @@ package body Landin.Backend.Arm64 is
            (Shape : Landin.IR.Field_Shape;
             Path  : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count
-           is (Landin.Backend.Path_Offset (Of_Unit, Shape, Path, Facts));
+           is (Landin.Backend.Path_Offset
+                 (Of_Unit, Shape, Path, Facts, Path_Layouts));
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
-         --  Transfer a classified chunk at x13. Byte replay avoids reading
-         --  beyond a short aggregate and preserves both ABI register banks.
+         --  Transfer a classified chunk at x13. Scalars use their storage
+         --  width; byte replay bounds aggregate chunks, including short tails.
          procedure C_Chunk
            (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean);
          procedure C_Entry;
          procedure C_Call (Value : Landin.IR.Value_Id);
          procedure C_Result (Value : Landin.IR.Value_Id);
+         C_Result_Place : AAPCS64_ABI.Location;
 
          procedure C_Chunk
            (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean)
@@ -1640,6 +1865,25 @@ package body Landin.Backend.Arm64 is
             Reg : constant String :=
               Trimmed (Natural'Image (Place.Registers (Chunk) - 1));
          begin
+            if not Place.Shape.Aggregate then
+               if Place.Shape.Float_Bytes > 0 then
+                  Emit ((if Store then "str " else "ldr ")
+                        & (if Place.Shape.Float_Bytes = 4 then "s" else "d")
+                        & Reg & ", [x13]");
+               else
+                  Memory
+                    (Store,
+                     (case Place.Shape.Size is
+                        when 1 => Landin.Targets.Byte_1,
+                        when 2 => Landin.Targets.Byte_2,
+                        when 4 => Landin.Targets.Byte_4,
+                        when 8 => Landin.Targets.Byte_8,
+                        when others => raise Compiler_Defect with
+                          "unsupported Darwin C scalar width"),
+                     "x" & Reg, "x13");
+               end if;
+               return;
+            end if;
             if Store then
                Emit ((if Place.Shape.Float_Bytes > 0
                       then "fmov x14, d" else "mov x14, x") & Reg);
@@ -1675,6 +1919,8 @@ package body Landin.Backend.Arm64 is
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
          begin
+            --  Every leave in this routine has the same C result carrier.
+            C_Result_Place := Plan.Result;
             if Hidden > 0 then
                if Plan.Result.Shape.Indirect then
                   Emit ("mov x9, x8");
@@ -1748,15 +1994,20 @@ package body Landin.Backend.Arm64 is
                begin
                   if Place.Shape.Indirect then
                      Load_Value (Argument (Index), "x10");
-                     Emit ("mov x9, sp");
-                     Add_Offset ("x9", Copies (Index));
+                     Stack_Address ("x9", Copies (Index));
                      Copy_Bytes (Place.Shape.Size);
-                     Emit ("mov x13, sp");
-                     Add_Offset ("x13", Copies (Index));
+                     Stack_Address ("x13", Copies (Index));
                      if Place.On_Stack then
-                        Emit ("mov x9, sp");
-                        Add_Offset ("x9", Place.Stack_At);
-                        Emit ("str x13, [x9]");
+                        if Place.Stack_At <= 32760
+                          and then Place.Stack_At mod 8 = 0
+                        then
+                           Emit ("str x13, [sp, #"
+                             & Trimmed (Landin.Targets.Byte_Count'Image
+                               (Place.Stack_At)) & "]");
+                        else
+                           Stack_Address ("x9", Place.Stack_At);
+                           Emit ("str x13, [x9]");
+                        end if;
                      else
                         Emit ("mov x" & Trimmed
                           (Natural'Image (Place.Registers (1) - 1))
@@ -1769,8 +2020,7 @@ package body Landin.Backend.Arm64 is
                         Frame_Address
                           (Value_Offset (Layout, Argument (Index)), "x10");
                      end if;
-                     Emit ("mov x9, sp");
-                     Add_Offset ("x9", Place.Stack_At);
+                     Stack_Address ("x9", Place.Stack_At);
                      Copy_Bytes (Place.Shape.Size);
                   else
                      if Place.Shape.Aggregate then
@@ -1816,31 +2066,29 @@ package body Landin.Backend.Arm64 is
                   C_Chunk (Plan.Result, Chunk, True);
                end loop;
             end if;
-            Immediate ("x15", Pattern (Bytes));
-            Emit ("add sp, sp, x15");
+            Restore_Stack (Bytes);
          end C_Call;
 
          procedure C_Result (Value : Landin.IR.Value_Id) is
-            Plan : constant AAPCS64_ABI.Plan := AAPCS64_ABI.Signature_Plan
-              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+            Place : AAPCS64_ABI.Location renames C_Result_Place;
          begin
-            if Plan.Result.Shape.Size = 0 then
+            if Place.Shape.Size = 0 then
                return;
-            elsif Plan.Result.Shape.Indirect then
+            elsif Place.Shape.Indirect then
                Load_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1), "x9");
                Frame_Address (Slot_Offset
                  (Layout, Landin.IR.Result_Slot (Of_Unit, Item)), "x10");
-               Copy_Bytes (Plan.Result.Shape.Size);
+               Copy_Bytes (Place.Shape.Size);
             else
-               if Plan.Result.Shape.Aggregate then
+               if Place.Shape.Aggregate then
                   Frame_Address (Slot_Offset
                     (Layout, Landin.IR.Result_Slot (Of_Unit, Item)), "x13");
                else
                   Frame_Address (Value_Offset (Layout,
                     Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1)), "x13");
                end if;
-               for Chunk in 1 .. Plan.Result.Shape.Count loop
-                  C_Chunk (Plan.Result, Chunk, False);
+               for Chunk in 1 .. Place.Shape.Count loop
+                  C_Chunk (Place, Chunk, False);
                end loop;
                Extend ("x0", Result);
             end if;
@@ -2903,10 +3151,20 @@ package body Landin.Backend.Arm64 is
                              & Trimmed (Natural'Image (Index - 1)));
                         else
                            Load_Value (Operand (Index + Offset));
-                           Emit ("mov x10, sp");
-                           Add_Offset ("x10", Landin.Targets.Byte_Count (Index
-                             - 9) * 8);
-                           Emit ("str x9, [x10]");
+                           declare
+                              Stack_At : constant Landin.Targets.Byte_Count :=
+                                Landin.Targets.Byte_Count (Index - 9) * 8;
+                           begin
+                              if Stack_At <= 32760 then
+                                 Emit ("str x9, [sp, #"
+                                   & Trimmed (Landin.Targets.Byte_Count'Image
+                                     (Stack_At)) & "]");
+                              else
+                                 Emit ("mov x10, sp");
+                                 Add_Offset ("x10", Stack_At);
+                                 Emit ("str x9, [x10]");
+                              end if;
+                           end;
                         end if;
                      end loop;
                      if Indirect then
@@ -2927,8 +3185,7 @@ package body Landin.Backend.Arm64 is
                      then
                         Store_Value (Value, "x0");
                      end if;
-                     Immediate ("x15", Pattern (Bytes));
-                     Emit ("add sp, sp, x15");
+                     Restore_Stack (Bytes);
                   end;
                when Landin.IR.Jump =>
                   Emit ("b " & Label (Item, Landin.IR.Target_Of (Of_Unit,
@@ -3672,6 +3929,7 @@ package body Landin.Backend.Arm64 is
       procedure Emit_Recursive_Image_Datum
         (Item : Landin.IR.Item_Id)
       is
+         Datum_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Placed : Landin.Targets.Placement;
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
@@ -3923,7 +4181,8 @@ package body Landin.Backend.Arm64 is
                            (Of_Unit, Item, Image, Payload);
                      At_Payload : constant Landin.Targets.Byte_Count :=
                        Landin.Backend.Variant_Payload_Field_Offset
-                         (Of_Unit, Shape, Selected, Payload, Facts);
+                         (Of_Unit, Shape, Selected, Payload, Facts,
+                          Datum_Layouts);
                      Payload_Size : Landin.Targets.Byte_Count;
                      Payload_Alignment : Landin.Targets.Byte_Alignment;
                   begin
@@ -4353,9 +4612,8 @@ package body Landin.Backend.Arm64 is
          --  paths follow its last return.
          Open_Bridge : Host_Helper := No_Host_Helper;
          procedure Close_Bridge;
-         procedure Start (Helper : Host_Helper);
+         procedure Start (Helper : Host_Helper; Framed : Boolean := True);
          procedure Finish;
-         procedure Tail (Name : String);
 
          procedure Close_Bridge is
          begin
@@ -4368,7 +4626,7 @@ package body Landin.Backend.Arm64 is
             end if;
          end Close_Bridge;
 
-         procedure Start (Helper : Host_Helper) is
+         procedure Start (Helper : Host_Helper; Framed : Boolean := True) is
          begin
             Close_Bridge;
             Emit (".p2align 2");
@@ -4383,15 +4641,17 @@ package body Landin.Backend.Arm64 is
                Emit (".cfi_startproc");
                Open_Frame := True;
             end if;
-            Emit ("stp x29, x30, [sp, #-16]!");
-            if Debug /= null then
-               Emit (".cfi_def_cfa_offset 16");
-               Emit (".cfi_offset w29, -16");
-               Emit (".cfi_offset w30, -8");
-            end if;
-            Emit ("mov x29, sp");
-            if Debug /= null then
-               Emit (".cfi_def_cfa_register w29");
+            if Framed then
+               Emit ("stp x29, x30, [sp, #-16]!");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset 16");
+                  Emit (".cfi_offset w29, -16");
+                  Emit (".cfi_offset w30, -8");
+               end if;
+               Emit ("mov x29, sp");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_register w29");
+               end if;
             end if;
          end Start;
 
@@ -4413,12 +4673,6 @@ package body Landin.Backend.Arm64 is
             end if;
          end Finish;
 
-         procedure Tail (Name : String) is
-         begin
-            Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
-              (Facts, Name));
-            Finish;
-         end Tail;
       begin
          Emit (".text");
          Start (Initialize_Arguments);
@@ -4481,17 +4735,22 @@ package body Landin.Backend.Arm64 is
          Start (Argument_At_From);
          Emit ("ldr x0, [x0, x1, lsl #3]");
          Finish;
-         Start (Text_Length);
-         Tail ("strlen");
-         Start (Read_Bytes);
-         Tail ("read");
-         Start (Write_Bytes);
-         Tail ("write");
-         Start (Close_File);
-         Tail ("close");
-         Start (Open_Read);
+         Start (Text_Length, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "strlen"));
+         Start (Read_Bytes, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "read"));
+         Start (Write_Bytes, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "write"));
+         Start (Close_File, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "close"));
+         Start (Open_Read, Framed => False);
          Emit ("mov w1, #0");
-         Tail ("open");
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "open"));
          Start (Open_Write);
          --  O_WRONLY | O_CREAT | O_TRUNC, and the mode 0666 that libc's
          --  umask filters, as open's first unnamed argument: on Apple's
@@ -4506,7 +4765,9 @@ package body Landin.Backend.Arm64 is
          else
             Emit ("mov w2, #" & Image (Hosted_ABI.Created_File_Mode));
          end if;
-         Tail ("open");
+         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "open"));
+         Finish;
          Start (Errno_Value);
          Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
            (Facts, Hosted_ABI.Errno_Function (System)));
@@ -4540,9 +4801,10 @@ package body Landin.Backend.Arm64 is
          Put (Local_Prefix & "heap_failed:");
          Emit ("mov x0, #0");
          Finish;
-         Start (Heap_Release);
+         Start (Heap_Release, Framed => False);
          Emit ("ldur x0, [x0, #-8]");
-         Tail ("free");
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "free"));
          Close_Bridge;
          Emit (".data");
          Emit (".balign 8");
@@ -4597,7 +4859,8 @@ package body Landin.Backend.Arm64 is
       end if;
       Emit (".text");
       if Debug /= null then
-         Unbounded.Append (Out_Text, Dwarf.Preamble
+         Preamble_After := Natural (Lines.Length);
+         Unbounded.Append (Preamble_Text, Dwarf.Preamble
            (Debug.all, Local_Prefix,
             Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
       end if;
@@ -4688,7 +4951,7 @@ package body Landin.Backend.Arm64 is
          Runtime;
       end if;
       if Debug /= null then
-         Unbounded.Append (Out_Text,
+         Unbounded.Append (Debug_Text,
            (case Format is
                when Landin.Targets.Capabilities.Mach_O =>
                   Mach_O_Debug_Sections
@@ -4700,7 +4963,57 @@ package body Landin.Backend.Arm64 is
                      Local_Prefix, Symbol'Access)));
       end if;
       Emit (Platform.Trailer (Format));
-      Assembly := Out_Text;
+      --  The first pass retains every long form.  Its byte counts are upper
+      --  bounds, including the largest possible padding at each alignment.
+      --  Removing long forms cannot increase those bounds.  A segment break
+      --  leaves the original form intact when inline assembly or a directive
+      --  makes the distance unknown.
+      declare
+         Out_Text : Unbounded.Unbounded_String;
+         Next_Branch : Positive := 1;
+         Index : Positive := 1;
+      begin
+         while Index <= Natural (Lines.Length) loop
+            if Next_Branch <= Natural (Branches.Length)
+              and then Branches (Next_Branch).First = Index
+            then
+               declare
+                  Branch : constant Branch_Entry := Branches (Next_Branch);
+                  Name : constant String := Unbounded.To_String
+                    (Branch.Target);
+               begin
+                  if Labels.Contains (Name)
+                    and then Labels.Element (Name).Segment =
+                      Lines (Index).Segment
+                    and then abs (Labels.Element (Name).Offset -
+                                  Lines (Index).Offset) <= Branch.Reach
+                  then
+                     Unbounded.Append
+                       (Out_Text, Unbounded.To_String (Branch.Direct) & LF);
+                  else
+                     for Part in Index .. Index + 2 loop
+                        Unbounded.Append
+                          (Out_Text,
+                           Unbounded.To_String (Lines (Part).Text) & LF);
+                     end loop;
+                  end if;
+                  Index := Index + 3;
+                  Next_Branch := Next_Branch + 1;
+               end;
+            else
+               if Index = Natural (Lines.Length) then
+                  Unbounded.Append (Out_Text, Debug_Text);
+               end if;
+               Unbounded.Append
+                 (Out_Text, Unbounded.To_String (Lines (Index).Text) & LF);
+               if Index = Preamble_After then
+                  Unbounded.Append (Out_Text, Preamble_Text);
+               end if;
+               Index := Index + 1;
+            end if;
+         end loop;
+         Assembly := Out_Text;
+      end;
    end Emit;
 
 end Landin.Backend.Arm64;

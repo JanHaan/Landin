@@ -27,10 +27,20 @@ selected: () -> (result: i32) =
     local.lead = 1
     local.tail = 2
     local.inside.kind = pair(first: 3, second: 4)
+    local.inside.kind = pair(first: 3, second: 4)
+    local.inside.kind = pair(first: 3, second: 4)
     result = local.lead + local.tail
     match local.inside.kind
         leaf: result = result + 0
         pair(first, second): result = result + first + second
+    end match
+    match local.inside.kind
+        leaf: result = result + 0
+        pair(first, second): result = result + first - first
+    end match
+    match local.inside.kind
+        leaf: result = result + 0
+        pair(first, second): result = result + second - second
     end match
 end selected
 

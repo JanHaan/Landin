@@ -2,8 +2,10 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Debug_Locations;
+with Landin.Backend.X86_64;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Dwarf;
+with Landin.Build_Reports;
 with Landin.Debugging;
 with Landin.Driver;
 with Landin.IR;
@@ -19,6 +21,7 @@ with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Testing.Fakes;
+with Landin.Types;
 
 package body Landin.Tests.Debugging_Suite is
 
@@ -70,6 +73,8 @@ package body Landin.Tests.Debugging_Suite is
    procedure Arrays (Item : in out Landin.Testing.Context);
    procedure Failing_Returns (Item : in out Landin.Testing.Context);
    procedure Aliases (Item : in out Landin.Testing.Context);
+   procedure Retained_Facts_On_Failure
+     (Item : in out Landin.Testing.Context);
 
    procedure Invalid_Requests (Item : in out Landin.Testing.Context) is
       procedure Refuses (First : String; Second : String := "");
@@ -1062,11 +1067,126 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Implicit_Return_Uses_Closing_Line;
 
+   procedure Retained_Facts_On_Failure
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Text : constant String :=
+        "f: () -> none = local: i32 = 2 end f "
+        & "g: () -> none = end g";
+      Assembly : US.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Retry_Report : Landin.Build_Reports.Report;
+      Partial_Report : Landin.Build_Reports.Report;
+      Dwarf_Raised, Frame_Raised : Boolean := False;
+   begin
+      Lower (Item, Work, Text);
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Info : aliased Landin.Debugging.Information
+           (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+         Routine : IR.Item_Id := IR.No_Item;
+         Second : IR.Item_Id := IR.No_Item;
+         Slot : IR.Slot_Id := IR.No_Slot;
+      begin
+         for Index in 1 .. IR.Item_Count (Unit) loop
+            if IR.Kind_Of (Unit, IR.Item_Id (Index)) = IR.Routine
+              and then IR.Slot_Count (Unit, IR.Item_Id (Index)) > 0
+            then
+               Routine := IR.Item_Id (Index);
+               Slot := 1;
+               exit;
+            end if;
+         end loop;
+         for Index in 1 .. IR.Item_Count (Unit) loop
+            if IR.Kind_Of (Unit, IR.Item_Id (Index)) = IR.Routine
+              and then IR.Item_Id (Index) /= Routine
+            then
+               Second := IR.Item_Id (Index);
+               exit;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Routine /= IR.No_Item and then Slot /= IR.No_Slot
+            and then Second /= IR.No_Item,
+            "two routines provide retained fact storage");
+         if Slot = IR.No_Slot or else Second = IR.No_Item then
+            return;
+         end if;
+         --  This malformed scalar storage alias is rejected in DWARF,
+         --  after both routines have acquired plans and frames.
+         IR.Note_Source_Alias
+           (Unit, Routine,
+            (Binding => IR.Declares (Unit, Routine, Slot),
+             Site => IR.Origin_Of (Unit, Routine, Slot),
+             Place => (Kind => IR.Frame_Slot, Slot => Slot),
+             Field => 0, Initialized_On_Entry => True), IR.No_Path_Steps);
+         Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+         begin
+            Landin.Backend.X86_64.Emit
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Targets.Linux_X86_64,
+               Landin.Optimization.Default_Options,
+               Assembly, Report, Debug => Info'Access);
+         exception
+            when Error : Landin.Compiler_Defect =>
+               Dwarf_Raised := Ada.Exceptions.Exception_Message (Error) =
+                 "a whole slot alias requires array storage";
+         end;
+         Landin.Testing.Check
+           (Item, Dwarf_Raised,
+            "DWARF failure follows retained fact creation");
+         --  The same IR can still be emitted without debug information.
+         Landin.Backend.X86_64.Emit
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Targets.Linux_X86_64,
+            Landin.Optimization.Default_Options, Assembly, Retry_Report);
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Assembly), ".text"),
+            "emission remains usable after DWARF failure");
+         declare
+            Oversized : constant IR.Slot_Id := IR.Add_Array_Slot
+              (Unit, Second, Landin.Types.U64, IR.Element_Total'Last,
+               IR.No_Declaration, IR.Origin_Of (Unit, Second));
+         begin
+            Landin.Testing.Check
+              (Item, IR.Is_Array (Unit, Second, Oversized),
+               "second routine has an oversized frame slot");
+         end;
+         --  The first routine has a plan and frame; the second has a plan
+         --  when Frame_For rejects this slot, leaving partial ownership.
+         begin
+            Landin.Backend.X86_64.Emit
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Targets.Linux_X86_64,
+               Landin.Optimization.Default_Options,
+               Assembly, Partial_Report, Debug => Info'Access);
+         exception
+            when Error : Landin.Compiler_Defect =>
+               Frame_Raised := Ada.Exceptions.Exception_Message (Error) =
+                 "an array extent exceeds its limit";
+         end;
+         Landin.Testing.Check
+           (Item, Frame_Raised,
+            "frame failure follows partial retained fact construction");
+      end;
+   end Retained_Facts_On_Failure;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "debugging", "module data and slices are described",
          Module_Data_And_Slices_Are_Described'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "retained facts on failure",
+         Retained_Facts_On_Failure'Access);
       Landin.Testing.Register
         (Into, "debugging", "implicit return uses closing line",
          Implicit_Return_Uses_Closing_Line'Access);

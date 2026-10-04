@@ -33,6 +33,8 @@ package Landin.Backend.Dwarf is
         (Item : Landin.IR.Item_Id) return String) return String;
    generic
       type Placement (<>) is private;
+      type Placement_Access is access all Placement;
+      type Frame_Access is access all Frame;
       with function Make
         (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
          Facts : Landin.Targets.Target_Facts;
@@ -55,6 +57,10 @@ package Landin.Backend.Dwarf is
       Info : Landin.Debugging.Information;
       Prefix : String;
       Symbol : not null access function
-        (Item : Landin.IR.Item_Id) return String) return String;
+        (Item : Landin.IR.Item_Id) return String;
+      Cached_Plan : access function
+        (Item : Landin.IR.Item_Id) return Placement_Access := null;
+      Cached_Frame : access function
+        (Item : Landin.IR.Item_Id) return Frame_Access := null) return String;
 
 end Landin.Backend.Dwarf;

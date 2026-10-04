@@ -52,8 +52,10 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Selected_Instructions (Item : in out Landin.Testing.Context);
    procedure Canonical_Bodies (Item : in out Landin.Testing.Context);
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
-   procedure Pressure_And_C_Homes (Item : in out Landin.Testing.Context);
+   procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
+   procedure Small_Array_Bounds (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
+   procedure C_Entry_Saves (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
    procedure Level_Selects_Shifts (Item : in out Landin.Testing.Context);
 
@@ -248,7 +250,7 @@ package body Landin.Tests.X86_Optimization_Suite is
       end;
    end Loop_Allocation;
 
-   procedure Pressure_And_C_Homes (Item : in out Landin.Testing.Context) is
+   procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Native_Source : constant String :=
@@ -291,6 +293,7 @@ package body Landin.Tests.X86_Optimization_Suite is
          Plan : constant Alloc.Plan := Alloc.Make
            (Code, 2, Landin.Stages.Target (C_Work), Opt.Default_Options);
          Calls : Natural := 0;
+         Register_Arguments : Natural := 0;
       begin
          for Index in 1 .. IR.Value_Count (Code, 2) loop
             declare
@@ -308,20 +311,25 @@ package body Landin.Tests.X86_Optimization_Suite is
                           (IR.Nth_Operand (Code, 2, Value, Position));
                      begin
                         Landin.Testing.Check
-                          (Item, Plan.Value (Argument).Kind = Alloc.Stack
-                           and then Plan.Value (Argument).Address_Required,
-                           "C arguments keep addressable transport homes");
+                          (Item, not Plan.Value (Argument).Address_Required,
+                           "scalar C arguments do not require an address");
+                        if Plan.Value (Argument).Kind = Alloc.GP then
+                           Register_Arguments := Register_Arguments + 1;
+                        end if;
                      end;
                   end loop;
                end if;
             end;
          end loop;
          Landin.Testing.Check
-           (Item, Calls = 2
-            and then Contains (Emitted (C_Work), "foreign_step"),
-            "both foreign call boundaries survive allocation");
+           (Item, Calls = 2 and then Register_Arguments > 0
+            and then Contains (Emitted (C_Work), "foreign_step")
+            and then Contains (Emitted (C_Work), "movq %r10, %rdi")
+            and then not Contains
+              (Emitted (C_Work), "movq 0(%r11), %r10"),
+            "foreign calls load scalar values without address roundtrips");
       end;
-   end Pressure_And_C_Homes;
+   end Pressure_And_C_Scalars;
 
    procedure Bounded_Probes (Item : in out Landin.Testing.Context) is
       type Length_Array is array (Positive range <>) of Positive;
@@ -354,6 +362,41 @@ package body Landin.Tests.X86_Optimization_Suite is
          end;
       end loop;
    end Bounded_Probes;
+
+   procedure C_Entry_Saves (Item : in out Landin.Testing.Context) is
+      Empty : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Mixed : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower (Item, Empty,
+             "public extern(c) empty: () -> (r: i32) = "
+             & "r = 42 end empty");
+      declare
+         Text : constant String := Emitted (Empty);
+      begin
+         Landin.Testing.Check
+           (Item, not Contains (Text, "subq $112, %rsp")
+            and then not Contains (Text, "addq $112, %rsp")
+            and then not Contains (Text, "(%rsp)"),
+            "an empty C entry does not stage argument registers");
+      end;
+
+      Lower (Item, Mixed,
+             "public extern(c) mixed: (i: i64, f: f64) -> (r: i64) = "
+             & "r = i end mixed");
+      declare
+         Text : constant String := Emitted (Mixed);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "movq %rdi, 0(%rsp)")
+            and then Contains (Text, "movq %xmm0, 8(%rsp)")
+            and then Contains (Text, "movq 8(%rsp), %r10")
+            and then not Contains (Text, "movq %rsi, 8(%rsp)")
+            and then not Contains (Text, "movq %xmm1, 16(%rsp)"),
+            "a mixed C entry saves only the used register prefixes");
+      end;
+   end C_Entry_Saves;
 
    procedure Final_Folding (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -466,8 +509,37 @@ package body Landin.Tests.X86_Optimization_Suite is
       end;
    end Level_Selects_Shifts;
 
+   procedure Small_Array_Bounds (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower
+        (Item, Work,
+         "public probe: (i: usize) -> (r: u32) = "
+         & "mut words: [4]u32 = zeroed "
+         & "p: ptr mut u32 = addr words[i] "
+         & "p.val = 7 r = words[i] end probe");
+      for Reference in Boolean loop
+         declare
+            Text : constant String := Emitted
+              (Work, (if Reference then Opt.Reference_Options
+                      else Opt.Default_Options));
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Count (Text, "cmpq $4, %rax") = 2
+               and then Ada.Strings.Fixed.Count (Text, "_index:") = 2
+               and then Ada.Strings.Fixed.Count (Text, "ud2") = 2
+               and then not Contains (Text, "cmpq %rdx, %rax"),
+               "element address and load compare small bounds directly"
+               & " while retaining both traps");
+         end;
+      end loop;
+   end Small_Array_Bounds;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "x86 opt", "small array bounds", Small_Array_Bounds'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "selected instructions",
          Selected_Instructions'Access);
@@ -476,9 +548,12 @@ package body Landin.Tests.X86_Optimization_Suite is
       Landin.Testing.Register
         (Into, "x86 opt", "loop allocation", Loop_Allocation'Access);
       Landin.Testing.Register
-        (Into, "x86 opt", "pressure and C homes", Pressure_And_C_Homes'Access);
+        (Into, "x86 opt", "pressure and C scalars",
+         Pressure_And_C_Scalars'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "C entry saves", C_Entry_Saves'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "final folding", Final_Folding'Access);
       Landin.Testing.Register
