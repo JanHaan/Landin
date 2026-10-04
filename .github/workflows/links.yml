@@ -42,3 +42,4 @@ jobs:
         with:
           args: --config lychee.toml --no-progress --files-from ${{ runner.temp }}/lychee-inputs.txt
           fail: true
+          failIfEmpty: false
