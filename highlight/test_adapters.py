@@ -247,7 +247,8 @@ def kate_raw_smoke(kate: ET.ElementTree) -> None:
     assert raw.attrib["lineEndContext"] == "#stay"
     (closer,) = list(raw)
     assert closer.tag == "StringDetect"
-    assert closer.attrib == {"String": "%1", "dynamic": "true", "context": "#pop"}
+    assert closer.attrib == {"String": "%1", "dynamic": "true",
+                             "attribute": "String", "context": "#pop"}
 
     opening = re.compile(opener.attrib["String"])
     assert opening.match('"ordinary"') is None

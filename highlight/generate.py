@@ -207,7 +207,7 @@ def kate() -> str:
         <DetectChar char="&quot;" context="#pop"/>
       </context>
       <context name="Raw String" attribute="String" lineEndContext="#stay">
-        <StringDetect String="%1" dynamic="true" context="#pop"/>
+        <StringDetect String="%1" dynamic="true" attribute="String" context="#pop"/>
       </context>
       <context name="Char" attribute="Char" lineEndContext="#pop">
         <HlCChar attribute="Special Character"/>
