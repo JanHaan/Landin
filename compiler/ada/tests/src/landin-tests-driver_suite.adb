@@ -148,6 +148,130 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "--wat"), "the option is named");
    end Unknown_Options_Are_Diagnosed;
 
+   procedure Incompatible_Target_Options_Precede_Source_Loading
+     (Item : in out Landin.Testing.Context);
+
+   procedure Incompatible_Target_Options_Precede_Source_Loading
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refuse
+        (Target, Option, Message : String;
+         Status : Integer;
+         Other : String := "";
+         Report_Path : String := "";
+         Writes : Natural := 0);
+
+      procedure Refuse
+        (Target, Option, Message : String;
+         Status : Integer;
+         Other : String := "";
+         Report_Path : String := "";
+         Writes : Natural := 0)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", "unread source");
+         Host.Raise_On_Read;
+         Args.Append ("--target=" & Target);
+         Args.Append (Option);
+         if Other /= "" then
+            Args.Append (Other);
+         end if;
+         Args.Append ("--emit=asm");
+         if Report_Path /= "" then
+            Args.Append ("--stage-report=" & Report_Path);
+         end if;
+         Args.Append ("main.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Status,
+            Option & " on " & Target & " is refused before a source read");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report), Message),
+            "the target-option diagnostic identifies " & Option);
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "no native tool runs");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, Writes,
+            "only a requested safe stage report is written");
+         if Report_Path = "main.ldn" then
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Result.Report),
+                 "stage report collides with source: main.ldn"),
+               "a colliding report is refused without reading its source");
+         elsif Writes = 1 then
+            Landin.Testing.Check
+              (Item, Contains (Host.Written (Report_Path),
+                 """format"":""landin-stage-report-1""")
+                 and then Contains (Host.Written (Report_Path),
+                   """sources"":0")
+                 and then not Contains (Host.Written (Report_Path),
+                   """stage"":""loading"""),
+               "a safe early report has no stages or loaded sources");
+         end if;
+      end Refuse;
+   begin
+      Refuse
+        ("linux-x86-64", "--debug=lines",
+         "unsupported source debugger mode for target linux-x86-64",
+         Landin.Driver.Status_Reported);
+      Refuse
+        ("darwin-arm64", "--debug=lines",
+         "unsupported source debugger mode for target darwin-arm64",
+         Landin.Driver.Status_Reported);
+      Refuse
+        ("cortex-m0", "--debug=full",
+         "unsupported source debugger mode for target cortex-m0",
+         Landin.Driver.Status_Reported);
+      Refuse
+        ("linux-x86-64", "--firmware-entry=start",
+         "--firmware-entry requires --target=cortex-m0",
+         Landin.Driver.Status_Misuse);
+      Refuse
+        ("linux-x86-64", "--debug=lines",
+         "unsupported source debugger mode for target linux-x86-64",
+         Landin.Driver.Status_Misuse, "--unknown");
+      Refuse
+        ("linux-x86-64", "--debug=lines",
+         "unsupported source debugger mode for target linux-x86-64",
+         Landin.Driver.Status_Reported,
+         Report_Path => "stages.json", Writes => 1);
+      Refuse
+        ("linux-x86-64", "--debug=lines",
+         "unsupported source debugger mode for target linux-x86-64",
+         Landin.Driver.Status_Misuse, Report_Path => "main.ldn");
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Raise_On_Read;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("--debug=lines");
+         Args.Append ("--emit=asm");
+         Args.Append ("--stage-report=stages.json");
+         Args.Append ("--root=root");
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "a rooted request is refused before discovering imports");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0,
+               "rooted early refusal leaves an unverified path untouched");
+         end;
+      end;
+   end Incompatible_Target_Options_Precede_Source_Loading;
+
    --  An emission request without a source, and an empty root, are misuse
    --  rather than a silent success or a search from `/`.
    procedure Emission_Without_Sources_Is_Misuse
@@ -4807,6 +4931,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "invalid options are refused",
          Invalid_Options_Are_Refused'Access);
+      Landin.Testing.Register
+        (Into, "driver", "target options precede source loading",
+         Incompatible_Target_Options_Precede_Source_Loading'Access);
       Landin.Testing.Register
         (Into, "driver", "libraries keep their written order",
          Libraries_Keep_Their_Written_Order'Access);

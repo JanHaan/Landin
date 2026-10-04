@@ -825,6 +825,7 @@ package body Landin.Driver is
            Landin.Stages.Create (Facts, Level);
          Panic : aliased Landin.Panics.Plan;
          Panic_Problem : Unbounded.Unbounded_String;
+         Target_Option_Refused : Boolean := False;
 
          procedure Keep_Report;
 
@@ -910,12 +911,12 @@ package body Landin.Driver is
             end if;
          end Watch_Stage;
 
-         --  Written when source loading began, a refused program included:
-         --  where a refusal's time and storage went is exactly what a bound
-         --  is measured by. A preflight refusal has no loaded source list to
-         --  protect from an overlapping report path, and no measured stage.
-         --  The sizes are the compilation's own counts and are the same on
-         --  every run; the rows are not.
+         --  Written whenever a well-formed request reaches a stage, a
+         --  refused program included: where a refusal's time and storage
+         --  went is exactly what a bound is measured by.  An early target
+         --  refusal can also write an empty report once source paths are
+         --  known to be safe.  The sizes are the compilation's own counts
+         --  and are the same on every run; the rows are not.
          procedure Write_Stage_Report is
             Path : constant String := Unbounded.To_String (Stage_Report_Path);
             Written : Landin.Platform.Write_Status;
@@ -1259,26 +1260,6 @@ package body Landin.Driver is
                end loop;
             end loop;
 
-            if Debug_Enabled and then
-              (Landin.Targets.Capabilities.Debug_Format_Of (Facts)
-                 = Landin.Targets.Capabilities.No_Debug_Format
-               or else Lines_Debug /= Cortex)
-            then
-               Note_No_Toolchain
-                 ((if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
-                         = Landin.Targets.Capabilities.No_Debug_Format
-                   then "target " & Landin.Targets.Name (Facts)
-                        & " has no source debug format"
-                   else "unsupported source debugger mode for target "
-                        & Landin.Targets.Name (Facts)),
-                  (if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
-                         = Landin.Targets.Capabilities.No_Debug_Format
-                   then "describe a target with a backend, or drop --emit"
-                   elsif Cortex then "use --debug=lines or --debug=none"
-                   else "use --debug=full or --debug=none"));
-               return;
-            end if;
-
             if Cortex and then not Firmware_Seen
               and then Emit = Emit_Assembly
             then
@@ -1295,13 +1276,6 @@ package body Landin.Driver is
                      return;
                   end if;
                end loop;
-            end if;
-            if Firmware_Seen and then not Cortex then
-               Bad_Use := True;
-               Note_Failure
-                 (Code_Unknown_Option,
-                  "--firmware-entry requires --target=cortex-m0");
-               return;
             end if;
             if Cortex and then (Emit = Emit_Executable or Firmware_Seen) then
                Firmware_Entry := Landin.Backend.Entry_Point.Firmware_Start
@@ -2004,6 +1978,71 @@ package body Landin.Driver is
                Result.Output := Unbounded.To_Unbounded_String
                  (if Wants_Usage then Usage else Identity);
             end if;
+            return Result;
+         end if;
+
+         --  Target facts and emission options are known before any source
+         --  is loaded.  A source error must not hide an incompatible request.
+         if Emit /= Emit_Nothing and then Rejected.Is_Empty then
+            declare
+               Cortex : constant Boolean :=
+                 Landin.Targets.Architecture_Of (Facts)
+                   = Landin.Targets.Cortex_M0;
+            begin
+               if Debug_Enabled and then
+                 (Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                    = Landin.Targets.Capabilities.No_Debug_Format
+                  or else Lines_Debug /= Cortex)
+               then
+                  Note_No_Toolchain
+                    ((if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                            = Landin.Targets.Capabilities.No_Debug_Format
+                      then "target " & Landin.Targets.Name (Facts)
+                           & " has no source debug format"
+                      else "unsupported source debugger mode for target "
+                           & Landin.Targets.Name (Facts)),
+                     (if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                            = Landin.Targets.Capabilities.No_Debug_Format
+                      then "describe a target with a backend, or drop --emit"
+                      elsif Cortex then "use --debug=lines or --debug=none"
+                      else "use --debug=full or --debug=none"));
+                  Target_Option_Refused := True;
+               elsif Firmware_Seen and then not Cortex then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--firmware-entry requires --target=cortex-m0");
+                  Target_Option_Refused := True;
+               end if;
+            end;
+         end if;
+
+         if Target_Option_Refused then
+            --  Explicit inputs are the complete source set.  A rooted
+            --  request may reach imports not named here, so its report
+            --  cannot be written safely without loading the program.
+            if Stage_Report_Seen and then not Bad_Use
+              and then Roots.Is_Empty
+            then
+               for Path of Inputs loop
+                  if Host.Paths_Overlap
+                    (Unbounded.To_String (Stage_Report_Path), Path)
+                  then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "stage report collides with source: "
+                        & Unbounded.To_String (Stage_Report_Path));
+                     exit;
+                  end if;
+               end loop;
+               Write_Stage_Report;
+            end if;
+            Result.Report := Unbounded.To_Unbounded_String
+              (Landin.Stages.Rendered_Report (Context));
+            Keep_Report;
+            Result.Status :=
+              (if Bad_Use then Status_Misuse else Status_Reported);
             return Result;
          end if;
 

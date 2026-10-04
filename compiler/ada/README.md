@@ -1083,6 +1083,12 @@ emission) with its processor time and the peak resident set when it ended,
 plus the compilation's deterministic sizes. A refused program is measured up
 to the stage that refused it. No measurement reaches a decision, a diagnostic
 or an artifact; a host without a meter writes zeros.
+An incompatible `--debug` emission request is refused before loading. With
+explicit source files, it writes a requested stage report with no stage rows
+and zero sources if the report path does not overlap an input. With `--root`,
+imports have not been discovered, so it writes no stage report: their paths
+cannot be checked for overlap without loading them. A command-line misuse,
+including `--firmware-entry` on a hosted target, writes no stage report.
 `src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
 constants. `Native.Tools` passes the already-open capture descriptors and
 literal argument vector. Merged capture retains one ordered byte stream;
