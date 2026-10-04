@@ -1,0 +1,98 @@
+==================
+Private inline array uninitialized construction
+==================
+
+hidden: type = struct
+    slots: [8]u8
+    used: usize
+end hidden
+
+new: () -> (result: hidden) =
+    result = (slots: uninit, used: 0)
+end new
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (struct_body
+        (field
+          (identifier_list
+            (identifier))
+          (array_type
+            (logical_or_expression
+              (logical_and_expression
+                (comparison_expression
+                  (alternation_expression
+                    (exclusion_expression
+                      (conjunction_expression
+                        (shift_expression
+                          (sum_expression
+                            (product_expression
+                              (unary_expression
+                                (literal
+                                  (integer_literal))))))))))))
+            (scalar_type)))
+        (field
+          (identifier_list
+            (identifier))
+          (scalar_type))
+        (identifier))))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier)))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (struct_literal
+                                (field_value
+                                  (identifier)
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (uninit_literal)))))))))))))
+                                (field_value
+                                  (identifier)
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))))))))))))))
+      (identifier))))
