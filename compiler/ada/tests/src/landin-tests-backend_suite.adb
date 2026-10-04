@@ -6347,6 +6347,82 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Any_Dispatch_Uses_A_Flattened_Real_Table;
 
+   procedure Cortex_Evidence_Tables_Have_Separate_Sections
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Evidence_Tables_Have_Separate_Sections
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "display: type = concept (t: type)" & LF
+         & "    read: (self: ptr t) -> (value: i32)" & LF
+         & "end display" & LF
+         & "first: type = struct" & LF
+         & "    value: i32" & LF
+         & "end first" & LF
+         & "second: type = struct" & LF
+         & "    value: i32" & LF
+         & "end second" & LF
+         & "read_first: (self: ptr first) -> (value: i32) =" & LF
+         & "    value = self.val.value" & LF
+         & "end read_first" & LF
+         & "read_second: (self: ptr second) -> (value: i32) =" & LF
+         & "    value = self.val.value" & LF
+         & "end read_second" & LF
+         & "first is display (read: read_first)" & LF
+         & "second is display (read: read_second)" & LF
+         & "mut observed: i32" & LF
+         & "start: () -> none =" & LF
+         & "    left: first = (value: 18)" & LF
+         & "    a: any display = any(addr left)" & LF
+         & "    observed = a.read()" & LF
+         & "end start" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "source lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Targets.Cortex_M,
+         Landin.Optimization.Reference_Options, Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String
+           (Assembly);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".section .rodata.landin_evidence_"),
+            3, "each direct or erased table selects its own section");
+         for Number in 1 .. 3 loop
+            declare
+               Suffix : constant String := Ada.Strings.Fixed.Trim
+                 (Number'Image, Ada.Strings.Both);
+            begin
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Text, HT & ".section .rodata.landin_evidence_"
+                     & Suffix & ",""a"",%progbits" & LF
+                     & HT & ".balign 4" & LF
+                     & "Llandin_evidence_" & Suffix & ":" & LF),
+                  "table and section identities agree");
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".long read_second" & LF)
+             and then Contains (Text, HT & ".word Llandin_evidence_2" & LF),
+            "unused provider and live table address remain distinct");
+      end;
+   end Cortex_Evidence_Tables_Have_Separate_Sections;
+
    --  D195 keeps host-width allocation policy out of neutral IR.  The shim
    --  must reject either overflowing addition and totals above PTRDIFF_MAX
    --  before libc, then retain the original malloc pointer for real release.
@@ -8163,6 +8239,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "any dispatch uses a flattened real table",
          Any_Dispatch_Uses_A_Flattened_Real_Table'Access);
+      Landin.Testing.Register
+        (Into, "backend", "Cortex evidence tables have separate sections",
+         Cortex_Evidence_Tables_Have_Separate_Sections'Access);
       Landin.Testing.Register
         (Into, "backend", "generic evidence is ordered indirect and shared",
          Generic_Evidence_Is_Ordered_Indirect_And_Shared'Access);

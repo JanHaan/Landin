@@ -5226,7 +5226,6 @@ package body Landin.Backend.Cortex_M is
          end;
       end loop;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Emit (".section .rodata");
          for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
             declare
                Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
@@ -5237,6 +5236,10 @@ package body Landin.Backend.Cortex_M is
                Field_Extent (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit,
                  Id),
                  Facts, Bytes, Alignment);
+               --  Each table must be an input section of its own.  A live
+               --  table must not keep unrelated tables or their providers.
+               Emit (".section .rodata.landin_evidence_"
+                 & Trimmed (Id'Image) & ",""a"",%progbits");
                Emit (".balign 4");
                Put (Evidence_Symbol (Id) & ":");
                Emit (".long " & Trimmed (Landin.Targets.Byte_Count'Image

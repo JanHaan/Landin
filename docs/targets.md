@@ -725,6 +725,9 @@ not enable the general C source surface.
 
 `.text.*` and `.rodata.*` reside in flash; `.data.*`, `.bss.*` and `.ramtext.*`
 execute in RAM, with flash load images for initialized data and RAM code.
+Each conformance evidence table has its own `.rodata.landin_evidence_*` input
+section, so section garbage collection can discard an unused table and its
+provider references independently of live tables.
 Startup copies both load images and clears BSS before source entry. GNU ARM
 veneers handle out-of-range calls between flash and RAM. Link assertions bound
 physical images; L0505 independently bounds pre-GC static materialization to
