@@ -4610,9 +4610,8 @@ package body Landin.Backend.Arm64 is
          --  paths follow its last return.
          Open_Bridge : Host_Helper := No_Host_Helper;
          procedure Close_Bridge;
-         procedure Start (Helper : Host_Helper);
+         procedure Start (Helper : Host_Helper; Framed : Boolean := True);
          procedure Finish;
-         procedure Tail (Name : String);
 
          procedure Close_Bridge is
          begin
@@ -4625,7 +4624,7 @@ package body Landin.Backend.Arm64 is
             end if;
          end Close_Bridge;
 
-         procedure Start (Helper : Host_Helper) is
+         procedure Start (Helper : Host_Helper; Framed : Boolean := True) is
          begin
             Close_Bridge;
             Emit (".p2align 2");
@@ -4640,15 +4639,17 @@ package body Landin.Backend.Arm64 is
                Emit (".cfi_startproc");
                Open_Frame := True;
             end if;
-            Emit ("stp x29, x30, [sp, #-16]!");
-            if Debug /= null then
-               Emit (".cfi_def_cfa_offset 16");
-               Emit (".cfi_offset w29, -16");
-               Emit (".cfi_offset w30, -8");
-            end if;
-            Emit ("mov x29, sp");
-            if Debug /= null then
-               Emit (".cfi_def_cfa_register w29");
+            if Framed then
+               Emit ("stp x29, x30, [sp, #-16]!");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset 16");
+                  Emit (".cfi_offset w29, -16");
+                  Emit (".cfi_offset w30, -8");
+               end if;
+               Emit ("mov x29, sp");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_register w29");
+               end if;
             end if;
          end Start;
 
@@ -4670,12 +4671,6 @@ package body Landin.Backend.Arm64 is
             end if;
          end Finish;
 
-         procedure Tail (Name : String) is
-         begin
-            Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
-              (Facts, Name));
-            Finish;
-         end Tail;
       begin
          Emit (".text");
          Start (Initialize_Arguments);
@@ -4738,17 +4733,22 @@ package body Landin.Backend.Arm64 is
          Start (Argument_At_From);
          Emit ("ldr x0, [x0, x1, lsl #3]");
          Finish;
-         Start (Text_Length);
-         Tail ("strlen");
-         Start (Read_Bytes);
-         Tail ("read");
-         Start (Write_Bytes);
-         Tail ("write");
-         Start (Close_File);
-         Tail ("close");
-         Start (Open_Read);
+         Start (Text_Length, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "strlen"));
+         Start (Read_Bytes, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "read"));
+         Start (Write_Bytes, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "write"));
+         Start (Close_File, Framed => False);
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "close"));
+         Start (Open_Read, Framed => False);
          Emit ("mov w1, #0");
-         Tail ("open");
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "open"));
          Start (Open_Write);
          --  O_WRONLY | O_CREAT | O_TRUNC, and the mode 0666 that libc's
          --  umask filters, as open's first unnamed argument: on Apple's
@@ -4763,7 +4763,9 @@ package body Landin.Backend.Arm64 is
          else
             Emit ("mov w2, #" & Image (Hosted_ABI.Created_File_Mode));
          end if;
-         Tail ("open");
+         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "open"));
+         Finish;
          Start (Errno_Value);
          Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
            (Facts, Hosted_ABI.Errno_Function (System)));
@@ -4797,9 +4799,10 @@ package body Landin.Backend.Arm64 is
          Put (Local_Prefix & "heap_failed:");
          Emit ("mov x0, #0");
          Finish;
-         Start (Heap_Release);
+         Start (Heap_Release, Framed => False);
          Emit ("ldur x0, [x0, #-8]");
-         Tail ("free");
+         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "free"));
          Close_Bridge;
          Emit (".data");
          Emit (".balign 8");
