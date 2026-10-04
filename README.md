@@ -208,8 +208,10 @@ This is the maintained inventory of what the compiler does today:
   flow, lexical `defer` and failure-only `undo`, declared errors, every loop
   and literal family, the enabled scalar conversions, range subtypes and
   `unchecked` regions. Generics take fixed parameters by compile-time
-  substitution; concepts carry a whole-program conformance register; one
-  evidence table serves both static calls and `any C`. Pointers and slices
+  substitution; concepts carry a whole-program conformance register. Generic
+  calls pass only the evidence their checked bodies use; direct and `any C`
+  dispatch share table storage only when their layouts and entries match.
+  Pointers and slices
   get local origin, borrow, `escaping`, `from` and consume checks. Directory
   modules have file-local imports, aliases, selected imports, typed global
   options and ordered roots. D227's memory model supplies scalar atomics,
