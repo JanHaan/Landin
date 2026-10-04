@@ -72,9 +72,9 @@ python3 check.py prototype-2-parser.md
 ./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
     --toolchain=aarch64-unknown-linux-gnu-gcc --suite='fixture execution'
 
-# Render every document as HTML, verify nothing was dropped, and package
-# it.  It does not publish: .github/workflows/pages.yml is the only
-# publisher; see docs/site/README.md.
+# Render the documents selected in docs/site/render_html.py as HTML,
+# verify their text was not dropped, and package them. It does not publish:
+# .github/workflows/pages.yml is the only publisher; see docs/site/README.md.
 ./scripts/site.sh
 
 # On a nix machine, a shell holding the pinned toolchain and python3.  It
@@ -228,7 +228,9 @@ in a table.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
-Every document above is also published as a reading copy at <https://www.701.dev>, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
+The documents selected in `docs/site/render_html.py` are published as reading
+copies at <https://www.701.dev>. The text files are the sources; the pages are
+generated and never edited by hand. See `docs/site/README.md` for the scope.
 
 The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
 the drawing — `701` as a path, so no renderer needs Futura — and

@@ -71,9 +71,11 @@ findings, including several that reversed a decision.
 
 ## Reading it online
 
-Every document here is published as a syntax-highlighted reading copy at
-**<https://www.701.dev>** — the tour, the specification, the running examples,
-the four prototypes, the roadmap, and the implementation notes. Every
+Selected language documents and guides are published as syntax-highlighted
+reading copies at **<https://www.701.dev>** — including the tour, the
+specification, the running examples, the four prototypes, the roadmap, and
+the implementation notes. The renderer's `DOCS` and `GUIDES` lists define
+the selection; see [the site guide](docs/site/README.md). Every
 `[NNNN]` citation links to the construct it names, and hovering one shows what
 it says.
 
