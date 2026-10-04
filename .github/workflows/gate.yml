@@ -18,6 +18,7 @@
 #  Cortex-M job fails and produced output, the workflow attempts to upload
 #  its diagnostics for 14-day retention.  The gate is a safety net over
 #  every target.
+#  Cross-host determinism also contributes to the aggregate gate status.
 #
 #  Whole-job times below were measured on these runners, four vCPUs on Linux
 #  and three cores on macOS, install and build included; lane times inside
@@ -686,13 +687,18 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" \
             --clang clang-19 --output "$RUNNER_TEMP/bindings"
 
+  #  Build and compare assembly manifests on Linux and macOS in the same
+  #  workflow run, so a host disagreement also fails the aggregate status.
+  determinism:
+    uses: ./.github/workflows/determinism.yml
+
   #  The one check a branch rule requires: every job above succeeded.
   gate:
     if: always()
     needs: [documents, scripts, compiler, linux-release-build, release,
             bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
             darwin-host, darwin-host-release, darwin-parity, lldb,
-            arm64-compiler, arm64-release]
+            arm64-compiler, arm64-release, determinism]
     runs-on: ubuntu-24.04
     steps:
       - name: Every job succeeded

@@ -18,7 +18,7 @@ what they cost.
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
-| every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
+| every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 
 From the repository root on a Mac, with the default `darwin-arm64` build tag:
 
@@ -44,8 +44,8 @@ explanatory-only prose path does not cover generated Ada or catalogues,
 executable examples or fixtures, or grammar and semantic rules in `spec.md`.
 The gate is a safety net rather than a verdict: it runs every
 target on every push. On a failed Cortex-M job, it is configured to upload
-diagnostic output if present and retain it for 14 days. It retains no successful
-exact-revision acceptance record; green says the tree passed there, not that
+diagnostic output if present and retain it for 14 days. The called determinism workflow retains assembly manifests as short-lived
+artifacts. These are not a successful exact-revision acceptance record; green says the tree passed there, not that
 a revision is accepted. Documentation changes still receive the full
 `check.py`; its mechanical checks do not establish prose accuracy.
 

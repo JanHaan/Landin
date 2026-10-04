@@ -102,10 +102,10 @@ document, binding and editor-grammar checks. Same-run release build artifacts
 avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
 configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
-revision. `.github/workflows/determinism.yml` builds the compiler on Linux
+revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
 x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for all
 four targets in both build modes, and compares emitted assembly digests
-across hosts. It does not assemble, link or run those programs.
+across hosts; disagreement fails the aggregate gate. It does not assemble, link or run those programs.
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
 compiler test.

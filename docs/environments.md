@@ -32,7 +32,7 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 | QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
+| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane and the called `determinism.yml` comparison; `links.yml`, `release.yml` and `pages.yml` run separately | working |
 
 The retired acceptance controller ran the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion ran debug compiler-host

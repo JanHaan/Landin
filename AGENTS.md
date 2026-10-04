@@ -99,7 +99,7 @@ nix build .#refine-bin
 push and pull request. It runs every target the compiler has, in jobs that
 report separate verdicts. A release build on each host supplies checked
 executables to its same-host lanes; the final `gate` job fails unless every
-build and verification job succeeded:
+build and verification job, including cross-host determinism, succeeded:
 
 | job | runner | runs |
 |---|---|---|
@@ -119,6 +119,7 @@ build and verification job succeeded:
 | `lldb` | macos-26 | the LLDB sessions |
 | `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
+| `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-26 | the called workflow emits the fixture manifest on each host and compares them |
 
 A release compile error surfaces in its host's build job; debug compile
 errors surface in the debug verification jobs. Before
@@ -137,9 +138,10 @@ On a failed Cortex-M job, it is configured to upload diagnostic output if
 that output exists; uploaded artifacts are retained for 14 days. It is a
 safety net over every target.
 
-Three more workflows run on pushes matching their triggers. `determinism.yml`
+The gate calls `determinism.yml`, which
 requires every host in its matrix to emit the same bytes; it emits and hashes
-but never assembles, links or runs. `pages.yml` publishes <https://www.701.dev>
+but never assembles, links or runs. It also supports manual dispatch.
+`pages.yml` publishes <https://www.701.dev>
 when a site input changes on `main`, or when dispatched manually. `links.yml`
 checks changed documents on a push and every document weekly or manually.
 Changes to link checker configuration and unknown changed ranges also check
