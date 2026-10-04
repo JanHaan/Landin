@@ -83,9 +83,33 @@ public main: () -> (code: i32) =
     return when not count_finite_region()
     code = 12
     return when not repeated_matches()
+    code = 13
+    return when not clear_reuses_storage()
     code = 42
 
 end main
+
+clear_reuses_storage: () -> (ok: bool) =
+    ok = false
+    mut backing: [8]u8 = zeroed
+    base: ptr mut u8 = addr backing[0]
+    slots: usize = 8
+    mut storage := mem.reserve(item: u8, base: base, slots: slots)
+    first: usize = mem.admit(storage, u8(17)) else slots
+    second: usize = mem.admit(storage, u8(29)) else slots
+    mem.clear(storage)
+    retained: bool = mem.initialized(storage) == 0
+      and mem.capacity(storage) == slots
+    missing: u8 = mem.get(storage, first) else u8(99)
+    reused: usize = mem.admit(storage, u8(41)) else slots
+    taken: u8 = mem.release(storage) else u8(0)
+    released: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        return
+    end
+    ok = first == 0 and second == 1 and retained and missing == 99
+      and reused == 0 and taken == 41 and usize(released) == usize(base)
+end clear_reuses_storage
 
 --  One-byte chunks, an empty line, growth beyond 8 KiB, and an unterminated
 --  final line all pass through the same application and count destination.

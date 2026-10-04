@@ -15152,12 +15152,11 @@ before extending the witness by one. Neither step publishes spare capacity.
 `replace`, like `admit`, declares the inserted value `escaping`. `used` returns
 only the initialized witness, with mutable element permission and
 `from storage`. `release` checks for `raw_empty`, saves the typed former tail
-and then shortens the witness. For `raw(u8)` alone, `release_bytes` shortens the
-typed initialized witness to zero in one transition without returning each
-byte; it preserves the original base and capacity. Bytes require no per-item
-cleanup. `dispose` checks for `raw_not_empty`, returns
-the original byte pointer and clears the allocation state, witness and
-capacity.
+and then shortens the witness. `clear` shortens the witness to zero in one
+transition, retaining capacity and backing without reading the discarded
+values; callers still manage any resources those values refer to. `dispose`
+checks for `raw_not_empty`, returns
+the original byte pointer and clears the allocation state, witness and capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
 ownership remains the container's composition rather than state stored in
 `raw`.
@@ -15197,7 +15196,7 @@ byte-specific `new_bytes` returns a private `byte_buffer` containing the full
 allocation extent and an initialized byte prefix. Zero count makes no provider
 call; nonzero count publishes a view only after every byte is initialized.
 `bytes` derives its mutable view from the owner. `drop_bytes` empties the byte
-witness with `release_bytes`, then `dispose` clears the descriptor before
+witness with `clear`, then `dispose` clears the descriptor before
 `drop_bytes` frees the saved original base and extent;
 a shortened borrowed slice is never used as allocation identity. These routines
 introduce no ownership, implicit destruction or exemption from shallow origin

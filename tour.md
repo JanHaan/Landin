@@ -704,7 +704,7 @@ slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
 foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
 `raw_empty`, and `raw_not_empty`.
-For byte storage, `release_bytes` shortens the typed initialized prefix to
+For byte storage, `clear` shortens the typed initialized prefix to
 zero in one step; it leaves the backing allocation for `dispose` to return.
 
 Growth uses two raw values. Allocate and reserve an empty replacement, copy

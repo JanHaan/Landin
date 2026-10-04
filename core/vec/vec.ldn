@@ -175,6 +175,10 @@ public pop: (item: type, inout value: list(item))
     end
 end pop
 
+public clear: (item: type, inout value: list(item)) -> none =
+    mem.clear(value.values)
+end clear
+
 public release: (item: type, provider: type is mem.allocator,
                  inout value: list(item), inout state: provider) -> none =
     drain(value.values)
