@@ -183,6 +183,24 @@ class Capture:
         return self.run(name, argv)[1]
 
 
+def source_inventory(capture, root=ROOT):
+    # Capture.run strips and decodes command output for human-readable replies.
+    # Git's NUL-delimited pathnames must instead come from the retained bytes.
+    capture.run("inventory", ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+                cwd=root)
+    data = (capture.directory / "inventory.stdout").read_bytes()
+    require(not data or data.endswith(b"\0"), "incomplete Git source inventory")
+    names = data[:-1].split(b"\0") if data else []
+    require(all(names), "empty pathname in Git source inventory")
+    sources = {}
+    for name in sorted(set(names)):
+        path = os.fsdecode(name)
+        source = root / path
+        require(source.is_file(), f"cannot hash listed source {path!r}")
+        sources[path] = sha256(source)
+    return sources
+
+
 def validate(capture):
     policy = json.loads(POLICY.read_text())
     native_host(platform.system(), platform.machine(), capture.text(
@@ -262,9 +280,7 @@ def main():
         capture.text("worktree", ["git", "status", "--porcelain"])
         capture.text("diff", ["git", "diff", "--binary", "HEAD"])
         # Record source identities including new, untracked implementation files.
-        paths = capture.text("inventory", ["git", "ls-files", "-co", "--exclude-standard", "-z"])
-        summary["sources"] = {p: sha256(ROOT / p) for p in sorted(set(paths.split("\0")))
-                              if p and (ROOT / p).is_file()}
+        summary["sources"] = source_inventory(capture)
         smoke = directory / "native.s"
         smoke.write_text(".text\n.globl _main\n.p2align 2\n_main:\n    mov w0, #0\n    ret\n")
         obj, exe = directory / "native.o", directory / "native"

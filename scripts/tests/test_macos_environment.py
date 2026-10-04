@@ -133,6 +133,27 @@ class MacOSEnvironment(unittest.TestCase):
             self.assertLess(code, 0)
             self.assertTrue((Path(tmp) / "commands.json").is_file())
 
+    def test_source_inventory_preserves_pathnames_and_rejects_missing_files(self):
+        with tempfile.TemporaryDirectory() as repo_dir, \
+                tempfile.TemporaryDirectory() as evidence_dir:
+            repo = Path(repo_dir)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            first = repo / " leading.ldn"
+            first.write_bytes(b"first\n")
+            (repo / "normal.ldn").write_bytes(b"second\n")
+            subprocess.run(["git", "add", "--", " leading.ldn", "normal.ldn"],
+                           cwd=repo, check=True)
+            capture = macos.Capture(Path(evidence_dir))
+            sources = macos.source_inventory(capture, repo)
+            self.assertEqual((Path(evidence_dir) / "inventory.stdout").read_bytes(),
+                             b" leading.ldn\0normal.ldn\0")
+            self.assertEqual(sources, {
+                " leading.ldn": macos.sha256(first),
+                "normal.ldn": macos.sha256(repo / "normal.ldn")})
+            first.unlink()
+            with self.assertRaisesRegex(ValueError, "cannot hash listed source"):
+                macos.source_inventory(capture, repo)
+
     def test_timeout_stops_a_separate_tool_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             pid_file = Path(tmp) / "child.pid"
