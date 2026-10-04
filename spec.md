@@ -15105,11 +15105,12 @@ necessary transitions with a non-zeroable pointer element, but deliberately
 proposed no spelling.
 
 **Chosen:** the repository-owned `core/mem` module declares a private
-parameterized nominal `raw(item)` with a byte pointer, capacity, a private
-singleton pointer and an initialized slice witness. The witness length is the
-initialized count. D150 permits public routines to carry that private identity,
-so callers hold it through inferred bindings without being able to name its type or
-select its fields. The parser-support core adds the public parameterized alias `storage(item)` so
+parameterized nominal `raw(item)` with an allocation state (a byte pointer or
+no storage), capacity and an initialized slice witness. The witness length is
+the initialized count. D150 permits public routines to carry that private
+identity, so callers hold it through inferred bindings without being able to
+name its type or select its fields. The parser-support core adds the public
+parameterized alias `storage(item)` so
 another core module may name the same identity in a field or signature without
 exposing its representation. D135's alias introduces no second nominal
 identity. Cross-module field selection through such a value is L0202, related
@@ -15118,9 +15119,10 @@ field access; no field-visibility syntax or special raw type kind is
 introduced.
 
 `reserve` records a supplied byte pointer and capacity with an empty witness.
-The private `ptr mut [1]item` names the first destination; constructing it is
-not a read or publication of an initialized array. `capacity` and `initialized`
-expose capacity and witness length. `admit` checks for `raw_full` before a
+`admit` and `transfer` each construct a local `ptr mut [1]item` to name the
+first destination; constructing it is not a read or publication of an
+initialized array. `capacity` and `initialized` expose capacity and witness
+length. `admit` checks for `raw_full` before a
 complete typed store. For the first item it then takes the genuine singleton
 slice; for later items a narrow `unchecked` block stores at the old length
 before extending the witness by one. Neither step publishes spare capacity.
@@ -15129,7 +15131,8 @@ before extending the witness by one. Neither step publishes spare capacity.
 only the initialized witness, with mutable element permission and
 `from storage`. `release` checks for `raw_empty`, saves the typed former tail
 and then shortens the witness. `dispose` checks for `raw_not_empty`, returns
-the original byte pointer and clears both pointers, witness and capacity.
+the original byte pointer and clears the allocation state, witness and
+capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
 ownership remains the container's composition rather than state stored in
 `raw`.
