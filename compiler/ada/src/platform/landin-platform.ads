@@ -81,6 +81,9 @@ package Landin.Platform is
    function Identity_Of
      (Host : Filesystem; Path : String) return File_Identity is abstract;
 
+   function Existing_Identity
+     (Host : Filesystem; Path : String) return File_Identity is abstract;
+
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
 

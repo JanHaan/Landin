@@ -1,5 +1,7 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
+with Ada.Containers;
+with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
@@ -32,6 +34,24 @@ package body Landin.Driver.Loading is
 
    package Path_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
+   function Hash_Identity (Key : Landin.Platform.File_Identity)
+     return Ada.Containers.Hash_Type;
+
+   function Hash_Identity (Key : Landin.Platform.File_Identity)
+     return Ada.Containers.Hash_Type
+   is
+      use type Ada.Containers.Hash_Type;
+   begin
+      return Ada.Containers.Hash_Type (Key.Device)
+        xor Ada.Containers.Hash_Type (Key.Inode);
+   end Hash_Identity;
+
+   package Directory_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Landin.Platform.File_Identity,
+      Element_Type    => Landin.Modules.Module_Id,
+      Hash            => Hash_Identity,
+      Equivalent_Keys => Landin.Platform."=");
+
 
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
      Landin.Diagnostics.Catalogue.Code
@@ -402,37 +422,79 @@ package body Landin.Driver.Loading is
       Graph : constant not null access Landin.Modules.Table :=
         Landin.Stages.Modules (Context);
       Queue : Module_Vectors.Vector;
+      Known_Directories : Directory_Maps.Map;
+      Unknown_Directories : Module_Vectors.Vector;
       Next  : Positive := 1;
 
-      function Loaded_Directory (Path : String)
+      procedure Remember_Directory
+        (Module : Landin.Modules.Module_Id;
+         Identity : Landin.Platform.File_Identity);
+
+      function Loaded_Directory
+        (Path : String; Identity : out Landin.Platform.File_Identity)
         return Landin.Modules.Module_Id;
 
-      function Loaded_Directory (Path : String)
+      procedure Remember_Directory
+        (Module : Landin.Modules.Module_Id;
+         Identity : Landin.Platform.File_Identity)
+      is
+      begin
+         if Identity.Valid then
+            Known_Directories.Insert (Identity, Module);
+         else
+            Unknown_Directories.Append (Module);
+         end if;
+      end Remember_Directory;
+
+      function Loaded_Directory
+        (Path : String; Identity : out Landin.Platform.File_Identity)
         return Landin.Modules.Module_Id
       is
          Exact : constant Landin.Modules.Module_Id :=
            Landin.Modules.Find_Directory (Graph.all, Path);
       begin
+         Identity := (others => <>);
          if Exact /= Landin.Modules.No_Module then
             return Exact;
          end if;
          --  Preserve the first spelling for reads and diagnostics.
-         --  Only the filesystem can prove that another spelling names
-         --  the same directory; uncertain identities stay apart.
-         for Position in 1 .. Landin.Modules.Module_Count (Graph.all)
-         loop
+         --  Known identities need one lookup, then comparisons only with
+         --  directories whose identity was unknown. An unknown new path
+         --  still checks every loaded directory to preserve proven aliases.
+         Identity := Host.Existing_Identity (Path);
+         if Identity.Valid then
             declare
-               Candidate : constant Landin.Modules.Module_Id :=
-                 Landin.Modules.Module_Id (Position);
+               Found : constant Directory_Maps.Cursor :=
+                 Known_Directories.Find (Identity);
             begin
+               if Directory_Maps.Has_Element (Found) then
+                  return Directory_Maps.Element (Found);
+               end if;
+            end;
+            for Candidate of Unknown_Directories loop
                if Host.Same_File
                  (Path, Landin.Modules.Directory_Path
                     (Graph.all, Candidate))
                then
                   return Candidate;
                end if;
-            end;
-         end loop;
+            end loop;
+         else
+            for Position in 1 .. Landin.Modules.Module_Count (Graph.all)
+            loop
+               declare
+                  Candidate : constant Landin.Modules.Module_Id :=
+                    Landin.Modules.Module_Id (Position);
+               begin
+                  if Host.Same_File
+                    (Path, Landin.Modules.Directory_Path
+                       (Graph.all, Candidate))
+                  then
+                     return Candidate;
+                  end if;
+               end;
+            end loop;
+         end if;
          return Landin.Modules.No_Module;
       end Loaded_Directory;
    begin
@@ -456,6 +518,9 @@ package body Landin.Driver.Loading is
 
       Landin.Modules.Set_Entry_Directory
         (Graph.all, Entry_Directory);
+      Remember_Directory
+        (Landin.Modules.Entry_Module,
+         Host.Existing_Identity (Entry_Directory));
       Queue.Append (Landin.Modules.Entry_Module);
 
       while Next <= Natural (Queue.Length) loop
@@ -649,17 +714,20 @@ package body Landin.Driver.Loading is
                                          (Found, 1));
                                  end;
                               else
-                                 Target := Loaded_Directory
-                                   (Directory_Path);
-                                 if Target
-                                   = Landin.Modules.No_Module
-                                 then
-                                    Target := Landin.Modules.Add_Module
-                                      (Graph.all, Logical,
-                                       Directory_Path,
-                                       Positive (Selected_Root));
-                                    Queue.Append (Target);
-                                 end if;
+                                 declare
+                                    Identity : Landin.Platform.File_Identity;
+                                 begin
+                                    Target := Loaded_Directory
+                                      (Directory_Path, Identity);
+                                    if Target = Landin.Modules.No_Module then
+                                       Target := Landin.Modules.Add_Module
+                                         (Graph.all, Logical,
+                                          Directory_Path,
+                                          Positive (Selected_Root));
+                                       Remember_Directory (Target, Identity);
+                                       Queue.Append (Target);
+                                    end if;
+                                 end;
                               end if;
                            end;
                         end if;

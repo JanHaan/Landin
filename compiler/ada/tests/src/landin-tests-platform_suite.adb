@@ -1242,6 +1242,7 @@ package body Landin.Tests.Platform_Suite is
    procedure Native_Path_Identity (Item : in out Landin.Testing.Context);
 
    procedure Native_Path_Identity (Item : in out Landin.Testing.Context) is
+      use type Landin.Platform.File_Identity;
       Host : Landin.Platform.Native.Native_Filesystem;
       Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Result : Landin.Platform.Tool_Result;
@@ -1338,6 +1339,24 @@ package body Landin.Tests.Platform_Suite is
                                            Landin.Platform.Arguments
                                              (Root & "/parent/new.s")),
             "missing leaves under aliased parents collide in a batch");
+      end;
+      declare
+         Key : constant Landin.Platform.File_Identity :=
+           Host.Existing_Identity (Original);
+         Other : constant Landin.Platform.File_Identity :=
+           Host.Existing_Identity (Root & "/copy.ldn");
+      begin
+         Landin.Testing.Check
+           (Item, Key.Valid and then Other.Valid
+            and then Key = Host.Existing_Identity (Root & "/hard.json")
+            and then Key = Host.Existing_Identity (Root & "/symbolic.json")
+            and then Key /= Other
+            and then not Host.Existing_Identity
+              (Root & "/absent.ldn").Valid
+            and then Host.Existing_Identity (Root).Valid
+            and then Host.Existing_Identity (Root)
+              = Host.Existing_Identity (Root & "/parent"),
+            "known keys identify existing file and directory aliases");
       end;
    end Native_Path_Identity;
 

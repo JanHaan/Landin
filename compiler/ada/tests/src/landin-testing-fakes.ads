@@ -56,6 +56,11 @@ package Landin.Testing.Fakes is
       return Landin.Platform.File_Identity;
 
    function Output_Locked (Host : Fake_Filesystem) return Boolean;
+   overriding function Existing_Identity
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity;
+
+   function Same_File_Count (Host : Fake_Filesystem) return Natural;
 
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
@@ -306,6 +311,7 @@ private
 
       Next_Identity : Interfaces.Unsigned_64 := 1;
       Output_Is_Locked : Boolean := False;
+      Identity_Comparisons : Natural := 0;
    end record;
 
    type Store_Access is access Store;

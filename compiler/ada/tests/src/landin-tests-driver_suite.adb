@@ -800,6 +800,48 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Module_Directories_Keep_Identity;
 
+   procedure Distinct_Modules_Use_Identity_Keys
+     (Item : in out Landin.Testing.Context);
+
+   procedure Distinct_Modules_Use_Identity_Keys
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Imports : Unbounded.Unbounded_String;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      for Index in 1 .. 12 loop
+         declare
+            Name : constant String := "m" & Ada.Strings.Fixed.Trim
+              (Index'Image, Ada.Strings.Both);
+         begin
+            Unbounded.Append (Imports, "import " & Name & LF);
+            Host.Add_Directory ("root/" & Name);
+            Host.Add_File ("root/" & Name & "/part.ldn", "");
+         end;
+      end loop;
+      Host.Add_File
+        ("entry/main.ldn", Unbounded.To_String (Imports)
+         & "public main: () -> (code: i32) = code = 0 end main" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "distinct rooted modules load successfully: "
+            & Unbounded.To_String (Result.Report));
+         Landin.Testing.Check_Equal
+           (Item, Host.Same_File_Count, 0,
+            "known directory keys avoid pairwise identity checks");
+      end;
+   end Distinct_Modules_Use_Identity_Keys;
+
    procedure Roots_Are_Searched_In_Order
      (Item : in out Landin.Testing.Context);
 
@@ -4984,6 +5026,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "module directories keep identity",
          Module_Directories_Keep_Identity'Access);
+      Landin.Testing.Register
+        (Into, "driver", "distinct modules use identity keys",
+         Distinct_Modules_Use_Identity_Keys'Access);
       Landin.Testing.Register
         (Into, "driver", "missing entry uses entry source",
          Missing_Entry_Uses_Entry_Source'Access);

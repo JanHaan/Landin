@@ -1,6 +1,7 @@
 with Ada.Directories;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
+with Interfaces;
 with Interfaces.C;
 with Interfaces;
 with Interfaces.C.Strings;
@@ -103,6 +104,10 @@ package body Landin.Platform.Native is
       end if;
       return Result;
    end Identity_Of;
+
+   overriding function Existing_Identity
+     (Host : Native_Filesystem; Path : String) return File_Identity
+     is (Identity_Of (Host, Path));
 
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean

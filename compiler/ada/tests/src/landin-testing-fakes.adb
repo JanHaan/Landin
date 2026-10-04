@@ -1,4 +1,5 @@
 with Ada.Unchecked_Deallocation;
+with Interfaces;
 
 package body Landin.Testing.Fakes is
 
@@ -145,8 +146,40 @@ package body Landin.Testing.Fakes is
 
    overriding function Same_File
      (Host : Fake_Filesystem; Left, Right : String) return Boolean
-     is (Host.Exists (Left) and then Host.Exists (Right)
-         and then Host.Paths_Overlap (Left, Right));
+   is
+   begin
+      Host.Writes.Data.Identity_Comparisons :=
+        Host.Writes.Data.Identity_Comparisons + 1;
+      return Host.Exists (Left) and then Host.Exists (Right)
+        and then Host.Paths_Overlap (Left, Right);
+   end Same_File;
+
+   overriding function Existing_Identity
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.File_Identity
+   is
+      Index : constant Natural := Find (Host, Path);
+   begin
+      if Index = 0 then
+         return (others => <>);
+      end if;
+      --  Explicit aliases are only pairwise in this fake. Defer those
+      --  names to Same_File rather than inventing a transitive key.
+      for Alias_Path of Host.Aliases loop
+         if Alias_Path = Path
+           or else (Host.Is_Directory (Path)
+                    and then Directory_Path (Alias_Path)
+                      = Directory_Path (Path))
+         then
+            return (others => <>);
+         end if;
+      end loop;
+      return (Valid => True, Device => 1,
+              Inode => Interfaces.Unsigned_64 (Index));
+   end Existing_Identity;
+
+   function Same_File_Count (Host : Fake_Filesystem) return Natural
+     is (Host.Writes.Data.Identity_Comparisons);
 
    overriding function Existing_File_Key
      (Host : Fake_Filesystem; Path : String) return String

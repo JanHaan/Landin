@@ -72,6 +72,10 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Path : String) return File_Identity
      is (if Host.Held.Contains (Path) then (others => <>)
          else Host.Under.Identity_Of (Path));
+   overriding function Existing_Identity
+     (Host : Overlay; Path : String) return File_Identity
+     is (if Host.Held.Contains (Path) then (others => <>)
+         else Host.Under.Existing_Identity (Path));
 
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean
