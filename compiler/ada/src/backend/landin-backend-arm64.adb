@@ -4854,15 +4854,9 @@ package body Landin.Backend.Arm64 is
          raise Compiler_Defect with
            "arm64 emission needs an arm64 description";
       end if;
-      --  The default level names nothing, as before levels existed; a
-      --  higher one names its architecture so the assembler admits exactly
-      --  what that level has (D255).
-      if Landin.Targets.Levels.Name (Level)
-        /= Landin.Targets.Levels.Name
-             (Landin.Targets.Levels.Default_Level (Facts))
-      then
-         Emit (".arch " & Landin.Targets.Levels.Name (Level));
-      end if;
+      --  Name the architecture even at the default: Apple's implicit
+      --  assembler level admits instructions above armv8-a (D255).
+      Emit (".arch " & Landin.Targets.Levels.Name (Level));
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          if Landin.IR.Is_External (Of_Unit, Landin.IR.Item_Id (Index))
            and then Helper_Of (Source_Symbol (Landin.IR.Item_Id (Index))) /=

@@ -7564,6 +7564,12 @@ package body Landin.Tests.Backend_Suite is
         & "end divide" & LF;
       Base_Arm : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8-a");
+      Inline_LSE : constant String :=
+        Emitted
+          (Landin.Targets.Darwin_Arm64,
+           "public h: () -> none = "
+           & "assembler.block(""ldaddal w1, w2, [x3]"") end h",
+           "armv8-a");
       LSE : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8.1-a");
       Base_M : constant String :=
@@ -7575,8 +7581,14 @@ package body Landin.Tests.Backend_Suite is
         (Item, Occurrences (Base_Arm, "ldxr") = 4
            and then Occurrences (Base_Arm, "stxr") = 4
            and then Occurrences (Base_Arm, "ldadd") = 0
-           and then Occurrences (Base_Arm, ".arch") = 0,
-         "armv8-a keeps the exclusive-monitor loop and names no level");
+           and then Contains (Base_Arm, ".arch armv8-a" & LF)
+           and then Occurrences (Base_Arm, ".arch") = 1,
+         "armv8-a keeps the exclusive-monitor loop and constrains assembly");
+      Landin.Testing.Check
+        (Item, Index (Inline_LSE, ".arch armv8-a" & LF) > 0
+           and then Index (Inline_LSE, ".arch armv8-a" & LF)
+             < Index (Inline_LSE, "ldaddal w1, w2, [x3]"),
+         "the default architecture precedes an inline LSE instruction");
       Landin.Testing.Check
         (Item, Contains (LSE, ".arch armv8.1-a" & LF)
            and then Contains (LSE, "ldaddalb w11, w9, [x10]")
