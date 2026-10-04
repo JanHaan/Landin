@@ -6,6 +6,7 @@ four of check.py's checks vacuous while the run still said `all clean`.  So
 the comparison is exercised against differing manifests, unexpected shared
 refusals, and agreeing manifests with real assembly evidence.
 """
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,9 +18,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CHECK = ROOT / "scripts" / "emit_manifest.py"
 
 BASE = {
-    "alias-conversion|linux-x86-64|debug": "a" * 64,
-    "alias-conversion|cortex-m0|release": "b" * 64,
-    "external-scalar-c-boundary|cortex-m0|debug": "refused:1",
+    "alias-conversion|linux-x86-64|debug|optimize=size|specialize=auto": "a" * 64,
+    "alias-conversion|cortex-m0|release|optimize=size|specialize=auto": "b" * 64,
+    "external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1",
 }
 
 
@@ -59,50 +60,52 @@ class Comparison(unittest.TestCase):
 
     def test_a_changed_digest_fails(self):
         other = dict(BASE)
-        other["alias-conversion|linux-x86-64|debug"] = "c" * 64
+        key = "alias-conversion|linux-x86-64|debug|optimize=none|specialize=off"
+        other[key] = "c" * 64
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
         self.assertIn("not host-neutral", result.stderr)
-        self.assertIn("alias-conversion|linux-x86-64|debug", result.stderr)
+        self.assertIn(key, result.stderr)
 
     def test_a_missing_entry_fails(self):
         other = dict(BASE)
-        del other["external-scalar-c-boundary|cortex-m0|debug"]
+        del other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"]
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
         self.assertIn("is absent", result.stderr)
 
     def test_an_extra_entry_fails(self):
         other = dict(BASE)
-        other["invented|cortex-m0|debug"] = "d" * 64
+        other["invented|cortex-m0|debug|optimize=none|specialize=all"] = "d" * 64
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("invented|cortex-m0|debug", result.stderr)
+        self.assertIn("invented|cortex-m0|debug|optimize=none|specialize=all",
+                      result.stderr)
 
     def test_a_refusal_that_became_an_emission_fails(self):
         #  Accept/refuse must agree too: a fixture one host compiles and
         #  another rejects is a host leak in the frontend, not the backend.
         other = dict(BASE)
-        other["external-scalar-c-boundary|cortex-m0|debug"] = "e" * 64
+        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"] = "e" * 64
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
 
     def test_shared_unexpected_refusal_fails(self):
         other = dict(BASE)
-        other["alias-conversion|linux-x86-64|debug"] = "refused:1"
+        other["alias-conversion|linux-x86-64|debug|optimize=size|specialize=auto"] = "refused:1"
         result = compare(other, dict(other))
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
 
     def test_all_expected_refusals_still_fail(self):
-        refused = {"external-scalar-c-boundary|cortex-m0|debug": "refused:1"}
+        refused = {"external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1"}
         result = compare(refused, dict(refused))
         self.assertEqual(result.returncode, 1)
         self.assertIn("no assembly digest was emitted", result.stderr)
 
     def test_missing_assembly_is_not_an_expected_refusal(self):
         other = dict(BASE)
-        other["external-scalar-c-boundary|cortex-m0|debug"] = "refused:0"
+        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"] = "refused:0"
         result = compare(other, dict(other))
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
@@ -133,8 +136,50 @@ class Emission(unittest.TestCase):
             'done\n'
             'exit 2\n')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 2)
-        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 6)
+        self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 18)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 54)
+
+    def test_every_profile_is_emitted_and_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area = Path(tmp)
+            fixture = area / "compiler/tests/fixtures/positive/example"
+            fixture.mkdir(parents=True)
+            (fixture / "fixture.meta").write_text("program: main.ldn\n")
+            refine = area / "refine"
+            refine.write_text(
+                "#!" + sys.executable + "\n"
+                "import pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "if '--target=cortex-m0' in args and "
+                "'--optimize=speed' in args and '--specialize=all' in args:\n"
+                "    sys.exit(2)\n"
+                "controls = [a for a in args if a.startswith((\n"
+                "    '--target=', '--build-mode=', '--optimize=', '--specialize='))]\n"
+                "pathlib.Path(args[args.index('-o') + 1]).write_text('|'.join(controls))\n")
+            refine.chmod(0o755)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area),
+                 str(out)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("unexpected emission result", result.stderr)
+            manifest = json.loads(out.read_text())
+            self.assertEqual(len(manifest), 4 * 2 * 3 * 3)
+            for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0"):
+                for mode in ("debug", "release"):
+                    for optimize in ("none", "size", "speed"):
+                        for specialize in ("off", "auto", "all"):
+                            key = (f"example|{target}|{mode}|optimize={optimize}"
+                                   f"|specialize={specialize}")
+                            self.assertIn(key, manifest)
+                            if (target == "cortex-m0" and
+                                    (optimize, specialize) == ("speed", "all")):
+                                self.assertEqual(manifest[key], "refused:2")
+                            else:
+                                controls = (f"--target={target}|--build-mode={mode}|"
+                                            f"--optimize={optimize}|--specialize={specialize}")
+                                self.assertEqual(manifest[key], hashlib.sha256(
+                                    controls.encode()).hexdigest())
 
 
 if __name__ == "__main__":

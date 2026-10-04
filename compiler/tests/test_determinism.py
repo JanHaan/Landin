@@ -57,11 +57,13 @@ input, not an equivalence -- or any timing reproducibility.
 The host is the one freedom this file cannot exercise, because one machine
 cannot disagree with itself.  It is checked from two instead:
 `scripts/emit_manifest.py` emits every positive fixture on every target in
-both build modes and hashes each one, and `.github/workflows/determinism.yml`
-builds that manifest on each host and requires the manifests to agree.
-Measured across macOS arm64 and Linux x86-64: 1446 entries, identical, with
-the 22 refusals agreeing too -- so accept and reject are host-neutral as well
-as the bytes.  The claim is worth stating because nothing outside
+both build modes and every optimization/specialization profile, hashes each
+one, and `.github/workflows/determinism.yml` builds that manifest on each
+host and requires the manifests to agree.
+The initial size/auto comparison across macOS arm64 and Linux x86-64 measured
+1446 identical entries, including 22 matching refusals.  The expanded profile
+matrix now checks that accept/reject verdicts and emitted bytes agree under
+each profile.  The claim is worth stating because nothing outside
 `Landin.Targets` may ask the host how wide a pointer is; when that slips, a
 32-bit target quietly follows the machine it was built on.
 

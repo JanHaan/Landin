@@ -34,6 +34,10 @@ does for the harness; a fixture this check could not read would be a
 fixture it silently stopped checking, which is how 27 of them went
 unexamined while the header said "every positive fixture".
 
+The manifest covers each independent optimization and specialization control
+in both build modes.  Each digest's key names its exact profile so that a
+host disagreement identifies the path that produced it.
+
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
 """
@@ -49,6 +53,8 @@ from pathlib import Path
 
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
 MODES = ("debug", "release")
+OPTIMIZATIONS = ("none", "size", "speed")
+SPECIALIZATIONS = ("off", "auto", "all")
 MAX_WORKERS = 4
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
@@ -86,12 +92,17 @@ REFUSAL_PAIRS = {
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
 }
-EXPECTED_REFUSALS = {
+BASE_EXPECTED_REFUSALS = {
     "%s|%s|%s" % (fixture, target, mode)
     for fixture, target in REFUSAL_PAIRS for mode in MODES
 } | {
     #  This fixture asserts that the build mode is debug.
     "r430-fixed-options|%s|release" % target for target in TARGETS
+}
+EXPECTED_REFUSALS = {
+    f"{key}|optimize={optimize}|specialize={specialize}"
+    for key in BASE_EXPECTED_REFUSALS for optimize in OPTIMIZATIONS
+    for specialize in SPECIALIZATIONS
 }
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -144,12 +155,12 @@ def operands(fixture):
 
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
-    key, refine, fixture, sources, target, mode, asm = job
+    key, refine, fixture, sources, target, mode, optimize, specialize, asm = job
     asm.parent.mkdir()
     #  cwd and operands preserve the source-path spelling on every host.
     result = subprocess.run(
         [str(refine), "--target=" + target, "--build-mode=" + mode,
-         "--optimize=size", "--specialize=auto", "--emit=asm",
+         "--optimize=" + optimize, "--specialize=" + specialize, "--emit=asm",
          "-o", str(asm)] + sources,
         capture_output=True, cwd=fixture)
     if result.returncode != 0 or not asm.exists():
@@ -171,11 +182,15 @@ def emit(refine, root, out, workers=None):
             sources = operands(fixture)
             for target in TARGETS:
                 for mode in MODES:
-                    key = "%s|%s|%s" % (fixture.name, target, mode)
-                    asm = Path(tmp) / str(len(jobs)) / "out.s"
-                    jobs.append((key, refine, fixture, sources, target, mode, asm))
+                    for optimize in OPTIMIZATIONS:
+                        for specialize in SPECIALIZATIONS:
+                            key = (f"{fixture.name}|{target}|{mode}|"
+                                   f"optimize={optimize}|specialize={specialize}")
+                            asm = Path(tmp) / str(len(jobs)) / "out.s"
+                            jobs.append((key, refine, fixture, sources, target,
+                                         mode, optimize, specialize, asm))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            #  map yields in fixture/target/mode order regardless of completion.
+            # Preserve inventory order regardless of completion order.
             for key, value in pool.map(compile_one, jobs):
                 manifest[key] = value
                 refused += value.startswith("refused:")
