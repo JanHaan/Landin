@@ -3,10 +3,8 @@
 import core/io
 import core/io/hosted
 
-in_set: (pixel_x: usize, pixel_y: usize, size: usize)
+in_set: (real_coordinate: f64, imaginary_coordinate: f64)
         -> (member: bool) =
-    real_coordinate: f64 = 2.0 * f64(pixel_x) / f64(size) - 1.5
-    imaginary_coordinate: f64 = 2.0 * f64(pixel_y) / f64(size) - 1.0
     mut real: f64 = 0.0
     mut imaginary: f64 = 0.0
     mut real_squared: f64 = 0.0
@@ -27,21 +25,27 @@ end in_set
 
 render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
+    coordinate_size: f64 = f64(size)
     bytes_per_row: usize = size / 8
     bits_per_byte: usize = 8
     first: usize = 0
+    mut real_coordinates: [200]f64 = zeroed
     stream: io.file = io.out(host)
     mut row_bytes: [25]u8 = zeroed
     members = 0
+    for pixel_x in first..<size do
+        real_coordinates[pixel_x] = 2.0 * f64(pixel_x) / coordinate_size - 1.5
+    end for
 
     try io.write(host, stream, "P4\n200 200\n")
     for row in first..<size do
+        imaginary_coordinate: f64 = 2.0 * f64(row) / coordinate_size - 1.0
         for byte_column in first..<bytes_per_row do
             mut packed: u8 = 0
             for offset in first..<bits_per_byte do
                 packed <<= 1
                 pixel_x: usize = byte_column * bits_per_byte + offset
-                if in_set(pixel_x, row, size) then
+                if in_set(real_coordinates[pixel_x], imaginary_coordinate) then
                     packed |= 1
                     inc members
                 end if
