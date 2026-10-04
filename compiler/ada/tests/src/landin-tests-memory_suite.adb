@@ -164,13 +164,23 @@ package body Landin.Tests.Memory_Suite is
         with Import, Convention => C, External_Name => "malloc";
       procedure C_Free (Block : System.Address)
         with Import, Convention => C, External_Name => "free";
-      --  Run this case before the larger compiler cases fill the allocator's
-      --  512-byte cache, so the meter can see each retained allocation.
+      --  mallinfo2 includes blocks in glibc's thread cache as allocated.
+      --  Reusing those blocks is invisible to the meter until the cache
+      --  empties. Seed that condition explicitly, then retain warm-up blocks
+      --  until three successive allocations are visible. This control must
+      --  work after other suites, not depend on being the first allocator.
+      Block_Size : constant := 512;
+      Seed_Count : constant := 8;
+      Cache_Blocks : array (1 .. 128) of System.Address :=
+        [others => System.Null_Address];
       Held : array (1 .. 8) of System.Address :=
         [others => System.Null_Address];
       Meter : Landin.Platform.Native.Native_Meter;
-      Settled, Midpoint, Late, Final : Long_Long_Integer;
-      Completed : Boolean;
+      Settled, Midpoint, Late, Final : Long_Long_Integer := 0;
+      Completed : Boolean := False;
+      Prepared : Boolean := False;
+      Visible : Natural := 0;
+      Earlier : Long_Long_Integer;
 
       function Retain_One (Run : Positive) return Boolean;
 
@@ -181,22 +191,52 @@ package body Landin.Tests.Memory_Suite is
             Transient :=
               Unbounded.To_Unbounded_String (String'(1 .. 8 * 1024 => 't'));
          end if;
-         Held (Run) := C_Malloc (512);
+         Held (Run) := C_Malloc (Block_Size);
          return Held (Run) /= System.Null_Address
            and then (Run /= 5 or else Unbounded.Length (Transient) = 8 * 1024);
       end Retain_One;
    begin
-      Measure_Repeated
-        (Meter, Warm => 2, Measured => 6, Execute => Retain_One'Access,
-         Settled => Settled, Midpoint => Midpoint, Late => Late,
-         Final => Final,
-         Completed => Completed);
+      for Index in 1 .. Seed_Count loop
+         Cache_Blocks (Index) := C_Malloc (Block_Size);
+      end loop;
+      for Index in 1 .. Seed_Count loop
+         C_Free (Cache_Blocks (Index));
+         Cache_Blocks (Index) := System.Null_Address;
+      end loop;
+      Earlier := Meter.Sample.Allocated_Bytes;
+      for Index in Cache_Blocks'Range loop
+         Cache_Blocks (Index) := C_Malloc (Block_Size);
+         exit when Cache_Blocks (Index) = System.Null_Address;
+         declare
+            Current : constant Long_Long_Integer :=
+              Meter.Sample.Allocated_Bytes;
+         begin
+            Visible := (if Current - Earlier >= Block_Size
+                        then Visible + 1 else 0);
+            Earlier := Current;
+         end;
+         if Visible = 3 then
+            Prepared := True;
+            exit;
+         end if;
+      end loop;
+      if Prepared then
+         Measure_Repeated
+           (Meter, Warm => 2, Measured => 6, Execute => Retain_One'Access,
+            Settled => Settled, Midpoint => Midpoint, Late => Late,
+            Final => Final,
+            Completed => Completed);
+      end if;
       declare
          Small_Leak_Rejected : constant Boolean :=
-           Completed and then Final - Settled in 1 .. Tolerance
+           Prepared and then Completed
+           and then Final - Settled in 1 .. Tolerance
            and then Late > Midpoint and then Final > Late
            and then not Flat (Settled, Midpoint, Late, Final);
       begin
+         for Block of Cache_Blocks loop
+            C_Free (Block);
+         end loop;
          for Block of Held loop
             C_Free (Block);
          end loop;
@@ -204,6 +244,7 @@ package body Landin.Tests.Memory_Suite is
            (Item, Small_Leak_Rejected,
             "post-run samples reject 512 retained bytes per run below 64 KiB"
             & " despite a finalized transient result"
+            & "; allocator warmed " & Boolean'Image (Prepared)
             & "; total " & Long_Long_Integer'Image (Final - Settled)
             & ", tail parts " & Long_Long_Integer'Image (Late - Midpoint)
             & " and " & Long_Long_Integer'Image (Final - Late));
