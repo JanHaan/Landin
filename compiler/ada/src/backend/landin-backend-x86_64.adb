@@ -1290,6 +1290,11 @@ package body Landin.Backend.X86_64 is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
+         C_Plan : constant C_ABI.Plan :=
+           (if Is_C_Item (Item) then
+              C_ABI.Signature_Plan
+                (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts)
+            else (Count => 0, others => <>));
          type Use_Counts is array (Positive range <>) of Natural;
          package Use_Buffers is new Work_Arrays (Natural, Use_Counts, 0);
          Use_Data : Use_Buffers.Buffer
@@ -2033,8 +2038,7 @@ package body Landin.Backend.X86_64 is
          end Load_C_Scalar;
 
          procedure Emit_C_Entry is
-            Plan : constant C_ABI.Plan := C_ABI.Signature_Plan
-              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+            Plan : C_ABI.Plan renames C_Plan;
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
             GP_Bytes : constant Landin.Targets.Byte_Count :=
@@ -2230,9 +2234,7 @@ package body Landin.Backend.X86_64 is
          end Emit_C_Call;
 
          procedure Emit_C_Result (Value : Landin.IR.Value_Id) is
-            Plan : constant C_ABI.Plan := C_ABI.Signature_Plan
-              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
-            Place : C_ABI.Location renames Plan.Result;
+            Place : C_ABI.Location renames C_Plan.Result;
          begin
             if Place.Shape.Size = 0 then
                return;
