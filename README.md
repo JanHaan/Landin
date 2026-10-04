@@ -98,7 +98,8 @@ The exact-revision native acceptance that approved every revision through
 every push it runs every target, Linux x86-64, Linux arm64 and macOS arm64
 natively with GDB
 and LLDB and Cortex-M under QEMU, both compiler modes, and the
-document, binding and editor-grammar checks. On a failed Cortex-M job, it is
+document, binding and editor-grammar checks. Same-run release build artifacts
+avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
 configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. `.github/workflows/determinism.yml` builds the compiler on Linux

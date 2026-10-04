@@ -171,7 +171,7 @@ fails the gate, every end-to-end target claim is a verdict in a record the
 coverage readers read rather than a run, and the documents stop describing
 the gate as Linux and debug only.
 
-Done: `gate.yml` runs its worker jobs on every push and a final `gate` job
+Done: `gate.yml` initially ran its worker jobs on every push and a final `gate` job
 that fails unless all succeeded: `check.py`, every `scripts/tests` module with its
 controls, the debug and the release corpus at eight workers with the
 determinism closures and report identity, object quality and GDB, the
@@ -189,6 +189,12 @@ Renode scheduler notice the Cortex-M oracle took for a model warning. The
 completing commit's own gate then found a third: Renode's log thread wrote
 into the middle of a script's result marker on the console they shared, so
 a script's output and Renode's log are now separate files.
+
+The current gate keeps those verification lanes separate while two release
+build jobs supply same-run executables to the other release lanes on their
+respective hosts. Each consumer verifies the build's source and native
+toolchain manifest before using it; the final job still requires every build
+and verification verdict.
 
 ### R8.40 — Move the peripheral models onto QEMU
 

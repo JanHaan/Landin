@@ -371,6 +371,31 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(self.tests_manifest.read_text(),
                          self.manifest.read_text())
 
+    def test_imported_build_requires_matching_source_and_executables(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        calls = self.calls()
+        reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
+        current = self.run_build("-q", extra=reuse)
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertIn("imported build matches", current.stdout)
+        self.assertEqual(self.calls(), calls)
+
+        source = self.root / "compiler/ada/src/main.adb"
+        source.write_text("changed source\n")
+        stale = self.run_build("-q", extra=reuse)
+        self.assertEqual(stale.returncode, 1)
+        self.assertIn("does not match", stale.stderr)
+        self.assertEqual(self.calls(), calls)
+        source.write_text("src/main.adb\n")
+
+        (self.build / "bin/landin_tests").unlink()
+        missing = self.run_build("-q", extra=reuse)
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(self.calls(), calls)
+        invalid = self.run_build(extra=reuse)
+        self.assertEqual(invalid.returncode, 2)
+
     def test_selected_identity_changes_clean_both_build_modes(self):
         for incremental in ("yes", "no"):
             extra = {"LANDIN_BUILD_INCREMENTAL": incremental}

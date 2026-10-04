@@ -97,31 +97,39 @@ nix build .#refine-bin
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
 push and pull request. It runs every target the compiler has, in jobs that
-share nothing, and its final `gate` job fails unless every one succeeded:
+report separate verdicts. A release build on each host supplies checked
+executables to its same-host lanes; the final `gate` job fails unless every
+build and verification job succeeded:
 
 | job | runner | runs |
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
 | `compiler` | ubuntu-24.04 | the debug compiler's 800 cases at `LANDIN_TEST_JOBS=8`, the default target, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `linux-release-build` | ubuntu-24.04 | build the release executables once for the Linux release, Cortex-M and scaling jobs |
 | `release` | ubuntu-24.04 | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `cortex-m` | ubuntu-24.04 | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
 | `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
-| `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism, report identity and the scripted server sessions |
+| `darwin-release-build` | macos-26 | build the release executables once for the Darwin host, parity and LLDB jobs |
+| `darwin-host` | macos-26 | the debug compiler host suite, determinism, report identity and the scripted server sessions |
+| `darwin-host-release` | macos-26 | the release compiler host suite and the same follow-on checks |
 | `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `lldb` | macos-26 | the LLDB sessions |
 | `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
 
-A compile error surfaces in the first minutes of every job that builds.
-Measured on the runners, each job including its install and build:
+A release compile error surfaces in its host's build job; debug compile
+errors surface in the debug verification jobs. Before
+release artifact sharing, measured whole-job times including install and build were:
 `documents` about ninety seconds, `editor-grammar` fifteen, `bindings`
 seventy, `scaling` five and a half, `scripts` six, `lldb` seven, `arm64-release`
 eight, `darwin-host` nine and twelve, `arm64-compiler` eleven, `release`
 twelve, `compiler` and `darwin-parity` fourteen, and `cortex-m` sixteen and a
-half, which sets the gate at about seventeen minutes.
+half. These precede artifact sharing; the revised workflow needs new timing
+measurements. Same-run build archives are short-lived inputs, not acceptance
+records.
 
 The gate is **not** the retired acceptance: it retains no successful
 exact-revision acceptance record, and green is not a verdict on a revision.

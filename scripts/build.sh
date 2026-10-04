@@ -94,6 +94,7 @@ EOF
 
 Current="$(landin_manifest)" || exit
 Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"
+Reuse="${LANDIN_BUILD_REUSE:-no}"
 
 case "$Incremental" in
     yes | no) ;;
@@ -102,6 +103,39 @@ case "$Incremental" in
         exit 2
         ;;
 esac
+
+case "$Reuse" in
+    yes | no) ;;
+    *)
+        echo "landin: LANDIN_BUILD_REUSE must be yes or no" >&2
+        exit 2
+        ;;
+esac
+
+#  CI may import executables and a successful manifest from a build job in
+#  this workflow run.  Verify the checkout and native toolchain identity,
+#  then use those executables without asking GPRbuild to rebuild them.
+if [ "$Reuse" = "yes" ]; then
+    if [ "$#" -ne 1 ] || [ "$1" != "-q" ]; then
+        echo "landin: LANDIN_BUILD_REUSE requires build.sh -q" >&2
+        exit 2
+    fi
+    if [ ! -f "$Manifest" ]; then
+        echo "landin: imported build has no successful source manifest" >&2
+        exit 1
+    fi
+    Imported="$(cat "$Manifest")" || exit
+    if [ "$Current" != "$Imported" ] \
+       || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ] \
+       || [ ! -x "$LANDIN_BUILD_DIR/bin/landin_tests" ]
+    then
+        echo "landin: imported build does not match this source and toolchain" >&2
+        exit 1
+    fi
+    echo "landin: imported build matches source and toolchain"
+    echo "built: $LANDIN_BUILD_DIR/bin/refine"
+    exit 0
+fi
 
 if [ -d "$LANDIN_BUILD_DIR" ] && [ ! -f "$Manifest" ]; then
     echo "landin: the last build did not finish; rebuilding from clean"

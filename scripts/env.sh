@@ -10,6 +10,7 @@
 #  LANDIN_BUILD_MODE     debug (default) or release
 #  LANDIN_BUILD_TAG      per-host object directory (default: os-arch)
 #  LANDIN_BUILD_INCREMENTAL  yes only through the developer wrappers
+#  LANDIN_BUILD_REUSE        yes only for a verified same-run CI build artifact
 
 set -eu
 

@@ -1,10 +1,9 @@
 #  The gate: every target the compiler has, on every push.
 #
-#  Each job runs one lane and shares nothing with the others -- no cache, no
-#  artifact passed between them -- so a job's verdict depends only on its
-#  checkout, and a compile error or a failed lane surfaces in the job that
-#  owns it.  `gate` needs every job and fails unless all of them succeeded,
-#  which is the one check a branch protection rule can require.
+#  Verification lanes have separate verdicts.  A release build job on each
+#  host supplies an artifact to its same-host lanes; consumers check its
+#  source and toolchain manifest before use.  A compile error surfaces in
+#  the build job, and `gate` needs every job so any failure fails the gate.
 #
 #  Linux x86-64 runs on ubuntu-24.04, Linux arm64 on ubuntu-24.04-arm with
 #  the pinned aarch64 toolchain, macOS arm64 on macos-26 with Xcode 26.6
@@ -26,6 +25,7 @@
 #  an eight-core Mac, except cortex-m's, measured on its runner.  cortex-m,
 #  sixteen and a half minutes, sets the gate's length; the two arm64 jobs
 #  take eleven and eight.
+#  Shared build artifacts are not acceptance records; new timings are pending.
 
 name: gate
 
@@ -128,14 +128,11 @@ jobs:
           --refine "$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
           --out "$RUNNER_TEMP/fuzz"
 
-  #  The same corpus with the release compiler, which is the one people run,
-  #  and the lanes that measure or debug what it emits: object quality and
-  #  the GDB sessions.  Release only, because the debug compiler's checks
-  #  make those five times slower and add no coverage of their own.
-  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
-  release:
+  #  Compile the release executables once on Linux for the corpus, Cortex-M
+  #  and scaling lanes.  The archive preserves executable permissions.
+  linux-release-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       LANDIN_BUILD_MODE: release
     steps:
@@ -143,6 +140,50 @@ jobs:
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
+
+      - name: Build release executables
+        run: ./scripts/build.sh -j4
+
+      - name: Package release executables and source manifest
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-release.tar.gz"
+          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release.tar.gz
+          retention-days: 1
+
+  #  The same corpus with the release compiler, which is the one people run,
+  #  and the lanes that measure or debug what it emits: object quality and
+  #  the GDB sessions.  Release only, because the debug compiler's checks
+  #  make those five times slower and add no coverage of their own.
+  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
+  release:
+    needs: linux-release-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+          ./scripts/build.sh -q
 
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
@@ -243,24 +284,35 @@ jobs:
   #  Four workers, each with its own shared GDB: 612 s on the runner, and the
   #  whole job sixteen and a half minutes.
   cortex-m:
+    needs: linux-release-build
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+          ./scripts/build.sh -q
+
       - name: Install the locked Cortex-M tools
         run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
 
       - name: The probe supervisor's controls
         run: python3 environments/cortex-m/test.py
-
-      - name: Build refine
-        run: ./scripts/build.sh --compiler-only -j4
 
       - name: Every Cortex-M lane
         run: |
@@ -286,31 +338,71 @@ jobs:
   #  runs on this runner a few seconds apart, so the verdict does not
   #  depend on its speed.
   scaling:
+    needs: linux-release-build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+          LANDIN_BUILD_MODE=release ./scripts/build.sh -q
+
       - name: The scaling benchmark
         run: ./scripts/scaling.sh
 
-  #  The compiler as a native Darwin host in both modes: every compiler
-  #  case, without the two that execute Linux programs, then the
-  #  determinism closures and native report identity.  Measured on an
-  #  eight-core Mac: the host suite 124 s in debug and 54 s in release.
+  #  Compile the Darwin release executables once for the host suite,
+  #  hosted parity and LLDB lanes.
+  darwin-release-build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: Build release executables
+        run: ./scripts/build.sh -j3
+
+      - name: Package release executables and source manifest
+        run: >-
+          tar -czf "$RUNNER_TEMP/darwin-release.tar.gz"
+          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: darwin-release
+          path: ${{ runner.temp }}/darwin-release.tar.gz
+          retention-days: 1
+
+  #  The debug compiler as a native Darwin host: every compiler case,
+  #  without the two that execute Linux programs, then determinism closures,
+  #  native report identity and the server.
   darwin-host:
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [debug, release]
     runs-on: macos-26
     timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      LANDIN_BUILD_MODE: ${{ matrix.mode }}
+      LANDIN_BUILD_MODE: debug
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -350,6 +442,47 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
+  #  The same native host checks with the release compiler, using the
+  #  checked artifact from this revision's Darwin release build.
+  darwin-host-release:
+    needs: darwin-release-build
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release
+          path: ${{ runner.temp }}/darwin-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/darwin-arm64/release
+          tar -xzf "$RUNNER_TEMP/darwin-release/darwin-release.tar.gz" \
+            -C compiler/ada/build/darwin-arm64/release
+          ./scripts/build.sh -q
+
+      - name: The compiler host suite
+        run: ./scripts/test.sh --host
+
+      - name: Determinism closures, native report identity and the server
+        run: |
+          set -eu
+          refine="$PWD/compiler/ada/build/darwin-arm64/release/bin/refine"
+          python3 compiler/tests/test_determinism.py --refine "$refine"
+          python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
+
   #  The shared hosted corpus executed natively, every source verdict with
   #  Darwin selected, end-to-end fixtures among them, and the regenerated
   #  bindings and archives, with the release compiler.
@@ -360,11 +493,13 @@ jobs:
   #  and at eight alike.  On this image the whole job takes fourteen
   #  minutes.
   darwin-parity:
+    needs: darwin-release-build
     runs-on: macos-26
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -373,8 +508,17 @@ jobs:
         with:
           platform: aarch64-darwin
 
-      - name: Build refine
-        run: ./scripts/build.sh --compiler-only -j3
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release
+          path: ${{ runner.temp }}/darwin-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/darwin-arm64/release
+          tar -xzf "$RUNNER_TEMP/darwin-release/darwin-release.tar.gz" \
+            -C compiler/ada/build/darwin-arm64/release
+          ./scripts/build.sh -q
 
       - name: Hosted parity
         run: |
@@ -398,11 +542,13 @@ jobs:
   #  panic sessions and the source-debugging contract, with every dSYM,
   #  DWARF and Mach-O identity check.  41 s on a Mac, five minutes as a job.
   lldb:
+    needs: darwin-release-build
     runs-on: macos-26
     timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -411,8 +557,17 @@ jobs:
         with:
           platform: aarch64-darwin
 
-      - name: Build refine
-        run: ./scripts/build.sh --compiler-only -j3
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-release
+          path: ${{ runner.temp }}/darwin-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/darwin-arm64/release
+          tar -xzf "$RUNNER_TEMP/darwin-release/darwin-release.tar.gz" \
+            -C compiler/ada/build/darwin-arm64/release
+          ./scripts/build.sh -q
 
       - name: LLDB source debugging
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
@@ -534,8 +689,9 @@ jobs:
   #  The one check a branch rule requires: every job above succeeded.
   gate:
     if: always()
-    needs: [documents, scripts, compiler, release, bindings, editor-grammar,
-            cortex-m, scaling, darwin-host, darwin-parity, lldb,
+    needs: [documents, scripts, compiler, linux-release-build, release,
+            bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
+            darwin-host, darwin-host-release, darwin-parity, lldb,
             arm64-compiler, arm64-release]
     runs-on: ubuntu-24.04
     steps:
