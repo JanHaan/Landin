@@ -248,12 +248,13 @@ def compact_interface(text):
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def source_block(source, mode="full", first=None, last=None):
+def source_block(source, mode="full", first=None, last=None, lines=None):
     if first is None:
         contents = source.text
         location = ""
     else:
-        lines = source.text.splitlines(keepends=True)
+        if lines is None:
+            lines = source.text.splitlines(keepends=True)
         contents = "".join(lines[first - 1:last])
         location = f' lines="{first}-{last}"'
     if contents and not contents.endswith("\n"):
@@ -311,6 +312,7 @@ def source_chunks(source, words, chunk_lines, overlap):
                 score=score,
                 text=source_block(
                     source, mode="exact", first=start + 1, last=stop,
+                    lines=lines,
                 ),
             ))
         if stop == len(lines):

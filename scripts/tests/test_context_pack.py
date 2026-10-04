@@ -75,6 +75,29 @@ class ContextPackTests(unittest.TestCase):
         self.assertIn('lines="16-35"', chunks[0].text)
         self.assertIn("procedure Important_Check is\n", chunks[0].text)
 
+    def test_multiple_query_chunks_split_source_once(self):
+        class CountingText(str):
+            splits = 0
+
+            def splitlines(self, keepends=False):
+                self.splits += 1
+                return super().splitlines(keepends=keepends)
+
+        text = CountingText("".join("check\n" for _ in range(39)) + "check")
+        source = CONTEXT_PACK.Source(
+            Path("check.adb"), "check.adb", text, "def",
+        )
+        chunks = CONTEXT_PACK.source_chunks(
+            source, ("check",), chunk_lines=20, overlap=5,
+        )
+        self.assertEqual(text.splits, 1)
+        self.assertEqual(
+            [chunk.display for chunk in chunks],
+            ["check.adb:1-20", "check.adb:16-35", "check.adb:31-40"],
+        )
+        self.assertIn('lines="31-40"', chunks[-1].text)
+        self.assertIn("check\n</source>\n", chunks[-1].text)
+
     def test_short_query_words_do_not_match_inside_identifiers(self):
         self.assertEqual(
             CONTEXT_PACK.relevance("driver.adb", "first mirror", ("ir",)),
