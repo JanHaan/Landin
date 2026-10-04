@@ -3,15 +3,29 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 integration=false
+lsp_emacs=false
 case "${1-}" in
     "") ;;
     --integration) integration=true ;;
-    *) echo "usage: $0 [--integration]" >&2; exit 2 ;;
+    --lsp-emacs) lsp_emacs=true ;;
+    *) echo "usage: $0 [--integration|--lsp-emacs]" >&2; exit 2 ;;
 esac
 
 test_tmp=$(mktemp -d "${TMPDIR:-/tmp}/landin-highlight-tests.XXXXXX")
 trap 'rm -rf -- "$test_tmp"' EXIT HUP INT TERM
 
+if test "$lsp_emacs" = true; then
+    if test -z "${LANDIN_REFINE-}" || ! test -x "$LANDIN_REFINE"; then
+        echo "$0: --lsp-emacs needs an executable LANDIN_REFINE" >&2
+        exit 1
+    fi
+    if ! command -v emacs >/dev/null 2>&1; then
+        echo "$0: --lsp-emacs needs Emacs" >&2
+        exit 1
+    fi
+fi
+
+if test "$lsp_emacs" = false; then
 python3 "$root/highlight/generate.py" --check
 python3 "$root/highlight/test_adapters.py"
 python3 "$root/highlight/tests/test_adapters_revision.py"
@@ -143,6 +157,7 @@ if command -v pwsh >/dev/null 2>&1; then
       '$tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:LANDIN_SCRIPT, [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { exit 1 }'
     echo "Visual Studio installer syntax clean"
 fi
+fi
 
 #  The language server through the editors that can start it by
 #  configuration alone, against a refine that LANDIN_REFINE names: each
@@ -155,7 +170,7 @@ if test -n "${LANDIN_REFINE-}"; then
     ln -s "$LANDIN_REFINE" "$server_bin/refine"
     printf 'twice: (x: u8) -> (y: u8) =\n    y = x + true\nend twice\n' \
       > "$server_work/smoke.ldn"
-    if command -v nvim >/dev/null 2>&1; then
+    if test "$lsp_emacs" = false && command -v nvim >/dev/null 2>&1; then
         (cd "$server_work" && PATH="$server_bin:$PATH" \
           LANDIN_FIXTURE="$server_work/smoke.ldn" \
           nvim -n --headless --clean \
@@ -172,4 +187,6 @@ if test -n "${LANDIN_REFINE-}"; then
     fi
 fi
 
-echo "highlight packages clean"
+if test "$lsp_emacs" = false; then
+    echo "highlight packages clean"
+fi

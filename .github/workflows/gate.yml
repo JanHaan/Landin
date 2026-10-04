@@ -104,6 +104,19 @@ jobs:
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
+      #  Use the compiler this job already built.  The focused mode requires
+      #  Emacs and the executable, then waits for a live refine diagnostic.
+      - name: Install the required Emacs client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends emacs-nox
+          emacs --version | head -1
+
+      - name: Emacs starts refine lsp
+        run: >-
+          LANDIN_REFINE="$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
+          ./highlight/test.sh --lsp-emacs
+
       #  The linked-image half needs the pinned driver on PATH, as
       #  scripts/env.sh puts it for the harness.
       - name: Determinism closures, native report identity and the server

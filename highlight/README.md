@@ -126,6 +126,8 @@ python3 highlight/generate.py --check
 ./highlight/test.sh                 # isolated: only highlight/ fixtures, see
                                     # highlight/tests/README.md
 ./highlight/test.sh --integration   # also parse compiler and core fixtures
+LANDIN_REFINE=/absolute/path/to/refine ./highlight/test.sh --lsp-emacs
+                                    # require Emacs to launch refine lsp
 ```
 
 The default test never builds or invokes the compiler. Its mandatory path is
@@ -137,6 +139,9 @@ smoke checks; absent optional tools are reported and skipped. Neovim's parser
 is compiled into a temporary directory rather than the product tree. With
 `npm install` run in `highlight/textmate`, the suite also tokenizes the fixture
 through VS Code's actual TextMate engine and builds a temporary valid VSIX.
+The `--lsp-emacs` mode runs only the live editor-to-server smoke and fails if
+Emacs or the named compiler executable is absent; the compiler gate uses it
+after building `refine`.
 
 To exercise Pygments without installing anything into the repository, create
 a temporary virtual environment, `pip install -e ./highlight`, and run the
