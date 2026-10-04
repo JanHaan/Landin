@@ -189,7 +189,7 @@
 1650 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Entry point
 1660 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | And this is where capabilities come from
 1670 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A failed check calls a fixed, never-returning symbol
-1680 | tour | accepted emitted executed refused | executed | executed | executed | refused | - | executed | hosted | none | none | Require a capability, do not track an effect
+1680 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | Require a capability, do not track an effect
 1690 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | One mechanism, two readings, is better than two mechanisms
 1700 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Atoms are the same idea wherever they appear
 1710 | tour | - | - | - | - | - | - | advisory | none | none | none | How a new feature earns its place
@@ -220,7 +220,7 @@
 1950 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An operand an operation cannot take
 1960 | spec | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | A trap stops at the operation
 1970 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | The first hosted path has one entry shape
-1975 | spec | accepted emitted executed refused | executed | executed | executed | refused | - | executed | hosted | none | none | The selected hosted C boundaries
+1975 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | The selected hosted C boundaries
 1980 | spec | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
 1990 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
 2000 | spec | - | - | - | - | - | - | advisory | none | none | none | What a doc comment is about
