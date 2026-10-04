@@ -14574,6 +14574,12 @@ ARMv6-M has no exclusive instruction pair. It does not silently substitute
 interrupt masking, an unavailable `libatomic` helper, or a stronger core.
 The Cortex-M backend emits that admitted subset. Synthetic-32
 admits no memory intrinsics.
+The planned ESP32-C3 RV32IMC target likewise has no hardware
+read-modify-write atomics. When implemented, it must admit aligned one-,
+two- and four-byte atomic loads/stores and thread fences, and statically
+refuse exchange, add, compare-exchange and eight-byte atomic accesses with
+L0344. It gains no implicit `libatomic` or interrupt-masking fallback. This
+records the planned target contract; ESP32-C3 support is not enabled today.
 Device addresses must use volatile accesses, never CPU atomics. Even a CPU
 instruction that is atomic in RAM says nothing about peripheral bus semantics.
 
@@ -14609,12 +14615,19 @@ uses only its failure read ordering. A seq_cst fence has acquire and release
 semantics in addition to the SC constraints below.
 
 Happens-before is the transitive closure of sequenced-before, these
-synchronizes-with edges, and explicitly specified platform synchronization
-(such as thread creation/join or the interrupt exclusion protocol below).
-It is acyclic. Sequentially consistent operations and fences additionally
-have one total order consistent with happens-before and each object's
-modification order. For precision, A is coherence-before B on one atomic object when A precedes B
-in modification order, A supplies B's read value, or A reads a modification
+synchronizes-with edges, and explicitly specified platform synchronization.
+For hosted threads, successful creation synchronizes with the first action of
+the new thread: actions sequenced before creation happen-before its actions.
+The thread's completion synchronizes with successful return from joining that
+thread: its actions happen-before actions sequenced after the join. Failed
+creation or join establishes no such edge. These edges also order ordinary
+memory; accesses made concurrently between creation and join still need their
+own synchronization. The interrupt exclusion protocol below supplies another
+platform edge. Happens-before is acyclic. Sequentially consistent operations
+and fences additionally have one total order consistent with happens-before
+and each object's modification order. For precision, A is coherence-before B
+on one atomic object when A precedes B in modification order, A supplies B's
+read value, or A reads a modification
 that precedes B in modification order; take the transitive closure of these
 edges. Successful RMWs have both read and write roles, without a self edge.
 For every coherence-before pair A, B, the SC total order S must satisfy:

@@ -1142,6 +1142,7 @@ negative/text-empty-conversion-frame | linux-x86-64, linux-arm64, macos-arm64, s
 negative/text-literal-codepoint-in-byte-context | linux-x86-64, linux-arm64, macos-arm64
 negative/text-literal-malformed-codepoint-escape | linux-x86-64, linux-arm64, macos-arm64
 negative/text-literal-needs-byte-slice | linux-x86-64, linux-arm64, macos-arm64
+negative/text-literal-needs-pointer | linux-x86-64, macos-arm64
 negative/text-literal-needs-read-only-slice | linux-x86-64, linux-arm64, macos-arm64
 negative/text-literal-short-byte-escape | linux-x86-64, linux-arm64, macos-arm64
 negative/text-literal-unknown-escape | linux-x86-64, linux-arm64, macos-arm64

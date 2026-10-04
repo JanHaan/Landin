@@ -7,23 +7,10 @@ see the same text; edit this one.
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler.
-`refine` scans and parses every `.ldn` file it is given, resolves the files as
-one module, checks every type and definite assignment, lowers accepted
-functions into verified target-neutral IR, emits Linux x86-64, Linux arm64,
-Darwin arm64 or Cortex-M0 assembly, and can invoke a target-selected native
-toolchain to assemble and link. A build is for the compiler's own host unless
-`--target=` names another.
-
-All four targets are implemented. The three hosted ones build and run complete
-programs with native source-debugging coverage — GDB on Linux, LLDB on
-Darwin — and Cortex-M0 builds firmware with compiler-owned reset, vectors,
-linker script and initialized-data copying, with line and function debugging.
-A small repository-owned `core` library and the complete derived prototypes 2,
-3 and 4 execute through that path. Runtime fixtures execute those binaries,
-and the gate runs them on all four targets on every push: natively on
-Linux x86-64, Linux arm64 and macOS arm64, and on Cortex-M0 under QEMU, whose
-synthetic devices a repository-owned harness serves through QEMU's debugger
-stub, with GDB and LLDB sessions on the hosted targets.
+The [README's current compiler capabilities](README.md#current-compiler-capabilities)
+are the maintained inventory of language, library, targets, execution and
+debugging coverage. Update that inventory when a capability changes; this
+file describes the repository and the commands used to work on it.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
@@ -324,8 +311,8 @@ inherited row a terminal disposition.
 What each item contributed is not re-narrated here, and the current roadmap
 does not narrate either: the first one grew to thirteen thousand lines doing
 it. A completed item gets a short `Done:` paragraph, and the reasoning goes in
-the commit and in `spec.md`'s register of decisions. What the compiler does
-today is under **Repository state** above.
+the commit and in `spec.md`'s register of decisions. For current compiler
+capabilities, see [the README](README.md#current-compiler-capabilities).
 
 The current roadmap covers a frontend that scales, assembly with
 operands, a frontend for an editor, more hosted targets, microcontrollers,

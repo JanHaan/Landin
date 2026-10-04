@@ -40,6 +40,11 @@ and `handoff.md` carry, because an item is finished long before the text
 that cites it is, and a citation that outlives its item is a question nobody
 can answer. `check.py` refuses such a citation anywhere else.
 
+`README.md` maintains the current compiler capability inventory. `handoff.md`
+and `AGENTS.md` point to it instead of maintaining parallel inventories;
+the `Done:` paragraphs here record completion evidence, not a second
+current-capability summary.
+
 ## Mechanics
 
 Phases are `R8`, `R9` and onward, in order, and each ends in one gate. Work
@@ -229,11 +234,13 @@ take the claims about a real device. A spike outside the tree ran the
 generated peripheral consumer this way in all six profiles and matched the
 Renode lane's trace oracle exactly.
 
-Exit evidence: every Renode lane passes on the harness with its oracles
-unchanged; the decoder agrees with the pinned disassembler on every load and
-store in every image the lanes build; a refused access, an interrupt never
-delivered and a wrong device reply each fail a named control; the gate's
-Cortex-M job runs the harness in Renode's place; and Renode, its lock
+Exit evidence: every Renode lane except the stock STM32 control passes on the
+harness with its oracles unchanged; that control tests Renode's own models and
+is removed with Renode rather than migrated; the decoder agrees with the
+pinned disassembler on every load and store in every image the lanes build;
+a refused access, an interrupt never delivered and a wrong device reply each
+fail a named control; the gate's Cortex-M job runs the harness in Renode's
+place; and Renode, its lock
 entries and the C# models are gone from the tree, with every document that
 cites Renode as evidence saying what now carries it.
 
@@ -631,6 +638,10 @@ GDB sessions, and execute the higher-level consumers only on a runner whose
 support for all selected features is confirmed. Missing higher-level runtime
 evidence is unverified, never supplied by baseline or Darwin success.
 
+Audit the completed Linux arm64 lane for an executed assembly block with an
+integer operand and an IR verifier refusal for an invalid arm64 register.
+Retain both as recurring gate checks; this audit does not reopen R11.20.
+
 ### R11.30 — FreeBSD x86-64 and arm64
 
 Status: planned
@@ -645,6 +656,29 @@ and unwinding.
 Exit evidence: separate gate verdicts for the runtime corpus and scripted
 source-debugger sessions in the FreeBSD x86-64 and FreeBSD arm64 virtual
 machines.
+
+Each FreeBSD architecture must execute an assembly block with an integer
+operand and have an IR verifier refusal for an invalid target register.
+
+On a FreeBSD x86-64 guest with verified `x86-64-v3` support, execute the
+variable-shift fixture at both `x86-64-v1` and `x86-64-v3`. Inspect its shift
+code in each linked executable: require BMI2 (`shlx`, `shrx` or `sarx`) at v3
+and none at v1. Missing guest support fails this lane rather than skipping it.
+
+The FreeBSD arm64 lane selects both `armv8-a` and `armv8.1-a`, verifies that
+the baseline assembler refuses an LSE instruction, and checks that an atomic
+fixture uses an exclusive loop at baseline and LSE without that loop at the
+higher level. Confirm LSE support before executing the higher-level fixture.
+If the usual VM lacks it, a named LSE-capable FreeBSD arm64 host supplies the
+higher-level execution verdict on every recurring gate run; a one-time run
+or a skipped higher-level verdict cannot satisfy completion.
+
+A nonempty C ABI fixture set must execute separately on FreeBSD x86-64 and
+FreeBSD arm64 against independently compiled C peers for each architecture.
+Cover imported and exported calls, integer and floating-point values,
+`layout(c)` aggregates, callbacks and variadic calls. Report each architecture's
+ABI verdict separately from its runtime and debugger verdicts, and fail if
+its ABI fixture selection is empty.
 
 ### R11.40 — RISC-V rv64 Linux
 
@@ -667,6 +701,15 @@ at the extended level and its baseline sequence at `rv64gc`. An
 `assembler.block` using that instruction must assemble at the extended level
 and be refused at `rv64gc`. The selected execution lane must support the
 extension.
+
+Execute an assembly block with an integer operand and require an IR verifier
+refusal for an invalid RV64 register in the same gate. Record the selected
+RV64 Linux LP64D C calling, layout and capability facts in `spec.md`, and
+expose the matching scalar aliases through `core/c`. A nonempty C ABI fixture
+set must execute against independently compiled C peers, covering calls in
+both directions, integer and floating-point values, aggregates, callbacks
+and variadic calls. Report its ABI verdict separately and refuse an empty
+selection.
 
 ### R11.50 — Convert to a written type
 
@@ -698,11 +741,29 @@ derive or refuse as decided.
 - RISC-V passes the baseline and nondefault extension-level evidence in
   R11.40 on its selected execution lane.
 
+- Each new hosted target executes an assembly block with an integer operand
+  and has an IR verifier refusal for its register rules. R11.25 audits and
+  retains that evidence for completed Linux arm64 support.
+- FreeBSD x86-64 passes baseline/v3 execution and linked BMI2-selection checks;
+  FreeBSD arm64 passes baseline/LSE checks with recurring capable-host execution.
+- FreeBSD x86-64, FreeBSD arm64 and RV64 Linux each have a separate nonempty,
+  executing C ABI verdict against independently compiled C peers.
+
 ## R12 — Microcontrollers
 
 The chips people buy: RP2040 and RP2350, STM32, and Espressif's ESP32,
 ESP32-S and ESP32-C series. Emulators first, as before, and boards beside
 them rather than instead of them.
+
+An item may describe a noncoherent cached memory profile without admitting
+it for firmware. Before the first R12 item claims support for such a profile,
+it must provide platform-specific DMA cache maintenance and evidence for
+cache levels, aliases, cache-line ownership and device visibility points.
+Require target execution of transmit and receive consumers and bounded
+failure oracles for stale reads and lost dirty bytes when maintenance is
+omitted. Cacheless profiles need no such provider. A cached profile without
+this evidence remains unsupported through the R12 gate; R12.10, R12.30,
+R12.40 and R12.50 each apply this rule to any profile they first admit.
 
 ### R12.10 — Describe devices
 
@@ -714,8 +775,11 @@ vector mappings selected per device instead of the fixed constrained profile,
 and boot image formats as target facts. The selected device's interrupt numbers
 must map to absolute vector slots (external IRQ0 is slot 16), with its reserved
 slots kept zero and its implemented slots available to typed handlers. This
-schedules the SVD and linker halves of R551-33, R730-05's larger profiles and
-the Cortex-M toolchain move SR-01. When device selection lands, [1990]/D229's
+schedules the SVD and linker halves of R551-33, R730-05's larger profiles,
+R551-08's bounded emission policy and the Cortex-M toolchain move SR-01.
+The emission policy must be in force before admitting images larger than
+32 KiB; the retained constrained profile remains available while that policy
+is established. When device selection lands, [1990]/D229's
 fixed vector slot exclusions must become profile-specific; the current
 constrained profile remains a reference.
 
@@ -746,19 +810,38 @@ compare each selected boot image format fact with an independently recorded
 expectation for that device; a wrong or absent format fails the checks. The
 firmware ELF alone does not establish this selection.
 
+Small source/IR shapes must demonstrate that compact inputs cannot cause
+unbounded assembler repetition or object growth under the emission policy,
+with the forbidden giant-fixture boundary retained. Check this bound before
+enabling a larger profile; this schedules the policy and its evidence without
+choosing a new numeric compiler limit here.
+
 ### R12.20 — The first board
 
 Status: planned
 Depends on: R12.10
 
 Raspberry Pi Pico, an RP2040 with the ARMv6-M the backend already emits: its
-second-stage boot, flashing through a debug probe, and a smoke procedure
-checked against the emulator lanes' oracles.
+second-stage boot and flashing through a debug probe. Port the prototype-1
+UART/DMA application to real RP2040 peripheral addresses, clock, reset and
+pad setup, and DMA/interrupt and stop semantics. Define a device-specific
+physical trace oracle for injected UART data, echo and GPIO effects, and
+observable DMA/interrupt progress. This item owns R730-01's first pinned
+physical-board run and smoke procedure.
 
-Exit evidence: the derived driver running on the board, its captured trace
-checked against the same oracle, and the run recorded here. The board run
-also delivers IRQ5 and observes the typed handler whose absolute slot-21
-placement is required by R12.10.
+The existing derived driver retains its synthetic peripheral map and drain
+contract in the emulator lane; only source-level scenarios whose premises
+hold on both devices are shared.
+
+Exit evidence: check the flashed RP2040 image's second-stage bytes and
+checksum, then record a power-cycle boot from that image, without a probe-set
+program counter or RAM-loaded program. It must reach compiler-owned startup
+through the ROM-loaded second stage and execute the board smoke test. Check
+the captured board-port trace against its physical oracle and record the run
+here. The synthetic driver and its own emulator oracle remain in the gate;
+compare shared scenario outcomes only where their contracts overlap. The
+board run also delivers IRQ5 and observes the typed handler whose absolute
+slot-21 placement is required by R12.10.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M4F
 
@@ -786,16 +869,33 @@ source interoperation remains in R13.20. [1630] and D248 must also be amended fo
 operands, with executed float-operand fixtures on every target with float
 registers.
 
+The recurring emulator gate must also execute a compiler-generated,
+non-division Thumb-2 operation at `armv8-m.main` and check its result. Linked
+disassembly must locate the selected instruction in the fixture's compiled
+function. The same source at default `armv6-m` must retain its baseline
+lowering without that instruction. This evidence supplements the M4F float,
+ABI and assembly-operand requirements above.
+
 ### R12.40 — RISC-V microcontrollers
 
 Status: planned
 Depends on: R11.40, R12.10
 
-rv32imac for RP2350's Hazard3 cores and ESP32-C3 and C6, including the ESP
-application image format.
+RP2350's Hazard3 cores and ESP32-C6 use `rv32imac`; ESP32-C3 uses `rv32imc`
+without A. The ESP targets also need their application image format. The
+C3 default level and assembler limit must omit A. Under D227, support aligned
+one-, two- and four-byte atomic loads/stores and thread fences, and statically
+refuse read-modify-write atomics and eight-byte operations with L0344. There
+is no implicit library or interrupt-masking fallback.
 
 Exit evidence: the freestanding corpus on an emulator lane in the gate, and a
 recorded run on each board.
+
+C3 emulator and board cases execute its admitted atomic operations. The C3
+lane checks the `rv32imc` assembler setting and absence of A-extension
+instructions in linked firmware, and requires refusal of exchange, add,
+compare-exchange and eight-byte atomics. Hazard3 and C6 lanes execute an
+A-extension read-modify-write operation.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
@@ -810,21 +910,66 @@ startup then provides, or CALL0 throughout, which has none.
 Exit evidence: the freestanding corpus on Espressif's QEMU in the gate, and a
 recorded run on each board.
 
+Extend D255 with one Xtensa family and two selectable levels: the ESP32 LX6
+configuration `xtensa-esp32` as default and the ESP32-S3 LX7 configuration
+`xtensa-esp32s3`. Backend design must establish their compatibility and one
+shared layout and C ABI, choosing the calling convention here rather than
+assuming it now. Record their feature sets when implemented, including a
+feature present only in the S3 configuration.
+
+Select levels through `--level=` and the server's `level` option, expose the
+features through `fixed if compiler.feature.NAME`, and refuse unknown or
+other-family selections with L0009. Pin assembler configurations that reject
+instructions outside each selected level, including the default, for both
+`assembler.block` and generated code.
+
+Completion requires CLI and server selection checks, a feature-dependent
+source taking different branches at the two levels, and unknown/foreign-level
+refusals. Execute the same source at both selected levels only on compatible
+chips, recording the baseline compatibility evidence before relying on an S3
+run for an LX6-level build. At each level, require assembly acceptance of an
+available instruction and refusal of a valid Xtensa instruction absent from
+that level. Record the assembler commands and refusals; a corpus run alone
+does not satisfy the item. Neither level is added to today's compiler table
+by this plan.
+
 ### R12.60 — Boards in the gate
 
 Status: planned
 Depends on: R12.20, R12.30, R12.40, R12.50
 
 A self-hosted runner with the boards attached, run for `main` and by hand and
-never for a pull request from a fork. This takes on R730-01.
+never for a pull request from a fork. This extends R12.20's first-board
+readiness evidence to recurring smoke runs on every supported board.
 
-Exit evidence: every board this phase supports runs its smoke procedure in the
-gate, beside the emulator lanes it does not replace.
+Exit evidence: every board this phase supports runs its smoke procedure
+against a device-specific physical oracle in the gate, beside the emulator
+lanes it does not replace.
 
 ### R12 gate
 
 - RP2040, RP2350, an STM32 board, ESP32, ESP32-S3 and ESP32-C run
-  compiler-owned firmware in emulation and on hardware.
+  compiler-owned firmware in emulation and on hardware, each against an oracle
+  valid for that device or emulator model. The synthetic driver remains an
+  emulator lane.
+
+- Each new freestanding target/profile executes an assembly block with an
+  integer operand and has an IR verifier refusal for an invalid register in
+  its target gate: each new Cortex-M profile, each RV32 target, and both
+  Xtensa LX6 and LX7. This evidence is required before its milestone completes.
+
+- The RP2040 board run starts at power-on from the flashed boot image and
+  reaches compiler-owned startup through its checked second stage.
+
+- Every admitted noncoherent cached profile has its platform maintenance
+  provider and DMA visibility-point evidence from its first admitting item.
+- R12.10's bounded emission policy and small-shape controls pass before any
+  profile larger than the retained 32 KiB image is admitted.
+
+- Xtensa LX6 and LX7 pass level selection, feature-fact and assembler-limit
+  checks, with execution on compatible chips as required by R12.50.
+- R12.30 passes non-division Thumb-2 execution, linked instruction-selection
+  inspection and the same-source ARMv6-M baseline control.
 
 ## R13 — The library
 
@@ -855,15 +1000,25 @@ module under `core/*` checks on every supported target, `core/cpu` checks on
 M-profile levels and is refused on other families, and a firmware build
 refuses a hosted import by name.
 
+Record the shared-root module inventory and supported-target matrix at
+closure. For every shared module, a small consumer must import and use it,
+then compile and link on every supported hosted and firmware target. Execute
+the consumers on native or emulator lanes where behavior needs target
+evidence, with success and failure oracles. Keep consumers separate where a
+combined image would exceed a constrained target's budget; an image-size
+refusal is not positive evidence that a shared module works. Every later
+target's gate must repeat this matrix for that target.
+
 ### R13.20 — The freestanding library
 
 Status: planned
 Depends on: R13.10, R12.30
 
 What firmware on the R12 boards needs, each facility driven by a complete
-consumer: peripheral configuration beyond one baud rate, cache maintenance for
-the cached profiles, C on Cortex-M, and `core/text`'s missing half for working
-with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
+consumer: peripheral configuration beyond one baud rate, a reusable
+freestanding cache-maintenance interface over the platform providers required
+when cached profiles were admitted in R12, C on Cortex-M, and `core/text`'s
+missing half for working with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
 and R730-02, R730-07, R730-09 and SR-05.
 
 Exit evidence: each facility's consumer running on its targets with failure
@@ -890,6 +1045,10 @@ oracles.
   separate. Every shared module checks on every supported target, each
   target-specific module checks only on its declared targets, firmware
   refuses hosted imports by name, and every facility has a consumer.
+
+- Every shared-root module has R13.10's positive per-target compile/link
+  evidence and applicable execution and failure checks. Target-specific
+  freestanding and hosted availability checks remain separate.
 
 ## R14 — Concurrency
 
@@ -969,7 +1128,10 @@ Hosted threads, and the atomic wrapper type over D227's builtins that answers
 Cortex-M0's missing read-modify-write explicitly. This takes on R730-21.
 
 Exit evidence: consumers of both on every applicable target, with failure
-oracles.
+oracles. The hosted thread facility implements D227's creation and join
+happens-before edges: executable cases publish ordinary data before starting a
+worker and observe its ordinary writes after joining it, on each hosted
+target, with no other synchronization supplying either edge.
 
 ### R14 gate
 
@@ -1039,13 +1201,27 @@ Measured first, and then only where the measurement says.
 Status: planned
 Depends on: none
 
-Benchmarks with recorded time and size per target, tracked by the gate, and a
-build report that counts the same things on every backend. This takes on
-R730-24. A measured code-quality cost attributable to assembly's fixed memory
-effect is recorded against SR-09 before any narrower effect is proposed.
+Benchmarks with recorded time and size for every supported target, each CPU
+feature level of its family, and all nine independent combinations of
+`--optimize=none|size|speed` and `--specialize=off|auto|all`, including none/off
+and size/auto. Track the matrix in the recurring gate, with a build report
+that counts the same things on every backend. Each baseline identifies its
+target, selected `--level`, optimization/specialization pair, workload and
+measurement runner. This takes on R730-24. A measured code-quality cost
+attributable to assembly's fixed memory effect is recorded against SR-09
+before any narrower effect is proposed.
 
-Exit evidence: baselines recorded for every target, and the gate failing on a
-regression beyond a stated tolerance.
+Cover every supported family level, including the default and any later-added
+levels. Today these are x86-64 v1 through v4, `armv8-a` and `armv8.1-a`, and
+`armv6-m`, `armv7-m` and `armv7e-m` where the target family applies. The
+measurement runner must support and execute the selected level; lack of
+support cannot silently substitute a lower level or skip a measurement.
+
+Exit evidence: record time and size baselines for the complete
+target/level/profile matrix on the same workloads. Compare each combination
+against its own baseline and fail the gate if either measure regresses beyond
+its stated tolerance. Measure the matrix's recurring cost; no cost saving or
+existing coverage of this future matrix is claimed.
 
 ### R16.20 — Register allocation
 
@@ -1056,12 +1232,19 @@ Allocation for the arm64 backend's stack homes and the remaining x86-64 and
 Cortex-M cases, the bounds check an indexed increment keeps, and the atomic
 and barrier lowering, which is baseline. This takes on R551-12.
 
-Exit evidence: measured improvement against R16.10's baselines with unchanged
-behaviour, ABI and debugger evidence.
+Exit evidence: measured improvement for affected target/level/profile
+combinations against their matching R16.10 baselines, with unchanged
+behavior, ABI and debugger evidence. Every supported combination remains
+under the same time and size regression gate, including unaffected levels
+and profiles.
 
 ### R16 gate
 
-- Every optimization is measured against a recorded baseline.
+- Every supported target, CPU feature level and all nine optimization/
+  specialization combinations are measured on the same workloads against
+  their own recorded time and size baselines. Either measure exceeding its
+  stated tolerance fails; unsupported runners cannot skip or substitute a
+  selected level.
 
 ## The concurrency execution model
 
@@ -1132,7 +1315,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
 | R551-07 | Scale and self-hosting | Final linker placement is not preflighted: Linux RIP-relative reach, Darwin's 2 GiB static-image collision and arm64 branch reach. Merged: R730-05, seventeen shared programs exceed the 32 KiB flash, 16 KiB RAM and 4 KiB stack profile in 72 capacity verdicts. | Before general large-image support, or a workload that needs it. | Bounded reach and layout evidence with the native control and its status-42 oracle retained. R12.10 takes R730-05's larger profiles. | open |
-| R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | open |
+| R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | scheduled R12.10 |
 | R551-09 | Competitive optimization | Guarded cleanups can expand quickly despite correct pop-before-run order. | A measured cleanup workload with unacceptable growth. | Selectors, effects and order preserved, with bounded size compared before and after. | open |
 | R551-11 | Competitive optimization | Frame and allocation planning is repeated by preflight, emission and debug output. | Profiling justifies sharing the plans. | One immutable plan owning emission and debug locations, with debugger agreement. | open |
 | R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin stack homes have no register allocation. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
@@ -1147,10 +1330,10 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
 | R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, cache maintenance for cached device profiles; R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
+| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
-| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against the emulator lanes' oracles, which stay mandatory. | scheduled R12.60 |
+| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
 | R730-03 | Release readiness | D227's ordering trials and bounded store-buffer models are evidence, not a formal proof; no wait-free or timing bound is claimed. | Before a claim beyond the bounded models, or any timing bound. | A stated proof or checked model agreeing with the native trials. | open |
 | R730-06 | Release readiness | Stack paint and SP observation are measurements, not worst-case bounds; 64 spare flash bytes is a fit, not a budget; reset assumes no NMI or fault in its window. | Before a production budget, worst-case stack or fault-tolerant reset claim. | A workload and interrupt model with a checked bound, and reset-window behaviour with executable evidence. | open |
 | R730-07 | Broader standard library | Cortex-M0 C source capabilities, `core/c` and header generation are disabled; 33 shared programs are general-C restrictions there. | A freestanding program that must call or be called from C. | An ILP32 `core/c`, Cortex-M0 C signatures, generated bindings from a pinned device C header under a checked Cortex-M0 ABI, and executable firmware fixtures using the generated declarations and adapters with failure oracles; the 33 restrictions re-decided. | scheduled R13.20 |

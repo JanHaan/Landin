@@ -217,94 +217,19 @@ exist and all their findings are worked in. Independent reviews are folded
 back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
-**The bootstrap compiler is working.** It scans, parses, resolves and checks
-whole programs, lowers them into verified target-neutral IR and emits
-assembly for three targets. What it covers, by capability:
+The current compiler capabilities, targets, execution coverage and recorded
+limits are maintained in [the README](README.md#current-compiler-capabilities).
+The [construct matrix](compiler/tests/constructs.matrix) records each
+normative construct's state and evidence; completed roadmap items record
+what landed and where its exit evidence is.
 
-- **The language.** Functions, aggregates and variants, function fields,
-  recursive module images, block-valued control, declared errors, lexical
-  `defer` and failure-only `undo` cleanup, every loop and literal family, the
-  enabled scalar conversions, condition declarations, caller parameters,
-  range subtypes, `unchecked` regions and the atom-or-pointer unions.
-  Generics take fixed parameters by compile-time substitution, with fixed
-  conditional declarations and per-instance inferred errors. Concepts carry a
-  whole-program conformance register and the closed compiler `zeroable`
-  family. One target-neutral evidence order serves hidden evidence arguments
-  selected by each concrete instance body, indirect concept calls, shared
-  machine bodies and `any C`'s two-word pair
-  with object-safe dispatch and flattened composed tables. Pointers and slices
-  get local origins and borrows, `escaping`, `from` and consume checking.
-  Directory modules have file-local import scopes, aliases, selected imports,
-  public qualified lookup, typed global options, compiler facts, assertions
-  and ordered roots with deterministic graph closure. D227's concurrency
-  memory model supplies scalar atomics, volatile accesses and explicit
-  barriers, and D228 packed raw images with checked encoded-field extraction
-  and explicit reserved-bit and access policies. Every normative construct has
-  a row in `compiler/tests/constructs.matrix` with its state, targets and
-  evidence, and `check.py` refuses a missing, stale or unexplained one.
-- **The library.** `core` threads heap, arena, pool and failing allocators as
-  capabilities, and `core/mem`, `core/vec`, `core/small`, `core/map`,
-  `core/tree` and `core/sort` sit on honest raw storage with every container
-  transition, allocation rollback and unsafe obligation written down.
-  `core/text` has byte-oriented positions and validated conversions, `core/io`
-  interchangeable system and memory worlds, `core/diag.log` bounded and
-  streaming providers dispatched through `any`, and `core/region` explicit
-  bulk cleanup over a supplied provider. D212 withdraws both builtin arena
-  forms and W7's transitive escape promise while preserving ordinary local
-  origins. A freestanding slice adds CPU support, nonreturning signatures and
-  panic dispatch with optional source maps. Of the eleven running examples, the
-  four that write output — FizzBuzz and the three Benchmark Game programs —
-  import `core` and are held to exact output oracles.
-- **The C boundary.** Each hosted target's C ABI, `layout(c)`, callbacks and
-  variadic call transport. A separate header generator and policy-driven C
-  adapters cover the supported enum, union, bitfield, global/TLS and
-  incoming-varargs boundaries; unsupported C forms receive explicit refusals.
-- **Targets.** Linux x86-64 and Darwin arm64 build and run hosted executables,
-  Darwin with an explicit large-image loader limitation. The `cortex_m0`
-  backend defaults to ARMv6-M Thumb and can select the higher `armv7-m` or
-  `armv7e-m` level; all three share 32-bit layouts, the external AAPCS,
-  Landin's internal ABI, r11 frame chains and soft-float arithmetic. D229
-  enables its compiler-owned reset, data/RAM-code copying, BSS clearing, typed
-  interrupt/naked functions, vector references, placement/retention and fixed
-  assembly with explicit effects, within the selected 32 KiB flash, 16 KiB RAM
-  and 4 KiB stack reservation. The
-  [firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
-  runs it on pinned QEMU with synthetic peripherals beside independent
-  C/assembly controls, and thirty RP2040 registers are checked in as generated
-  device fixtures.
-- **Code generation.** Deterministic baseline code: target code and the build
-  report are identical under a stated relation of build directory, working
-  directory, output path, environment, repetition and order on all three
-  targets, and the hosted linked image is deliberately not claimed. Compact
-  numeric-array loops, strict-saving `layout(optimal)` placement and
-  independently controlled evidence-proved specialization are optional and
-  reported factually.
-- **Debugging.** DWARF source lines, symbolic frames and inspectable
-  parameters and locals under GDB on Linux, including optimized caller frames;
-  LLDB with exact Mach-O/dSYM identity on Darwin; line and function debugging
-  on Cortex-M0. Debug provenance remains independent of DWARF encoding for a
-  possible future PDB emitter; PDB support is not implemented.
-- **Derived programs.** Prototype 2's recursive configuration parser retains
-  valid nested AST nodes while recovering three ordered syntax faults, and
-  runs unchanged through bounded and streaming `any diag.log`
-  implementations. Prototype 3's container client and prototype 4's log
-  filter — runtime-selected filters and destinations, complete lines across
-  arbitrary chunks, copied arguments and explicit delivery retry — run beside
-  it on Linux and macOS with native debugging coverage. Prototype 1's driver
-  runs on the Cortex-M0 emulators. Each derivation row carries a generated
-  oracle, and its derivation manifest keeps the evidence traceable to its
-  prototype.
-
-The gate runs the corpus on all three targets, with GDB and LLDB on the
-hosted ones. Every inherited item and later discovery has a
-terminal disposition, and the transferred ones are owned by the successor
-families the current roadmap's register carries. Feature-complete pre-v1 is a
-claim about coverage and nothing else, and the recorded boundaries stand
-exactly as measured. The broader standard library remains successor work.
-`ROADMAP.md` is the sole work authority. Outstanding grammar,
-representation, ABI, guarantee, and diagnostic questions are settled by the
-first slice that needs them rather than forming one blanket front-end
-barrier.
+Every inherited item and later discovery has a terminal disposition, and
+the transferred ones are owned by the successor families in the current
+roadmap's register. Feature-complete pre-v1 is a claim about coverage.
+The broader standard library remains successor work. `ROADMAP.md` is the
+sole work authority. Outstanding grammar, representation, ABI, guarantee,
+and diagnostic questions are settled by the first slice that needs them
+rather than forming one blanket front-end barrier.
 
 The first major compiler milestone was a complete derived version of
 the parser prototype with useful diagnostics, evidence-table dispatch,
