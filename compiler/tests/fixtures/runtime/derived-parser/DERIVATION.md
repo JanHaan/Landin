@@ -19,10 +19,11 @@ input, diagnostics and status oracle.
 | Prototype evidence | Executable evidence |
 |---|---|
 | Y1: syntax faults are handled, world-dependent failures use the error channel | Three syntax faults are logged and recovered in order; a one-byte arena produces `mem.out_of_memory`, and a logger aimed at a closed descriptor produces `io.io_failed`. |
-| Y4: the parser does not require loop labels or value breaks | Flat parser sequences and lexer byte scans use ordinary loops; nested groups and recovery retain recursion without changing the workload’s control boundaries. |
+| Y4: the parser does not require loop labels or value breaks | Flat parser sequences, lexer byte scans and recovery use ordinary loops; only bounded nested groups retain recursion. No loop labels or value breaks are needed. |
 | Y5: variant cases are constructors | `parser.value` constructs text, integer and group cases, and the runtime exhaustively matches all three. |
 | Y6: a recovery arm may produce a value or leave | Numeric overflow leaves its value arm after reporting, while the outer sequence resumes and retains later valid nodes. |
 | Y7: allocated nodes are initialized through pointer `.val` | `parser.value` contains a recursive pointer list; each arena allocation is converted to `ptr mut value` and filled through `item.val`. |
 | `config/lex` retains bad input and source positions | `lexer.next` emits bad-character and unterminated-string tokens with opaque `text.position` bounds. The runtime checks token and scanner offsets across delimiters, and scans 100,000-byte identifiers, numbers, blanks, and string contents. |
 | The parser accepts an erased diagnostic capability | The identical parse body runs once with `diag.bounded(8)` and once with `diag.streaming`, both through `any diag.log`. |
 | Nesting cleanup survives failure | The group arm registers `defer lower_depth(parser)` before recursive descent. |
+| Recovery survives a long malformed line | A 100,000-token line produces one diagnostic, then the following line produces its expected AST entry. |

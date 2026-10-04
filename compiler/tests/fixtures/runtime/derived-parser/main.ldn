@@ -14,6 +14,8 @@ mut tiny_memory: [1]u8 = zeroed
 mut third_memory: [4096]u8 = zeroed
 mut blank_memory: [1]u8 = zeroed
 mut blank_source: [50000]u8 = zeroed
+mut long_line: [100005]u8 = zeroed
+mut long_line_memory: [4096]u8 = zeroed
 
 ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = false
@@ -302,6 +304,51 @@ public main: () -> (code: i32) =
       or diag.dropped(blank_notes) <> 0 then
         return
     end if
+    mut long_at: usize = 0
+    while long_at < 100000 do
+        long_line[long_at] = 64
+        inc long_at
+    end while
+    long_line[100000] = 10
+    long_line[100001] = 120
+    long_line[100002] = 61
+    long_line[100003] = 49
+    long_line[100004] = 10
+    mut long_arena := mem.arena_over(addr long_line_memory[0], 4096)
+    mut long_notes := diag.new_log(capacity: 1)
+    mut long_logger: any diag.log = any(addr long_notes)
+    mut long_tree := parser.empty()
+    parser.parse_file(long_line[0..<100005], long_logger, long_arena,
+                      long_tree) else (problem)
+        _ = problem
+        return
+    end
+    if not long_logger.failed() or diag.stored(long_notes) <> 1
+      or parser.length(long_tree) <> 1 then
+        return
+    end if
+    long_zero: usize = 0
+    long_note := diag.note_at(long_notes, long_zero) else (missing)
+        _ = missing
+        return
+    end
+    if diag.position_of(long_note) <> 0
+      or diag.message_length(long_note) <> 16 then
+        return
+    end if
+    long_item := parser.long_at(long_tree, 0) else (missing)
+        _ = missing
+        return
+    end
+    match long_item.val.body
+        parser.integer_value(number): begin
+            if number <> 1 then
+                return
+            end if
+        end
+        parser.text_value(begins, ends): return
+        parser.group_value(count, items): return
+    end match
 
     code = 42
 end main

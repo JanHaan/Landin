@@ -67,11 +67,11 @@ report: (inout logger: any diag.log, where: text.position,
 end report
 
 recover_to_boundary: (source: []u8, inout parser: parser_state) -> none =
-    return when parser.look.what == lexer.newline
-    return when parser.look.what == lexer.right_brace
-    return when parser.look.what == lexer.end_of_input
-    advance(source, parser)
-    recover_to_boundary(source, parser)
+    while parser.look.what <> lexer.newline
+      and parser.look.what <> lexer.right_brace
+      and parser.look.what <> lexer.end_of_input do
+        advance(source, parser)
+    end while
 end recover_to_boundary
 
 lower_depth: (inout parser: parser_state) -> none =
