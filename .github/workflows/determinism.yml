@@ -43,6 +43,8 @@ jobs:
     runs-on: ${{ matrix.host }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -68,6 +70,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: manifests

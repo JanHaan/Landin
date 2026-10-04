@@ -32,8 +32,7 @@ name: gate
 
 on:
   push:
-  pull_request:
-  workflow_dispatch:
+    branches: ["ci-reuse-replay/round3-2026-10-04"]
 
 permissions:
   contents: read
@@ -49,19 +48,77 @@ jobs:
       reuse: ${{ steps.reuse.outputs.reuse }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
       - name: Inspect a recent full pass for explanatory-only changes
         id: reuse
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 scripts/gate_inputs.py reuse gate.yml \
-            documents scripts compiler linux-release-build release bindings \
-            editor-grammar cortex-m scaling darwin-release-build darwin-host \
-            darwin-host-release darwin-parity lldb arm64-compiler arm64-release \
-            'determinism / manifest (x86_64-linux)' \
-            'determinism / manifest (aarch64-linux)' \
-            'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate
-          echo 'reuse=false' >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import runpy
+          import subprocess
+          import sys
+          import tempfile
+
+          expected_sha = '565cfc3512e2164191060682d75f867787d59b24'
+          replay_run_id = 37230751070
+          lab_branch = 'ci-reuse-replay/round3-2026-10-04'
+          command = ['python3', 'scripts/gate_inputs.py', 'reuse', 'gate.yml', 'documents', 'scripts', 'compiler', 'linux-release-build', 'release', 'bindings', 'editor-grammar', 'cortex-m', 'scaling', 'darwin-release-build', 'darwin-host', 'darwin-host-release', 'darwin-parity', 'lldb', 'arm64-compiler', 'arm64-release', 'determinism / manifest (x86_64-linux)', 'determinism / manifest (aarch64-linux)', 'determinism / manifest (aarch64-darwin)', 'determinism / agree', 'gate']
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit("replay refused: " + message)
+
+          require(os.environ["GITHUB_EVENT_NAME"] == "push", "lab event is not a push")
+          require(os.environ["GITHUB_REF"] == "refs/heads/" + lab_branch,
+                  "not the isolated lab branch")
+          require(os.environ["GITHUB_WORKFLOW_REF"].endswith(
+                  "/.github/workflows/gate.yml@refs/heads/" + lab_branch),
+                  "not the isolated gate workflow")
+          require(os.environ["GITHUB_RUN_ID"] != str(replay_run_id), "cannot replay itself")
+          actual_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          require(actual_sha == expected_sha, "checkout differs from pinned main SHA")
+
+          # Uses the unchanged production authentication/API helper. No token is printed.
+          api = runpy.run_path("scripts/gate_inputs.py")["github"]
+          workflow = api("actions/workflows/gate.yml")
+          record = api("actions/runs/" + str(replay_run_id))
+          repo = os.environ["GITHUB_REPOSITORY"]
+          require(workflow.get("path") == ".github/workflows/gate.yml", "workflow path")
+          require(record.get("id") == replay_run_id, "run identity")
+          require(record.get("workflow_id") == workflow.get("id"), "workflow identity")
+          require(record.get("path") == ".github/workflows/gate.yml", "run workflow path")
+          require(record.get("repository", {}).get("full_name") == repo,
+                  "run belongs to another repository")
+          require(record.get("head_repository", {}).get("full_name") == repo,
+                  "head belongs to another repository")
+          require(record.get("event") == "push" and record.get("head_branch") == "main",
+                  "record is not an actual main push")
+          require(record.get("head_sha") == expected_sha, "run differs from pinned SHA")
+          require(record.get("status") == "completed" and record.get("conclusion") == "success",
+                  "main push must have finished successfully")
+          print("Verified replay source: " + record["html_url"], flush=True)
+
+          # A minimal replay, not the actual lab event. Production decision logic and
+          # required job names are unchanged. Environment changes affect only this child.
+          with tempfile.TemporaryDirectory(prefix="gate-replay-") as directory:
+              event_path = Path(directory) / "event.json"
+              event_path.write_text(json.dumps({"ref": "refs/heads/main", "after": expected_sha}))
+              environment = dict(os.environ, GITHUB_EVENT_NAME="push",
+                                 GITHUB_EVENT_PATH=str(event_path))
+              result = subprocess.run(command, env=environment, text=True,
+                                      stdout=subprocess.PIPE, check=True)
+              require(result.stdout.strip() == "reuse=true", "production decision was not true")
+
+          # Fail closed before publishing an output, including API or decision failures.
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("reuse=true\n")
+          print("Replay decision: reuse=true (scheduler validation only)")
+          PY
 
   #  Documents, grammar and the transcription tables.  Nothing to install
   #  and nothing to build, so this is the fastest verdict available.
@@ -74,6 +131,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: check.py
         run: python3 check.py
@@ -86,6 +145,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: scripts/tests
         run: |
@@ -112,6 +173,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -179,6 +242,8 @@ jobs:
       LANDIN_BUILD_MODE: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -212,6 +277,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -274,6 +341,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned Clang
         run: |
@@ -304,6 +373,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
           fetch-depth: 0 # compare shipped grammar and queries with the pinned commit
 
       - name: Install the pinned tree-sitter CLI
@@ -340,6 +410,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -394,6 +466,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -425,6 +499,8 @@ jobs:
       LANDIN_BUILD_MODE: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -458,6 +534,8 @@ jobs:
       LANDIN_BUILD_MODE: debug
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -508,6 +586,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -575,6 +655,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -625,6 +707,8 @@ jobs:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -657,6 +741,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -706,6 +792,8 @@ jobs:
       LANDIN_BUILD_MODE: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
@@ -781,6 +869,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 565cfc3512e2164191060682d75f867787d59b24
       - name: Every job succeeded, or was skipped for a verified reused pass
         env:
           NEEDS: ${{ toJSON(needs) }}
