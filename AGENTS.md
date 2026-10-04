@@ -123,15 +123,24 @@ The aggregate gate covers each build, test and determinism host separately.
 | `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-15 | the called workflow emits the fixture manifest on each host and compares them |
 
 A release compile error surfaces in its host's build job; debug compile
-errors surface in the debug verification jobs. Before
-release artifact sharing, measured whole-job times including install and build were:
-`documents` about ninety seconds, `editor-grammar` fifteen, `bindings`
-seventy, `scaling` five and a half, `scripts` six, `lldb` seven, `arm64-release`
-eight, `darwin-host` nine and twelve, `arm64-compiler` eleven, `release`
-twelve, `compiler` and `darwin-parity` fourteen, and `cortex-m` sixteen and a
-half. These precede artifact sharing; the revised workflow needs new timing
-measurements. Same-run build archives are short-lived inputs, not acceptance
-records.
+errors surface in the debug verification jobs. In
+[run 37227405592](https://github.com/JanHaan/Landin/actions/runs/37227405592),
+the successful shared release-build jobs took 300 seconds on Linux and 447
+on Darwin; their compilation steps took 273 and 425 seconds respectively.
+Successful verification jobs took 328 seconds for `release`, 153 for
+`scaling`, 102 for `lldb` and 486 for `darwin-parity`. These whole-job times
+include setup and artifact handling, but exclude queueing and waiting for
+the shared build dependency.
+
+The determinism manifest jobs covering all nine optimization/specialization
+combinations took 150 seconds on Linux x86-64, 137 on Linux arm64 and 276 on
+Darwin arm64; manifest emission itself took 50, 40 and 105 seconds
+respectively. The agreement job took five seconds. These are observations
+from a single run, excluding failed jobs whose durations cover only part
+of their work. They are not a controlled
+comparison with the earlier measurements before artifact sharing, and no
+CI time saving has been demonstrated. Same-run build archives are
+short-lived inputs, not acceptance records.
 
 The gate is **not** the retired acceptance: it retains no successful
 exact-revision acceptance record, and green is not a verdict on a revision.
