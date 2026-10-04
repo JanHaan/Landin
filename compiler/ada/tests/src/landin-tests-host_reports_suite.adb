@@ -391,9 +391,11 @@ package body Landin.Tests.Host_Reports_Suite is
                           (Host.Written (Report), "landin-build-report-1") > 0,
                         "an inactive map path holds the requested report");
                      Landin.Testing.Check_Equal
-                       (Item, Host.Write_Count,
-                        (if Executable then 3 else 2),
-                        "assembly, requested output and report are written");
+                       (Item, Host.Write_Count, 2,
+                        "the driver writes assembly and the report");
+                     Landin.Testing.Check
+                       (Item, Host.Exists ("out"),
+                        "the requested assembly or tool output exists");
                      Landin.Testing.Check_Equal
                        (Item, Tools.Run_Count,
                         (if Executable then 1 else 0),

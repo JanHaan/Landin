@@ -2048,6 +2048,26 @@ package body Landin.Driver is
             --  to read its imports, so its syntax is inside this row.
             Stage_Ended ("loading");
 
+            --  An empty module is legal, but it supplies nothing to emit.
+            --  Keep the check-only request legal and refuse emission before
+            --  any existing output at the requested path can appear current.
+            if Natural (Roots.Length) > 0
+              and then Landin.Stages.Source_Count (Context) = 0
+              and then not Bad_Use
+              and then not Landin.Stages.Failed (Context)
+            then
+               if Emit = Emit_Executable then
+                  Note_No_Entry
+                    (For_Firmware =>
+                       Landin.Targets.Architecture_Of (Facts)
+                         = Landin.Targets.Cortex_M0);
+               elsif Emit = Emit_Assembly then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option, "--emit needs a source to compile");
+               end if;
+            end if;
+
             --  Every source that was read is scanned and parsed together, as
             --  one compilation: the language is checked whole, and a stage
             --  that saw one file at a time could not be replaced later by one
