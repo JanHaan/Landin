@@ -449,8 +449,12 @@ and remain enabled inside unchecked regions.
 All memory primitives conservatively carry read/write/call/trap effects, so
 simplification retains discarded accesses and invalidates forwarded slot
 values. Address-taken storage remains pinned by the existing address paths;
-x86 allocation uses its existing saved-register/scratch discipline. Argument
-spills preserve left-to-right evaluation across later control-flow expressions.
+x86 allocation uses its saved-register/scratch discipline. With the speed
+objective, eligible float slots and values in routines without calls or inline
+assembly use XMM8..XMM15; XMM0 remains instruction scratch. Address-observed,
+parameter, result and C transport slots keep stack homes, and source debugger
+locations follow the allocation plan. Argument spills preserve left-to-right
+evaluation across later control-flow expressions.
 Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
 with no atomicity promise. Target instructions are described in the target guide.

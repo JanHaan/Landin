@@ -6,6 +6,7 @@ with Ada.Strings.Unbounded;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
+with Landin.Debugging;
 with Landin.IR;
 with Landin.Optimization;
 with Landin.Source;
@@ -29,6 +30,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    use type Alloc.Location_Kind;
    use type Alloc.Locations;
    use type Alloc.Register_Set;
+   use type Alloc.SSE_Register_Set;
    use type IR.Opcode;
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Count;
@@ -54,6 +56,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
    procedure Small_Array_Bounds (Item : in out Landin.Testing.Context);
+   procedure Float_Registers (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
    procedure C_Entry_Saves (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
@@ -251,6 +254,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    end Loop_Allocation;
 
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context) is
+   procedure Float_Registers (Item : in out Landin.Testing.Context);
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Native_Source : constant String :=
@@ -550,6 +554,8 @@ package body Landin.Tests.X86_Optimization_Suite is
       Landin.Testing.Register
         (Into, "x86 opt", "pressure and C scalars",
          Pressure_And_C_Scalars'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "float registers", Float_Registers'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
       Landin.Testing.Register

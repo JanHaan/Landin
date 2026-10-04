@@ -1328,6 +1328,11 @@ package body Landin.Backend.X86_64 is
          function Value_Label (Value : Landin.IR.Value_Id) return String;
          procedure Store_Value (Value : Landin.IR.Value_Id; From : String);
 
+         function Is_XMM (Operand : String) return Boolean is
+           (Operand'Length >= 4
+            and then Operand (Operand'First .. Operand'First + 3)
+              = "%xmm");
+
          function Value_Operand
            (Value : Landin.IR.Value_Id; Width : Held_Size) return String
          is
@@ -1339,6 +1344,8 @@ package body Landin.Backend.X86_64 is
                  "invalid value location width";
             elsif Place.Kind = Allocation.GP then
                return Allocation.Name (Place.Register, Width);
+            elsif Place.Kind = Allocation.SSE then
+               return Allocation.Name (Place.Float_Register);
             end if;
             return Cell (Value_Offset (Layout, Value));
          end Value_Operand;
@@ -1361,6 +1368,8 @@ package body Landin.Backend.X86_64 is
          begin
             if Place.Kind = Allocation.GP then
                return Allocation.Name (Place.Register, Place.Size);
+            elsif Place.Kind = Allocation.SSE then
+               return Allocation.Name (Place.Float_Register);
             end if;
             return Cell (Slot_Offset (Layout, Slot));
          end Slot_Cell;
@@ -1377,8 +1386,16 @@ package body Landin.Backend.X86_64 is
          procedure Load_Value (Value : Landin.IR.Value_Id) is
             Held : constant Held_Size := Size_Of_Value (Value);
          begin
-            Emit ("mov" & Suffix (Held) & " " & Value_Operand (Value)
-                  & ", " & Accumulator (Held));
+            if Allocation_Plan.Value (Positive (Value)).Kind
+              = Allocation.SSE
+            then
+               Emit ((if Held = Landin.Targets.Byte_4 then "movd "
+                      else "movq ") & Value_Operand (Value)
+                     & ", " & Accumulator (Held));
+            else
+               Emit ("mov" & Suffix (Held) & " " & Value_Operand (Value)
+                     & ", " & Accumulator (Held));
+            end if;
          end Load_Value;
 
          procedure Store_Value (Value : Landin.IR.Value_Id; From : String) is
@@ -1386,7 +1403,12 @@ package body Landin.Backend.X86_64 is
          begin
             --  AH cannot be encoded with any REX prefix.  The allocator's
             --  high registers require one even for a one-byte destination.
-            if From = "%ah"
+            if Allocation_Plan.Value (Positive (Value)).Kind
+              = Allocation.SSE
+            then
+               Emit ((if Held = Landin.Targets.Byte_4 then "movd "
+                      else "movq ") & From & ", " & Value_Operand (Value));
+            elsif From = "%ah"
               and then Allocation_Plan.Value (Positive (Value)).Kind
                 = Allocation.GP
             then
@@ -1862,6 +1884,23 @@ package body Landin.Backend.X86_64 is
          begin
             if Optimized and then From = To then
                return;
+            elsif Is_XMM (From) or else Is_XMM (To) then
+               if Size not in Landin.Targets.Byte_4
+                            | Landin.Targets.Byte_8
+               then
+                  raise Landin.Compiler_Defect with
+                    "a non-float carrier reached an XMM register";
+               end if;
+               Emit
+                 ((if (Is_XMM (From) and then not Is_XMM (To)
+                        and then To (To'First) = '%')
+                       or else (Is_XMM (To) and then not Is_XMM (From)
+                         and then From (From'First) = '%')
+                   then (if Size = Landin.Targets.Byte_4
+                         then "movd " else "movq ")
+                   else (if Size = Landin.Targets.Byte_4
+                         then "movss " else "movsd "))
+                  & From & ", " & To);
             elsif Optimized
               and then (From (From'First) = '%' or else To (To'First) = '%')
             then
@@ -2719,9 +2758,7 @@ package body Landin.Backend.X86_64 is
                            & Trimmed
                                (Landin.Types.Magnitude'Image (Pattern))
                            & ", %rax");
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
+                     Store_Value (Value, Accumulator (Held));
                   end;
 
                when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
@@ -5278,14 +5315,7 @@ package body Landin.Backend.X86_64 is
                   --  [1810]'s return carries what the named return place
                   --  held; a `-> none` routine carries nothing.
                   if Result in Landin.Types.Scalar_Name then
-                     declare
-                        Held : constant Held_Size :=
-                          Size_Of (Result, Facts);
-                     begin
-                        Emit ("mov" & Suffix (Held) & " "
-                              & Value_Operand (Operand (1)) & ", "
-                              & Accumulator (Held));
-                     end;
+                     Load_Value (Operand (1));
                   elsif Result in Landin.Types.Aggregate
                                    | Landin.Types.Fixed_Array
                   then
@@ -5647,7 +5677,8 @@ package body Landin.Backend.X86_64 is
             Counts.Frame_Bytes := Extent (Layout);
             Counts.Spill_Bytes := Spill_Bytes (Layout);
             Counts.Save_Bytes := Save_Bytes (Layout);
-            Counts.Register_Count := Allocation.Save_Count (Allocation_Plan);
+            Counts.Register_Count := Allocation.Save_Count (Allocation_Plan)
+              + Allocation.SSE_Count (Allocation_Plan);
             Counts.Spill_Count := Allocation_Plan.Spill_Homes;
          end;
          Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));

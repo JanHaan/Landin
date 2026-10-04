@@ -11,8 +11,10 @@ with Landin.Panics;
 --  The legacy overload selects none/off: accumulator computation and one
 --  frame cell per scalar value.  Explicit size/speed emission uses a typed,
 --  deterministic GP allocation plan with block-local intervals, reused spill
---  homes and eligible cross-block scalar slots.  Scratch/argument/SSE banks
---  and failure transport remain reserved; only used callee saves get homes.
+--  homes and eligible cross-block scalar slots.  Speed emission also keeps
+--  eligible float slots and values in XMM8..XMM15 in call-free routines.
+--  Scratch/argument registers and failure transport remain reserved; only
+--  used GP callee saves get homes.
 --  The same allocation and target-byte frame planner serve preflight and
 --  emission.  Final selected instruction evidence controls body sharing and
 --  reports actual emitted sites.  Nothing reads a clock, hash iteration order
