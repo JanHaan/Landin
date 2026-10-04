@@ -104,6 +104,11 @@ expired or mismatching evidence runs everything. Documents and script
 checks always run, and a reused run can never itself supply the full pass.
 The aggregate gate covers each build, test and determinism host separately.
 
+For a successful reuse, the `inputs` log names the source commit and links
+the full run being reused. Target and build jobs, including `determinism`,
+appear as skipped; `inputs`, `documents`, `scripts` and the final `gate`
+still succeed. The linked full run contains the target-test results.
+
 | job | runner | runs |
 |---|---|---|
 | `inputs` | ubuntu-24.04 | verify whether a recent complete main run can cover a declared explanatory edit |
