@@ -15,7 +15,8 @@ User arguments build an ordered heterogeneous filter chain. `--level` accepts
 DEBUG, INFO, WARN, ERROR, or FATAL. A level is a complete leading token followed
 by a space, tab, or end of line; unknown tokens have level zero. `--match`
 requires valid UTF-8 and searches for its copied substring; invalid UTF-8 input
-lines do not match. `--every` samples the lines that reached that filter, so
+lines do not match. Match filters share one lazy UTF-8 validation per line.
+`--every` samples the lines that reached that filter, so
 changing option order changes behavior. Invalid encoding, malformed or
 unrepresentable numbers, and zero recover to one with distinct diagnostics;
 the hosted process reports failure status after processing because its logger

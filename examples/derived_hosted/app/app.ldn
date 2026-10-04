@@ -17,8 +17,9 @@ public process: (provider: type is mem.allocator, inout allocator: provider,
             fail io.io_failed
         end
         mut pass: bool = true
+        mut encoding: line_encoding = (checked: false, valid: false)
         for selected in vec.used(cfg.chain) do
-            pass = selected.keep(line)
+            pass = selected.keep(line, encoding)
             break when not pass
         end for
         if pass then

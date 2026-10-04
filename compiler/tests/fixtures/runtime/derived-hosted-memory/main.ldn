@@ -81,6 +81,8 @@ public main: () -> (code: i32) =
     return when not bare_levels()
     code = 11
     return when not count_finite_region()
+    code = 12
+    return when not repeated_matches()
     code = 42
 
 end main
@@ -456,6 +458,46 @@ bare_levels: () -> (ok: bool) =
     end for
     ok = true
 end bare_levels
+
+--  The invalid first line contains both needles before its bad byte. The
+--  sample filter counts only valid lines; both matches see the same verdict.
+repeated_matches: () -> (ok: bool) =
+    ok = false
+    mut data: [31]u8 = zeroed
+    prefix: []u8 = "INFO keep"
+    for at in usize(0)..<lenof prefix do data[at] = prefix[at] end for
+    data[9] = 255
+    data[10] = 10
+    rest: []u8 = "INFO keep\nINFO keep\n"
+    for at in usize(0)..<lenof rest do data[11 + at] = rest[at] end for
+    mut files: [1]io.memory_file
+    files[0] = (name: "in", contents: data[0..<31], length: 31, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    every: []u8 = "2"
+    args: [7]io.argument = [
+      (data: addr arg2[0], length: lenof arg2),
+      (data: addr arg1[0], length: lenof arg1),
+      (data: addr arg4[0], length: lenof arg4),
+      (data: addr every[0], length: lenof every),
+      (data: addr arg2[0], length: lenof arg2),
+      (data: addr arg3[0], length: lenof arg3),
+      (data: addr arg8[0], length: lenof arg8)]
+    mut out: [128]u8 = zeroed
+    mut err: [128]u8 = zeroed
+    mut world_state := io.memory_world(files[0..<1], args[0..<7],
+                                       out[0..<128], err[0..<128])
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    mut program := region.new_region(addr host)
+    defer region.release_region(program)
+    kept: usize = app.run(program, world, usize(3)) else (problem)
+        _ = problem
+        return
+    end
+    expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
+    ok = kept == 1 and not files[0].opened
+      and app.equal(out[0..<world_state.output_used], expected)
+end repeated_matches
 
 metadata_exhaustion: () -> (ok: bool) =
     ok = false

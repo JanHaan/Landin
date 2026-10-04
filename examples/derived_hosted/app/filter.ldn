@@ -1,8 +1,13 @@
 import core/text
 
 public filter: type = concept (item: type)
-    keep: (self: ptr mut item, line: []u8) -> (yes: bool)
+    keep: (self: ptr mut item, line: []u8, inout encoding: line_encoding)
+          -> (yes: bool)
 end filter
+public line_encoding: type = struct
+    checked: bool
+    valid: bool
+end line_encoding
 public level_filter: type = struct
     least: u8
 end level_filter
@@ -32,17 +37,28 @@ public level_of: (line: []u8) -> (level: u8) =
     if has_level(line, "FATAL") then level = 5 end if
 end level_of
 
-level_keep: (self: ptr mut level_filter, line: []u8) -> (yes: bool) =
+level_keep: (self: ptr mut level_filter, line: []u8,
+             inout encoding: line_encoding) -> (yes: bool) =
+    _ = encoding
     yes = level_of(line) >= self.val.least
 end level_keep
-match_keep: (self: ptr mut match_filter, line: []u8) -> (yes: bool) =
+valid_line: (line: []u8) -> (yes: bool) =
     valid: utf8 = text.from_bytes(line) else (problem)
         _ = problem
         yes = false
         return
     end
     _ = valid
+    yes = true
+end valid_line
+match_keep: (self: ptr mut match_filter, line: []u8,
+             inout encoding: line_encoding) -> (yes: bool) =
+    if not encoding.checked then
+        encoding.valid = valid_line(line)
+        encoding.checked = true
+    end if
     yes = false
+    return when not encoding.valid
     needle: []u8 = self.val.needle
     return when lenof needle > lenof line
     mut at: usize = 0
@@ -54,8 +70,10 @@ match_keep: (self: ptr mut match_filter, line: []u8) -> (yes: bool) =
         inc at
     end while
 end match_keep
-sample_keep: (self: ptr mut sample_filter, line: []u8) -> (yes: bool) =
+sample_keep: (self: ptr mut sample_filter, line: []u8,
+              inout encoding: line_encoding) -> (yes: bool) =
     _ = line
+    _ = encoding
     --  R480_DEBUG_SAMPLE
     inc self.val.seen
     yes = self.val.seen % self.val.every == 0
