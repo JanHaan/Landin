@@ -1124,47 +1124,57 @@ package body Landin.Tests.Server_Suite is
    begin
       Host.Add_File ("/w/m.ldn", Text);
       declare
-         Context : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-         Answer  : Landin.Server.Analysis.Result;
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result);
+
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer : Landin.Server.Analysis.Result)
+         is
+         begin
+            Landin.Testing.Check (Item, Answer.Checked, "source is checked");
+            declare
+               Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Landin.Stages.Trees (Context).all, 1);
+            begin
+               for Offset in Landin.Source.Byte_Offset range 0 .. Text'Length
+               loop
+                  declare
+                     Expected : Syn.Node_Id := Syn.No_Node;
+                     Length   : Landin.Source.Byte_Offset :=
+                       Landin.Source.Byte_Offset'Last;
+                  begin
+                     for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Tree.all)
+                     loop
+                        declare
+                           Where : constant Landin.Source.Span :=
+                             Syn.Where (Tree.all, Node);
+                        begin
+                           if Offset >= Where.First and then Offset < Where.Last
+                             and then Where.Last - Where.First < Length
+                             and then not Syn.Is_Error (Syn.Kind (Tree.all, Node))
+                           then
+                              Expected := Node;
+                              Length := Where.Last - Where.First;
+                           end if;
+                        end;
+                     end loop;
+                     Landin.Testing.Check
+                       (Item, Landin.Server.Navigation.Node_At
+                                (Tree.all, Offset) = Expected,
+                        "same node at byte" & Offset'Image);
+                  end;
+               end loop;
+            end;
+         end Visit;
       begin
          Landin.Server.Analysis.Analyse
-           (Context, Host, One_File ("/w/m.ldn"), Answer);
-         Landin.Testing.Check (Item, Answer.Checked, "source is checked");
-         declare
-            Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of
-                (Landin.Stages.Trees (Context).all, 1);
-         begin
-            for Offset in Landin.Source.Byte_Offset range 0 .. Text'Length
-            loop
-               declare
-                  Expected : Syn.Node_Id := Syn.No_Node;
-                  Length   : Landin.Source.Byte_Offset :=
-                    Landin.Source.Byte_Offset'Last;
-               begin
-                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Tree.all)
-                  loop
-                     declare
-                        Where : constant Landin.Source.Span :=
-                          Syn.Where (Tree.all, Node);
-                     begin
-                        if Offset >= Where.First and then Offset < Where.Last
-                          and then Where.Last - Where.First < Length
-                          and then not Syn.Is_Error (Syn.Kind (Tree.all, Node))
-                        then
-                           Expected := Node;
-                           Length := Where.Last - Where.First;
-                        end if;
-                     end;
-                  end loop;
-                  Landin.Testing.Check
-                    (Item, Landin.Server.Navigation.Node_At
-                             (Tree.all, Offset) = Expected,
-                     "same node at byte" & Offset'Image);
-               end;
-            end loop;
-         end;
+           (Landin.Targets.Linux_X86_64,
+            Landin.Targets.Levels.Default_Level
+              (Landin.Targets.Linux_X86_64),
+            Host, One_File ("/w/m.ldn"), Visit'Access);
       end;
    end Cursor_Lookup_Keeps_The_Post_Order_Choice;
 
