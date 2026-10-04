@@ -5,7 +5,8 @@ Every positive, negative, runtime and ABI fixture directory with exactly one
 direct `.ldn` file, and every reproducer in `reproducers/`, is a seed. Each
 mutant is one of seven mutations of one seed, chosen by a splitmix64 generator
 from its own seed number, so a seed number names one mutant on every host and
-every Python. The seed's file is opened under the repository root, changed
+every Python. Fixtures use their real URI and reproducers isolated copies under the
+repository import root; the source is changed
 to the mutant, and asked for hover, a definition, formatting and code actions
 at positions the same generator picks.
 
@@ -339,6 +340,30 @@ def check_imports(server):
         server.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 
 
+def isolate_reproducers(corpus, directory):
+    """Keep each reproducer separate under a rooted server's module rule."""
+    isolated = {}
+    for label, path, text in corpus:
+        if label.startswith("reproducers/"):
+            module = directory / path.stem
+            module.mkdir()
+            entry = module / path.name
+            entry.write_bytes(text.encode("utf-8", "surrogateescape"))
+            isolated[label] = entry
+    return isolated
+
+
+def check_reproducer(server, path, text):
+    """Prove a reproducer reaches its checker diagnostics in isolation."""
+    server.diagnostics.clear()
+    serve_one(server, 0, path, text, text)
+    codes = {item.get("code") for report in server.diagnostics
+             if report.get("uri") == path.as_uri()
+             for item in report.get("diagnostics", [])}
+    if not {"L0301", "L0303"} <= codes:
+        raise Broken("reproducer check did not reach L0301 and L0303")
+
+
 def batch_one(refine, seconds, mutant):
     path = Path("/tmp") / ("landin-fuzz-%d.ldn" % os.getpid())
     path.write_bytes(mutant.encode("utf-8", "surrogateescape"))
@@ -435,56 +460,72 @@ def main():
         print("HIT seed=%d src=%s :: %s" % (seed, label, problem),
               flush=True)
 
-    if not arguments.batch:
-        server = Server(refine, arguments.memory, arguments.seconds)
-        try:
-            check_imports(server)
-        except Broken as problem:
-            print("import check failed: %s" % problem, file=sys.stderr)
-            server.stop()
-            return 1
-        stopped = server.stop()
-        if stopped:
-            print("import check failed: %s" % stopped, file=sys.stderr)
-            return 1
-        server = None
-    for label, path, original in seeds():
-        for _ in range(arguments.rounds):
-            seed = arguments.seed + total
-            total += 1
-            mutant = mutate(seed, original)
-            problem = ""
-            if arguments.batch:
-                problem = batch_one(refine, arguments.seconds, mutant)
-                transcript = []
-            else:
-                if server is None or total % arguments.per_server == 0:
-                    if server is not None:
-                        stopped = server.stop()
-                        if stopped:
-                            hit(*last[:3], last[3] + server.transcript,
-                                stopped)
-                    server = Server(refine, arguments.memory,
-                                    arguments.seconds)
-                    last = None
-                try:
-                    serve_one(server, seed, path, original, mutant)
-                except Broken as broken:
-                    problem = str(broken)
-                transcript = server.transcript
-                server.transcript = []
-                if problem:
-                    server.stop()
-                    server = None
-                    last = None
+    corpus = seeds()
+    scratch = None
+    isolated = {}
+    try:
+        if not arguments.batch:
+            scratch = tempfile.TemporaryDirectory(
+                prefix="reproducers-", dir=out)
+            isolated = isolate_reproducers(
+                corpus, Path(scratch.name).resolve())
+            server = Server(refine, arguments.memory, arguments.seconds)
+            try:
+                check_imports(server)
+                label = "reproducers/min-100299.ldn"
+                check_reproducer(
+                    server, isolated[label],
+                    next(text for name, _, text in corpus if name == label))
+            except Broken as problem:
+                print("seed check failed: %s" % problem, file=sys.stderr)
+                return 1
+            stopped = server.stop()
+            server = None
+            if stopped:
+                print("seed check failed: %s" % stopped, file=sys.stderr)
+                return 1
+        for label, path, original in corpus:
+            if label in isolated:
+                path = isolated[label]
+            for _ in range(arguments.rounds):
+                seed = arguments.seed + total
+                total += 1
+                mutant = mutate(seed, original)
+                problem = ""
+                if arguments.batch:
+                    problem = batch_one(refine, arguments.seconds, mutant)
+                    transcript = []
                 else:
-                    last = (seed, label, mutant, transcript)
-            if problem:
-                hit(seed, label, mutant, transcript, problem)
-    if server is not None:
-        stopped = server.stop()
-        if stopped:
-            hit(*last[:3], last[3] + server.transcript, stopped)
+                    if server is None or total % arguments.per_server == 0:
+                        if server is not None:
+                            stopped = server.stop()
+                            if stopped:
+                                hit(*last[:3], last[3] + server.transcript,
+                                    stopped)
+                        server = Server(refine, arguments.memory,
+                                        arguments.seconds)
+                        last = None
+                    try:
+                        serve_one(server, seed, path, original, mutant)
+                    except Broken as broken:
+                        problem = str(broken)
+                    transcript = server.transcript
+                    server.transcript = []
+                    if problem:
+                        server.stop()
+                        server = None
+                        last = None
+                    else:
+                        last = (seed, label, mutant, transcript)
+                if problem:
+                    hit(seed, label, mutant, transcript, problem)
+    finally:
+        if server is not None:
+            stopped = server.stop()
+            if stopped and last is not None:
+                hit(*last[:3], last[3] + server.transcript, stopped)
+        if scratch is not None:
+            scratch.cleanup()
     print("total=%d hits=%d seconds=%d out=%s"
           % (total, hits, time.monotonic() - started, out))
     return 1 if hits else 0

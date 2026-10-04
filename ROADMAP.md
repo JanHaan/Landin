@@ -501,12 +501,14 @@ run in the test program and through the executable on Linux and macOS; the
 memory suite runs eight sessions of twenty edits and stays flat.
 `compiler/tests/fuzz/fuzz.py` gives the single direct source from every
 one-source positive, negative, runtime and ABI fixture directory, plus every
-reproducer, mutated, to the server at its real file URI with the checkout as
-import root. An unchanged imported fixture must report its expected checker
-diagnostic before the mutants run. This is source-text crash coverage; the
-lane does not execute the fixtures or their C companions. Its first run found a
-query of a module refused before the checker raising, which is fixed and
-pinned. Neovim, Helix, Emacs, Zed, VS Code, Vim, Sublime Text and Kate
+reproducer, mutated, to the server with the checkout as import root.
+Fixtures use their real file URIs; reproducers use separate temporary
+modules. An unchanged imported fixture and an isolated reproducer must
+report their expected checker diagnostics before the mutants run. This is
+source-text crash coverage; the lane does not execute the fixtures or their
+C companions. Its first run found a query of a module refused before the
+checker raising, which is fixed and pinned. Neovim, Helix, Emacs, Zed,
+VS Code, Vim, Sublime Text and Kate
 start the server, and Neovim and Emacs were run against it.
 `scripts/driver_manifest.py` held every commit to its parent at all 8,169
 entries, and the largest scaling ratio is 2.10. The Mac ran the host suite

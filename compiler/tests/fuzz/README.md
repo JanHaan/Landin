@@ -34,10 +34,14 @@ The server is initialized with the checkout as its import root. Before the
 mutants, the driver opens `negative/core-failing-needs-mutable-inner` unchanged
 and requires its L0340 diagnostic at line 10. That diagnostic comes after
 `core/failing` and `core/heap` resolve; a run that loses imports fails here.
+The reproducers are separate seeds, so each is copied into its own temporary
+module for the run. The unchanged `min-100299.ldn` must report L0301 and
+L0303 before the mutants run; sibling reproducers cannot mask its checker path.
 
-One server serves fifty mutants, each its own document. Each is opened at
-its seed's real file URI, changed to the mutant, then asked for a hover, a
-definition, formatting and code actions at positions the seed picks, and
+One server serves fifty mutants, each its own document. Each fixture is
+opened at its real file URI and each reproducer at its isolated copy's URI,
+changed to the mutant, then asked for a hover, a definition, formatting
+and code actions at positions the seed picks, and
 closed. A mutant is a hit when the server stops, does not answer within
 `--seconds` (default 10), answers a request with anything but a result or a
 protocol error, or reports a compiler defect, on its log or through

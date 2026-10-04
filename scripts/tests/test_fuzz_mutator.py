@@ -124,6 +124,21 @@ class Mutator(unittest.TestCase):
                     patch.object(fuzz, "serve_one"):
                 self.assertIn("status 70", fuzz.reduce_one(
                     "refine", 0, 10, Path(directory), "trial"))
+    def test_reproducers_have_separate_rooted_modules(self):
+        corpus = fuzz.seeds()
+        siblings = [path for label, path, _ in corpus
+                    if label.startswith("reproducers/")]
+        self.assertGreater(len(siblings), 1)
+        self.assertEqual(len({path.parent for path in siblings}), 1)
+        with tempfile.TemporaryDirectory() as directory:
+            isolated = fuzz.isolate_reproducers(corpus, Path(directory))
+            self.assertEqual(len(isolated), len(siblings))
+            for label, original, text in corpus:
+                if label in isolated:
+                    entry = isolated[label]
+                    self.assertNotEqual(entry.parent, original.parent)
+                    self.assertEqual(list(entry.parent.glob("*.ldn")), [entry])
+                    self.assertEqual(entry.read_text(), text)
 
 
 if __name__ == "__main__":
