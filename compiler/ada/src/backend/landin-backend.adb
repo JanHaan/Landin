@@ -252,6 +252,22 @@ package body Landin.Backend is
       Alignment := Measured.Alignment;
    end Field_Extent;
 
+   procedure Variant_Selected_Payload_Extent
+     (Of_Unit : Landin.IR.Unit;
+      Shape   : Landin.IR.Field_Shape;
+      Which   : Positive;
+      Facts   : Landin.Targets.Target_Facts;
+      Offset  : out Landin.Targets.Byte_Count;
+      Size    : out Landin.Targets.Byte_Count)
+   is
+      Part : constant Layout.Plan := Variant_Layout (Of_Unit, Shape, Facts);
+      Payload : constant Layout.Plan :=
+        Case_Layout (Of_Unit, Shape, Which, Facts);
+   begin
+      Offset := Part.Offsets (2);
+      Size := Payload.Size;
+   end Variant_Selected_Payload_Extent;
+
    function Variant_Payload_Field_Offset
      (Of_Unit       : Landin.IR.Unit;
       Shape         : Landin.IR.Field_Shape;

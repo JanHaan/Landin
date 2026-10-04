@@ -218,6 +218,21 @@ package Landin.Backend is
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment);
 
+   --  Selecting a case zeroes only its own payload.  The returned offset
+   --  includes the tag-to-payload gap; Size is zero for a bare case.
+   procedure Variant_Selected_Payload_Extent
+     (Of_Unit : Landin.IR.Unit;
+      Shape   : Landin.IR.Field_Shape;
+      Which   : Positive;
+      Facts   : Landin.Targets.Target_Facts;
+      Offset  : out Landin.Targets.Byte_Count;
+      Size    : out Landin.Targets.Byte_Count)
+     with Pre => Landin.IR."="
+                   (Shape.Kind, Landin.IR.Variant_Field_Shape)
+                 and then Which <= Shape.Cases
+                 and then Landin.IR.Variant_Case_Run_Is_Valid
+                   (Of_Unit, Shape, Which);
+
    --  D76's scalar payload write reaches one field inside one selected
    --  case.  The offset is relative to the start of the variant part and
    --  is replayed from the same tag-first/max-payload rule as Field_Extent;

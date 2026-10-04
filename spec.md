@@ -8860,9 +8860,11 @@ omitted payload field, while any other fill is L0304. Aggregate payloads stay
 D74's depth-one refusal.
 
 The destination case is selected before any payload expression is evaluated.
-Selection clears the variant part's complete padded target extent, writes the
-case's zero-based source-order tag, and thereby gives omitted and fixed-array
-payload fields their zero image. Labelled scalar expressions are then
+Selection clears only the selected case's padded payload extent and writes the
+case's zero-based source-order tag. A bare case therefore writes only its tag;
+the gap after the tag, inactive case storage and part tail padding have
+unspecified bytes. The clear gives omitted and fixed-array payload fields
+their zero image. Labelled scalar expressions are then
 evaluated exactly once in written order and stored immediately, so a later
 expression observes every earlier program write. A refused destination reads
 none of them. D16 records the complete selected part as assigned; D77 is the
@@ -8875,14 +8877,17 @@ identity and one scalar operand. None carries a target offset. The verifier
 checks storage, aggregate field, variant shape, case run, payload field kind
 and operand type in that order with explicit release-build code, and refuses
 either operation inside a datum initializer. The backend replays D74's layout:
-selection clears the target-derived part extent and writes `case - 1` with the
-shape's tag width; a payload store derives the part, payload and field offsets
-for the selected target before storing at the scalar width.
+selection clears the selected case's target-derived payload extent and writes
+`case - 1` with the shape's tag width; a payload store derives the part,
+payload and field offsets for the selected target before storing at the scalar
+width.
 
 **Why contextual construction first:** it exercises every case identity and
 payload offset without an aggregate temporary, a static nonzero variant image
-or an ABI rule. A field-wise clear was declined because it would leave union
-padding outside the selected value's zero image. Whole copying waited until
+or an ABI rule. Clearing the selected payload as one extent retains its omitted
+fields' zero images without touching storage reserved for inactive cases. This
+revises D76's original complete-part clear: that rule made a bare selection's
+write count grow with the largest unrelated case. Whole copying waited until
 D80 fixed the source and destination as storage identities and copied the
 complete padded part. D84 later adds D52/D53's write sequence inside a
 fixed-array payload without changing selection's clear-and-tag operation. D77
@@ -8890,6 +8895,12 @@ adds tag matching; D78 adds scalar payload binding while retaining that
 fixed-array boundary. D79 also lets a call-shaped case construction infer a
 fresh local binding; D81 later supplies the nonzero static variant image and
 admits module inference.
+
+**The alternative:** clear the complete padded variant part on every selection.
+That gives inactive bytes a zero value but makes a bare case write an extent
+set by an unrelated payload. Clearing each selected field separately would
+avoid those inactive bytes but leave gaps inside the selected payload
+uninitialized.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -9012,9 +9023,9 @@ selection existed.
 **Chosen:** `name := T(..., part: case(...), ...)` is admitted inside a
 function when `T` is a D74 variant-bearing ordinary struct. The construction's
 type name supplies [0710]'s body before inference settles the binding, and the
-fresh aggregate frame slot is its contextual destination. D76 then applies
-unchanged: common and payload values are evaluated once in written order, the
-selected part is cleared, its tag is written, and scalar payload fields are
+fresh aggregate frame slot is its contextual destination. D76 then applies:
+common and payload values are evaluated once in written order, the selected
+payload is cleared, its tag is written, and scalar payload fields are
 stored directly. The inferred local is distinct storage and may immediately be
 selected or matched under D77/D78.
 
@@ -9074,13 +9085,14 @@ The backend replays D74's tag-first maximum-payload layout for the selected
 target, forms both field addresses and copies the complete padded part with one
 forward byte run. Distinct aggregate roots do not overlap; a self-copy names
 the identical range, which the forward run preserves. Copying the padded part
-rather than only the selected payload preserves [0540]'s complete image and
-does not need to inspect the source tag. Scalar and fixed-array fields remain
-separate operations in declaration order, exactly as D54 specified.
+also carries any unspecified inactive bytes; it need not inspect the source
+tag. An explicit `zeroed` source still has [0540]'s complete all-zero image.
+Scalar and fixed-array fields remain separate operations in declaration order,
+exactly as D54 specified.
 
 **Why a compact part copy:** selecting the active case and copying only its
-payload would branch on runtime state, leave inactive bytes or padding behind,
-and make the copy sequence depend on the tag. Copying the whole struct as one
+payload would branch on runtime state and make the copy sequence depend on the
+tag. Copying the whole struct as one
 opaque byte operation would duplicate D54's established scalar/array paths and
 erase their verifier types. One compact operation for the only union-shaped
 field keeps the IR target-neutral and the existing field semantics visible.
@@ -9283,12 +9295,13 @@ gives a payload array every expression an ordinary array field takes, still
 selecting the case first. A refused or
 immutable destination is reported first and reads no payload.
 
-Selection remains one destination-first operation: it clears the complete
-padded variant part and writes the source-order tag before labelled payloads
+Selection remains one destination-first operation: it clears the selected
+case's padded payload and writes the source-order tag before labelled payloads
 are evaluated once in written order. Literal elements store immediately;
 repetitions evaluate their repeated value once; copies move the complete
-array. A nested `zeroed` payload emits no second clear because selection has
-already cleared every byte of the part. Normal completion retains D76's whole
+array. A nested `zeroed` payload retains the selected array's zero image; the
+array path may emit a redundant clear of that array. Both writes remain bounded
+by the selected payload extent. Normal completion retains D76's whole
 variant-field definite-assignment fact.
 
 No new opcode is needed. `Store_Element`, `Fill_Array` and the destination of
@@ -10895,9 +10908,9 @@ source order; fixed-array payloads use the same literal, repetition, `zeroed`
 and storage-copy forms D101 gives ordinary array fields. `of zeroed` selects
 the first case for an omitted variant field.
 
-Selection clears the complete padded unfolded part before payload writes, so
-inactive bytes and omitted payload leaves have the all-zero image. The IR
-retains field, case and payload-field identities; target tag placement, payload
+Selection clears the selected payload before payload writes, so omitted
+payload leaves have the all-zero image while inactive bytes are unspecified.
+The IR retains field, case and payload-field identities; target tag placement, payload
 offsets and padded extent remain backend-derived. The finished temporary then
 uses D102's unchanged one-position by-value transport.
 

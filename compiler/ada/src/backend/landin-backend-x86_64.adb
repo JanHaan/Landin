@@ -3838,29 +3838,37 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
                        Reached_Shape (Destination, Field, Nested);
+                     Offset : Landin.Targets.Byte_Count;
                      Size : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
                      Tag : constant Natural :=
                        Landin.IR.Variant_Case_Of
                          (Of_Unit, Item, Value) - 1;
                      Held : constant Held_Size :=
                        Size_Of (Shape.Element, Facts);
                   begin
-                     Landin.Backend.Field_Extent
-                       (Of_Unit, Shape, Facts, Size, Alignment);
-                     Storage_Address
-                       (Destination, Field, "%rdi", Nested => Nested);
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Size))
-                        & ", %rcx");
-                     Emit ("xorl %eax, %eax");
-                     Emit ("cld");
-                     Emit ("rep stosb");
+                     Landin.Backend.Variant_Selected_Payload_Extent
+                       (Of_Unit, Shape, Positive (Tag + 1), Facts,
+                        Offset, Size);
+                     if Size > 0 then
+                        Storage_Address
+                          (Destination, Field, "%rdi", Nested => Nested);
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Offset))
+                           & ", %rcx");
+                        Emit ("addq %rcx, %rdi");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Size))
+                           & ", %rcx");
+                        Emit ("xorl %eax, %eax");
+                        Emit ("cld");
+                        Emit ("rep stosb");
+                     end if;
 
-                     --  rep stosb advances %rdi, so form the part base
-                     --  again before writing the source-order tag.
+                     --  Form the part base for the source-order tag.
                      Storage_Address
                        (Destination, Field, "%rcx", Nested => Nested);
                      Emit

@@ -3293,21 +3293,27 @@ package body Landin.Backend.Cortex_M is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
+                     Offset : Landin.Targets.Byte_Count;
                   begin
                      if Op = Landin.IR.Select_Variant then
-                        Field_Extent
+                        Variant_Selected_Payload_Extent
                           (Of_Unit, Reached_Shape (Destination, Field, Nested),
-                           Facts, Bytes, Alignment);
+                           Positive (Landin.IR.Variant_Case_Of
+                             (Of_Unit, Item, Value)), Facts, Offset, Bytes);
                      else
                         Bytes := Whole_Clear_Extent
                           (Destination, Field, Nested);
                      end if;
-                     Storage_Address (Destination, Field, "r0", Nested =>
-                       Nested);
-                     Zero_Bytes
-                       (Bytes, Clear_Alignment
-                          (Destination, Field, Nested));
+                     if Bytes > 0 then
+                        Storage_Address (Destination, Field, "r0", Nested =>
+                          Nested);
+                        if Op = Landin.IR.Select_Variant then
+                           Add_Offset ("r0", Offset);
+                        end if;
+                        Zero_Bytes
+                          (Bytes, Clear_Alignment
+                             (Destination, Field, Nested));
+                     end if;
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "r2", Nested => Nested);

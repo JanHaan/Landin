@@ -2651,19 +2651,25 @@ package body Landin.Backend.Arm64 is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
+                     Offset : Landin.Targets.Byte_Count;
                   begin
                      if Op = Landin.IR.Select_Variant then
-                        Field_Extent
+                        Variant_Selected_Payload_Extent
                           (Of_Unit, Reached_Shape (Destination, Field, Nested),
-                           Facts, Bytes, Alignment);
+                           Positive (Landin.IR.Variant_Case_Of
+                             (Of_Unit, Item, Value)), Facts, Offset, Bytes);
                      else
                         Bytes := Whole_Clear_Extent
                           (Destination, Field, Nested);
                      end if;
-                     Storage_Address (Destination, Field, "x9", Nested =>
-                       Nested);
-                     Zero_Bytes (Bytes);
+                     if Bytes > 0 then
+                        Storage_Address (Destination, Field, "x9", Nested =>
+                          Nested);
+                        if Op = Landin.IR.Select_Variant then
+                           Add_Offset ("x9", Offset);
+                        end if;
+                        Zero_Bytes (Bytes);
+                     end if;
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "x10", Nested => Nested);

@@ -5102,6 +5102,7 @@ package body Landin.Tests.Backend_Suite is
         & "    variant_state = zeroed" & LF
         & "    variant_state.kind = wide_payload(word: 7, byte: 9)" & LF
         & "    local.kind = array_payload(row: zeroed)" & LF
+        & "    variant_state.kind = no_payload" & LF
         & "    match variant_state.kind" & LF
         & "        no_payload: _ = 1" & LF
         & "        wide_payload: _ = 2" & LF
@@ -5229,13 +5230,27 @@ package body Landin.Tests.Backend_Suite is
             "the selected u16 array payload has one separate six-byte clear");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $24, %rcx") = 4
-              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 4
+            Occurrences (Wide, HT & "movabsq $24, %rcx") = 2
+              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 2
+              and then Contains
+                (Wide, HT & "movabsq $8, %rcx" & LF
+                 & HT & "addq %rcx, %rdi" & LF
+                 & HT & "movabsq $16, %rcx" & LF)
+              and then Contains
+                (Thin, HT & "movabsq $4, %rcx" & LF
+                 & HT & "addq %rcx, %rdi" & LF
+                 & HT & "movabsq $8, %rcx" & LF)
               and then Contains (Wide, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Wide, HT & "movb $2, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $2, (%rcx)" & LF),
-            "selection and copy use the target-derived variant extent");
+            "selection clears only its selected payload");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Wide, HT & "rep stosb" & LF), 5,
+            "bare case adds no clear on the wide target");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Thin, HT & "rep stosb" & LF), 5,
+            "bare case adds no clear on the narrow target");
          Landin.Testing.Check
            (Item,
             Occurrences (Wide, HT & "rep movsb") = 2
