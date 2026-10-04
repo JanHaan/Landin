@@ -14008,6 +14008,21 @@ an implementation limit, like L0111's nesting depth, and not a rule of the
 language: a larger compiler may raise them without changing what any program
 at or under them means.
 
+Pointer-provenance verification uses a separate representation: it indexes
+stores and reads and follows uninitialized paths for each read slot. Its
+scratch grows with blocks, slots, IR values and uses, not their block-by-slot
+product. Every input-sized scratch array, including reachability and work
+queues, has scoped heap ownership with checked allocation sizes and cleanup
+on early return or allocation failure. Successors are read directly from
+validated terminators; no returned graph or automatic construction queue is
+needed. Zero-use items avoid slot/value dataflow storage while retaining
+signature, true reachability and ordered pointer/storage checks. This adds
+no block, value or slot limit: existing accepted workloads and the source
+bounds above remain unchanged. An unrepresentable scratch size or an
+allocation failure retains host-resource exhaustion reporting, exit 71.
+Heap ownership does not establish a bound for the compiler's total memory
+or remove the other per-routine automatic arrays described below.
+
 The numbers are measured, not chosen for their shape. Origin tracking keeps,
 for each declaration the routine can name, a fact with one bit for each of
 them, so a routine's storage still grows with the square of its declarations,
@@ -14038,7 +14053,10 @@ and replacing them is a change to that pass rather than to its bound.
 **Pinned by** `unit/checker-size-bounds`, the checking case `size bounds
 refuse past their limit`, which generates a routine and a struct at each bound
 and one past it: a program that meets either is too large to keep in the
-corpus, as L0111's is.
+corpus, as L0111's is. Pointer scratch is pinned by the verifier cases
+`scratch arithmetic and zero uses` and `address initialisation is checked`,
+including injected allocation failures, and the optimization case
+`cyclic islands`, which retains the 10,000-block reachability verdicts.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 

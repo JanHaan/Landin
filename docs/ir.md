@@ -284,9 +284,17 @@ completed unit before backend use, and the current specialization and
 simplification passes verify their inputs and outputs. It checks storage
 runs and identities before dereferencing them, then block structure,
 reachability, operand order, type agreement, signatures, shapes, paths,
-evidence and static images. Pointer-provenance dataflow keeps its
-block-by-slot input and output tables in scoped heap storage, including
-when verification exits early after finding a fault.
+evidence and static images. Pointer-provenance verification indexes stores
+and reads, then follows uninitialized paths for each read slot, retaining the
+first fault in block and instruction order. Its scoped heap scratch grows
+with blocks, slots, values and pointer uses, without block-by-slot tables.
+Successors come directly from validated terminators, so constructing a graph
+introduces no automatic queue or returned graph temporary. Array byte sizes
+and use counts are checked before allocation; partial allocations are released
+on faults and host-resource failures. An item with no pointer reads needs no
+slot/value dataflow scratch, but still receives signature, true reachability
+and ordered pointer/storage checks. There are no additional per-item block,
+value or slot caps; D247's existing source limits remain unchanged.
 
 This is structural and semantic consistency checking of a compiler data
 structure, not a proof that compilation preserves every program's behavior.
