@@ -1914,11 +1914,15 @@ There is no implicit keep attached to either convention.
 On exception entry ARMv6-M saves r0–r3, r12, incoming LR, return PC and xPSR
 on the interrupted stack, adding the architectural alignment word when needed.
 Handler mode uses MSP; thread mode may use MSP or programmer-established PSP.
-An interrupt routine additionally preserves r4–r7 and constructs the same
-previous-r11/incoming-LR eight-byte record as every ordinary Landin routine
-before publishing r11. r8 and r10 are untouched, r9 remains reserved, and
-r11 is restored. Incoming LR in that record is EXC_RETURN, not a code address.
-The epilogue restores it and uses BX LR; the hardware restores volatile state,
+Ordinary and interrupt routines preserve each r4–r7 register their emitted
+instructions use. An ordinary routine with no calls, no inline assembly, and no transient
+stack changes may use SP-relative homes, leave r11 and LR untouched, and save only
+the low registers it uses. Other routines construct a previous-r11/incoming-LR
+eight-byte record before publishing r11; they also save the low register used
+to carry r11 and round the low save area for eight-byte call alignment. r8 and
+r10 are untouched, r9 remains reserved, and a published r11 is restored.
+Incoming LR in an interrupt record is EXC_RETURN, not a code address.
+The epilogue uses BX LR; the hardware restores volatile state,
 flags and the interrupted stack. `0xfffffff1`, `0xfffffff9` and `0xfffffffd`
 are respectively supported returns to a handler, a thread using MSP, and a
 thread using PSP. The NVIC implements four programmable priority levels (the upper two
@@ -14834,8 +14838,10 @@ use the same handler on the interrupted stack and do not return through
 EXC_RETURN. The existing [1990] assumption of no NMI/fault during reset
 initialization remains: a custom early NMI/HardFault cannot assume initialized
 storage or this latch before BSS has been cleared. This is not a new promise
-about reset-time hardware faults. All ordinary frames, including the handler,
-retain the previous-frame/incoming-return record and target alignment.
+about reset-time hardware faults. Call-bearing ordinary frames, including a
+handler that calls, retain the previous-frame/incoming-return record and target
+alignment. Eligible leaves use SP-relative homes and preserve incoming LR in
+its register.
 
 Site zero is reserved for synthetic guards without a source operation. Other
 sites use a deterministic, collision-free compilation-local space. In canonical

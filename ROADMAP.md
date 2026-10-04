@@ -1080,9 +1080,10 @@ in `tour.md` under WHAT WAS TRIED AND DROPPED.
 - **Stackful fibres are the route, and the backends keep them reachable on
   purpose.** A backend decision that forecloses switching stacks is a defect
   in that backend rather than a trade-off. The conditions are held for other
-  reasons already: the frame pointer is always present, the callee-saved
-  discipline is explicit, and no capability rides in a reserved register. The
-  case to design against is a single-core freestanding target, where the
+  reasons already: call-bearing frames retain a frame pointer, the callee-saved
+  discipline is explicit, and no capability rides in a reserved register.
+  Call-free Cortex-M leaves may omit the pointer because they cannot switch
+  stacks. The case to design against is a single-core freestanding target, where the
   honest answer to a request for concurrency is that there is none.
 
 ## Successor families

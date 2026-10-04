@@ -1,3 +1,4 @@
+with Ada.Characters.Handling;
 with Ada.Containers.Vectors;
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;
@@ -430,6 +431,9 @@ package body Landin.Backend.Cortex_M is
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
       Instruction_Count : Natural := 0;
+      Leaf_Frame : Boolean := False;
+      Leaf_Homes : Landin.Targets.Byte_Count := 0;
+      type Low_Set is array (4 .. 7) of Boolean;
       type Literal_Entry is record
          Name : Unbounded.Unbounded_String;
          Label : Unbounded.Unbounded_String;
@@ -622,10 +626,14 @@ package body Landin.Backend.Cortex_M is
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "r6") is
       begin
-         Emit ("mov " & Register & ", r11");
-         if Offset <= 255 then
+         if Leaf_Frame then
+            Emit ("mov " & Register & ", sp");
+            Add_Offset (Register, Leaf_Homes - Offset);
+         elsif Offset <= 255 then
+            Emit ("mov " & Register & ", r11");
             Emit ("subs " & Register & ", #" & Trimmed (Offset'Image));
          else
+            Emit ("mov " & Register & ", r11");
             Immediate ("r7", Pattern (Offset));
             Emit ("subs " & Register & ", " & Register & ", r7");
          end if;
@@ -636,7 +644,10 @@ package body Landin.Backend.Cortex_M is
       procedure Frame_Address_Through
         (Offset : Landin.Targets.Byte_Count; Register : String) is
       begin
-         if Offset <= 255 then
+         if Leaf_Frame then
+            Emit ("mov " & Register & ", sp");
+            Add_Offset (Register, Leaf_Homes - Offset);
+         elsif Offset <= 255 then
             Emit ("mov " & Register & ", r11");
             Emit ("subs " & Register & ", #" & Trimmed (Offset'Image));
          else
@@ -1180,11 +1191,23 @@ package body Landin.Backend.Cortex_M is
          end loop;
       end Emit_Vectors;
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id);
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Probe : Boolean := True;
+         Leaf : Boolean := False; Saves : Low_Set := [others => True]);
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Probe : Boolean := True;
+         Leaf : Boolean := False; Saves : Low_Set := [others => True]) is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Before_Emit : constant Natural := Instruction_Count;
+         Before_Serial : constant Natural := Serial;
+         Before_Line : constant Natural := Emission_Line;
+         Before_Generation : constant Natural := Pool_Generation;
+         Before_Distance : constant Natural := Pool_Distance;
+         Used_Low : Low_Set := [others => False];
+         Saving_Low : constant Low_Set := Saves;
+         Save_Count : Landin.Targets.Byte_Count := 0;
+         Body_Marker : constant String := "@landin_cortex_body@";
          Routine_Start : constant Positive := Unbounded.Length (Out_Text) + 1;
          type Branch_Site is record
             First, Last : Positive;
@@ -1228,6 +1251,181 @@ package body Landin.Backend.Cortex_M is
          Home_Line : Natural := 0;
          Home_Offset : Landin.Targets.Byte_Count := 0;
          Hard_Trap_Used : Boolean := False;
+
+         procedure Mark_Low (Assembly : String);
+         function Call_Free (Assembly : String) return Boolean;
+         function Low_List return String;
+
+         function Assembly_Space (C : Character) return Boolean is
+           (C in ' ' | Character'Val (9) | Character'Val (11)
+             | Character'Val (12) | Character'Val (13));
+
+         procedure Mark_Low (Assembly : String) is
+            Start : Positive := Assembly'First;
+            function Name_Character (C : Character) return Boolean is
+              (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_');
+         begin
+            for Last in Assembly'Range loop
+               if Assembly (Last) = LF then
+                  if Assembly (Start) = Character'Val (9) then
+                     declare
+                        Line : constant String :=
+                          Ada.Characters.Handling.To_Lower
+                            (Assembly (Start + 1 .. Last - 1));
+                        First : Natural := Line'First;
+                        Space : Natural;
+                        Operand_First : Natural;
+                     begin
+                        while First <= Line'Last and then
+                          Assembly_Space (Line (First))
+                        loop
+                           First := First + 1;
+                        end loop;
+                        Space := First;
+                        while Space <= Line'Last and then
+                          not Assembly_Space (Line (Space))
+                        loop
+                           Space := Space + 1;
+                        end loop;
+                        Operand_First := Space;
+                        while Operand_First <= Line'Last and then
+                          Assembly_Space (Line (Operand_First))
+                        loop
+                           Operand_First := Operand_First + 1;
+                        end loop;
+                        if First <= Line'Last and then
+                          Line (First) /= '.' and then
+                          Operand_First <= Line'Last
+                        then
+                           declare
+                              Op : constant String :=
+                                Line (First .. Space - 1);
+                              Limit : Natural := Line'Last;
+                           begin
+                              --  Branch operands and bare literal names are
+                              --  symbols, even when one is spelled "r5".
+                              if Op not in "b" | "bl" | "beq" | "bne"
+                                | "bcc" | "bcs" | "bmi" | "bpl" | "bvs"
+                                | "bvc" | "bhi" | "bls" | "bge" | "blt"
+                                | "bgt" | "ble" | "bal"
+                              then
+                                 if Op in "ldr" | "ldrb" | "ldrh"
+                                   | "ldrsb" | "ldrsh" | "adr"
+                                 then
+                                    declare
+                                       Comma : constant Natural :=
+                                         Ada.Strings.Fixed.Index (Line, ",");
+                                    begin
+                                       if Comma > 0 and then
+                                         Ada.Strings.Fixed.Index
+                                           (Line (Comma + 1 .. Line'Last),
+                                            "[") = 0
+                                       then
+                                          Limit := Comma - 1;
+                                       end if;
+                                    end;
+                                 end if;
+                                 for Index in Operand_First .. Limit - 1 loop
+                                    if Line (Index) = 'r' and then
+                                      Line (Index + 1) in '4' .. '7'
+                                      and then (Index = Operand_First or else
+                                        not Name_Character (Line (Index - 1)))
+                                      and then (Index + 1 = Limit or else
+                                        not Name_Character (Line (Index + 2)))
+                                    then
+                                       Used_Low
+                                         (Character'Pos (Line (Index + 1))
+                                          - Character'Pos ('0')) := True;
+                                    end if;
+                                 end loop;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+                  Start := Last + 1;
+               end if;
+            end loop;
+         end Mark_Low;
+
+         function Call_Free (Assembly : String) return Boolean is
+            Start : Positive := Assembly'First;
+            Begun : Boolean := False;
+         begin
+            for Last in Assembly'Range loop
+               if Assembly (Last) = LF then
+                  declare
+                     Line : constant String := Assembly (Start .. Last - 1);
+                  begin
+                     if Line = Body_Marker then
+                        Begun := True;
+                     elsif Begun and then Line'Length > 0 and then
+                       Line (Line'First) = Character'Val (9)
+                     then
+                        declare
+                           Text : constant String :=
+                             Ada.Characters.Handling.To_Lower
+                               (Line (Line'First + 1 .. Line'Last));
+                           First : Natural := Text'First;
+                           Space : Natural;
+                           Operand_First : Natural;
+                        begin
+                           while First <= Text'Last and then
+                             Assembly_Space (Text (First))
+                           loop
+                              First := First + 1;
+                           end loop;
+                           Space := First;
+                           while Space <= Text'Last and then
+                             not Assembly_Space (Text (Space))
+                           loop
+                              Space := Space + 1;
+                           end loop;
+                           Operand_First := Space;
+                           while Operand_First <= Text'Last and then
+                             Assembly_Space (Text (Operand_First))
+                           loop
+                              Operand_First := Operand_First + 1;
+                           end loop;
+                           if First <= Text'Last and then
+                             Operand_First <= Text'Last
+                           then
+                              declare
+                                 Op : constant String :=
+                                   Text (First .. Space - 1);
+                              begin
+                                 if Op in "bl" | "blx" | "push" | "pop"
+                                   or else (Op in "sub" | "add" | "mov"
+                                     and then Operand_First + 1 <= Text'Last
+                                     and then Text (Operand_First
+                                       .. Operand_First + 1) = "sp")
+                                 then
+                                    return False;
+                                 end if;
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+                  Start := Last + 1;
+               end if;
+            end loop;
+            return True;
+         end Call_Free;
+
+         function Low_List return String is
+            List : Unbounded.Unbounded_String;
+         begin
+            for Reg in Saving_Low'Range loop
+               if Saving_Low (Reg) then
+                  if Unbounded.Length (List) > 0 then
+                     Unbounded.Append (List, ", ");
+                  end if;
+                  Unbounded.Append (List, "r" & Trimmed (Reg'Image));
+               end if;
+            end loop;
+            return Unbounded.To_String (List);
+         end Low_List;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -1604,6 +1802,39 @@ package body Landin.Backend.Cortex_M is
 
          procedure Epilogue is
          begin
+            if Probe then
+               return;
+            end if;
+            if Leaf then
+               if Debug /= null then
+                  Emit (".cfi_remember_state");
+               end if;
+               if Homes in 1 .. 508 then
+                  Emit ("add sp, #" & Trimmed (Homes'Image));
+               elsif Homes > 0 then
+                  Immediate ("r2", Pattern (Homes));
+                  Emit ("add sp, r2");
+               end if;
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset " & Trimmed (Save_Count'Image));
+               end if;
+               if Save_Count > 0 then
+                  Emit ("pop {" & Low_List & "}");
+               end if;
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset 0");
+                  for Reg in Saving_Low'Range loop
+                     if Saving_Low (Reg) then
+                        Emit (".cfi_restore r" & Trimmed (Reg'Image));
+                     end if;
+                  end loop;
+               end if;
+               Emit ("bx lr");
+               if Debug /= null then
+                  Emit (".cfi_restore_state");
+               end if;
+               return;
+            end if;
             if Debug /= null then
                Emit (".cfi_remember_state");
             end if;
@@ -3720,8 +3951,8 @@ package body Landin.Backend.Cortex_M is
                             Landin.IR.No_Path_Steps));
                      end;
                   end if;
-                  Emit ("movs r4, #0");
-                  Emit ("mov r12, r4");
+                  Emit ("movs r2, #0");
+                  Emit ("mov r12, r2");
                   Return_From_Routine;
                when Landin.IR.Halt =>
                   if Panic = null or else Landin.Panics.Handler (Panic.all)
@@ -3739,6 +3970,13 @@ package body Landin.Backend.Cortex_M is
             end case;
          end Instruction;
       begin
+         Leaf_Frame := Probe or Leaf;
+         Leaf_Homes := Homes;
+         for Reg in Saving_Low'Range loop
+            if Saving_Low (Reg) then
+               Save_Count := Save_Count + 4;
+            end if;
+         end loop;
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             for Position in 1 .. Landin.IR.Length
               (Of_Unit, Item, Landin.IR.Block_Id (Block))
@@ -3808,29 +4046,57 @@ package body Landin.Backend.Cortex_M is
             return;
          end if;
          Pool_Active := True;
-         Emit ("push {r4, r5, r6, r7}");
-         if Debug /= null then
-            Emit (".cfi_def_cfa_offset 16");
-            for Reg in 4 .. 7 loop
-               Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
-                 & Trimmed (Integer'Image ((8 - Reg) * 4)));
-            end loop;
-         end if;
-         Emit ("mov r4, r11");
-         Emit ("mov r5, lr");
-         Emit ("push {r4, r5}");
-         if Debug /= null then
-            Emit (".cfi_def_cfa_offset 24");
-            Emit (".cfi_offset r11, -24");
-            if Ordinary then
-               Emit (".cfi_offset lr, -20");
+         if Probe then
+            null;
+         elsif Leaf then
+            if Save_Count > 0 then
+               Emit ("push {" & Low_List & "}");
+            end if;
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset " & Trimmed (Save_Count'Image));
+               declare
+                  Position : Natural := 0;
+               begin
+                  for Reg in Saving_Low'Range loop
+                     if Saving_Low (Reg) then
+                        Emit (".cfi_offset r" & Trimmed (Reg'Image)
+                          & ", -" & Trimmed
+                            (Integer'Image (Integer (Save_Count)
+                              - Position * 4)));
+                        Position := Position + 1;
+                     end if;
+                  end loop;
+               end;
+            end if;
+         else
+            Emit ("push {r4, r5, r6, r7}");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 16");
+               for Reg in 4 .. 7 loop
+                  Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
+                    & Trimmed (Integer'Image ((8 - Reg) * 4)));
+               end loop;
+            end if;
+            Emit ("mov r4, r11");
+            Emit ("mov r5, lr");
+            Emit ("push {r4, r5}");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 24");
+               Emit (".cfi_offset r11, -24");
+               if Ordinary then
+                  Emit (".cfi_offset lr, -20");
+               end if;
+            end if;
+            Emit ("mov r11, sp");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_register r11");
             end if;
          end if;
-         Emit ("mov r11, sp");
-         if Debug /= null then
-            Emit (".cfi_def_cfa_register r11");
-         end if;
          Reserve (Homes);
+         if Leaf and then Debug /= null then
+            Emit (".cfi_def_cfa_offset " & Trimmed
+              (Landin.Targets.Byte_Count'Image (Save_Count + Homes)));
+         end if;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
             Address ("r6", Local_Prefix & "landin_panic_active");
@@ -3871,8 +4137,17 @@ package body Landin.Backend.Cortex_M is
                   Frame_Address (Homes - Landin.Targets.Byte_Count
                     (Arg.First_Core) * 4);
                else
-                  Emit ("mov r6, r11");
-                  Add_Offset ("r6", 24 + Arg.Stack_At);
+                  if Probe or Leaf then
+                     Emit ("mov r6, sp");
+                     --  The argument-base adjustment must not introduce a
+                     --  new callee-save register after the selection probe.
+                     Immediate ("r2", Pattern
+                       (Homes + Save_Count + Arg.Stack_At));
+                     Emit ("adds r6, r6, r2");
+                  else
+                     Emit ("mov r6, r11");
+                     Add_Offset ("r6", 24 + Arg.Stack_At);
+                  end if;
                end if;
                if Aggregate then
                   declare
@@ -3904,6 +4179,9 @@ package body Landin.Backend.Cortex_M is
                end if;
             end;
          end loop;
+         if Probe then
+            Put (Body_Marker);
+         end if;
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             Put (Label (Item, Landin.IR.Block_Id (Block)) & ":");
             for Position in 1 .. Landin.IR.Length
@@ -3944,11 +4222,49 @@ package body Landin.Backend.Cortex_M is
             Emit (".cfi_endproc");
          end if;
          Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+         if Probe then
+            declare
+               Text : constant String := Unbounded.Slice
+                 (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+               Eligible : Boolean := Ordinary and then Call_Free (Text);
+            begin
+               for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+                  for Position in 1 .. Landin.IR.Length
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block))
+                  loop
+                     if Landin.IR.Op_Of
+                       (Of_Unit, Item, Landin.IR.Nth_Value
+                          (Of_Unit, Item, Landin.IR.Block_Id (Block),
+                           Position))
+                       = Landin.IR.Assembly
+                     then
+                        Eligible := False;
+                     end if;
+                  end loop;
+               end loop;
+               Mark_Low (Text);
+               Unbounded.Delete
+                 (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+               Instruction_Count := Before_Emit;
+               Serial := Before_Serial;
+               Emission_Line := Before_Line;
+               Pool_Generation := Before_Generation;
+               Pool_Distance := Before_Distance;
+               Literals.Clear;
+               --  No byte positions survive the tentative emission. The
+               --  final pass builds literal pools and branch sites anew.
+               Emit_Routine (Item, Probe => False, Leaf => Eligible,
+                             Saves => Used_Low);
+               return;
+            end;
+         end if;
          Shorten_Local_Branches;
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
-             (Item => Item, Frame_Bytes => Homes + 24,
-              Spill_Bytes => Spill_Bytes (Layout), Save_Bytes => 24,
+             (Item => Item,
+              Frame_Bytes => Homes + (if Leaf then Save_Count else 24),
+              Spill_Bytes => Spill_Bytes (Layout),
+              Save_Bytes => (if Leaf then Save_Count else 24),
               Spill_Count => Spill_Count (Layout),
               Instructions => Instruction_Count - Before_Emit,
               others => <>));

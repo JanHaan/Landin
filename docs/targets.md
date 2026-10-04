@@ -286,8 +286,9 @@ the template's source name/coordinates, and a source breakpoint can select
 multiple instances. Hosted targets retain their existing `full` contract and
 refuse `lines`, rather than silently substituting a different interface.
 
-Ordinary routine CFI describes the existing previous-r11/incoming-lr record,
-callee saves and changing CFA through prologue/epilogue. Interrupt and naked
+Ordinary routine CFI describes callee saves and the changing CFA through
+prologue/epilogue. Framed routines describe their previous-r11/incoming-lr
+record; eligible leaves describe SP-relative homes without that record. Interrupt and naked
 routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
 EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
 padding, nested exception records and restoration have independent executable
@@ -481,14 +482,16 @@ results remain in r0/r1, and failed calls promise no successful result. C
 calls do not preserve this internal error carrier. Linker call veneers may
 clobber r12 on entry; it is only an outcome after the called routine returns.
 
-The selected frame obligation keeps r11 in every Landin routine, including
-leaves, pointing to an eight-byte record: previous r11 then incoming lr.
-Publish the frame pointer only after constructing that record. Preserve
-r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
+Call-bearing and other framed Landin routines keep r11 pointing to an
+eight-byte record: previous r11 then incoming lr. Publish the frame pointer
+only after constructing that record. Eligible leaves use SP-relative homes,
+leave r11 and LR untouched, and save only the low registers their body uses.
+Preserve r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
 flags as call-clobbered, maintain sp modulo four at all times and modulo eight
 at calls, and allocate no red zone below sp. The backend implements this record
-and checks its construction through instruction stepping, including leaves and
-nested calls. The earlier handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
+and checks framed construction through instruction stepping, including nested
+calls. Eligible leaves have separate SP-based unwind evidence. The earlier
+handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
 r11 chain or foreign-exception unwinding is promised. Code addresses retain
 the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
 [Arm ELF32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aaelf32/aaelf32.rst),
@@ -600,12 +603,15 @@ epilogue restores it before the frame record.
 It does not change ordinary, C or optimal layout. Source slots remain pinned;
 verified block-local scalar temporaries reuse eight-byte stack homes only after
 their last operand read. Heap-owned work arrays keep allocation scratch off the
-Ada host stack. r0-r7 are selector scratch, with r4-r7 saved, r8/r10 untouched,
-r9 reserved, and r11 the frame pointer. The fixed prologue saves r4-r7, constructs
-the eight-byte previous-r11/lr record, publishes r11, then reserves aligned
-homes and incoming-register staging. Every epilogue restores that chain and the
-saved registers. Incoming stack arguments start 24 bytes above r11. Outgoing
-arguments use the planner's aligned stack area plus private r0-r3 staging.
+Ada host stack. r0-r7 are selector scratch, with r4-r7 saved in framed routines and only used low registers saved in
+leaves, r8/r10 untouched,
+r9 reserved, and r11 the frame pointer in framed routines. Their prologue
+saves r4-r7,
+constructs the eight-byte previous-r11/lr record, publishes r11, then reserves
+aligned homes and incoming-register staging. Eligible leaves use SP-relative
+homes and preserve LR and r11 in registers. Epilogues restore only their own
+saved registers. Incoming stack arguments begin above the actual save area.
+Outgoing arguments use the planner's aligned stack area plus private r0-r3 staging.
 
 | Selection | Implemented choice and boundary |
 |---|---|

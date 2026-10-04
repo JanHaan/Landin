@@ -618,6 +618,10 @@ package body Landin.Backend.X86_64 is
       begin
          Put (Character'Val (9) & ".type " & Decode_Entry & ", @function");
          Put (Decode_Entry & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc");
+            Emit (".cfi_def_cfa %rsp, 8");
+         end if;
          Emit ("movq %rax, %r8");
          Emit ("shrq $" & Trimmed (Natural'Image (Sign_Shift)) & ", %r8");
          Emit ("movq %rax, %rcx");
@@ -667,6 +671,9 @@ package body Landin.Backend.X86_64 is
          Put (Bad & ":");
          Emit ("stc");
          Emit ("ret");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
          Put (Character'Val (9) & ".size " & Decode_Entry & ", .-"
                & Decode_Entry);
       end Emit_Float_Decode;
@@ -3271,12 +3278,7 @@ package body Landin.Backend.X86_64 is
                            --  distinguish every valid u64 result from their
                            --  indefinite overflow result.  This is exactly
                            --  the target-neutral truncation and range check.
-                           Emit
-                             ((if From = Landin.Types.F32
-                               then "movl " else "movq ")
-                              & Value_Operand (Source)
-                              & (if From = Landin.Types.F32
-                                 then ", %eax" else ", %rax"));
+                           Load_Value (Source);
                            if Options.Optimize = Landin.Optimization.Size
                            then
                               Float_Decode_Used (From) := True;

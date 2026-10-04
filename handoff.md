@@ -112,8 +112,9 @@ compiler is written in Ada 2022 with pinned GNAT/GPRbuild, minimal
 dependencies, no SPARK, and a custom test harness. It compiles whole
 programs, may keep private caches, and lowers through a verified,
 target-neutral internal IR that evolves from implementation evidence to
-assembly text for the platform assembler and linker. The ordinary frame pointer
-is always present. Linux x86-64 comes first, native macOS arm64 second, and emulator-first Cortex-M third. Not
+assembly text for the platform assembler and linker. Hosted routines keep an
+ordinary frame pointer; eligible Cortex-M leaves use SP-relative homes and
+preserve r11. Linux x86-64 comes first, native macOS arm64 second, and emulator-first Cortex-M third. Not
 LLVM, which is a dependency larger than the language, and not C, which
 loses the calling convention, traps and debug information the design
 spends its precision on. Ada package boundaries are tested seams for
@@ -259,7 +260,7 @@ assembly for three targets. What it covers, by capability:
   Darwin with an explicit large-image loader limitation. The `cortex_m0`
   backend defaults to ARMv6-M Thumb and can select the higher `armv7-m` or
   `armv7e-m` level; all three share 32-bit layouts, the external AAPCS,
-  Landin's internal ABI, r11 frame chains and soft-float arithmetic. D229
+  Landin's internal ABI, r11 frame chains for framed routines and soft-float arithmetic. D229
   enables its compiler-owned reset, data/RAM-code copying, BSS clearing, typed
   interrupt/naked functions, vector references, placement/retention and fixed
   assembly with explicit effects, within the selected 32 KiB flash, 16 KiB RAM
