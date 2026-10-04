@@ -14488,6 +14488,12 @@ ARMv6-M has no exclusive instruction pair. It does not silently substitute
 interrupt masking, an unavailable `libatomic` helper, or a stronger core.
 The Cortex-M backend emits that admitted subset. Synthetic-32
 admits no memory intrinsics.
+The planned ESP32-C3 RV32IMC target likewise has no hardware
+read-modify-write atomics. When implemented, it must admit aligned one-,
+two- and four-byte atomic loads/stores and thread fences, and statically
+refuse exchange, add, compare-exchange and eight-byte atomic accesses with
+L0344. It gains no implicit `libatomic` or interrupt-masking fallback. This
+records the planned target contract; ESP32-C3 support is not enabled today.
 Device addresses must use volatile accesses, never CPU atomics. Even a CPU
 instruction that is atomic in RAM says nothing about peripheral bus semantics.
 

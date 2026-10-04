@@ -864,11 +864,21 @@ registers.
 Status: planned
 Depends on: R11.40, R12.10
 
-rv32imac for RP2350's Hazard3 cores and ESP32-C3 and C6, including the ESP
-application image format.
+RP2350's Hazard3 cores and ESP32-C6 use `rv32imac`; ESP32-C3 uses `rv32imc`
+without A. The ESP targets also need their application image format. The
+C3 default level and assembler limit must omit A. Under D227, support aligned
+one-, two- and four-byte atomic loads/stores and thread fences, and statically
+refuse read-modify-write atomics and eight-byte operations with L0344. There
+is no implicit library or interrupt-masking fallback.
 
 Exit evidence: the freestanding corpus on an emulator lane in the gate, and a
 recorded run on each board.
+
+C3 emulator and board cases execute its admitted atomic operations. The C3
+lane checks the `rv32imc` assembler setting and absence of A-extension
+instructions in linked firmware, and requires refusal of exchange, add,
+compare-exchange and eight-byte atomics. Hazard3 and C6 lanes execute an
+A-extension read-modify-write operation.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
