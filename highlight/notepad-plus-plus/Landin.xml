@@ -26,7 +26,7 @@
       <Keywords name="Folders in comment, open">--(</Keywords>
       <Keywords name="Folders in comment, middle"></Keywords>
       <Keywords name="Folders in comment, close">)--</Keywords>
-      <Keywords name="Keywords1">addr align alignof and any arena as at atom begin big break caller complete concept continue dec defer distinct do else elsif end escaping extern fail fixed for from if import in inc inout is layout lenof link little loop match mut not of option or ptr public range register return set sink sizeof soa struct then try type unchecked undo variant volatile when while with</Keywords>
+      <Keywords name="Keywords1">addr align alignof and any arena as at atom begin big break caller complete concept continue dec defer distinct do else elsif end escaping extern fail fixed for from if import in inc inout is layout lenof link little loop match mut not of option or ptr public range register return set sink sizeof soa struct then try type unchecked undo uninit variant volatile when while with</Keywords>
       <Keywords name="Keywords2">bool cstring f16 f32 f64 i128 i16 i32 i64 i8 isize u128 u16 u32 u64 u8 usize utf16 utf8</Keywords>
       <Keywords name="Keywords3">assembler compiler false linker none noreturn true zeroed</Keywords>
       <Keywords name="Keywords4"></Keywords>

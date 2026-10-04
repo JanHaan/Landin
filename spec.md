@@ -139,7 +139,7 @@ keyword and never a name, so 'if' is not available as a binding;
 that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The kernel
-reserves forty-nine words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
+reserves fifty words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
 language. Once reserved, it is a keyword in every program, even one that
 does not use that construct. Type names are not among them: u32 and bool
 are ordinary declared names [0120] that the kernel happens to predeclare.
@@ -162,14 +162,14 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "begin"
               | "inc" | "inout" | "loop" | "match" | "mut" | "none" | "not"
               | "or" | "ptr" | "public" | "return" | "sink" | "sizeof"
               | "struct" | "then" | "true" | "try" | "type" | "unchecked"
-              | "undo" | "when" | "while" | "with" | "zeroed"
+              | "undo" | "uninit" | "when" | "while" | "with" | "zeroed"
 
 ```
 
 ### [1770] The kernel's literals include characters, floats and text
 
 The kernel's literals are integers, floats, characters, quoted text,
-the two booleans, and contextual `zeroed`.
+the two booleans, and contextual `zeroed` and `uninit`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. Each integer digit run starts and ends in
@@ -177,7 +177,9 @@ a digit of its base; any internal run of underscores separates digits.
 A number ends where its spelling ends: a letter, digit or underscore
 directly after one belongs to it, so `1u64` or `1.5f32` is one malformed
 literal rather than a number and a name (D245).
-`zeroed` has no type of its own: [0540] gives it
+`uninit` is D152's restricted private inline-array field initializer; it
+reserves storage without assigning an item image. It has no stand-alone
+value type. `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
@@ -205,7 +207,7 @@ type `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 
 ```landin-grammar
 literal     ::= integer | float | character | text | raw
-              | "true" | "false" | "zeroed"
+              | "true" | "false" | "zeroed" | "uninit"
 character   ::= "'" (character_escape | unicode_scalar) "'"
 unicode_scalar ::= any Unicode scalar except apostrophe, backslash or line_end
 character_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
@@ -13732,8 +13734,10 @@ concept constraint and a declared error set. A private
 member is distinguished from a missing one and related to its declaration.
 Public declarations may mention private identities, but those identities stay
 unnameable across the boundary, and a value carrying one does not expose that
-private type's fields. A contextual struct literal for that private identity
-is likewise refused: otherwise a public alias could bypass its constructor.
+private type's fields. A contextual literal cannot construct a private
+nominal from another module, including through a public wrapper's field;
+otherwise it could forge an initialized-prefix invariant. Array-field
+selection through a nested path obeys the same visibility rule.
 Variant cases inherit the containing type's
 visibility. A namespace itself is no runtime or type value. `public` on a
 conformance is refused; every unmarked conformance in the reached graph still
@@ -13770,6 +13774,8 @@ identities and diagnostics host-dependent. All were declined.
 **Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
 `negative/core-mem-private-representation`,
 `negative/core-arena-private-representation`,
+`negative/core-small-private-representation`,
+`negative/core-small-forged-storage`,
 `negative/core-text-frame-slice-escape`, `runtime/core-vec-pointer-storage`,
 and the parser, resolution, driver and hosted-entry cases.
 
@@ -15270,14 +15276,33 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 The derived parser did not require maps and trees. The hosted core library
 slice supplies those libraries,
 the typed initialized-prefix slice witness and `core/small.small(item, N)`.
-Its honest initialized inline array keeps the written `zeroable` constraint,
-while its spilled arm owns a `core/vec.list(item)` and reuses that list's
-transactional growth. Ordinary traversal and sorting use `vec.used`;
+The vector has a public wrapper with one private nominal storage field.
+Its explicit `uninit` inline array has a readable prefix bounded by `count`;
+its separate `core/vec.list(item)` descriptor owns spilled storage and reuses
+that list's transactional growth. The written `zeroable` constraint remains
+on the public alias and operations, but no longer causes eager inline clearing.
+Pop and release shorten the readable prefix without clearing unused slots;
+release disposes a spill and resets only metadata. Ordinary traversal and
+sorting use `vec.used`;
 D180's source-free iterable item does not replace that retained-origin view.
 Allocator acquisition and ownership remain outside the compiler; the modules
 thread an allocator supplied by their caller on allocating/freeing operations.
 
-**The alternatives:** expose vector capacity as `[]mut item`, require
+`uninit` is a contextual initializer only for an explicitly labelled
+fixed-array field in a private compact nominal construction inside its
+defining module. It emits no store for that field and is refused for module
+static images, public representations, packed layouts, scalar fields and
+stand-alone arrays. Construction establishes the containing value for
+transport, but it does not create readable item images in the array. The
+defining module is responsible for writing an item before every typed read
+and for restricting public access to the initialized prefix. Existing
+aggregate transport still copies the complete padded extent, including
+unspecified bytes; only written fields and prefix elements have value
+meaning. This is a deliberately narrow raw-storage responsibility like
+D151's pointer-backed prefix. It does not change ordinary `zeroed`, D19/D22
+definite assignment for arrays, or D76 variant selection.
+
+**The alternatives:** expose raw-backed vector capacity as `[]mut item`, require
 `zeroable`, publish a partially copied replacement, store an allocator in each
 container, treat parser text as codepoints now, or implement the prototype's
 map and tree before a workload needs them. The first two repeat the false raw
@@ -15502,7 +15527,9 @@ retains the first `capacity` entries in order, counts every later note in
 `dropped`, and counts error severity even when that note is dropped. Overflow
 therefore returns normally and never raises `io_failed`. Entry and logger
 representation stay private; checked accessors report `out_of_bounds` rather
-than exposing unused storage. The final text types did not yet exist, so one entry retains the message address and byte length internally.
+than exposing unused storage. Its inline note array is explicitly `uninit` at
+construction; each note is written before `stored` grows, and `note_at`
+checks that prefix. The final text types did not yet exist, so one entry retains the message address and byte length internally.
 The `escaping` parameter prevents a frame-backed slice at the capability
 boundary; explicit integer-pointer conversion remains subject to [0470]'s
 honest validity limit.

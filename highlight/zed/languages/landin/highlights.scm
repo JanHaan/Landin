@@ -6,6 +6,7 @@
 (float_literal) @number.float
 (boolean_literal) @boolean
 (zeroed_literal) @constant.builtin
+(uninit_literal) @constant.builtin
 (text_literal) @string
 (raw_literal) @string
 (character_literal) @character

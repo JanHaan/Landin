@@ -1,0 +1,7 @@
+error[L0304]: `uninit` requires an array field of a private compact struct
+  --> ../tests/fixtures/negative/uninit-scalar-field/main.ldn:6:25
+  |
+6 |     value: box = (flag: uninit)
+  |                         ^^^^^^
+  = note: the tour describes it at [0520]
+  = note: this is a recorded source-form boundary

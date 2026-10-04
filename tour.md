@@ -785,6 +785,11 @@ a pointer or a struct, and every later element must be of that type (D241).
 
 ### [0540] zeroed is the all-bits-zero image of a type
 
+D152 also admits `uninit` as an explicit array-field initializer inside a
+private compact nominal construction. It leaves the field's bytes unspecified;
+the defining module must expose only items it has written. It is not an
+alternative spelling of `zeroed` and cannot initialize a stand-alone array.
+
 zeroed is the all-bits-zero image of a type. Two separate
 properties decide where it may appear. A type HAS a zero
 image when all-zero is a valid value for it; that is what

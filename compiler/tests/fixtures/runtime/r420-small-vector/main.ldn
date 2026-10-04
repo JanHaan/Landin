@@ -93,6 +93,12 @@ larger_inline_capacity: () -> (ok: bool) =
     ok = ok and small.length(values) == 0
          and small.capacity(values) == 3
          and state.attempts == 0 and state.frees == 0
+    small.push(values, state, 99) else 0
+    begin
+        view := small.used(values)
+        ok = ok and lenof view == 1 and view[0] == 99
+             and state.attempts == 0
+    end
 end larger_inline_capacity
 
 public main: () -> (code: i32) =

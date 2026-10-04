@@ -126,7 +126,7 @@ type struct variant concept is end if then elsif else while do for in loop
 break continue when complete match defer undo begin unchecked return fail try
 with from and or not mut public ptr addr sizeof alignof lenof inc dec atom
 distinct range layout volatile big little escaping caller align link at of
-fixed option extern import as any none noreturn zeroed true false sink inout
+fixed option extern import as any none noreturn zeroed uninit true false sink inout
 set register arena
 """.split())
 
@@ -1111,7 +1111,7 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                         ends = ((at + 1,)
                                 if token_kind in ("integer", "float",
                                                   "character", "text", "raw")
-                                or text in ("true", "false", "zeroed") else ())
+                                or text in ("true", "false", "zeroed", "uninit") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
             elif name in trees:

@@ -78,7 +78,7 @@ package Landin.Tokens is
       Kw_From, Kw_If, Kw_Import, Kw_In, Kw_Inc, Kw_Inout, Kw_Loop,
       Kw_Match, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Ptr, Kw_Public,
       Kw_Return, Kw_Sink, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True, Kw_Try,
-      Kw_Type, Kw_Unchecked, Kw_Undo, Kw_When, Kw_While, Kw_With,
+      Kw_Type, Kw_Unchecked, Kw_Undo, Kw_Uninit, Kw_When, Kw_While, Kw_With,
       Kw_Zeroed,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
@@ -113,7 +113,7 @@ package Landin.Tokens is
    subtype Spelled_Kind is Token_Kind range Kw_Addr .. Dot_Dot_Less;
 
    --  `literal ::= integer | float | character | text | raw | "true" | "false"
-   --             | "zeroed"`
+   --             | "zeroed" | "uninit"`
    --  [1770].
    --  The three words are reserved and literals at once, so this is a
    --  predicate rather than a band of the enumeration.
@@ -121,7 +121,7 @@ package Landin.Tokens is
      is (Of_Kind in Integer_Literal | Float_Literal | Hex_Float_Literal
                     | Character_Literal
                     | Text_Literal | Raw_Literal
-                    | Kw_True | Kw_False | Kw_Zeroed);
+                    | Kw_True | Kw_False | Kw_Zeroed | Kw_Uninit);
 
    --  The bytes of a kind that has only one spelling.  `unchecked` is the
    --  longest, at nine.

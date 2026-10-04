@@ -38,7 +38,7 @@ KEYWORDS = {
     # control
     "if", "then", "elsif", "else", "end", "while", "do", "for", "in", "loop",
     "break", "continue", "when", "complete", "match", "return", "fail", "try",
-    "with", "begin", "unchecked", "defer", "undo", "arena",
+    "with", "begin", "unchecked", "defer", "undo", "uninit", "arena",
     # operators spelled as words
     "and", "or", "not",
     # memory and queries

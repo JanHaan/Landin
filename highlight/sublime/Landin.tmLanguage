@@ -24,7 +24,7 @@
       "name": "support.module.landin"
     },
     {
-      "match": "\\b(?:unchecked|complete|continue|distinct|escaping|register|volatile|alignof|concept|variant|caller|extern|import|layout|little|option|public|return|sizeof|struct|align|arena|begin|break|defer|elsif|fixed|inout|lenof|match|range|while|addr|atom|else|fail|from|link|loop|sink|then|type|undo|when|with|and|any|big|dec|end|for|inc|mut|not|ptr|set|soa|try|as|at|do|if|in|is|of|or)\\b",
+      "match": "\\b(?:unchecked|complete|continue|distinct|escaping|register|volatile|alignof|concept|variant|caller|extern|import|layout|little|option|public|return|sizeof|struct|uninit|align|arena|begin|break|defer|elsif|fixed|inout|lenof|match|range|while|addr|atom|else|fail|from|link|loop|sink|then|type|undo|when|with|and|any|big|dec|end|for|inc|mut|not|ptr|set|soa|try|as|at|do|if|in|is|of|or)\\b",
       "name": "keyword.control.landin"
     },
     {

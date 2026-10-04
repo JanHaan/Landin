@@ -41,7 +41,7 @@ module.exports = grammar({
       'extern', 'fail', 'false', 'fixed', 'for', 'from', 'if', 'import',
       'in', 'inc', 'inout', 'loop', 'match', 'mut', 'none', 'not', 'or',
       'ptr', 'public', 'return', 'sink', 'sizeof', 'struct', 'then', 'true',
-      'try', 'type', 'unchecked', 'undo', 'when', 'while', 'with', 'zeroed',
+      'try', 'type', 'unchecked', 'undo', 'uninit', 'when', 'while', 'with', 'zeroed',
     ],
   },
 
@@ -596,10 +596,12 @@ module.exports = grammar({
 
     literal: $ => choice(
       $.float_literal, $.integer_literal, $.boolean_literal, $.zeroed_literal,
+      $.uninit_literal,
       $.character_literal, $.text_literal, $.raw_literal,
     ),
     boolean_literal: _ => choice('true', 'false'),
     zeroed_literal: _ => 'zeroed',
+    uninit_literal: _ => 'uninit',
     // The float needs a fraction on both sides of its point, so `0..` in
     // a range never starts one; the hexadecimal form needs its exponent.
     float_literal: _ => token(prec(2, choice(

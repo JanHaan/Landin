@@ -54,7 +54,7 @@ LANDIN_KEYWORDS = {
     "extern", "fail", "false", "fixed", "for", "from", "if", "import", "in",
     "inc", "inout", "loop", "match", "mut", "none", "not", "or", "ptr",
     "public", "return", "sink", "sizeof", "struct", "then", "true", "try",
-    "type", "unchecked", "undo", "when", "while", "with", "zeroed",
+    "type", "unchecked", "undo", "uninit", "when", "while", "with", "zeroed",
 }
 # Contextual syntax and builtin names also make poor generated identifiers.
 LANDIN_AVOID = LANDIN_KEYWORDS | {
