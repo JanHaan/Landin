@@ -67,7 +67,7 @@ ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = true
 end ast_is_expected
 
-notes_are_expected: (value: diag.bounded(8), inout ok: bool) -> none =
+notes_are_expected: (value: ptr mut diag.bounded(8), inout ok: bool) -> none =
     if diag.stored(value) <> 3 or diag.dropped(value) <> 0 then
         ok = false
         return
@@ -234,7 +234,7 @@ public main: () -> (code: i32) =
         return
     end
     mut valid: bool = ast_is_expected(tree) and bounded_log.failed()
-    notes_are_expected(collected, valid)
+    notes_are_expected(addr collected, valid)
     if not valid then
         return
     end if

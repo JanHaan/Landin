@@ -351,8 +351,8 @@ small_spill_retry: () -> (ok: bool) =
     mut atomic: bool = false
     begin
         view := small.used(values)
-        atomic = failed and small.length(values) == 2
-                 and small.capacity(values) == 2
+        atomic = failed and small.length(addr values) == 2
+                 and small.capacity(addr values) == 2
                  and view[0] == 11 and view[1] == 13
                  and failing.attempts(state) == 1
                  and failing.delegated(state) == 0
@@ -375,8 +375,8 @@ small_spill_retry: () -> (ok: bool) =
     mut spilled: bool = false
     begin
         view := small.used(values)
-        spilled = popped == 17 and small.length(values) == 2
-                  and small.capacity(values) == 4
+        spilled = popped == 17 and small.length(addr values) == 2
+                  and small.capacity(addr values) == 4
                   and view[0] == 11 and view[1] == 13
                   and failing.attempts(state) == 2
                   and failing.delegated(state) == 1
@@ -388,7 +388,7 @@ small_spill_retry: () -> (ok: bool) =
                   and pool.live(inner) == 1
     end
     small.release(values, state)
-    released: bool = small.length(values) == 0 and small.capacity(values) == 2
+    released: bool = small.length(addr values) == 0 and small.capacity(addr values) == 2
                      and failing.frees(state) == 1
                      and failing.live(state) == 0
                      and pool.free_count(inner) == 1

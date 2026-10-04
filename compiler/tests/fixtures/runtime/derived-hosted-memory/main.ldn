@@ -448,15 +448,15 @@ diagnostics: () -> (ok: bool) =
     kept: usize = app.run_logged(program, world, usize(3), log) else (problem) _ = problem
         return
     end
-    return when kept <> 3 or not log.failed() or diag.stored(logger) <> 3
-      or diag.dropped(logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
-    first: diag.entry = diag.note_at(logger, usize(0)) else (problem) _ = problem
+    return when kept <> 3 or not log.failed() or diag.stored(addr logger) <> 3
+      or diag.dropped(addr logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
+    first: diag.entry = diag.note_at(addr logger, usize(0)) else (problem) _ = problem
         return
     end
-    second: diag.entry = diag.note_at(logger, usize(1)) else (problem) _ = problem
+    second: diag.entry = diag.note_at(addr logger, usize(1)) else (problem) _ = problem
         return
     end
-    third: diag.entry = diag.note_at(logger, usize(2)) else (problem) _ = problem
+    third: diag.entry = diag.note_at(addr logger, usize(2)) else (problem) _ = problem
         return
     end
     return when not exact_note(first, "--every argument is not UTF-8, using 1\n")

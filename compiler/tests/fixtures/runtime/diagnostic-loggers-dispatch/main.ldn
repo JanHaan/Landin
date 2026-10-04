@@ -80,15 +80,15 @@ public main: () -> (code: i32) =
     first_index: usize = 0
     second_index: usize = 1
     third_index: usize = 2
-    first_note := diag.note_at(collected, first_index) else (missing_first)
+    first_note := diag.note_at(addr collected, first_index) else (missing_first)
         _ = missing_first
         return
     end
-    second_note := diag.note_at(collected, second_index) else (missing_second)
+    second_note := diag.note_at(addr collected, second_index) else (missing_second)
         _ = missing_second
         return
     end
-    third_note := diag.note_at(collected, third_index) else (missing_third)
+    third_note := diag.note_at(addr collected, third_index) else (missing_third)
         _ = missing_third
         return
     end
@@ -107,7 +107,7 @@ public main: () -> (code: i32) =
         _ = missing_third_byte
         return
     end
-    if diag.stored(collected) <> 3 or diag.dropped(collected) <> 0
+    if diag.stored(addr collected) <> 3 or diag.dropped(addr collected) <> 0
       or not bounded_log.failed()
       or diag.position_of(first_note) <> 0
       or diag.position_of(second_note) <> 1
@@ -179,7 +179,7 @@ public main: () -> (code: i32) =
         _ = unexpected_overflow_failure
         return
     end
-    if diag.stored(overflowed) <> 2 or diag.dropped(overflowed) <> 1
+    if diag.stored(addr overflowed) <> 2 or diag.dropped(addr overflowed) <> 1
       or not overflow_log.failed()
     then
         return
