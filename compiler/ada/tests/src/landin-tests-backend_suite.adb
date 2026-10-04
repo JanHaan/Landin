@@ -20,11 +20,13 @@ with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Backend.Arm64;
+with Landin.Backend.Dwarf;
 with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.X86_64;
+with Landin.Debugging;
 with Landin.IR;
 with Landin.IR.Testing_Support;
 with Landin.IR.Verifier;
@@ -8236,6 +8238,109 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Cortex_Scalar_Homes_Reuse_Adjacent_Address;
 
+   procedure Arm64_Exits_Share_One_Epilogue
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Exits_Share_One_Epilogue
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Opcode;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Debug_Report : Landin.Build_Reports.Report;
+      Info : aliased Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+      Source : constant String :=
+        "problem: atom" & LF
+        & "f: (early: bool, broken: bool, v: i16, w: u64)"
+        & " -> (r: u64) ! problem =" & LF
+        & "    r = assembler.block(""sxth x19, {x}\nadd {r}, {r}, x19""," & LF
+        & "        inout r: u64 at general = w," & LF
+        & "        in x: i16 at general = v, out _ at x19)" & LF
+        & "    return when early" & LF
+        & "    fail problem when broken" & LF
+        & "end f" & LF;
+   begin
+      Lower (Work, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Occurrences (Text, "_exit" & LF) = 3
+              and then Occurrences (Text, "_exit:" & LF) = 1,
+            "both successful returns and failure branch to one exit");
+         Landin.Testing.Check
+           (Item, Occurrences (Text, HT & "ret" & LF) = 1
+              and then Occurrences (Text, "mov sp, x29") = 1
+              and then Occurrences (Text, "ldp x29, x30, [sp], #16") = 1
+              and then Occurrences (Text, "str x19, [x15]") = 1
+              and then Occurrences (Text, "ldr x19, [x15]") = 1,
+            "the frame and declared register are restored once");
+      end;
+
+      Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Debug_Report, Debug => Info'Access);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         Code : constant not null access IR.Unit := Landin.Stages.Code (Work);
+         Terminals : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, Occurrences (Text, ".cfi_remember_state") = 1
+              and then Occurrences (Text, ".cfi_restore w19") = 1
+              and then Occurrences (Text, ".cfi_def_cfa sp, 0") = 1
+              and then Occurrences (Text, ".cfi_restore_state") = 1,
+            "one unwind transition surrounds the shared teardown");
+         for Index in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (Index))
+              in IR.Leave | IR.Fail
+            then
+               declare
+                  Boundary : constant String :=
+                    Landin.Backend.Dwarf.Label_Name
+                      ("L", "epilogue", 1, Index);
+               begin
+                  Terminals := Terminals + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     (if IR.Op_Of (Code.all, 1, IR.Value_Id (Index)) = IR.Fail
+                      then Contains
+                        (Text, HT & "ldr w8, [x15]" & LF & Boundary & ":" & LF)
+                      else Contains
+                        (Text, HT & "ldr x0, [x15]" & LF
+                         & HT & "mov w8, #0" & LF & Boundary & ":" & LF))
+                       and then Contains
+                         (Text, Boundary & ":" & LF & HT & "b ")
+                       and then Contains
+                         (Text, HT & ".quad " & Boundary & LF),
+                     "return or failure registers precede each debug"
+                     & " boundary and shared exit branch");
+               end;
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Terminals, 3, "two leaves and one failure were emitted");
+      end;
+   end Arm64_Exits_Share_One_Epilogue;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -8256,6 +8361,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 exits share one epilogue",
+         Arm64_Exits_Share_One_Epilogue'Access);
       Landin.Testing.Register
         (Into, "backend", "assembly blocks keep their registers",
          Assembly_Blocks_Keep_Their_Registers'Access);

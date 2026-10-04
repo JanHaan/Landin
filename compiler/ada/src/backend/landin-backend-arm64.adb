@@ -1225,6 +1225,8 @@ package body Landin.Backend.Arm64 is
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
+         Shared_Exit : constant String := Label (Item, 1) & "_exit";
+         Terminal_Count : Natural := 0;
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          type Panic_Edge is record
             Reason : Landin.Panics.Kind;
@@ -1284,6 +1286,7 @@ package body Landin.Backend.Arm64 is
          procedure Check_Fit
            (Register : String; Scalar : Landin.Types.Integer_Name);
          procedure Epilogue;
+         procedure Finish_Exit;
 
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9") is
@@ -1413,8 +1416,6 @@ package body Landin.Backend.Arm64 is
          procedure Epilogue is
          begin
             if Debug /= null then
-               Put (Dwarf.Label_Name (Local_Prefix, "epilogue", Item,
-                 Natural (Current_Value)) & ":");
                Emit (".cfi_remember_state");
             end if;
             Restore_Saves;
@@ -1430,6 +1431,21 @@ package body Landin.Backend.Arm64 is
                Emit (".cfi_restore_state");
             end if;
          end Epilogue;
+
+         procedure Finish_Exit is
+         begin
+            if Debug /= null then
+               --  Location ranges end after result preparation, before
+               --  either the branch or the first shared register restore.
+               Put (Dwarf.Label_Name (Local_Prefix, "epilogue", Item,
+                 Natural (Current_Value)) & ":");
+            end if;
+            if Terminal_Count > 1 then
+               Emit ("b " & Shared_Exit);
+            else
+               Epilogue;
+            end if;
+         end Finish_Exit;
 
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
@@ -3238,7 +3254,7 @@ package body Landin.Backend.Arm64 is
                      end;
                   end if;
                   Emit ("mov w8, #0");
-                  Epilogue;
+                  Finish_Exit;
                when Landin.IR.Halt =>
                   if Panic = null or else Landin.Panics.Handler (Panic.all)
                     = Landin.IR.No_Item
@@ -3250,11 +3266,20 @@ package body Landin.Backend.Arm64 is
 
                when Landin.IR.Fail =>
                   Load_Value (Operand (1), "x8");
-                  Epilogue;
+                  Finish_Exit;
             end case;
          end Instruction;
 
       begin
+         --  One terminal keeps its inline teardown; more than one pays for
+         --  branches to a single restore sequence.
+         for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Index))
+              in Landin.IR.Leave | Landin.IR.Fail
+            then
+               Terminal_Count := Terminal_Count + 1;
+            end if;
+         end loop;
          if Is_Public_Item (Item) or else Is_Forced (Item) then
             Emit (".globl " & Symbol (Item));
          end if;
@@ -3368,6 +3393,10 @@ package body Landin.Backend.Arm64 is
                end if;
             end loop;
          end loop;
+         if Terminal_Count > 1 then
+            Put (Shared_Exit & ":");
+            Epilogue;
+         end if;
          for Edge of Edges loop
             Put (Unbounded.To_String (Edge.Label) & ":");
             if Debug /= null then
