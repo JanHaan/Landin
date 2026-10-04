@@ -119,7 +119,7 @@ def evidence_faults(manifest):
         else:
             faults.append("%s has unexpected emission result %r" % (key, value))
     if not emitted:
-        faults.append("no assembly digest was emitted")
+        faults.insert(0, "no assembly digest was emitted")
     return faults
 
 
