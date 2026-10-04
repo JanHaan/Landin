@@ -127,7 +127,7 @@ package body Landin.Backend.Cortex_M is
    is
       package IR renames Landin.IR;
       package L renames Landin.Targets.Layouts;
-      package Masks is new Work_Arrays (Boolean, Home_Mask, True);
+      package Masks is new Work_Arrays (Boolean, Home_Mask, False);
       package Numbers is new Work_Arrays (Natural, Spill_Assignments, 0);
       package Extents is new Work_Arrays
         (L.Field_Extent, L.Field_Extent_Array, (0, 1));
@@ -185,6 +185,71 @@ package body Landin.Backend.Cortex_M is
          return Home;
       end Take_Home;
    begin
+      --  Simplification retains slot identities when it removes unreachable
+      --  instructions.  Only slots still named by executable IR need homes.
+      declare
+         procedure Mark (Slot : IR.Slot_Id);
+         procedure Mark (Place : IR.Storage);
+
+         procedure Mark (Slot : IR.Slot_Id) is
+         begin
+            if Slot /= IR.No_Slot then
+               Slots.Data (Positive (Slot)) := True;
+            end if;
+         end Mark;
+
+         procedure Mark (Place : IR.Storage) is
+         begin
+            case Place.Kind is
+               when IR.Module_Datum => null;
+               when IR.Frame_Slot => Mark (Place.Slot);
+               when IR.Runtime_Address => Mark (Place.Address);
+            end case;
+         end Mark;
+      begin
+         for Index in 1 .. IR.Parameter_Count (Of_Unit, Item) loop
+            Mark (IR.Nth_Parameter (Of_Unit, Item, Index));
+         end loop;
+         Mark (IR.Result_Slot (Of_Unit, Item));
+         for Index in 1 .. IR.Value_Count (Of_Unit, Item) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Index);
+               Op : constant IR.Opcode := IR.Op_Of (Of_Unit, Item, Value);
+            begin
+               case Op is
+                  when IR.Load | IR.Store =>
+                     Mark (IR.Slot_Of (Of_Unit, Item, Value));
+                  when IR.Load_Field | IR.Store_Field
+                     | IR.Load_Element | IR.Store_Element =>
+                     if IR.Reaches_A_Slot (Of_Unit, Item, Value) then
+                        Mark (IR.Slot_Of (Of_Unit, Item, Value));
+                     end if;
+                  when IR.Storage_Address | IR.Place_Address
+                     | IR.Clear_Array | IR.Fill_Array
+                     | IR.Select_Variant | IR.Store_Variant_Field =>
+                     Mark (IR.Destination_Of (Of_Unit, Item, Value));
+                  when IR.Copy_Array | IR.Copy_Variant =>
+                     Mark (IR.Source_Of (Of_Unit, Item, Value));
+                     Mark (IR.Destination_Of (Of_Unit, Item, Value));
+                  when IR.Load_Variant_Tag | IR.Load_Variant_Field =>
+                     Mark (IR.Source_Of (Of_Unit, Item, Value));
+                  when IR.Load_Indirect | IR.Store_Indirect =>
+                     Mark (IR.Indirect_Address_Slot
+                       (Of_Unit, Item, Value));
+                  when IR.Call | IR.Indirect_Call =>
+                     Mark (IR.Failure_Slot_Of (Of_Unit, Item, Value));
+                  when IR.Assembly =>
+                     for Operand in 1 .. IR.Assembly_Operand_Count
+                       (Of_Unit, Item, Value)
+                     loop
+                        Mark (IR.Nth_Assembly_Operand
+                          (Of_Unit, Item, Value, Operand).Output);
+                     end loop;
+                  when others => null;
+               end case;
+            end;
+         end loop;
+      end;
       for Block in 1 .. IR.Block_Count (Of_Unit, Item) loop
          --  All prior homes are available at a block boundary. Start this
          --  block at home 1 instead of clearing the routine's high-water mark.

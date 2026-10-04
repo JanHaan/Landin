@@ -9,6 +9,7 @@ with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
+with Landin.IR.Simplification;
 with Landin.IR.Verifier;
 with Landin.IR.Testing_Support;
 with Landin.Machine;
@@ -497,6 +498,60 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Register_Staging;
+   procedure Dead_Array_Slot_Has_No_Frame
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dead_Array_Slot_Has_No_Frame
+     (Item : in out Landin.Testing.Context)
+   is
+      package Reports renames Landin.Build_Reports;
+      package Opt renames Landin.Optimization;
+      function Frame_Bytes (Condition : String) return T.Byte_Count;
+
+      function Frame_Bytes (Condition : String) return T.Byte_Count is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (T.Cortex_M);
+         Order : Landin.Stages.Pipeline;
+         Written : constant Landin.Source.Source_Id := Landin.Stages.Add_Source
+           (Work, "dead-slot.ldn", "f: () -> (r: u8) = "
+            & "r = 1 if " & Condition & " then "
+            & "dead: [8192]u8 = [of 0] r = dead[0] "
+            & "end if end f");
+         Assembly : U.Unbounded_String;
+         Report : Reports.Report;
+      begin
+         pragma Unreferenced (Written);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Resolver'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Landin.Stages.Append (Order, Lowerer'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Order, Work), 5,
+            "array source reaches IR: "
+            & Landin.Stages.Rendered_Report (Work));
+         if Landin.Stages.Failed (Work) then
+            return 0;
+         end if;
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, T.Cortex_M, Opt.Size);
+         Landin.Backend.Cortex_M.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, T.Cortex_M,
+            (Opt.Size, Opt.Off), Assembly, Report);
+         return Reports.Nth_Routine (Report, 1).Frame_Bytes;
+      end Frame_Bytes;
+
+      Dead : constant T.Byte_Count := Frame_Bytes ("1 == 2");
+      Live : constant T.Byte_Count := Frame_Bytes ("1 == 1");
+   begin
+      Landin.Testing.Check
+        (Item, Dead > 0 and then Dead < 256,
+         "unreachable array reserves no Cortex-M0 frame home");
+      Landin.Testing.Check
+        (Item, Live >= 8192,
+         "reachable array retains its Cortex-M0 frame home");
+   end Dead_Array_Slot_Has_No_Frame;
 
    procedure Contract (Item : in out Landin.Testing.Context) is
       Unit : IR.Unit;
@@ -2084,6 +2139,9 @@ package body Landin.Tests.Cortex_Suite is
          Scalar_Spill_Homes'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "register staging", Register_Staging'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "dead array slot frame",
+         Dead_Array_Slot_Has_No_Frame'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
