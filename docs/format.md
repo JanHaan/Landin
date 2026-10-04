@@ -11,7 +11,8 @@ examples and both to the grammar.
 A layout is a decision about space. The formatter never adds, removes or
 changes a token, never changes a comment's bytes, never breaks a long line and
 never joins two lines. It decides where each line starts, the space between
-two things on one line, which blank lines survive and how every line ends.
+two things on one line, which blank lines survive and how line ends outside
+raw literals and block comments are normalized.
 There is no option that changes any of that. `refine fmt --check` reports a
 file that is not in the layout instead of rewriting it.
 
@@ -23,7 +24,7 @@ What `refine fmt` does to bytes no example can show:
 
 | written | formatted |
 |---|---|
-| a CR LF or a lone CR ending a line | LF |
+| a CR LF or a lone CR ending a line outside a raw literal or block comment | LF |
 | blanks or tabs at the end of a line | removed |
 | a tab in a line's indentation or between two tokens | spaces, as the rules below place them |
 | no line end after the last line | one LF |
@@ -32,6 +33,7 @@ What `refine fmt` does to bytes no example can show:
 
 The bytes inside a raw literal [0280] and inside a block comment [1780] are
 the literal's and the comment's, their line ends included, and never change.
+Formatted source can therefore retain CR LF or lone CR line ends inside them.
 
 Replacement writes a sibling temporary file and renames it only after all
 bytes and mode bits have been written successfully. Failures leave the

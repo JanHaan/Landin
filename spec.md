@@ -14952,9 +14952,11 @@ their writers happened to.
 changes a token, never changes a comment's bytes or moves one past a token,
 and never breaks or joins a line; what it decides is where each line starts,
 the space between two things on one line, that a run of blank lines is one
-and none begins or ends a file, and that every line ends in one LF. It reads
-the scan and the tree and nothing later, so a program is formatted whether
-or not its names and types are right, and one that does not parse is refused
+and none begins or ends a file, and that line ends outside raw literals and
+block comments become one LF. Line ends inside those protected bytes remain
+unchanged. It reads the scan and the tree and nothing later, so a program is
+formatted whether or not its names and types are right, and one that does not
+parse is refused
 with its report and not touched. The rules, each with a program as written
 and as formatted, are `docs/format.md`'s, which the test program holds the
 implementation to; they were measured on `core` and the examples before any
@@ -14970,9 +14972,10 @@ reader. A printer that breaks and joins lines at a width, which lays out every
 expression from scratch and so moves every comment's line, every caller
 location and every debugger breakpoint whenever a name's length changes; no
 width is enforced here, and one that is would bring such a printer with it.
-Keeping each file's own line ends, which leaves two spellings of every line
-in one repository; [1750] admits three on input and nothing needs more than
-one on output. Leaving the layout to the tools of the editor that happens to
+Keeping each file's own line ends outside raw literals and block comments,
+which leaves three spellings of ordinary line boundaries in one repository;
+[1750] admits three on input and ordinary layout needs only LF on output.
+Leaving the layout to the tools of the editor that happens to
 be open, which is what the language had before and what `core` shows.
 
 **Pinned by** `positive/comment-forms`, `positive/space-forms`,
