@@ -107,12 +107,13 @@ with Landin.Packed;
 --  recorded artefact the way `compiler/tests/lexical.tokens` is, and a
 --  reader would be both a second constructor of an IR and the first half
 --  of the serialised stage protocol the stage seams refuse to freeze.
---  Conversion and Range_Check are
---  the two checked integer operations D168, [0470] and D188 need, not a
---  generic coercion protocol; the checker still refuses every other [0700]
---  conversion by name [1830].  They are separate because Range_Check's
---  source and result types are identical, so it neither widens nor narrows
---  and composes with Conversion rather than generalising it.
+--  Conversion carries the enabled explicit scalar conversions among
+--  integers, floats and bool (D168-D174, D176), including the integer
+--  address step of [0470].  Each source/result pair determines whether
+--  conversion checks, rounds, truncates or is total.  Range_Check enforces
+--  D188's subtype bounds and [0470]'s pointer-address bounds on a value of
+--  unchanged integer type; it composes with Conversion rather than
+--  generalising it.  [1830]'s deferred scalar widths remain refused.
 --  There is no Discard: [1930] throws a result away and an unused value is how
 --  that is spelt, so no rule here says every value is used.  And there is
 --  no Increment: [1900] says `inc` says what `x += 1` says, which is a
@@ -216,9 +217,11 @@ package Landin.IR is
       --  target question carried by the scalar element identity.
       Slice_Address,
       Empty_Slice_Base,
-      --  D168's explicit integer conversion and [0470]'s pointer-address
-      --  form. The source and result integer kinds retain both widths; a
-      --  backend emits the required runtime fit check before narrowing.
+      --  D168-D174 and D176's explicit scalar conversions among integers,
+      --  floats and bool.  The source/result types retain their kinds and
+      --  widths, so a backend applies the pair's rounding, truncation or
+      --  canonical-bool rule and any required check.  [0470]'s
+      --  pointer-address form also converts its integer address value here.
       Conversion,
       --  D188's [0660] constraint check.  Its source and result types are
       --  identical, so this is not a conversion and cannot narrow: it
