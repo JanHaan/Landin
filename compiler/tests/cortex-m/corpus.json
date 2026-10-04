@@ -450,9 +450,10 @@
     "runtime/core-tree-count-overflow": {
       "mode": "refuse",
       "codes": [
+        "L0300",
         "L0346"
       ],
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "This hosted tree boundary fixture uses usize literals above the Cortex-M0 32-bit range, including a 64-bit leaf-count boundary, and imports the hosted heap's unsupported general C source surface. The target-sized tree fields remain 32-bit on Cortex-M0."
     },
     "runtime/core-tree-indices": {
       "mode": "refuse",
@@ -488,7 +489,7 @@
     "runtime/cstring-conversion-truncated-traps": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
