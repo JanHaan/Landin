@@ -261,6 +261,10 @@ def measure(refine: str, root: str, entry: str, report: str,
     compiler's own report."""
     command = [refine, "--root=" + root, "--stage-report=" + report,
                "--emit=asm", "-o", report + ".s", entry]
+    try:
+        os.unlink(report)
+    except FileNotFoundError:
+        pass
     started = time.monotonic()
     completed = subprocess.run(command, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, timeout=timeout,
@@ -271,8 +275,12 @@ def measure(refine: str, root: str, entry: str, report: str,
                 " ".join(command), completed.returncode,
                 time.monotonic() - started,
                 completed.stderr.decode("utf-8", "replace")[-2000:]))
-    with open(report, encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with open(report, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError as error:
+        raise RuntimeError("compiler did not write the stage report: "
+                           + report) from error
     stages = {row["stage"]: row for row in data["stages"]}
     missing = [name for name in FRONTEND + EMISSION if name not in stages]
     if missing:
