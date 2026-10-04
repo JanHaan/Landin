@@ -59,6 +59,11 @@ package Landin.Targets.Capabilities is
    --  `aarch64-linux-gnu-gcc` on Linux arm64 and
    --  `aarch64-apple-darwin24.6.0-gcc` on this macOS host.  Each was
    --  measured in its own environment rather than recalled.
+   --  The target's toolchain triplet.  Linux and Cortex-M use it as the
+   --  prefix of their GNU compiler driver: `x86_64-pc-linux-gnu-gcc` and
+   --  `arm-none-eabi-gcc` respectively.  Darwin carries
+   --  `arm64-apple-darwin` as target metadata but defaults independently
+   --  to Apple's `/usr/bin/clang`.
    --
    --  One spelling, carried verbatim, and deliberately not canonicalised.
    --  The same machine is `x86_64-pc-linux-gnu` to the pinned GNAT,
@@ -66,8 +71,8 @@ package Landin.Targets.Capabilities is
    --  `x86_64-unknown-linux-gnu` to LLVM, and Autoconf's own manual says
    --  "You should not attempt to duplicate the canonicalization done by
    --  `config.sub' in your own code".  A host whose toolchain uses another
-   --  spelling names it on the command line; recognising aliases here would
-   --  be the second authority this compiler refuses everywhere else.
+   --  spelling names a driver on the command line; recognising aliases here
+   --  would be the second authority this compiler refuses everywhere else.
    --
    --  It is not a target name.  `--target=` still takes this repository's
    --  own names, so a triplet never becomes a second way to spell one.

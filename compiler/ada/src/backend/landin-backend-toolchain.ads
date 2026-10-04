@@ -8,27 +8,22 @@
 --  A driver is named, not a linker.  The three things a hosted program
 --  needs beyond its own instructions -- the C runtime's startup objects,
 --  `-lc`, and the dynamic loader's path -- live in the compiler driver and
---  not in `ld`, and they differ per distribution.  Asking `gcc` to finish
---  the job is what keeps that knowledge out of this compiler; invoking a
+--  not in `ld`, and they differ per distribution.  Asking a compiler driver
+--  to finish the job keeps that knowledge out of this compiler; invoking a
 --  linker directly would move every one of those paths in here, where no
 --  paragraph of the specification could say what they are.
 --
---  The driver is found by the GNU triplet prefix.  That convention is the
---  reason this needs no configuration in the environments that already
---  exist: `Landin.Targets.Capabilities.Triplet` carries the spelling, and
---  the pinned GNAT installs itself under it.  Measured rather than assumed
---  -- `x86_64-pc-linux-gnu-gcc` resolves inside the pinned Linux image, and
---  the same toolchain is `aarch64-apple-darwin24.6.0-gcc` on the macOS
---  host.
+--  The Linux and Cortex-M drivers follow the GNU triplet-prefix convention:
+--  `Landin.Targets.Capabilities.Triplet` supplies the prefix and `-gcc`
+--  completes the name.  The pinned Linux image has
+--  `x86_64-pc-linux-gnu-gcc`; Cortex-M uses `arm-none-eabi-gcc`.  Darwin
+--  instead defaults to Apple's `/usr/bin/clang`, with `-arch arm64` in its
+--  link arguments.  A named driver overrides any of these defaults.
 --
---  There is deliberately no fall back to a bare `gcc`.  A host whose
---  triplet-prefixed driver is absent is a host that cannot finish this
---  target, and reaching for whatever `gcc` names would, on the macOS
---  development host, hand ELF-only assembly to a toolchain that emits
---  Mach-O.  Making that a stated refusal costs one diagnostic; making it a
---  fallback would cost a host-detection rule this compiler has nowhere to
---  put -- `Landin.Targets`' whole reason for existing is that the host is
---  never asked what the target is.
+--  There is deliberately no fallback to a bare `gcc`.  A host without the
+--  selected driver cannot finish the target; substituting a host compiler
+--  could hand ELF assembly to a Mach-O toolchain.  `Landin.Targets` keeps
+--  the target explicit rather than inferring it from the host.
 --
 --  Whether the named driver exists is not asked here either.  A tool that
 --  cannot be started raises `External_Tool_Failed` from
@@ -43,11 +38,11 @@ with Landin.Targets.Levels;
 package Landin.Backend.Toolchain is
 
    --  The program that turns assembly text into an executable.  `Named`
-   --  overrides the convention for a host that spells its triplet
-   --  differently, or that has no GNU toolchain at all; the empty string
-   --  asks for the convention.  An empty result means the target names no
-   --  toolchain and none was given, which is the one case that cannot be
-   --  attempted rather than merely failing.
+   --  overrides the target's default driver; an empty `Named` selects the
+   --  triplet-prefixed GCC for Linux and Cortex-M, or `/usr/bin/clang` for
+   --  Darwin.  An empty result means the target names no toolchain and none
+   --  was given, which is the one case that cannot be attempted rather than
+   --  merely failing.
    --  Darwin retains the full source/assembly digest without filenames.
    --  Linux ELF passes the same digest through a GNU linker build ID.
    --  Cortex-M0 ELF stores it in a nonallocated .landin_id section for

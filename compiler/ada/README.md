@@ -879,10 +879,11 @@ for `linux-x86-64`. With `--debug=full` or `--debug=lines`, assembly identity
 also requires the compilation directory and source spelling to be fixed:
 DWARF records them in `comp_dir` and `.file` (see
 [Deterministic artifacts](../../docs/targets.md#deterministic-artifacts)).
-The finishing half is host-dependent, and says so — a host without the
-target's triplet-prefixed driver reports `L0500` rather than reaching for
-whatever `gcc` names. On macOS, that could hand ELF-only assembly to a
-toolchain that emits Mach-O.
+The finishing
+half depends on the selected target's driver: Linux uses
+`x86_64-pc-linux-gnu-gcc` or `aarch64-linux-gnu-gcc`, Cortex-M uses `arm-none-eabi-gcc`, and Darwin uses
+`/usr/bin/clang` with `-arch arm64`. A host where that driver is absent
+reports `L0500` rather than falling back to whatever bare `gcc` names.
 The supported Linux finishing path is the triplet-selected GNU driver and
 its assembler/linker. A named driver override must accept that target's
 emitted assembly and argument conventions; selecting an executable does not
