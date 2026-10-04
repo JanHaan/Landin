@@ -1274,7 +1274,8 @@ package body Landin.Backend.Arm64 is
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9");
          procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "x9");
+           (Value : Landin.IR.Value_Id; Register : String := "x9";
+            Atom_Validated : Boolean := False);
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9");
          procedure Store_Slot
@@ -1292,12 +1293,14 @@ package body Landin.Backend.Arm64 is
          end Load_Value;
 
          procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "x9")
+           (Value : Landin.IR.Value_Id; Register : String := "x9";
+            Atom_Validated : Boolean := False)
          is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
-            if Atoms /= Landin.IR.No_Atom_Set
+            if not Atom_Validated
+              and then Atoms /= Landin.IR.No_Atom_Set
               and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
                 Landin.IR.Load | Landin.IR.Load_Indirect
                 | Landin.IR.Load_Datum | Landin.IR.Load_Field
@@ -2527,7 +2530,7 @@ package body Landin.Backend.Arm64 is
                              (Natural'Image (Shape.Packing.First)) & ", #"
                              & Trimmed (Natural'Image (Shape.Packing.Bits)));
                            Packed_Atom (Shape.Atoms, Encode => False);
-                           Store_Value (Value);
+                           Store_Value (Value, Atom_Validated => True);
                         else
                            Load_Value (Operand (1));
                            Packed_Atom (Shape.Atoms, Encode => True);
@@ -2590,7 +2593,7 @@ package body Landin.Backend.Arm64 is
                            Emit ("and x9, x9, x12");
                            Packed_Atom (Landin.IR.Array_Element_Shape
                              (Of_Unit, Shape).Atoms, Encode => False);
-                           Store_Value (Value);
+                           Store_Value (Value, Atom_Validated => True);
                         else
                            Load_Value (Operand (2));
                            Packed_Atom (Landin.IR.Array_Element_Shape

@@ -7569,6 +7569,89 @@ package body Landin.Tests.Backend_Suite is
             "a sparse positive value seeds at its nonzero chunk");
       end;
    end Arm64_Immediates_Use_The_Shorter_Move_Sequence;
+   --  D228: the decoder rejects unnamed patterns before a packed read
+   --  produces an ordinary atom.  Storing that result needs no second scan.
+   procedure Arm64_Packed_Reads_Validate_Atoms_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Packed_Reads_Validate_Atoms_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Read
+        (Source, Description, Extraction : String; Count : Natural);
+
+      procedure Check_Read
+        (Source, Description, Extraction : String; Count : Natural)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, Description & " lowers");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         Landin.Backend.Arm64.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Stages.Target (Work),
+            Landin.Optimization.Reference_Options, Assembly, Report);
+         declare
+            Text : constant String :=
+              Ada.Strings.Unbounded.To_String (Assembly);
+            First : constant Natural := Index (Text, Extraction);
+         begin
+            Landin.Testing.Check
+              (Item, First > 0, Description & " extracts packed bits");
+            if First = 0 then
+               return;
+            end if;
+            declare
+               Last : constant Natural := Index
+                 (Text (First .. Text'Last), "str w9, [x15]");
+            begin
+               Landin.Testing.Check
+                 (Item, Last > 0, Description & " stores decoded atom");
+               if Last > 0 then
+                  Landin.Testing.Check_Equal
+                    (Item, Occurrences
+                       (Text (First .. Last), "cmp x9, x14"), Count,
+                     Description & " validates once before storing");
+               end if;
+            end;
+         end;
+      end Check_Read;
+   begin
+      Check_Read
+        ("a: atom" & LF
+         & "b: atom" & LF
+         & "c: atom" & LF
+         & "mode: type = (a = 0 | b = 1 | c = 4)" & LF
+         & "image: type = layout(packed) struct" & LF
+         & "    mode: mode at 1..3" & LF
+         & "end image" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    x: image = zeroed" & LF
+         & "    if x.mode == a then code = 42 else code = 1 end if" & LF
+         & "end main" & LF,
+         "packed field", "ubfx x9, x9", 3);
+      Check_Read
+        ("a: atom" & LF
+         & "b: atom" & LF
+         & "mode: type = (a = 0 | b = 3)" & LF
+         & "image: type = layout(packed) struct" & LF
+         & "    modes: [2]mode at 0..3" & LF
+         & "end image" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    x: image = zeroed" & LF
+         & "    if x.modes[0] == a then code = 42 else code = 1 end if" & LF
+         & "end main" & LF,
+         "packed element", "and x9, x9, x12", 2);
+   end Arm64_Packed_Reads_Validate_Atoms_Once;
 
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
    --  at every width, inside the same fences, and the default emits the
@@ -8526,6 +8609,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "helper membership is exact",
          Helper_Membership_Is_Exact'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 packed reads validate atoms once",
+         Arm64_Packed_Reads_Validate_Atoms_Once'Access);
    end Register;
 
 end Landin.Tests.Backend_Suite;
