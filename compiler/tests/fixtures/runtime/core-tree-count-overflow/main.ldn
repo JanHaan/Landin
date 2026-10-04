@@ -55,6 +55,14 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
+    --  The cumulative total now exceeds u32, but this child interval does not.
+    one: u32 = 1
+    small: tree.node_id = tree.add_branch(value, state, label, first, one)
+        else (problem)
+            _ = problem
+            return
+        end
+    small_count: u32 = tree.count_leaves(value, small) else 0
     mut invalid: bool = false
     maximum: u32 = 0 -% 1
     _ = tree.count_leaves(value, tree.id(maximum)) else (problem)
@@ -64,8 +72,9 @@ public main: () -> (code: i32) =
     end
     before_release: usize = tree.length(value)
     tree.release(value, state)
-    if overflow and unchanged and invalid and before_release == 47
-       and final == 2971215073 and failing.attempts(state) == 4
+    if overflow and unchanged and invalid and before_release == 48
+       and final == 2971215073 and small_count == 1
+       and failing.attempts(state) == 4
        and failing.frees(state) == 4 and failing.live(state) == 0
     then
         code = 42

@@ -64,6 +64,24 @@ public main: () -> (code: i32) =
         return
     end if
     deep_count: u32 = tree.count_leaves(value, deep) else 0
+    --  Every range starts at the same branch and extends one child farther.
+    --  The shared and empty nodes make the cumulative totals nonuniform.
+    at = 0
+    while at < 128 do
+        span: u32 = u32(at + 1)
+        overlap: tree.node_id = tree.add_branch(value, state, "overlap", root,
+                                                span) else (problem)
+            _ = problem
+            return
+        end
+        observed: u32 = tree.count_leaves(value, overlap) else 0
+        if at < 2 then
+            return when observed <> 3
+        else
+            return when observed <> 3 * span
+        end if
+        inc at
+    end while
     before: usize = tree.length(value)
     mut invalid: bool = false
     _ = tree.add_branch(value, state, "invalid", c, maximum)
