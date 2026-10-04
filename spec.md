@@ -10983,17 +10983,18 @@ made a returned struct's lifetime independent of the callee frame.
 **Chosen:** a function with an ordinary, variant-bearing or depth-one nested
 struct result receives one unspellable internal `usize` parameter naming
 caller-owned result storage. It precedes all source parameters in the existing
-register/stack run. The callee keeps its named result in an independently
-shaped local slot and, at every successful leave, copies the complete
-source-target-derived padded extent to that address. A typed local initializer
-may supply a matching aggregate-returning call as its value.
+register/stack run. The named result keeps its complete checked shape. It may
+occupy an independent callee slot, copied into the hidden destination on each
+successful exit, or use that destination as its storage when D116's
+observational conditions hold. A typed local initializer may supply a matching
+aggregate-returning call as its value.
 
 The checked IR item retains `Aggregate` as the declared result and keeps the
 complete neutral shape on its result slot. The call instruction itself has no
 aggregate value: its first operand is an opaque `Storage_Address` for the
 already-shaped destination, followed by source arguments. The verifier checks
 that operand against the hidden scalar parameter. Target offsets, padding and
-byte extent enter only when the backend emits the final copy.
+byte extent enter only during backend layout and any copy that is needed.
 
 **Why not return a pointer to callee storage:** that pointer would escape a dead
 frame and would turn by-value semantics into an alias. Returning fields in
@@ -11017,9 +11018,10 @@ well as a struct result.
 **Chosen:** a function may name a fixed-array return, assign it through the
 existing whole-array contextual forms, and initialize a matching typed local
 from its call. One leading unspellable `usize` parameter points at the caller's
-shaped array slot. On leave the callee copies exactly `length * element-size`
-bytes from its independent result slot. The call itself still returns no IR
-value.
+shaped array slot. The named result may use that storage under D116's
+conditions; otherwise each successful exit copies exactly
+`length * element-size` bytes from its independent result slot. The call
+itself still returns no IR value.
 
 Definite assignment records a whole-array fact for the named return; assigning
 known elements independently also suffices once every position is covered.
@@ -11046,17 +11048,18 @@ aggregate value would add no semantics and would lose that direct destination.
 **Chosen:** a matching struct- or fixed-array-returning call may initialize a
 typed local, assign a direct whole aggregate place, fill a named return in a
 block, or serve as that return's expression body. Lowering supplies the final
-place itself as the hidden result destination. Forwarding therefore performs
-callee-to-caller copies at each source call boundary but never materializes an
-aggregate SSA value or aliases one frame's storage into another.
+place itself as the hidden result destination. Forwarding never materializes
+an aggregate SSA value or aliases one frame's storage into another. A callee
+using an independent result slot copies at its successful exits; a callee
+meeting D116's direct-storage conditions need not copy there.
 
 Child-field destinations remain separate: they require a field-qualified
 hidden destination carrier before a returned call can fill them directly.
 
-**Why retain each boundary copy:** the language says aggregate arguments and
-results are values, not aliases. Tail-call storage forwarding could elide a
-copy later, but it is an optimization only when it preserves the independently
-observable named-return place and all source evaluation order.
+**Why permit a boundary without a copy:** by-value results require the same
+observable value and effect order, not a particular intermediate allocation.
+The independent slot remains available when direct storage would expose a
+partial result or change the named return's behavior.
 
 **The alternative:** materialize an aggregate result as an IR value and copy it into the destination afterwards. That is a second copy of every result and an aggregate SSA value the IR was designed not to have; naming the final place as the hidden destination removes both.
 
@@ -11084,8 +11087,8 @@ No target offset, byte extent or source-level pointer enters checked IR.
 **Why destination qualification belongs on the address:** copying first into a
 temporary and then into the field would be correct but would add an avoidable
 whole aggregate copy. Passing a qualified opaque destination preserves the
-same by-value result semantics because the callee writes only its independent
-named result until the leave copy.
+same by-value result semantics when the callee either commits its independent
+named result at the exit or meets D116's direct-storage conditions.
 
 **The alternative:** require a result destined for a field to go through a whole-aggregate local first. The hidden address already carries field identities for arguments, so the same carrier gives a field destination without a copy the reader would otherwise write.
 
@@ -11108,8 +11111,8 @@ as D106's hidden destination. Module inference from calls remains forbidden by
 [1940], because module images run no call before entry.
 
 **Why inference changes no ABI rule:** checking copies only source identity into
-the declaration, before lowering. Runtime still has exactly the same
-caller-owned destination and callee leave copy as an explicitly typed local.
+the declaration, before lowering. Runtime uses the same caller-owned
+destination and D116 commit rule as an explicitly typed local.
 
 **The alternative:** require the local's type to be spelled when it is initialized by an aggregate-returning call. The callee's signature names the body or the array shape completely; a spelled type would only be compared with it.
 
@@ -11136,10 +11139,11 @@ When later arguments change blocks, the temporary address uses the same saved
 scalar carrier as any earlier aggregate argument, preserving block-local IR and
 source evaluation order.
 
-**Why two copies remain semantic:** the inner return establishes a value in the
-caller and the outer `in` boundary establishes an independent callee value.
-Optimization may combine storage only after proving neither identity can be
-observed; the language and verifier do not depend on that optimization.
+**Why the boundaries remain semantic:** the inner return establishes a complete
+value in the caller and the outer `in` boundary establishes an independent
+callee value. The inner boundary need not copy under D116; optimization may
+combine argument storage only after proving neither identity can be observed.
+The language and verifier do not depend on either optimization.
 
 **The alternative:** bind a returned aggregate to a named local before it may be passed on. The fresh temporary is that local without a name, filled by the inner call's hidden destination and copied by the outer callee exactly as a named one would be.
 
@@ -11152,7 +11156,7 @@ IR records; and the nested calls in `runtime/struct-returns-cross-calls` and
 
 **The tour said** that discarding a result is explicit [1020] [1930]. A scalar
 call can simply leave its produced IR value unused, but D106 requires valid
-storage through the aggregate callee's leave copy.
+storage through the aggregate callee's result commit.
 
 **Chosen:** `_ = call()` for a struct or fixed-array result allocates a fresh
 shaped caller temporary, supplies it as the hidden destination, completes the
@@ -11294,25 +11298,37 @@ literal assignment by an equivalent call change whether later reads are legal.
 **Pinned by** `negative/aggregate-call-result-not-assigned-on-every-path` and
 `runtime/aggregate-results-across-branches` on Linux x86-64.
 
-### D116 — Every aggregate-result exit performs its own final copy
+### D116 — Aggregate-result exits commit a complete value
 
 **The tour said** that every reachable `return` requires the named return to be
 assigned [1890] [1910]. Aggregate caller-owned storage makes the consequence
 observable at more than the function's lexical end.
 
 **Chosen:** each accepted early or final exit from an aggregate-returning
-function copies the complete independent named-result slot into that call's
-hidden caller destination. An aggregate call may complete the named result
-immediately before either exit. Flow checking refuses an exit reached without
-the complete result; another arm having completed and exited does not lend its
-fact to that path.
+function delivers the complete named result to that call's hidden caller
+destination. The ordinary implementation keeps an independent named-result
+slot and copies its complete padded extent after that exit's cleanups. A
+compiler may instead construct the result in the caller destination and omit
+the final copy only when it can establish the same observable behavior: result
+construction makes no write to the caller destination on a failing path; no
+callee-visible alias, escaped result address, callback or cleanup can observe
+a partial or premature result; and source evaluation and cleanup still occur
+in order.
+This includes proving that any operation after the first direct write cannot
+fail or expose that write before a successful exit. When these conditions
+cannot be established, the independent slot and exit copy are required.
 
-**Why every exit copies:** redirecting only lexical fallthrough would make an
+An aggregate call may complete the named result immediately before either
+exit. Flow checking refuses an exit reached without the complete result;
+another arm having completed and exited does not lend its fact to that path.
+
+**Why every exit commits:** redirecting only lexical fallthrough would make an
 early `return` expose an unfilled caller image, while returning the callee slot's
-address would expose dead frame storage. Both violate the same by-value result
-boundary.
+address would expose dead frame storage. Direct construction can avoid both a
+second full extent and its transfer when the result is built once and cannot
+be observed until that exit commits it.
 
-**The alternative:** copy the named result once at a single merged exit block, or let one arm's completion satisfy another arm's exit. A merged exit runs cleanups in the wrong order relative to [1100]; a lent fact is exactly the soundness hole a path-insensitive join opens.
+**The alternative:** copy the named result once at a single merged exit block, or let one arm's completion satisfy another arm's exit. A merged exit runs cleanups in the wrong order relative to [1100]; a lent fact is exactly the soundness hole a path-insensitive join opens. Requiring a distinct slot even when direct construction is observationally equivalent adds storage and a whole-object transfer without protecting a value boundary.
 
 **Pinned by** `negative/aggregate-call-result-missing-at-early-exit` and
 `runtime/aggregate-results-across-early-exits` on Linux x86-64.
@@ -11438,10 +11454,10 @@ anonymous result values agree only when their ordered names and complete field
 types agree.
 
 The internal ABI transports every multiple result as one aggregate. The caller
-supplies D106's one hidden destination, the callee owns one independently shaped
-result slot, and each source named return writes its declaration-order field.
-Every early or final leave performs the existing complete aggregate copy to the
-caller. Direct and indirect calls, stack arguments and aggregate fields within
+supplies D106's one hidden destination, and each source named return writes its
+declaration-order field in the complete checked result shape. The callee uses
+an independent result slot and exit copies unless D116 permits direct storage.
+Direct and indirect calls, stack arguments and aggregate fields within
 the result add no second convention. A function-valued field is a `usize`
 carrier that retains its nested signature; aggregate-shaped field copies reuse
 the compact verified storage-copy operation.
@@ -11980,7 +11996,7 @@ final expression first fills D125's consumer-owned value storage, then that
 frame's reached entries run in reverse registration order, and only then does
 the edge reach its surrounding join. A successful `return` runs every reached
 entry from the innermost active frame outward, reverse within each frame,
-before D116's final result copy or scalar leave. Thus a defer written after a
+before D116's result commit or scalar leave. Thus a defer written after a
 guarded return is absent from the guard's taken edge, while an inner arm or
 bare-block defer runs before an outer one. An entry is removed before its call
 runs: if a control expression in that call returns, the still-pending entries
