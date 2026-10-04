@@ -147,6 +147,22 @@ jobs:
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
+      # Representative process measurements; low-stack outcomes are recorded,
+      # not required thresholds. The full scaling verdict has its own job.
+      - name: Representative verifier resource observations
+        run: >-
+          python3 scripts/verifier_resources.py
+          --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
+          --output "$RUNNER_TEMP/verifier-resources"
+
+      - name: Keep representative resource observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-resources-release-release
+          path: ${{ runner.temp }}/verifier-resources
+          retention-days: 14
+
       - name: Determinism closures, native report identity and the server
         run: |
           set -eu
@@ -308,6 +324,22 @@ jobs:
       - name: The compiler host suite
         run: ./scripts/test.sh --host --target=linux-x86-64
 
+      # Representative process measurements; low-stack outcomes are recorded,
+      # not required thresholds. The full scaling verdict has its own job.
+      - name: Representative verifier resource observations
+        run: >-
+          python3 scripts/verifier_resources.py
+          --refine "$PWD/compiler/ada/build/darwin-arm64/${{ matrix.mode }}/bin/refine"
+          --output "$RUNNER_TEMP/verifier-resources"
+
+      - name: Keep representative resource observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-resources-darwin-host-${{ matrix.mode }}
+          path: ${{ runner.temp }}/verifier-resources
+          retention-days: 14
+
       - name: Determinism closures, native report identity and the server
         run: |
           set -eu
@@ -403,6 +435,22 @@ jobs:
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
+      # Representative process measurements; low-stack outcomes are recorded,
+      # not required thresholds. The full scaling verdict has its own job.
+      - name: Representative verifier resource observations
+        run: >-
+          python3 scripts/verifier_resources.py
+          --refine "$PWD/compiler/ada/build/linux-arm64/debug/bin/refine"
+          --output "$RUNNER_TEMP/verifier-resources"
+
+      - name: Keep representative resource observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-resources-arm64-compiler-debug
+          path: ${{ runner.temp }}/verifier-resources
+          retention-days: 14
+
       - name: The default target, determinism closures, native report identity and the server
         run: |
           set -eu
@@ -433,6 +481,22 @@ jobs:
 
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+
+      # Representative process measurements; low-stack outcomes are recorded,
+      # not required thresholds. The full scaling verdict has its own job.
+      - name: Representative verifier resource observations
+        run: >-
+          python3 scripts/verifier_resources.py
+          --refine "$PWD/compiler/ada/build/linux-arm64/release/bin/refine"
+          --output "$RUNNER_TEMP/verifier-resources"
+
+      - name: Keep representative resource observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-resources-arm64-release-release
+          path: ${{ runner.temp }}/verifier-resources
+          retention-days: 14
 
       - name: The default target and the server
         run: |
