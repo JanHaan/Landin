@@ -1,6 +1,19 @@
 import core/mem
 import core/pool
 
+--  Measure the padded representation this pool used before size became its
+--  occupancy field; the free-index heap remains. sizeof observes the selected target's actual stride.
+padded_slot: type = struct
+    occupied: bool
+    size: usize
+    free_index: usize
+end padded_slot
+
+compact_layout: () -> (ok: bool) =
+    ok = sizeof padded_slot == 24 and sizeof pool.slot == 16
+         and sizeof padded_slot > sizeof pool.slot + sizeof bool
+end compact_layout
+
 zero_slots_exhaust: () -> (ok: bool) =
     mut words: [2]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
@@ -27,6 +40,40 @@ zero_slots_exhaust: () -> (ok: bool) =
          and pool.bookkeeping_capacity(state) == lenof bookkeeping
          and pool.allocation_count(state) == 0 and pool.live(state) == 0
 end zero_slots_exhaust
+
+zero_size_occupies_slot: () -> (ok: bool) =
+    mut words: [2]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over(base, 16, 8, 1, 8, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    zero: usize = 0
+    one: usize = 1
+    block: ptr mut u8 = mem.allocate(state, zero, zero) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    mut exhausted: bool = false
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        exhausted = true
+    end
+    mem.free(state, block, one)
+    ok = exhausted and pool.live(state) == 1
+         and pool.rejected_free_count(state) == 1
+    mem.free(state, block, zero)
+    ok = ok and pool.live(state) == 0 and pool.free_count(state) == 1
+    maximum: usize = 0 -% 1
+    mem.free(state, block, maximum)
+    ok = ok and pool.rejected_free_count(state) == 2
+end zero_size_occupies_slot
 
 one_slot_reuses: () -> (ok: bool) =
     mut words: [12]u64 = zeroed
@@ -406,8 +453,34 @@ bad_configuration_is_refused: () -> (ok: bool) =
     ok = capacity_refused and extent_refused
 end bad_configuration_is_refused
 
+maximum_size_is_refused: () -> (ok: bool) =
+    mut words: [8]u8 = zeroed
+    base: ptr mut u8 = addr words[0]
+    maximum: usize = 0 -% 1
+    one: usize = 1
+    zero: usize = 0
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+
+    mut refused: bool = false
+    _ = pool.over(base, maximum, maximum, one, one, bookkeeping)
+        else (problem)
+        _ = problem
+        refused = true
+    end
+    empty := pool.over(base, zero, maximum, zero, one, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = refused and records[0].size == 0 and pool.capacity(empty) == 0
+end maximum_size_is_refused
+
 public main: () -> (code: i32) =
-    if zero_slots_exhaust() and one_slot_reuses()
+    if compact_layout() and maximum_size_is_refused()
+      and zero_slots_exhaust() and zero_size_occupies_slot()
+      and one_slot_reuses()
       and multiple_live_and_bounds() and six_live_slots()
       and out_of_order_reuse()
       and bad_configuration_is_refused()

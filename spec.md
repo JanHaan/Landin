@@ -16083,6 +16083,17 @@ bookkeeping` clause retains both when the actuals have tracked origins, and a
 local metadata slice cannot escape beside a named backing parameter. The
 module imports no heap and has no fallback.
 
+Each `pool.slot` stores a `usize` requested size and a `usize` free-heap
+index. The maximum requested size marks an unoccupied slot, removing the
+old Boolean field and its padding. Cortex-M0 bookkeeping shrinks from
+twelve to eight bytes per slot; hosted 64-bit bookkeeping shrinks from
+twenty-four to sixteen bytes. The free-index heap retains lowest-index reuse. A positive pool refuses a
+slot size equal to that marker. Such a slot would require a base address of
+zero to fit in the target address space, and [1975] forbids constructing a
+non-null pointer there. Zero-slot pools may still use that size. A zero-size
+request stores zero and still occupies a slot. The single caller slice and
+the `from base, bookkeeping` origin clause remain the same.
+
 The existing whole-value origin algebra still applies: Untracked is an OR.
 If one constituent is deliberately made untracked, such as a base produced by
 `ptr(integer)`, the complete provider is untracked and the checker does not
