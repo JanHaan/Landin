@@ -721,17 +721,17 @@ where present, is exercised by these checks; unsupported forms have negative
 refusal controls. Every capacity verdict is rerun against each selected
 profile with the 32 KiB reference retained.
 
-The Cortex-M gate runs with SR-01's migrated `arm-eabi-gcc` toolchain, and every Cortex-M
-record, including firmware hashes and disassemblies, is rebaselined in the
-same toolchain change.
+The Cortex-M gate runs with SR-01's migrated `arm-eabi-gcc` toolchain. Every
+affected Cortex-M record, including firmware hashes and disassemblies, is
+regenerated and reviewed in the same toolchain change.
 
-Check the RP2040 SVD interrupt-to-vector mapping against the linked firmware image:
+Check the RP2040 SVD interrupt-to-vector mapping against the linked firmware
+image:
 `USBCTRL_IRQ` is IRQ5, so a typed handler at absolute slot 21 must compile,
 occupy that vector word and execute when IRQ5 is delivered. Verify the
 constrained reference profile still refuses slot 21 and emits zero there.
 
-Fixture
-checks select RP2040 and the second generated family by device identity and
+Fixture checks select RP2040 and the second generated family by device identity and
 compare each selected boot image format fact with an independently recorded
 expectation for that device; a wrong or absent format fails the checks. The
 firmware ELF alone does not establish this selection.
@@ -746,7 +746,9 @@ second-stage boot, flashing through a debug probe, and a smoke procedure
 checked against the emulator lanes' oracles.
 
 Exit evidence: the derived driver running on the board, its captured trace
-checked against the same oracle, and the run recorded here.
+checked against the same oracle, and the run recorded here. The board run
+also delivers IRQ5 and observes the typed handler whose absolute slot-21
+placement is required by R12.10.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M4F
 
@@ -818,7 +820,7 @@ gate, beside the emulator lanes it does not replace.
 
 A standard library split where the capability model already splits it.
 
-### R13.10 — Split freestanding from hosted
+### R13.10 — Separate library availability classes
 
 Status: planned
 Depends on: none

@@ -151,8 +151,9 @@ ABI, is the same at every level of a family.
 
 The x86-64 assembler is held to the level at every level, the baseline's
 plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
-instruction is refused by the assembler unless the build assumes v3; the
-other targets' default levels add no argument and no directive. The pinned
+instruction is refused by the assembler unless the build assumes v3. Linux
+arm64 likewise passes its selected level to the assembler at every level,
+including the baseline. The pinned
 GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
