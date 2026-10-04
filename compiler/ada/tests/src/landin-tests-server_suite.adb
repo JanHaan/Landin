@@ -1208,6 +1208,71 @@ package body Landin.Tests.Server_Suite is
       end;
    end Queries_Of_A_Refused_Module_Answer_Nothing;
 
+   procedure An_Unresolved_Name_Leaves_Other_Navigation
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Unresolved_Name_Leaves_Other_Navigation
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Text : constant String :=
+        "bad: () -> none = missing () end bad" & LF
+        & "good: (x: u8) -> (y: u8) = y = x + 1 end good" & LF;
+      Missing : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "missing") - Text'First);
+      Parameter : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "x: u8") - Text'First);
+      Reference : constant Landin.Source.Byte_Offset :=
+        Landin.Source.Byte_Offset
+          (Ada.Strings.Fixed.Index (Text, "x + 1") - Text'First);
+      Expression : constant Landin.Source.Byte_Offset := Reference + 2;
+   begin
+      Host.Add_File ("/w/m.ldn", Text);
+      declare
+         Context : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Answer : Landin.Server.Analysis.Result;
+      begin
+         Landin.Server.Analysis.Analyse
+           (Context, Host, One_File ("/w/m.ldn"), Answer);
+         Landin.Testing.Check
+           (Item, Answer.Resolved and then Answer.Checked
+                  and then Answer.Found.Count > 0,
+            "the name error leaves both tables available");
+         Landin.Testing.Check_Equal
+           (Item, Codes_Of (Answer.Found), "L0201",
+            "only the original resolution error is published");
+         Landin.Testing.Check
+           (Item, Landin.Server.Navigation.Definition
+                    (Context, Answer, 1, Missing)
+                  = Landin.Server.Navigation.No_Place,
+            "the missing name has no definition");
+         Landin.Testing.Check
+           (Item, Landin.Server.Navigation.Hover
+                    (Context, Answer, 1, Missing).Length = 0,
+            "the missing name has no hover");
+         Landin.Testing.Check
+           (Item, Landin.Server.Navigation.Definition
+                    (Context, Answer, 1, Reference)
+                  = (1, (Parameter, Parameter + 1)),
+            "the unrelated parameter still has a definition");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+                    (Landin.Server.Navigation.Hover
+                       (Context, Answer, 1, Reference).Text,
+                     "x: u8") > 0,
+            "the unrelated parameter still has a hover");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+                    (Landin.Server.Navigation.Hover
+                       (Context, Answer, 1, Expression).Text,
+                     "u8") > 0,
+            "the unrelated expression still has a type");
+      end;
+   end An_Unresolved_Name_Leaves_Other_Navigation;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1261,6 +1326,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "cursor lookup keeps the post order choice",
          Cursor_Lookup_Keeps_The_Post_Order_Choice'Access);
+      Landin.Testing.Register
+        (Into, "server", "an unresolved name leaves other navigation",
+         An_Unresolved_Name_Leaves_Other_Navigation'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

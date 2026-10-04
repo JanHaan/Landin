@@ -56,8 +56,10 @@ package Landin.Server.Analysis is
       --  Each source's held regions, by Source_Id; empty for one analysed
       --  as it is.
       Held   : Hold_Vectors.Vector;
-      --  Whether the stages ran past syntax, so names and types may be
-      --  asked of the compilation.
+      --  Resolution may have usable bindings even when it reported an
+      --  unresolved name.  Checking may then be run for navigation alone.
+      Resolved : Boolean := False;
+      --  Whether the checking table was prepared for hover queries.
       Checked : Boolean := False;
       --  Directories an unresolved import could appear in under the roots.
       Missing_Directories : Landin.Platform.Path_List;

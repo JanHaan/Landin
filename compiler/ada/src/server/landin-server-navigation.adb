@@ -211,7 +211,7 @@ package body Landin.Server.Navigation is
       Offset  : Landin.Source.Byte_Offset) return Place
    is
    begin
-      if not Answer.Checked
+      if not Answer.Resolved
         or else not Landin.Syntax.Forest.Contains
           (Landin.Stages.Trees (Context).all, Source)
         or else Landin.Server.Analysis.Is_Held

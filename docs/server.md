@@ -112,6 +112,13 @@ then its doc comment: the run of `---` lines directly above a declaration
 that begins its line [2000]. Over an expression, hover shows its type. Inside
 a routine body that does not parse, both answer nothing.
 
+When the only resolution errors are unresolved names, the server keeps the
+bindings of other names and checks for hover types. Definition and hover still
+answer in unaffected code. The unresolved name has no definition or type, and
+diagnostics remain the same as a build's resolution diagnostics; any type
+errors found during this extra editor check are not published until the names
+are resolved.
+
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
 and one after `shutdown` with InvalidRequest. The server answers each request
