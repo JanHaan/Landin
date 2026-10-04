@@ -6682,9 +6682,12 @@ the dump exposes an array leaf as `[N]element`.
 At this decision a struct with an aggregate field still had no runtime storage
 or value context. D46--D65 later add its module and frame storage, indexed and
 whole-field places, contextual initializers, whole copies, zero images and
-labelled literals. Parameters, returns, a struct field of struct type, deeper
-nested aggregate composition, inline anonymous measurement and `lenof` on a
-struct remain deferred. Scalar-field struct measurement is unchanged.
+labelled literals. D87 and D119 later admit ordinary struct fields and
+arbitrary-depth ordinary nesting; D94, D102 and D104 admit specified struct
+parameter shapes, and D106 admits specified struct result shapes. Those
+decisions retain their own limits on storage, expressions and calls. Inline
+anonymous struct measurement and `lenof` on a struct remain deferred.
+Scalar-field struct measurement is unchanged.
 
 **Why the compact leaf:** D18 permits an array length no host or IR vector can
 enumerate, while its element and count are the complete representation-
