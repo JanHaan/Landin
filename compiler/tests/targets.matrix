@@ -181,6 +181,7 @@ negative/condition-declaration-not-bool | linux-x86-64, linux-arm64, macos-arm64
 negative/condition-declaration-out-of-scope | linux-x86-64, linux-arm64, macos-arm64
 negative/condition-is-not-believed | linux-x86-64, linux-arm64, macos-arm64
 negative/conformance-collision | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/conformance-duplicate-label | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/conformance-entry-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/constraint-not-satisfied | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/construction-is-not-call-statement | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -963,6 +964,7 @@ negative/r640-static-array-extraction | linux-x86-64, linux-arm64, macos-arm64
 negative/r640-width | linux-x86-64, linux-arm64, macos-arm64
 negative/r640-zero-array | linux-x86-64, linux-arm64, macos-arm64
 negative/r640-zero-field | linux-x86-64, linux-arm64, macos-arm64
+negative/r660-firmware-frame | cortex-m
 negative/r660-materialization | cortex-m
 negative/r670-noreturn-fallthrough | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/r670-panic-handler | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1174,7 +1176,7 @@ negative/utf8-index-needs-u32-or-position | linux-x86-64, linux-arm64, macos-arm
 negative/utf8-index-position-identity-is-exact | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64
-negative/variant-case-declaration-duplicate-payload | linux-x86-64, macos-arm64
+negative/variant-case-declaration-duplicate-payload | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-does-not-belong | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-duplicate | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-payload-disagrees | linux-x86-64, linux-arm64, macos-arm64

@@ -51317,7 +51317,7 @@ file negative/misspelt-module-member-is-offered-a-public-one/program.ldn tokens 
   40 46 anwser
   47 50 end
   51 52 f
-file negative/misspelt-name-is-offered-its-neighbour/program.ldn tokens 59
+file negative/misspelt-name-is-offered-its-neighbour/program.ldn tokens 97
   0 5 count
   5 6 :
   7 8 (
@@ -51337,46 +51337,84 @@ file negative/misspelt-name-is-offered-its-neighbour/program.ldn tokens 59
   47 48 1
   49 52 end
   53 58 count
-  60 65 total
-  65 66 :
-  67 68 (
-  68 73 limit
-  73 74 :
-  75 78 u32
-  78 79 )
-  80 82 ->
-  83 84 (
-  84 90 result
-  90 91 :
-  92 95 u32
-  95 96 )
-  97 98 =
-  103 106 mut
-  107 110 sum
-  110 111 :
-  112 115 u32
-  116 117 =
-  118 119 0
-  124 129 while
-  130 133 sum
-  134 135 <
-  136 140 limt
-  141 143 do
-  152 155 sum
-  156 157 =
-  158 163 cuont
-  163 164 (
-  164 169 value
-  169 170 :
-  171 174 sum
-  174 175 )
-  180 183 end
-  184 189 while
-  194 200 result
-  201 202 =
-  203 206 sum
-  207 210 end
-  211 216 total
+  59 64 cuona
+  64 65 :
+  66 67 (
+  67 72 value
+  72 73 :
+  74 77 u32
+  77 78 )
+  79 81 ->
+  82 83 (
+  83 89 result
+  89 90 :
+  91 94 u32
+  94 95 )
+  96 97 =
+  98 103 value
+  104 105 +
+  106 107 2
+  108 111 end
+  112 117 cuona
+  118 123 cuons
+  123 124 :
+  125 126 (
+  126 131 value
+  131 132 :
+  133 136 u32
+  136 137 )
+  138 140 ->
+  141 142 (
+  142 148 result
+  148 149 :
+  150 153 u32
+  153 154 )
+  155 156 =
+  157 162 value
+  163 164 +
+  165 166 3
+  167 170 end
+  171 176 cuons
+  178 183 total
+  183 184 :
+  185 186 (
+  186 191 limit
+  191 192 :
+  193 196 u32
+  196 197 )
+  198 200 ->
+  201 202 (
+  202 208 result
+  208 209 :
+  210 213 u32
+  213 214 )
+  215 216 =
+  221 224 mut
+  225 228 sum
+  228 229 :
+  230 233 u32
+  234 235 =
+  236 237 0
+  242 247 while
+  248 251 sum
+  252 253 <
+  254 258 limt
+  259 261 do
+  270 273 sum
+  274 275 =
+  276 281 cuont
+  281 282 (
+  282 287 value
+  287 288 :
+  289 292 sum
+  292 293 )
+  298 301 end
+  302 307 while
+  312 318 result
+  319 320 =
+  321 324 sum
+  325 328 end
+  329 334 total
 file negative/misspelt-selected-import-is-offered/program.ldn tokens 19
   0 6 import
   7 10 lib

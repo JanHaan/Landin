@@ -158,7 +158,7 @@ count_finite_region: () -> (ok: bool) =
     world: any io.world = any(addr world_state)
     mut backing: [512]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over(base, usize(4096))
+    mut arena := mem.arena_over_unchecked(base, usize(4096))
     mut program := region.new_region(addr arena)
     defer region.release_region(program)
     kept: usize = app.run(program, world, usize(32)) else (problem)
