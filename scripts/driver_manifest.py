@@ -51,9 +51,10 @@ whole warning blocks inserted.  Entries whose reports grew are named.
 A change to the space of the sources themselves -- `refine fmt` over a
 module -- moves byte offsets and columns and nothing else, and is compared
 with one compiler over the two trees.  Each entry also records `layout`:
-the assembly with every `.loc` column, every debug section, the build
-identity and every panic site's number removed, the build report with its
-source digests and byte spans removed, and the source map with its digests,
+the assembly with `.loc` columns, DWARF source line/column attributes and the
+compilation directory, the build identity and every panic site's number
+removed; the build report with its source digests and byte spans removed; and
+the source map with its digests,
 lengths, line offsets and panic bases removed.  `--layout-only` requires
 status, output and report equal as they are, and `layout` equal where the
 raw artefacts differ.  A line that moved would show in a `.loc`'s line and
@@ -207,31 +208,64 @@ SITE = re.compile(rb"^(\s*(?:movl\s+\$|movz\s+x1,\s*#|movk\s+x1,\s*#|"
                   rb"(?:call|bl|blx)\s+_?panic_handler)", re.M)
 SECTION = re.compile(rb"^\s*(?:\.section|\.text|\.data|\.bss)\b.*$", re.M)
 IDENTITY = re.compile(rb"^# Landin caller files [0-9a-f]+\n", re.M)
+#  The full-debug emitter writes a routine's source, line and column after
+#  its frame-base expression. Parameters and locals put them between a type
+#  reference and a location-list reference. Preserve the source number and
+#  every other DIE byte. Cortex-M's line-only DIE spells the three operands
+#  on one line instead.
+DWARF_ROUTINE = re.compile(
+    rb"(^[ \t]*\.quad [^\n]*debug_end_[^\n]*\n"
+    rb"[ \t]*\.uleb128 1\n[ \t]*\.byte (?:0x[0-9a-f]+|\d+)\n"
+    rb"[ \t]*\.uleb128 \d+\n[ \t]*\.uleb128 )\d+"
+    rb"(\n[ \t]*\.uleb128 )\d+(?=\n)", re.M)
+DWARF_VARIABLE = re.compile(
+    rb"(^[ \t]*\.long [^\n]*debug_type_[^\n]*\n"
+    rb"[ \t]*\.uleb128 \d+\n[ \t]*\.uleb128 )\d+"
+    rb"(\n[ \t]*\.uleb128 )\d+"
+    rb"(?=\n[ \t]*\.long [^\n]*debug_(?:alias_)?loc_)", re.M)
+DWARF_LINE_ROUTINE = re.compile(
+    rb"(^[ \t]*\.(?:long|quad) [^\n]*debug_begin_[^\n]*\n"
+    rb"[ \t]*\.(?:long|quad) [^\n]*debug_end_[^\n]*\n"
+    rb"[ \t]*\.uleb128 \d+,)\d+,\d+(?=\r?$)", re.M)
+#  Manifest revisions compile from distinct fixture trees. The CU directory
+#  reflects that path, while the following DIEs still describe the program.
+DWARF_COMP_DIR = re.compile(
+    rb'(^[ \t]*\.uleb128 1\n'
+    rb'[ \t]*\.asciz "Landin refine(?: \(lines\))?"\n'
+    rb'[ \t]*\.short 0x0002\n[ \t]*\.asciz [^\n]+\n'
+    rb'[ \t]*\.asciz )[^\n]+', re.M)
 LEVEL = re.compile(rb',"level":"([^"]*)"')
 SPANS = re.compile(rb'"(?:sha256|source_sha256|assembly_sha256|build_id|'
                    rb'first|last|byte_length|panic_base)":\s*("[^"]*"|\d+)')
 OFFSETS = re.compile(rb'"line_offsets":\[[^\]]*\]')
 
 
-def without_debug_sections(assembly):
-    """The assembly with every section that is debug information, or the
-    build identity, removed whole: from its directive to the next one."""
-    kept, dropping, last = [], False, 0
+def normalize_layout_assembly(assembly):
+    """Discard the build ID and normalize only source location fields."""
+    kept, section, last = [], b"", 0
+
+    def keep(part):
+        if b"landin_id" in section:
+            return b""
+        if b".debug_info" in section or b"__debug_info" in section:
+            part = DWARF_COMP_DIR.sub(rb'\g<1>"DIRECTORY"', part)
+            part = DWARF_ROUTINE.sub(rb"\g<1>LINE\g<2>COLUMN", part)
+            part = DWARF_VARIABLE.sub(rb"\g<1>LINE\g<2>COLUMN", part)
+            part = DWARF_LINE_ROUTINE.sub(rb"\g<1>LINE,COLUMN", part)
+        return part
+
     for found in SECTION.finditer(assembly):
-        if not dropping:
-            kept.append(assembly[last:found.start()])
-        line = found.group(0)
-        dropping = b"debug" in line or b"landin_id" in line
+        kept.append(keep(assembly[last:found.start()]))
+        section = found.group(0)
         last = found.start()
-    if not dropping:
-        kept.append(assembly[last:])
+    kept.append(keep(assembly[last:]))
     return b"".join(kept)
 
 
 def layout_digest(assembly, report, maps):
     """The artefacts with what a change of space moves taken out."""
     code = IDENTITY.sub(b"", assembly)
-    code = without_debug_sections(code)
+    code = normalize_layout_assembly(code)
     code = LOCATION.sub(rb"\1", code)
     code = SITE.sub(rb"\1SITE\2", code)
     parts = [code, SPANS.sub(b"", report)]

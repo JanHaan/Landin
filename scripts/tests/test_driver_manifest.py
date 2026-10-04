@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Report-only comparisons must preserve every old warning and help line."""
 from collections import Counter
+import contextlib
+import io
 import base64
 import hashlib
 import importlib.util
@@ -237,6 +239,77 @@ class ArtifactReads(unittest.TestCase):
             self.assertEqual(entry["report"], "absent")
             self.assertEqual(entry["layout"], driver_manifest.layout_digest(
                 b"", b"", []))
+
+
+ELF = (b".text\n.loc 1 9 3\nret\n"
+       b".section .debug_info,\"\",@progbits\n"
+       b'.uleb128 1\n.asciz "Landin refine"\n.short 0x0002\n'
+       b'.asciz "main.ldn"\n.asciz "/tree/a"\n'
+       b".uleb128 2\n.asciz \"f\"\n"
+       b".quad .Ldebug_begin_1_0\n.quad .Ldebug_end_1_0\n"
+       b".uleb128 1\n.byte 0x56\n.uleb128 1\n.uleb128 9\n"
+       b".uleb128 3\n.uleb128 10\n.asciz \"local\"\n"
+       b".long .Ldebug_type_1-.Ldebug_info\n.uleb128 1\n"
+       b".uleb128 9\n.uleb128 3\n"
+       b".long .Ldebug_loc_1-.Ldebug_loc\n.byte 1\n"
+       b".section .debug_loc,\"\",@progbits\n.byte 0x91\n")
+
+
+class DriverManifestLayout(unittest.TestCase):
+    def layout(self, assembly):
+        return driver_manifest.layout_digest(assembly, b"", [])
+
+    def compare(self, first, second):
+        with tempfile.TemporaryDirectory() as directory:
+            files = []
+            for name, assembly in (("a", first), ("b", second)):
+                entry = {"status": 0, "stdout": "same", "stderr": "same",
+                         "errors": "same", "report": "same",
+                         "asm": hashlib.sha256(assembly).hexdigest(),
+                         "layout": self.layout(assembly)}
+                path = Path(directory) / (name + ".json")
+                path.write_text(json.dumps({
+                    "positive/example|linux-x86-64|debug": entry}))
+                files.append(path)
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 contextlib.redirect_stderr(io.StringIO()):
+                return driver_manifest.compare(*files, layout_only=True)
+
+    def test_source_columns_and_die_coordinates_may_move(self):
+        changed = ELF.replace(b".loc 1 9 3", b".loc 1 9 7")
+        changed = changed.replace(b".uleb128 9\n.uleb128 3",
+                                  b".uleb128 10\n.uleb128 7")
+        changed = changed.replace(b'.asciz "/tree/a"', b'.asciz "/tree/b"')
+        self.assertEqual(self.compare(ELF, changed), 0)
+
+    def test_debug_data_and_locations_must_agree(self):
+        for changed in (
+            ELF.replace(b".byte 1\n.section", b".byte 2\n.section"),
+            ELF.replace(b'.asciz "local"', b'.asciz "other"'),
+            ELF.replace(b'.asciz "main.ldn"', b'.asciz "other.ldn"'),
+            ELF.replace(b".debug_loc,\"\",@progbits\n.byte 0x91",
+                        b".debug_loc,\"\",@progbits\n.byte 0x92"),
+            ELF.replace(b".loc 1 9 3", b".loc 1 10 3"),
+        ):
+            with self.subTest(changed=changed):
+                self.assertEqual(self.compare(ELF, changed), 1)
+
+    def test_line_only_dwarf_coordinates_may_move(self):
+        assembly = (b".text\n.loc 1 9 3\n"
+                    b".section .debug_info,\"\",%progbits\n"
+                    b".uleb128 2\n.asciz \"f\"\n"
+                    b".long Ldebug_begin_1_0\n"
+                    b".long Ldebug_end_1_0\n"
+                    b".uleb128 1,9,3\n.byte 1\n")
+        changed = assembly.replace(b".uleb128 1,9,3",
+                                   b".uleb128 1,10,7")
+        self.assertEqual(self.layout(assembly), self.layout(changed))
+        self.assertNotEqual(self.layout(assembly),
+                            self.layout(changed.replace(b".byte 1", b".byte 2")))
+        unrelated = assembly.replace(b".uleb128 1,9,3\n.byte 1",
+                                     b".uleb128 1,9,3\n.uleb128 5,9,3")
+        self.assertNotEqual(self.layout(unrelated), self.layout(
+            unrelated.replace(b".uleb128 5,9,3", b".uleb128 5,10,7")))
 
 
 if __name__ == "__main__":
