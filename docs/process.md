@@ -16,8 +16,24 @@ what they cost.
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
 | before pushing | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
-| before pushing a Darwin change | the host suite, `compiler/tests/darwin/check.py --parity` and `scripts/debug.sh --target=darwin-arm64 --parity` on a Mac, LLDB from a terminal session | the change passes where the gate will run it |
+| before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
 | every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
+
+From the repository root on a Mac, with the default `darwin-arm64` build tag:
+
+```sh
+./scripts/dev-test.sh --host --target=linux-x86-64
+darwin_output=$(mktemp -d)
+python3 compiler/tests/darwin/check.py --parity \
+  --refine "$PWD/compiler/ada/build/darwin-arm64/debug/bin/refine" \
+  --output "$darwin_output/parity"
+./scripts/debug.sh --target=darwin-arm64 --parity \
+  --output "$darwin_output/lldb"
+```
+
+The host suite builds the debug compiler. The two result directories must not
+exist before their runners create them; `mktemp -d` gives each run a fresh
+parent directory.
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
