@@ -1152,9 +1152,11 @@ package body Landin.Tests.Server_Suite is
                            Where : constant Landin.Source.Span :=
                              Syn.Where (Tree.all, Node);
                         begin
-                           if Offset >= Where.First and then Offset < Where.Last
+                           if Offset >= Where.First
+                             and then Offset < Where.Last
                              and then Where.Last - Where.First < Length
-                             and then not Syn.Is_Error (Syn.Kind (Tree.all, Node))
+                             and then not Syn.Is_Error
+                               (Syn.Kind (Tree.all, Node))
                            then
                               Expected := Node;
                               Length := Where.Last - Where.First;
