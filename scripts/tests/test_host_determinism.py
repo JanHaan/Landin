@@ -134,7 +134,7 @@ class Emission(unittest.TestCase):
             'exit 2\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 2)
-        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 4)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 6)
 
 
 if __name__ == "__main__":

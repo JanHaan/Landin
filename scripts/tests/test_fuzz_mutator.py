@@ -140,6 +140,50 @@ class Mutator(unittest.TestCase):
                     self.assertEqual(list(entry.parent.glob("*.ldn")), [entry])
                     self.assertEqual(entry.read_text(), text)
 
+    def test_import_preflight_requires_current_code_line_and_uri(self):
+        uri = (fuzz.FIXTURES /
+               "negative/core-failing-needs-mutable-inner/main.ldn").as_uri()
+        for code, line, report_uri, accepted in (
+                ("L0340", 9, uri, True), ("L0301", 9, uri, False),
+                ("L0340", 8, uri, False), ("L0340", 9, uri + "other", False)):
+            with self.subTest(code=code, line=line, uri=report_uri):
+                server = Mock()
+                server.diagnostics = []
+
+                def publish(*_):
+                    server.diagnostics.append({"uri": report_uri, "diagnostics": [
+                        {"code": code, "range": {"start": {"line": line}}}]})
+
+                server.request.side_effect = publish
+                if accepted:
+                    fuzz.check_imports(server)
+                else:
+                    with self.assertRaises(fuzz.Broken):
+                        fuzz.check_imports(server)
+                self.assertEqual(server.notify.call_args.args[0],
+                                 "textDocument/didClose")
+
+    def test_reproducer_preflight_requires_both_local_diagnostics(self):
+        path = (fuzz.HERE / "reproducers/min-100299.ldn").resolve()
+        for codes, local, accepted in ((["L0301", "L0303"], True, True),
+                                       (["L0301"], True, False),
+                                       (["L0301", "L0303"], False, False)):
+            with self.subTest(codes=codes, local=local):
+                server = Mock()
+                server.diagnostics = []
+
+                def publish(*_):
+                    server.diagnostics.append({
+                        "uri": path.as_uri() if local else "file:///other.ldn",
+                        "diagnostics": [{"code": code} for code in codes]})
+
+                with patch.object(fuzz, "serve_one", side_effect=publish):
+                    if accepted:
+                        fuzz.check_reproducer(server, path, "trial")
+                    else:
+                        with self.assertRaises(fuzz.Broken):
+                            fuzz.check_reproducer(server, path, "trial")
+
 
 if __name__ == "__main__":
     unittest.main()
