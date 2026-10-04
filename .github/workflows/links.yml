@@ -4,8 +4,8 @@
 #  repository-relative name a document uses resolves, and every document is
 #  reachable from README.md.  Neither says whether a URL is still there.
 #
-#  This runs when a document changes and once a week otherwise, because link
-#  rot happens on the far side of the link and no commit here announces it.
+#  Check changed documents on a push, and all documents once a week because
+#  link rot happens on the far side of the link and no commit here announces it.
 #  It is not a gate on the compiler.
 
 name: links
@@ -30,8 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Check every link in every document
+      - name: Select documents
+        id: inputs
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: python3 scripts/links_inputs.py
+
+      - name: Check links
+        if: steps.inputs.outputs.scope != 'none'
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --config lychee.toml --no-progress './**/*.md'
+          args: --config lychee.toml --no-progress --files-from ${{ runner.temp }}/lychee-inputs.txt
           fail: true

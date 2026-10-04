@@ -130,7 +130,9 @@ Three more workflows run on pushes matching their triggers. `determinism.yml`
 requires every host in its matrix to emit the same bytes; it emits and hashes
 but never assembles, links or runs. `pages.yml` publishes <https://www.701.dev>
 when a site input changes on `main`, or when dispatched manually. `links.yml`
-checks every link in every document, weekly and whenever a document changes.
+checks changed documents on a push and every document weekly or manually.
+Changes to link checker configuration and unknown changed ranges also check
+every document.
 `release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
 assets that `nix build .#refine-bin` consumes.
 
