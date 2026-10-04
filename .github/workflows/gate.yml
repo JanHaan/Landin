@@ -158,10 +158,10 @@ jobs:
       - name: Build release executables
         run: ./scripts/build.sh -j4
 
-      - name: Package release executables and source manifest
+      - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-release.tar.gz"
-          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt
+          -C compiler/ada/build/linux-amd64/release bin source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -397,10 +397,10 @@ jobs:
       - name: Build release executables
         run: ./scripts/build.sh -j3
 
-      - name: Package release executables and source manifest
+      - name: Package release executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/darwin-release.tar.gz"
-          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt
+          -C compiler/ada/build/darwin-arm64/release bin source-manifest.txt tests-manifest.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
