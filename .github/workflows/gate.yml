@@ -474,14 +474,14 @@ jobs:
       - name: Representative verifier resource observations
         run: >-
           python3 scripts/verifier_resources.py
-          --refine "$PWD/compiler/ada/build/darwin-arm64/${{ matrix.mode }}/bin/refine"
+          --refine "$PWD/compiler/ada/build/darwin-arm64/${{ env.LANDIN_BUILD_MODE }}/bin/refine"
           --output "$RUNNER_TEMP/verifier-resources"
 
       - name: Keep representative resource observations
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: verifier-resources-darwin-host-${{ matrix.mode }}
+          name: verifier-resources-darwin-host-${{ env.LANDIN_BUILD_MODE }}
           path: ${{ runner.temp }}/verifier-resources
           retention-days: 14
 
@@ -527,14 +527,32 @@ jobs:
           ./scripts/build.sh -q
 
       - name: The compiler host suite
-        run: ./scripts/test.sh --host
+        run: ./scripts/test.sh --host --target=linux-x86-64
+
+      # Representative process measurements; low-stack outcomes are recorded,
+      # not required thresholds. The full scaling verdict has its own job.
+      - name: Representative verifier resource observations
+        run: >-
+          python3 scripts/verifier_resources.py
+          --refine "$PWD/compiler/ada/build/darwin-arm64/${{ env.LANDIN_BUILD_MODE }}/bin/refine"
+          --output "$RUNNER_TEMP/verifier-resources"
+
+      - name: Keep representative resource observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verifier-resources-darwin-host-${{ env.LANDIN_BUILD_MODE }}
+          path: ${{ runner.temp }}/verifier-resources
+          retention-days: 14
 
       - name: Determinism closures, native report identity and the server
         run: |
           set -eu
-          refine="$PWD/compiler/ada/build/darwin-arm64/release/bin/refine"
+          refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
+          python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The shared hosted corpus executed natively, every source verdict with
