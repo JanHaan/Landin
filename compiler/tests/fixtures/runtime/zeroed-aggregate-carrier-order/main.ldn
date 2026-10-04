@@ -1,0 +1,57 @@
+child: type = struct
+    bytes: [8]u8
+end child
+packet: type = struct
+    inner: child
+    kind: variant
+        empty |
+        full: (word: usize)
+    end kind
+end packet
+bad: atom
+mut calls: i32 = 0
+mut entries: i32 = 0
+mark: (answer: bool) -> (result: bool) =
+    inc calls
+    result = answer
+end mark
+inspect: (first: [8]u8, a: i32, b: i32, c: i32, d: i32,
+          e: i32, f: i32, g: i32, last: packet, flag: bool) -> (result: i32) =
+    inc entries
+    result = a + b + c + d + e + f + g
+    result += i32(first[0]) + i32(first[7]) + i32(last.inner.bytes[7])
+    if flag then
+        result += 100
+    end if
+    match last.kind
+        empty: result += 0
+        full(word): result += i32(word)
+    end match
+end inspect
+fail_flag: () -> (result: bool) ! bad =
+    inc calls
+    fail bad
+end fail_flag
+cleanup: () -> none =
+    calls += 10
+end cleanup
+attempt: () -> (result: i32) ! bad =
+    defer cleanup()
+    result = inspect(zeroed, 1, 2, 3, 4, 5, 6, 7, zeroed, try fail_flag())
+end attempt
+public main: () -> (code: i32) =
+    stored: [8]u8 = [3, 0, 0, 0, 0, 0, 0, 5]
+    value: packet = (inner: (bytes: [8 of 2]), kind: full(word: 4))
+    first := inspect(zeroed, 1, 2, 3, 4, 5, 6, 7, zeroed,
+                     mark(false) and mark(true))
+    second := inspect(stored, 1, 2, 3, 4, 5, 6, 7, value,
+                      mark(true) and mark(false))
+    failed := attempt() else 99
+    code = 1
+    if first == 28 and second == 42 and calls == 14
+      and entries == 2 and failed == 99
+      and stored[0] == 3 and value.inner.bytes[7] == 2
+    then
+        code = 42
+    end if
+end main

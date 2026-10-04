@@ -3791,7 +3791,10 @@ package body Landin.Backend.Cortex_M is
                      Copy_Bytes (Bytes);
                      Jump (Done_Label);
                      Put (Zero_Label & ":");
-                     Zero_Bytes (Bytes);
+                     Zero_Bytes
+                       (Bytes, Clear_Alignment
+                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                           0, Landin.IR.No_Path_Steps));
                      Put (Done_Label & ":");
                   end;
                else

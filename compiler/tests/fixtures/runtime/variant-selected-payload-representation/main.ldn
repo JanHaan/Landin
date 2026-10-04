@@ -1,0 +1,39 @@
+choice: type = struct
+    kind: variant
+        empty |
+        small: (word: u32, byte: u8) |
+        large: (bytes: [64]u8)
+    end kind
+end choice
+public main: () -> (code: i32) =
+    mut value: choice = (kind: large(bytes: [64 of 165]))
+    value.kind = small(word: 42, of zeroed)
+    mut active_ok: bool = false
+    match value.kind
+        empty: active_ok = false
+        small(word, byte): active_ok = word == 42 and byte == 0
+        large: active_ok = false
+    end match
+    value.kind = empty
+    copied: choice = value
+    mut equal: bool = true
+    mut index: usize = 0
+    while index < sizeof choice do
+        before: ptr u8 = ptr(usize(addr value) + index)
+        after: ptr u8 = ptr(usize(addr copied) + index)
+        equal = equal and before.val == after.val
+        inc index
+    end while
+    value = zeroed
+    mut clear: bool = true
+    index = 0
+    while index < sizeof choice do
+        byte: ptr u8 = ptr(usize(addr value) + index)
+        clear = clear and byte.val == 0
+        inc index
+    end while
+    code = 1
+    if active_ok and equal and clear then
+        code = 42
+    end if
+end main

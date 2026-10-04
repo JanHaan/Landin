@@ -1075,7 +1075,8 @@ package body Landin.Tests.Backend_Suite is
             & " and the caller snapshots the one that precedes later"
             & " arguments");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "addq %rdx, %rax" & LF),
+           (Item, Contains (Text, HT & "leaq -20(%rbp), %rax" & LF
+                              & HT & "addq $4, %rax" & LF),
             "the nested array address follows its target-derived offset");
       end;
    end Aggregate_Arguments_Are_Copied_In_The_Callee;
@@ -1162,12 +1163,15 @@ package body Landin.Tests.Backend_Suite is
         & " + ninth(1, 2, 3, 4, 5, 6, 7, 8, data)" & LF
         & "end use" & LF;
    begin
-      for Target in 1 .. 2 loop
+      for Target in 1 .. 3 loop
          declare
             Darwin : constant Boolean := Target = 1;
+            Arm64 : constant Boolean := Target <= 2;
             Facts : constant Landin.Targets.Target_Facts :=
-              (if Darwin then Landin.Targets.Darwin_Arm64
-               else Landin.Targets.Cortex_M);
+              (case Target is
+                 when 1 => Landin.Targets.Darwin_Arm64,
+                 when 2 => Landin.Targets.Linux_Arm64,
+                 when others => Landin.Targets.Cortex_M);
             Work : Landin.Stages.Compilation :=
               Landin.Stages.Create (Facts);
             Ran : Natural;
@@ -1183,7 +1187,7 @@ package body Landin.Tests.Backend_Suite is
             if Landin.Stages.Failed (Work) then
                return;
             end if;
-            if Darwin then
+            if Arm64 then
                Landin.Backend.Arm64.Emit
                  (Landin.Stages.Code (Work).all,
                   Landin.Stages.Meanings (Work).all,
@@ -1225,15 +1229,17 @@ package body Landin.Tests.Backend_Suite is
 
                   procedure Check_Dispatch (Part : String) is
                   begin
-                     if Darwin then
+                     if Arm64 then
                         Landin.Testing.Check
-                          (Item, Contains (Part, HT & "cbnz x10,")
+                          (Item, Contains (Part, HT & "cbz x10,")
                            and then Contains (Part,
                              HT & "ldrb w12, [x10], #1" & LF)
                            and then Contains (Part,
-                             HT & "strb wzr, [x9], #1" & LF)
+                             HT & "str xzr, [x9], #8" & LF)
                            and then Occurrences
-                             (Part, HT & "movz x11, #64" & LF) = 2,
+                             (Part, HT & "movz x11, #64" & LF) = 2
+                           and then Contains
+                             (Part, HT & "movz x11, #8" & LF),
                            "arm64 selects a full copy or clear");
                      else
                         Landin.Testing.Check
@@ -1248,7 +1254,7 @@ package body Landin.Tests.Backend_Suite is
                      end if;
                   end Check_Dispatch;
                begin
-                  if Darwin then
+                  if Arm64 then
                      Landin.Testing.Check
                        (Item, Contains (First_Text, HT & "mov x10, x0" & LF)
                         and then Contains (Ninth_Text,
@@ -1258,9 +1264,12 @@ package body Landin.Tests.Backend_Suite is
                         "arm64 reads register and stack carriers");
                      Landin.Testing.Check
                        (Item, Occurrences
-                         (Use_Text, HT & "bl _first" & LF) = 2
+                         (Use_Text, HT & "bl "
+                            & (if Darwin then "_first" else "first") & LF) = 2
                         and then Occurrences
-                          (Use_Text, HT & "bl _ninth" & LF) = 2,
+                          (Use_Text, HT & "bl "
+                             & (if Darwin then "_ninth" else "ninth")
+                             & LF) = 2,
                         "arm64 calls each position with zero and storage");
                   else
                      Landin.Testing.Check
@@ -2472,36 +2481,48 @@ package body Landin.Tests.Backend_Suite is
    procedure A_Field_After_A_Wide_Array_Uses_A_Register_Address
      (Item : in out Landin.Testing.Context)
    is
-      Work : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-      Ran  : Natural;
    begin
-      Lower
-        (Work,
-         "wide: type = struct" & LF
-         & "    prefix: [2147483648]u8" & LF
-         & "    tail: u8" & LF
-         & "end wide" & LF
-         & "mut state: wide" & LF
-         & "read: () -> none =" & LF
-         & "    value: u8 = state.tail" & LF
-         & "end read" & LF,
-         Ran);
-
-      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
-
-      declare
-         Text : constant String := Emitted (Work);
-      begin
-         Landin.Testing.Check
-           (Item, Contains (Text, HT & "leaq state(%rip), %rcx"),
-            "the wide sibling offset starts from the symbol address");
-         Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $2147483648, %rdx")
-                  and then Contains (Text, HT & "addq %rdx, %rcx")
-                  and then Contains (Text, HT & "movb (%rcx), %al"),
-            "the full target offset is added and then loaded");
-      end;
+      for Beyond in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Offset : constant String :=
+              (if Beyond then "2147483648" else "2147483647");
+            Ran : Natural;
+         begin
+            Lower
+              (Work,
+               "wide: type = struct" & LF
+               & "    prefix: [" & Offset & "]u8" & LF
+               & "    tail: u8" & LF
+               & "end wide" & LF
+               & "mut state: wide" & LF
+               & "read: () -> (value: u8) = value = state.tail end read" & LF
+               & "write: (value: u8) -> none = state.tail = value end write"
+               & LF, Ran);
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+            declare
+               Text : constant String := Emitted (Work);
+               Add : constant String :=
+                 (if Beyond then HT & "movabsq $" & Offset & ", %rdx" & LF
+                  & HT & "addq %rdx, %rcx"
+                  else HT & "addq $" & Offset & ", %rcx");
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences (Text,
+                    HT & "leaq state(%rip), %rcx" & LF & Add), 2,
+                  "read and write honor the signed immediate boundary");
+               Landin.Testing.Check
+                 (Item, Contains (Text, HT & "movb (%rcx), %al")
+                  and then Contains (Text, HT & "movb %al, (%rcx)"),
+                  "both operations use the computed full target address");
+               Landin.Testing.Check
+                 (Item, not Contains
+                    (Text, "state+" & Offset & "(%rip)"),
+                  "the boundary never becomes a symbol displacement");
+            end;
+         end;
+      end loop;
    end A_Field_After_A_Wide_Array_Uses_A_Register_Address;
 
    procedure An_Array_Field_After_A_Wide_Field_Uses_Registers
@@ -2859,8 +2880,7 @@ package body Landin.Tests.Backend_Suite is
                  (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
                and then Contains (Text, HT & "leaq source(%rip), %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Field_Offset & ", %rdx")
-               and then Contains (Text, HT & "addq %rdx, %rsi")
+                 (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
                  (Text, HT & "movabsq $" & Bytes & ", %rcx")
                and then Contains (Text, HT & "rep movsb")
@@ -2925,8 +2945,7 @@ package body Landin.Tests.Backend_Suite is
                  (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
                and then Contains (Text, HT & "leaq source(%rip), %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Field_Offset & ", %rdx")
-               and then Contains (Text, HT & "addq %rdx, %rsi")
+                 (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
                  (Text, HT & "movabsq $" & Bytes & ", %rcx")
                and then Contains (Text, HT & "rep movsb"),
@@ -3808,8 +3827,7 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Clear : constant String :=
               HT & "leaq state(%rip), %rdi" & LF
-              & HT & "movabsq $" & Offset & ", %rdx" & LF
-              & HT & "addq %rdx, %rdi" & LF
+              & HT & "addq $" & Offset & ", %rdi" & LF
               & HT & "xorl %eax, %eax" & LF
               & HT & "movabsq $" & Bytes & ", %rcx" & LF
               & HT & "cld" & LF
@@ -3868,8 +3886,7 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Address : constant String :=
               HT & "leaq state(%rip), %rcx" & LF
-              & HT & "movabsq $" & Offset & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF;
+              & HT & "addq $" & Offset & ", %rcx" & LF;
          begin
             Landin.Testing.Check
               (Item,
@@ -3931,10 +3948,8 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Address : constant String :=
               HT & "leaq state(%rip), %rcx" & LF
-              & HT & "movabsq $" & Parent & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF
-              & HT & "movabsq $" & Leaf & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF
+              & HT & "addq $" & Parent & ", %rcx" & LF
+              & HT & "addq $" & Leaf & ", %rcx" & LF
               & HT & "addq %rax, %rcx" & LF;
          begin
             Landin.Testing.Check_Equal
@@ -3987,10 +4002,8 @@ package body Landin.Tests.Backend_Suite is
 
          function Address (Name, Register : String) return String
          is (HT & "leaq " & Name & "(%rip), " & Register & LF
-             & HT & "movabsq $" & Parent & ", %rdx" & LF
-             & HT & "addq %rdx, " & Register & LF
-             & HT & "movabsq $" & Leaf & ", %rdx" & LF
-             & HT & "addq %rdx, " & Register & LF);
+             & HT & "addq $" & Parent & ", " & Register & LF
+             & HT & "addq $" & Leaf & ", " & Register & LF);
       begin
          Lower (Work, Source_Text, Ran);
          Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
@@ -4570,15 +4583,15 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "movl words(%rip), %eax"),
             "the first element needs no displacement");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $8, %rdx")
+           (Item, Contains (Text, HT & "addq $8, %rcx")
                   and then Contains (Text, HT & "movl (%rcx), %eax"),
             "the third is two elements along");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $5, %rdx")
+           (Item, Contains (Text, HT & "addq $5, %rcx")
                   and then Contains (Text, HT & "movb (%rcx), %al"),
             "and a one-byte element counts in ones");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $12, %rdx")
+           (Item, Contains (Text, HT & "addq $12, %rcx")
                   and then Contains (Text, HT & "movl %eax, (%rcx)"),
             "a written element reaches the same bytes");
          Landin.Testing.Check
@@ -5015,12 +5028,12 @@ package body Landin.Tests.Backend_Suite is
            (Item,
             not Contains (Wide, HT & "imulq $8, %rax, %rax")
               and then not Contains (Thin, HT & "imulq $4, %rax, %rax")
-              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $24, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $32, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $12, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $16, %rdx" & LF)
+              and then Contains (Wide, HT & "addq $16, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $24, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $32, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $8, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $12, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $16, %rcx" & LF)
               and then Occurrences
                 (Wide, HT & "movq %rax, (%rcx)" & LF) = 3
               and then Occurrences
@@ -5044,8 +5057,8 @@ package body Landin.Tests.Backend_Suite is
             "nested array copies derive the target byte extent");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $8, %rdx") > 0
-              and then Occurrences (Thin, HT & "movabsq $4, %rdx") > 0,
+            Occurrences (Wide, HT & "addq $8, %rcx") > 0
+              and then Occurrences (Thin, HT & "addq $4, %rcx") > 0,
             "variant payload bases replay target tag and payload padding");
       end;
    end Variant_Array_Payload_Writes_Follow_The_Target;
@@ -5263,10 +5276,10 @@ package body Landin.Tests.Backend_Suite is
             "tag-only matches load the target-described u8 tag once");
          Landin.Testing.Check
            (Item,
-            Contains (Wide, HT & "movabsq $8, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $4, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF),
+            Contains (Wide, HT & "addq $8, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $16, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $4, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $8, %rcx" & LF),
             "payload stores replay each target's tag and field layout");
       end;
    end A_Measurement_Follows_The_Target;
