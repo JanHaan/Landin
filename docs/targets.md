@@ -66,6 +66,14 @@ allocation, open/read/write/close and immediate errno capture through `__error`.
 It uses Apple's open flags and variadic placement. The platform's ordinary
 startup and libSystem come from the native Apple driver.
 
+Linux x86-64 emits each routine, datum, conformance table and hosted bridge
+in its own ELF input section and links with `-Wl,--gc-sections`. An
+executable keeps only what the entry, a C object or another kept section
+reaches: a bridge that is declared but never called, or reached only from an
+unreachable routine or datum, is absent along with its libc dependency. The
+hidden argument initializer is emitted with any bridge support ([1975]), so a
+C-owned startup can still call it.
+
 Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
 and GNU build-id arguments. Darwin queries the selected driver with
 `-print-file-name=libNAME.a` and passes an existing returned file directly;

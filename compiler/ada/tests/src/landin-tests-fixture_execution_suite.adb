@@ -815,69 +815,144 @@ package body Landin.Tests.Fixture_Execution_Suite is
    is
       Host    : Landin.Platform.Native.Native_Filesystem;
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
-      Source  : constant String := Output_Directory & "unused-host-bridge.ldn";
-      Built   : constant String := Output_Directory & "unused-host-bridge";
-      Args    : Landin.Platform.Path_List;
-      Nm_Args : Landin.Platform.Path_List;
-      Written : Landin.Platform.Write_Status;
-      Ready   : Boolean;
-      Symbols : Landin.Platform.Tool_Result;
-      Ran     : Landin.Platform.Tool_Result;
+      LF      : constant String := [ASCII.LF];
+
+      --  Link a hosted main that never reaches the bridge and check that
+      --  the executable holds none of the Absent symbols, then run it.
+      --  Each program differs only in what keeps the bridge unreachable.
+      procedure Check_Discarded
+        (Name, Program : String; Absent : Landin.Platform.Path_List);
+
+      procedure Check_Discarded
+        (Name, Program : String; Absent : Landin.Platform.Path_List)
+      is
+         Source  : constant String := Output_Directory & Name & ".ldn";
+         Built   : constant String := Output_Directory & Name;
+         Args    : Landin.Platform.Path_List;
+         Nm_Args : Landin.Platform.Path_List;
+         Written : Landin.Platform.Write_Status;
+         Ready   : Boolean;
+         Symbols : Landin.Platform.Tool_Result;
+         Ran     : Landin.Platform.Tool_Result;
+      begin
+         Host.Write_File (Source, Program, Written);
+         Landin.Testing.Check
+           (Item, Written = Landin.Platform.Write_Ok,
+            Name & ": regression source was written");
+         if Written /= Landin.Platform.Write_Ok then
+            return;
+         end if;
+
+         Args.Append (Source);
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("--emit=exe");
+         Args.Append ("-o");
+         Args.Append (Built);
+         Produce_Output
+           (Host, Runner, Refine_Path, Name, Built, Args, Item, Ready);
+         if not Ready then
+            return;
+         end if;
+
+         Nm_Args.Append ("-a");
+         Nm_Args.Append (Built);
+         Runner.Run ("nm", Nm_Args, Symbols, Landin.Platform.Merged);
+         Landin.Testing.Check
+           (Item, Symbols.Ended = Landin.Platform.Exited
+            and then Symbols.Exit_Code = 0,
+            Name & ": linked symbols are readable");
+         if Symbols.Ended = Landin.Platform.Exited
+           and then Symbols.Exit_Code = 0
+         then
+            for Symbol of Absent loop
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Unbounded.To_String (Symbols.Output), Symbol) = 0,
+                  Name & ": " & Symbol & " is absent from the executable");
+            end loop;
+         end if;
+
+         Runner.Run (Built, Landin.Platform.No_Arguments, Ran,
+                     Landin.Platform.Merged);
+         Landin.Testing.Check
+           (Item, Ran.Ended = Landin.Platform.Exited
+            and then Ran.Exit_Code = 0
+            and then Unbounded.Length (Ran.Output) = 0,
+            Name & ": hosted main runs");
+      end Check_Discarded;
+
+      Main : constant String :=
+        "public main: () -> (code: i32) = code = 0 end main" & LF;
+      Count : constant String :=
+        "extern(c) _landin_host_argument_count: () -> (n: usize)" & LF;
+      Absent : Landin.Platform.Path_List;
    begin
-      Host.Write_File
-        (Source,
+      --  A declaration alone makes the bridge available to a C object,
+      --  not part of this program.
+      Absent.Append ("_landin_host_text_length");
+      Absent.Append ("strlen@");
+      Check_Discarded
+        ("unused-host-bridge",
          "extern(c) _landin_host_text_length:"
-         & " (data: ptr u8) -> (length: usize)" & ASCII.LF
-         & "public main: () -> (code: i32) = code = 0 end main"
-         & ASCII.LF,
-         Written);
-      Landin.Testing.Check
-        (Item, Written = Landin.Platform.Write_Ok,
-         "hosted-main regression source was written");
-      if Written /= Landin.Platform.Write_Ok then
-         return;
-      end if;
+         & " (data: ptr u8) -> (length: usize)" & LF & Main,
+         Absent);
 
-      Args.Append (Source);
-      Args.Append ("--target=linux-x86-64");
-      Args.Append ("--emit=exe");
-      Args.Append ("-o");
-      Args.Append (Built);
-      Produce_Output
-        (Host, Runner, Refine_Path, "unused hosted bridge", Built,
-         Args, Item, Ready);
-      if not Ready then
-         return;
-      end if;
+      --  A routine nothing reaches retains neither itself nor its bridge.
+      Absent.Clear;
+      Absent.Append ("dead_argument_reader");
+      Absent.Append ("_landin_host_argument_count");
+      Check_Discarded
+        ("dead-host-bridge-caller",
+         Count
+         & "dead_argument_reader: () -> (n: usize) ="
+         & " n = _landin_host_argument_count()"
+         & " end dead_argument_reader" & LF & Main,
+         Absent);
 
-      Nm_Args.Append ("-a");
-      Nm_Args.Append (Built);
-      Runner.Run ("nm", Nm_Args, Symbols, Landin.Platform.Merged);
-      Landin.Testing.Check
-        (Item, Symbols.Ended = Landin.Platform.Exited
-         and then Symbols.Exit_Code = 0,
-         "linked hosted symbols are readable");
-      if Symbols.Ended = Landin.Platform.Exited
-        and then Symbols.Exit_Code = 0
-      then
-         Landin.Testing.Check
-           (Item, Ada.Strings.Fixed.Index
-              (Unbounded.To_String (Symbols.Output),
-               "_landin_host_text_length") = 0,
-            "unused helper body is absent from the linked executable");
-         Landin.Testing.Check
-           (Item, Ada.Strings.Fixed.Index
-              (Unbounded.To_String (Symbols.Output), "strlen@") = 0,
-            "unused helper introduces no strlen dependency");
-      end if;
+      --  Nor does an unreachable datum holding the caller's address.
+      Absent.Clear;
+      Absent.Append ("dead_holder");
+      Absent.Append ("held_argument_reader");
+      Absent.Append ("_landin_host_argument_count");
+      Check_Discarded
+        ("dead-host-bridge-datum",
+         Count
+         & "counter: type = () -> (n: usize)" & LF
+         & "holder: type = struct" & LF
+         & "    run: counter" & LF
+         & "end holder" & LF
+         & "held_argument_reader: () -> (n: usize) ="
+         & " n = _landin_host_argument_count()"
+         & " end held_argument_reader" & LF
+         & "dead_holder: holder = (run: held_argument_reader)" & LF
+         & Main,
+         Absent);
 
-      Runner.Run (Built, Landin.Platform.No_Arguments, Ran,
-                  Landin.Platform.Merged);
-      Landin.Testing.Check
-        (Item, Ran.Ended = Landin.Platform.Exited
-         and then Ran.Exit_Code = 0
-         and then Unbounded.Length (Ran.Output) = 0,
-         "hosted main runs without the unused helper");
+      --  Nor an erased conformance table only a dead routine builds.
+      Absent.Clear;
+      Absent.Append ("dead_erased_reader");
+      Absent.Append ("evidence_argument_reader");
+      Absent.Append ("_landin_host_argument_count");
+      Check_Discarded
+        ("dead-host-bridge-evidence",
+         Count
+         & "counting: type = concept (t: type)" & LF
+         & "    count: (self: ptr t) -> (n: usize)" & LF
+         & "end counting" & LF
+         & "thing: type = struct" & LF
+         & "    value: i32" & LF
+         & "end thing" & LF
+         & "evidence_argument_reader: (self: ptr thing) -> (n: usize) =" & LF
+         & "    n = _landin_host_argument_count()" & LF
+         & "end evidence_argument_reader" & LF
+         & "thing is counting (count: evidence_argument_reader)" & LF
+         & "dead_erased_reader: () -> (n: usize) =" & LF
+         & "    item: thing = (value: 1)" & LF
+         & "    erased: any counting = any(addr item)" & LF
+         & "    n = erased.count()" & LF
+         & "end dead_erased_reader" & LF
+         & Main,
+         Absent);
    end Unused_Hosted_Bridge_Is_Discarded;
 
    procedure Every_Positive_Fixture_Is_Emitted

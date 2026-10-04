@@ -493,6 +493,20 @@ package body Landin.Backend.X86_64 is
               & Bridge_Symbol (Helper) & ",""ax"",@progbits");
       end Begin_Bridge_Section;
 
+      --  Every routine, datum and evidence table has its own input section,
+      --  so the hosted link's --gc-sections keeps exactly what the entry, a
+      --  C object or another retained item reaches.  A dead caller, or dead
+      --  data holding a routine's address, then keeps no hosted bridge.
+      procedure Begin_Item_Section
+        (Prefix, Flags : String; Position : Positive);
+
+      procedure Begin_Item_Section
+        (Prefix, Flags : String; Position : Positive) is
+      begin
+         Put (Character'Val (9) & ".section " & Prefix
+              & Trimmed (Positive'Image (Position)) & "," & Flags);
+      end Begin_Item_Section;
+
       function Is_Hosted_Dependency (Spelling : String) return Boolean
         is (Bridge_Of (Spelling) /= Not_A_Bridge
             or else Spelling = "strlen"
@@ -6801,6 +6815,8 @@ package body Landin.Backend.X86_64 is
                if Landin.IR.Is_External (Of_Unit, Item) then
                   null;
                elsif Shared_With (Index) = Landin.IR.No_Item then
+                  Begin_Item_Section
+                    (".text.landin_routine_", """ax"",@progbits", Index);
                   Unbounded.Append (Out_Text, Bodies (Index));
                   Landin.Build_Reports.Append (Report, Statistics (Index));
                else
@@ -6835,8 +6851,6 @@ package body Landin.Backend.X86_64 is
       --  reference the checker should have refused faults instead of
       --  silently changing every reader's literal.
       if Any_Read_Only then
-         Put (Character'Val (9) & ELF.Read_Only_Section);
-
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
@@ -6845,6 +6859,8 @@ package body Landin.Backend.X86_64 is
                if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
                  and then Landin.IR.Is_Read_Only (Of_Unit, Item)
                then
+                  Begin_Item_Section
+                    (".rodata.landin_datum_", """a"",@progbits", Index);
                   Emit_Array_Image_Datum (Item);
                end if;
             end;
@@ -6852,7 +6868,6 @@ package body Landin.Backend.X86_64 is
       end if;
 
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Put (Character'Val (9) & ELF.Relocated_Read_Only_Section);
          for Position in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
             declare
                Evidence : constant Landin.IR.Evidence_Id :=
@@ -6860,6 +6875,9 @@ package body Landin.Backend.X86_64 is
                Size : Landin.Targets.Byte_Count;
                Alignment : Landin.Targets.Byte_Alignment;
             begin
+               Begin_Item_Section
+                 (".data.rel.ro.local.landin_evidence_", """aw"",@progbits",
+                  Position);
                Landin.Backend.Field_Extent
                  (Of_Unit, Landin.IR.Evidence_Represented
                     (Of_Unit, Evidence), Facts, Size, Alignment);
@@ -6889,13 +6907,10 @@ package body Landin.Backend.X86_64 is
          end loop;
       end if;
 
-      --  Data follows every routine rather than interrupting them, and each
-      --  section is one run, so each directive is written once however many
-      --  objects it holds.  Written first and reserved second, in the order
-      --  the declarations were made inside each.
+      --  Data follows every routine rather than interrupting them.  Written
+      --  first and reserved second, in the order the declarations were made
+      --  inside each; each object is its own collectable input section.
       if Any_Written then
-         Put (Character'Val (9) & ELF.Data_Section);
-
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
@@ -6905,6 +6920,8 @@ package body Landin.Backend.X86_64 is
                  and then not Landin.IR.Is_Read_Only (Of_Unit, Item)
                  and then not Is_All_Zero (Item)
                then
+                  Begin_Item_Section
+                    (".data.landin_datum_", """aw"",@progbits", Index);
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then
@@ -6924,8 +6941,6 @@ package body Landin.Backend.X86_64 is
       end if;
 
       if Any_Reserved then
-         Put (Character'Val (9) & ELF.Zero_Section);
-
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
@@ -6935,6 +6950,8 @@ package body Landin.Backend.X86_64 is
                  and then not Landin.IR.Is_Read_Only (Of_Unit, Item)
                  and then Is_All_Zero (Item)
                then
+                  Begin_Item_Section
+                    (".bss.landin_datum_", """aw"",@nobits", Index);
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then

@@ -52,8 +52,7 @@ package body Landin.Tests.Backend_Suite is
    function Index (Text : String; Needle : String) return Natural is
      (Ada.Strings.Fixed.Index (Text, Needle));
 
-   --  How many times a needle occurs, which is how a case says a section
-   --  directive was written once rather than once per object in it.
+   --  How many times a needle occurs.
    function Occurrences (Text : String; Needle : String) return Natural;
 
    function Occurrences (Text : String; Needle : String) return Natural is
@@ -74,6 +73,29 @@ package body Landin.Tests.Backend_Suite is
 
       return Seen;
    end Occurrences;
+
+   --  Linux x86-64 gives each object its own input section so the hosted
+   --  link can collect it.  Whether the section opened last before Label
+   --  is one of Kind's (`.data`, `.bss`, `.rodata`) says where it lives.
+   function In_Section (Text, Kind, Label : String) return Boolean;
+
+   function In_Section (Text, Kind, Label : String) return Boolean is
+      Directive : constant String := ASCII.HT & ".section ";
+      At_Label : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, ASCII.LF & Label & ":" & ASCII.LF);
+      Opened : Natural;
+   begin
+      if At_Label = 0 then
+         return False;
+      end if;
+      Opened := Ada.Strings.Fixed.Index
+        (Text (Text'First .. At_Label), Directive, Ada.Strings.Backward);
+      return Opened > 0
+        and then Opened + Directive'Length + Kind'Length <= At_Label
+        and then Text (Opened + Directive'Length
+                       .. Opened + Directive'Length + Kind'Length)
+          = Kind & ".";
+   end In_Section;
 
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Alignment;
@@ -139,6 +161,7 @@ package body Landin.Tests.Backend_Suite is
 
       Expected : constant String :=
         HT & ".text" & LF
+        & HT & ".section .text.landin_routine_1,""ax"",@progbits" & LF
         & HT & ".globl main" & LF
         & HT & ".type main, @function" & LF
         & "main:" & LF
@@ -1077,7 +1100,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Expected : constant String :=
-           HT & ".data" & LF
+           HT & ".section .data.landin_datum_1,""aw"",@progbits" & LF
            & HT & ".globl answer" & LF
            & HT & ".type answer, @object" & LF
            & HT & ".align 4" & LF
@@ -1120,7 +1143,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Expected : constant String :=
-           HT & ".bss" & LF
+           HT & ".section .bss.landin_datum_1,""aw"",@nobits" & LF
            & HT & ".globl state" & LF
            & HT & ".type state, @object" & LF
            & HT & ".align 4" & LF
@@ -1301,8 +1324,7 @@ package body Landin.Tests.Backend_Suite is
                "the 32-bit image writes fields and zero layout gaps");
             Landin.Testing.Check
               (Item,
-               Contains (Text, "blank:" & LF)
-               and then Occurrences (Text, HT & ".data" & LF) = 1
+               In_Section (Text, ".data", "blank")
                and then not Contains
                  (Text, "blank:" & LF & HT & ".zero 16" & LF),
                "an explicit all-zero literal remains written data");
@@ -3840,18 +3862,21 @@ package body Landin.Tests.Backend_Suite is
                       & HT & ".long 42" & LF),
             "a value that is not zero is still written down");
 
-         --  The sections are one run each, so each directive is written
-         --  once however many objects it holds.
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
-            "the reserved section is opened once");
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".data" & LF), 1,
-            "and the written one is too");
+         --  Each object is its own collectable section, of the kind its
+         --  image selects.
          Landin.Testing.Check
            (Item,
-            Index (Text, HT & ".data" & LF) < Index (Text, HT & ".bss" & LF),
-            "written data comes before reserved, so each stays one run");
+            In_Section (Text, ".bss", "state")
+            and then In_Section (Text, ".bss", "counter"),
+            "the zeroed objects are in reserved sections");
+         Landin.Testing.Check
+           (Item, In_Section (Text, ".data", "answer"),
+            "and the written one is in a written section");
+         Landin.Testing.Check
+           (Item,
+            Index (Text, HT & ".section .data.")
+              < Index (Text, HT & ".section .bss."),
+            "written data comes before reserved");
       end;
    end Zero_Data_Is_Reserved_And_Not_Written;
 
@@ -3887,11 +3912,13 @@ package body Landin.Tests.Backend_Suite is
            (Item,
             Contains (Text, "flag:" & LF & HT & ".zero 1" & LF),
             "false is reserved");
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
-            "both contextual zeros share the reserved section");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & ".data" & LF),
+           (Item,
+            In_Section (Text, ".bss", "number")
+            and then In_Section (Text, ".bss", "flag"),
+            "both contextual zeros are in reserved sections");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & ".section .data."),
             "no written data image is emitted");
       end;
    end A_Zeroed_Module_Scalar_Stays_In_Bss;
@@ -3963,7 +3990,9 @@ package body Landin.Tests.Backend_Suite is
                          & HT & ".zero " & Wide & LF),
                "and a pointer-width element follows the target");
             Landin.Testing.Check
-              (Item, Contains (Text, HT & ".bss" & LF),
+              (Item,
+               In_Section (Text, ".bss", "buffer")
+               and then In_Section (Text, ".bss", "wide"),
                "a zeroed array is reserved and not written");
          end;
       end Check_Target;
@@ -4003,10 +4032,9 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains
-              (Text,
-               HT & ".data" & LF),
-            "one .data section holds the images");
+            In_Section (Text, ".data", "numbers")
+            and then In_Section (Text, ".data", "base"),
+            ".data sections hold the images");
          Landin.Testing.Check
            (Item,
             Contains
@@ -4022,7 +4050,7 @@ package body Landin.Tests.Backend_Suite is
             "the array image is one directive per source-order element");
          Landin.Testing.Check
            (Item,
-            Contains (Text, HT & ".bss" & LF)
+            In_Section (Text, ".bss", "reserved")
               and then Contains
                          (Text,
                           "reserved:" & LF
@@ -4037,8 +4065,8 @@ package body Landin.Tests.Backend_Suite is
             "an explicitly zeroed array stays reserved storage");
          Landin.Testing.Check
            (Item,
-            Index (Text, HT & ".data" & LF)
-              < Index (Text, HT & ".bss" & LF),
+            Index (Text, HT & ".section .data.")
+              < Index (Text, HT & ".section .bss."),
             "written data comes before reserved");
       end;
    end A_Module_Array_Literal_Becomes_Data_Image;
@@ -4068,9 +4096,9 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
          Shared : constant String := ".Llandin_anonymous_3";
       begin
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".section .rodata" & LF), 1,
-            "read-only literal data has one section");
+         Landin.Testing.Check
+           (Item, In_Section (Text, ".rodata", Shared),
+            "read-only literal data is in a read-only section");
          Landin.Testing.Check
            (Item,
             Contains
