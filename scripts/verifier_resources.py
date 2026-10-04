@@ -52,6 +52,15 @@ def digest(path):
     return result.hexdigest()
 
 
+
+def retain_assembly_identity(report):
+    """Keep identity instead of redundant successful emitted assembly."""
+    assembly = Path(str(report) + ".s")
+    identity = {"sha256": digest(assembly), "bytes": assembly.stat().st_size}
+    assembly.unlink()
+    return identity
+
+
 def probe_limits(stack_kib):
     """Set only the child soft stack limit; never raise a host hard limit."""
     _, hard = resource.getrlimit(resource.RLIMIT_STACK)
@@ -142,6 +151,7 @@ def main(argv=None):
                     sample = scaling.measure(str(refine), str(directory),
                                              str(directory), str(report),
                                              args.timeout, launcher)
+                    sample["assembly"] = retain_assembly_identity(report)
                     row["samples"].append(sample)
                 except (OSError, RuntimeError, subprocess.TimeoutExpired,
                         ValueError, KeyError) as error:
@@ -162,7 +172,10 @@ def main(argv=None):
                 command = [launcher, str(refine), "--root=" + str(directory),
                            "--stage-report=" + str(report), "--emit=asm",
                            "-o", str(report) + ".s", str(directory)]
-                row["stack_probes"].append(stack_probe(command, stack, args.timeout))
+                probe = stack_probe(command, stack, args.timeout)
+                if probe["status"] == 0:
+                    probe["assembly"] = retain_assembly_identity(report)
+                row["stack_probes"].append(probe)
                 save()
             print(f"{name}: {row.get('summary', 'normal measurement failed')}")
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
