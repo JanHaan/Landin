@@ -1,4 +1,5 @@
---  The selected constrained Cortex-M0 image, in target bytes.
+--  The selected constrained Cortex-M image, in target bytes.
+with Landin.Targets.Levels;
 package Landin.Targets.Firmware is
    Flash_Base : constant Byte_Count := 0;
    Flash_Size : constant Byte_Count := 32 * 1024;
@@ -7,5 +8,7 @@ package Landin.Targets.Firmware is
    Stack_Size : constant Byte_Count := 4 * 1024;
    Vector_Count : constant := 48;
 
-   function Assembly_Error (Text : String; Naked : Boolean) return String;
+   function Assembly_Error
+     (Text : String; Naked : Boolean;
+      Level : Landin.Targets.Levels.Feature_Level) return String;
 end Landin.Targets.Firmware;

@@ -2008,14 +2008,20 @@ external-writer obligations remain.
 The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
 printable characters. Directives, comments, statement separators and labels
 are refused in an ordinary block, which is straight-line: it cannot branch,
-call, return or change control mode. On Cortex-M0 the accepted spelling is a
-bounded subset of ARMv6-M unified assembly; the instruction allowlist is an
-implementation limit, pinned by the machine checks. Naked blocks additionally
-admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the MSP/PSP/CONTROL
-system registers, and take no operands. CPS changes only PRIMASK; barrier
-operands are `sy` or omitted. BASEPRI, FAULTMASK and later-core system
-registers are refused. On x86-64 and arm64 the checker refuses control
-transfer by mnemonic and leaves which instructions exist to the platform
+call, return or change control mode. At the default `armv6-m` level the
+accepted spelling is a bounded subset of ARMv6-M unified assembly; its
+instruction allowlist is an implementation limit, pinned by the machine
+checks. At `armv7-m` and `armv7e-m`, the checker retains the text and
+straight-line restrictions, and the assembler enforces the selected
+architecture's instruction set. `UDF` and `BKPT` are refused in ordinary
+blocks at every level because they enter exception handling. Naked blocks
+additionally admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the
+MSP/PSP/CONTROL system registers, and take no operands. CPS changes
+PRIMASK at every level and may change FAULTMASK at `armv7-m` or `armv7e-m`;
+barrier operands are `sy` or omitted. BASEPRI and FAULTMASK system registers
+are available at those higher levels. Unsupported system registers remain
+refused. On x86-64 and arm64 the checker refuses control transfer by mnemonic
+and leaves which instructions exist to the platform
 assembler. Unencodable operands and instructions remain explicit assembler
 failures under the pinned flags, never a target upgrade. Assembly must not
 overwrite compiler spill or frame storage, saved registers or immutable
@@ -14912,9 +14918,10 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
 ASCII, lines, no directive, comment, separator or label, and straight-line
-control in an ordinary block. The instruction allowlist stays Cortex-M0's
-implementation limit; on the hosted targets the checker refuses control
-transfer by mnemonic and leaves which instructions exist to the assembler.
+control in an ordinary block. The instruction allowlist is an `armv6-m`
+implementation limit; at higher M-profile levels and on hosted targets the
+checker refuses control transfer by mnemonic and leaves which instructions
+exist to the assembler.
 Implicit register effects and indirect writes into compiler storage remain
 programmer obligations that no check can prove.
 
@@ -15061,8 +15068,12 @@ grammar already derives; it adds no reserved word and no configuration atom,
 so no option name collides with one. Like every other fact it is read only
 in a fixed configuration expression.
 
-A level changes which instructions the backend selects and which the
-toolchain accepts, and nothing else. The assembler is held to the level at
+A level changes which instructions the backend selects, which Cortex assembly
+text the checker admits, and which instructions the toolchain accepts, and
+nothing else. The Cortex text check uses the level so its default-only
+instruction allowlist does not refuse valid instructions of higher levels;
+type checking and IR do not depend on it.
+The assembler is held to the level at
 every level, the default included, so an `assembler.block` can use no
 instruction the build does not assume. At `x86-64-v3` a variable shift of 32 or
 64 bits is BMI2's `shlx`, `shrx` or `sarx`, which shifts by any register
@@ -15077,8 +15088,8 @@ minimum-over-minus-one guards, rather than a call to the runtime's
 `__aeabi_idivmod`; a 64-bit one still calls the runtime. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A level is not a target. Comparing two
-descriptions still says which backend and which ABI, and the checker and the
-target-neutral IR never see a level. A name that is no level of the selected
+descriptions still says which backend and which ABI, and type checking and
+the target-neutral IR do not depend on a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
 detected by the program; on Linux x86-64 the executable carries the level
 in its ISA note and the loader refuses it. Linux arm64 emits no ISA-level

@@ -680,9 +680,11 @@ At `armv7-m` (D255) the emitter names `.arch armv7-m` instead of `.cpu
 cortex-m0`, a 32-bit quotient is SDIV or UDIV and its remainder MLS after it,
 after the same zero-divisor and minimum-over-minus-one guards, and the link
 selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. Every
-other selection above, the r0-r7 selector, the instruction envelope of
-inline assembly and the 64-bit helpers, is unchanged: a level adds
-instructions where it says so and nowhere else.
+other selection above, the r0-r7 selector and the 64-bit helpers, is
+unchanged. Inline assembly keeps the ordinary block's straight-line and
+register restrictions, but the ARMv6-M instruction allowlist applies only
+at `armv6-m`; at higher levels the assembler checks instructions against
+the selected `.arch`.
 
 The [execution guide](../environments/cortex-m/README.md#compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical

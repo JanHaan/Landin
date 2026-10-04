@@ -1652,16 +1652,45 @@ package body Landin.Tests.Cortex_Suite is
              & "_ = assembler.block(""nop"", 0) end h",
            when 48 => "h: (x: u32) -> none = "
              & "_ = assembler.block(text: ""nop"", operand: x) end h",
-           when 49 => "link(section: "".rodata.shared"") "
+           when 65 => "link(section: "".rodata.shared"") "
              & "first: u8 = 1 "
              & "link(section: "".rodata.shared"", keep) "
              & "second: u8 = 2 "
              & "link(section: "".rodata.third"") third: u8 = 3",
+           when 49 | 50 =>
+             "h: (a: u32, b: u32) -> (q: u32) = "
+             & "q = assembler.block(""udiv {q}, {q}, {b}"", "
+             & "inout q: u32 at r0 = a, in b: u32 at r1 = b) end h",
+           when 51 => "h: () -> none = assembler.block(""qadd r0, r0, r1"")"
+             & " end h",
+           when 52 => "h: () -> none = assembler.block(""b.w elsewhere"")"
+             & " end h",
+           when 53 => "h: () -> none = assembler.block(""udiv r9, r0, r1"")"
+             & " end h",
+           when 54 => "h: () -> none = assembler.block(""there: nop"")"
+             & " end h",
+           when 55 => "h: () -> none = assembler.block(""it eq"") end h",
+           when 56 => "h: () -> none = "
+             & "assembler.block(""ldrex r0, [r1]"") end h",
+           when 57 => "h: () -> none = "
+             & "assembler.block(""mrs r0, basepri"") end h",
+           when 58 => "h: () -> none = "
+             & "assembler.block(""msr basepri, r0"") end h",
+           when 59 => "h: () -> none = "
+             & "assembler.block(""cpsid f"") end h",
+           when 60 | 62 => "h: () -> none = "
+             & "assembler.block(""udf #0"") end h",
+           when 61 => "h: () -> none = "
+             & "assembler.block(""bkpt #0"") end h",
+           when 63 => "extern(naked) h: () -> none = "
+             & "assembler.block(""udf #0"") end h",
+           when 64 => "h: () -> none = "
+             & "assembler.block(""udf.w #0"") end h",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 49 loop
+      for Case_Number in 1 .. 65 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1675,6 +1704,11 @@ package body Landin.Tests.Cortex_Suite is
             Args.Append (if Case_Number in 25 .. 27 | 44
                          then "--target=darwin-arm64"
                          else "--target=cortex-m0");
+            if Case_Number in 50 | 52 .. 61 | 63 .. 64 then
+               Args.Append ("--level=armv7-m");
+            elsif Case_Number in 51 | 62 then
+               Args.Append ("--level=armv7e-m");
+            end if;
             Args.Append ("--emit=asm");
             Args.Append ("-o");
             Args.Append ("p.s");
@@ -1686,12 +1720,15 @@ package body Landin.Tests.Cortex_Suite is
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
                   --  26: a hosted operand-free block lowers like any other.
-                  (if Case_Number in 1 | 26 | 38 | 45 | 49
+                  (if Case_Number in 1 | 26 | 38 | 45 | 50 | 51
+                    | 56 .. 59 | 63 | 65
                    then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number not in 1 | 26 | 38 | 45 | 49 then
+               if Case_Number not in 1 | 26 | 38 | 45 | 50 | 51
+                 | 56 .. 59 | 63 | 65
+               then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");
