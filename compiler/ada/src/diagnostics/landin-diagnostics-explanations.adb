@@ -93,10 +93,12 @@ package body Landin.Diagnostics.Explanations is
                & "ter work. Write the program without it, or with what the"
                & " note says replaces it.",
             when Catalogue.Malformed_Integer =>
-               "An integer literal has a digit its base does not have, o"
-               & "r runs straight into a name [1770]. `0x` takes hexadecim"
-               & "al digits, `0b` binary and `0o` octal, and a literal nee"
-               & "ds a separator before a following name.",
+               "An integer literal is malformed if a base prefix has no "
+               & "digits, a digit is not in its base, an underscore begins"
+               & " or ends the digit run, or the literal runs straight int"
+               & "o a name [1770]. `0x` takes hexadecimal digits, `0b` bin"
+               & "ary and `0o` octal. Keep underscores between digits, and"
+               & " put a separator before a following name.",
             when Catalogue.Unknown_Bytes =>
                "A run of bytes no lexical rule spells [1750]. A name is "
                & "lower case [1760], and a byte outside the source alphabe"

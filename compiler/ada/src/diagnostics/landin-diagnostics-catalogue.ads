@@ -395,7 +395,8 @@ package Landin.Diagnostics.Catalogue is
             when Construct_Not_Enabled =>
                "[1830]: the tour describes this and the kernel omits it",
             when Malformed_Integer     =>
-               "[1770]: a digit outside the base the prefix selected",
+               "[1770]: an integer with missing digits, misplaced " &
+               "underscores, an invalid base digit, or an adjacent name",
             when Unknown_Bytes         =>
                "[1750]: a run of bytes no rule spells",
             when Unterminated_Comment  =>

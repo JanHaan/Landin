@@ -161,9 +161,11 @@ state: point = point(of zeroed)
 
 ### L0011
 
-An integer literal has a digit its base does not have, or runs straight into a
-name [1770]. `0x` takes hexadecimal digits, `0b` binary and `0o` octal, and a
-literal needs a separator before a following name.
+An integer literal is malformed if a base prefix has no digits, a digit is not
+in its base, an underscore begins or ends the digit run, or the literal runs
+straight into a name [1770]. `0x` takes hexadecimal digits, `0b` binary and
+`0o` octal. Keep underscores between digits, and put a separator before a
+following name.
 
 ```landin
 mask: u64 = 1u64
