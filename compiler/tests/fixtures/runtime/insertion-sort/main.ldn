@@ -1,6 +1,6 @@
 --  The public operation accepts caller-owned storage through inout; its
 --  writable slice lets the nested loops exchange adjacent values in place.
-insertion_sort: (inout values: [8]i32) -> none =
+public insertion_sort: (inout values: [8]i32) -> none =
     view: []mut i32 = values[0..<lenof values]
     first_unsorted: usize = 1
     for index in first_unsorted..<lenof view do
