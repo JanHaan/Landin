@@ -221,3 +221,41 @@ def interrupt(run, elf, naked=False):
     execute(run,elf,['directory '+str(elf.parent),*PRELUDE,*commands,
         'python','assert v("$sp") == '+str(0x20003800 if naked else 0x20004000),
         'print("R6100_INTERRUPT_SOURCE_PASS")','end'],'R6100_INTERRUPT_SOURCE_PASS')
+
+
+def leaf(run, elf):
+    """Unwind an SP-based leaf, including its interrupted hardware context.
+
+    Ordinary unwinding still stops at interrupt entry. Selecting the saved
+    architectural context is a test operation, not a new exception-unwind
+    promise. The compiler's leaf CFI must recover its ordinary callers there.
+    """
+    checked(run, elf)
+    line = source_line(run, 'boot.ldn', 'result += 1')
+    execute(run, elf, ['directory '+str(elf.parent), *PRELUDE,
+        f'break boot.ldn:{line}', 'continue', 'python',
+        'chain(["leaf","caller","start","_landin_firmware_reset"])',
+        'end', 'bt', 'delete breakpoints',
+        'set *(unsigned*)0xe000e014 = 99',
+        'set *(unsigned*)0xe000e018 = 0',
+        'set *(unsigned*)0xe000e010 = 7',
+        'break *tick', 'continue', 'python',
+        'assert v("$xpsr") & 511 == 15',
+        'assert v("$lr") == 0xfffffff9',
+        'assert gdb.newest_frame().older() is None',
+        'saved={r:v("$"+r) for r in ("sp","pc","lr")}',
+        'import struct',
+        'hw=struct.unpack("<8I",bytes(gdb.selected_inferior().read_memory(saved["sp"],32)))',
+        'gdb.execute("set $sp = %d"%(saved["sp"]+32+(4 if hw[7]&512 else 0)))',
+        'gdb.execute("set $lr = %d"%hw[5])',
+        'gdb.execute("set $pc = %d"%hw[6])',
+        'chain(["leaf","caller","start","_landin_firmware_reset"])',
+        'gdb.execute("bt")',
+        'gdb.execute("frame 0")',
+        'for reg,value in saved.items(): gdb.execute("set $%s = %d"%(reg,value))',
+        'end', 'set *(unsigned*)0xe000e010 = 0',
+        'delete breakpoints', 'break _landin_firmware_returned', 'continue',
+        'python', 'assert v("*(unsigned*)&observed") == 100000',
+        'assert v("*(unsigned*)&interrupted") == 1',
+        'assert v("$sp") == 0x20004000 and v("$r11") == 0',
+        'print("CORTEX_LEAF_SOURCE_PASS")', 'end'], 'CORTEX_LEAF_SOURCE_PASS')

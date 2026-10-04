@@ -6,6 +6,7 @@ with Ada.Strings.Unbounded;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
+with Landin.Debugging;
 with Landin.IR;
 with Landin.Optimization;
 with Landin.Source;
@@ -29,6 +30,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    use type Alloc.Location_Kind;
    use type Alloc.Locations;
    use type Alloc.Register_Set;
+   use type Alloc.SSE_Register_Set;
    use type IR.Opcode;
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Count;
@@ -54,6 +56,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context);
    procedure Small_Array_Bounds (Item : in out Landin.Testing.Context);
+   procedure Float_Registers (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
    procedure C_Entry_Saves (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
@@ -249,6 +252,94 @@ package body Landin.Tests.X86_Optimization_Suite is
          end;
       end;
    end Loop_Allocation;
+
+   procedure Float_Registers (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Speed : constant Opt.Options := (Opt.Speed, Opt.Auto);
+      Before, After : US.Unbounded_String;
+      Old_Report, New_Report : Reports.Report;
+   begin
+      Lower
+        (Item, Work,
+         "public twice: (value: f64) -> (result: f64) = "
+         & "working: f64 = value "
+         & "result = working * 2.0 + working end twice "
+         & "public caller: (value: f64) -> (result: f64) = "
+         & "result = twice(value) + value end caller");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Facts : constant Landin.Targets.Target_Facts :=
+           Landin.Stages.Target (Work);
+         Plan : constant Alloc.Plan := Alloc.Make (Code, 1, Facts, Speed);
+         Again : constant Alloc.Plan := Alloc.Make (Code, 1, Facts, Speed);
+         Calling : constant Alloc.Plan := Alloc.Make (Code, 2, Facts, Speed);
+         Compact : constant Alloc.Plan := Alloc.Make
+           (Code, 1, Facts, Opt.Default_Options);
+         Slots, Values : Natural := 0;
+      begin
+         for Place of Plan.Slot loop
+            if Place.Kind = Alloc.SSE then
+               Slots := Slots + 1;
+            end if;
+         end loop;
+         for Place of Plan.Value loop
+            if Place.Kind = Alloc.SSE then
+               Values := Values + 1;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Slots > 0 and then Values > 0
+            and then Plan.Slot = Again.Slot
+            and then Plan.Value = Again.Value
+            and then Plan.Used_SSE = Again.Used_SSE
+            and then Alloc.SSE_Count (Calling) = 0
+            and then Alloc.SSE_Count (Compact) = 0,
+            "call-free speed floats use repeatable XMM locations");
+         X86.Emit
+           (Code, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Opt.Default_Options, Before, Old_Report);
+         X86.Emit
+           (Code, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Speed, After, New_Report);
+         declare
+            Old : constant Reports.Routine_Statistics :=
+              Reports.Nth_Routine (Old_Report, 1);
+            New_Counts : constant Reports.Routine_Statistics :=
+              Reports.Nth_Routine (New_Report, 1);
+         begin
+            Landin.Testing.Check
+              (Item, New_Counts.Stack_Loads + New_Counts.Stack_Stores
+                 < Old.Stack_Loads + Old.Stack_Stores
+               and then New_Counts.Frame_Bytes < Old.Frame_Bytes
+               and then New_Counts.Register_Count
+                 = Alloc.Save_Count (Plan) + Alloc.SSE_Count (Plan)
+               and then Contains (US.To_String (After), "%xmm8")
+               and then Contains (US.To_String (After), "mulsd"),
+               "float allocation reduces measured stack traffic and frame");
+         end;
+         declare
+            Info : aliased Landin.Debugging.Information
+              (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+            Debug_Text : US.Unbounded_String;
+            Debug_Report : Reports.Report;
+         begin
+            Landin.Debugging.Append
+              (Info, Landin.Stages.Source (Work, 1));
+            X86.Emit
+              (Code, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, Facts, Speed,
+               Debug_Text, Debug_Report, Debug => Info'Access);
+            Landin.Testing.Check
+              (Item, Contains (US.To_String (Debug_Text), "working")
+               and then Contains
+                 (US.To_String (Debug_Text), ".byte 105"),
+               "promoted float local has an XMM8 DWARF location");
+         end;
+      end;
+   end Float_Registers;
 
    procedure Pressure_And_C_Scalars (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -550,6 +641,8 @@ package body Landin.Tests.X86_Optimization_Suite is
       Landin.Testing.Register
         (Into, "x86 opt", "pressure and C scalars",
          Pressure_And_C_Scalars'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "float registers", Float_Registers'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
       Landin.Testing.Register

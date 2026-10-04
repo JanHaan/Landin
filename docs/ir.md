@@ -449,8 +449,12 @@ and remain enabled inside unchecked regions.
 All memory primitives conservatively carry read/write/call/trap effects, so
 simplification retains discarded accesses and invalidates forwarded slot
 values. Address-taken storage remains pinned by the existing address paths;
-x86 allocation uses its existing saved-register/scratch discipline. Argument
-spills preserve left-to-right evaluation across later control-flow expressions.
+x86 allocation uses its saved-register/scratch discipline. With the speed
+objective, eligible float slots and values in routines without calls or inline
+assembly use XMM8..XMM15; XMM0 remains instruction scratch. Address-observed,
+parameter, result and C transport slots keep stack homes, and source debugger
+locations follow the allocation plan. Argument spills preserve left-to-right
+evaluation across later control-flow expressions.
 Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
 with no atomicity promise. Target instructions are described in the target guide.
@@ -495,8 +499,9 @@ field-level bit-array presentation is not claimed.
 Cortex-M selection uses pinned source places and reusable eight-byte homes for
 block-local scalar temporaries. Last reads come from the verifier's explicit
 operand runs; live operands cannot share a home, and a call cannot destroy a
-live value. Selection uses low-register scratch and always constructs the r11
-frame record before publishing it, including for leaves. The shared frame
+live value. Selection uses low-register scratch. Routines with calls or
+transient stack changes construct the r11 frame record before publishing it;
+eligible leaves use SP-relative homes and preserve r11 and LR. The shared frame
 placer still owns target-byte offsets and limits. Cortex performs no body
 sharing; specialization and IR optimization retain their existing proofs.
 The [target guide](targets.md#cortex-m0-assembly-implementation) records physical
@@ -536,8 +541,9 @@ establish a new alias. It is not a hardware barrier. Cortex emission reads live 
 compiler stack homes after ordinary low-register-clobbering text; ordinary
 text cannot name SP, LR, r9, r11 or other high registers. Naked text owns all
 machine state and receives no frame. Ordinary and interrupt routines retain
-the eight-byte previous-r11/incoming-LR record; an interrupt's incoming LR is
-EXC_RETURN. The hardware frame separately saves volatile registers and flags.
+the eight-byte previous-r11/incoming-LR record when framed; eligible leaves
+leave both registers untouched. An interrupt's incoming LR is EXC_RETURN.
+The hardware frame separately saves volatile registers and flags.
 
 D248's named operands are checked against `Landin.Targets.Assembly`'s
 register tables on every target. A backend chooses each `general` register

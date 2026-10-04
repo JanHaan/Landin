@@ -49,6 +49,21 @@ package body Landin.Backend.X86_64.Allocation is
       end case;
    end Name;
 
+   function Name (Register : SSE_Register) return String is
+     ("%xmm" & Natural'Image (SSE_Register'Pos (Register) + 8)
+      (2 .. Natural'Image (SSE_Register'Pos (Register) + 8)'Last));
+
+   function SSE_Count (Of_Plan : Plan) return Natural is
+      Count : Natural := 0;
+   begin
+      for Used of Of_Plan.Used_SSE loop
+         if Used then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end SSE_Count;
+
    function Save_Count (Of_Plan : Plan) return Natural is
       Count : Natural := 0;
    begin
@@ -174,7 +189,9 @@ package body Landin.Backend.X86_64.Allocation is
            Count_Buffers.Buffer (Value_Count);
          Use_Data : Count_Buffers.Buffer (Slot_Count);
          Block_Data : Block_Buffers.Buffer (Slot_Count);
-         Across_Data, Eligible_Data : Mask_Buffers.Buffer (Slot_Count);
+         Across_Data, Eligible_Data, Parameter_Data :
+           Mask_Buffers.Buffer (Slot_Count);
+         Float_Data : Mask_Buffers.Buffer (Value_Count);
          Starts : Counts renames Start_Data.Data.all;
          Lasts : Counts renames Last_Data.Data.all;
          Sequence : Counts renames Sequence_Data.Data.all;
@@ -182,8 +199,12 @@ package body Landin.Backend.X86_64.Allocation is
          First_Block : Blocks renames Block_Data.Data.all;
          Across_Blocks : Home_Mask renames Across_Data.Data.all;
          Eligible : Home_Mask renames Eligible_Data.Data.all;
+         Parameter_Slot : Home_Mask renames Parameter_Data.Data.all;
+         Float_Eligible : Home_Mask renames Float_Data.Data.all;
          Permanent : Register_Set := Result.Used;
+         Permanent_SSE : SSE_Register_Set := [others => False];
          Busy_Until : array (Saved_Register) of Natural := [others => 0];
+         SSE_Busy_Until : array (SSE_Register) of Natural := [others => 0];
          --  Release buckets make spill reuse linear in instruction count,
          --  without scanning all previous homes at every definition.
          Release_Data : Count_Buffers.Buffer (Value_Count + 1);
@@ -199,6 +220,9 @@ package body Landin.Backend.X86_64.Allocation is
            Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
            and then Landin.IR.Signature_Uses_C_ABI
              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item));
+         Allocate_SSE : Boolean :=
+           Options.Optimize = Landin.Optimization.Speed
+           and then not C_Entry;
 
          procedure Pin (Place : Landin.IR.Storage);
          procedure Pin_Value (Value : Landin.IR.Value_Id);
@@ -234,10 +258,14 @@ package body Landin.Backend.X86_64.Allocation is
                Result.Slot (Index).Home := Index;
                if Kind in Landin.Types.Scalar_Name then
                   Result.Slot (Index).Size := Size_Of (Kind, Facts);
-                  Eligible (Index) := Kind not in Landin.Types.Float_Name
-                    and then not Landin.IR.Is_Address (Of_Unit, Item, Slot);
+                  Eligible (Index) :=
+                    not Landin.IR.Is_Address (Of_Unit, Item, Slot);
                end if;
             end;
+         end loop;
+         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
+            Parameter_Slot (Positive
+              (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) := True;
          end loop;
          --  C entry copies use addresses, including scalar entries.  Hidden
          --  destinations/results are implicit uses, never promoted.
@@ -286,6 +314,29 @@ package body Landin.Backend.X86_64.Allocation is
                Op : constant Landin.IR.Opcode :=
                  Landin.IR.Op_Of (Of_Unit, Item, Value);
             begin
+               Float_Eligible (Index) :=
+                 Landin.IR.Result_Of (Of_Unit, Item, Value)
+                   in Landin.Types.Float_Name
+                 and then Op in Landin.IR.Number | Landin.IR.Load
+                   | Landin.IR.Add | Landin.IR.Subtract
+                   | Landin.IR.Multiply | Landin.IR.Divide;
+            end;
+         end loop;
+         for Index in 1 .. Value_Count loop
+            declare
+               Value : constant Landin.IR.Value_Id :=
+                 Landin.IR.Value_Id (Index);
+               Op : constant Landin.IR.Opcode :=
+                 Landin.IR.Op_Of (Of_Unit, Item, Value);
+            begin
+               if Op in Landin.IR.Call | Landin.IR.Indirect_Call
+                 | Landin.IR.Assembly
+               then
+                  --  SysV owns every XMM register at a call, and assembly
+                  --  text may name any of them.  Keep this bank local to
+                  --  routines without either boundary.
+                  Allocate_SSE := False;
+               end if;
                for Position in 1 .. Landin.IR.Operand_Count
                  (Of_Unit, Item, Value)
                loop
@@ -297,6 +348,16 @@ package body Landin.Backend.X86_64.Allocation is
                      Lasts (Operand) := Natural'Max
                        (Lasts (Operand), Starts (Index));
                      Traffic := Traffic + 1;
+                     if Op not in Landin.IR.Store | Landin.IR.Leave
+                       | Landin.IR.Add | Landin.IR.Subtract
+                       | Landin.IR.Multiply | Landin.IR.Divide
+                       | Landin.IR.Equal_To | Landin.IR.Not_Equal_To
+                       | Landin.IR.Less_Than | Landin.IR.Less_Or_Equal
+                       | Landin.IR.Greater_Than
+                       | Landin.IR.Greater_Or_Equal
+                     then
+                        Float_Eligible (Operand) := False;
+                     end if;
                   end;
                end loop;
                --  The emitter rereads the receiver through Evidence_Function.
@@ -424,7 +485,11 @@ package body Landin.Backend.X86_64.Allocation is
                      goto Next_Register;
                   end if;
                   for Index in 1 .. Slot_Count loop
-                     if Eligible (Index) and then Across_Blocks (Index)
+                     if Eligible (Index)
+                       and then Landin.IR.Type_Of
+                         (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                           not in Landin.Types.Float_Name
+                       and then Across_Blocks (Index)
                        and then Uses (Index) >= 3
                        and then (Best = 0 or else Uses (Index) > Uses (Best))
                      then
@@ -441,6 +506,36 @@ package body Landin.Backend.X86_64.Allocation is
                   end if;
                end;
                <<Next_Register>>
+            end loop;
+         end if;
+         if Allocate_SSE then
+            --  Whole-routine float locals get stable XMM locations.  Leave
+            --  argument and result slots in their ABI/debug transport homes.
+            --  Four registers remain available for shorter value intervals.
+            for Register in XMM8 .. XMM11 loop
+               declare
+                  Best : Natural := 0;
+               begin
+                  for Index in 1 .. Slot_Count loop
+                     if Eligible (Index) and then not Parameter_Slot (Index)
+                       and then Landin.IR.Type_Of
+                         (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                           in Landin.Types.Float_Name
+                       and then Uses (Index) >= 2
+                       and then (Best = 0 or else Uses (Index) > Uses (Best))
+                     then
+                        Best := Index;
+                     end if;
+                  end loop;
+                  if Best /= 0 then
+                     Result.Slot (Best).Kind := SSE;
+                     Result.Slot (Best).Float_Register := Register;
+                     Result.Slot (Best).Home := 0;
+                     Eligible (Best) := False;
+                     Permanent_SSE (Register) := True;
+                     Result.Used_SSE (Register) := True;
+                  end if;
+               end;
             end loop;
          end if;
          for Position in 1 .. Value_Count loop
@@ -473,6 +568,21 @@ package body Landin.Backend.X86_64.Allocation is
                            Place.Register := Register;
                            Busy_Until (Register) := Lasts (Index);
                            Result.Used (Register) := True;
+                           exit;
+                        end if;
+                     end loop;
+                  end if;
+                  if Allocate_SSE and then Float_Eligible (Index)
+                    and then not Place.Address_Required
+                  then
+                     for Register in SSE_Register loop
+                        if not Permanent_SSE (Register)
+                          and then SSE_Busy_Until (Register) < Position
+                        then
+                           Place.Kind := SSE;
+                           Place.Float_Register := Register;
+                           SSE_Busy_Until (Register) := Lasts (Index);
+                           Result.Used_SSE (Register) := True;
                            exit;
                         end if;
                      end loop;

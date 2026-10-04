@@ -1,0 +1,34 @@
+a: atom
+b: atom
+c: atom
+d: atom
+e: atom
+left_mode: type = u64 (a = 0 | b = 1 | c = 2 | d = 3 | e = 4)
+right_mode: type = u64 (a = 4 | b = 3 | c = 2 | d = 1 | e = 0)
+left_image: type = layout(packed, u64) struct
+    mode: left_mode at 0..63
+end left_image
+right_image: type = layout(packed, u64) struct
+    mode: right_mode at 0..63
+end right_image
+decode_left: (raw: u64) -> (value: left_mode) =
+    mut image: left_image = zeroed
+    bits: ptr mut u64 = ptr(usize(addr image))
+    bits.val = raw
+    value = image.mode
+end decode_left
+decode_right: (raw: u64) -> (value: right_mode) =
+    mut image: right_image = zeroed
+    bits: ptr mut u64 = ptr(usize(addr image))
+    bits.val = raw
+    value = image.mode
+end decode_right
+public main: () -> (code: i32) =
+    mut source: u64 = 4
+    input: ptr mut u64 = ptr(usize(addr source))
+    if decode_left(input.val) == e and decode_right(input.val) == a then
+        code = 42
+    else
+        code = 1
+    end if
+end main

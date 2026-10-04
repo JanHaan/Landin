@@ -20981,7 +20981,8 @@ package body Landin.Stages.Checking is
                                    (Landin.Configuration.Fixed_Text
                                       (Source
                                          (Context, Syn.Source_Of (Of_Tree)),
-                                       Of_Tree, Argument), "r0"), Naked));
+                                       Of_Tree, Argument), "r0"), Naked,
+                                 Level (Context)));
                         else
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
                              (Landin.Targets.Assembly.Text_Error

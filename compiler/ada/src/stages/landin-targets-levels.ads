@@ -5,9 +5,9 @@
 --  rather than a field of Target_Facts, so that comparing descriptions keeps
 --  meaning "which backend, which ABI": every level of a family shares one
 --  layout, one calling convention and one C ABI, and code built at two
---  levels of one family links together.  Nothing that lays out data or
---  checks a program can therefore see a level; configuration, emission and
---  the toolchain can.
+--  levels of one family links together.  Layout and type checking do not
+--  depend on a level; configuration, Cortex assembly text validation,
+--  emission and the toolchain can use it.
 --
 --  A level's features are a set rather than a rank.  The x86-64 levels of
 --  the psABI happen to nest, but ARMv8-M's baseline lacks what ARMv7-M has,

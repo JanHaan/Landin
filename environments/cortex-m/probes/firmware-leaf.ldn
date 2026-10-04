@@ -1,0 +1,18 @@
+mut observed: u32 = 0
+mut interrupted: u32 = 0
+link(vector: 15)
+extern(interrupt) tick: () -> none =
+    interrupted = 1
+end tick
+leaf: (limit: u32) -> (result: u32) =
+    result = 0
+    while result < limit do
+        result += 1
+    end while
+end leaf
+caller: () -> (result: u32) =
+    result = leaf(100000)
+end caller
+start: () -> none =
+    observed = caller()
+end start

@@ -9,6 +9,7 @@ with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
+with Landin.IR.Simplification;
 with Landin.IR.Verifier;
 with Landin.IR.Testing_Support;
 with Landin.Machine;
@@ -196,12 +197,12 @@ package body Landin.Tests.Cortex_Suite is
                  Landin.Build_Reports.Nth_Routine (Report, 1);
             begin
                if Index = 1 then
-                  Narrow_Frame := Stats.Frame_Bytes;
+                  Narrow_Frame := Stats.Frame_Bytes - Stats.Save_Bytes;
                end if;
                Landin.Testing.Check
                  (Item, Stats.Spill_Count = 3
                     and then Stats.Spill_Bytes = 3 * Bytes (Index)
-                    and then Stats.Frame_Bytes =
+                    and then Stats.Frame_Bytes - Stats.Save_Bytes =
                       Narrow_Frame + T.Align_Up
                         (3 * Bytes (Index), 8) - 8,
                   "three live homes use scalar widths and aligned frames");
@@ -497,6 +498,60 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Register_Staging;
+   procedure Dead_Array_Slot_Has_No_Frame
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dead_Array_Slot_Has_No_Frame
+     (Item : in out Landin.Testing.Context)
+   is
+      package Reports renames Landin.Build_Reports;
+      package Opt renames Landin.Optimization;
+      function Frame_Bytes (Condition : String) return T.Byte_Count;
+
+      function Frame_Bytes (Condition : String) return T.Byte_Count is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (T.Cortex_M);
+         Order : Landin.Stages.Pipeline;
+         Written : constant Landin.Source.Source_Id := Landin.Stages.Add_Source
+           (Work, "dead-slot.ldn", "f: () -> (r: u8) = "
+            & "r = 1 if " & Condition & " then "
+            & "dead: [8192]u8 = [of 0] r = dead[0] "
+            & "end if end f");
+         Assembly : U.Unbounded_String;
+         Report : Reports.Report;
+      begin
+         pragma Unreferenced (Written);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Resolver'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Landin.Stages.Append (Order, Lowerer'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Order, Work), 5,
+            "array source reaches IR: "
+            & Landin.Stages.Rendered_Report (Work));
+         if Landin.Stages.Failed (Work) then
+            return 0;
+         end if;
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, T.Cortex_M, Opt.Size);
+         Landin.Backend.Cortex_M.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, T.Cortex_M,
+            (Opt.Size, Opt.Off), Assembly, Report);
+         return Reports.Nth_Routine (Report, 1).Frame_Bytes;
+      end Frame_Bytes;
+
+      Dead : constant T.Byte_Count := Frame_Bytes ("1 == 2");
+      Live : constant T.Byte_Count := Frame_Bytes ("1 == 1");
+   begin
+      Landin.Testing.Check
+        (Item, Dead > 0 and then Dead < 256,
+         "unreachable array reserves no Cortex-M0 frame home");
+      Landin.Testing.Check
+        (Item, Live >= 8192,
+         "reachable array retains its Cortex-M0 frame home");
+   end Dead_Array_Slot_Has_No_Frame;
 
    procedure Contract (Item : in out Landin.Testing.Context) is
       Unit : IR.Unit;
@@ -962,6 +1017,211 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Driver_Boundaries;
 
+   procedure Hard_Trap_Emission (Item : in out Landin.Testing.Context);
+
+   procedure Hard_Trap_Emission (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 2 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn",
+              (if Mode = 1 then
+                 "public f: () -> (r: u32) = r = 7 end f"
+               else
+                 "public f: (d: u32) -> (r: u32) = r = 7 / d end f"));
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "Cortex trap assembly: " & U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Text : constant String := Host.Written ("p.s");
+                     Reference : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, "_trap");
+                     Definition : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, "_trap:");
+                  begin
+                     if Mode = 1 then
+                        Landin.Testing.Check
+                          (Item, Definition = 0
+                           and then Ada.Strings.Fixed.Index
+                             (Text, "udf #1") = 0,
+                           "trap-free routine has no hard trap");
+                     else
+                        Landin.Testing.Check
+                          (Item, Reference > 0 and then Definition > Reference
+                           and then Ada.Strings.Fixed.Index
+                             (Text, "udf #1") > 0,
+                           "division guard retains its hard trap");
+                     end if;
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Hard_Trap_Emission;
+
+   procedure Frame_Saves (Item : in out Landin.Testing.Context);
+
+   procedure Frame_Saves (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 5 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Path : constant String :=
+              (if Mode = 1 then "r5.ldn" else "p.ldn");
+            Source : constant String :=
+              (case Mode is
+                 when 1 => "public simple: () -> (code: i32) = "
+                   & "code = 7 end simple" & LF
+                   & "public r5: () -> (code: i32) = "
+                   & "code = 7 end r5",
+                 when 2 => "public fifth: (a: i32, b: i32, c: i32,"
+                   & " d: i32, e: i32) -> (r: i32) = r = e end fifth"
+                   & LF & "public caller: () -> (r: i32) = "
+                   & "r = fifth(1, 2, 3, 4, 5) end caller",
+                 when 3 => "public with_asm: (x: u32) -> (r: u32)"
+                   & " = r = assembler.block(""adds {o}, {i}, #7"","
+                   & " out o: u32 at r5, in i: u32 at r1 = x)"
+                   & " end with_asm",
+                 when 4 => "public tabbed: () -> none = "
+                   & "assembler.block(""movs\tr5, #1"", out _ at r5)"
+                   & " end tabbed",
+                 when others => "public spaced: () -> none = "
+                   & "assembler.block(""movs\t  \tr5, #1"","
+                   & " out _ at r5) end spaced");
+         begin
+            Host.Add_File (Path, Source);
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--debug=lines");
+            Args.Append ("--emit=asm");
+            Args.Append ("--build-report=build.json");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append (Path);
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "Cortex frame variant emits" & Mode'Image);
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Text : constant String :=
+                       Landin.Testing.Fakes.Written (Host, "p.s");
+                     Report : constant String :=
+                       Landin.Testing.Fakes.Written (Host, "build.json");
+                  begin
+                     case Mode is
+                        when 1 =>
+                           declare
+                              First : constant Natural :=
+                                Ada.Strings.Fixed.Index
+                                  (Text, "simple:" & LF);
+                              Second : constant Natural :=
+                                Ada.Strings.Fixed.Index
+                                  (Text, "r5:" & LF);
+                           begin
+                              Landin.Testing.Check
+                                (Item, First > 0 and then Second > First,
+                                 "both named leaves are emitted");
+                              if First > 0 and then Second > First then
+                                 declare
+                                    First_Body : constant String :=
+                                      Text (First .. Second - 1);
+                                    Second_Body : constant String :=
+                                      Text (Second .. Text'Last);
+                                 begin
+                                    Landin.Testing.Check
+                                      (Item, Ada.Strings.Fixed.Index
+                                        (First_Body, "push {r6}" & LF) > 0
+                                        and then Ada.Strings.Fixed.Index
+                                          (Second_Body, "push {r6}" & LF) > 0
+                                        and then Ada.Strings.Fixed.Index
+                                          (Second_Body, "push {r5") = 0,
+                                       "symbol r5 does not change saves");
+                                    Landin.Testing.Check
+                                      (Item, Ada.Strings.Fixed.Index
+                                        (First_Body, "push {lr}") = 0
+                                        and then Ada.Strings.Fixed.Index
+                                          (Second_Body, "mov r11, sp") = 0,
+                                       "leaves omit LR and r11 frame record");
+                                 end;
+                              end if;
+                           end;
+                           Landin.Testing.Check
+                             (Item, Ada.Strings.Fixed.Index
+                               (Text, ".cfi_offset r6, -4" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Text, ".cfi_offset lr") = 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Report, """save_bytes"":4") > 0,
+                              "leaf unwind and report use four save bytes");
+                        when 2 =>
+                           Landin.Testing.Check
+                             (Item, Ada.Strings.Fixed.Index
+                               (Text, "adds r6, r6, r2" & LF) > 0,
+                              "leaf stack argument follows its save area");
+                           Landin.Testing.Check
+                             (Item, Ada.Strings.Fixed.Index
+                               (Text, "push {r4, r5}" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Text, ".cfi_offset r11, -24" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Report, """save_bytes"":24") > 0,
+                              "caller retains aligned frame and unwind");
+                        when 3 =>
+                           Landin.Testing.Check
+                             (Item, Ada.Strings.Fixed.Index
+                               (Text, "adds r5, r1, #7" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Text, "push {r4, r5, r6, r7}" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Report, """save_bytes"":24") > 0,
+                              "inline assembly register is preserved");
+                        when others =>
+                           Landin.Testing.Check
+                             (Item, (if Mode = 4 then
+                                Ada.Strings.Fixed.Index
+                                  (Text, "movs" & Character'Val (9)
+                                    & "r5, #1") > 0
+                              else Ada.Strings.Fixed.Index
+                                  (Text, "movs" & Character'Val (9)
+                                    & "  " & Character'Val (9)
+                                    & "r5, #1") > 0)
+                               and then Ada.Strings.Fixed.Index
+                                 (Text, "push {r4, r5, r6, r7}" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Text, "pop {r4, r5, r6, r7}" & LF) > 0,
+                              "tab-separated register keeps its save");
+                           Landin.Testing.Check
+                             (Item, Ada.Strings.Fixed.Index
+                               (Text, ".cfi_offset r5, -12" & LF) > 0
+                               and then Ada.Strings.Fixed.Index
+                                 (Report, """save_bytes"":24") > 0,
+                              "tab-separated clobber has unwind and report");
+                     end case;
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Frame_Saves;
+
    procedure Source_Debugging (Item : in out Landin.Testing.Context);
 
    procedure Source_Debugging (Item : in out Landin.Testing.Context) is
@@ -1004,6 +1264,50 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Source_Debugging;
+
+   procedure Fixed_Fills_Enter_Their_Loops
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Fills_Enter_Their_Loops
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("p.ldn",
+        "main: () -> (r: u32) = "
+        & "a: [4]u8 = [of 7] "
+        & "b: [4]u8 = [1, 2, of 3] "
+        & "r = u32(a[0]) + u32(b[3]) end main");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("p.s");
+            begin
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index (Text, "movs r4, #4") > 0
+                    and then Ada.Strings.Fixed.Index
+                      (Text, "movs r4, #2") > 0,
+                  "full and suffix fills use their fixed element counts");
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index (Text, "cmp r4, #0") = 0,
+                  "fixed fills do not test their positive counts");
+            end;
+         end if;
+      end;
+   end Fixed_Fills_Enter_Their_Loops;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
    procedure Local_Branches (Item : in out Landin.Testing.Context);
@@ -1597,16 +1901,45 @@ package body Landin.Tests.Cortex_Suite is
              & "_ = assembler.block(""nop"", 0) end h",
            when 48 => "h: (x: u32) -> none = "
              & "_ = assembler.block(text: ""nop"", operand: x) end h",
-           when 49 => "link(section: "".rodata.shared"") "
+           when 65 => "link(section: "".rodata.shared"") "
              & "first: u8 = 1 "
              & "link(section: "".rodata.shared"", keep) "
              & "second: u8 = 2 "
              & "link(section: "".rodata.third"") third: u8 = 3",
+           when 49 | 50 =>
+             "h: (a: u32, b: u32) -> (q: u32) = "
+             & "q = assembler.block(""udiv {q}, {q}, {b}"", "
+             & "inout q: u32 at r0 = a, in b: u32 at r1 = b) end h",
+           when 51 => "h: () -> none = assembler.block(""qadd r0, r0, r1"")"
+             & " end h",
+           when 52 => "h: () -> none = assembler.block(""b.w elsewhere"")"
+             & " end h",
+           when 53 => "h: () -> none = assembler.block(""udiv r9, r0, r1"")"
+             & " end h",
+           when 54 => "h: () -> none = assembler.block(""there: nop"")"
+             & " end h",
+           when 55 => "h: () -> none = assembler.block(""it eq"") end h",
+           when 56 => "h: () -> none = "
+             & "assembler.block(""ldrex r0, [r1]"") end h",
+           when 57 => "h: () -> none = "
+             & "assembler.block(""mrs r0, basepri"") end h",
+           when 58 => "h: () -> none = "
+             & "assembler.block(""msr basepri, r0"") end h",
+           when 59 => "h: () -> none = "
+             & "assembler.block(""cpsid f"") end h",
+           when 60 | 62 => "h: () -> none = "
+             & "assembler.block(""udf #0"") end h",
+           when 61 => "h: () -> none = "
+             & "assembler.block(""bkpt #0"") end h",
+           when 63 => "extern(naked) h: () -> none = "
+             & "assembler.block(""udf #0"") end h",
+           when 64 => "h: () -> none = "
+             & "assembler.block(""udf.w #0"") end h",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 49 loop
+      for Case_Number in 1 .. 65 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1620,6 +1953,11 @@ package body Landin.Tests.Cortex_Suite is
             Args.Append (if Case_Number in 25 .. 27 | 44
                          then "--target=darwin-arm64"
                          else "--target=cortex-m0");
+            if Case_Number in 50 | 52 .. 61 | 63 .. 64 then
+               Args.Append ("--level=armv7-m");
+            elsif Case_Number in 51 | 62 then
+               Args.Append ("--level=armv7e-m");
+            end if;
             Args.Append ("--emit=asm");
             Args.Append ("-o");
             Args.Append ("p.s");
@@ -1631,12 +1969,15 @@ package body Landin.Tests.Cortex_Suite is
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
                   --  26: a hosted operand-free block lowers like any other.
-                  (if Case_Number in 1 | 26 | 38 | 45 | 49
+                  (if Case_Number in 1 | 26 | 38 | 45 | 50 | 51
+                    | 56 .. 59 | 63 | 65
                    then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number not in 1 | 26 | 38 | 45 | 49 then
+               if Case_Number not in 1 | 26 | 38 | 45 | 50 | 51
+                 | 56 .. 59 | 63 | 65
+               then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");
@@ -2057,12 +2398,12 @@ package body Landin.Tests.Cortex_Suite is
                   "five scalar, aggregate, and failure exits share two"
                   & " return blocks");
                Landin.Testing.Check
-                 (Item, Count ("mov sp, r6") = 3
+                 (Item, Count ("mov sp, r6") = 0
                     and then Count ("bx lr") = 3,
                   "single exit stays inline and shared exits restore once");
                Landin.Testing.Check
                  (Item, Count ("mov r12, r0") = 1
-                    and then Count ("mov r12, r4") = 5,
+                    and then Count ("mov r12, r2") = 5,
                   "failure carrier and successful return preparations differ");
                Landin.Testing.Check
                  (Item, Count (".cfi_remember_state") = 3
@@ -2076,6 +2417,11 @@ package body Landin.Tests.Cortex_Suite is
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
+        (Into, "cortex ABI", "routine register saves", Frame_Saves'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "fixed fills enter their loops",
+         Fixed_Fills_Enter_Their_Loops'Access);
+      Landin.Testing.Register
         (Into, "cortex ABI", "fixed zero stores", Fixed_Zero_Stores'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "outgoing calls", Outgoing_Calls'Access);
@@ -2084,6 +2430,9 @@ package body Landin.Tests.Cortex_Suite is
          Scalar_Spill_Homes'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "register staging", Register_Staging'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "dead array slot frame",
+         Dead_Array_Slot_Has_No_Frame'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
@@ -2119,6 +2468,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "driver boundaries",
          Driver_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "hard trap emission",
+         Hard_Trap_Emission'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "lowered source carriers",
          Source_Carriers'Access);

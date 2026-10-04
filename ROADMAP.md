@@ -1230,9 +1230,11 @@ existing coverage of this future matrix is claimed.
 Status: planned
 Depends on: R16.10
 
-Allocation for the arm64 backend's stack homes and the remaining x86-64 and
-Cortex-M cases, the bounds check an indexed increment keeps, and the atomic
-and barrier lowering, which is baseline. This takes on R551-12.
+Further allocation for the arm64 backend's stack homes and the remaining
+x86-64 and Cortex-M cases, the bounds check an indexed increment keeps, and
+the atomic and barrier lowering, which is baseline. Arm64 already reuses
+nonoverlapping scalar value homes at `size` and `speed`, and keeps eligible
+integer intermediates in saved registers at `speed`. This takes on R551-12.
 
 Exit evidence: measured improvement for affected target/level/profile
 combinations against their matching R16.10 baselines, with unchanged
@@ -1271,9 +1273,10 @@ in `tour.md` under WHAT WAS TRIED AND DROPPED.
 - **Stackful fibres are the route, and the backends keep them reachable on
   purpose.** A backend decision that forecloses switching stacks is a defect
   in that backend rather than a trade-off. The conditions are held for other
-  reasons already: the frame pointer is always present, the callee-saved
-  discipline is explicit, and no capability rides in a reserved register. The
-  case to design against is a single-core freestanding target, where the
+  reasons already: call-bearing frames retain a frame pointer, the callee-saved
+  discipline is explicit, and no capability rides in a reserved register.
+  Call-free Cortex-M leaves may omit the pointer because they cannot switch
+  stacks. The case to design against is a single-core freestanding target, where the
   honest answer to a request for concurrency is that there is none.
 
 ## Successor families
@@ -1320,7 +1323,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | scheduled R12.10 |
 | R551-09 | Competitive optimization | Guarded cleanups can expand quickly despite correct pop-before-run order. | A measured cleanup workload with unacceptable growth. | Selectors, effects and order preserved, with bounded size compared before and after. | open |
 | R551-11 | Competitive optimization | Frame and allocation planning is repeated by preflight, emission and debug output. | Profiling justifies sharing the plans. | One immutable plan owning emission and debug locations, with debugger agreement. | open |
-| R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin stack homes have no register allocation. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
+| R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin still has stack homes beyond the scalar value reuse and integer register promotion already implemented. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
 | R551-15 | Scale and self-hosting | Nix provides a development shell and a flake built by hand, not cached derivations or CI. | An explicit decision to revisit Nix CI. | Builders, SDK identity, debugger permissions and cache provenance accounted for. | limit |
 | R551-16 | Scale and self-hosting | Large nested stage procedures, duplicate construction helpers and unused interfaces such as `Needs_Source` remain. | Replacing or splitting the affected stage, or a change it obstructs. | Refactoring behind existing seams with strict warnings, removing only demonstrated dead interfaces. | open |
 | R551-19 | Release readiness | No mutation coverage of the driver's options, targets other than the default, several editor documents resolved as one module, or emission, linking and running of the mutants that are accepted. The frontend has source-text crash coverage: R10.50's `compiler/tests/fuzz/fuzz.py` drives the sole direct `.ldn` source of each positive, negative, runtime and ABI fixture directory, plus every reproducer, mutated with a fixed seed, through `refine lsp` with rooted imports and an imported-fixture diagnostic check, bounded per response and in memory. C companions are not executed. | Before robustness or production claims. | Fixed seeds, bounded resources, stage and target reach, crash classes and minimal reproducers, for the driver and the backends as the frontend has them. | open |

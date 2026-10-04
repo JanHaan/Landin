@@ -175,10 +175,12 @@ def execute_suite(parent, refine, profiles=PROFILES):
         optimize,specialize,kind=item
         profile=optimize+'-'+specialize
         run=child(root,profile+'/controls/'+kind)
-        if kind in ('veneer','irq','machine'):
+        if kind in ('veneer','irq','machine','leaf'):
             elf=firmware.build(run,refine,(driver.HERE/('probes/firmware-'+kind+'.ldn')).read_text(),
                                optimize,specialize,'lines')
-            if kind=='veneer':
+            if kind=='leaf':
+                source_debug.leaf(run,elf)
+            elif kind=='veneer':
                 source_debug.veneer(run,elf)
                 lane=child(run,'resources')
                 shutil.copy(run.out/'disassembly.log',lane.out)
@@ -198,7 +200,7 @@ def execute_suite(parent, refine, profiles=PROFILES):
     for optimize,specialize in profiles:
         work+=[(program,(optimize,specialize,n)) for n in ('app','protocol','layout')]
         work+=[(control,(optimize,specialize,k)) for k in
-               ('pool','vec','cpu','noreturn','panic','veneer','irq','machine')]
+               ('pool','vec','cpu','noreturn','panic','veneer','irq','machine','leaf')]
     with ThreadPoolExecutor(max_workers=workers()) as pool:
         for row in pool.map(lambda job: job[0](job[1]),work):
             rows.append(row)

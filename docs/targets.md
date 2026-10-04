@@ -145,7 +145,7 @@ ABI, is the same at every level of a family.
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
 | `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly above the baseline; `-Wa,-march=` with the level at every level |
-| `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly |
+| `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
@@ -153,7 +153,8 @@ The x86-64 assembler is held to the level at every level, the baseline's
 plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
 instruction is refused by the assembler unless the build assumes v3. Linux
 arm64 likewise passes its selected level to the assembler at every level,
-including the baseline. The default Cortex `armv6-m` level likewise
+including the baseline. Darwin arm64 emits `.arch` at both levels so its
+default also refuses LSE instructions in an `assembler.block`. The default Cortex `armv6-m` level likewise
 names its CPU in both tool arguments and assembly directive. The pinned
 GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
@@ -285,8 +286,9 @@ the template's source name/coordinates, and a source breakpoint can select
 multiple instances. Hosted targets retain their existing `full` contract and
 refuse `lines`, rather than silently substituting a different interface.
 
-Ordinary routine CFI describes the existing previous-r11/incoming-lr record,
-callee saves and changing CFA through prologue/epilogue. Interrupt and naked
+Ordinary routine CFI describes callee saves and the changing CFA through
+prologue/epilogue. Framed routines describe their previous-r11/incoming-lr
+record; eligible leaves describe SP-relative homes without that record. Interrupt and naked
 routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
 EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
 padding, nested exception records and restoration have independent executable
@@ -493,14 +495,16 @@ results remain in r0/r1, and failed calls promise no successful result. C
 calls do not preserve this internal error carrier. Linker call veneers may
 clobber r12 on entry; it is only an outcome after the called routine returns.
 
-The selected frame obligation keeps r11 in every Landin routine, including
-leaves, pointing to an eight-byte record: previous r11 then incoming lr.
-Publish the frame pointer only after constructing that record. Preserve
-r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
+Call-bearing and other framed Landin routines keep r11 pointing to an
+eight-byte record: previous r11 then incoming lr. Publish the frame pointer
+only after constructing that record. Eligible leaves use SP-relative homes,
+leave r11 and LR untouched, and save only the low registers their body uses.
+Preserve r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
 flags as call-clobbered, maintain sp modulo four at all times and modulo eight
 at calls, and allocate no red zone below sp. The backend implements this record
-and checks its construction through instruction stepping, including leaves and
-nested calls. The earlier handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
+and checks framed construction through instruction stepping, including nested
+calls. Eligible leaves have separate SP-based unwind evidence. The earlier
+handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
 r11 chain or foreign-exception unwinding is promised. Code addresses retain
 the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
 [Arm ELF32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aaelf32/aaelf32.rst),
@@ -612,12 +616,15 @@ epilogue restores it before the frame record.
 It does not change ordinary, C or optimal layout. Source slots remain pinned;
 verified block-local scalar temporaries reuse eight-byte stack homes only after
 their last operand read. Heap-owned work arrays keep allocation scratch off the
-Ada host stack. r0-r7 are selector scratch, with r4-r7 saved, r8/r10 untouched,
-r9 reserved, and r11 the frame pointer. The fixed prologue saves r4-r7, constructs
-the eight-byte previous-r11/lr record, publishes r11, then reserves aligned
-homes and incoming-register staging. Every epilogue restores that chain and the
-saved registers. Incoming stack arguments start 24 bytes above r11. Outgoing
-arguments use the planner's aligned stack area plus private r0-r3 staging.
+Ada host stack. r0-r7 are selector scratch, with r4-r7 saved in framed routines and only used low registers saved in
+leaves, r8/r10 untouched,
+r9 reserved, and r11 the frame pointer in framed routines. Their prologue
+saves r4-r7,
+constructs the eight-byte previous-r11/lr record, publishes r11, then reserves
+aligned homes and incoming-register staging. Eligible leaves use SP-relative
+homes and preserve LR and r11 in registers. Epilogues restore only their own
+saved registers. Incoming stack arguments begin above the actual save area.
+Outgoing arguments use the planner's aligned stack area plus private r0-r3 staging.
 
 | Selection | Implemented choice and boundary |
 |---|---|
@@ -696,9 +703,11 @@ At `armv7-m` (D255) the emitter names `.arch armv7-m` instead of `.cpu
 cortex-m0`, a 32-bit quotient is SDIV or UDIV and its remainder MLS after it,
 after the same zero-divisor and minimum-over-minus-one guards, and the link
 selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. Every
-other selection above, the r0-r7 selector, the instruction envelope of
-inline assembly and the 64-bit helpers, is unchanged: a level adds
-instructions where it says so and nowhere else.
+other selection above, the r0-r7 selector and the 64-bit helpers, is
+unchanged. Inline assembly keeps the ordinary block's straight-line and
+register restrictions, but the ARMv6-M instruction allowlist applies only
+at `armv6-m`; at higher levels the assembler checks instructions against
+the selected `.arch`.
 
 The [execution guide](../environments/cortex-m/README.md#compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical
@@ -737,6 +746,9 @@ not enable the general C source surface.
 
 `.text.*` and `.rodata.*` reside in flash; `.data.*`, `.bss.*` and `.ramtext.*`
 execute in RAM, with flash load images for initialized data and RAM code.
+Each conformance evidence table has its own `.rodata.landin_evidence_*` input
+section, so section garbage collection can discard an unused table and its
+provider references independently of live tables.
 Startup copies both load images and clears BSS before source entry. GNU ARM
 veneers handle out-of-range calls between flash and RAM. Link assertions bound
 physical images; L0505 independently bounds pre-GC static materialization to

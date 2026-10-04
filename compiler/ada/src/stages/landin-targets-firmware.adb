@@ -2,9 +2,35 @@ with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
 
 package body Landin.Targets.Firmware is
-   function Assembly_Error (Text : String; Naked : Boolean) return String is
+   function Assembly_Error
+     (Text : String; Naked : Boolean;
+      Level : Landin.Targets.Levels.Feature_Level) return String
+   is
       Start : Integer := Text'First;
       Seen : Boolean := False;
+      Thumb2 : constant Boolean := Landin.Targets.Levels.Has
+        (Level, Landin.Targets.Levels.Thumb2);
+
+      --  The assembler checks the selected .arch, but ordinary blocks must
+      --  remain straight-line before emission at every level.  UDF and BKPT
+      --  enter exception handling and are refused in ordinary blocks.
+      function Transfers_Control (Mnemonic : String) return Boolean;
+
+      function Transfers_Control (Mnemonic : String) return Boolean is
+         Dot : constant Natural := Ada.Strings.Fixed.Index (Mnemonic, ".");
+         Base : constant String :=
+           (if Dot = 0 then Mnemonic
+            else Mnemonic (Mnemonic'First .. Dot - 1));
+      begin
+         return Base in "b" | "beq" | "bne" | "bcs" | "bcc" | "bhs"
+           | "blo" | "bmi" | "bpl" | "bvs" | "bvc" | "bhi" | "bls"
+           | "bge" | "blt" | "bgt" | "ble" | "bal" | "bnv"
+           | "bl" | "blx" | "bx"
+           | "bxj" | "cbz" | "cbnz" | "tbb" | "tbh" | "pop" | "push"
+           | "rfe" | "srs" | "eret" | "udf" | "bkpt"
+           or else (Base'Length >= 2 and then Base (Base'First ..
+             Base'First + 1) = "it");
+      end Transfers_Control;
 
       function Check_Line (Line : String) return String;
 
@@ -41,14 +67,23 @@ package body Landin.Targets.Firmware is
                end if;
             end;
          end if;
+         if not Naked and then Ada.Strings.Fixed.Index (Clean, ":") /= 0
+         then
+            return "ordinary assembly is straight-line and defines no label";
+         end if;
          while Stop <= Clean'Last and then Clean (Stop) not in ' ' | ASCII.HT
          loop
             Stop := Stop + 1;
          end loop;
          declare
             Mnemonic : constant String := Clean (Clean'First .. Stop - 1);
+            Dot : constant Natural := Ada.Strings.Fixed.Index (Mnemonic, ".");
+            Base : constant String :=
+              (if Dot = 0 then Mnemonic
+               else Mnemonic (Mnemonic'First .. Dot - 1));
          begin
-            if Mnemonic not in "nop" | "wfi" | "wfe" | "sev" | "yield"
+            if (not Thumb2
+              and then Mnemonic not in "nop" | "wfi" | "wfe" | "sev" | "yield"
               | "cpsid" | "cpsie" | "dmb" | "dsb" | "isb" | "mrs" | "msr"
               | "mov" | "movs" | "ldr" | "ldrb" | "ldrh" | "ldrsb"
               | "ldrsh" | "str" | "strb" | "strh" | "adds" | "subs"
@@ -60,10 +95,15 @@ package body Landin.Targets.Firmware is
                 "b" | "beq" | "bne" | "bcs" | "bcc" | "bhs" | "blo"
                 | "bmi" | "bpl" | "bvs" | "bvc" | "bhi" | "bls"
                 | "bge" | "blt" | "bgt" | "ble" | "bl" | "blx"
-                | "bx" | "push" | "pop" | "udf")
+                | "bx" | "push" | "pop" | "udf"))
+              or else (not Naked and then Transfers_Control (Mnemonic))
             then
-               return "assembly requires enabled M0 instructions; ordinary"
-                 & " blocks require straight-line control flow";
+               return
+                 (if Thumb2
+                  then "ordinary assembly requires straight-line control"
+                    & " flow"
+                  else "assembly requires enabled M0 instructions; ordinary"
+                    & " blocks require straight-line control flow");
             end if;
             declare
                Tail : constant String := Ada.Strings.Fixed.Trim
@@ -71,31 +111,38 @@ package body Landin.Targets.Firmware is
                Comma : constant Natural :=
                  Ada.Strings.Fixed.Index (Tail, ",");
             begin
-               if Mnemonic in "cpsid" | "cpsie" and then Tail /= "i" then
-                  return "Cortex-M0 CPS changes only PRIMASK (i)";
-               elsif Mnemonic in "dmb" | "dsb" | "isb"
+               if Base in "cpsid" | "cpsie"
+                 and then Tail /= "i"
+                 and then (not Thumb2 or else Tail /= "f")
+               then
+                  return "Cortex-M CPS requires i or an enabled f mask";
+               elsif Base in "dmb" | "dsb" | "isb"
                  and then Tail not in "" | "sy"
                then
                   return "Cortex-M0 barriers require the sy domain";
-               elsif Mnemonic in "mrs" | "msr" and then Comma /= 0 then
+               elsif Base in "mrs" | "msr" and then Comma /= 0 then
                   declare
                      Register : constant String := Ada.Strings.Fixed.Trim
-                       ((if Mnemonic = "mrs"
+                       ((if Base = "mrs"
                          then Tail (Comma + 1 .. Tail'Last)
                          else Tail (Tail'First .. Comma - 1)),
                         Ada.Strings.Both);
                      Readable : constant Boolean := Register in
                        "apsr" | "ipsr" | "epsr" | "iapsr" | "eapsr"
-                         | "iepsr" | "xpsr" | "primask";
+                         | "iepsr" | "xpsr" | "primask"
+                       or else (Thumb2 and then Register in
+                         "basepri" | "faultmask");
                      Writable : constant Boolean :=
-                       Register in "apsr_nzcvq" | "primask";
+                       Register in "apsr_nzcvq" | "primask"
+                       or else (Thumb2 and then Register in
+                         "basepri" | "basepri_max" | "faultmask");
                   begin
-                     if not ((Mnemonic = "mrs" and Readable)
-                       or else (Mnemonic = "msr" and Writable)
+                     if not ((Base = "mrs" and Readable)
+                       or else (Base = "msr" and Writable)
                        or else (Naked and then Register in
                          "msp" | "psp" | "control"))
                      then
-                        return "unsupported Cortex-M0 system register";
+                        return "unsupported Cortex-M system register";
                      end if;
                   end;
                end if;

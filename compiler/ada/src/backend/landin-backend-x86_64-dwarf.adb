@@ -61,6 +61,12 @@ package body Landin.Backend.X86_64.Dwarf is
         (Indirect or else not Address_Only)
       then
          return Register_Location (Place.Register, Indirect);
+      elsif Place.Kind = Allocation.SSE
+        and then not Indirect and then not Address_Only
+      then
+         --  DWARF's x86-64 register numbers 17..32 name XMM0..XMM15.
+         return HT & ".byte " & N (16#50# + 25
+           + Allocation.SSE_Register'Pos (Place.Float_Register)) & LF;
       elsif Has_Slot_Home (Layout, Slot) then
          return HT & ".byte 0x91" & LF & HT & ".sleb128 -"
            & Ada.Strings.Fixed.Trim (Landin.Targets.Byte_Count'Image

@@ -1900,6 +1900,9 @@ runtime/r640-packed-fields | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-hole | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-index-bound | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-indexed | linux-x86-64, linux-arm64, macos-arm64
+runtime/r640-packed-many-encodings | linux-x86-64, linux-arm64, macos-arm64
+runtime/r640-packed-many-hole | linux-x86-64, linux-arm64, macos-arm64
+runtime/r640-packed-map-sharing | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-nested-copy | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-small-space | linux-x86-64, linux-arm64, macos-arm64
 runtime/r640-packed-static | linux-x86-64, linux-arm64, macos-arm64

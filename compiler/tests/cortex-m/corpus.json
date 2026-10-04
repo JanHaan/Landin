@@ -1623,6 +1623,15 @@
     "runtime/r640-packed-indexed": {
       "mode": "execute"
     },
+    "runtime/r640-packed-many-encodings": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-many-hole": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-map-sharing": {
+      "mode": "execute"
+    },
     "runtime/r640-packed-nested-copy": {
       "mode": "execute"
     },

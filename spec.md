@@ -1915,11 +1915,15 @@ There is no implicit keep attached to either convention.
 On exception entry ARMv6-M saves r0–r3, r12, incoming LR, return PC and xPSR
 on the interrupted stack, adding the architectural alignment word when needed.
 Handler mode uses MSP; thread mode may use MSP or programmer-established PSP.
-An interrupt routine additionally preserves r4–r7 and constructs the same
-previous-r11/incoming-LR eight-byte record as every ordinary Landin routine
-before publishing r11. r8 and r10 are untouched, r9 remains reserved, and
-r11 is restored. Incoming LR in that record is EXC_RETURN, not a code address.
-The epilogue restores it and uses BX LR; the hardware restores volatile state,
+Ordinary and interrupt routines preserve each r4–r7 register their emitted
+instructions use. An ordinary routine with no calls, no inline assembly, and no transient
+stack changes may use SP-relative homes, leave r11 and LR untouched, and save only
+the low registers it uses. Other routines construct a previous-r11/incoming-LR
+eight-byte record before publishing r11; they also save the low register used
+to carry r11 and round the low save area for eight-byte call alignment. r8 and
+r10 are untouched, r9 remains reserved, and a published r11 is restored.
+Incoming LR in an interrupt record is EXC_RETURN, not a code address.
+The epilogue uses BX LR; the hardware restores volatile state,
 flags and the interrupted stack. `0xfffffff1`, `0xfffffff9` and `0xfffffffd`
 are respectively supported returns to a handler, a thread using MSP, and a
 thread using PSP. The NVIC implements four programmable priority levels (the upper two
@@ -2009,14 +2013,23 @@ external-writer obligations remain.
 The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
 printable characters. Directives, comments, statement separators and labels
 are refused in an ordinary block, which is straight-line: it cannot branch,
-call, return or change control mode. On Cortex-M0 the accepted spelling is a
-bounded subset of ARMv6-M unified assembly; the instruction allowlist is an
-implementation limit, pinned by the machine checks. Naked blocks additionally
-admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the MSP/PSP/CONTROL
-system registers, and take no operands. CPS changes only PRIMASK; barrier
-operands are `sy` or omitted. BASEPRI, FAULTMASK and later-core system
-registers are refused. On x86-64 and arm64 the checker refuses control
-transfer by mnemonic and leaves which instructions exist to the platform
+call, return or change control mode, except that Cortex-M0 `svc` enters the
+SVC exception handler at vector 11. That handler decides whether execution
+resumes after `svc`; this exception does not admit other control transfers
+in an ordinary block. At the default `armv6-m` level the
+accepted spelling is a bounded subset of ARMv6-M unified assembly; its
+instruction allowlist is an implementation limit, pinned by the machine
+checks. At `armv7-m` and `armv7e-m`, the checker retains the text and
+straight-line restrictions, and the assembler enforces the selected
+architecture's instruction set. `UDF` and `BKPT` are refused in ordinary
+blocks at every level because they enter exception handling. Naked blocks
+additionally admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the
+MSP/PSP/CONTROL system registers, and take no operands. CPS changes
+PRIMASK at every level and may change FAULTMASK at `armv7-m` or `armv7e-m`;
+barrier operands are `sy` or omitted. BASEPRI and FAULTMASK system registers
+are available at those higher levels. Unsupported system registers remain
+refused. On x86-64 and arm64 the checker refuses control transfer by mnemonic
+and leaves which instructions exist to the platform
 assembler. Unencodable operands and instructions remain explicit assembler
 failures under the pinned flags, never a target upgrade. Assembly must not
 overwrite compiler spill or frame storage, saved registers or immutable
@@ -4613,10 +4626,11 @@ a whole, so D22 permits a later compiler-known or computed index read.
 Lowering records one target-neutral `Clear_Array` instruction with no operands
 and no result. D57 later gives field zero of that destination-only operation a
 whole aggregate's padded extent as well; its array meaning is unchanged. The
-Linux x86-64 backend forms the slot address, takes the target
-byte extent, and emits one forward `rep stosb` clear. Compiler work and IR size
-therefore remain independent of the target-sized length D18 admits, and no
-array-valued temporary or hidden zero datum exists.
+Linux x86-64 backend forms the slot address and takes the target byte extent.
+It emits bounded scalar zero stores for one to six bytes or exactly eight
+bytes; other extents retain the forward `rep stosb` clear. Compiler work and
+IR size therefore remain independent of the target-sized length D18 admits,
+and no array-valued temporary or hidden zero datum exists.
 
 This remains one contextual initializer. D28 does not infer a shape for
 `name := zeroed`; D30 separately admits array assignment, D39/D40 typed module
@@ -4722,10 +4736,11 @@ array place or value.
 The destination is reached first; `zeroed` evaluates no source expressions and
 names no source storage. Lowering emits one `Clear_Array` carrying that local
 frame slot or module datum; D49 additionally carries the declaration-order field
-identity, never a target byte offset. The verifier resolves its complete array shape, and
-the backend derives the byte extent from target facts before emitting one
-forward byte clear. There is no hidden zero datum, array temporary, source
-operand, or compiler enumeration of D18's target-sized length.
+identity, never a target byte offset. The verifier resolves its complete array
+shape, and the backend derives the byte extent from target facts. Linux x86-64
+uses bounded scalar zero stores for one to six bytes or exactly eight bytes;
+other extents retain `rep stosb`. There is no hidden zero datum, array
+temporary, source operand, or compiler enumeration of D18's target-sized length.
 
 A normally completed assignment marks a local destination assigned as a whole,
 so every compiler-known and computed element may then be read. There is no
@@ -7049,7 +7064,8 @@ the shape, rejecting an absent field or a scalar field with the same faults D48
 uses. Each backend derives the field offset, element width, and byte extent from
 its selected target. Linux x86-64 forms a module field base in registers so a
 D18-wide preceding field remains addressable, uses the L0504-bounded displacement
-for a frame field, and emits one forward byte clear. A zero extent gives
+for a frame field. It uses bounded scalar zero stores for one to six bytes or
+exactly eight bytes; other extents retain `rep stosb`. A zero extent gives
 `rep stosb` a zero count.
 
 **Why only the contextual clear:** a field supplies exactly the shape and
@@ -7123,10 +7139,11 @@ remains field-zero-only.
 Each backend derives both field offsets, the source element width, and the byte
 extent from its selected target. Linux x86-64 register-forms a module field on
 either side when a D18-wide preceding field puts its offset outside a signed
-displacement, uses L0504-bounded frame displacements for local fields, and emits
-one forward `rep movsb`. Distinct fields and distinct storage do not overlap;
-an exact self-copy names the same range, which the forward copy preserves. A
-zero extent gives the operation a zero count.
+displacement and uses L0504-bounded frame displacements for local fields. It
+uses scalar register moves for one to six bytes or exactly eight bytes; other
+extents retain one forward `rep movsb`. Distinct fields and distinct storage
+do not overlap; an exact self-copy names the same range, which either
+transfer preserves. A zero extent gives the operation a zero count.
 
 **Why the contextual endpoints:** the compact D20 operation already expresses
 the complete source read and destination write without enumerating D18's
@@ -7621,8 +7638,10 @@ whole fixed-array storage, as before, or D57's whole aggregate storage; a
 positive field remains an array field. The verifier explicitly admits only an
 array or aggregate at field zero before any shaped accessor. Each backend
 derives an aggregate's complete padded extent from target facts and clears
-every byte, including padding, in one forward operation. No field enumeration,
-hidden zero object, target offset or new opcode is introduced.
+every byte, including padding. Linux x86-64 uses bounded scalar zero stores
+for one to six bytes or exactly eight bytes; other extents retain `rep stosb`.
+No field enumeration, hidden zero object, target offset or new opcode is
+introduced.
 
 An invalid struct body already owns its field/layout report and never reaches
 lowering. An explicit module struct zero image in this slice, inferred `name := zeroed`,
@@ -9156,13 +9175,14 @@ the tag, case count, payload kinds, scalar types and array lengths to agree.
 These are explicit release-build checks.
 
 The backend replays D74's tag-first maximum-payload layout for the selected
-target, forms both field addresses and copies the complete padded part with one
-forward byte run. Distinct aggregate roots do not overlap; a self-copy names
-the identical range, which the forward run preserves. Copying the padded part
-also carries any unspecified inactive bytes; it need not inspect the source
-tag. An explicit `zeroed` source still has [0540]'s complete all-zero image.
-Scalar and fixed-array fields remain separate operations in declaration order,
-exactly as D54 specified.
+target, forms both field addresses and copies the complete padded part. Extents
+of one to six bytes or exactly eight bytes use bounded scalar chunks; other
+nonzero extents retain one forward byte run. Distinct aggregate roots do not
+overlap; a self-copy names the identical range, which either transfer preserves.
+Copying the padded part also carries any unspecified inactive bytes; it need
+not inspect the source tag. An explicit `zeroed` source still has [0540]'s
+complete all-zero image. Scalar and fixed-array fields remain separate
+operations in declaration order, exactly as D54 specified.
 
 **Why a compact part copy:** selecting the active case and copying only its
 payload would branch on runtime state and make the copy sequence depend on the
@@ -14934,8 +14954,10 @@ use the same handler on the interrupted stack and do not return through
 EXC_RETURN. The existing [1990] assumption of no NMI/fault during reset
 initialization remains: a custom early NMI/HardFault cannot assume initialized
 storage or this latch before BSS has been cleared. This is not a new promise
-about reset-time hardware faults. All ordinary frames, including the handler,
-retain the previous-frame/incoming-return record and target alignment.
+about reset-time hardware faults. Call-bearing ordinary frames, including a
+handler that calls, retain the previous-frame/incoming-return record and target
+alignment. Eligible leaves use SP-relative homes and preserve incoming LR in
+its register.
 
 Site zero is reserved for synthetic guards without a source operation. Other
 sites use a deterministic, collision-free compilation-local space. In canonical
@@ -15021,9 +15043,10 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
 ASCII, lines, no directive, comment, separator or label, and straight-line
-control in an ordinary block. The instruction allowlist stays Cortex-M0's
-implementation limit; on the hosted targets the checker refuses control
-transfer by mnemonic and leaves which instructions exist to the assembler.
+control in an ordinary block except for Cortex-M0's `svc` exception entry. The instruction allowlist is an `armv6-m`
+implementation limit; at higher M-profile levels and on hosted targets the
+checker refuses control transfer by mnemonic and leaves which instructions
+exist to the assembler.
 Implicit register effects and indirect writes into compiler storage remain
 programmer obligations that no check can prove.
 
@@ -15173,8 +15196,12 @@ grammar already derives; it adds no reserved word and no configuration atom,
 so no option name collides with one. Like every other fact it is read only
 in a fixed configuration expression.
 
-A level changes which instructions the backend selects and which the
-toolchain accepts, and nothing else. The assembler is held to the level at
+A level changes which instructions the backend selects, which Cortex assembly
+text the checker admits, and which instructions the toolchain accepts, and
+nothing else. The Cortex text check uses the level so its default-only
+instruction allowlist does not refuse valid instructions of higher levels;
+type checking and IR do not depend on it.
+The assembler is held to the level at
 every level, the default included, so an `assembler.block` can use no
 instruction the build does not assume. At `x86-64-v3` a variable shift of 32 or
 64 bits is BMI2's `shlx`, `shrx` or `sarx`, which shifts by any register
@@ -15189,8 +15216,8 @@ minimum-over-minus-one guards, rather than a call to the runtime's
 `__aeabi_idivmod`; a 64-bit one still calls the runtime. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A level is not a target. Comparing two
-descriptions still says which backend and which ABI, and the checker and the
-target-neutral IR never see a level. A name that is no level of the selected
+descriptions still says which backend and which ABI, and type checking and
+the target-neutral IR do not depend on a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
 detected by the program; on Linux x86-64 the executable carries the level
 in its ISA note and the loader refuses it. Linux arm64 emits no ISA-level

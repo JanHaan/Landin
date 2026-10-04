@@ -1,3 +1,6 @@
+with Ada.Finalization;
+with Ada.Unchecked_Deallocation;
+with System.Storage_Elements;
 with Interfaces;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
@@ -5,9 +8,72 @@ with Landin.IR.Verifier;
 
 package body Landin.IR.Simplification is
    use type Interfaces.Unsigned_64;
+   use type System.Storage_Elements.Storage_Count;
    use type Landin.Optimization.Objective;
    subtype Bits is Interfaces.Unsigned_64;
    subtype Integer_Value is Landin.Types.Folded;
+
+   function Checked_Scratch_Bytes
+     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
+      return System.Storage_Elements.Storage_Count;
+
+   function Checked_Scratch_Bytes
+     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
+      return System.Storage_Elements.Storage_Count
+   is
+      use System.Storage_Elements;
+   begin
+      if Width /= 0 and then Storage_Count (Count)
+        > Storage_Count'Last / Width
+      then
+         raise Storage_Error with
+           "simplifier scratch size is not representable";
+      end if;
+      return Storage_Count (Count) * Width;
+   end Checked_Scratch_Bytes;
+
+   generic
+      type Element is private;
+      Initial : Element;
+   package Scratch_Arrays is
+      type Elements is array (Positive range <>) of Element;
+      type Elements_Access is access Elements;
+      type Owner is new Ada.Finalization.Limited_Controlled with record
+         Data : Elements_Access := null;
+      end record;
+      overriding procedure Finalize (Value : in out Owner);
+      function Create (Count : Natural) return Owner;
+   end Scratch_Arrays;
+
+   package body Scratch_Arrays is
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Object => Elements, Name => Elements_Access);
+
+      overriding procedure Finalize (Value : in out Owner) is
+      begin
+         Free (Value.Data);
+      end Finalize;
+
+      function Create (Count : Natural) return Owner is
+         Bytes : constant System.Storage_Elements.Storage_Count :=
+           Checked_Scratch_Bytes
+             (Count, Element'Object_Size / System.Storage_Unit);
+      begin
+         pragma Unreferenced (Bytes);
+         return Result : Owner do
+            --  Initialize in owned heap storage, without an input-sized
+            --  aggregate or return temporary on the compiler's stack.
+            Result.Data := new Elements (1 .. Count);
+            for Held of Result.Data.all loop
+               Held := Initial;
+            end loop;
+         end return;
+      end Create;
+   end Scratch_Arrays;
+
+   package Flags is new Scratch_Arrays (Boolean, False);
+   package Values is new Scratch_Arrays (Value_Id, No_Value);
+   package Indices is new Scratch_Arrays (Positive, 1);
 
    function Pattern (Value : Integer_Value) return Bits
      is (if Value < 0 then 0 - Bits (-Value) else Bits (Value));
@@ -50,22 +116,52 @@ package body Landin.IR.Simplification is
       procedure Simplify
         (Item : Item_Id; Keep : in out Rewriting.Keep_Vectors.Vector) is
          Held : constant Item_Record := Into.Items (Positive (Item));
-         Alias : array (1 .. Held.Values.Count) of Value_Id;
-         Needed : array (1 .. Held.Values.Count) of Boolean :=
-           [others => False];
-         Required_Proof : array (1 .. Held.Values.Count) of Boolean :=
-           [others => False];
-         Eligible : array (1 .. Held.Slots.Count) of Boolean;
-         Stored : array (1 .. Held.Slots.Count) of Value_Id :=
-           [others => No_Value];
-         --  The slots Stored holds a value for, so that forgetting them all
-         --  at a block boundary or a write costs what was remembered rather
-         --  than every slot of the routine.
-         Remembered : array (1 .. Held.Slots.Count) of Positive;
+         Alias_Owner : constant Values.Owner :=
+           Values.Create (Held.Values.Count);
+         Alias : Values.Elements renames Alias_Owner.Data.all;
+         Needed_Owner : constant Flags.Owner :=
+           Flags.Create (Held.Values.Count);
+         Needed : Flags.Elements renames Needed_Owner.Data.all;
+         Required_Proof_Owner : constant Flags.Owner :=
+           Flags.Create (Held.Values.Count);
+         Required_Proof : Flags.Elements renames Required_Proof_Owner.Data.all;
+         Eligible_Owner : constant Flags.Owner :=
+           Flags.Create (Held.Slots.Count);
+         Eligible : Flags.Elements renames Eligible_Owner.Data.all;
+         Local_Store_Owner : constant Flags.Owner :=
+           Flags.Create (Held.Slots.Count);
+         Local_Store : Flags.Elements renames Local_Store_Owner.Data.all;
+         Pending_Owner : constant Values.Owner :=
+           Values.Create (Held.Slots.Count);
+         Pending : Values.Elements renames Pending_Owner.Data.all;
+         Pending_Tracked_Owner : constant Flags.Owner :=
+           Flags.Create (Held.Slots.Count);
+         Pending_Tracked : Flags.Elements renames
+           Pending_Tracked_Owner.Data.all;
+         Pending_Slots_Owner : constant Indices.Owner :=
+           Indices.Create (Held.Slots.Count);
+         Pending_Slots : Indices.Elements renames Pending_Slots_Owner.Data.all;
+         Stored_Owner : constant Values.Owner :=
+           Values.Create (Held.Slots.Count);
+         Stored : Values.Elements renames Stored_Owner.Data.all;
+         Remembered_Owner : constant Indices.Owner :=
+           Indices.Create (Held.Slots.Count);
+         Remembered : Indices.Elements renames Remembered_Owner.Data.all;
+         Pending_Count : Natural := 0;
          Remembered_Count : Natural := 0;
          Last_Block : Block_Id := No_Block;
 
+         procedure Forget_Pending;
          procedure Forget_Stores;
+
+         procedure Forget_Pending is
+         begin
+            for Index in 1 .. Pending_Count loop
+               Pending (Pending_Slots (Index)) := No_Value;
+               Pending_Tracked (Pending_Slots (Index)) := False;
+            end loop;
+            Pending_Count := 0;
+         end Forget_Pending;
 
          procedure Forget_Stores is
          begin
@@ -85,10 +181,12 @@ package body Landin.IR.Simplification is
                when Frame_Slot =>
                   if Place.Slot /= No_Slot then
                      Eligible (Positive (Place.Slot)) := False;
+                     Local_Store (Positive (Place.Slot)) := False;
                   end if;
                when Runtime_Address =>
                   if Place.Address /= No_Slot then
                      Eligible (Positive (Place.Address)) := False;
+                     Local_Store (Positive (Place.Address)) := False;
                   end if;
                when Module_Datum => null;
             end case;
@@ -309,10 +407,12 @@ package body Landin.IR.Simplification is
                Slot : constant Slot_Record := Into.Slots
                  (Held.Slots.First + S);
             begin
-               Eligible (S) := not Slot.Aggregate and then not Slot.Array_Shape
+               Local_Store (S) :=
+                 not Slot.Aggregate and then not Slot.Array_Shape
                  and then not Slot.Addressed and then Slot.Pointee = No_Pointee
                  and then Slot.Signature = No_Signature
-                 and then Slot.Atom_Set = No_Atom_Set
+                 and then Slot.Atom_Set = No_Atom_Set;
+               Eligible (S) := Local_Store (S)
                  and then Slot.Of_Type not in Landin.Types.Float_Name;
             end;
          end loop;
@@ -334,6 +434,7 @@ package body Landin.IR.Simplification is
                if Code.Slot /= No_Slot and then Code.Op not in Load | Store
                then
                   Eligible (Positive (Code.Slot)) := False;
+                  Local_Store (Positive (Code.Slot)) := False;
                end if;
                --  [1630]: a block writes its output slots itself, so no
                --  store before it may stand in for a load after it.
@@ -344,11 +445,46 @@ package body Landin.IR.Simplification is
                   begin
                      if Output /= No_Slot then
                         Eligible (Positive (Output)) := False;
+                        Local_Store (Positive (Output)) := False;
                      end if;
                   end;
                end loop;
             end;
          end loop;
+         --  A plain local store has no observer before the next write to
+         --  that slot in this block.  A load, block boundary or other write
+         --  ends the proof.  Its value preparation remains subject to the
+         --  backward demand pass, which keeps any calls or traps.
+         for V in Alias'Range loop
+            declare
+               Code : constant Instruction := Code_At (Value_Id (V));
+            begin
+               if Code.In_Block /= Last_Block then
+                  Forget_Pending;
+                  Last_Block := Code.In_Block;
+               end if;
+               if Code.Op = Store and then Local_Store (Positive (Code.Slot))
+               then
+                  if Pending (Positive (Code.Slot)) /= No_Value then
+                     Keep (Held.Values.First
+                           + Positive (Pending (Positive (Code.Slot)))) :=
+                       False;
+                  elsif not Pending_Tracked (Positive (Code.Slot)) then
+                     Pending_Count := Pending_Count + 1;
+                     Pending_Slots (Pending_Count) := Positive (Code.Slot);
+                     Pending_Tracked (Positive (Code.Slot)) := True;
+                  end if;
+                  Pending (Positive (Code.Slot)) := Value_Id (V);
+               elsif Code.Op = Load
+                 and then Local_Store (Positive (Code.Slot))
+               then
+                  Pending (Positive (Code.Slot)) := No_Value;
+               elsif Effects.Of_Code (Code.Op).Writes then
+                  Forget_Pending;
+               end if;
+            end;
+         end loop;
+         Last_Block := No_Block;
          for V in Alias'Range loop
             declare
                Code : Instruction := Code_At (Value_Id (V));
