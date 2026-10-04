@@ -1662,6 +1662,69 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Local_Array_Initializer_Becomes_A_Copy;
 
+   --  D209 can retain distinct local operands in their own storage and
+   --  fill a separate destination without three whole-array copies.
+   procedure Disjoint_Array_Arithmetic_Uses_Named_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Disjoint_Array_Arithmetic_Uses_Named_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "f: () -> none =" & LF
+         & "    left: [4]i32 = [of 1]" & LF
+         & "    right: [4]i32 = [of 2]" & LF
+         & "    mut out: [4]i32 = [of 0]" & LF
+         & "    out = left + right" & LF
+         & "end f" & LF,
+         Ran);
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 1;
+         Arrays : Natural := 0;
+         Copies : Natural := 0;
+         Element_Stores : Natural := 0;
+      begin
+         for Position in 1 .. IR.Slot_Count (Unit, Routine) loop
+            if IR.Is_Array (Unit, Routine, IR.Slot_Id (Position)) then
+               Arrays := Arrays + 1;
+            end if;
+         end loop;
+         for Block in 1 .. IR.Block_Count (Unit, Routine) loop
+            for Position in 1 .. IR.Length
+              (Unit, Routine, IR.Block_Id (Block))
+            loop
+               case IR.Op_Of
+                 (Unit, Routine, IR.Nth_Value
+                   (Unit, Routine, IR.Block_Id (Block), Position))
+               is
+                  when IR.Copy_Array => Copies := Copies + 1;
+                  when IR.Store_Element =>
+                     Element_Stores := Element_Stores + 1;
+                  when others => null;
+               end case;
+            end loop;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Arrays, 3, "only the three declared arrays need slots");
+         Landin.Testing.Check_Equal
+           (Item, Copies, 0, "disjoint arithmetic needs no array copies");
+         Landin.Testing.Check_Equal
+           (Item, Element_Stores, 1,
+            "the scalar loop writes the declared destination");
+      end;
+   end Disjoint_Array_Arithmetic_Uses_Named_Storage;
+
    --  D23 lowers a finite source run directly into the one compact local
    --  array slot, keeping each expression immediately before its store.
    procedure A_Local_Array_Literal_Becomes_Ordered_Stores
@@ -13346,6 +13409,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array initializer becomes a copy",
          A_Local_Array_Initializer_Becomes_A_Copy'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "disjoint array arithmetic uses named storage",
+         Disjoint_Array_Arithmetic_Uses_Named_Storage'Access);
       Landin.Testing.Register
         (Into, "lowering", "a local array literal becomes ordered stores",
          A_Local_Array_Literal_Becomes_Ordered_Stores'Access);

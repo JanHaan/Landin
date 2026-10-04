@@ -5893,11 +5893,16 @@ snapshot. Compound arithmetic assignment evaluates its place once, retains the
 old array value, then evaluates the right operand and applies the same rule.
 This does not change [0520]'s direct formation of a written array literal.
 Known-operand refusals still apply where the scalar rule requires them.
+Retaining an operand's value does not require copying it when its storage
+remains stable through the other operand's evaluation and the scalar loop.
+When that storage is disjoint from the destination, the loop may write the
+destination directly; an overlapping or effectful case still preserves the
+retained values.
 
 No reduction builtin is added. [0590]'s `sum_four` is an ordinary function
 whose positive-zero initial value and left fold specify the rounding order.
 The compiler emits compact scalar loops, not one instruction or compiler
-metadata record per array element. The storage for the result and necessary
+metadata record per array element. Storage for a separate result and necessary
 snapshots is real; a 16 KB array does not fit for free on a 32 KB device.
 
 **The alternatives:** mask-valued comparison, implicit whole-array equality,

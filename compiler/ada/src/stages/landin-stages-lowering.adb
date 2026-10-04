@@ -3639,8 +3639,9 @@ package body Landin.Stages.Lowering is
          Destination : Stored_Place);
 
       --  One scalar loop per lifted operator, independent of array length.
-      --  Source operands are snapped left-to-right before the first element
-      --  operation.  The result is private until the entire loop succeeds.
+      --  Source operands are retained left-to-right before the first element
+      --  operation.  Disjoint named storage can itself retain the value;
+      --  other operands use private snapshots.
       procedure Write_Array_Arithmetic
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
@@ -3664,8 +3665,44 @@ package body Landin.Stages.Lowering is
            IR.Array_Element_Shape (Unit.all, Shape);
          Snapshots : array (1 .. Count) of IR.Slot_Id :=
            [others => IR.No_Slot];
+         Sources : array (1 .. Count) of Stored_Place;
+         Borrowed : array (1 .. Count) of Boolean := [others => False];
          Arrays : array (1 .. Count) of Boolean := [others => False];
-         Answer : IR.Slot_Id;
+         --  A name lookup cannot call code or mutate an earlier operand.
+         --  Restrict borrowing to this complete, side-effect-free form.
+         Named_Arrays : constant Boolean :=
+           not Updating and then
+             (if Unary then
+                Syn.Kind (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                  = Syn.Name_Reference
+                and then Type_At
+                  (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                    = Ty.Fixed_Array
+              else
+                Syn.Kind (Of_Tree, Syn.Left_Of (Of_Tree, Node))
+                  = Syn.Name_Reference
+                and then Syn.Kind
+                  (Of_Tree, Syn.Right_Of (Of_Tree, Node))
+                    = Syn.Name_Reference
+                and then Type_At
+                  (Of_Tree, Syn.Left_Of (Of_Tree, Node))
+                    = Ty.Fixed_Array
+                and then Type_At
+                  (Of_Tree, Syn.Right_Of (Of_Tree, Node))
+                    = Ty.Fixed_Array);
+         Unpacked_Destination : constant Boolean :=
+           Destination.Base = 0
+             and then Destination.Steps.Is_Empty
+             and then Stored_Shape (Destination, Shape).Packing.Bits = 0;
+         Answer : Stored_Place;
+         Direct_Answer : Boolean := False;
+
+         function Same_Root (Left, Right : IR.Storage) return Boolean is
+           (Left.Kind = Right.Kind
+            and then (case Left.Kind is
+              when IR.Frame_Slot => Left.Slot = Right.Slot,
+              when IR.Module_Datum => Left.Datum = Right.Datum,
+              when IR.Runtime_Address => True));
       begin
          for Position in Snapshots'Range loop
             declare
@@ -3679,20 +3716,38 @@ package body Landin.Stages.Lowering is
             begin
                Arrays (Position) :=
                  Type_At (Of_Tree, Operand) = Ty.Fixed_Array;
-               Snapshots (Position) := Shaped_Temporary
-                 ((if Arrays (Position) then Shape else Child), Site);
-               if Updating and then Position = 1 then
-                  Copy_Shaped_Storage
-                    (Destination, Stored_At
-                       ((Kind => IR.Frame_Slot, Slot => Snapshots (Position))),
-                     Shape, Site);
-               else
-                  Write_Shaped_Value
-                    (Of_Tree, Operand, Scope,
-                     (if Arrays (Position) then Shape else Child),
-                     Stored_At
-                       ((Kind => IR.Frame_Slot,
-                         Slot => Snapshots (Position))));
+               if Named_Arrays and then Unpacked_Destination then
+                  Sources (Position) :=
+                    Lower_Stored_Place (Of_Tree, Operand, Scope);
+                  Borrowed (Position) :=
+                    Sources (Position).Place.Kind /= IR.Runtime_Address
+                    and then Sources (Position).Base = 0
+                    and then Sources (Position).Steps.Is_Empty
+                    and then
+                      (if Destination.Place.Kind = IR.Runtime_Address
+                       then Sources (Position).Place.Kind = IR.Frame_Slot
+                       else not Same_Root
+                         (Sources (Position).Place, Destination.Place))
+                    and then Stored_Shape
+                      (Sources (Position), Shape).Packing.Bits = 0;
+               end if;
+               if not Borrowed (Position) then
+                  Snapshots (Position) := Shaped_Temporary
+                    ((if Arrays (Position) then Shape else Child), Site);
+                  if Updating and then Position = 1 then
+                     Copy_Shaped_Storage
+                       (Destination, Stored_At
+                          ((Kind => IR.Frame_Slot,
+                            Slot => Snapshots (Position))),
+                        Shape, Site);
+                  else
+                     Write_Shaped_Value
+                       (Of_Tree, Operand, Scope,
+                        (if Arrays (Position) then Shape else Child),
+                        Stored_At
+                          ((Kind => IR.Frame_Slot,
+                            Slot => Snapshots (Position))));
+                  end if;
                end if;
                if Current = IR.No_Block then
                   return;
@@ -3700,7 +3755,16 @@ package body Landin.Stages.Lowering is
             end;
          end loop;
 
-         Answer := Shaped_Temporary (Shape, Site);
+         Direct_Answer := Unpacked_Destination
+           and then (for all Position in Borrowed'Range =>
+                       Borrowed (Position));
+         if Direct_Answer then
+            Answer := Destination;
+         else
+            Answer := Stored_At
+              ((Kind => IR.Frame_Slot,
+                Slot => Shaped_Temporary (Shape, Site)));
+         end if;
          if Shape.Length /= 0 then
             declare
                Cursor : constant IR.Slot_Id := IR.Add_Slot
@@ -3739,7 +3803,19 @@ package body Landin.Stages.Lowering is
                begin
                   for Position in Values'Range loop
                      Values (Position) :=
-                       (if Arrays (Position)
+                       (if Borrowed (Position)
+                          and then Sources (Position).Place.Kind
+                            = IR.Module_Datum
+                        then IR.Emit_Load_Element
+                          (Unit.all, Filling,
+                           Sources (Position).Place.Datum,
+                           Index, Child.Element, Site)
+                        elsif Borrowed (Position)
+                        then IR.Emit_Load_Slot_Element
+                          (Unit.all, Filling,
+                           Sources (Position).Place.Slot,
+                           Index, Child.Element, Site)
+                        elsif Arrays (Position)
                         then IR.Emit_Load_Slot_Element
                           (Unit.all, Filling, Snapshots (Position),
                            Index, Child.Element, Site)
@@ -3756,8 +3832,20 @@ package body Landin.Stages.Lowering is
                            (Syn.Assignment_Operation (Of_Tree, Node))
                          else Opcode_For (Syn.Kind (Of_Tree, Node))),
                         Values (1), Values (2), Child.Element, Site));
-                  IR.Emit_Store_Slot_Element
-                    (Unit.all, Filling, Answer, Index, Value, Site);
+                  case Answer.Place.Kind is
+                     when IR.Frame_Slot =>
+                        IR.Emit_Store_Slot_Element
+                          (Unit.all, Filling, Answer.Place.Slot,
+                           Index, Value, Site);
+                     when IR.Module_Datum =>
+                        IR.Emit_Store_Element
+                          (Unit.all, Filling, Answer.Place.Datum,
+                           Index, Value, Site);
+                     when IR.Runtime_Address =>
+                        IR.Emit_Shaped_Store
+                          (Unit.all, Filling, Answer.Place.Address,
+                           0, Index, Value, Site);
+                  end case;
                   One := IR.Emit_Number
                     (Unit.all, Filling, Ty.Usize, 1, False, Site);
                   Next := IR.Emit_Binary
@@ -3768,9 +3856,9 @@ package body Landin.Stages.Lowering is
                Open (Done);
             end;
          end if;
-         Copy_Shaped_Storage
-           (Stored_At ((Kind => IR.Frame_Slot, Slot => Answer)),
-            Destination, Shape, Site);
+         if not Direct_Answer then
+            Copy_Shaped_Storage (Answer, Destination, Shape, Site);
+         end if;
       end Write_Array_Arithmetic;
 
       procedure Write_Shaped_Value
