@@ -565,7 +565,7 @@ def hosted_gdb_script(start_commands: list[str],
             ("sample", "filter.ldn", (("seen", "self->seen"),
                                       ("every", "self->every"))),
             ("sample-updated", "filter.ldn", (("seen", "self->seen"),)),
-            ("text", "dest.ldn", (("delivered", "line.delivered"),))):
+            ("text", "dest.ldn", (("delivered", "pending.delivered"),))):
         source = os.path.relpath(HOSTED_SOURCE.parent / filename, ROOT)
         line = source_lines[name]
         lines.extend([f"tbreak {source}:{line}", "commands", "silent"])

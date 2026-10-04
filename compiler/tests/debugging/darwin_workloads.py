@@ -18,17 +18,17 @@ def stops_for(workload):
         source = shared.PARSER_SOURCE
         return [
             stop('digits', source, lines['digits'],
-                 ['parse_digits', 'parse_digits', 'parse_entry', 'parse_sequence'],
+                 ['parse_digits', 'parse_digits', 'parse_entry', 'parse_and_append', 'parse_sequence'],
                  {'accumulated': 4, 'cursor.offset': 27, 'ends.offset': 28},
                  when={'accumulated': 4}, complete_parser=True,
                  caller_values={'accumulated': 0, 'cursor.offset': 26}),
             stop('recovery', source, lines['recovery'],
-                 ['recover_to_boundary', 'parse_entry', 'parse_sequence'],
+                 ['recover_to_boundary', 'parse_entry', 'parse_and_append', 'parse_sequence'],
                  {'parser.depth': 0, 'parser.look.what': 1,
                   'parser.look.begins.offset': 36, 'parser.look.ends.offset': 38},
                  when={'parser.look.begins.offset': 36}, complete_parser=True),
             stop('nested', source, lines['nested'],
-                 ['parse_sequence', 'parse_entry', 'parse_sequence'],
+                 ['parse_sequence', 'parse_entry', 'parse_and_append', 'parse_sequence'],
                  {'parser.depth': 1, 'parser.look.what': 6,
                   'parser.look.begins.offset': 48, 'source.len': 92},
                  when={'parser.depth': 1}, complete_parser=True),
@@ -64,7 +64,7 @@ def stops_for(workload):
                 ('sample-updated', 'filter.ldn', ['sample_keep', 'process', 'run_logged', 'run', 'main'],
                  {'self.*.seen': 1}),
                 ('text', 'dest.ldn', ['text_emit', 'emit_retry', 'process', 'run_logged', 'run', 'main'],
-                 {'line.delivered': 0}))]
+                 {'pending.delivered': 0}))]
 
 
 def measure(refine, output, capture, tools, selected=None, profile=None):
