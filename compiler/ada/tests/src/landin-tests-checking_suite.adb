@@ -14808,6 +14808,27 @@ package body Landin.Tests.Checking_Suite is
                else Landin.Targets.Synthetic_32);
          begin
             Check_Source
+              ("an unused concept rejects an unknown return source",
+               "borrow: type = concept (t: type) get: (source: ptr t) "
+               & "-> (r: ptr t from missing) end borrow", "L0339", Facts);
+            Check_Source
+              ("an instantiated concept rejects an unknown return source",
+               "borrow: type = concept (t: type) get: (source: ptr t) "
+               & "-> (r: ptr t from missing) end borrow "
+               & "read: (source: ptr i32) -> (r: ptr i32 from source) = "
+               & "r = source end read i32 is borrow (get: read)",
+               "L0339", Facts);
+            Check_Source
+              ("shared concept returns diagnose their source once",
+               "borrow: type = concept (t: type) get: (source: ptr t) "
+               & "-> (a, b: ptr t from missing) end borrow", "L0339", Facts);
+            Check_Source
+              ("a concept source matches its provider by position",
+               "borrow: type = concept (t: type) get: (source: ptr t) "
+               & "-> (r: ptr t from source) end borrow "
+               & "read: (other: ptr i32) -> (r: ptr i32 from other) = "
+               & "r = other end read i32 is borrow (get: read)", "", Facts);
+            Check_Source
               ("hidden module choice",
                "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
                & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "

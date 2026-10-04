@@ -15810,6 +15810,49 @@ package body Landin.Stages.Checking is
                      Errors : constant Syn.Node_Id :=
                        Syn.Error_Set_Of (Of_Tree, Requirement_Node);
                   begin
+                     --  Source names are a declaration-time signature rule,
+                     --  independent of the concept's actual types. Diagnose
+                     --  them even when no conformance instantiates the entry;
+                     --  a missing source must not silently produce an empty
+                     --  provider signature that later reaches lowering.
+                     for Result_Index in 1 .. Syn.Return_Count
+                       (Of_Tree, Requirement_Node)
+                     loop
+                        declare
+                           Returned : constant Syn.Node_Id := Syn.Nth_Return
+                             (Of_Tree, Requirement_Node, Result_Index);
+                           Owned : constant Natural :=
+                             (if Syn.Shares_Declared_Type (Of_Tree, Returned)
+                              then 0 else Syn.Return_Source_Count
+                                (Of_Tree, Returned));
+                        begin
+                           for Source_Index in 1 .. Owned loop
+                              declare
+                                 Source : constant Syn.Node_Id :=
+                                   Syn.Nth_Return_Source
+                                     (Of_Tree, Returned, Source_Index);
+                              begin
+                                 if Source_Parameter (Of_Tree, Source) = 0
+                                 then
+                                    Bad.Report
+                                      (Item => Bad.Signature_Form,
+                                       Source => Syn.Source_Of (Of_Tree),
+                                       Where => Syn.Where (Of_Tree, Source),
+                                       Message => "this `from` source is not a"
+                                         & " runtime parameter of the"
+                                         & " signature",
+                                       Note => "[0790]: a returned reference"
+                                         & " names the parameters it"
+                                         & " derives from",
+                                       Related => Syn.Origin
+                                         (Of_Tree, Returned),
+                                       Because => "the named return",
+                                       Into => Found);
+                                 end if;
+                              end;
+                           end loop;
+                        end;
+                     end loop;
                      if Errors /= Syn.No_Node
                        and then Syn.Never_Returns
                          (Of_Tree, Requirement_Node)
