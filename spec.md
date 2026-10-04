@@ -14324,9 +14324,9 @@ remain unchanged; source debugging and full hosted parity have separate gates.
 platform program and the generated-binding/archive execution runner, together
 with the shared native aggregate and callback differential cases, and
 `abi/darwin-stack-composite-slots` for which stack arguments pack. They run
-natively on a Mac, and nothing runs them automatically: the gate runs that
-fixture on Linux alone, so its Darwin placement is checked by
-`compiler/tests/darwin/check.py --parity`.
+natively on a Mac. The gate runs `abi/darwin-stack-composite-slots` on Linux
+and compiles, links and executes it on macOS arm64 in its `darwin-parity` job
+through `compiler/tests/darwin/check.py --parity`.
 
 ### D227 — Explicit memory events, synchronization and external writers
 
