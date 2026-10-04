@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise build.sh's real invalidation decision, without invoking a builder."""
 import os
+import re
+import tarfile
 import json
 from pathlib import Path
 import subprocess
@@ -232,7 +234,7 @@ build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
 project = sys.argv[sys.argv.index("-P") + 1]
 name = {"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}[project]
 path = build / "bin" / name
-path.write_text("#!/bin/sh\\nexit 0\\n")
+path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
 path.chmod(0o755)
 ''')
         self.executable(fake / "gprconfig", '''#!/usr/bin/env python3
@@ -396,6 +398,67 @@ path.write_text("-- generated at " + str(path) + "\\n"
         invalid = self.run_build(extra=reuse)
         self.assertEqual(invalid.returncode, 2)
 
+    def test_imported_full_build_rejects_missing_or_stale_test_stamp(self):
+        self.assertEqual(self.run_build().returncode, 0)
+        calls = self.calls()
+        manifest = self.manifest.read_text()
+        reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
+        for stamp in (None, "", "different source and toolchain\n"):
+            with self.subTest(stamp=stamp):
+                if stamp is None:
+                    self.tests_manifest.unlink()
+                else:
+                    self.tests_manifest.write_text(stamp)
+                result = self.run_build("-q", extra=reuse)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("imported", result.stderr)
+                self.assertEqual(self.calls(), calls)
+                self.assertEqual(self.manifest.read_text(), manifest)
+        self.tests_manifest.write_text(manifest)
+        self.assertEqual(self.run_build("-q", extra=reuse).returncode, 0)
+        self.assertEqual(self.calls(), calls)
+
+    def test_imported_compiler_only_build_does_not_require_tests(self):
+        first = self.run_build("--compiler-only")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertFalse(self.tests_manifest.exists())
+        self.assertFalse((self.build / "bin/landin_tests").exists())
+        calls = self.calls()
+        reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
+        current = self.run_build("--compiler-only", "-q", extra=reuse)
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertEqual(self.calls(), calls)
+        full = self.run_build("-q", extra=reuse)
+        self.assertEqual(full.returncode, 1)
+        self.assertEqual(self.calls(), calls)
+
+        # A compiler-only rebuild must not bless an older test executable.
+        self.assertEqual(self.run_build().returncode, 0)
+        source = self.root / "compiler/ada/src/main.adb"
+        source.write_text("updated compiler\n")
+        self.assertEqual(self.run_build("--compiler-only").returncode, 0)
+        self.assertTrue((self.build / "bin/landin_tests").exists())
+        calls = self.calls()
+        current = self.run_build("--compiler-only", "-q", extra=reuse)
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertEqual(self.run_build("-q", extra=reuse).returncode, 1)
+        self.assertEqual(self.calls(), calls)
+
+    def test_imported_compiler_identity_and_executable_are_required(self):
+        self.assertEqual(self.run_build("--compiler-only").returncode, 0)
+        calls = self.calls()
+        reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
+        executable = self.build / "bin/refine"
+        executable.chmod(0o644)
+        result = self.run_build("--compiler-only", "-q", extra=reuse)
+        self.assertEqual(result.returncode, 1)
+        executable.chmod(0o755)
+        self.manifest.unlink()
+        result = self.run_build("--compiler-only", "-q", extra=reuse)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no successful source manifest", result.stderr)
+        self.assertEqual(self.calls(), calls)
+
     def test_selected_identity_changes_clean_both_build_modes(self):
         for incremental in ("yes", "no"):
             extra = {"LANDIN_BUILD_INCREMENTAL": incremental}
@@ -476,6 +539,42 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 self.assertIn("owns the native GPR configuration", result.stderr)
                 self.assertEqual(self.manifest.read_text(), old)
                 self.assertEqual(self.calls(), calls)
+
+
+class ReleaseArchives(unittest.TestCase):
+    def test_workflow_archives_preserve_both_stamps_and_executables(self):
+        workflow = (ROOT / ".github/workflows/gate.yml").read_text()
+        commands = [" ".join(block.split()) for block in re.findall(
+            r"run: >-\n((?: {10}.+\n)+)", workflow)]
+        packages = [command for command in commands
+                    if command.startswith("tar -czf ")]
+        self.assertEqual(len(packages), 2)
+        for command in packages:
+            with self.subTest(command=command):
+                with tempfile.TemporaryDirectory(prefix="landin-archive-") as tmp:
+                    root = Path(tmp)
+                    words = shlex.split(command)
+                    build = root / words[words.index("-C") + 1]
+                    (build / "bin").mkdir(parents=True)
+                    for name in ("refine", "landin_tests"):
+                        executable = build / "bin" / name
+                        executable.write_text("#!/bin/sh\nexit 0\n")
+                        executable.chmod(0o755)
+                    manifest = "checked source and toolchain identity\n"
+                    for name in ("source-manifest.txt", "tests-manifest.txt"):
+                        (build / name).write_text(manifest)
+                    result = subprocess.run(
+                        ["sh", "-eu", "-c", command], cwd=root,
+                        env={**os.environ, "RUNNER_TEMP": tmp},
+                        capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    archive_path = Path(words[2].replace("$RUNNER_TEMP", tmp))
+                    with tarfile.open(archive_path) as archive:
+                        for name in ("source-manifest.txt", "tests-manifest.txt"):
+                            self.assertEqual(archive.extractfile(name).read(),
+                                             manifest.encode())
+                        for name in ("bin/refine", "bin/landin_tests"):
+                            self.assertTrue(archive.getmember(name).mode & 0o111)
 
 
 class RecipeChecksum(unittest.TestCase):

@@ -112,9 +112,10 @@ case "$Reuse" in
         ;;
 esac
 
-#  CI may import executables and a successful manifest from a build job in
-#  this workflow run.  Verify the checkout and native toolchain identity,
-#  then use those executables without asking GPRbuild to rebuild them.
+#  CI may import executables and successful manifests from a build job in
+#  this workflow run. Verify the checkout and native toolchain identity and,
+#  for a full build, the test executable's separate successful-build stamp.
+#  Compiler-only consumers need only refine and its source manifest.
 if [ "$Reuse" = "yes" ]; then
     if [ "$#" -ne 1 ] || [ "$1" != "-q" ]; then
         echo "landin: LANDIN_BUILD_REUSE requires build.sh -q" >&2
@@ -126,11 +127,23 @@ if [ "$Reuse" = "yes" ]; then
     fi
     Imported="$(cat "$Manifest")" || exit
     if [ "$Current" != "$Imported" ] \
-       || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ] \
-       || [ ! -x "$LANDIN_BUILD_DIR/bin/landin_tests" ]
+       || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ]
     then
         echo "landin: imported build does not match this source and toolchain" >&2
         exit 1
+    fi
+    if [ "$Compiler_Only" = "no" ]; then
+        if [ ! -f "$Tests_Manifest" ] \
+           || [ ! -x "$LANDIN_BUILD_DIR/bin/landin_tests" ]
+        then
+            echo "landin: imported build has no verified test executable" >&2
+            exit 1
+        fi
+        Imported_Tests="$(cat "$Tests_Manifest")" || exit
+        if [ "$Imported_Tests" != "$Current" ]; then
+            echo "landin: imported test build does not match this source and toolchain" >&2
+            exit 1
+        fi
     fi
     echo "landin: imported build matches source and toolchain"
     echo "built: $LANDIN_BUILD_DIR/bin/refine"
