@@ -4102,6 +4102,9 @@ package body Landin.Tests.Verifier_Suite is
         (Imports_Only, Import_Then_Definition, Definition_Then_Import,
          Two_Definitions, Conflicting_Imports, Variadic_Definition,
          Native_Definition);
+      type Many_Link_Case is
+        (Distinct_Symbols, Shared_One_Definition,
+         Shared_Two_Definitions);
    begin
       Ready (Work, Site);
       declare
@@ -4167,6 +4170,46 @@ package body Landin.Tests.Verifier_Suite is
                       | Definition_Then_Import | Native_Definition
                    then V.Nothing_Wrong else V.Routine_Signature_Disagrees),
                   "C link declarations: " & Which'Image);
+            end;
+         end loop;
+
+         for Scenario in Many_Link_Case loop
+            declare
+               Unit : IR.Unit;
+               Signature : IR.Signature_Id;
+               Routine : IR.Item_Id;
+            begin
+               IR.Prepare (Unit, Meanings.all);
+               Signature := IR.Add_Signature
+                 (Unit, IR.No_Signature_Parts,
+                  (Kind => Landin.Types.No_Value, others => <>),
+                  C_ABI => True);
+               for Index in 1 .. 4 loop
+                  Routine := IR.Add_Item
+                    (Unit, IR.Routine, IR.Declaration_Id (Index),
+                     Landin.Types.No_Value, Site);
+                  IR.Set_Signature (Unit, Routine, Signature);
+                  IR.Set_Link_Symbol
+                    (Unit, Routine,
+                     Landin.Resolution.Name_Of
+                       (Meanings.all,
+                        IR.Declaration_Id
+                          (if Scenario = Distinct_Symbols then Index else 1)));
+                  if Scenario /= Distinct_Symbols and then Index >= 3
+                    and then (Index = 3
+                              or else Scenario = Shared_Two_Definitions)
+                  then
+                     Add_Empty_Body (Unit, Routine, Site);
+                  else
+                     IR.Mark_External (Unit, Routine);
+                  end if;
+               end loop;
+               Expect
+                 (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+                  (if Scenario = Shared_Two_Definitions
+                   then V.Routine_Signature_Disagrees
+                   else V.Nothing_Wrong),
+                  "four C links: " & Scenario'Image);
             end;
          end loop;
 
