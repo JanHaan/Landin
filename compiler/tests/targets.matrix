@@ -417,6 +417,7 @@ negative/inferred-array-mixed-repetition-not-enabled | linux-x86-64, linux-arm64
 negative/inferred-array-repetition-extent-overflow | linux-x86-64, linux-arm64, macos-arm64
 negative/inferred-array-repetition-reads-incoming-state | linux-x86-64, linux-arm64, macos-arm64
 negative/inferred-array-repetition-zero-count | linux-x86-64, linux-arm64, macos-arm64
+negative/inferred-error-missing-erased-member | linux-x86-64, linux-arm64, macos-arm64
 negative/inferred-errors-public | linux-x86-64, linux-arm64, synthetic-32
 negative/inferred-module-array-repetition-element-not-static | linux-x86-64, linux-arm64, macos-arm64
 negative/inferred-module-array-repetition-extent-overflow | linux-x86-64, linux-arm64, macos-arm64

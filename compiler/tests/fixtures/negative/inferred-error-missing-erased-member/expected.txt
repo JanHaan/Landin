@@ -1,0 +1,6 @@
+error[L0308]: this runtime concept has no entry called `code`
+  --> ../tests/fixtures/negative/inferred-error-missing-erased-member/program.ldn:5:21
+  |
+5 |     answer = erased.code() else (problem)
+  |                     ^^^^
+  = note: [1390]: an `any` member names one concept entry

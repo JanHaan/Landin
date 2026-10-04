@@ -1,0 +1,8 @@
+display: type = concept (t: type)
+end display
+
+consumer: (erased: any display) -> (answer: i32) ! ... =
+    answer = erased.code() else (problem)
+        fail problem
+    end
+end consumer

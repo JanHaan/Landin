@@ -1,0 +1,9 @@
+class: negative
+summary: a missing erased member keeps its diagnostic when inferred recovery cannot close
+program: program.ldn
+constructs: 0940, 1030, 1230, 1390
+codes: L0308
+expect: expected.txt
+args: ../tests/fixtures/negative/inferred-error-missing-erased-member/program.ldn
+status: 1
+targets: linux-x86-64, linux-arm64, macos-arm64

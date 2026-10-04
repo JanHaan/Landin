@@ -35312,6 +35312,13 @@ package body Landin.Stages.Checking is
                exit;
             elsif not Progress then
                if Blocked_Error_Calls.Is_Empty then
+                  --  A diagnosed invalid call can leave a recovered error
+                  --  type unknown without awaiting any generic key.  Keep
+                  --  that source refusal rather than treating the rejected
+                  --  call as an unexplained inference dependency.
+                  if Landin.Diagnostics.Has_Errors (Found) then
+                     goto Publish_Diagnostics;
+                  end if;
                   raise Landin.Compiler_Defect with
                     "an open error frontier has no blocked generic key";
                end if;

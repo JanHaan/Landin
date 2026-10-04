@@ -49120,6 +49120,52 @@ file negative/inferred-array-repetition-zero-count/program.ldn tokens 23
   54 55 ]
   56 59 end
   60 61 f
+file negative/inferred-error-missing-erased-member/program.ldn tokens 45
+  0 7 display
+  7 8 :
+  9 13 type
+  14 15 =
+  16 23 concept
+  24 25 (
+  25 26 t
+  26 27 :
+  28 32 type
+  32 33 )
+  34 37 end
+  38 45 display
+  47 55 consumer
+  55 56 :
+  57 58 (
+  58 64 erased
+  64 65 :
+  66 69 any
+  70 77 display
+  77 78 )
+  79 81 ->
+  82 83 (
+  83 89 answer
+  89 90 :
+  91 94 i32
+  94 95 )
+  96 97 !
+  98 101 ...
+  102 103 =
+  108 114 answer
+  115 116 =
+  117 123 erased
+  123 124 .
+  124 128 code
+  128 129 (
+  129 130 )
+  131 135 else
+  136 137 (
+  137 144 problem
+  144 145 )
+  154 158 fail
+  159 166 problem
+  171 174 end
+  175 178 end
+  179 187 consumer
 file negative/inferred-errors-public/program.ldn tokens 17
   0 3 bad
   3 4 :
