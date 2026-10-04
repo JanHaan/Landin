@@ -7007,6 +7007,7 @@ OWNED_TESTS = (
     "environments/cortex-m/test.py",
     "devices/test.py",
     "scripts/tests/test_panic_locations.py",
+    "scripts/tests/test_darwin_assembly.py",
 )
 
 
