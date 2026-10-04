@@ -31,7 +31,6 @@ package body Landin.Tests.IR_Optimization_Suite is
    use type IR.Opcode;
    use type IR.Item_Id;
    use type IR.Item_Kind;
-   use type IR.Item_Id;
    use type IR.Evidence_Id;
    use type IR.Slot_Id;
    use type IR.Block_Id;
@@ -76,6 +75,8 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Incoming_Evidence (Item : in out Landin.Testing.Context);
    procedure Assembly_Output_Aliases
      (Item : in out Landin.Testing.Context);
+   procedure Forwarded_Evidence_Chain
+     (Item : in out Landin.Testing.Context);
    procedure Instance_Costs (Item : in out Landin.Testing.Context);
    procedure Sparse_Instance_Items (Item : in out Landin.Testing.Context);
    procedure Large_Graph (Item : in out Landin.Testing.Context);
@@ -90,7 +91,8 @@ package body Landin.Tests.IR_Optimization_Suite is
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
       Split_Template : Boolean := False;
-      Assembly_Output : Assembly_Case := No_Assembly);
+      Assembly_Output : Assembly_Case := No_Assembly;
+      Chain : Boolean := False);
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -392,7 +394,8 @@ package body Landin.Tests.IR_Optimization_Suite is
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
       Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
       Split_Template : Boolean := False;
-      Assembly_Output : Assembly_Case := No_Assembly)
+      Assembly_Output : Assembly_Case := No_Assembly;
+      Chain : Boolean := False)
    is
       Site : constant Landin.Provenance.Origin :=
         IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
@@ -508,6 +511,12 @@ package body Landin.Tests.IR_Optimization_Suite is
                Landin.Types.No_Value, Site);
             IR.Add_Argument (Code, Generic_Items (I), Called, Table);
          end if;
+         if Chain and then I > 1 then
+            Called := IR.Emit_Call
+              (Code, Generic_Items (I), Generic_Items (I - 1),
+               Landin.Types.No_Value, Site);
+            IR.Add_Argument (Code, Generic_Items (I), Called, Table);
+         end if;
          IR.Emit_Leave (Code, Generic_Items (I), IR.No_Value, Site);
          IR.Leave_Block (Code, Generic_Items (I));
       end loop;
@@ -522,9 +531,11 @@ package body Landin.Tests.IR_Optimization_Suite is
             Site);
       end if;
       for Generic_Item of Generic_Items loop
-         Called := IR.Emit_Call
-           (Code, Root, Generic_Item, Landin.Types.No_Value, Site);
-         IR.Add_Argument (Code, Root, Called, Table);
+         if not Chain or else Generic_Item = Generic_Items (Instances) then
+            Called := IR.Emit_Call
+              (Code, Root, Generic_Item, Landin.Types.No_Value, Site);
+            IR.Add_Argument (Code, Root, Called, Table);
+         end if;
       end loop;
       IR.Emit_Leave (Code, Root, IR.No_Value, Site);
       IR.Leave_Block (Code, Root);
@@ -732,6 +743,52 @@ package body Landin.Tests.IR_Optimization_Suite is
             "table-callable recursion keeps an unknown-evidence fallback");
       end;
    end Incoming_Evidence;
+
+   procedure Forwarded_Evidence_Chain
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Chain_Length : constant Positive := 20;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      for Incoming in Incoming_Kind loop
+         declare
+            Code : IR.Unit;
+            Report : Reports.Report;
+            Expected : constant Boolean := Incoming = Literal_Table;
+         begin
+            Evidence_Unit
+              (Code, Work, Incoming, Chain_Length, False, Chain => True);
+            IR.Specialization.Run
+              (Code, Landin.Stages.Target (Work),
+               (Opt.Speed, Opt.All_Eligible), Report);
+            Landin.Testing.Check_Equal
+              (Item, Reports.Specialization_Count (Report), Chain_Length,
+               "every forwarded instance has a decision");
+            for I in 1 .. Chain_Length loop
+               declare
+                  Decision : constant Reports.Specialization_Decision :=
+                    Reports.Nth_Specialization (Report, I);
+               begin
+                  Landin.Testing.Check
+                    (Item, Decision.Action =
+                       (if Expected then Reports.Specialized
+                        else Reports.Declined)
+                     and then Decision.Reason =
+                       (if Expected then Reports.Forced
+                        else Reports.Unknown_Evidence),
+                     "forwarded evidence follows the late root: "
+                     & Incoming'Image & Positive'Image (I));
+               end;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Count (Code, IR.Indirect_Call),
+               (if Expected then 0 else Chain_Length),
+               "forwarded dispatch follows the late root");
+         end;
+      end loop;
+   end Forwarded_Evidence_Chain;
 
    procedure Instance_Costs (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -1496,6 +1553,9 @@ package body Landin.Tests.IR_Optimization_Suite is
       Landin.Testing.Register
         (Into, "ir opt", "assembly output aliases",
          Assembly_Output_Aliases'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "forwarded evidence chain",
+         Forwarded_Evidence_Chain'Access);
       Landin.Testing.Register
         (Into, "ir opt", "instance costs", Instance_Costs'Access);
       Landin.Testing.Register

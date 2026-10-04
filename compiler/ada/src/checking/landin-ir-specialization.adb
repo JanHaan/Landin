@@ -52,8 +52,22 @@ package body Landin.IR.Specialization is
         (True, Into.Slots.Length);
       Aliases : Value_Ref_Vectors.Vector := Value_Ref_Vectors.To_Vector
         (No_Value, Into.Code.Length);
-      Changed : Boolean;
       Rewritten : Boolean := False;
+      --  Keep the dependency graph on the heap like the other whole-unit
+      --  scratch: source declaration bounds do not bound IR item counts.
+      package Natural_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Natural);
+      First_Dependent : Natural_Vectors.Vector := Natural_Vectors.To_Vector
+        (0, Ada.Containers.Count_Type (Count));
+      Next_Dependent : Natural_Vectors.Vector := Natural_Vectors.To_Vector
+        (0, Into.Code.Length);
+      Dependent_Target : Item_Ref_Vectors.Vector :=
+        Item_Ref_Vectors.To_Vector (No_Item, Into.Code.Length);
+      Dependency_Count : Natural := 0;
+      Pending : Item_Ref_Vectors.Vector := Item_Ref_Vectors.To_Vector
+        (No_Item, Ada.Containers.Count_Type (Count));
+      Pending_First : Natural := 1;
+      Pending_Last : Natural := 0;
 
       procedure Expose (Item : Item_Id);
 
@@ -61,6 +75,16 @@ package body Landin.IR.Specialization is
       begin
          Exposed (Positive (Item)) := True;
       end Expose;
+
+      procedure Invalidate (Item : Item_Id);
+      procedure Invalidate (Item : Item_Id) is
+      begin
+         if Proven (Positive (Item)) then
+            Proven (Positive (Item)) := False;
+            Pending_Last := Pending_Last + 1;
+            Pending (Pending_Last) := Item;
+         end if;
+      end Invalidate;
 
       function Code_At (Item : Item_Id; Value : Value_Id) return Instruction
         is (Into.Code (Into.Items (Positive (Item)).Values.First
@@ -236,42 +260,72 @@ package body Landin.IR.Specialization is
             end loop;
          end;
       end loop;
-      loop
-         Changed := False;
-         for I in 1 .. Count loop
-            declare
-               Caller : constant Item_Id := Item_Id (I);
-            begin
-               for V in 1 .. Value_Count (Into, Caller) loop
-                  declare
-                     Code : constant Instruction := Code_At
-                       (Caller, Value_Id (V));
-                  begin
-                     if Code.Op = Call and then Proven (Positive (Code.Named))
-                     then
-                        for B in 1 .. Evidence_Binding_Count (Into, Code.Named)
-                        loop
+      --  Inspect each call once. Literal evidence is independent of the
+      --  caller; a stable bound-parameter load creates a dependency from the
+      --  caller to the callee. Any other incoming evidence is a failed root.
+      --  Each failed instance enters the queue once, including failures found
+      --  while scanning later calls, so propagation never rescans the unit.
+      for I in 1 .. Count loop
+         declare
+            Caller : constant Item_Id := Item_Id (I);
+         begin
+            for V in 1 .. Value_Count (Into, Caller) loop
+               declare
+                  Code : constant Instruction := Code_At
+                    (Caller, Value_Id (V));
+                  Depends : Boolean := False;
+               begin
+                  if Code.Op = Call and then Proven (Positive (Code.Named))
+                  then
+                     for B in 1 .. Evidence_Binding_Count (Into, Code.Named)
+                     loop
+                        declare
+                           Binding : constant Evidence_Binding :=
+                             Nth_Evidence_Binding (Into, Code.Named, B);
+                        begin
+                           if Binding.Parameter > Code.Args then
+                              Invalidate (Code.Named);
+                              exit;
+                           end if;
                            declare
-                              Binding : constant Evidence_Binding :=
-                                Nth_Evidence_Binding (Into, Code.Named, B);
+                              Argument : constant Value_Id := Into.Operands
+                                (Code.First_Arg + Binding.Parameter);
+                              Source : constant Instruction := Code_At
+                                (Caller, Original (Caller, Argument));
                            begin
-                              if Binding.Parameter > Code.Args or else
-                                Static_Table (Caller, Into.Operands
-                                  (Code.First_Arg + Binding.Parameter))
-                                    /= Binding.Evidence
+                              if Static_Table (Caller, Argument)
+                                /= Binding.Evidence
                               then
-                                 Proven (Positive (Code.Named)) := False;
-                                 Changed := True;
+                                 Invalidate (Code.Named);
                                  exit;
                               end if;
+                              Depends := Depends or else Source.Op = Load;
                            end;
-                        end loop;
+                        end;
+                     end loop;
+                     if Depends and then Proven (Positive (Code.Named)) then
+                        Dependency_Count := Dependency_Count + 1;
+                        Dependent_Target (Dependency_Count) := Code.Named;
+                        Next_Dependent (Dependency_Count) :=
+                          First_Dependent (I);
+                        First_Dependent (I) := Dependency_Count;
                      end if;
-                  end;
-               end loop;
-            end;
-         end loop;
-         exit when not Changed;
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+      while Pending_First <= Pending_Last loop
+         declare
+            Edge : Natural := First_Dependent
+              (Positive (Pending (Pending_First)));
+         begin
+            while Edge /= 0 loop
+               Invalidate (Dependent_Target (Edge));
+               Edge := Next_Dependent (Edge);
+            end loop;
+            Pending_First := Pending_First + 1;
+         end;
       end loop;
       for I in 1 .. Count loop
          declare
