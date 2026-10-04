@@ -125,7 +125,8 @@ end copy_argument
 --  A world entry receives one already terminated pointer. Dynamic callers
 --  make that precondition explicit with caller-owned scratch: empty input,
 --  an embedded NUL, and insufficient terminator capacity are distinct and
---  checked in that order. No byte is copied before all checks pass.
+--  checked in that order. No byte is copied before all checks pass. Source
+--  and scratch may overlap; the copy preserves the original source bytes.
 public terminate_path: (source: []u8, scratch: []mut u8)
                        -> (path: ptr u8 from scratch)
                        ! empty_path | path_contains_nul | path_too_long =
@@ -137,11 +138,19 @@ public terminate_path: (source: []u8, scratch: []mut u8)
     end while
     fail path_too_long when lenof source >= lenof scratch
 
-    mut copied: usize = 0
-    while copied < lenof source do
-        scratch[copied] = source[copied]
-        inc copied
-    end while
+    if usize(addr scratch[0]) > usize(addr source[0]) then
+        mut remaining: usize = lenof source
+        while remaining > 0 do
+            dec remaining
+            scratch[remaining] = source[remaining]
+        end while
+    else
+        mut copied: usize = 0
+        while copied < lenof source do
+            scratch[copied] = source[copied]
+            inc copied
+        end while
+    end if
     scratch[lenof source] = 0
     path = addr scratch[0]
 end terminate_path

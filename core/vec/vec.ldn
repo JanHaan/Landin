@@ -123,6 +123,10 @@ public reserve: (item: type, provider: type is mem.allocator,
     return when want <= old_capacity
 
     extent: usize = try byte_extent(item: item, slots: want)
+    old_extent: usize = old_capacity * sizeof item
+    if mem.grow_storage(value.values, state, old_extent, extent, want) then
+        return
+    end if
     block: ptr mut u8 = try provider.alloc
         (state, extent, alignof item)
     mut fresh := mem.reserve(item: item, base: block, slots: want)

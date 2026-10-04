@@ -382,7 +382,7 @@ end main
 
 ## Sieve of Eratosthenes
 
-The sieve exercises caller-owned fixed storage, writable and read-only slices, computed indexing, zeroed initialization, and nested traversal. It marks composites through 100 and verifies both the prime count and boundary values. This is the bounded-array form of the [Rosetta Code task](https://rosettacode.org/wiki/Sieve_of_Eratosthenes).
+The sieve exercises caller-owned fixed storage, writable and read-only slices, computed indexing, zeroed initialization, and nested traversal. It marks composites through 100 and verifies both the prime count and boundary values. Each prime starts marking at its square because smaller multiples already have a smaller prime factor; the division guard keeps that square within the array. This is the bounded-array form of the [Rosetta Code task](https://rosettacode.org/wiki/Sieve_of_Eratosthenes).
 
 Fixture source: `compiler/tests/fixtures/runtime/sieve-of-eratosthenes/main.ldn`.
 
@@ -405,8 +405,8 @@ sieve: (inout composite: [101]bool) -> none =
     view[1] = true
     first_candidate: usize = 2
     for candidate in first_candidate..<lenof view do
-        if not view[candidate] then
-            mut multiple: usize = candidate + candidate
+        if not view[candidate] and candidate <= (lenof view - 1) / candidate then
+            mut multiple: usize = candidate * candidate
             while multiple < lenof view do
                 view[multiple] = true
                 multiple += candidate
@@ -709,10 +709,8 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.
 import core/io
 import core/io/hosted
 
-in_set: (pixel_x: usize, pixel_y: usize, size: usize)
+in_set: (real_coordinate: f64, imaginary_coordinate: f64)
         -> (member: bool) =
-    real_coordinate: f64 = 2.0 * f64(pixel_x) / f64(size) - 1.5
-    imaginary_coordinate: f64 = 2.0 * f64(pixel_y) / f64(size) - 1.0
     mut real: f64 = 0.0
     mut imaginary: f64 = 0.0
     mut real_squared: f64 = 0.0
@@ -733,21 +731,27 @@ end in_set
 
 render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
+    coordinate_size: f64 = f64(size)
     bytes_per_row: usize = size / 8
     bits_per_byte: usize = 8
     first: usize = 0
+    mut real_coordinates: [200]f64 = zeroed
     stream: io.file = io.out(host)
     mut row_bytes: [25]u8 = zeroed
     members = 0
+    for pixel_x in first..<size do
+        real_coordinates[pixel_x] = 2.0 * f64(pixel_x) / coordinate_size - 1.5
+    end for
 
     try io.write(host, stream, "P4\n200 200\n")
     for row in first..<size do
+        imaginary_coordinate: f64 = 2.0 * f64(row) / coordinate_size - 1.0
         for byte_column in first..<bytes_per_row do
             mut packed: u8 = 0
             for offset in first..<bits_per_byte do
                 packed <<= 1
                 pixel_x: usize = byte_column * bits_per_byte + offset
-                if in_set(pixel_x, row, size) then
+                if in_set(real_coordinates[pixel_x], imaginary_coordinate) then
                     packed |= 1
                     inc members
                 end if
@@ -843,7 +847,7 @@ end select_symbol
 
 write_repeated: (inout host: hosted.system, stream: io.file,
                  source: []u8, count: usize) -> none ! io.io_failed =
-    mut line: [60]u8 = zeroed
+    mut line: [61]u8 = zeroed
     mut emitted: usize = 0
     mut source_at: usize = 0
     first: usize = 0
@@ -857,9 +861,9 @@ write_repeated: (inout host: hosted.system, stream: io.file,
                 source_at = 0
             end if
         end for
-        output: []u8 = line[0..<width]
+        line[width] = 10
+        output: []u8 = line[0..<width + 1]
         try io.write(host, stream, output)
-        try io.write(host, stream, "\n")
         emitted += width
     end while
 end write_repeated
@@ -867,7 +871,7 @@ end write_repeated
 write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
-    mut line: [60]u8 = zeroed
+    mut line: [61]u8 = zeroed
     mut emitted: usize = 0
     first: usize = 0
 
@@ -877,9 +881,9 @@ write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
             random: f64 = next_random(seed)
             line[at] = select_symbol(symbols, cumulative, random)
         end for
-        output: []u8 = line[0..<width]
+        line[width] = 10
+        output: []u8 = line[0..<width + 1]
         try io.write(host, stream, output)
-        try io.write(host, stream, "\n")
         emitted += width
     end while
 end write_random

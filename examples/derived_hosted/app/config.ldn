@@ -8,6 +8,7 @@ public bad_argument: atom
 public bad_encoding: atom
 public config: type = struct
     chain: vec.list(any filter)
+    leading_level: u8
     to: any dest
     count_only: bool
     input: ptr u8
@@ -98,6 +99,8 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
     arguments := try copy_arguments(allocator, world)
     args := vec.used(arguments)
     mut chain := vec.new_list(item: any filter)
+    mut leading_level: u8 = 0
+    mut only_levels: bool = true
     mut input: []u8 = ""
     mut output: []u8 = ""
     mut warnings: usize = 0
@@ -122,16 +125,21 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
                 elsif equal(parameter, "ERROR") then least = 4
                 elsif equal(parameter, "FATAL") then least = 5
                 else fail bad_argument end if
+                if only_levels and least > leading_level then
+                    leading_level = least
+                end if
                 initial: level_filter = (least: least)
                 object := try mem.new(allocator, initial)
                 selected: any filter = any(object)
                 try vec.push(chain, allocator, selected)
             elsif equal(arg, "--match") then
+                only_levels = false
                 initial: match_filter = (needle: parameter)
                 object := try mem.new(allocator, initial)
                 selected: any filter = any(object)
                 try vec.push(chain, allocator, selected)
             elsif equal(arg, "--every") then
+                only_levels = false
                 mut every: usize = (sample_number(parameter) else (problem)
                     _ = problem
                     inc warnings
@@ -171,7 +179,7 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
     initial: count_dest = zeroed
     object := try mem.new(allocator, initial)
     chosen: any dest = any(object)
-    value = (chain: chain, to: chosen, count_only: lenof output == 0,
+    value = (chain: chain, leading_level: leading_level, to: chosen, count_only: lenof output == 0,
              input: addr input[0],
              output_path: output, output: world.out(), owns_output: false,
              warnings: warnings,

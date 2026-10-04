@@ -6,7 +6,6 @@
 import core/mem
 
 public slot: type = struct
-    occupied: bool
     size: usize
     free_index: usize
 end slot
@@ -75,8 +74,9 @@ end slot_stride
 
 --  slot_size is positive. The initialized bookkeeping slice is supplied by
 --  the caller, its length is the finite bookkeeping capacity, and slot_count
---  may be zero but may not exceed it. A positive pool aligns its first slot
---  from the absolute backing address, includes that padding in extent
+--  may be zero but may not exceed it. The maximum usize marks a free slot,
+--  so a positive pool cannot use that slot size. A positive pool aligns its
+--  first slot from the absolute backing address, includes that padding in extent
 --  accounting, and proves every later slot and its complete payload fit both
 --  the backing extent and target address space before publishing the provider.
 public over: (base: ptr mut u8, extent: usize, slot_size: usize,
@@ -85,6 +85,8 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
              -> (state: provider from base, bookkeeping)
              ! mem.out_of_memory =
     fail mem.out_of_memory when slot_count > lenof bookkeeping
+    empty: usize = 0 -% 1
+    fail mem.out_of_memory when slot_count > 0 and slot_size == empty
 
     mut normalized_alignment: usize = slot_alignment
     if normalized_alignment <= 1 then
@@ -108,7 +110,7 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
 
     mut index: usize = 0
     while index < slot_count do
-        bookkeeping[index] = (occupied: false, size: 0,
+        bookkeeping[index] = (size: empty,
                               free_index: index)
         inc index
     end while
@@ -196,7 +198,6 @@ pool_alloc: (inout state: fixed_pool,
     address: usize = usize(state.base) + state.first_offset + distance
     block = ptr(address)
     selected: ptr mut slot = addr state.bookkeeping[index]
-    selected.val.occupied = true
     selected.val.size = size
     inc state.allocations
     inc state.live_count
@@ -225,19 +226,30 @@ pool_free: (inout state: fixed_pool,
         return
     end if
     selected: ptr mut slot = addr state.bookkeeping[index]
-    if not selected.val.occupied or selected.val.size <> size then
+    if selected.val.size == 0 -% 1 or selected.val.size <> size then
         inc state.rejected_frees
         return
     end if
 
-    selected.val.occupied = false
-    selected.val.size = 0
+    selected.val.size = 0 -% 1
     return_free_index(state, index)
     inc state.frees
     dec state.live_count
 end pool_free
 
-fixed_pool is mem.allocator (alloc: pool_alloc, free: pool_free)
+pool_grow: (inout state: fixed_pool, block: ptr mut u8,
+            old_size: usize, new_size: usize, alignment: usize)
+           -> (grown: bool) =
+    _ = state.live_count
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end pool_grow
+
+fixed_pool is mem.allocator (alloc: pool_alloc, grow: pool_grow,
+                             free: pool_free)
 
 public capacity: (state: provider) -> (count: usize) =
     count = state.slot_count

@@ -4,6 +4,7 @@ import core/io/hosted
 import core/mem
 import core/text
 import examples/config_parser/lexer
+import core/vec
 import examples/config_parser/parser
 
 --  Parsed nodes are retained through the public escaping arena capability.
@@ -16,6 +17,73 @@ mut blank_memory: [1]u8 = zeroed
 mut blank_source: [50000]u8 = zeroed
 mut long_line: [100005]u8 = zeroed
 mut long_line_memory: [4096]u8 = zeroed
+mut depth_memory: [8192]u8 = zeroed
+
+depth_group_is_expected: (node: ptr mut parser.value, level: usize)
+                         -> (yes: bool) =
+    yes = false
+    match node.val.body
+        parser.group_value(count, children): begin
+            if count <> 1 then
+                return
+            end if
+            child := vec.get(children, usize(0)) else (missing)
+                _ = missing
+                return
+            end
+            if level == 7 then
+                match child.val.body
+                    parser.integer_value(number): yes = number == 2
+                    parser.text_value(begins, ends): return
+                    parser.group_value(child_count, items): return
+                end match
+            else
+                yes = depth_group_is_expected(child, level + 1)
+            end if
+        end
+        parser.text_value(begins, ends): return
+        parser.integer_value(number): return
+    end match
+end depth_group_is_expected
+
+depth_recovery_is_expected: () -> (yes: bool) =
+    yes = false
+    source: []u8 = "g0 = {\ng1 = {\ng2 = {\ng3 = {\ng4 = {\ng5 = {\ng6 = {\ng7 = {\ng8 = {\ninner = {\nx = 1\n}\nafter = 9\n}\ny = 2\n}\n}\n}\n}\n}\n}\n}\n}\nz = 3\n"
+    mut arena := mem.arena_over(addr depth_memory[0], lenof depth_memory)
+    mut notes := diag.new_log(capacity: 4)
+    mut logger: any diag.log = any(addr notes)
+    mut tree := parser.empty()
+    parser.parse_file(source, logger, arena, tree) else (problem)
+        _ = problem
+        return
+    end
+    if diag.stored(addr notes) <> 1 or parser.length(tree) <> 2 then
+        return
+    end if
+    note := diag.note_at(addr notes, usize(0)) else (missing)
+        _ = missing
+        return
+    end
+    if diag.message_length(note) <> 22 then
+        return
+    end if
+    first := parser.at(tree, 0) else (missing)
+        _ = missing
+        return
+    end
+    if not depth_group_is_expected(first, 0) then
+        return
+    end if
+    second := parser.at(tree, 1) else (missing)
+        _ = missing
+        return
+    end
+    match second.val.body
+        parser.integer_value(number): yes = number == 3
+        parser.text_value(begins, ends): return
+        parser.group_value(count, items): return
+    end match
+end depth_recovery_is_expected
 
 ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = false
@@ -349,6 +417,9 @@ public main: () -> (code: i32) =
         parser.text_value(begins, ends): return
         parser.group_value(count, items): return
     end match
+    if not depth_recovery_is_expected() then
+        return
+    end if
 
     code = 42
 end main

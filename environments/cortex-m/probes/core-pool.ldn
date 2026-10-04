@@ -1,12 +1,19 @@
 import core/mem
 import core/pool
 
+padded_slot: type = struct
+    occupied: bool
+    size: usize
+    free_index: usize
+end padded_slot
+
 mut backing: [64]u8 = zeroed
 mut records: [2]pool.slot = zeroed
 mut observed: u32 = 0
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
+    return when sizeof padded_slot <> 12 or sizeof pool.slot <> 8
     base: ptr mut u8 = ptr(usize(addr backing[0]) + 1)
     mut state := try pool.over(base, 63, 16, 2, 4, records[0..<2])
     zero := try mem.allocate(state, usize(0), usize(0))

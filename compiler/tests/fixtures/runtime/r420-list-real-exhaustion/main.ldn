@@ -1,8 +1,8 @@
 --  Real inner-provider exhaustion for vec.list(pointer) and vec.list(any).
 --  No allocation here is refused by an injected schedule: every refusal below
 --  is the backing arena running out of bytes or the fixed pool running out of
---  slots. Both item kinds run the same two shapes -- a monotonic extent spent
---  to its end, and a growth that needs the old and the new block at once.
+--  slots. Arenas extend a topmost allocation in place; pools still need an
+--  old and a new slot at once for vector replacement.
 
 import core/mem
 import core/pool
@@ -95,8 +95,7 @@ fill: (provider: type is mem.allocator, inout state: provider,
     ok = true
 end fill
 
---  A monotonic arena sized to exactly two growths. The third growth is
---  refused by the arena itself and must leave the old vector intact.
+--  The 16-slot final extent fits, then the 32-slot growth is refused.
 arena_case: () -> (ok: bool) =
     ok = false
     mut backing: [24]u64 = zeroed
@@ -107,14 +106,15 @@ arena_case: () -> (ok: bool) =
 
     eight: usize = 8
     return when not fill(state, values, eight)
-    --  Repeated growth consumes monotonic capacity: 8 slots, 64 bytes.
+    --  The first allocation owns 8 slots, 64 bytes.
     return when vec.capacity(values) <> 8
       or mem.arena_used(state) <> 8 * sizeof node_ptr
 
     sixteen: usize = 16
     return when not fill(state, values, sixteen)
-    --  The second growth took 128 further bytes and ended the extent.
-    return when vec.capacity(values) <> 16 or mem.arena_used(state) <> extent
+    --  Extending the same block spends only the final 128 bytes.
+    return when vec.capacity(values) <> 16
+      or mem.arena_used(state) <> 16 * sizeof node_ptr
 
     mut exhausted: bool = false
     vec.push(values, state, entry(sixteen)) else (problem)
@@ -122,13 +122,88 @@ arena_case: () -> (ok: bool) =
     end
     preserved: bool = exhausted and contents_ok(values, sixteen)
                       and vec.capacity(values) == 16
-                      and mem.arena_used(state) == extent
+                      and mem.arena_used(state) == 16 * sizeof node_ptr
 
     vec.release(values, state)
     --  The arena's free is a documented no-op, so the offset does not move.
     ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
-         and mem.arena_used(state) == extent
+         and mem.arena_used(state) == 16 * sizeof node_ptr
 end arena_case
+
+--  The ordinary doubling path reaches the full 256-byte backing while
+--  preserving each byte; a further push fails without changing the list.
+arena_byte_case: () -> (ok: bool) =
+    ok = false
+    mut backing: [256]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut values := vec.new_list(item: u8)
+    mut at: usize = 0
+    while at < 256 do
+        vec.push(values, state, u8(at)) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    return when vec.capacity(values) <> 256 or mem.arena_used(state) <> 256
+    mut exhausted: bool = false
+    vec.push(values, state, u8(0)) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    mut preserved: bool = exhausted and vec.length(values) == 256
+    at = 0
+    while at < 256 do
+        saved: u8 = vec.get(values, at) else (problem)
+            _ = problem
+            preserved = false
+            return
+        end
+        preserved = preserved and saved == u8(at)
+        inc at
+    end while
+    vec.release(values, state)
+    ok = preserved and mem.arena_used(state) == 256
+         and vec.length(values) == 0 and vec.capacity(values) == 0
+end arena_byte_case
+
+--  Another allocation above the vector prevents extension. Replacement
+--  still preserves that allocation and the vector's initialized prefix.
+arena_interleaved_case: () -> (ok: bool) =
+    ok = false
+    mut backing: [40]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut values := vec.new_list(item: u8)
+    mut at: usize = 0
+    while at < 8 do
+        vec.push(values, state, u8(at)) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    other: ptr mut u8 = mem.allocate(state, usize(8), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    other.val = 77
+    vec.push(values, state, u8(8)) else (problem)
+        _ = problem
+        return
+    end
+    ok = other.val == 77 and mem.arena_used(state) == 32
+         and vec.capacity(values) == 16 and vec.length(values) == 9
+    at = 0
+    while at < 9 do
+        saved: u8 = vec.get(values, at) else (problem)
+            _ = problem
+            ok = false
+            return
+        end
+        ok = ok and saved == u8(at)
+        inc at
+    end while
+    vec.release(values, state)
+end arena_interleaved_case
 
 --  One slot wide enough for the grown block still cannot satisfy a growth
 --  that needs the old and the new block at the same time.
@@ -218,8 +293,9 @@ arena_any_case: (escaping a: any counter, escaping b: any counter)
 
     sixteen: usize = 16
     return when not fill_erased(state, values, sixteen, a, b)
-    --  The second growth took sixteen further items and ended the extent.
-    return when vec.capacity(values) <> 16 or mem.arena_used(state) <> extent
+    --  The second growth extends the same block to sixteen items.
+    return when vec.capacity(values) <> 16
+      or mem.arena_used(state) <> 16 * item_bytes
 
     mut exhausted: bool = false
     vec.push(values, state, a) else (problem)
@@ -228,11 +304,11 @@ arena_any_case: (escaping a: any counter, escaping b: any counter)
     --  Every descriptor still dispatches to the pointee it was built over.
     preserved: bool = exhausted and erased_ok(values, sixteen)
                       and vec.capacity(values) == 16
-                      and mem.arena_used(state) == extent
+                      and mem.arena_used(state) == 16 * item_bytes
 
     vec.release(values, state)
     ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
-         and mem.arena_used(state) == extent
+         and mem.arena_used(state) == 16 * item_bytes
 end arena_any_case
 
 --  The erased item repeats the simultaneous old-and-new pool shape.
@@ -317,10 +393,96 @@ public main: () -> (code: i32) =
     end while
     a: any counter = any(addr first_source)
     b: any counter = any(addr second_source)
-    if arena_case() and single_slot_case() and two_slot_case()
+    if arena_case() and arena_byte_case() and arena_interleaved_case()
+      and grown_extent_free() and arena_grow_refusals()
+      and single_slot_case() and two_slot_case()
       and arena_any_case(a, b) and single_slot_any_case(a, b)
       and two_slot_any_case(a, b)
     then
         code = 42
     end if
 end main
+
+--  Observe the exact final free after the allocator keeps a growing block.
+growing: type = struct
+    base: ptr mut u8
+    used: usize
+    allocations: usize
+    frees: usize
+    released_size: usize
+end growing
+
+growing_alloc: (inout state: growing, size: usize, alignment: usize)
+                -> (block: ptr mut u8) ! mem.out_of_memory =
+    _ = alignment
+    fail mem.out_of_memory when state.used <> 0 or size > 32
+    inc state.allocations
+    state.used = size
+    block = ptr(usize(state.base))
+end growing_alloc
+
+growing_grow: (inout state: growing, block: ptr mut u8,
+                old_size: usize, new_size: usize, alignment: usize)
+               -> (grown: bool) =
+    _ = alignment
+    grown = false
+    return when usize(block) <> usize(state.base) or old_size <> state.used
+    return when new_size <= old_size or new_size > 32
+    state.used = new_size
+    grown = true
+end growing_grow
+
+growing_free: (inout state: growing, block: ptr mut u8, size: usize) -> none =
+    _ = block
+    inc state.frees
+    state.released_size = size
+end growing_free
+
+growing is mem.allocator (alloc: growing_alloc, grow: growing_grow,
+                          free: growing_free)
+
+grown_extent_free: () -> (ok: bool) =
+    ok = false
+    mut bytes: [32]u8 = zeroed
+    mut state: growing = (base: addr bytes[0], used: 0, allocations: 0,
+                           frees: 0, released_size: 0)
+    mut values := vec.new_list(item: u8)
+    for at in usize(0)..<usize(17) do
+        vec.push(values, state, u8(at)) else (problem) _ = problem return end
+    end for
+    vec.release(values, state)
+    ok = state.allocations == 1 and state.used == 32
+         and state.frees == 1 and state.released_size == 32
+end grown_extent_free
+
+grow: (provider: type is mem.allocator, inout state: provider,
+        block: ptr mut u8, old: usize, want: usize, alignment: usize)
+       -> (ok: bool) =
+    ok = provider.grow(state, block, old, want, alignment)
+end grow
+
+arena_grow_refusals: () -> (ok: bool) =
+    ok = false
+    mut words: [4]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    mut state := mem.arena_over_unchecked(base, usize(31))
+    block: ptr mut u8 = mem.allocate(state, usize(4), usize(1))
+        else (problem) _ = problem return end
+    block.val = 73
+    --  Every refusal leaves the offset and existing byte intact.
+    return when grow(state, block, usize(4), usize(8), usize(8))
+    return when grow(state, block, usize(3), usize(8), usize(1))
+    return when grow(state, block, usize(4), usize(32), usize(1))
+    return when grow(state, block, usize(4), usize(4), usize(1))
+    return when mem.arena_used(state) <> 4 or block.val <> 73
+    return when not grow(state, block, usize(4), usize(8), usize(1))
+    return when mem.arena_used(state) <> 8 or block.val <> 73
+    maximum: usize = 0 -% 1
+    near_end: ptr mut u8 = ptr(maximum - 7)
+    mut impossible := mem.arena_over_unchecked(near_end, usize(16))
+    edge: ptr mut u8 = mem.allocate(impossible, usize(4), usize(1))
+        else (problem) _ = problem return end
+    --  The synthetic address is never dereferenced.
+    return when grow(impossible, edge, usize(4), usize(8), usize(1))
+    ok = mem.arena_used(impossible) == 4
+end arena_grow_refusals

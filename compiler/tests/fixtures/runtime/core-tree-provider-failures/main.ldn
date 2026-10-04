@@ -12,7 +12,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
     okay = false
     zero: usize = 0
     one: usize = 1
-    eight: u32 = 8
+    eight: usize = 8
     mut value := tree.new_tree()
     mut state := failing.count_down(addr backing, zero)
     mut empty_refused: bool = false
@@ -30,7 +30,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
                 _ = problem
                 return
             end
-        return when tree.ordinal(added) <> u32(at)
+        return when tree.ordinal(added) <> at
         inc at
     end while
     mut leaf_refused: bool = false
@@ -50,7 +50,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
     return when tree.length(value) <> 8 or failing.live(state) <> 1
     at = 0
     while at < 8 do
-        selected := tree.get(value, tree.id(u32(at))) else (problem)
+        selected := tree.get(value, tree.id(at)) else (problem)
             _ = problem
             return
         end
@@ -64,7 +64,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         _ = problem
         return
     end
-    leaves: u32 = tree.count_leaves(value, root) else (problem)
+    leaves: usize = tree.count_leaves(value, root) else (problem)
         _ = problem
         return
     end

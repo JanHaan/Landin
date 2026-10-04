@@ -77,8 +77,20 @@ region_free: (provider: type is mem.allocator, inout state: region(provider),
     _ = size
 end region_free
 
+region_grow: (provider: type,
+              inout state: region(provider), block: ptr mut u8,
+              old_size: usize, new_size: usize, alignment: usize)
+             -> (grown: bool) =
+    _ = state.parent
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end region_grow
+
 (provider: type is mem.allocator) region_value(provider) is mem.allocator
-    (alloc: region_alloc, free: region_free)
+    (alloc: region_alloc, grow: region_grow, free: region_free)
 
 --  End every alias before this call. Every payload and ledger allocation
 --  is returned to the parent, including failed-construction payloads. A

@@ -2794,7 +2794,7 @@ value parameter may appear among them.
                                item:  list_item,  next:   list_next)
 
 (provider: type is allocator) counted(provider) is allocator
-    (alloc: counted_alloc, free: counted_free)
+    (alloc: counted_alloc, grow: counted_grow, free: counted_free)
 ```
 
 The functions supplying the entries are generic themselves.
@@ -3160,6 +3160,8 @@ with in C because it is too awkward.
 allocator: type = concept (provider: type)
     alloc: (inout a: provider, size: usize, alignment: usize)
            -> (p: ptr mut u8) ! out_of_memory
+    grow: (inout a: provider, p: ptr mut u8, old_size: usize,
+           new_size: usize, alignment: usize) -> (grown: bool)
     free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
@@ -3173,6 +3175,10 @@ makes the type `list(t, provider)`, so a list in an arena and a list
 on the heap become different types and no function takes
 both. Threading keeps the type parameterised by `t` alone,
 and costs one argument at every call that can allocate.
+`grow` may extend the same block to a larger byte extent without moving it.
+A refusal returns `false` with the block and provider unchanged, so a container
+can try a fresh allocation. An arena can use this when the block is its latest
+allocation; providers without in-place growth return `false`.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
 monotonic provider over an explicit extent. The separately imported
@@ -3219,23 +3225,26 @@ ownership of elements remains manual.
 
 `entries()` creates an enumeration cursor. `next_entry` receives the map and
 an `inout` cursor and returns a key/value `entry(key_type, value_type) from map`, or reports
-`end_of_entries`. A complete walk scans each bucket at most once and exposes
-only live entries. References in a returned entry still derive from the map;
+`end_of_entries`. A complete walk follows only live bucket links in insertion
+order, so its work follows the number of live entries even after removals.
+References in a returned entry still derive from the map;
 scalar copies do not retain a view [0840]. The cursor is a manually managed
 position, not a checked map/generation identity: restart after any mutation,
 and do not resume a cursor on a different map. Local reference checks do not
 replace that protocol.
 
 `map` is a public struct composition, not an encapsulated or deep-safe object.
-Its bucket, key and value storages and its counters are public fields. The
-private identity of the bucket record and the opaque representation of
+Its bucket, key and value storages, counters and live head/tail are public
+fields. The private identity of the bucket record and the opaque representation
+of
 `mem.storage` do not make the map private: `mem` operations expose the typed
 initialized key/value prefixes, including removed dense entries, and inferred
 views can copy and overwrite whole bucket records. Code that composes below
 the map operations must manually preserve equal storage capacities, a fully
 initialized bucket array, paired key/value prefixes, exactly one used or dead
-bucket with a valid index for each dense position, and counters equal to the
-numbers of used and dead records. The compiler does not enforce those
+bucket with a valid index for each dense position, counters equal to the
+numbers of used and dead records, and a linked walk through exactly the used
+buckets. The compiler does not enforce those
 container invariants.
 
 The supplied equality must be an equivalence relation. Equal keys must produce
@@ -4210,7 +4219,8 @@ backing must remain valid, transfer ranges must not overlap, counters need
 headroom, and stale handles can address a reopened slot. D153 records these
 bounds. The complete derived hosted application, `examples/derived_hosted`,
 uses this same world interface, copies retained arguments, assembles complete
-lines and selects heterogeneous filters and destinations at runtime. Its derivation
+kept lines and selects heterogeneous filters and destinations at runtime. A
+leading level filter discards rejected lines from a bounded prefix. Its derivation
 manifest records exact argument, buffering, retry and cleanup policies.
 
 Both providers expose each user argument as a pointer and byte length, never as

@@ -31,11 +31,24 @@ public next_line: (provider: type is mem.allocator, inout allocator: provider,
                    inout value: reader, world: any io.world)
                   -> (line: []u8 from value)
                   ! io.io_failed | mem.out_of_memory | at_end =
+    line = try next_line_at_least(allocator, value, world, u8(0))
+end next_line
+
+--  A leading level filter can reject after at most six bytes: the longest
+--  level name has five bytes, and the sixth establishes its separator.
+public next_line_at_least: (provider: type is mem.allocator,
+                            inout allocator: provider, inout value: reader,
+                            world: any io.world, least: u8)
+                           -> (line: []u8 from value)
+                           ! io.io_failed | mem.out_of_memory | at_end =
     vec.clear(value.line)
+    mut skipping: bool = false
+    mut decided: bool = least == 0
     loop do
         if value.position == value.filled then
             if value.ended then
-                fail at_end when vec.length(value.line) == 0
+                fail at_end when skipping or vec.length(value.line) == 0
+                fail at_end when not decided and level_of(vec.used(value.line)) < least
                 line = vec.used(value.line)
                 return
             end if
@@ -46,13 +59,27 @@ public next_line: (provider: type is mem.allocator, inout allocator: provider,
             byte: u8 = chunk_byte(value.chunk, value.position)
             inc value.position
             if byte == 10 then
-                line = vec.used(value.line)
-                return
+                if skipping or (not decided and level_of(vec.used(value.line)) < least) then
+                    vec.clear(value.line)
+                    skipping = false
+                    decided = least == 0
+                else
+                    line = vec.used(value.line)
+                    return
+                end if
+            elsif not skipping then
+                try vec.push(value.line, allocator, byte)
+                if not decided and vec.length(value.line) == 6 then
+                    decided = true
+                    if level_of(vec.used(value.line)) < least then
+                        skipping = true
+                        vec.clear(value.line)
+                    end if
+                end if
             end if
-            try vec.push(value.line, allocator, byte)
         end if
     end loop
-end next_line
+end next_line_at_least
 
 public shut_reader: (provider: type is mem.allocator, inout allocator: provider,
                      world: any io.world, sink value: reader)

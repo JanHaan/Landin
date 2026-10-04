@@ -13,6 +13,23 @@ public new_message: () -> (value: message) =
     bytes := vec.new_list(item: u8)
     value = (bytes: bytes, delivered: 0)
 end new_message
+reserve_message: (provider: type is mem.allocator, inout allocator: provider,
+                  inout value: message, want: usize)
+                 -> none ! mem.out_of_memory =
+    old_capacity: usize = vec.capacity(value.bytes)
+    return when want <= old_capacity
+    maximum: usize = 0 -% 1
+    --  Keep a spare slot and double retained capacity as messages grow.
+    --  This also bounds allocations retained by a run-lifetime region.
+    mut next: usize = want
+    if next < maximum then inc next end if
+    if next < 8 then next = 8 end if
+    if old_capacity > 0 and old_capacity <= maximum / 2 then
+        doubled: usize = old_capacity * 2
+        if next < doubled then next = doubled end if
+    end if
+    try vec.reserve(value.bytes, allocator, next)
+end reserve_message
 public append: (provider: type is mem.allocator, inout allocator: provider,
                 inout value: message, bytes: []u8)
                -> none ! mem.out_of_memory =
@@ -23,6 +40,17 @@ public append: (provider: type is mem.allocator, inout allocator: provider,
     try vec.reserve(value.bytes, allocator, count + lenof bytes)
     for byte in bytes do try vec.push(value.bytes, allocator, byte) end for
 end append
+public append_line: (provider: type is mem.allocator, inout allocator: provider,
+                     inout value: message, bytes: []u8)
+                    -> none ! mem.out_of_memory =
+    count: usize = vec.length(value.bytes)
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when lenof bytes >= maximum - count
+    --  Reserve the complete record before changing the message.
+    try reserve_message(allocator, value, count + lenof bytes + 1)
+    for byte in bytes do try vec.push(value.bytes, allocator, byte) end for
+    try vec.push(value.bytes, allocator, u8(10))
+end append_line
 public deliver: (inout value: message, world: any io.world, stream: io.file)
                 -> none ! io.io_failed =
     while value.delivered < vec.length(value.bytes) do

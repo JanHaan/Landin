@@ -59,6 +59,56 @@ path_rules_code: () -> (code: i32) =
     then
         return
     end if
+    code = 14
+    mut right: [5]u8 = [65, 66, 67, 88, 88]
+    right_path: ptr u8 = io.terminate_path(right[0..<3], right[1..<5])
+      else (problem)
+        _ = problem
+        return
+    end
+    if right_path <> addr right[1] or right[1] <> 65 or right[2] <> 66
+      or right[3] <> 67 or right[4] <> 0
+    then
+        return
+    end if
+    code = 15
+    mut left: [5]u8 = [88, 65, 66, 67, 88]
+    left_path: ptr u8 = io.terminate_path(left[1..<4], left[0..<4])
+      else (problem)
+        _ = problem
+        return
+    end
+    if left_path <> addr left[0] or left[0] <> 65 or left[1] <> 66
+      or left[2] <> 67 or left[3] <> 0
+    then
+        return
+    end if
+    code = 16
+    mut same: [4]u8 = [65, 66, 67, 88]
+    same_path: ptr u8 = io.terminate_path(same[0..<3], same[0..<4])
+      else (problem)
+        _ = problem
+        return
+    end
+    if same_path <> addr same[0] or same[0] <> 65 or same[1] <> 66
+      or same[2] <> 67 or same[3] <> 0
+    then
+        return
+    end if
+    code = 17
+    mut invalid: [5]u8 = [65, 0, 67, 88, 88]
+    mut invalid_path: ptr u8 = addr invalid[1]
+    invalid_path = io.terminate_path(invalid[0..<3], invalid[1..<5])
+      else (problem)
+        if problem <> io.path_contains_nul or invalid[0] <> 65
+          or invalid[1] <> 0 or invalid[2] <> 67 or invalid[3] <> 88
+          or invalid[4] <> 88
+        then
+            return
+        end if
+        invalid_path
+    end
+    _ = invalid_path
     code = 42
 end path_rules_code
 

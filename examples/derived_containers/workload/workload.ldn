@@ -438,12 +438,14 @@ end map_lacks
 
 accumulate_collision_entry:
     (value: map.map(collision_key, i32), inout position: map.cursor,
-     inout count: usize, inout key_sum: u64, inout item_sum: i32)
+     inout count: usize, inout key_sum: u64, inout item_sum: i32,
+     inout order_code: u64)
     -> none ! map.end_of_entries =
     selected: map.entry(collision_key, i32) =
         try map.next_entry(value, position)
     key_sum += selected.key.identity
     item_sum += selected.item
+    order_code = order_code * 10 + selected.key.identity
     inc count
 end accumulate_collision_entry
 
@@ -516,7 +518,7 @@ map_operations: () -> (ok: bool) =
     ok = false
     discarded: map.entry(collision_key, i32) =
         (key: (identity: u64(0), home: u64(0)), item: i32(0))
-    mut bytes: [2048]u8 = zeroed
+    mut bytes: [4096]u8 = zeroed
     mut provider := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
     mut value := map.new_map(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
@@ -548,6 +550,28 @@ map_operations: () -> (ok: bool) =
                              and map_lacks(value, 1)
                              and map_has(value, 3, 103)
                              and map_has(value, 4, 104)
+    mut insertion_order: bool = false
+    begin
+        mut ordered := map.entries()
+        first: map.entry(collision_key, i32) =
+            map.next_entry(value, ordered) else (problem)
+                _ = problem
+                return
+            end
+        second: map.entry(collision_key, i32) =
+            map.next_entry(value, ordered) else (problem)
+                _ = problem
+                return
+            end
+        third: map.entry(collision_key, i32) =
+            map.next_entry(value, ordered) else (problem)
+                _ = problem
+                return
+            end
+        insertion_order = first.key.identity == 2
+                          and second.key.identity == 3
+                          and third.key.identity == 4
+    end
 
     map.insert(value, provider, k5, 105) else (problem) _ = problem return end
     map.insert(value, provider, k6, 106) else (problem) _ = problem return end
@@ -560,6 +584,62 @@ map_operations: () -> (ok: bool) =
     map.remove(value, k3) else (problem) _ = problem return end
     removed: bool = map.length(value) == 6 and map_lacks(value, 3)
                     and map_has(value, 7, 107)
+    map.remove(value, k2) else (problem) _ = problem return end
+    map.remove(value, k4) else (problem) _ = problem return end
+    map.remove(value, k5) else (problem) _ = problem return end
+    map.remove(value, k7) else (problem) _ = problem return end
+    map.remove(value, k8) else (problem) _ = problem return end
+    mut sparse_walk: bool = false
+    begin
+        mut sparse_position := map.entries()
+        survivor: map.entry(collision_key, i32) =
+            map.next_entry(value, sparse_position) else (problem)
+                _ = problem
+                return
+            end
+        mut ended: bool = false
+        _ = map.next_entry(value, sparse_position) else (problem)
+            ended = problem == map.end_of_entries
+            discarded
+        end
+        mut ended_again: bool = false
+        _ = map.next_entry(value, sparse_position) else (problem)
+            ended_again = problem == map.end_of_entries
+            discarded
+        end
+        sparse_walk = map.capacity(value) == 16 and map.length(value) == 1
+                      and value.tombstones == 6
+                      and survivor.key.identity == 6
+                      and survivor.item == 106
+                      and ended and ended_again
+    end
+    map.remove(value, k6) else (problem) _ = problem return end
+    mut empty_after_removal: bool = false
+    begin
+        mut empty_position := map.entries()
+        _ = map.next_entry(value, empty_position) else (problem)
+            empty_after_removal = problem == map.end_of_entries
+            discarded
+        end
+        empty_after_removal = empty_after_removal
+                              and map.capacity(value) == 16
+                              and map.length(value) == 0
+    end
+    map.insert(value, provider, k1, 111) else (problem)
+        _ = problem
+        return
+    end
+    mut revived: bool = false
+    begin
+        mut revived_position := map.entries()
+        selected: map.entry(collision_key, i32) =
+            map.next_entry(value, revived_position) else (problem)
+                _ = problem
+                return
+            end
+        revived = selected.key.identity == 1 and selected.item == 111
+                  and map.length(value) == 1
+    end
     used_bytes: bool = mem.arena_used(provider) > 0
     map.release_map(value, provider)
 
@@ -580,24 +660,24 @@ map_operations: () -> (ok: bool) =
     before_tombstones: usize = compact.tombstones
     before_used: usize = mem.arena_used(provider)
 
-    --  Enumerate while dead buckets still precede and follow live buckets. A
-    --  scan that mistakes any non-free bucket for a live entry changes both
-    --  these exact sums and the point at which exhaustion is reported.
+    --  Dead buckets remain beside the live chain. Enumeration must follow
+    --  only its used links, retaining their insertion order through rehash.
     mut tombstone_position := map.entries()
     mut tombstone_count: usize = 0
     mut tombstone_key_sum: u64 = 0
     mut tombstone_item_sum: i32 = 0
+    mut tombstone_order: u64 = 0
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
-         tombstone_key_sum, tombstone_item_sum)
+         tombstone_key_sum, tombstone_item_sum, tombstone_order)
         else (problem) _ = problem map.release_map(compact, provider) return end
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
-         tombstone_key_sum, tombstone_item_sum)
+         tombstone_key_sum, tombstone_item_sum, tombstone_order)
         else (problem) _ = problem map.release_map(compact, provider) return end
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
-         tombstone_key_sum, tombstone_item_sum)
+         tombstone_key_sum, tombstone_item_sum, tombstone_order)
         else (problem) _ = problem map.release_map(compact, provider) return end
     mut tombstone_exhausted: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
@@ -611,6 +691,7 @@ map_operations: () -> (ok: bool) =
     end
     enumerated_through_tombstones: bool = tombstone_count == 3
                                           and tombstone_key_sum == 15 and tombstone_item_sum == 165
+                                          and tombstone_order == 456
                                           and tombstone_exhausted and tombstone_exhausted_again
 
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
@@ -627,17 +708,18 @@ map_operations: () -> (ok: bool) =
     mut enumeration_count: usize = 0
     mut key_sum: u64 = 0
     mut item_sum: i32 = 0
+    mut order_code: u64 = 0
     accumulate_collision_entry
-        (compact, position, enumeration_count, key_sum, item_sum)
+        (compact, position, enumeration_count, key_sum, item_sum, order_code)
         else (problem) _ = problem map.release_map(compact, provider) return end
     accumulate_collision_entry
-        (compact, position, enumeration_count, key_sum, item_sum)
+        (compact, position, enumeration_count, key_sum, item_sum, order_code)
         else (problem) _ = problem map.release_map(compact, provider) return end
     accumulate_collision_entry
-        (compact, position, enumeration_count, key_sum, item_sum)
+        (compact, position, enumeration_count, key_sum, item_sum, order_code)
         else (problem) _ = problem map.release_map(compact, provider) return end
     accumulate_collision_entry
-        (compact, position, enumeration_count, key_sum, item_sum)
+        (compact, position, enumeration_count, key_sum, item_sum, order_code)
         else (problem) _ = problem map.release_map(compact, provider) return end
     mut exhausted: bool = false
     _ = map.next_entry(compact, position) else (problem)
@@ -652,22 +734,25 @@ map_operations: () -> (ok: bool) =
     enumerated: bool = exhausted and exhausted_again
                        and enumeration_count == 4
                        and key_sum == 22 and item_sum == 242
+                       and order_code == 4567
     map.release_map(compact, provider)
 
-    ok = updated and reused_tombstone and rehashed and removed and used_bytes
-         and enumerated_through_tombstones and reused_without_growth
-         and enumerated
+    ok = updated and reused_tombstone and insertion_order
+         and rehashed and removed and sparse_walk and empty_after_removal
+         and revived
+         and used_bytes
+         and enumerated_through_tombstones and reused_without_growth and enumerated
          and map.length(value) == 0 and map.length(compact) == 0
 end map_operations
 
 map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     ok = false
-    mut words: [193]u64 = zeroed
+    mut words: [385]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [6]pool.slot = zeroed
     mut inner := pool.over
         (base, lenof words * sizeof u64,
-         256, 6, 8, records[0..<6]) else (problem)
+         512, 6, 8, records[0..<6]) else (problem)
         _ = problem
         return
     end
@@ -776,7 +861,7 @@ tree_append_retry: () -> (ok: bool) =
     end
     zero: usize = 0
     one: usize = 1
-    eight: u32 = 8
+    eight: usize = 8
     mut state := failing.count_down
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
@@ -803,7 +888,7 @@ tree_append_retry: () -> (ok: bool) =
             _ = problem
             return
         end
-        if u32(added) <> u32(at) then
+        if tree.ordinal(added) <> at then
             ids_ok = false
         end if
         inc at
@@ -833,7 +918,7 @@ tree_append_retry: () -> (ok: bool) =
                          and pool.live(inner) == 1
     at = 0
     while at < 8 do
-        selected := tree.get(value, tree.id(u32(at))) else (problem)
+        selected := tree.get(value, tree.id(at)) else (problem)
             _ = problem
             retained = false
             tree.get(value, tree.id(0)) else (fallback)
@@ -843,13 +928,13 @@ tree_append_retry: () -> (ok: bool) =
         end
         name: utf8 = tree.name(selected)
         first: u32 = name[0]
-        leaves: u32 = tree.count_leaves(value, tree.id(u32(at)))
+        leaves: usize = tree.count_leaves(value, tree.id(at))
             else (problem)
             _ = problem
             retained = false
             0
         end
-        if u32(tree.node_id(u32(at))) <> u32(at)
+        if tree.ordinal(tree.node_id(at)) <> at
           or lenof name <> 4 or first <> 'l' or leaves <> 1
         then
             retained = false
@@ -871,12 +956,12 @@ tree_append_retry: () -> (ok: bool) =
     end
     root_name: utf8 = tree.name(root_node)
     root_first: u32 = root_name[0]
-    total: u32 = tree.count_leaves(value, root) else (problem)
+    total: usize = tree.count_leaves(value, root) else (problem)
         _ = problem
         tree.release(value, state)
         return
     end
-    appended: bool = u32(root) == 8 and tree.length(value) == 9
+    appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
                      and lenof root_name == 6 and root_first == 'b'
                      and total == 8
                      and failing.attempts(state) == 5
