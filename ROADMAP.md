@@ -140,7 +140,9 @@ Done: `scripts/scaling.py` generates eight families from 1,000 to 16,000
 declarations and times the derived programs, each five times, from
 `--stage-report`'s per-stage processor time and peak storage. Emission is
 held to the bound as well as the frontend, because the backend's scans were
-the same records' work. On the host that measured the numbers above, with
+the same records' work. The gate also refuses a peak-memory ratio above 2.5
+per doubling, using the largest peak reported across the five runs at each
+size. On the host that measured the numbers above, with
 the release compiler, the largest ratio is 2.19, the 2,000-function input
 checks in 0.41 seconds of the 89 it took, and the log filter's frontend
 takes 0.17 of 6.6. D247 refuses a routine of more than 16,384 declarations or a struct
