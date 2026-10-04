@@ -34,9 +34,9 @@ class LiveExampleFences(unittest.TestCase):
             document.splitlines(keepends=True)) if kind == "landin"],
             ["landin"] * 4)
         expected = [
-            (2, "live Landin example: no rule spells '@'"),
-            (5, "live Landin example: no rule spells '@'"),
-            (8, "live Landin example: no rule spells '@'")]
+            (3, "live Landin example: no rule spells '@'"),
+            (6, "live Landin example: no rule spells '@'"),
+            (9, "live Landin example: no rule spells '@'")]
         self.assertEqual(CHECK.live_example_tokens(document), expected)
 
 
