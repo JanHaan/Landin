@@ -186,12 +186,12 @@ not measurements of the future Landin driver or a stack-usage guarantee.
 
 ## Layout and ABI evidence
 
-The same mandatory `run.py` now also builds `probes/abi.c` and `abi.S` with
+The same mandatory `run.py` also builds `probes/abi.c` and `abi.S` with
 the original pinned flags, startup and memory limits, then executes them in
 QEMU. The peripheral lane is separate; its result is never counted as ABI
 evidence. No library or tool pin changes. The additional ELF, disassembly,
 macro dump, GDB script/log, measured JSON and both layout contract inputs are
-retained in the existing exported `cortex-m` directory.
+retained in the `run.py` output directory.
 
 Three independent comparisons meet:
 
@@ -224,7 +224,7 @@ storage, and erased data/table dispatch through Thumb code pointers. GDB checks
 the nested r11 frame records, saved lr, chain termination and aligned sp;
 firmware checks callee-save registers and restoration. These execute the
 selected contract with real M0 instructions; they are not compiler-generated
-Landin calls or Landin source-debugging acceptance.
+Landin calls or Landin source-debugging evidence.
 
 Compiler refusal/boundary controls cover wrong targets, unavailable C and
 emission capabilities, narrow extension, the four-byte C result threshold,
@@ -235,12 +235,14 @@ The Python controls refuse duplicate/missing/invalid contract rows, synthetic
 mismatches, missing markers, subprocess errors and timeouts.
 
 Every subprocess retains the original deadlines (GDB 20 seconds, build/tools
-30, debugger readiness three) and owned process-group cleanup. The final
-exact-archive Linux documents job repeats all lanes and retains tool/input
-hashes alongside the new ABI artifacts. Its ordinary dual-native approval binds
-these results to the same revision as the hosted checks. Development results
-are indexed separately in `abi-validation.json`; `validation.json` keeps its
-historical meaning as the CPU and peripheral environment's record.
+30, debugger readiness three) and owned process-group cleanup. In the retired
+exact-archive acceptance, the Linux documents job repeated all lanes and
+retained tool/input hashes alongside the ABI artifacts. Its dual-native
+approval bound those results to the same revision as the hosted checks. The
+current `cortex-m` gate job runs these controls through `run.py`.
+Development results are indexed separately in `abi-validation.json`;
+`validation.json` keeps its historical meaning as the CPU and peripheral
+environment's record.
 
 These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
@@ -285,7 +287,7 @@ none of that evidence. Hardware testing stays supplemental.
 Each new subprocess uses the existing 30-second tool and 20-second debugger
 limits, three-second readiness deadline and owned process-group cleanup.
 Commands, logs, ELF/map/disassembly, generated controls and GDB input, tool/input
-hashes and `memory-model.json` are retained under the same exported `cortex-m`
+hashes and `memory-model.json` are retained under the same `run.py` output
 directory. Native Linux and Darwin separately execute the Landin scalar and
 pthread ABI fixtures over their selected optimization profiles. Those results
 are compiler-generated hosted execution, not embedded or model evidence.
@@ -318,7 +320,7 @@ returns zero. Write-only and one-clears commands issue no preparatory read.
 The count is never widened to the neighboring halfword.
 
 The runner retains the ELF/map/disassembly, trace, tool identities, exact
-commands and hashes under the same exported evidence directory. The existing
+commands and hashes under the same `run.py` output directory. The existing
 subprocess limits and process-group cleanup apply. The new
 initial firmware had 660 text bytes, zero data and 16 BSS bytes before the
 write-one reserved-bit register was added; current sizes are retained in
@@ -354,9 +356,11 @@ commands, device trace and assertions. Compilation is bounded to 60 seconds;
 the native peer has a 10-second bound and a 17-command positive limit; the
 negative case permits exactly one command, and anything the peer writes to
 stderr fails the lane. Tool inventories are checked before and after
-execution. Native acceptance builds the committed debug compiler in its
-documents job and retains this lane in the existing verified `cortex-m` export.
-No Cortex-M emitter or generated vendor fixture programme is implied.
+execution. The retired exact-revision acceptance built the committed debug
+compiler in its documents job and retained this lane in its verified `cortex-m`
+export. The current gate runs the lane through `run.py` with its built compiler.
+The hosted transport remains distinct from the Cortex-M emitter and generated
+vendor fixture lanes below.
 The original DMA lane continues to test ordinary externally written buffer
 storage under D227's explicit serialized-device premise.
 
@@ -448,10 +452,13 @@ python3 environments/cortex-m/backend_controls.py --refine PATH_TO_REFINE --outp
 python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
 ```
 
-Filtered commands are development feedback. The retired exact-revision native
-acceptance ran the complete mandatory path and exported
-`artifacts/cortex-m/backend` with all prior evidence; nothing runs it now, and
-[`ROADMAP.md`](../../ROADMAP.md) schedules these lanes into the gate. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
+Filtered commands are development feedback. The current `cortex-m` gate job
+runs `run.py` with the built compiler. Its mandatory `backend_acceptance.py`
+lane executes the complete compiler-generated corpus and controls under the
+pinned tools and records their results in `backend/result.json`. The retired
+exact-revision native acceptance separately exported
+`artifacts/cortex-m/backend` with all prior evidence. That acceptance no
+longer runs or approves revisions. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
 records instruction, allocation, ABI, runtime-helper and memory decisions.
 Language startup/linking/sections/interrupt/naked/inline-assembly surfaces,
 the freestanding core and `noreturn`, the checked-in device fixtures and the
@@ -461,8 +468,9 @@ expansion or new DMA ownership model is introduced.
 
 ## Compiler-owned firmware
 
-`firmware.py` is a mandatory addition to `run.py` and its existing evidence
-export, separate from every earlier lane. It invokes the compiler with
+`firmware.py` is mandatory in `run.py`. It writes records under the run's
+`firmware` output directory, separate from every earlier lane. It invokes the
+compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; neither
 `backend-start.S` nor `backend-memory.ld` supplies these semantics. The older
@@ -517,7 +525,7 @@ object, assembly, script and map for every generated scenario/profile. ELF
 identity includes sections and relocations. Log paths, TCP debugger ports,
 command durations and host/compiler identity records intentionally vary and
 are retained as execution metadata, not image bytes.
-The new records are under `artifacts/cortex-m/firmware` in accepted evidence.
+`run.py` writes these records under its `firmware` output directory.
 
 For a focused development run on the supported Linux host:
 
@@ -543,13 +551,13 @@ their own lanes below. General SVD generation remains companion-tool work.
 
 `freestanding.py` compiles rooted ordinary modules through the same generated
 reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
-its own `artifacts/cortex-m/freestanding` export directory. The old 533-fixture
+its own `freestanding` output directory. The old 533-fixture
 backend corpus and the firmware lane's 37 QEMU/24 device sessions and 270 comparisons are
 unchanged. The shared inventory adds two explicitly restricted hosted C peers
 for D231/D232; neither replaces an inherited case. The declared additional lane
 has eleven consumers at six profiles: 198 QEMU sessions, six device runs and 336
 fresh-directory comparisons. Panic consumers additionally compare optional
-source-map bytes. A focused run is development feedback, not complete acceptance.
+source-map bytes. A focused run is development feedback, not a complete gate run.
 
 | Consumer | Independent observation |
 |---|---|
@@ -593,7 +601,7 @@ writes only. [The core guide](../../core/README.md) documents the public surface
 [The device guide](../../devices/README.md) records pinned RP2040 provenance,
 manual corrections, regeneration, public interfaces and unsupported metadata.
 `devices.py` follows all inherited probes in `run.py`, retaining its own
-`artifacts/cortex-m/devices` evidence. Five firmware consumers at the six
+`devices` output directory. Five firmware consumers at the six
 inherited profiles supply six QEMU sessions, 24 generated device runs and 168
 deterministic artifact comparisons; a separate C/assembly control adds one
 device run. Seven precise source refusals and independent vendor-header/literal
@@ -636,9 +644,9 @@ application executes echo/GPIO commands, periodic partial-data polling, overrun
 recovery and observable terminal policy. Detailed premises and limitations are
 in the derivation.
 
-Evidence under `artifacts/cortex-m/driver` retains compiler/tool identities,
-source roots, assertions, timeouts, QEMU/GDB scripts, device traces, startup/linker
-inputs, ELF/map/assembly/object/disassembly/relocations, private runtime closure
+Evidence under the `run.py` output's `driver` directory retains compiler/tool
+identities, source roots, assertions, timeouts, QEMU/GDB scripts, device traces,
+startup/linker inputs, ELF/map/assembly/object/disassembly/relocations, private runtime closure
 and fresh-build comparisons. NOLOAD BSS has a RAM LMA, checked independently
 from ELF headers; the original memory map is unchanged. Stack paint is an
 observation, not a worst-case bound. A model refusal or unexpected QEMU
@@ -651,9 +659,10 @@ python3 environments/cortex-m/driver.py --refine PATH/TO/refine \
   --output /ABSOLUTE/NEW/EVIDENCE --profile size-auto --case protocol
 ```
 
-Use `--all-profiles` for this complete lane. Normal acceptance invokes it
-through `run.py`, preserving every earlier mandatory lane. Source refusal
-checks are also safe compiler-host feedback via `compiler/tests/driver/check_sources.py`.
+Use `--all-profiles` for this complete lane. The current `cortex-m` gate job
+invokes it through `run.py`, preserving every earlier mandatory lane. Source
+refusal checks are also safe compiler-host feedback via
+`compiler/tests/driver/check_sources.py`.
 
 ## Freestanding evidence
 
@@ -713,11 +722,13 @@ every other scenario, the helper and veneer controls and the independent
 calibration run under the observer. The fixed Cortex profile and firmware
 bytes are unchanged. Every process has a bounded timeout and failure record.
 
-Artifacts under `artifacts/cortex-m/evidence` retain sources, identities,
-commands/assertions/timeouts, ELF/object/assembly/linker/map/disassembly/debug
-records, closure and resource JSON, source-selection failures, measured SP/frame
+Artifacts under the `run.py` output's `evidence` directory retain sources,
+identities, commands/assertions/timeouts,
+ELF/object/assembly/linker/map/disassembly/debug records, closure and resource
+JSON, source-selection failures, measured SP/frame
 snapshots and repeat-emission comparisons. Debug CUs retain their compilation
 directory, so deterministic debug comparisons repeat within that directory;
-relocation does not imply identical source identity. Acceptance binds the
-entire artifact tree to its committed archive. Physical board testing remains
-supplemental and is not claimed by these emulator lanes.
+relocation does not imply identical source identity. The current `cortex-m`
+gate job runs this lane through `run.py` with the compiler built from its
+checkout. Physical board testing remains supplemental and is not claimed by
+these emulator lanes.
