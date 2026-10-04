@@ -228,11 +228,13 @@ take the claims about a real device. A spike outside the tree ran the
 generated peripheral consumer this way in all six profiles and matched the
 Renode lane's trace oracle exactly.
 
-Exit evidence: every Renode lane passes on the harness with its oracles
-unchanged; the decoder agrees with the pinned disassembler on every load and
-store in every image the lanes build; a refused access, an interrupt never
-delivered and a wrong device reply each fail a named control; the gate's
-Cortex-M job runs the harness in Renode's place; and Renode, its lock
+Exit evidence: every Renode lane except the stock STM32 control passes on the
+harness with its oracles unchanged; that control tests Renode's own models and
+is removed with Renode rather than migrated; the decoder agrees with the
+pinned disassembler on every load and store in every image the lanes build;
+a refused access, an interrupt never delivered and a wrong device reply each
+fail a named control; the gate's Cortex-M job runs the harness in Renode's
+place; and Renode, its lock
 entries and the C# models are gone from the tree, with every document that
 cites Renode as evidence saying what now carries it.
 
