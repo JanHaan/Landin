@@ -12,8 +12,8 @@ has no placeholder bodies.
 | app/read | `examples/derived_hosted/app/reader.ldn` reads arbitrary-length complete lines across explicit chunk boundaries, preserves empty lines and final unterminated lines, and closes the consumed reader on every handled exit. |
 | app/filter | `examples/derived_hosted/app/filter.ldn` implements exact level tokens, valid-UTF-8 substring matching, and stateful nth-line sampling as heterogeneous `any filter` values. |
 | app/dest | `examples/derived_hosted/app/dest.ldn` implements text and count destinations, arbitrary copied byte messages, transactional append allocation, and cursor-based delivery/retry. The queue receives its allocator explicitly before erased dispatch; count emission needs none. |
-| app/config | `examples/derived_hosted/app/config.ldn` copies the complete argument table's bytes, builds a runtime-sized vector of independently allocated heterogeneous filters, selects a destination, diagnoses and recovers from numeric input, and closes a newly opened destination if object allocation fails. |
-| app/run | `examples/derived_hosted/app/app.ldn` composes configuration, line reading, ordered short-circuit filters, message copying, destination dispatch, explicit bounded retry, and reader/destination cleanup; diagnostic capability is passed to `run_logged`/`build_logged`. |
+| app/config | `examples/derived_hosted/app/config.ldn` copies the complete argument table's bytes, builds a runtime-sized vector of independently allocated heterogeneous filters, retains the selected output path, diagnoses and recovers from numeric input, and closes a newly opened destination if object allocation fails. |
+| app/run | `examples/derived_hosted/app/app.ldn` composes configuration, input opening before output opening, line reading, ordered short-circuit filters, message copying, destination dispatch, explicit bounded retry, and reader/destination cleanup; diagnostic capability is passed to `run_logged`/`build_logged`. |
 
 The app/read spelling differs from the sketch where implementation evidence
 requires it: line growth takes an ordinary allocator argument; the borrowed
@@ -26,7 +26,10 @@ region release; parent `free` decides whether capacity becomes reusable.
 Configuration stores a valid file capability plus an `owns_output` flag:
 counting borrows stdout, text owns an opened file. This avoids manufacturing
 an invalid integer descriptor while respecting the enabled atom/pointer union
-boundary. Output opens only after complete argument validation. Identical path
+boundary. `run_logged` prepares configuration, then opens its input reader before
+opening the output, preserving an existing output if the input is missing.
+Direct `build_logged` callers still receive a configuration with its output
+opened. Identical path
 spellings are rejected; resolving filesystem aliases is outside this app's
 path comparison and remains the caller's responsibility.
 
@@ -66,6 +69,8 @@ backing, exact metadata-exhaustion consumption on a monotonic parent, allocation
 read/write/close/configuration failures with exact handle/allocation accounting.
 The count path also runs with a finite arena that holds the reader line but
 cannot hold two additional full-line message extents.
+The missing-input case checks that existing output bytes and length survive,
+and that no output handle is opened or closed.
 
 `runtime/r480-hosted-count` runs the actual hosted root with real argv and an
 input file, comparing counts and summary. `runtime/r480-hosted-text` runs that

@@ -71,7 +71,7 @@ public main: () -> (code: i32) =
     code = 6
     return when not finite_regions() or not metadata_exhaustion()
     code = 7
-    return when not io_failures()
+    return when not io_failures() or not missing_input_preserves_output()
     code = 8
     return when not diagnostics()
     code = 9
@@ -363,10 +363,42 @@ io_failures: () -> (ok: bool) =
               or not app.equal(destination[0..<3], "DEB")
         end if
         if scenario == 4 then return when world_state.open_calls <> 0 end if
-        if scenario == 5 then return when world_state.close_calls <> 1 end if
+        if scenario == 5 then return when world_state.close_calls <> 0 end if
     end for
     ok = true
 end io_failures
+
+missing_input_preserves_output: () -> (ok: bool) =
+    ok = false
+    previous: []u8 = "saved output\n"
+    mut contents: [32]u8 = zeroed
+    for at in usize(0)..<lenof previous do contents[at] = previous[at] end for
+    mut files: [1]io.memory_file
+    files[0] = (name: "out", contents: contents[0..<32],
+       length: lenof previous, cursor: 0, readable: true, writable: true,
+       opened: false, writing: false)
+    missing: []u8 = "missing"
+    args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
+      (data: addr arg7[0], length: lenof arg7),
+      (data: addr missing[0], length: lenof missing)]
+    mut out: [32]u8 = zeroed
+    mut err: [32]u8 = zeroed
+    mut world_state := io.memory_world(files[0..<1], args[0..<3],
+                                         out[0..<32], err[0..<32])
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    mut program := region.new_region(addr host)
+    defer region.release_region(program)
+    mut refused: bool = false
+    _ = app.run(program, world, usize(3)) else (problem)
+        refused = problem == io.not_found
+        0
+    end
+    ok = refused and files[0].length == lenof previous
+      and app.equal(contents[0..<lenof previous], previous)
+      and not files[0].opened and world_state.open_calls == 1
+      and world_state.close_calls == 0
+end missing_input_preserves_output
 
 diagnostics: () -> (ok: bool) =
     ok = false

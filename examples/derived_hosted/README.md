@@ -26,6 +26,8 @@ and identical input/output spellings are refused before opening a file.
 
 `--out` selects the text destination; its absence selects eight per-level
 counts on standard output. The program prints `kept: N` to standard error.
+The output file is opened only after the input reader opens successfully, so
+a missing input leaves an existing output file untouched.
 Input is split on LF, which is removed from each line. Other bytes, including
 CR, remain unchanged. Empty lines are real lines, a final unterminated line is
 returned once, and a trailing LF creates no phantom line. Reader chunks have

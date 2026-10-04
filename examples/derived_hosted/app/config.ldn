@@ -11,6 +11,7 @@ public config: type = struct
     to: any dest
     count_only: bool
     input: ptr u8
+    output_path: []u8
     output: io.file
     owns_output: bool
     warnings: usize
@@ -91,10 +92,9 @@ number: (bytes: []u8) -> (value: usize) ! bad_argument =
     end for
 end number
 
-public build_logged: (provider: type is mem.allocator, inout allocator: provider,
-                      world: any io.world, log: any diag.log) -> (value: config)
-                     ! bad_argument | mem.out_of_memory
-                     | io.not_found | io.no_access | io.io_failed =
+public prepare_logged: (provider: type is mem.allocator, inout allocator: provider,
+                        world: any io.world, log: any diag.log) -> (value: config)
+                       ! bad_argument | mem.out_of_memory | io.io_failed =
     arguments := try copy_arguments(allocator, world)
     args := vec.used(arguments)
     mut chain := vec.new_list(item: any filter)
@@ -166,28 +166,42 @@ public build_logged: (provider: type is mem.allocator, inout allocator: provider
     end while
     fail bad_argument when lenof input == 0
     fail bad_argument when lenof output > 0 and equal(input, output)
-    mut chosen: any dest
-    mut opened: io.file = world.out()
-    mut owns_output: bool = false
-    if lenof output > 0 then
-        stream: io.file = try world.open_write(addr output[0])
+    --  Keep the output path until run has opened the input reader. Opening
+    --  it here would truncate an existing output on an input-open failure.
+    initial: count_dest = zeroed
+    object := try mem.new(allocator, initial)
+    chosen: any dest = any(object)
+    value = (chain: chain, to: chosen, count_only: lenof output == 0,
+             input: addr input[0],
+             output_path: output, output: world.out(), owns_output: false,
+             warnings: warnings,
+             encoding_warnings: encoding_warnings)
+end prepare_logged
+
+public open_output: (provider: type is mem.allocator, inout allocator: provider,
+                     world: any io.world, inout value: config)
+                    -> none ! mem.out_of_memory
+                    | io.not_found | io.no_access | io.io_failed =
+    path: []u8 = value.output_path
+    if lenof path > 0 then
+        stream: io.file = try world.open_write(addr path[0])
         initial: text_dest = (stream: stream)
         object := (mem.new(allocator, initial) else (problem)
             world.close(stream) else (close_problem) _ = close_problem end
             fail problem
         end)
-        chosen = any(object)
-        opened = stream
-        owns_output = true
-    else
-        initial: count_dest = zeroed
-        object := try mem.new(allocator, initial)
-        chosen = any(object)
+        value.to = any(object)
+        value.output = stream
+        value.owns_output = true
     end if
-    value = (chain: chain, to: chosen, count_only: lenof output == 0,
-             input: addr input[0],
-             output: opened, owns_output: owns_output, warnings: warnings,
-             encoding_warnings: encoding_warnings)
+end open_output
+
+public build_logged: (provider: type is mem.allocator, inout allocator: provider,
+                      world: any io.world, log: any diag.log) -> (value: config)
+                     ! bad_argument | mem.out_of_memory
+                     | io.not_found | io.no_access | io.io_failed =
+    value = try prepare_logged(allocator, world, log)
+    try open_output(allocator, world, value)
 end build_logged
 
 public close_config: (world: any io.world, sink value: config)
