@@ -9638,6 +9638,103 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Array_Reference_Fields_Follow_Target;
 
+   procedure Concept_Interning_Keeps_Collection_Positions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Concept_Interning_Keeps_Collection_Positions
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+   begin
+      for Round in 1 .. 2 loop
+         declare
+            Count : constant Positive := (if Round = 1 then 12 else 3);
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Order : Landin.Stages.Pipeline;
+            Text : US.Unbounded_String;
+            Ids : array (1 .. Count) of Landin.Provenance.Declaration_Id;
+            Found : Natural := 0;
+            Src : Landin.Source.Source_Id;
+            Ran : Natural;
+         begin
+            for Index in 1 .. Count loop
+               US.Append
+                 (Text, "concept_" & Image (Index)
+                  & ": type = concept (t: type) end concept_"
+                  & Image (Index) & LF);
+            end loop;
+            Src := Landin.Stages.Add_Source
+              (Work, "concept-interning.ldn", US.To_String (Text));
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Names'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Ran := Landin.Stages.Run (Order, Work);
+            Landin.Testing.Check
+              (Item, Src /= Landin.Source.No_Source and then Ran = 4
+               and then not Landin.Stages.Failed (Work),
+               "the distinct concepts are checked");
+            if Ran /= 4 or else Landin.Stages.Failed (Work) then
+               return;
+            end if;
+
+            declare
+               Types : constant not null access C.Table :=
+                 Landin.Stages.Types (Work);
+               Meanings : constant not null access Landin.Resolution.Table :=
+                 Landin.Stages.Meanings (Work);
+               Compiler : constant C.Concept_Id :=
+                 C.Compiler_Zeroable_Concept (Types.all);
+            begin
+               Landin.Testing.Check
+                 (Item, C.Concept_Count (Types.all) = Count + 1
+                  and then Compiler = C.Concept_Identities.Nth
+                    (Types.all, 1)
+                  and then C.Is_Compiler_Concept (Types.all, Compiler)
+                  and then C.Concept_Declaration (Types.all, Compiler)
+                    = C.No_Declaration,
+                  "the compiler concept remains the first identity");
+               for Id in Landin.Provenance.Declaration_Id'(1)
+                 .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+               loop
+                  if Landin.Resolution.Sort_Of (Meanings.all, Id)
+                       = Landin.Resolution.Module_Concept
+                  then
+                     Found := Found + 1;
+                     Ids (Found) := Id;
+                     declare
+                        Concept : constant C.Concept_Id :=
+                          C.Intern_Concept (Types.all, Id);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Concept = C.Concept_Identities.Nth
+                            (Types.all, Found + 1)
+                           and then C.Concept_Declaration
+                             (Types.all, Concept) = Id
+                           and then not C.Is_Compiler_Concept
+                             (Types.all, Concept),
+                           "source concepts retain collection positions");
+                     end;
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Found, Count, "every source concept was collected");
+               for Index in reverse Ids'Range loop
+                  Landin.Testing.Check
+                    (Item, C.Intern_Concept (Types.all, Ids (Index))
+                       = C.Concept_Identities.Nth (Types.all, Index + 1),
+                     "repeated declarations retain their identities");
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, C.Concept_Count (Types.all), Count + 1,
+                  "repeated interning appends no concepts");
+            end;
+         end;
+      end loop;
+   end Concept_Interning_Keeps_Collection_Positions;
+
    procedure Conformance_Register_Uses_Normalized_Keys
      (Item : in out Landin.Testing.Context);
 
@@ -9649,8 +9746,14 @@ package body Landin.Tests.Checking_Suite is
       Order : Landin.Stages.Pipeline;
       Ran : Natural;
       Src : Landin.Source.Source_Id;
+      Text : US.Unbounded_String := US.To_Unbounded_String (Program);
    begin
-      Src := Landin.Stages.Add_Source (Work, "conformance-table.ldn", Program);
+      for Index in 1 .. 512 loop
+         US.Append
+           (Text, "key" & Image (Index) & ": type = i32" & LF);
+      end loop;
+      Src := Landin.Stages.Add_Source
+        (Work, "conformance-table.ldn", US.To_String (Text));
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -9734,6 +9837,271 @@ package body Landin.Tests.Checking_Suite is
                   Landin.Checking.Scalar_Type_Actual (Landin.Types.U32),
                   Inputs) = Landin.Checking.No_Conformance,
                "a different normalized target has no conformance");
+            declare
+               First : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U8, others => <>));
+               Equal_Copy : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U8, others => <>));
+               Different : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U16, others => <>));
+               First_Row : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept,
+                    Landin.Checking.Reference_Type_Actual
+                      (Types.all, First), Empty, Empty, Src, Point_Node,
+                    Landin.Checking.Declared_Conformance);
+               Different_Row : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept,
+                    Landin.Checking.Reference_Type_Actual
+                      (Types.all, Different), Empty, Empty, Src, Point_Node,
+                    Landin.Checking.Declared_Conformance);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Find_Conformance
+                    (Types.all, Concept,
+                     Landin.Checking.Reference_Type_Actual
+                       (Types.all, Equal_Copy), Empty) = First_Row
+                  and then Landin.Checking.Find_Conformance
+                    (Types.all, Concept,
+                     Landin.Checking.Reference_Type_Actual
+                       (Types.all, Different), Empty) = Different_Row,
+                  "structurally equal keys find their original row");
+            end;
+
+            declare
+               use Landin.Checking;
+               Member : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id
+                   (Declaration_Limit (Types.all));
+               Atoms : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Encoded_Copy : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Plain_Copy : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Target : constant Actual_Key :=
+                 Atom_Set_Type_Actual (Types.all, Atoms);
+               Encoded_Target : constant Actual_Key :=
+                 Atom_Set_Type_Actual (Types.all, Encoded_Copy);
+               Nested : constant Actual_Key :=
+                 Fixed_Array_Type_Actual
+                   (Types.all, 3,
+                    (Element => Landin.Types.U32, Atoms => Atoms,
+                     others => <>));
+               Inputs : Actual_Tuple := Empty_Actuals;
+               First_Row, Later_Row, Nested_Row : Conformance_Id;
+            begin
+               Append_Actual (Inputs, Fixed_Actual (987654));
+               First_Row := Add_Conformance
+                 (Types.all, Concept, Target, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Nested_Row := Add_Conformance
+                 (Types.all, Concept, Nested, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Set_Encodings (Types.all, Encoded_Copy, [0, 1], 2);
+               Later_Row := Add_Conformance
+                 (Types.all, Concept, Encoded_Target, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Set_Encodings (Types.all, Atoms, [0, 1], 2);
+               Landin.Testing.Check
+                 (Item,
+                  Find_Conformance
+                    (Types.all, Concept, Target, Inputs) = First_Row
+                  and then Find_Conformance
+                    (Types.all, Concept, Encoded_Target, Inputs) = First_Row
+                  and then Find_Conformance
+                    (Types.all, Concept, Nested, Inputs) = Nested_Row
+                  and then Find_Conformance
+                    (Types.all, Concept,
+                     Atom_Set_Type_Actual (Types.all, Plain_Copy), Inputs)
+                       = No_Conformance
+                  and then Later_Row /= First_Row,
+                  "encoding an indexed set preserves nested keys and"
+                  & " the earliest row");
+            end;
+
+            declare
+               Rows : array (1 .. 128) of Landin.Checking.Conformance_Id;
+               First_Member : constant Natural :=
+                 Landin.Checking.Declaration_Limit (Types.all) - 128;
+            begin
+               for Index in Rows'Range loop
+                  declare
+                     Member : constant Landin.Provenance.Declaration_Id :=
+                       Landin.Provenance.Declaration_Id
+                         (First_Member + Index);
+                     Atoms : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all, [Point, Member]);
+                     Target : constant Landin.Checking.Actual_Key :=
+                       Landin.Checking.Atom_Set_Type_Actual
+                         (Types.all, Atoms);
+                  begin
+                     Landin.Checking.Set_Encodings
+                       (Types.all, Atoms, [0, 1], 2);
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept, Target, Empty)
+                          = Landin.Checking.No_Conformance,
+                        "a distinct equal-size atom set misses");
+                     Rows (Index) := Landin.Checking.Add_Conformance
+                       (Types.all, Concept, Target, Empty, Empty, Src,
+                        Point_Node, Landin.Checking.Declared_Conformance);
+                  end;
+               end loop;
+               for Index in Rows'Range loop
+                  declare
+                     Member : constant Landin.Provenance.Declaration_Id :=
+                       Landin.Provenance.Declaration_Id
+                         (First_Member + Index);
+                     Reversed : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all, [Member, Point]);
+                  begin
+                     Landin.Checking.Set_Encodings
+                       (Types.all, Reversed, [1, 0], 2);
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept,
+                           Landin.Checking.Atom_Set_Type_Actual
+                             (Types.all, Reversed), Empty) = Rows (Index),
+                        "reordered atoms and encodings find their row");
+                  end;
+               end loop;
+               declare
+                  Different_Encoding : constant
+                    Landin.Checking.Atom_Set_Id :=
+                      Landin.Checking.Add_Atom_Set
+                        (Types.all,
+                         [Point, Landin.Provenance.Declaration_Id
+                            (First_Member + 1)]);
+               begin
+                  Landin.Checking.Set_Encodings
+                    (Types.all, Different_Encoding, [1, 0], 2);
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept,
+                        Landin.Checking.Atom_Set_Type_Actual
+                          (Types.all, Different_Encoding), Empty)
+                        = Landin.Checking.No_Conformance,
+                     "a different encoding map has no conformance");
+               end;
+            end;
+
+            declare
+               Rows : array (1 .. 255) of Landin.Checking.Conformance_Id;
+            begin
+               --  Under the old member hash, each pair (1, 510),
+               --  (2, 509), ..., (255, 256) had the same digest.
+               for Index in Rows'Range loop
+                  declare
+                     Atoms : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all,
+                          [Landin.Provenance.Declaration_Id (Index),
+                           Landin.Provenance.Declaration_Id (511 - Index)]);
+                     Target : constant Landin.Checking.Actual_Key :=
+                       Landin.Checking.Atom_Set_Type_Actual
+                         (Types.all, Atoms);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept, Target, Empty)
+                          = Landin.Checking.No_Conformance,
+                        "a complementary atom pair misses");
+                     Rows (Index) := Landin.Checking.Add_Conformance
+                       (Types.all, Concept, Target, Empty, Empty, Src,
+                        Point_Node, Landin.Checking.Declared_Conformance);
+                  end;
+               end loop;
+               for Index in Rows'Range loop
+                  declare
+                     Reversed : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all,
+                          [Landin.Provenance.Declaration_Id (511 - Index),
+                           Landin.Provenance.Declaration_Id (Index)]);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept,
+                           Landin.Checking.Atom_Set_Type_Actual
+                             (Types.all, Reversed), Empty) = Rows (Index),
+                        "a reversed complementary pair finds its row");
+                  end;
+               end loop;
+            end;
+
+            declare
+               Rows : array (0 .. 255) of Landin.Checking.Conformance_Id;
+               function Periodic (K : Natural)
+                 return Landin.Checking.Actual_Key
+                 is (Landin.Checking.Fixed_Array_Type_Actual
+                       (1 + Landin.Checking.Element_Count (K) * 2 ** 32,
+                        Landin.Types.U8));
+            begin
+               --  These lengths agree in their low 32 bits.
+               for K in Rows'Range loop
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept, Periodic (K), Empty)
+                       = Landin.Checking.No_Conformance,
+                     "a periodic array length misses");
+                  Rows (K) := Landin.Checking.Add_Conformance
+                    (Types.all, Concept, Periodic (K), Empty, Empty, Src,
+                     Point_Node, Landin.Checking.Declared_Conformance);
+               end loop;
+               for K in Rows'Range loop
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept, Periodic (K), Empty) = Rows (K),
+                     "a periodic array length finds its row");
+               end loop;
+            end;
+
+            declare
+               First_Member : constant Natural :=
+                 Landin.Checking.Declaration_Limit (Types.all) - 2;
+               X : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id (First_Member + 1);
+               Y : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id (First_Member + 2);
+               Repeated : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all,
+                    Landin.Checking.Add_Atom_Set
+                      (Types.all, [Point, Point, X]));
+               Distinct : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all,
+                    Landin.Checking.Add_Atom_Set (Types.all, [Y, X, Point]));
+               Unspelled : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept, Repeated, Empty, Empty, Src,
+                    Point_Node, Landin.Checking.Declared_Conformance);
+            begin
+               --  Atom_Sets_Agree counts members, so a set listing one atom
+               --  twice agrees with a three-atom set that holds its atoms.
+               --  Such a row has no exact spelling and is still found by
+               --  comparison, from a key that has one and from itself.
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Find_Conformance
+                    (Types.all, Concept, Distinct, Empty) = Unspelled
+                  and then Landin.Checking.Find_Conformance
+                    (Types.all, Concept, Repeated, Empty) = Unspelled,
+                  "a row without an exact spelling is still found");
+            end;
          end;
       end;
    end Conformance_Register_Uses_Normalized_Keys;
@@ -10388,6 +10756,207 @@ package body Landin.Tests.Checking_Suite is
       Check_Tail ("value");
       Check_Tail ("pair(left: 1, right: 2)");
    end C_Variadic_Carrier_Refusal_Is_Precise;
+
+   procedure Array_Field_Lookup_Keeps_First_Raw_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Lookup_Keeps_First_Raw_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      use type C.Field_Shape;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-index.ldn",
+         "one: type = struct x: u8 end one" & LF
+         & "two: type = struct x: u8 end two" & LF
+         & "three: type = struct x: u8 end three" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "shape source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "shape source was refused");
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Site : constant Landin.Provenance.Origin :=
+           Landin.Syntax.Origin
+             (Tree.all, Landin.Syntax.Nth_Declaration (Tree.all, 1));
+         Part : constant C.Signature_Part :=
+           (Kind => Ty.Usize, Site => Site, others => <>);
+         Fits : Boolean;
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         declare
+            First : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site);
+            Second : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site);
+            Mutable : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], Part, Site, Error_Form => C.Inferred);
+            A : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => First, others => <>);
+            B : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => Second, others => <>);
+            C_Mutable : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => Mutable, others => <>);
+            A_Array, B_Array, M_Array, Nested, Again : C.Field_Shape;
+         begin
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 1),
+               [(Kind => C.Variant_Field, Element => Ty.U8,
+                 Cases => 1, Payloads_First => 1, others => <>),
+                A, (Element => Ty.U8, others => <>)],
+               Landin.Targets.Linux_X86_64, Fits,
+               Cases => [(First => 1, Count => 2)],
+               Payloads => [A, (Element => Ty.U16, others => <>)]);
+            Landin.Testing.Check (Item, Fits, "variant payload layout fits");
+            A_Array := C.Make_Array_Field (Types.all, 3, A);
+            Landin.Testing.Check
+              (Item, A_Array.Payloads_First = 1
+                 and then C.Array_Field_Element (Types.all, A_Array) = A,
+               "payload precedes the same ordinary field");
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 2),
+               [(Element => Ty.U8, others => <>), B],
+               Landin.Targets.Linux_X86_64, Fits);
+            Landin.Testing.Check (Item, Fits, "ordinary field layout fits");
+            B_Array := C.Make_Array_Field (Types.all, 3, B);
+            Landin.Testing.Check
+              (Item, First /= Second
+                 and then C.Signatures_Agree (Types.all, First, Second)
+                 and then B_Array.Payloads_First = 7
+                 and then A_Array.Payloads_First /= B_Array.Payloads_First,
+               "raw-distinct semantic twins keep separate first positions");
+            C.Lay_Out
+              (Types.all, C.Nth_Nominal_Type (Types.all, 3), [A, B],
+               Landin.Targets.Linux_X86_64, Fits);
+            Landin.Testing.Check (Item, Fits, "repeated field layout fits");
+            Again := C.Make_Array_Field (Types.all, 5, A);
+            Landin.Testing.Check
+              (Item, Again.Payloads_First = A_Array.Payloads_First
+                 and then C.Array_Field_Element (Types.all, Again) = A,
+               "later layout duplicates preserve earliest positions");
+            Again := C.Make_Array_Field (Types.all, 5, B);
+            Landin.Testing.Check
+              (Item, Again.Payloads_First = B_Array.Payloads_First,
+               "repeated ordinary field keeps its first position");
+            M_Array := C.Make_Array_Field (Types.all, 3, C_Mutable);
+            C.Finalize_Inferred_Errors
+              (Types.all, Mutable, C.No_Atom_Set);
+            Again := C.Make_Array_Field (Types.all, 4, C_Mutable);
+            Landin.Testing.Check
+              (Item, M_Array.Payloads_First = Again.Payloads_First,
+               "signature finalization does not change the raw key");
+            Nested := C.Make_Array_Field (Types.all, 2, M_Array);
+            Again := C.Make_Array_Field (Types.all, 9, M_Array);
+            Landin.Testing.Check
+              (Item, Nested.Payloads_First = Again.Payloads_First
+                 and then C.Array_Field_Element (Types.all, Nested)
+                   = M_Array,
+               "array appended shapes are indexed and reused");
+         end;
+      end;
+   end Array_Field_Lookup_Keeps_First_Raw_Shape;
+
+   procedure Array_Field_Lookup_Handles_Hash_Collisions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Lookup_Handles_Hash_Collisions
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      use type C.Field_Shape;
+      type Word is mod 2 ** 32;
+
+      function Colliding_Length (K : Natural) return C.Element_Count;
+
+      function Colliding_Length (K : Natural) return C.Element_Count is
+         High : constant Word := Word (0) - Word (K) * 16#9E37_79B1#;
+      begin
+         return C.Element_Count (High) * 2 ** 32
+           + C.Element_Count (K + 1);
+      end Colliding_Length;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      --  Stage setup requires a source; its identity is irrelevant here.
+      pragma Unreferenced (Src);
+      Ran : Natural;
+      First : Natural := 0;
+      Leaf : constant C.Field_Shape := (Element => Ty.U8, others => <>);
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-collisions.ldn",
+         "one: type = struct x: u8 end one");
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "shape source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "shape source was refused");
+         return;
+      end if;
+      declare
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         --  These 256 distinct lengths collide under the old 32-bit hash:
+         --  each low-half increment cancels the high-half multiplication.
+         for K in 0 .. 255 loop
+            declare
+               Inner : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, Colliding_Length (K), Leaf);
+               Outer : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 2, Inner);
+            begin
+               if K = 0 then
+                  First := Outer.Payloads_First;
+               end if;
+               Landin.Testing.Check
+                 (Item, Outer.Payloads_First = First + K
+                    and then C.Array_Field_Element (Types.all, Outer) = Inner,
+                  "distinct colliding array element keeps its own position");
+            end;
+         end loop;
+         for K in reverse 0 .. 255 loop
+            declare
+               Inner : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, Colliding_Length (K), Leaf);
+               Outer : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 3, Inner);
+            begin
+               Landin.Testing.Check
+                 (Item, Outer.Payloads_First = First + K
+                    and then C.Array_Field_Element (Types.all, Outer) = Inner,
+                  "colliding array element reuses its first position");
+            end;
+         end loop;
+      end;
+   end Array_Field_Lookup_Handles_Hash_Collisions;
 
    procedure Recursive_Array_Foundations
      (Item : in out Landin.Testing.Context);
@@ -14196,6 +14765,12 @@ package body Landin.Tests.Checking_Suite is
          "array field copies compare complete children",
          Array_Field_Copies_Compare_Complete_Children'Access);
       Landin.Testing.Register
+        (Into, "checking", "array field lookup keeps first raw shape",
+         Array_Field_Lookup_Keeps_First_Raw_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field lookup handles hash collisions",
+         Array_Field_Lookup_Handles_Hash_Collisions'Access);
+      Landin.Testing.Register
         (Into, "checking", "recursive array foundations",
          Recursive_Array_Foundations'Access);
       Landin.Testing.Register
@@ -14228,6 +14803,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "float specials have canonical bits",
          Float_Specials_Have_Canonical_Bits'Access);
+      Landin.Testing.Register
+        (Into, "checking", "concept interning keeps collection positions",
+         Concept_Interning_Keeps_Collection_Positions'Access);
       Landin.Testing.Register
         (Into, "checking", "conformance register uses normalized keys",
          Conformance_Register_Uses_Normalized_Keys'Access);

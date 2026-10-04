@@ -6,6 +6,7 @@
 --  either side gets wrong shows up here, and check.py's own run says which
 --  side moved by refusing a stale dump.
 
+with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -31,6 +32,7 @@ package body Landin.Tests.Lexer_Suite is
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
    use type Landin.Source.Byte_Offset;
+   use type Landin.Source.Names.Name_Id;
    use type Landin.Tokens.Token_Kind;
    use type Landin.Tokens.Integer_Base;
    use type Landin.Tokens.Token_Index;
@@ -147,6 +149,116 @@ package body Landin.Tests.Lexer_Suite is
             "every two-byte sign is one token");
       end;
    end Longest_Token_Wins;
+
+   procedure Reserved_Words_And_Near_Misses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reserved_Words_And_Near_Misses
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Previous : Unbounded.Unbounded_String := Unbounded.Null_Unbounded_String;
+
+      procedure Check_Name (Text : String);
+
+      procedure Check_Name (Text : String) is
+      begin
+         Lex_Text (Text, Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Count (Stream) = 2
+            and then Landin.Tokens.Kind (Stream, 1)
+              = Landin.Tokens.Identifier,
+            Text & " stays one identifier");
+         if Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Identifier then
+            Landin.Testing.Check_Equal
+              (Item,
+               Landin.Source.Names.Spelling
+                 (Names, Landin.Tokens.Name
+                   (Landin.Tokens.Token_At (Stream, 1))),
+               Text, Text & " keeps its interned spelling");
+         end if;
+      end Check_Name;
+   begin
+      --  An exhaustive check also catches a keyword inserted out of order:
+      --  the lexer's binary search relies on the enum's alphabetical order.
+      for Word in Landin.Tokens.Reserved_Word loop
+         declare
+            Text   : constant String := Landin.Tokens.Spelling (Word);
+            Prefix : constant String := Text (Text'First .. Text'Last - 1);
+            Before : constant Natural := Landin.Source.Names.Count (Names);
+         begin
+            if Word /= Landin.Tokens.Reserved_Word'First then
+               Landin.Testing.Check
+                 (Item, Unbounded.To_String (Previous) < Text,
+                  Text & " follows the preceding keyword alphabetically");
+            end if;
+            Previous := Unbounded.To_Unbounded_String (Text);
+
+            Lex_Text (Text, Sources, Names, Stream);
+            Landin.Testing.Check
+              (Item, Landin.Tokens.Count (Stream) = 2
+               and then Landin.Tokens.Kind (Stream, 1) = Word
+               and then Landin.Tokens.Fault_Count (Stream) = 0,
+               Text & " is exactly its keyword token");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Source.Names.Count (Names), Before,
+               Text & " is not interned as a name");
+
+            Check_Name (Text & "_");
+            Check_Name ("_" & Text);
+            Check_Name (Text & "x");
+            if Prefix = "in" then
+               Lex_Text (Prefix, Sources, Names, Stream);
+               Landin.Testing.Check
+                 (Item, Landin.Tokens.Kind (Stream, 1)
+                    = Landin.Tokens.Kw_In,
+                  "in remains a keyword as the prefix of inc");
+            else
+               Check_Name (Prefix);
+            end if;
+
+            Lex_Text
+              (Ada.Characters.Handling.To_Upper (Text),
+               Sources, Names, Stream);
+            Landin.Testing.Check
+              (Item, Landin.Tokens.Count (Stream) = 2
+               and then Landin.Tokens.Kind (Stream, 1)
+                 = Landin.Tokens.Unknown_Bytes
+               and then Landin.Tokens.Fault_Count (Stream) = 1,
+               Text & " in capitals is not a keyword");
+            Lex_Text
+              (Ada.Characters.Handling.To_Upper
+                 (Text (Text'First)) & Text (Text'First + 1 .. Text'Last),
+               Sources, Names, Stream);
+            Landin.Testing.Check
+              (Item, Landin.Tokens.Kind (Stream, 1)
+                 = Landin.Tokens.Unknown_Bytes
+               and then Landin.Tokens.Fault_Count (Stream) = 1,
+               Text & " with an initial capital is not a keyword");
+         end;
+      end loop;
+
+      declare
+         Before : constant Natural := Landin.Source.Names.Count (Names);
+      begin
+         Lex_Text ("_ ordinary ordinary", Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Stream, 1)
+              = Landin.Tokens.Underscore
+            and then Landin.Tokens.Kind (Stream, 2)
+              = Landin.Tokens.Identifier
+            and then Landin.Tokens.Kind (Stream, 3)
+              = Landin.Tokens.Identifier,
+            "lone underscore is a discard; ordinary names are identifiers");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Name (Landin.Tokens.Token_At (Stream, 2))
+              = Landin.Tokens.Name (Landin.Tokens.Token_At (Stream, 3))
+            and then Landin.Source.Names.Count (Names) = Before + 1,
+            "repeated ordinary names share one interned identity");
+      end;
+   end Reserved_Words_And_Near_Misses;
 
    --  [1780]: the opener decides the form, and a block comment nests.
    procedure Comments_Are_Space (Item : in out Landin.Testing.Context);
@@ -782,6 +894,16 @@ package body Landin.Tests.Lexer_Suite is
          Fault = Landin.Tokens.Text.Well_Formed
            and then Bytes (1 .. Length) = LF & "one" & LF & "  two" & LF,
          "the closer's exact indentation is removed from every line");
+
+      Decode
+        (Three & LF & "  " & LF & Character'Val (9) & LF
+         & "  x" & LF & Three);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 7
+           and then Bytes (1 .. Length) = LF & LF & LF & "  x" & LF,
+         "a zero-indent closer discards blank-line spaces and tabs");
 
       Decode (Three & "\n" & Three);
       Landin.Testing.Check
@@ -1541,6 +1663,9 @@ package body Landin.Tests.Lexer_Suite is
         (Into, "lexer", "kinds and spans", Kinds_And_Spans'Access);
       Landin.Testing.Register
         (Into, "lexer", "longest token wins", Longest_Token_Wins'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "reserved words and near misses",
+         Reserved_Words_And_Near_Misses'Access);
       Landin.Testing.Register
         (Into, "lexer", "comments are space", Comments_Are_Space'Access);
       Landin.Testing.Register

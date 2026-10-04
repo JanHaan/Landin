@@ -505,7 +505,9 @@ register to the target's table and every type to one register's width;
 `cortex ABI/assembly IR` corrupts each. Its fixed read, write, call and trap
 effects invalidate memory knowledge and preserve ordering through
 optimization and specialization, and simplification never forwards a store
-across it into an output slot. It is not a hardware barrier. Cortex emission reads live values from their
+across it into an output slot. Specialization also forgets any local
+store-to-load evidence alias for each output slot; a later store can
+establish a new alias. It is not a hardware barrier. Cortex emission reads live values from their
 compiler stack homes after ordinary low-register-clobbering text; ordinary
 text cannot name SP, LR, r9, r11 or other high registers. Naked text owns all
 machine state and receives no frame. Ordinary and interrupt routines retain

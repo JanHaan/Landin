@@ -1,6 +1,6 @@
 class: runtime
 profiles: specialization
-summary: left and right operands snapshot once in source order before publication
+summary: effectful and addressed operands retain values while disjoint scalar broadcast computes directly
 constructs: 0300, 0370, 0520, 0590, 0760, 1890
 program: main.ldn
 status: 42

@@ -9,6 +9,10 @@ public main: () -> (code: i32) =
     escaped: []u8 = """\n"""
     raw_same: []u8 = """same"""
     text_same: []u8 = "same"
+    zero_indent: []u8 = """
+  
+x
+"""
 
     if lenof block == 9
       and block[0] == 10
@@ -22,6 +26,9 @@ public main: () -> (code: i32) =
       and lenof escaped == 2
       and escaped[0] == 92 and escaped[1] == 110
       and module_raw[5] == 101
+      and lenof zero_indent == 4
+      and zero_indent[0] == 10 and zero_indent[1] == 10
+      and zero_indent[2] == 120 and zero_indent[3] == 10
       and u64(addr raw_same[0]) == u64(addr text_same[0]) then
         code = 42
     else

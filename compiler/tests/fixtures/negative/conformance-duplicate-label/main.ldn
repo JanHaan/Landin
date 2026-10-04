@@ -1,0 +1,4 @@
+lookup: type = concept (t: type, index: type, item: type, other: type)
+end lookup
+
+i32 is lookup (index: u32, item: i16, other: i8, item: i16)

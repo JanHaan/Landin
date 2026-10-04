@@ -1,4 +1,5 @@
 with Ada.Containers.Ordered_Maps;
+with Ada.Containers.Vectors;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
 with Landin.IR.Shape_Measurement;
@@ -15,24 +16,58 @@ package body Landin.IR.Specialization is
      (Into : in out Unit;
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options;
+      Report : in out Landin.Build_Reports.Report) is
+   begin
+      Verifier.Verify (Into, Facts);
+      Run_On_Verified (Into, Facts, Options, Report);
+   end Run;
+
+   procedure Run_On_Verified
+     (Into : in out Unit;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
       Report : in out Landin.Build_Reports.Report)
    is
       package Reports renames Landin.Build_Reports;
       package Layouts renames Landin.Targets.Layouts;
+      use type Reports.Specialization_Decision;
       package Template_Counts is new Ada.Containers.Ordered_Maps
         (Key_Type => Declaration_Id, Element_Type => Natural);
+      package Boolean_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Boolean);
+      package Decision_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive,
+         Element_Type => Reports.Specialization_Decision);
       Eligible : Template_Counts.Map;
       Count : constant Natural := Item_Count (Into);
-      Proven, Exposed : array (1 .. Count) of Boolean := [others => False];
-      Decisions : array (1 .. Count) of Reports.Specialization_Decision;
-      Stable_Slots : array (1 .. Natural (Into.Slots.Length)) of Boolean :=
-        [others => True];
-      Private_Slots : array (Stable_Slots'Range) of Boolean :=
-        [others => True];
-      Aliases : array (1 .. Natural (Into.Code.Length)) of Value_Id :=
-        [others => No_Value];
-      Changed : Boolean;
+      Proven : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (False, Ada.Containers.Count_Type (Count));
+      Exposed : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (False, Ada.Containers.Count_Type (Count));
+      Decisions : Decision_Vectors.Vector := Decision_Vectors.To_Vector
+        ((others => <>), Ada.Containers.Count_Type (Count));
+      Stable_Slots : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (True, Into.Slots.Length);
+      Private_Slots : Boolean_Vectors.Vector := Boolean_Vectors.To_Vector
+        (True, Into.Slots.Length);
+      Aliases : Value_Ref_Vectors.Vector := Value_Ref_Vectors.To_Vector
+        (No_Value, Into.Code.Length);
       Rewritten : Boolean := False;
+      --  Keep the dependency graph on the heap like the other whole-unit
+      --  scratch: source declaration bounds do not bound IR item counts.
+      package Natural_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Natural);
+      First_Dependent : Natural_Vectors.Vector := Natural_Vectors.To_Vector
+        (0, Ada.Containers.Count_Type (Count));
+      Next_Dependent : Natural_Vectors.Vector := Natural_Vectors.To_Vector
+        (0, Into.Code.Length);
+      Dependent_Target : Item_Ref_Vectors.Vector :=
+        Item_Ref_Vectors.To_Vector (No_Item, Into.Code.Length);
+      Dependency_Count : Natural := 0;
+      Pending : Item_Ref_Vectors.Vector := Item_Ref_Vectors.To_Vector
+        (No_Item, Ada.Containers.Count_Type (Count));
+      Pending_First : Natural := 1;
+      Pending_Last : Natural := 0;
 
       procedure Expose (Item : Item_Id);
 
@@ -40,6 +75,16 @@ package body Landin.IR.Specialization is
       begin
          Exposed (Positive (Item)) := True;
       end Expose;
+
+      procedure Invalidate (Item : Item_Id);
+      procedure Invalidate (Item : Item_Id) is
+      begin
+         if Proven (Positive (Item)) then
+            Proven (Positive (Item)) := False;
+            Pending_Last := Pending_Last + 1;
+            Pending (Pending_Last) := Item;
+         end if;
+      end Invalidate;
 
       function Code_At (Item : Item_Id; Value : Value_Id) return Instruction
         is (Into.Code (Into.Items (Positive (Item)).Values.First
@@ -121,7 +166,6 @@ package body Landin.IR.Specialization is
          end if;
       end Pin;
    begin
-      Verifier.Verify (Into, Facts);
       Visit_Address_Exposures (Into, Expose'Access);
       --  Allocate every decision before inspecting recursive calls. Proof
       --  is a greatest fixed point: each surviving incoming edge is either
@@ -149,6 +193,20 @@ package body Landin.IR.Specialization is
                                        + Positive (Code.Slot)) := False;
                      end if;
                   end if;
+                  --  Assembly outputs are frame writes, even though the
+                  --  instruction itself has no Slot operand.  A parameter
+                  --  overwritten here cannot establish static evidence.
+                  for A in 1 .. Code.Assembly_Run.Count loop
+                     declare
+                        Output : constant Slot_Id := Into.Assembly_Operands
+                          (Code.Assembly_Run.First + A).Output;
+                     begin
+                        if Output /= No_Slot then
+                           Stable_Slots (Into.Items (I).Slots.First
+                                         + Positive (Output)) := False;
+                        end if;
+                     end;
+                  end loop;
                end;
             end loop;
          end;
@@ -185,46 +243,89 @@ package body Landin.IR.Specialization is
                           Stored (Positive (Code.Slot));
                      end if;
                   end if;
+                  --  Do not forward a store across a block's output write.
+                  --  A later store may still establish a fresh alias.
+                  for A in 1 .. Code.Assembly_Run.Count loop
+                     declare
+                        Output : constant Slot_Id := Into.Assembly_Operands
+                          (Code.Assembly_Run.First + A).Output;
+                     begin
+                        if Output /= No_Slot then
+                           Stored (Positive (Output)) := No_Value;
+                           Blocks (Positive (Output)) := No_Block;
+                        end if;
+                     end;
+                  end loop;
                end;
             end loop;
          end;
       end loop;
-      loop
-         Changed := False;
-         for I in 1 .. Count loop
-            declare
-               Caller : constant Item_Id := Item_Id (I);
-            begin
-               for V in 1 .. Value_Count (Into, Caller) loop
-                  declare
-                     Code : constant Instruction := Code_At
-                       (Caller, Value_Id (V));
-                  begin
-                     if Code.Op = Call and then Proven (Positive (Code.Named))
-                     then
-                        for B in 1 .. Evidence_Binding_Count (Into, Code.Named)
-                        loop
+      --  Inspect each call once. Literal evidence is independent of the
+      --  caller; a stable bound-parameter load creates a dependency from the
+      --  caller to the callee. Any other incoming evidence is a failed root.
+      --  Each failed instance enters the queue once, including failures found
+      --  while scanning later calls, so propagation never rescans the unit.
+      for I in 1 .. Count loop
+         declare
+            Caller : constant Item_Id := Item_Id (I);
+         begin
+            for V in 1 .. Value_Count (Into, Caller) loop
+               declare
+                  Code : constant Instruction := Code_At
+                    (Caller, Value_Id (V));
+                  Depends : Boolean := False;
+               begin
+                  if Code.Op = Call and then Proven (Positive (Code.Named))
+                  then
+                     for B in 1 .. Evidence_Binding_Count (Into, Code.Named)
+                     loop
+                        declare
+                           Binding : constant Evidence_Binding :=
+                             Nth_Evidence_Binding (Into, Code.Named, B);
+                        begin
+                           if Binding.Parameter > Code.Args then
+                              Invalidate (Code.Named);
+                              exit;
+                           end if;
                            declare
-                              Binding : constant Evidence_Binding :=
-                                Nth_Evidence_Binding (Into, Code.Named, B);
+                              Argument : constant Value_Id := Into.Operands
+                                (Code.First_Arg + Binding.Parameter);
+                              Source : constant Instruction := Code_At
+                                (Caller, Original (Caller, Argument));
                            begin
-                              if Binding.Parameter > Code.Args or else
-                                Static_Table (Caller, Into.Operands
-                                  (Code.First_Arg + Binding.Parameter))
-                                    /= Binding.Evidence
+                              if Static_Table (Caller, Argument)
+                                /= Binding.Evidence
                               then
-                                 Proven (Positive (Code.Named)) := False;
-                                 Changed := True;
+                                 Invalidate (Code.Named);
                                  exit;
                               end if;
+                              Depends := Depends or else Source.Op = Load;
                            end;
-                        end loop;
+                        end;
+                     end loop;
+                     if Depends and then Proven (Positive (Code.Named)) then
+                        Dependency_Count := Dependency_Count + 1;
+                        Dependent_Target (Dependency_Count) := Code.Named;
+                        Next_Dependent (Dependency_Count) :=
+                          First_Dependent (I);
+                        First_Dependent (I) := Dependency_Count;
                      end if;
-                  end;
-               end loop;
-            end;
-         end loop;
-         exit when not Changed;
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+      while Pending_First <= Pending_Last loop
+         declare
+            Edge : Natural := First_Dependent
+              (Positive (Pending (Pending_First)));
+         begin
+            while Edge /= 0 loop
+               Invalidate (Dependent_Target (Edge));
+               Edge := Next_Dependent (Edge);
+            end loop;
+            Pending_First := Pending_First + 1;
+         end;
       end loop;
       for I in 1 .. Count loop
          declare
@@ -393,8 +494,9 @@ package body Landin.IR.Specialization is
       --  only when a rewritten call leaves an unused callee operand behind.
       if Rewritten then
          Rewriting.Compact
-           (Into, [1 .. Natural (Into.Code.Length) => True]);
+           (Into, Rewriting.Keep_Vectors.To_Vector
+              (True, Into.Code.Length));
+         Verifier.Verify (Into, Facts);
       end if;
-      Verifier.Verify (Into, Facts);
-   end Run;
+   end Run_On_Verified;
 end Landin.IR.Specialization;

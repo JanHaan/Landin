@@ -1304,6 +1304,21 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Source : Syn.Node_Id) return Natural
         is (Res.Source_Parameter_Position
               (Meanings.all, Of_Tree, Source));
+      function Written_Return_Sources
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
+      function Written_Return_Sources
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+      is
+         Total : Natural := 0;
+      begin
+         if Node /= Syn.No_Node then
+            for Index in 1 .. Syn.Return_Count (Of_Tree, Node) loop
+               Total := Total + Syn.Return_Source_Count
+                 (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Index));
+            end loop;
+         end if;
+         return Total;
+      end Written_Return_Sources;
       function Exact_Concept_Entry_Signature
         (Evidence : Landin.Checking.Conformance_Id;
          Position : Positive) return Landin.Checking.Signature_Id;
@@ -4013,7 +4028,8 @@ package body Landin.Stages.Checking is
                  (1 .. Syn.Return_Count (Of_Tree, Written)) :=
                    [others => (others => <>)];
                Sources : Landin.Checking.Return_Source_Array
-                 (1 .. Positive'Max (1, Syn.Node_Count (Of_Tree))) :=
+                 (1 .. Positive'Max
+                   (1, Written_Return_Sources (Of_Tree, Written))) :=
                    [others => (others => 1)];
                Source_Count : Natural := 0;
                Errors : Landin.Checking.Atom_Set_Id :=
@@ -7863,22 +7879,9 @@ package body Landin.Stages.Checking is
            (1 .. Syn.Return_Count (Of_Tree, Node)) :=
              [others => (others => <>)];
 
-         --  Every `from` source this signature writes, which bounds the
-         --  sources it can record.
-         function Written_Sources return Natural;
-
-         function Written_Sources return Natural is
-            Total : Natural := 0;
-         begin
-            for Index in Results'Range loop
-               Total := Total + Syn.Return_Source_Count
-                 (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Index));
-            end loop;
-            return Total;
-         end Written_Sources;
-
          Sources : Landin.Checking.Return_Source_Array
-           (1 .. Positive'Max (1, Written_Sources)) :=
+           (1 .. Positive'Max
+             (1, Written_Return_Sources (Of_Tree, Node))) :=
              [others => (others => 1)];
          Source_Nodes : array (Sources'Range) of Syn.Node_Id :=
            [others => Syn.No_Node];
@@ -11256,7 +11259,8 @@ package body Landin.Stages.Checking is
                         [others => (others => <>)];
                   Sources : Landin.Checking.Return_Source_Array
                     (1 .. Positive'Max
-                      (1, Syn.Node_Count (Template_Tree.all))) :=
+                      (1, Written_Return_Sources
+                        (Template_Tree.all, Function_Node))) :=
                         [others => (others => 1)];
                   Source_Count : Natural := 0;
                   Valid : Boolean := True;
@@ -14937,7 +14941,14 @@ package body Landin.Stages.Checking is
                        (Concept_Tree.all, Concept_Node, Position))
                   else 0)) := [others => (others => <>)];
          Sources : Landin.Checking.Return_Source_Array
-           (1 .. Positive'Max (1, Syn.Node_Count (Concept_Tree.all))) :=
+           (1 .. Positive'Max
+             (1, Written_Return_Sources
+               (Concept_Tree.all,
+                (if Position <= Syn.Concept_Entry_Count
+                   (Concept_Tree.all, Concept_Node)
+                 then Syn.Nth_Concept_Entry
+                   (Concept_Tree.all, Concept_Node, Position)
+                 else Syn.No_Node)))) :=
              [others => (others => 1)];
          Source_Count : Natural := 0;
          Errors : Landin.Checking.Atom_Set_Id :=
@@ -15956,37 +15967,40 @@ package body Landin.Stages.Checking is
                         Node     => Node);
                   end Make_Probe;
                begin
-                  for Right in 2 .. Syn.Conformance_Entry_Count
-                    (Of_Tree, Node)
-                  loop
-                     for Left in 1 .. Right - 1 loop
-                        declare
-                           Earlier : constant Syn.Node_Id :=
-                             Syn.Nth_Conformance_Entry
-                               (Of_Tree, Node, Left);
-                           Later : constant Syn.Node_Id :=
-                             Syn.Nth_Conformance_Entry
-                               (Of_Tree, Node, Right);
-                        begin
-                           if Syn.Name (Of_Tree, Earlier)
-                                = Syn.Name (Of_Tree, Later)
+                  declare
+                     type Entry_Array is array (Positive range <>)
+                       of Syn.Node_Id;
+                     Entries : Entry_Array
+                       (1 .. Syn.Conformance_Entry_Count (Of_Tree, Node));
+                  begin
+                     --  Fetch each syntax entry once before comparing pairs.
+                     for Position in Entries'Range loop
+                        Entries (Position) := Syn.Nth_Conformance_Entry
+                          (Of_Tree, Node, Position);
+                     end loop;
+                     for Right in 2 .. Entries'Last loop
+                        for Left in 1 .. Right - 1 loop
+                           if Syn.Name (Of_Tree, Entries (Left))
+                                = Syn.Name (Of_Tree, Entries (Right))
                            then
                               Bad.Report
                                 (Item    => Bad.Conformance_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Anchor (Of_Tree, Later),
+                                 Where   => Syn.Anchor
+                                   (Of_Tree, Entries (Right)),
                                  Message => "this conformance label is"
                                             & " supplied twice",
                                  Note    => "[1240]: every concept input and"
                                             & " entry is supplied once",
-                                 Related => Syn.Origin (Of_Tree, Earlier),
+                                 Related => Syn.Origin
+                                   (Of_Tree, Entries (Left)),
                                  Because => "first supplied here",
                                  Into    => Found);
                               Valid := False;
                            end if;
-                        end;
+                        end loop;
                      end loop;
-                  end loop;
+                  end;
 
                   for Given in 1 .. Syn.Conformance_Entry_Count
                     (Of_Tree, Node)
@@ -17073,8 +17087,9 @@ package body Landin.Stages.Checking is
                                        Sources : Landin.Checking
                                          .Return_Source_Array
                                            (1 .. Positive'Max
-                                             (1, Syn.Node_Count
-                                               (Concept_Tree.all))) :=
+                                             (1, Written_Return_Sources
+                                               (Concept_Tree.all,
+                                                Requirement_Node))) :=
                                              [others => (others => 1)];
                                        Source_Count : Natural := 0;
                                        Errors : Landin.Checking.Atom_Set_Id :=
@@ -18094,7 +18109,9 @@ package body Landin.Stages.Checking is
                                   [others => (others => <>)];
                               Sources : Landin.Checking.Return_Source_Array
                                 (1 .. Positive'Max
-                                  (1, Syn.Node_Count (Concept_Tree.all))) :=
+                                  (1, Written_Return_Sources
+                                    (Concept_Tree.all,
+                                     Requirement_Node))) :=
                                     [others => (others => 1)];
                               Source_Count : Natural := 0;
                               Errors : Landin.Checking.Atom_Set_Id :=

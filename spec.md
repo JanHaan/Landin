@@ -5896,11 +5896,16 @@ snapshot. Compound arithmetic assignment evaluates its place once, retains the
 old array value, then evaluates the right operand and applies the same rule.
 This does not change [0520]'s direct formation of a written array literal.
 Known-operand refusals still apply where the scalar rule requires them.
+Retaining an operand's value does not require copying it when its storage
+remains stable through the other operand's evaluation and the scalar loop.
+When that storage is disjoint from the destination, the loop may write the
+destination directly; an overlapping or effectful case still preserves the
+retained values.
 
 No reduction builtin is added. [0590]'s `sum_four` is an ordinary function
 whose positive-zero initial value and left fold specify the rounding order.
 The compiler emits compact scalar loops, not one instruction or compiler
-metadata record per array element. The storage for the result and necessary
+metadata record per array element. Storage for a separate result and necessary
 snapshots is real; a 16 KB array does not fit for free on a 32 KB device.
 
 **The alternatives:** mask-valued comparison, implicit whole-array equality,
@@ -12145,7 +12150,7 @@ classified failure boundary before the repository gate can pass.
 | `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
-| `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 snapshots operands in source order and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
+| `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 retains complete operand values in source order, allowing stable storage to supply them, and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
 | `arrays.element-traps` | trap | 0290, 0300, 0310, 0590, 1120, 1960 | D209 executes element operations in ascending index order with the scalar overflow and division edges; unchecked removes no division edge | `runtime/r450-array-later-overflow`, `runtime/r450-array-unary-overflow`, `runtime/r450-array-later-division-zero`, `runtime/r450-array-signed-division-overflow`, `runtime/r450-array-unchecked-division-zero` |
 | `layout.explicit-policy` | static | 0750, 0760 | D210 changes physical field placement only for explicit optimal policy and only for a strict final padded-size win; source identities and initializer evaluation order are unchanged | `positive/r450-optimal-layout-source`, `runtime/r450-optimal-layout-composition` |
 | `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
@@ -13987,7 +13992,9 @@ struct body or variant case has at most 16,384 fields. A program over either
 bound is refused with L0325 before any checking begins: a routine at its
 name, and a struct or case at its first field past the bound, related to the
 body. Every place over a bound is reported, in source order, and nothing else
-is checked, because every later pass is sized by what it refuses. The bounds
+is checked. The declaration limit bounds declaration-indexed checking and flow
+facts, and the field limit bounds field-indexed struct work. Neither limits the
+number of IR values in a routine. The bounds
 are `Landin.Stages.Checking.Declaration_Limit` and `Field_Limit`. They are
 an implementation limit, like L0111's nesting depth, and not a rule of the
 language: a larger compiler may raise them without changing what any program
@@ -14008,9 +14015,12 @@ exhausting that host at any size the scaling benchmark generates.
 was the behaviour before, and it is not a diagnostic: exit 71 says nothing
 about which routine or struct did it, and on a smaller host it arrives at a
 smaller program. A single bound on the whole program's declarations was
-declined because nothing in the compiler is sized by it any more: checking,
-flow and lowering scale with the program and only a routine's own facts, and
-a struct's own fields, are quadratic or stack-bound. Bounds high enough never
+declined for declaration-indexed checking and flow facts and field-indexed
+struct work, which grow with individual routines or structs. The whole-unit
+IR optimization scratch addressed here is heap-backed and no longer imposes
+a whole-program stack bound. Specialization, simplification and rewriting
+still use automatic arrays indexed by a routine's IR values; L0325 does not
+bound their lengths. Bounds high enough never
 to matter, 65,535 or 2**20, were declined because a program just under them
 would still exhaust an ordinary host, which is the failure the bound exists to
 replace. Making the storage sparse so that no bound is needed was deferred:

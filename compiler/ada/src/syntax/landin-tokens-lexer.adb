@@ -1,3 +1,5 @@
+with Ada.Characters.Handling;
+
 with Landin.Tokens.Text;
 
 package body Landin.Tokens.Lexer is
@@ -24,6 +26,36 @@ package body Landin.Tokens.Lexer is
 
    function Is_Name_Byte (Item : Character) return Boolean
      is (Is_Lower (Item) or else Is_Digit (Item) or else Item = '_');
+
+   function Keyword_Kind (Run : String) return Token_Kind;
+
+   function Keyword_Kind (Run : String) return Token_Kind is
+      --  The reserved literals in Token_Kind are alphabetical.  Compare
+      --  against their images so the spelling still lives only in the enum.
+      Upper : constant String := Ada.Characters.Handling.To_Upper (Run);
+      Left  : Integer := Reserved_Word'Pos (Reserved_Word'First);
+      Right : Integer := Reserved_Word'Pos (Reserved_Word'Last);
+   begin
+      while Left <= Right loop
+         declare
+            Middle : constant Integer := Left + (Right - Left) / 2;
+            Word   : constant Reserved_Word := Reserved_Word'Val (Middle);
+            Image  : constant String := Word'Image;
+            Letters : constant String :=
+              Image (Image'First + 3 .. Image'Last);
+         begin
+            if Upper = Letters then
+               return Word;
+            elsif Upper < Letters then
+               Right := Middle - 1;
+            else
+               Left := Middle + 1;
+            end if;
+         end;
+      end loop;
+
+      return Identifier;
+   end Keyword_Kind;
 
    procedure Lex
      (From   : Landin.Source.Snapshot;
@@ -717,34 +749,32 @@ package body Landin.Tokens.Lexer is
                   end loop;
 
                   declare
-                     Run  : constant String := Text (First .. Position - 1);
-                     Word : Token_Kind := Identifier;
+                     Run : constant String := Text (First .. Position - 1);
                   begin
                      --  A lone '_' is the discard of [1020], which the
                      --  identifier rule refuses on purpose [1760].
                      if Run = "_" then
                         Emit (Underscore, First, Position - 1);
                      else
-                        for Reserved in Reserved_Word loop
-                           if Spelling (Reserved) = Run then
-                              Word := Reserved;
+                        declare
+                           Word : constant Token_Kind := Keyword_Kind (Run);
+                        begin
+                           if Word = Identifier then
+                              Into.Items.Append
+                                (Token'(Kind      => Identifier,
+                                        Where     =>
+                                          Span (First, Position - 1),
+                                        Name      =>
+                                          Landin.Source.Names.Intern
+                                            (Names, Run),
+                                        Base      => Decimal,
+                                        Digit_Run =>
+                                          Landin.Source.Empty_Span,
+                                        Assignment => Plain_Assignment));
+                           else
+                              Emit (Word, First, Position - 1);
                            end if;
-                        end loop;
-
-                        if Word = Identifier then
-                           Into.Items.Append
-                             (Token'(Kind      => Identifier,
-                                     Where     => Span (First, Position - 1),
-                                     Name      =>
-                                       Landin.Source.Names.Intern
-                                         (Names, Run),
-                                     Base      => Decimal,
-                                     Digit_Run =>
-                                       Landin.Source.Empty_Span,
-                                     Assignment => Plain_Assignment));
-                        else
-                           Emit (Word, First, Position - 1);
-                        end if;
+                        end;
                      end if;
                   end;
                end;

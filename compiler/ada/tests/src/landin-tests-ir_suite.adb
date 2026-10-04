@@ -11,6 +11,7 @@
 --  what keeps this case inside the rule that every stage case runs against
 --  a fake filesystem.
 
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 
 with Landin.Cleanup;
@@ -37,6 +38,7 @@ package body Landin.Tests.IR_Suite is
    use type IR.Field_Shape;
    use type IR.Field_Shape_Kind;
    use type IR.Nominal_Type_Id;
+   use type IR.Pointee_Id;
    use type IR.Signature_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
@@ -1696,6 +1698,66 @@ package body Landin.Tests.IR_Suite is
       end;
    end Typed_Indirect_Accesses_Retain_Witnesses;
 
+   procedure Typed_Indirect_Atom_Stores_Check_Subsets
+     (Item : in out Landin.Testing.Context);
+
+   procedure Typed_Indirect_Atom_Stores_Check_Subsets
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Full, Narrow, Foreign : IR.Atom_Set_Id;
+      Routine : IR.Item_Id;
+      Address : IR.Slot_Id;
+      Block : IR.Block_Id;
+      Narrow_Value, Foreign_Value : IR.Value_Id;
+      Before : Natural;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Full := IR.Add_Atom_Set (Unit, [1, 2, 3]);
+      Narrow := IR.Add_Atom_Set (Unit, [3, 1]);
+      Foreign := IR.Add_Atom_Set (Unit, [4, 1]);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      Address := IR.Add_Address_Slot
+        (Unit, Routine, (Element => Landin.Types.U32,
+                         Atoms => Full, others => <>), Site);
+      Block := IR.Add_Block
+        (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      IR.Enter (Unit, Routine, Block);
+      Narrow_Value := IR.Emit_Atom (Unit, Routine, 3, Narrow, Site);
+      Foreign_Value := IR.Emit_Atom (Unit, Routine, 4, Foreign, Site);
+
+      Before := IR.Value_Count (Unit, Routine);
+      IR.Emit_Store_Indirect
+        (Unit, Routine, Address, Narrow_Value, Site);
+      Landin.Testing.Check
+        (Item, IR.Value_Count (Unit, Routine) = Before + 2
+         and then IR.Op_Of
+           (Unit, Routine, IR.Value_Id (Before + 2)) = IR.Store_Indirect
+         and then IR.Nth_Operand
+           (Unit, Routine, IR.Value_Id (Before + 2), 2) = Narrow_Value,
+         "a typed indirect store accepts a reordered atom subset");
+
+      Before := IR.Value_Count (Unit, Routine);
+      begin
+         IR.Emit_Store_Indirect
+           (Unit, Routine, Address, Foreign_Value, Site);
+         Landin.Testing.Fail
+           (Item, "a typed indirect store accepted a foreign atom set");
+      exception
+         when Error : Landin.Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, IR.Value_Count (Unit, Routine) = Before
+               and then Ada.Exceptions.Exception_Message (Error)
+                 = "a typed indirect store disagrees with its reached shape",
+               "a foreign atom set is refused before instruction emission");
+      end;
+   end Typed_Indirect_Atom_Stores_Check_Subsets;
+
    procedure Recursive_Array_Images_Keep_Separate_Roots
      (Item : in out Landin.Testing.Context);
 
@@ -1874,6 +1936,50 @@ package body Landin.Tests.IR_Suite is
          end;
       end;
    end Recursive_Array_Images_Keep_Separate_Roots;
+
+   procedure Pointee_Interning_Keeps_Stable_Ids
+     (Item : in out Landin.Testing.Context);
+
+   procedure Pointee_Interning_Keeps_Stable_Ids
+     (Item : in out Landin.Testing.Context)
+   is
+      Unit : IR.Unit;
+      First, Middle, Last : IR.Pointee_Id := IR.No_Pointee;
+      Shape : IR.Field_Shape;
+   begin
+      for Index in 1 .. 128 loop
+         Shape := IR.Make_Array_Shape
+           (Unit, IR.Element_Total (Index),
+            (Element => Landin.Types.U8, others => <>));
+         declare
+            Id : constant IR.Pointee_Id := IR.Add_Pointee (Unit, Shape);
+         begin
+            if Index = 1 then
+               First := Id;
+            elsif Index = 64 then
+               Middle := Id;
+            elsif Index = 128 then
+               Last := Id;
+            end if;
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, IR.Pointee_Count (Unit) = 128
+           and then First = 1 and then Middle = 64 and then Last = 128,
+         "distinct reached shapes retain insertion-order IDs");
+      for Index in 1 .. 128 loop
+         Shape := IR.Make_Array_Shape
+           (Unit, IR.Element_Total (Index),
+            (Element => Landin.Types.U8, others => <>));
+         Landin.Testing.Check
+           (Item, IR.Add_Pointee (Unit, Shape) = IR.Pointee_Id (Index),
+            "repeated reached shape keeps its ID");
+      end loop;
+      Landin.Testing.Check
+        (Item, IR.Pointee_Count (Unit) = 128
+           and then IR.Pointee_Shape (Unit, Middle).Length = 64,
+         "repeated shapes do not append pointees");
+   end Pointee_Interning_Keeps_Stable_Ids;
 
    procedure Pointer_Shapes_Survive_Storage
      (Item : in out Landin.Testing.Context);
@@ -2206,6 +2312,9 @@ package body Landin.Tests.IR_Suite is
         (Into, "ir", "detailed dumps retain pointer metadata",
          Detailed_Dumps_Retain_Pointer_Metadata'Access);
       Landin.Testing.Register
+        (Into, "ir", "pointee interning keeps stable ids",
+         Pointee_Interning_Keeps_Stable_Ids'Access);
+      Landin.Testing.Register
         (Into, "ir", "pointer shapes survive storage",
          Pointer_Shapes_Survive_Storage'Access);
       Landin.Testing.Register
@@ -2217,6 +2326,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "typed indirect accesses retain witnesses",
          Typed_Indirect_Accesses_Retain_Witnesses'Access);
+      Landin.Testing.Register
+        (Into, "ir", "typed indirect atom stores check subsets",
+         Typed_Indirect_Atom_Stores_Check_Subsets'Access);
       Landin.Testing.Register
         (Into, "ir", "recursive array images separate descriptor roots",
          Recursive_Array_Images_Keep_Separate_Roots'Access);

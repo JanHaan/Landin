@@ -532,7 +532,14 @@ package body Landin.Stages.Lowering is
       function Signature_For
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
 
+      function Build_Signature
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
+
       function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id;
+
+      function Build_Instance_Signature
         (Instance : Landin.Checking.Routine_Instance_Id)
          return IR.Signature_Id;
 
@@ -861,7 +868,7 @@ package body Landin.Stages.Lowering is
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name;
 
-      function Signature_For
+      function Build_Signature
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id
       is
          Count : constant Natural :=
@@ -938,9 +945,6 @@ package body Landin.Stages.Lowering is
                   else IR.No_Atom_Set));
          end Converted;
       begin
-         if Signatures (Positive (Source)) /= IR.No_Signature then
-            return Signatures (Positive (Source));
-         end if;
          if Landin.Checking.Signature_Error_Form (Types.all, Source)
               = Landin.Checking.Inferred
          then
@@ -987,9 +991,19 @@ package body Landin.Stages.Lowering is
               Variadic => Landin.Checking.Signature_Is_Variadic
                 (Types.all, Source));
          return Signatures (Positive (Source));
+      end Build_Signature;
+
+      function Signature_For
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id
+      is
+      begin
+         if Signatures (Positive (Source)) /= IR.No_Signature then
+            return Signatures (Positive (Source));
+         end if;
+         return Build_Signature (Source);
       end Signature_For;
 
-      function Signature_For_Instance
+      function Build_Instance_Signature
         (Instance : Landin.Checking.Routine_Instance_Id)
          return IR.Signature_Id
       is
@@ -1013,9 +1027,6 @@ package body Landin.Stages.Lowering is
              [others => (others => 1)];
          Source_Count : Natural := 0;
       begin
-         if Generic_Signatures (Position) /= IR.No_Signature then
-            return Generic_Signatures (Position);
-         end if;
          for Index in 1 .. Hidden loop
             Parameters (Index) :=
               (Kind => Ty.Usize, Convention => IR.In_Value, others => <>);
@@ -1049,6 +1060,20 @@ package body Landin.Stages.Lowering is
               C_ABI => IR.Signature_Uses_C_ABI (Unit.all, Source),
               Variadic => IR.Signature_Is_Variadic (Unit.all, Source));
          return Generic_Signatures (Position);
+      end Build_Instance_Signature;
+
+      function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id
+      is
+         Position : constant Positive :=
+           Landin.Checking.Routine_Identities.Position
+             (Types.all, Instance);
+      begin
+         if Generic_Signatures (Position) /= IR.No_Signature then
+            return Generic_Signatures (Position);
+         end if;
+         return Build_Instance_Signature (Instance);
       end Signature_For_Instance;
 
       --  [1820]'s operators onto Landin.IR's opcodes, one to one.  The
@@ -3614,8 +3639,9 @@ package body Landin.Stages.Lowering is
          Destination : Stored_Place);
 
       --  One scalar loop per lifted operator, independent of array length.
-      --  Source operands are snapped left-to-right before the first element
-      --  operation.  The result is private until the entire loop succeeds.
+      --  Source operands are retained left-to-right before the first element
+      --  operation.  Disjoint named storage can itself retain the value;
+      --  other operands use private snapshots.
       procedure Write_Array_Arithmetic
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
@@ -3639,8 +3665,38 @@ package body Landin.Stages.Lowering is
            IR.Array_Element_Shape (Unit.all, Shape);
          Snapshots : array (1 .. Count) of IR.Slot_Id :=
            [others => IR.No_Slot];
+         Sources : array (1 .. Count) of Stored_Place;
+         Borrowed : array (1 .. Count) of Boolean := [others => False];
          Arrays : array (1 .. Count) of Boolean := [others => False];
-         Answer : IR.Slot_Id;
+         --  Names and scalar literals cannot mutate an earlier operand.
+         --  Scalar values are still evaluated once into their small slots.
+         function Stable_Operand (Operand : Syn.Node_Id) return Boolean is
+           (if Type_At (Of_Tree, Operand) = Ty.Fixed_Array
+            then Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
+            else Syn.Kind (Of_Tree, Operand) in
+              Syn.Name_Reference | Syn.Integer_Literal | Syn.Float_Literal);
+
+         Stable_Operands : constant Boolean :=
+           not Updating and then
+             (if Unary then
+                Stable_Operand (Syn.Operand_Of (Of_Tree, Node))
+              else
+                Stable_Operand (Syn.Left_Of (Of_Tree, Node))
+                and then Stable_Operand (Syn.Right_Of (Of_Tree, Node)));
+         Unpacked_Destination : constant Boolean :=
+           Destination.Place.Kind /= IR.Runtime_Address
+             and then Destination.Base = 0
+             and then Destination.Steps.Is_Empty
+             and then Stored_Shape (Destination, Shape).Packing.Bits = 0;
+         Answer : Stored_Place;
+         Direct_Answer : Boolean := False;
+
+         function Same_Root (Left, Right : IR.Storage) return Boolean is
+           (Left.Kind = Right.Kind
+            and then (case Left.Kind is
+              when IR.Frame_Slot => Left.Slot = Right.Slot,
+              when IR.Module_Datum => Left.Datum = Right.Datum,
+              when IR.Runtime_Address => True));
       begin
          for Position in Snapshots'Range loop
             declare
@@ -3654,20 +3710,37 @@ package body Landin.Stages.Lowering is
             begin
                Arrays (Position) :=
                  Type_At (Of_Tree, Operand) = Ty.Fixed_Array;
-               Snapshots (Position) := Shaped_Temporary
-                 ((if Arrays (Position) then Shape else Child), Site);
-               if Updating and then Position = 1 then
-                  Copy_Shaped_Storage
-                    (Destination, Stored_At
-                       ((Kind => IR.Frame_Slot, Slot => Snapshots (Position))),
-                     Shape, Site);
-               else
-                  Write_Shaped_Value
-                    (Of_Tree, Operand, Scope,
-                     (if Arrays (Position) then Shape else Child),
-                     Stored_At
-                       ((Kind => IR.Frame_Slot,
-                         Slot => Snapshots (Position))));
+               if Arrays (Position) and then Stable_Operands
+                 and then Unpacked_Destination
+               then
+                  Sources (Position) :=
+                    Lower_Stored_Place (Of_Tree, Operand, Scope);
+                  Borrowed (Position) :=
+                    Sources (Position).Place.Kind /= IR.Runtime_Address
+                    and then Sources (Position).Base = 0
+                    and then Sources (Position).Steps.Is_Empty
+                    and then not Same_Root
+                      (Sources (Position).Place, Destination.Place)
+                    and then Stored_Shape
+                      (Sources (Position), Shape).Packing.Bits = 0;
+               end if;
+               if not Borrowed (Position) then
+                  Snapshots (Position) := Shaped_Temporary
+                    ((if Arrays (Position) then Shape else Child), Site);
+                  if Updating and then Position = 1 then
+                     Copy_Shaped_Storage
+                       (Destination, Stored_At
+                          ((Kind => IR.Frame_Slot,
+                            Slot => Snapshots (Position))),
+                        Shape, Site);
+                  else
+                     Write_Shaped_Value
+                       (Of_Tree, Operand, Scope,
+                        (if Arrays (Position) then Shape else Child),
+                        Stored_At
+                          ((Kind => IR.Frame_Slot,
+                            Slot => Snapshots (Position))));
+                  end if;
                end if;
                if Current = IR.No_Block then
                   return;
@@ -3675,7 +3748,16 @@ package body Landin.Stages.Lowering is
             end;
          end loop;
 
-         Answer := Shaped_Temporary (Shape, Site);
+         Direct_Answer := Unpacked_Destination
+           and then (for all Position in Borrowed'Range =>
+                       not Arrays (Position) or else Borrowed (Position));
+         if Direct_Answer then
+            Answer := Destination;
+         else
+            Answer := Stored_At
+              ((Kind => IR.Frame_Slot,
+                Slot => Shaped_Temporary (Shape, Site)));
+         end if;
          if Shape.Length /= 0 then
             declare
                Cursor : constant IR.Slot_Id := IR.Add_Slot
@@ -3714,7 +3796,19 @@ package body Landin.Stages.Lowering is
                begin
                   for Position in Values'Range loop
                      Values (Position) :=
-                       (if Arrays (Position)
+                       (if Borrowed (Position)
+                          and then Sources (Position).Place.Kind
+                            = IR.Module_Datum
+                        then IR.Emit_Load_Element
+                          (Unit.all, Filling,
+                           Sources (Position).Place.Datum,
+                           Index, Child.Element, Site)
+                        elsif Borrowed (Position)
+                        then IR.Emit_Load_Slot_Element
+                          (Unit.all, Filling,
+                           Sources (Position).Place.Slot,
+                           Index, Child.Element, Site)
+                        elsif Arrays (Position)
                         then IR.Emit_Load_Slot_Element
                           (Unit.all, Filling, Snapshots (Position),
                            Index, Child.Element, Site)
@@ -3731,8 +3825,19 @@ package body Landin.Stages.Lowering is
                            (Syn.Assignment_Operation (Of_Tree, Node))
                          else Opcode_For (Syn.Kind (Of_Tree, Node))),
                         Values (1), Values (2), Child.Element, Site));
-                  IR.Emit_Store_Slot_Element
-                    (Unit.all, Filling, Answer, Index, Value, Site);
+                  case Answer.Place.Kind is
+                     when IR.Frame_Slot =>
+                        IR.Emit_Store_Slot_Element
+                          (Unit.all, Filling, Answer.Place.Slot,
+                           Index, Value, Site);
+                     when IR.Module_Datum =>
+                        IR.Emit_Store_Element
+                          (Unit.all, Filling, Answer.Place.Datum,
+                           Index, Value, Site);
+                     when IR.Runtime_Address =>
+                        raise Landin.Compiler_Defect with
+                          "array arithmetic answer is not direct storage";
+                  end case;
                   One := IR.Emit_Number
                     (Unit.all, Filling, Ty.Usize, 1, False, Site);
                   Next := IR.Emit_Binary
@@ -3743,9 +3848,9 @@ package body Landin.Stages.Lowering is
                Open (Done);
             end;
          end if;
-         Copy_Shaped_Storage
-           (Stored_At ((Kind => IR.Frame_Slot, Slot => Answer)),
-            Destination, Shape, Site);
+         if not Direct_Answer then
+            Copy_Shaped_Storage (Answer, Destination, Shape, Site);
+         end if;
       end Write_Array_Arithmetic;
 
       procedure Write_Shaped_Value

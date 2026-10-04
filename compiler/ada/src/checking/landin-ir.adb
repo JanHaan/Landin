@@ -1,7 +1,13 @@
+with Ada.Containers.Generic_Array_Sort;
+
 package body Landin.IR is
 
    use type Landin.Machine.Convention;
    use type Landin.Source.Names.Name_Id;
+
+   function Hash_Instance_Position
+     (Position : Positive) return Ada.Containers.Hash_Type
+     is (Ada.Containers.Hash_Type (Position));
 
    function Packed_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Shape : Field_Shape;
@@ -432,17 +438,54 @@ package body Landin.IR is
    function Pointee_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Pointees.Length));
 
+   function Hash (Key : Pointee_Key) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type := 0;
+      Shape : Field_Shape renames Key.Shape;
+
+      procedure Mix (Value : Ada.Containers.Hash_Type);
+
+      procedure Mix (Value : Ada.Containers.Hash_Type) is
+      begin
+         Result := (Result xor Value) * 16_777_619;
+      end Mix;
+   begin
+      --  Hash every component used by Field_Shape's predefined equality.
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.First));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Bits));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Storage));
+      Mix (Field_Shape_Kind'Pos (Shape.Kind));
+      Mix (Landin.Types.Scalar_Name'Pos (Shape.Element));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Cases));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Payloads_First));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Signature));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Atoms));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Pointee));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Nominal_Position));
+      return Result;
+   end Hash;
+
    function Add_Pointee
      (Into : in out Unit; Shape : Field_Shape) return Pointee_Id
    is
+      Key : constant Pointee_Key :=
+        (Shape => Shape,
+         Nominal_Position =>
+           (if Shape.Nominal = No_Nominal_Type then 0
+            else Nominal_Identities.Position (Into, Shape.Nominal)));
+      Found : constant Pointee_Maps.Cursor := Into.Pointee_Ids.Find (Key);
    begin
-      for Index in 1 .. Pointee_Count (Into) loop
-         if Into.Pointees (Index) = Shape then
-            return Pointee_Id (Index);
-         end if;
-      end loop;
+      if Pointee_Maps.Has_Element (Found) then
+         return Pointee_Maps.Element (Found);
+      end if;
       Into.Pointees.Append (Shape);
-      return Pointee_Id (Into.Pointees.Last_Index);
+      declare
+         Id : constant Pointee_Id := Pointee_Id (Into.Pointees.Last_Index);
+      begin
+         Into.Pointee_Ids.Insert (Key, Id);
+         return Id;
+      end;
    end Add_Pointee;
 
    function Pointee_Shape
@@ -792,21 +835,65 @@ package body Landin.IR is
       return False;
    end Contains_Atom;
 
+   function Atom_Set_Is_Subset
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+   is
+   begin
+      if Left = Right then
+         return True;
+      end if;
+
+      declare
+         Sorted : Atom_Array (1 .. Atom_Count (Of_Unit, Right));
+         procedure Sort is new Ada.Containers.Generic_Array_Sort
+           (Index_Type   => Positive,
+            Element_Type => Declaration_Id,
+            Array_Type   => Atom_Array,
+            "<"          => "<");
+      begin
+         for Index in Sorted'Range loop
+            Sorted (Index) := Nth_Atom (Of_Unit, Right, Index);
+         end loop;
+         Sort (Sorted);
+
+         for Index in 1 .. Atom_Count (Of_Unit, Left) loop
+            declare
+               Atom  : constant Declaration_Id :=
+                 Nth_Atom (Of_Unit, Left, Index);
+               Below : Natural := 0;
+               Above : Natural := Sorted'Length;
+            begin
+               --  Find the first member not less than Atom.  The bounds are
+               --  positions between members, so neither update can overflow.
+               while Below < Above loop
+                  declare
+                     Middle : constant Positive :=
+                       Below + (Above - Below) / 2 + 1;
+                  begin
+                     if Sorted (Middle) < Atom then
+                        Below := Middle;
+                     else
+                        Above := Middle - 1;
+                     end if;
+                  end;
+               end loop;
+               if Below = Sorted'Length
+                 or else Sorted (Below + 1) /= Atom
+               then
+                  return False;
+               end if;
+            end;
+         end loop;
+         return True;
+      end;
+   end Atom_Set_Is_Subset;
+
    function Atom_Sets_Agree
      (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
    is
    begin
-      if Atom_Count (Of_Unit, Left) /= Atom_Count (Of_Unit, Right) then
-         return False;
-      end if;
-      for Index in 1 .. Atom_Count (Of_Unit, Left) loop
-         if not Contains_Atom
-           (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
-         then
-            return False;
-         end if;
-      end loop;
-      return True;
+      return Atom_Count (Of_Unit, Left) = Atom_Count (Of_Unit, Right)
+        and then Atom_Set_Is_Subset (Of_Unit, Left, Right);
    end Atom_Sets_Agree;
 
    function Signature_Count (Of_Unit : Unit) return Natural
@@ -1304,13 +1391,12 @@ package body Landin.IR is
    function Item_For_Instance
      (Of_Unit : Unit; Instance_Position : Positive) return Item_Id
    is
+      Found : constant Routine_Instance_Item_Maps.Cursor :=
+        Of_Unit.Routine_Instance_Items.Find (Instance_Position);
    begin
-      for Mapping of Of_Unit.Routine_Instance_Items loop
-         if Mapping.Position = Instance_Position then
-            return Mapping.Item;
-         end if;
-      end loop;
-      return No_Item;
+      return (if Routine_Instance_Item_Maps.Has_Element (Found)
+              then Routine_Instance_Item_Maps.Element (Found)
+              else No_Item);
    end Item_For_Instance;
 
    function Add_Routine_Instance_Item
@@ -1328,11 +1414,7 @@ package body Landin.IR is
       Held.Generic_Template := Template;
       Held.Instance_Position := Instance_Position;
       Into.Items (Positive (Made)) := Held;
-      Into.Routine_Instance_Items.Append
-        (Routine_Instance_Item'
-           (Position => Instance_Position,
-            Template => Template,
-            Item     => Made));
+      Into.Routine_Instance_Items.Insert (Instance_Position, Made);
       return Made;
    end Add_Routine_Instance_Item;
 
@@ -4253,10 +4335,8 @@ package body Landin.IR is
             begin
                Widened.Atoms := Shape.Atoms;
                Fits := Same_Shape (Into, Shape, Widened);
-               for Index in 1 .. Atom_Count (Into, Source.Atoms) loop
-                  Fits := Fits and then Contains_Atom
-                    (Into, Shape.Atoms, Nth_Atom (Into, Source.Atoms, Index));
-               end loop;
+               Fits := Fits and then Atom_Set_Is_Subset
+                 (Into, Source.Atoms, Shape.Atoms);
             end;
          end if;
          if not Fits then

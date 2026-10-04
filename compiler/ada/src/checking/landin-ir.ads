@@ -133,6 +133,8 @@ with Landin.Packed;
 --  that folder's canonical zero-or-one image beside an otherwise empty datum
 --  block.  Routine short-circuit CFG therefore never becomes data.
 
+with Ada.Containers;
+private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 
 with Landin.Layouts;
@@ -701,6 +703,10 @@ package Landin.IR is
      (Of_Unit : Unit; Set_Id : Atom_Set_Id; Atom : Declaration_Id)
       return Boolean
      with Pre => Holds (Of_Unit, Set_Id);
+
+   function Atom_Set_Is_Subset
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+     with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);
 
    function Atom_Sets_Agree
      (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
@@ -4199,14 +4205,16 @@ private
    package Evidence_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Evidence_Record);
 
-   type Routine_Instance_Item is record
-      Position : Positive := 1;
-      Template : Declaration_Id := No_Declaration;
-      Item     : Item_Id := No_Item;
-   end record;
+   function Hash_Instance_Position
+     (Position : Positive) return Ada.Containers.Hash_Type;
 
-   package Routine_Instance_Item_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Routine_Instance_Item);
+   --  Only ready checker positions have items.  A map keeps storage
+   --  proportional to that set even when positions are sparse.
+   package Routine_Instance_Item_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Positive,
+      Element_Type    => Item_Id,
+      Hash            => Hash_Instance_Position,
+      Equivalent_Keys => "=");
 
    package Nominal_Template_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -4230,6 +4238,19 @@ private
    package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
+
+   type Pointee_Key is record
+      Shape : Field_Shape;
+      Nominal_Position : Natural;
+   end record;
+
+   function Hash (Key : Pointee_Key) return Ada.Containers.Hash_Type;
+
+   package Pointee_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Pointee_Key,
+      Element_Type    => Pointee_Id,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
 
    package Case_Run_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -4278,6 +4299,7 @@ private
       Nominal_Shapes : Nominal_Shape_Vectors.Vector;
       Nominal_Fields : Field_Shape_Vectors.Vector;
       Pointees   : Field_Shape_Vectors.Vector;
+      Pointee_Ids : Pointee_Maps.Map;
       Atom_Sets  : Atom_Set_Vectors.Vector;
       Atoms      : Atom_Vectors.Vector;
       Encodings  : Encoding_Vectors.Vector;
@@ -4297,7 +4319,7 @@ private
       --  instruction is a fixed-size record and a path is not.
       Paths       : Path_Step_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
-      Routine_Instance_Items : Routine_Instance_Item_Vectors.Vector;
+      Routine_Instance_Items : Routine_Instance_Item_Maps.Map;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.
       Images      : Image_Vectors.Vector;

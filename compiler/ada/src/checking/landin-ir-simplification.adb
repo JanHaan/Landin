@@ -33,14 +33,22 @@ package body Landin.IR.Simplification is
    procedure Run
      (Into : in out Unit;
       Facts : Landin.Targets.Target_Facts;
+      Objective : Landin.Optimization.Objective) is
+   begin
+      Verifier.Verify (Into, Facts);
+      Run_On_Verified (Into, Facts, Objective);
+   end Run;
+
+   procedure Run_On_Verified
+     (Into : in out Unit;
+      Facts : Landin.Targets.Target_Facts;
       Objective : Landin.Optimization.Objective)
    is
-      Keep : Rewriting.Keep_Array (1 .. Natural (Into.Code.Length)) :=
-        [others => True];
+      procedure Simplify
+        (Item : Item_Id; Keep : in out Rewriting.Keep_Vectors.Vector);
 
-      procedure Simplify (Item : Item_Id);
-
-      procedure Simplify (Item : Item_Id) is
+      procedure Simplify
+        (Item : Item_Id; Keep : in out Rewriting.Keep_Vectors.Vector) is
          Held : constant Item_Record := Into.Items (Positive (Item));
          Alias : array (1 .. Held.Values.Count) of Value_Id;
          Needed : array (1 .. Held.Values.Count) of Boolean :=
@@ -412,18 +420,23 @@ package body Landin.IR.Simplification is
          end loop;
       end Simplify;
    begin
-      Verifier.Verify (Into, Facts);
       if Objective = Landin.Optimization.None then
          return;
       end if;
-      for I in 1 .. Item_Count (Into) loop
-         if Kind_Of (Into, Item_Id (I)) = Routine
-           and then not Is_External (Into, Item_Id (I))
-         then
-            Simplify (Item_Id (I));
-         end if;
-      end loop;
-      Rewriting.Compact (Into, Keep);
+      declare
+         Keep : Rewriting.Keep_Vectors.Vector :=
+           Rewriting.Keep_Vectors.To_Vector
+             (True, Into.Code.Length);
+      begin
+         for I in 1 .. Item_Count (Into) loop
+            if Kind_Of (Into, Item_Id (I)) = Routine
+              and then not Is_External (Into, Item_Id (I))
+            then
+               Simplify (Item_Id (I), Keep);
+            end if;
+         end loop;
+         Rewriting.Compact (Into, Keep);
+      end;
       Verifier.Verify (Into, Facts);
-   end Run;
+   end Run_On_Verified;
 end Landin.IR.Simplification;

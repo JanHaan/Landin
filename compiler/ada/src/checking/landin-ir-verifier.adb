@@ -1,3 +1,4 @@
+with Ada.Containers.Hashed_Maps;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
@@ -13,6 +14,17 @@ package body Landin.IR.Verifier is
 
    use type Landin.Source.Names.Name_Id;
    use type Landin.Types.Magnitude;
+
+   type Linked_Item is record
+      First          : Item_Id;
+      Has_Definition : Boolean;
+   end record;
+
+   package Linked_Symbols is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Landin.Source.Names.Name_Id,
+      Element_Type    => Linked_Item,
+      Hash            => Landin.Source.Names.Hash,
+      Equivalent_Keys => "=");
 
    function Describe (Of_Kind : Fault_Kind) return String
      is (case Of_Kind is
@@ -289,6 +301,9 @@ package body Landin.IR.Verifier is
         Aggregate_Field_Image_Pattern_Not_Canonical;
       Signature_Mismatch : constant Fault_Kind :=
         Function_Value_Signature_Disagrees;
+      --  A symbol's first signature represents every compatible declaration;
+      --  retain whether any earlier item supplied its one allowed body.
+      Symbols : Linked_Symbols.Map;
 
       function Run_Fits (Held : Run; Total : Natural) return Boolean
         is (Held.First <= Total
@@ -2189,14 +2204,7 @@ package body Landin.IR.Verifier is
          if not Holds (Of_Unit, Left) or else not Holds (Of_Unit, Right) then
             return False;
          end if;
-         for Index in 1 .. Atom_Count (Of_Unit, Left) loop
-            if not Contains_Atom
-              (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
-            then
-               return False;
-            end if;
-         end loop;
-         return True;
+         return Atom_Set_Is_Subset (Of_Unit, Left, Right);
       end Atom_Metadata_Is_Subset;
 
       function Address_Agrees
@@ -3982,24 +3990,38 @@ package body Landin.IR.Verifier is
                   return (Kind => Routine_Signature_Disagrees,
                           Item => Id, others => <>);
                end if;
-               for Prior in 1 .. Which - 1 loop
-                  declare
-                     Other : constant Item_Id := Item_Id (Prior);
-                  begin
-                     if Link_Symbol (Of_Unit, Other)
-                          = Link_Symbol (Of_Unit, Id)
-                       and then
-                         ((not Is_External (Of_Unit, Id)
-                           and then not Is_External (Of_Unit, Other))
+               declare
+                  Symbol : constant Landin.Source.Names.Name_Id :=
+                    Link_Symbol (Of_Unit, Id);
+                  Prior : constant Linked_Symbols.Cursor :=
+                    Symbols.Find (Symbol);
+               begin
+                  if Linked_Symbols.Has_Element (Prior) then
+                     declare
+                        Earlier : Linked_Item :=
+                          Linked_Symbols.Element (Prior);
+                     begin
+                        if (not Is_External (Of_Unit, Id)
+                              and then Earlier.Has_Definition)
                           or else not Signatures_Agree
                             (Of_Unit, Signature_Of (Of_Unit, Id),
-                             Signature_Of (Of_Unit, Other)))
-                     then
-                        return (Kind => Routine_Signature_Disagrees,
-                                Item => Id, others => <>);
-                     end if;
-                  end;
-               end loop;
+                             Signature_Of (Of_Unit, Earlier.First))
+                        then
+                           return (Kind => Routine_Signature_Disagrees,
+                                   Item => Id, others => <>);
+                        end if;
+                        if not Is_External (Of_Unit, Id) then
+                           Earlier.Has_Definition := True;
+                           Symbols.Replace_Element (Prior, Earlier);
+                        end if;
+                     end;
+                  else
+                     Symbols.Insert
+                       (Symbol,
+                        (First => Id,
+                         Has_Definition => not Is_External (Of_Unit, Id)));
+                  end if;
+               end;
             end if;
 
             if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type

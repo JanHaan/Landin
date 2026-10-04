@@ -1,14 +1,14 @@
 with Landin.IR.Control_Flow;
 
 package body Landin.IR.Rewriting is
-   procedure Compact (Into : in out Unit; Keep : Keep_Array) is
+   procedure Compact (Into : in out Unit; Keep : Keep_Vectors.Vector) is
       Code : Code_Vectors.Vector;
       Args : Value_Ref_Vectors.Vector;
       Assembled : Assembly_Operand_Vectors.Vector;
       Blocks : Block_Vectors.Vector;
       Items : Item_Vectors.Vector := Into.Items;
    begin
-      if Keep'First /= 1 or else Keep'Length /= Natural (Into.Code.Length)
+      if Natural (Keep.Length) /= Natural (Into.Code.Length)
       then
          raise Landin.Compiler_Defect with "invalid rewrite retention map";
       end if;

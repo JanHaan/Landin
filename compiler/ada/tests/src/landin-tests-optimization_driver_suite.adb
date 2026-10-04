@@ -1,6 +1,7 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Driver;
+with Landin.Optimization;
 with Landin.Platform;
 with Landin.Testing.Fakes;
 
@@ -8,6 +9,14 @@ package body Landin.Tests.Optimization_Driver_Suite is
    package US renames Ada.Strings.Unbounded;
    Source : constant String :=
      "public main: () -> (code: i32) = code = 0 end main";
+   Generic_Source : constant String :=
+     "ordered: type = concept (t: type) "
+     & "less: (a: t, b: t) -> (r: bool) end ordered "
+     & "less: (a: i32, b: i32) -> (r: bool) = a < b end less "
+     & "i32 is ordered (less: less) "
+     & "choose: (t: type is ordered, a: t, b: t) -> (r: t) = "
+     & "if t.less(a,b) then r = a else r = b end if end choose "
+     & "public main: () -> (r: i32) = r = choose(42,43) end main";
 
    type Report_Refusing_Host is new
      Landin.Testing.Fakes.Fake_Filesystem with null record;
@@ -42,6 +51,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
 
    procedure Invalid_Requests (Item : in out Landin.Testing.Context);
    procedure Reports_Are_Deterministic
+     (Item : in out Landin.Testing.Context);
+   procedure Pass_Mode_Combinations
      (Item : in out Landin.Testing.Context);
    procedure Report_Failures (Item : in out Landin.Testing.Context);
    procedure Tool_Completion (Item : in out Landin.Testing.Context);
@@ -195,6 +206,47 @@ package body Landin.Tests.Optimization_Driver_Suite is
         (Item, Host.Written ("report.json"), US.To_String (First),
          "explicit defaults and build mode do not change optimization");
    end Reports_Are_Deterministic;
+
+   procedure Pass_Mode_Combinations
+     (Item : in out Landin.Testing.Context)
+   is
+      package Opt renames Landin.Optimization;
+      use type Opt.Specialization_Mode;
+   begin
+      for Objective in Opt.Objective loop
+         for Mode in Opt.Specialization_Mode loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Args : Landin.Platform.Path_List := Request;
+               Result : Landin.Driver.Outcome;
+            begin
+               Host.Add_File ("main.ldn", Generic_Source);
+               Args.Append ("--optimize=" & Opt.Spelling (Objective));
+               Args.Append ("--specialize=" & Opt.Spelling (Mode));
+               Args.Append ("--build-report=report.json");
+               Result := Landin.Driver.Execute (Args, Host, Tools);
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 0,
+                  "pass combination emits: " & Objective'Image
+                  & Mode'Image);
+               Landin.Testing.Check
+                 (Item, Host.Written ("out.s") /= ""
+                  and then Ada.Strings.Fixed.Index
+                    (Host.Written ("report.json"),
+                     """specializations"": [") > 0,
+                  "pass combination writes assembly and decisions");
+               if Mode = Opt.Off then
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index
+                       (Host.Written ("report.json"),
+                        """action"":""declined"",""reason"":""disabled""") > 0,
+                     "off mode records declined, disabled decisions");
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Pass_Mode_Combinations;
 
    procedure Report_Failures (Item : in out Landin.Testing.Context) is
       Host : Report_Refusing_Host;
@@ -550,6 +602,9 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Landin.Testing.Register
         (Into, "opt driver", "deterministic source reports and defaults",
          Reports_Are_Deterministic'Access);
+      Landin.Testing.Register
+        (Into, "opt driver", "pass mode combinations",
+         Pass_Mode_Combinations'Access);
       Landin.Testing.Register
         (Into, "opt driver", "report writes fail through the platform",
          Report_Failures'Access);

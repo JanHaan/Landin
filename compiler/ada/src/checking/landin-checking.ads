@@ -59,6 +59,7 @@ with Landin.Machine;
 
 with Ada.Containers;
 private with Ada.Containers.Hashed_Maps;
+private with Ada.Containers.Ordered_Maps;
 private with Ada.Containers.Vectors;
 
 with Landin.Layouts;
@@ -102,6 +103,7 @@ package Landin.Checking is
       function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
       function Position (Of_Table : Table; Of_Id : Id) return Positive
         with Pre => Holds (Of_Table, Of_Id);
+      function "<" (Left, Right : Id) return Boolean;
       --  Equal for equal identities, None included; a lookup key only.
       function Hash (Of_Id : Id) return Ada.Containers.Hash_Type;
    private
@@ -2518,6 +2520,15 @@ private
    package Concept_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Record);
 
+   function Hash_Concept_Declaration
+     (Id : Declaration_Id) return Ada.Containers.Hash_Type;
+
+   package Concept_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Declaration_Id,
+      Element_Type    => Positive,
+      Hash            => Hash_Concept_Declaration,
+      Equivalent_Keys => "=");
+
    package Concept_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Id);
 
@@ -2534,6 +2545,24 @@ private
 
    package Conformance_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Conformance_Record);
+
+   --  A conformance key spelled as words.  Two exactly spelled keys agree
+   --  if and only if their words are equal.  The order is lexicographic
+   --  and means nothing else; no word's value decides a lookup's cost.
+   package Key_Word_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Packed.Image,
+      "="          => Landin.Packed."=");
+
+   function Precedes (Left, Right : Key_Word_Vectors.Vector) return Boolean;
+
+   package Conformance_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type     => Key_Word_Vectors.Vector,
+      Element_Type => Positive,
+      "<"          => Precedes);
+
+   package Conformance_Position_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Positive);
 
    type Conformance_Provider is record
       Declaration : Declaration_Id := No_Declaration;
@@ -2623,6 +2652,12 @@ private
    package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
+
+   function "<" (Left, Right : Field_Shape) return Boolean;
+
+   package Field_Shape_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type     => Field_Shape,
+      Element_Type => Positive);
 
    package Case_Run_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -2813,7 +2848,15 @@ private
       Routine_Actuals : Actual_Key_Vectors.Vector;
       Routine_Evidence : Routine_Evidence_Vectors.Vector;
       Concepts : Concept_Vectors.Vector;
+      --  Source declarations only; the compiler concept occupies position 1.
+      Concept_Index : Concept_Maps.Map;
       Conformances : Conformance_Vectors.Vector;
+      --  The earliest row of each exactly spelled key, and in order every
+      --  row whose key has no exact spelling.
+      Conformance_Index : Conformance_Maps.Map;
+      Unspelled_Conformances : Conformance_Position_Vectors.Vector;
+      --  A set added after the latest conformance cannot occur in any row.
+      Conformance_Atom_Set_Limit : Natural := 0;
       Conformance_Actuals : Actual_Key_Vectors.Vector;
       Conformance_Providers : Conformance_Provider_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;
@@ -2850,6 +2893,8 @@ private
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
       Field_Shapes : Field_Shape_Vectors.Vector;
+      --  The first raw-equal position, including layout fields and payloads.
+      Field_Shape_First : Field_Shape_Maps.Map;
       Case_Runs    : Case_Run_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];

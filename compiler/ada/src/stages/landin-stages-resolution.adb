@@ -1,3 +1,5 @@
+with Ada.Containers.Hashed_Maps;
+
 with Landin.Memory;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
@@ -29,6 +31,17 @@ package body Landin.Stages.Resolution is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
+
+   type Formal_Match is record
+      Role     : Res.Argument_Role;
+      Position : Positive;
+   end record;
+
+   package Formal_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Landin.Source.Names.Name_Id,
+      Element_Type    => Formal_Match,
+      Hash            => Landin.Source.Names.Hash,
+      Equivalent_Keys => "=");
 
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
@@ -592,8 +605,69 @@ package body Landin.Stages.Resolution is
                    (Landin.Resolution.Source_Of (Meanings.all, Meant));
                Declaration : constant Syn.Node_Id :=
                  Landin.Resolution.Node_Of (Meanings.all, Meant);
-               Runtime_Position : Natural := 0;
+               Parameter_Total : constant Natural :=
+                 Syn.Parameter_Count (Callee_Tree.all, Declaration);
+               Matches : Formal_Maps.Map;
+               Has_Label : Boolean := False;
+               Next_Runtime : Natural := 1;
             begin
+               for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                  if Syn.Argument_Label
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Which))
+                      /= Landin.Source.Names.No_Name
+                  then
+                     Has_Label := True;
+                     exit;
+                  end if;
+               end loop;
+
+               --  Resolve each declaration name once.  Generic formals win
+               --  over runtime parameters of the same name, as in the
+               --  source-ordered searches this replaces.
+               if Has_Label then
+                  for Static in 1 .. Syn.Generic_Formal_Count
+                    (Callee_Tree.all, Declaration)
+                  loop
+                     declare
+                        Candidate : constant Syn.Node_Id :=
+                          Syn.Nth_Generic_Formal
+                            (Callee_Tree.all, Declaration, Static);
+                        Named : constant Landin.Source.Names.Name_Id :=
+                          Syn.Name (Callee_Tree.all, Candidate);
+                     begin
+                        if not Matches.Contains (Named) then
+                           Matches.Insert
+                             (Named,
+                              (Role =>
+                                 (if Syn.Kind (Callee_Tree.all, Candidate)
+                                       = Syn.Type_Formal
+                                  then Landin.Resolution.Type_Argument
+                                  else Landin.Resolution.Fixed_Argument),
+                               Position => Static));
+                        end if;
+                     end;
+                  end loop;
+               end if;
+
+               if Has_Label then
+                  for Runtime in 1 .. Parameter_Total loop
+                     declare
+                        Candidate : constant Syn.Node_Id :=
+                          Syn.Nth_Parameter
+                            (Callee_Tree.all, Declaration, Runtime);
+                        Named : constant Landin.Source.Names.Name_Id :=
+                          Syn.Name (Callee_Tree.all, Candidate);
+                     begin
+                        if not Matches.Contains (Named) then
+                           Matches.Insert
+                             (Named,
+                              (Role => Landin.Resolution.Runtime_Argument,
+                               Position => Runtime));
+                        end if;
+                     end;
+                  end loop;
+               end if;
+
                for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                   declare
                      Argument : constant Syn.Node_Id :=
@@ -607,73 +681,38 @@ package body Landin.Stages.Resolution is
                      if Syn.Is_Fill_Argument (Of_Tree, Argument) then
                         Role := Landin.Resolution.Fill_Argument;
                      elsif Label = Landin.Source.Names.No_Name then
-                        Runtime_Position := Runtime_Position + 1;
-                        declare
-                           Visible : Natural := 0;
-                        begin
-                           for Runtime in 1 .. Syn.Parameter_Count
-                             (Callee_Tree.all, Declaration)
-                           loop
-                              declare
-                                 Candidate : constant Syn.Node_Id :=
-                                   Syn.Nth_Parameter
-                                     (Callee_Tree.all, Declaration, Runtime);
-                              begin
-                                 if not Syn.Is_Caller
-                                   (Callee_Tree.all, Candidate)
-                                 then
-                                    Visible := Visible + 1;
-                                    if Visible = Runtime_Position then
-                                       Role :=
-                                         Landin.Resolution.Runtime_Argument;
-                                       Position := Runtime;
-                                       exit;
-                                    end if;
-                                 end if;
-                              end;
-                           end loop;
-                        end;
-                     else
-                        for Static in 1 .. Syn.Generic_Formal_Count
-                          (Callee_Tree.all, Declaration)
-                        loop
+                        --  Positional arguments consume visible runtime
+                        --  parameters in order.  A caller parameter never
+                        --  consumes one of these arguments.
+                        while Next_Runtime in 1 .. Parameter_Total loop
                            declare
+                              Runtime : constant Positive :=
+                                Positive (Next_Runtime);
                               Candidate : constant Syn.Node_Id :=
-                                Syn.Nth_Generic_Formal
-                                  (Callee_Tree.all, Declaration, Static);
+                                Syn.Nth_Parameter
+                                  (Callee_Tree.all, Declaration, Runtime);
                            begin
-                              if Syn.Name (Callee_Tree.all, Candidate) = Label
+                              Next_Runtime :=
+                                (if Next_Runtime = Parameter_Total
+                                 then 0 else Next_Runtime + 1);
+                              if not Syn.Is_Caller
+                                (Callee_Tree.all, Candidate)
                               then
-                                 Position := Static;
-                                 Role :=
-                                   (if Syn.Kind (Callee_Tree.all, Candidate)
-                                         = Syn.Type_Formal
-                                    then Landin.Resolution.Type_Argument
-                                    else Landin.Resolution.Fixed_Argument);
+                                 Role := Landin.Resolution.Runtime_Argument;
+                                 Position := Runtime;
                                  exit;
                               end if;
                            end;
                         end loop;
-
-                        if Role = Landin.Resolution.Unmatched_Argument then
-                           for Runtime in 1 .. Syn.Parameter_Count
-                             (Callee_Tree.all, Declaration)
-                           loop
-                              declare
-                                 Candidate : constant Syn.Node_Id :=
-                                   Syn.Nth_Parameter
-                                     (Callee_Tree.all, Declaration, Runtime);
-                              begin
-                                 if Syn.Name (Callee_Tree.all, Candidate)
-                                      = Label
-                                 then
-                                    Role :=
-                                      Landin.Resolution.Runtime_Argument;
-                                    Position := Runtime;
-                                    exit;
-                                 end if;
-                              end;
-                           end loop;
+                     else
+                        if Matches.Contains (Label) then
+                           declare
+                              Found : constant Formal_Match :=
+                                Matches.Element (Label);
+                           begin
+                              Role := Found.Role;
+                              Position := Found.Position;
+                           end;
                         end if;
                      end if;
 
