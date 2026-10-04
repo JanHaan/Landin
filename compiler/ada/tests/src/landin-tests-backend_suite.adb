@@ -7587,6 +7587,32 @@ package body Landin.Tests.Backend_Suite is
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+
+   --  A range check uses the scalar's own width and leaves out a bound
+   --  already guaranteed by its representation. Wide checks still need both
+   --  halves of each bound on Cortex-M0.
+   procedure Narrow_Ranges_Use_Scalar_Comparisons
+     (Item : in out Landin.Testing.Context);
+
+   procedure Narrow_Ranges_Use_Scalar_Comparisons
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Range
+        (Scalar, Lower_Bound, Upper_Bound : String;
+         Low_Comparisons, High_Comparisons : Natural);
+
+      procedure Check_Range
+        (Scalar, Lower_Bound, Upper_Bound : String;
+         Low_Comparisons, High_Comparisons : Natural)
+      is
+         Source : constant String :=
+           "bounded: type = " & Scalar & " range " & Lower_Bound & ".."
+           & Upper_Bound & LF
+           & "check: (n: " & Scalar & ") -> (r: bounded) =" & LF
+           & "    r = n" & LF
+           & "end check" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Cortex_M);
          Ran : Natural;
          Assembly : Ada.Strings.Unbounded.Unbounded_String;
          Report : Landin.Build_Reports.Report;
@@ -7601,6 +7627,17 @@ package body Landin.Tests.Backend_Suite is
             Landin.Stages.Meanings (Work).all,
             Landin.Stages.Identities (Work).all,
             Landin.Stages.Target (Work),
+
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, Scalar & " range lowers");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         Landin.Backend.Cortex_M.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Targets.Cortex_M,
             Landin.Optimization.Reference_Options, Assembly, Report);
          declare
             Text : constant String :=
@@ -7654,6 +7691,23 @@ package body Landin.Tests.Backend_Suite is
          & "end main" & LF,
          "packed element", "and x9, x9, x12", 2);
    end Arm64_Packed_Reads_Validate_Atoms_Once;
+
+         begin
+            Landin.Testing.Check
+              (Item, Occurrences (Text, "cmp r0, r2") = Low_Comparisons
+                 and then Occurrences (Text, "cmp r1, r3")
+                   = High_Comparisons
+                 and then Contains (Text, "udf #1"),
+               Scalar & " range compares only needed bounds and traps");
+         end;
+      end Check_Range;
+   begin
+      Check_Range ("u8", "0", "100", 1, 0);
+      Check_Range ("i16", "-100", "100", 2, 0);
+      Check_Range ("u32", "10", "4294967295", 1, 0);
+      Check_Range ("i32", "-2147483648", "5", 1, 0);
+      Check_Range ("u64", "0", "100", 2, 2);
+   end Narrow_Ranges_Use_Scalar_Comparisons;
 
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
    --  at every width, inside the same fences, and the default emits the
@@ -8379,6 +8433,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "Cortex wrapping products use low word",
          Cortex_Wrapping_Products_Use_Low_Word'Access);
+      Landin.Testing.Register
+        (Into, "backend", "narrow ranges use scalar comparisons",
+         Narrow_Ranges_Use_Scalar_Comparisons'Access);
       Landin.Testing.Register
         (Into, "backend", "imported function addresses use the GOT",
          Imported_Function_Addresses_Use_The_GOT'Access);

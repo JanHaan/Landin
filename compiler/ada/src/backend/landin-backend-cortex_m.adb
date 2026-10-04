@@ -2521,33 +2521,65 @@ package body Landin.Backend.Cortex_M is
                      Load_Value (Operand (1));
                      Extend ("r0", Kind (Value));
                      if Size_Of_Value (Value) /= Landin.Targets.Byte_8 then
-                        if Signed then
-                           Emit ("asrs r1, r0, #31");
-                        else
-                           Emit ("movs r1, #0");
-                        end if;
-                     end if;
-                     for Upper in Boolean loop
                         declare
-                           Bound : constant Pattern := To_Pattern
-                             ((if Upper then Landin.IR.Range_Upper
-                                 (Of_Unit, Item, Value)
-                               else Landin.IR.Range_Lower
-                                 (Of_Unit, Item, Value)), 64);
-                           Next : constant String := Fresh;
+                           Bits : constant Natural := Natural
+                             (Landin.Types.Width
+                               (Landin.Types.Integer_Name (Kind (Value)),
+                                Facts));
+                           Minimum : constant Landin.Types.Folded :=
+                             (if Signed then -Landin.Types.Folded
+                                (2 ** (Bits - 1)) else 0);
+                           Maximum : constant Landin.Types.Folded :=
+                             (if Signed then Landin.Types.Folded
+                                (2 ** (Bits - 1) - 1)
+                              else Landin.Types.Folded (2 ** Bits - 1));
+                           Lower : constant Landin.Types.Folded :=
+                             Landin.IR.Range_Lower (Of_Unit, Item, Value);
+                           Upper : constant Landin.Types.Folded :=
+                             Landin.IR.Range_Upper (Of_Unit, Item, Value);
                         begin
-                           Immediate ("r2", Bound and 16#FFFF_FFFF#);
-                           Immediate ("r3", Bound / 2 ** 32);
-                           Emit ("cmp r1, r3");
-                           Branch ((if Upper then
-                             (if Signed then "gt" else "hi")
-                             else (if Signed then "lt" else "cc")), Trap);
-                           Branch ("ne", Next);
-                           Emit ("cmp r0, r2");
-                           Branch ((if Upper then "hi" else "cc"), Trap);
-                           Put (Next & ":");
+                           --  The scalar's representation already proves
+                           --  any bound at or beyond its own limits.
+                           if Upper < Minimum or else Lower > Maximum then
+                              Jump (Trap);
+                           else
+                              if Lower > Minimum then
+                                 Immediate ("r2", To_Pattern (Lower, 32));
+                                 Emit ("cmp r0, r2");
+                                 Branch
+                                   ((if Signed then "lt" else "cc"), Trap);
+                              end if;
+                              if Upper < Maximum then
+                                 Immediate ("r2", To_Pattern (Upper, 32));
+                                 Emit ("cmp r0, r2");
+                                 Branch
+                                   ((if Signed then "gt" else "hi"), Trap);
+                              end if;
+                           end if;
                         end;
-                     end loop;
+                     else
+                        for Upper in Boolean loop
+                           declare
+                              Bound : constant Pattern := To_Pattern
+                                ((if Upper then Landin.IR.Range_Upper
+                                    (Of_Unit, Item, Value)
+                                  else Landin.IR.Range_Lower
+                                    (Of_Unit, Item, Value)), 64);
+                              Next : constant String := Fresh;
+                           begin
+                              Immediate ("r2", Bound and 16#FFFF_FFFF#);
+                              Immediate ("r3", Bound / 2 ** 32);
+                              Emit ("cmp r1, r3");
+                              Branch ((if Upper then
+                                (if Signed then "gt" else "hi")
+                                else (if Signed then "lt" else "cc")), Trap);
+                              Branch ("ne", Next);
+                              Emit ("cmp r0, r2");
+                              Branch ((if Upper then "hi" else "cc"), Trap);
+                              Put (Next & ":");
+                           end;
+                        end loop;
+                     end if;
                      Store_Value (Value);
                   end;
                when Landin.IR.Conversion | Landin.IR.Pointer_Address =>
