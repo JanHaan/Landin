@@ -1,5 +1,8 @@
 """Regression checks for the scaling command's input validation."""
 
+import contextlib
+import io
+from unittest import mock
 import json
 from pathlib import Path
 import tempfile
@@ -57,6 +60,51 @@ class StageReportFreshness(unittest.TestCase):
                     scaling.measure("refine", work, work, str(report), 5)
             self.assertEqual(calls, 2)
 
+
+class CapturedOutput(io.StringIO):
+    def reconfigure(self, **kwargs):
+        pass
+
+
+class ScalingMemory(unittest.TestCase):
+    def verdict(self, peaks):
+        samples = iter({"frontend": float(size), "emission": float(size),
+                        "peak_kib": peak,
+                        "sizes": {"declarations": size}}
+                       for size, peak in zip(scaling.SIZES, peaks))
+        stdout, stderr = CapturedOutput(), io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "measurements.json"
+            with (mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
+                  mock.patch.object(scaling, "write_program"),
+                  mock.patch.object(scaling, "median_of", side_effect=lambda *args: next(samples)),
+                  contextlib.redirect_stdout(stdout),
+                  contextlib.redirect_stderr(stderr)):
+                status = scaling.main(["--refine", sys.executable, "--runs=1",
+                                       "--no-derived", "--json", str(report)])
+            record = json.loads(report.read_text())
+        return status, stdout.getvalue(), stderr.getvalue(), record
+
+    def test_quadratic_memory_fails_with_linear_time(self):
+        status, output, errors, record = self.verdict(
+            [1024, 4096, 16384, 65536, 262144])
+        self.assertEqual(status, 1)
+        self.assertIn("peak memory 1000 -> 2000 grew 4.00x", errors)
+        self.assertNotIn("frontend", errors)
+        self.assertIn("4.00x", output)
+        self.assertEqual(record["memory_limit"], 2.5)
+        self.assertEqual(record["families"]["sample"][1]["ratios"]["peak_kib"], 4)
+
+    def test_memory_at_limit_passes(self):
+        status, _, errors, _ = self.verdict([1024, 2560, 6400, 16000, 40000])
+        self.assertEqual(status, 0)
+        self.assertEqual(errors, "")
+
+    def test_missing_peak_fails(self):
+        status, _, errors, record = self.verdict([0, 2048, 4096, 8192, 16384])
+        self.assertEqual(status, 1)
+        self.assertIn("no positive peak memory measurement", errors)
+        self.assertEqual(record["families"]["sample"], [])
 
 
 if __name__ == "__main__":

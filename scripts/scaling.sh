@@ -3,8 +3,9 @@
 #
 #  scripts/scaling.py generates programs of 1,000 to 16,000 declarations,
 #  checks and emits each five times and fails a doubling whose median
-#  frontend or emission time grows more than 2.5 times.  A ratio compares two runs on one machine, so
-#  the verdict does not depend on how fast that machine is.  Release mode,
+#  frontend or emission time, or largest reported peak memory, grows more
+#  than 2.5 times.  A ratio compares two runs on one machine, so the verdict
+#  does not depend on how fast that machine is.  Release mode,
 #  because that is the compiler people run and the one the bound was
 #  measured on; the debug build's checks make every size slower alike.
 #
