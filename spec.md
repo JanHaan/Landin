@@ -13077,10 +13077,13 @@ structural atom-set, fixed-array, nominal, pointer/slice reference,
 `any`-concept or concrete function-signature descriptor; every repeat must
 agree exactly.
 
-A pointer or slice pattern first matches its reference kind, permission and
-ordinary view exactly, then recursively matches its complete referent
-descriptor. Deduction does not relax a mutable reference to a read-only
-pattern or treat a text view or pointer union as an ordinary reference.
+A pointer or slice pattern first matches its reference kind and ordinary view,
+then recursively matches its complete referent descriptor. When that written
+pattern is the outer runtime parameter type, a mutable argument may satisfy a
+read-only pointer or slice pattern under [0440]; the specialized parameter
+remains read-only. Permission in nested patterns still matches exactly, and a
+read-only argument never satisfies a mutable pattern. Deduction does not treat
+a text view or pointer union as an ordinary reference.
 Referent identity includes nested references, nominal identity, fixed-array
 extent, function signature and erased concept as applicable. A direct formal
 or stored nominal actual containing `any C` agrees only with that same C.
@@ -13222,8 +13225,9 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-zero-nominal-array-signatures`,
 `runtime/generic-declared-errors`,
 `runtime/generic-routine-inferred-errors`,
-`runtime/generic-try-effective-signature`, and
-`runtime/generic-same-key-recursion` and
+`runtime/generic-try-effective-signature`,
+`runtime/generic-same-key-recursion`,
+`runtime/r420-small-vector`, and
 `runtime/diagnostic-loggers-dispatch` on Linux x86-64. The malformed-error
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.

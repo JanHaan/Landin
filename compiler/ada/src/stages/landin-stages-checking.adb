@@ -9971,9 +9971,11 @@ package body Landin.Stages.Checking is
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => Message,
-                  Note    => "D138: deduction unifies the written parameter"
-                             & " pattern with the independently synthesized"
-                             & " argument descriptor exactly",
+                  Note    => "D138: deduction matches the written parameter"
+                             & " pattern against the independently"
+                             & " synthesized argument descriptor; only an"
+                             & " outer mutable reference may relax to"
+                             & " read-only",
                   Related => Syn.Origin (Pattern_Tree, Pattern),
                   Because => "the runtime parameter type pattern",
                   Into    => Found);
@@ -10258,7 +10260,8 @@ package body Landin.Stages.Checking is
             Actual       : Type_Descriptor;
             Argument     : Syn.Node_Id;
             Position     : Positive;
-            Map_Limit    : Natural) return Boolean;
+            Map_Limit    : Natural;
+            Outer_Reference : Boolean := False) return Boolean;
 
          function Match_Fixed_Pattern
            (Pattern_Tree : Syn.Tree;
@@ -10350,7 +10353,8 @@ package body Landin.Stages.Checking is
             Actual       : Type_Descriptor;
             Argument     : Syn.Node_Id;
             Position     : Positive;
-            Map_Limit    : Natural) return Boolean
+            Map_Limit    : Natural;
+            Outer_Reference : Boolean := False) return Boolean
          is
             Kind : constant Syn.Node_Kind := Syn.Kind (Pattern_Tree, Pattern);
 
@@ -10440,8 +10444,12 @@ package body Landin.Stages.Checking is
                      Atoms => Reference.Atoms,
                      others => <>);
                begin
-                  if Reference.Mutable /= Syn.Is_Referent_Mutable
-                    (Pattern_Tree, Pattern)
+                  if (Reference.Mutable /= Syn.Is_Referent_Mutable
+                        (Pattern_Tree, Pattern)
+                      and then not (Outer_Reference
+                        and then Reference.Mutable
+                        and then not Syn.Is_Referent_Mutable
+                          (Pattern_Tree, Pattern)))
                     or else Reference.View /= Ty.Ordinary_View
                     or else Reference.Empty_Atom /= Res.No_Declaration
                   then
@@ -10923,7 +10931,7 @@ package body Landin.Stages.Checking is
                           Descriptor_At (Caller_Tree, Argument, Got);
                         Agrees : constant Boolean := Match_Type_Pattern
                           (Template_Tree.all, Pattern, Actual, Argument,
-                           Index, 0);
+                           Index, 0, True);
                         pragma Unreferenced (Agrees);
                      begin
                         null;

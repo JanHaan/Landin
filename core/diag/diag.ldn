@@ -69,19 +69,19 @@ public new_log: (fixed capacity: usize) -> (result: bounded(capacity)) =
     result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
 end new_log
 
---  Generic pointer arguments match permission exactly; these queries read
---  through the mutable address that bounded log owners already hold.
-public stored: (fixed capacity: usize, value: ptr mut bounded(capacity))
+--  Read-only pointers let both mutable and immutable log owners query without
+--  copying the bounded note array.
+public stored: (fixed capacity: usize, value: ptr bounded(capacity))
                -> (count: usize) =
     count = value.val.stored
 end stored
 
-public dropped: (fixed capacity: usize, value: ptr mut bounded(capacity))
+public dropped: (fixed capacity: usize, value: ptr bounded(capacity))
                 -> (count: usize) =
     count = value.val.dropped
 end dropped
 
-public note_at: (fixed capacity: usize, value: ptr mut bounded(capacity), index: usize)
+public note_at: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
                 -> (result: entry) ! out_of_bounds =
     fail out_of_bounds when index >= value.val.stored
     result = value.val.notes[index]

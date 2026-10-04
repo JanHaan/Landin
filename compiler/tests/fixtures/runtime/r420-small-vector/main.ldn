@@ -44,6 +44,12 @@ end audit_free
 
 audit is mem.allocator (alloc: audit_alloc, free: audit_free)
 
+readonly_queries: () -> (ok: bool) =
+    values := small.new(item: i32, inline_slots: 512)
+    ok = small.length(addr values) == 0
+         and small.capacity(addr values) == 512
+end readonly_queries
+
 zero_inline_capacity: () -> (ok: bool) =
     mut bytes: [64]u8 = zeroed
     mut state: audit =
@@ -102,7 +108,8 @@ larger_inline_capacity: () -> (ok: bool) =
 end larger_inline_capacity
 
 public main: () -> (code: i32) =
-    if not zero_inline_capacity() or not larger_inline_capacity() then
+    if not readonly_queries() or not zero_inline_capacity()
+      or not larger_inline_capacity() then
         code = 1
         return
     end if

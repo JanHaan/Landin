@@ -25,15 +25,15 @@ public new: (item: type is zeroable, fixed inline_slots: u32)
                        spill: fresh, spilled: false))
 end new
 
---  Generic pointer arguments match permission exactly, so queries take the
---  mutable address of the container while reading only through it.
+--  A read-only pointer accepts addresses of mutable and immutable containers
+--  without copying their inline storage.
 public length: (item: type is zeroable, fixed inline_slots: u32,
-                value: ptr mut small(item, inline_slots)) -> (count: usize) =
+                value: ptr small(item, inline_slots)) -> (count: usize) =
     count = value.val.storage.count
 end length
 
 public capacity: (item: type is zeroable, fixed inline_slots: u32,
-                  value: ptr mut small(item, inline_slots)) -> (count: usize) =
+                  value: ptr small(item, inline_slots)) -> (count: usize) =
     if value.val.storage.spilled then
         count = vec.capacity(value.val.storage.spill)
     else

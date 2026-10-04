@@ -80,6 +80,19 @@ public main: () -> (code: i32) =
     first_index: usize = 0
     second_index: usize = 1
     third_index: usize = 2
+    immutable_notes: diag.bounded(3) = collected
+    immutable_note := diag.note_at(addr immutable_notes, second_index)
+      else (missing_immutable)
+        _ = missing_immutable
+        return
+    end
+    if diag.stored(addr immutable_notes) <> 3
+      or diag.dropped(addr immutable_notes) <> 0
+      or diag.position_of(immutable_note) <> 1
+      or diag.severity_of(immutable_note) <> diag.error
+    then
+        return
+    end if
     first_note := diag.note_at(addr collected, first_index) else (missing_first)
         _ = missing_first
         return
