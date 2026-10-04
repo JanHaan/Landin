@@ -101,12 +101,6 @@ def operands(meta):
     return [meta["program"]] + rest
 
 
-def digest(path):
-    if not path.exists():
-        return "absent"
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def text_digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -264,6 +258,7 @@ def run_one(refine, fixture, sources, target, variant, work):
         command += ["--build-mode=release"]
     result = subprocess.run(command + sources, capture_output=True,
                             cwd=fixture)
+    assembly = asm.read_bytes() if asm.exists() else None
     built = report.read_bytes() if report.exists() else None
     named = LEVEL.search(built) if built is not None else None
     if named:
@@ -274,19 +269,20 @@ def run_one(refine, fixture, sources, target, variant, work):
         "stderr": text_digest(result.stderr),
         "stderr_base64": base64.b64encode(result.stderr).decode("ascii"),
         "errors": text_digest(without_additions(result.stderr)),
-        "asm": digest(asm),
+        "asm": "absent" if assembly is None else text_digest(assembly),
         "report": "absent" if built is None else text_digest(built),
     }
     if named:
         entry["level"] = named.group(1).decode()
     maps = sorted(p for p in out.iterdir() if p.name not in
                   ("out.s", "build.json"))
-    for extra in maps:
-        entry["file:" + extra.name] = digest(extra)
+    artifacts = [(extra.name, extra.read_bytes()) for extra in maps]
+    for name, data in artifacts:
+        entry["file:" + name] = text_digest(data)
     entry["layout"] = layout_digest(
-        asm.read_bytes() if asm.exists() else b"",
+        assembly if assembly is not None else b"",
         built if built is not None else b"",
-        [extra.read_bytes() for extra in maps])
+        [data for _, data in artifacts])
     shutil.rmtree(out)
     return entry
 

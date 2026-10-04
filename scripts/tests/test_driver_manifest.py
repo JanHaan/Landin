@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Report-only comparisons must preserve every old warning and help line."""
+from collections import Counter
 import base64
 import hashlib
 import importlib.util
@@ -179,6 +180,63 @@ class RecordedArguments(unittest.TestCase):
             changed.write_text(json.dumps(manifest))
             self.assertEqual(driver_manifest.compare(output, changed), 1)
 
+
+
+class ArtifactReads(unittest.TestCase):
+    def test_emitted_artifacts_are_read_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = root / "positive" / "example"
+            fixture.mkdir(parents=True)
+            reads = Counter()
+            original_read = Path.read_bytes
+
+            def count_read(path):
+                reads[path.name] += 1
+                return original_read(path)
+
+            def compile_fixture(command, **kwargs):
+                out = Path(command[command.index("-o") + 1]).parent
+                (out / "out.s").write_bytes(b"assembly")
+                (out / "build.json").write_bytes(
+                    b'{"report":1,"level":"x86-64-v1"}')
+                (out / "a.map").write_bytes(b"first map")
+                (out / "z.map").write_bytes(b"second map")
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+
+            with patch.object(driver_manifest.subprocess, "run",
+                              side_effect=compile_fixture), patch.object(
+                                  Path, "read_bytes", count_read):
+                entry = driver_manifest.run_one(
+                    root / "refine", fixture, ["example.ldn"],
+                    "linux-x86-64", "debug", root / "work")
+
+            self.assertEqual(reads, Counter({
+                "out.s": 1, "build.json": 1, "a.map": 1, "z.map": 1}))
+            self.assertEqual(entry["asm"], digest(b"assembly"))
+            self.assertEqual(entry["report"], digest(b'{"report":1}'))
+            self.assertEqual(entry["level"], "x86-64-v1")
+            self.assertEqual(entry["file:a.map"], digest(b"first map"))
+            self.assertEqual(entry["file:z.map"], digest(b"second map"))
+            self.assertEqual(entry["layout"], driver_manifest.layout_digest(
+                b"assembly", b'{"report":1}',
+                [b"first map", b"second map"]))
+
+    def test_missing_artifacts_keep_absent_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = root / "negative" / "example"
+            fixture.mkdir(parents=True)
+            with patch.object(driver_manifest.subprocess, "run", return_value=
+                              subprocess.CompletedProcess([], 1, b"", b"error")):
+                entry = driver_manifest.run_one(
+                    root / "refine", fixture, ["example.ldn"],
+                    "linux-x86-64", "plain", root / "work")
+
+            self.assertEqual(entry["asm"], "absent")
+            self.assertEqual(entry["report"], "absent")
+            self.assertEqual(entry["layout"], driver_manifest.layout_digest(
+                b"", b"", []))
 
 
 if __name__ == "__main__":
