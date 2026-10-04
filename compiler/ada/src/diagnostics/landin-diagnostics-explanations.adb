@@ -307,8 +307,10 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Variant_Case_Named_Twice =>
                "A match names one variant case twice [1210].",
             when Catalogue.Variant_Case_Not_Matched =>
-               "An exhaustive match does not name every case [1210]. Add"
-               & " the missing arms, or an `else` arm.",
+               "A match leaves a case unnamed [1210]. For a variant part"
+               & ", add an arm naming each missing case. For an atom set o"
+               & "r pointer union, name the missing cases or put a `_:` ar"
+               & "m last to cover them.",
             when Catalogue.Recursive_Nominal_Value =>
                "A struct holds itself by value, so its layout could neve"
                & "r be finite (D137). Hold it through a pointer.",

@@ -565,8 +565,9 @@ A match names one variant case twice [1210].
 
 ### L0312
 
-An exhaustive match does not name every case [1210]. Add the missing arms, or
-an `else` arm.
+A match leaves a case unnamed [1210]. For a variant part, add an arm naming
+each missing case. For an atom set or pointer union, name the missing cases
+or put a `_:` arm last to cover them.
 
 ```landin
 north, south: atom
