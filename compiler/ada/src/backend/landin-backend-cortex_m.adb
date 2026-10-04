@@ -3293,21 +3293,27 @@ package body Landin.Backend.Cortex_M is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
+                     Offset : Landin.Targets.Byte_Count;
                   begin
                      if Op = Landin.IR.Select_Variant then
-                        Field_Extent
+                        Variant_Selected_Payload_Extent
                           (Of_Unit, Reached_Shape (Destination, Field, Nested),
-                           Facts, Bytes, Alignment);
+                           Positive (Landin.IR.Variant_Case_Of
+                             (Of_Unit, Item, Value)), Facts, Offset, Bytes);
                      else
                         Bytes := Whole_Clear_Extent
                           (Destination, Field, Nested);
                      end if;
-                     Storage_Address (Destination, Field, "r0", Nested =>
-                       Nested);
-                     Zero_Bytes
-                       (Bytes, Clear_Alignment
-                          (Destination, Field, Nested));
+                     if Bytes > 0 then
+                        Storage_Address (Destination, Field, "r0", Nested =>
+                          Nested);
+                        if Op = Landin.IR.Select_Variant then
+                           Add_Offset ("r0", Offset);
+                        end if;
+                        Zero_Bytes
+                          (Bytes, Clear_Alignment
+                             (Destination, Field, Nested));
+                     end if;
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "r2", Nested => Nested);
@@ -3770,11 +3776,27 @@ package body Landin.Backend.Cortex_M is
                   Add_Offset ("r6", 24 + Arg.Stack_At);
                end if;
                if Aggregate then
-                  Emit ("ldr r2, [r6]");
-                  Frame_Address (Slot_Offset (Layout, Slot), "r0");
-                  Copy_Bytes (Whole_Clear_Extent
-                    ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                      Landin.IR.No_Path_Steps));
+                  declare
+                     Zero_Label : constant String := Fresh;
+                     Done_Label : constant String := Fresh;
+                     Bytes : constant Landin.Targets.Byte_Count :=
+                       Whole_Clear_Extent
+                         ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                           Landin.IR.No_Path_Steps);
+                  begin
+                     Emit ("ldr r2, [r6]");
+                     Frame_Address (Slot_Offset (Layout, Slot), "r0");
+                     Emit ("cmp r2, #0");
+                     Branch ("eq", Zero_Label);
+                     Copy_Bytes (Bytes);
+                     Jump (Done_Label);
+                     Put (Zero_Label & ":");
+                     Zero_Bytes
+                       (Bytes, Clear_Alignment
+                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                           0, Landin.IR.No_Path_Steps));
+                     Put (Done_Label & ":");
+                  end;
                else
                   Memory (False, Size_Of
                     (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),

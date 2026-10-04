@@ -2651,19 +2651,25 @@ package body Landin.Backend.Arm64 is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
+                     Offset : Landin.Targets.Byte_Count;
                   begin
                      if Op = Landin.IR.Select_Variant then
-                        Field_Extent
+                        Variant_Selected_Payload_Extent
                           (Of_Unit, Reached_Shape (Destination, Field, Nested),
-                           Facts, Bytes, Alignment);
+                           Positive (Landin.IR.Variant_Case_Of
+                             (Of_Unit, Item, Value)), Facts, Offset, Bytes);
                      else
                         Bytes := Whole_Clear_Extent
                           (Destination, Field, Nested);
                      end if;
-                     Storage_Address (Destination, Field, "x9", Nested =>
-                       Nested);
-                     Zero_Bytes (Bytes);
+                     if Bytes > 0 then
+                        Storage_Address (Destination, Field, "x9", Nested =>
+                          Nested);
+                        if Op = Landin.IR.Select_Variant then
+                           Add_Offset ("x9", Offset);
+                        end if;
+                        Zero_Bytes (Bytes);
+                     end if;
                      if Op = Landin.IR.Select_Variant then
                         Storage_Address
                           (Destination, Field, "x10", Nested => Nested);
@@ -3305,10 +3311,22 @@ package body Landin.Backend.Arm64 is
                      Emit ("ldr x10, [x10]");
                   end if;
                   if Aggregate then
-                     Frame_Address (Slot_Offset (Layout, Slot), "x9");
-                     Copy_Bytes (Whole_Clear_Extent
-                       ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                         Landin.IR.No_Path_Steps));
+                     declare
+                        Zero_Label : constant String := Fresh;
+                        Done_Label : constant String := Fresh;
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                             Landin.IR.No_Path_Steps);
+                     begin
+                        Frame_Address (Slot_Offset (Layout, Slot), "x9");
+                        Emit ("cbz x10, " & Zero_Label);
+                        Copy_Bytes (Bytes);
+                        Emit ("b " & Done_Label);
+                        Put (Zero_Label & ":");
+                        Zero_Bytes (Bytes);
+                        Put (Done_Label & ":");
+                     end;
                   else
                      Store_Slot (Slot, "x10");
                   end if;

@@ -6768,9 +6768,11 @@ put into IR.
 The backend replays those shapes through the same target placement used for
 measurement and reserves the complete padded object in zeroed storage. Scalar
 field operations use the resulting target offset. On x86-64, a nonzero offset
-in any aggregate containing an array field is formed from the symbol address
-and a full-width register constant, so D18-sized fields cannot create an
-unencodable symbol-plus-displacement relocation.
+in any aggregate containing an array field is added to the symbol address:
+an offset fitting a signed 32-bit arithmetic immediate uses an immediate add,
+while a larger offset uses a full-width register constant and register add.
+Neither case asks the assembler to encode a symbol-plus-displacement memory
+operand whose relocation a D18-sized field could put out of range.
 
 **Why module state first:** it already has D10's complete image and needs only
 one compact datum description. Enabling the same type in a frame would require
@@ -8864,9 +8866,11 @@ omitted payload field, while any other fill is L0304. Aggregate payloads stay
 D74's depth-one refusal.
 
 The destination case is selected before any payload expression is evaluated.
-Selection clears the variant part's complete padded target extent, writes the
-case's zero-based source-order tag, and thereby gives omitted and fixed-array
-payload fields their zero image. Labelled scalar expressions are then
+Selection clears only the selected case's padded payload extent and writes the
+case's zero-based source-order tag. A bare case therefore writes only its tag;
+the gap after the tag, inactive case storage and part tail padding have
+unspecified bytes. The clear gives omitted and fixed-array payload fields
+their zero image. Labelled scalar expressions are then
 evaluated exactly once in written order and stored immediately, so a later
 expression observes every earlier program write. A refused destination reads
 none of them. D16 records the complete selected part as assigned; D77 is the
@@ -8879,14 +8883,17 @@ identity and one scalar operand. None carries a target offset. The verifier
 checks storage, aggregate field, variant shape, case run, payload field kind
 and operand type in that order with explicit release-build code, and refuses
 either operation inside a datum initializer. The backend replays D74's layout:
-selection clears the target-derived part extent and writes `case - 1` with the
-shape's tag width; a payload store derives the part, payload and field offsets
-for the selected target before storing at the scalar width.
+selection clears the selected case's target-derived payload extent and writes
+`case - 1` with the shape's tag width; a payload store derives the part,
+payload and field offsets for the selected target before storing at the scalar
+width.
 
 **Why contextual construction first:** it exercises every case identity and
 payload offset without an aggregate temporary, a static nonzero variant image
-or an ABI rule. A field-wise clear was declined because it would leave union
-padding outside the selected value's zero image. Whole copying waited until
+or an ABI rule. Clearing the selected payload as one extent retains its omitted
+fields' zero images without touching storage reserved for inactive cases. This
+revises D76's original complete-part clear: that rule made a bare selection's
+write count grow with the largest unrelated case. Whole copying waited until
 D80 fixed the source and destination as storage identities and copied the
 complete padded part. D84 later adds D52/D53's write sequence inside a
 fixed-array payload without changing selection's clear-and-tag operation. D77
@@ -8894,6 +8901,12 @@ adds tag matching; D78 adds scalar payload binding while retaining that
 fixed-array boundary. D79 also lets a call-shaped case construction infer a
 fresh local binding; D81 later supplies the nonzero static variant image and
 admits module inference.
+
+**The alternative:** clear the complete padded variant part on every selection.
+That gives inactive bytes a zero value but makes a bare case write an extent
+set by an unrelated payload. Clearing each selected field separately would
+avoid those inactive bytes but leave gaps inside the selected payload
+uninitialized.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -9016,9 +9029,9 @@ selection existed.
 **Chosen:** `name := T(..., part: case(...), ...)` is admitted inside a
 function when `T` is a D74 variant-bearing ordinary struct. The construction's
 type name supplies [0710]'s body before inference settles the binding, and the
-fresh aggregate frame slot is its contextual destination. D76 then applies
-unchanged: common and payload values are evaluated once in written order, the
-selected part is cleared, its tag is written, and scalar payload fields are
+fresh aggregate frame slot is its contextual destination. D76 then applies:
+common and payload values are evaluated once in written order, the selected
+payload is cleared, its tag is written, and scalar payload fields are
 stored directly. The inferred local is distinct storage and may immediately be
 selected or matched under D77/D78.
 
@@ -9078,13 +9091,14 @@ The backend replays D74's tag-first maximum-payload layout for the selected
 target, forms both field addresses and copies the complete padded part with one
 forward byte run. Distinct aggregate roots do not overlap; a self-copy names
 the identical range, which the forward run preserves. Copying the padded part
-rather than only the selected payload preserves [0540]'s complete image and
-does not need to inspect the source tag. Scalar and fixed-array fields remain
-separate operations in declaration order, exactly as D54 specified.
+also carries any unspecified inactive bytes; it need not inspect the source
+tag. An explicit `zeroed` source still has [0540]'s complete all-zero image.
+Scalar and fixed-array fields remain separate operations in declaration order,
+exactly as D54 specified.
 
 **Why a compact part copy:** selecting the active case and copying only its
-payload would branch on runtime state, leave inactive bytes or padding behind,
-and make the copy sequence depend on the tag. Copying the whole struct as one
+payload would branch on runtime state and make the copy sequence depend on the
+tag. Copying the whole struct as one
 opaque byte operation would duplicate D54's established scalar/array paths and
 erase their verifier types. One compact operation for the only union-shaped
 field keeps the IR target-neutral and the existing field semantics visible.
@@ -9287,12 +9301,13 @@ gives a payload array every expression an ordinary array field takes, still
 selecting the case first. A refused or
 immutable destination is reported first and reads no payload.
 
-Selection remains one destination-first operation: it clears the complete
-padded variant part and writes the source-order tag before labelled payloads
+Selection remains one destination-first operation: it clears the selected
+case's padded payload and writes the source-order tag before labelled payloads
 are evaluated once in written order. Literal elements store immediately;
 repetitions evaluate their repeated value once; copies move the complete
-array. A nested `zeroed` payload emits no second clear because selection has
-already cleared every byte of the part. Normal completion retains D76's whole
+array. A nested `zeroed` payload retains the selected array's zero image; the
+array path may emit a redundant clear of that array. Both writes remain bounded
+by the selected payload extent. Normal completion retains D76's whole
 variant-field definite-assignment fact.
 
 No new opcode is needed. `Store_Element`, `Fill_Array` and the destination of
@@ -10607,9 +10622,10 @@ One aggregate occupies one position in the existing internal argument run. The
 caller forms a target-neutral `Storage_Address` carrier; the first six
 positions use integer registers and later positions use D86's eight-byte stack
 slots. The carrier is not a Landin pointer and cannot be named by source. The
-callee preserves every incoming aggregate carrier before copying, derives the
-complete padded extent from its selected target, and copies the bytes into a
-fresh aggregate parameter slot before the body runs. Reads therefore use
+callee preserves every incoming aggregate carrier, derives the complete padded
+extent from its selected target, and copies an addressed source into a fresh
+aggregate parameter slot before the body runs. D97 clears that slot directly
+for a direct `zeroed` argument. Reads therefore use
 ordinary field and array operations against independent by-value storage.
 
 **Why an internal address and defensive copy:** flattening fields would make
@@ -10641,7 +10657,8 @@ expression remains refused as an argument.
 The array occupies one existing internal ABI position. The caller emits D94's
 unspellable target-neutral storage-address carrier. The callee preserves that
 carrier with the struct carriers, derives `length * target element size`, and
-copies those bytes into a fresh shaped array parameter slot before running.
+copies those bytes into a fresh shaped array parameter slot before running;
+D97 clears that slot directly for a direct `zeroed` argument.
 Register and stack positions therefore have one convention for scalar,
 ordinary-struct and fixed-array source parameters while their frame storage
 retains the distinct neutral shape each operation needs.
@@ -10691,32 +10708,37 @@ does not create an aggregate expression value.
 seams; `negative/nested-storage-argument-unassigned`; the generated token and
 IR records; and `runtime/nested-storage-arguments` on Linux x86-64.
 
-### D97 — `zeroed` may directly fill an aggregate argument temporary
+### D97 — `zeroed` may directly initialize aggregate parameter storage
 
 **The tour said** that `zeroed` takes its type from context [0540]. D94/D95
 provided shaped by-value parameter storage, but required the caller to name
 existing storage even when the all-zero value needed no source object.
 
-**Chosen:** `zeroed` may appear directly where a flat ordinary-struct or
-fixed-array parameter supplies its complete type. The caller allocates a fresh
-shaped temporary, clears its complete target-derived extent with the existing
-compact clear operation, and passes its `Storage_Address` through the same
-one-position internal convention. The callee still performs the ordinary
-by-value copy before its body runs.
+**Chosen:** `zeroed` may appear directly where a supported struct or
+fixed-array parameter supplies its complete type. For the internal convention,
+the caller passes a zero carrier in the aggregate's ordinary register or stack
+position, without allocating aggregate storage. At entry the callee recognizes
+that carrier and clears the complete target-derived extent of its own shaped
+parameter slot before the body runs. A nonzero carrier still names existing
+storage and is copied into that slot. This zero carrier is not a source pointer,
+and it is never used for a C ABI call or an aggregate result destination. A
+permitted C ABI aggregate argument keeps its existing caller materialization
+and C classification.
 
-The temporary and clear are target-neutral in verified IR: an ordinary struct
-carries its field shapes and an array carries length and scalar element. Only
-the backend derives padding, widths and byte extent. `zeroed` does not become a
-general aggregate expression, and nested or variant-bearing parameter types
-remain outside this rule.
+The zero carrier is target-neutral in verified IR, where only a direct all-zero
+internal aggregate argument may use it. The parameter's existing struct field
+shapes or array length and scalar element give the backend the padded extent.
+`zeroed` does not become a general aggregate expression. D102 and D104 also
+allow this carrier for their contextual variant-bearing and nested struct
+arguments, whose complete parameter shapes determine the clear extent.
 
-**Why retain both temporary and callee copy:** special-casing an all-zero ABI
-argument would create a second convention and would make its behavior depend
-on whether the caller wrote equivalent named zero storage. Materializing the
-contextual value through existing storage keeps argument order, register/stack
-placement and by-value independence identical.
+**Why clear in the callee:** an all-zero value has no source storage or
+initializer effects to preserve. The zero carrier keeps argument order and
+register/stack placement identical to other arguments, while clearing the
+callee's own slot gives it the same independent by-value storage. A named
+zeroed local remains an ordinary nonzero storage carrier and is copied.
 
-**The alternative:** require a named `zeroed` local before the call, or give the callee the job of zeroing. A temporary the caller clears keeps the callee's by-value copy uniform, and a named local for one zero value is noise the tour never asks for.
+**The alternative:** require a named `zeroed` local before the call, or clear a fresh caller temporary and copy it into the callee. Both spend a caller extent and a whole-object copy for a value whose complete image is known without either operation.
 
 **Pinned by** the checker, lowering, verifier and backend public seams; the
 generated token and IR records; and `runtime/nested-storage-arguments` on
@@ -10787,8 +10809,9 @@ records; and `runtime/array-arguments-cross-calls` on Linux x86-64.
 
 **The tour said** that labelled struct construction evaluates fields in source
 order [0410], omitted fields may use `of zeroed` [0700], and ordinary structs
-are nominal [0710]. D97 supplied the shaped caller temporary for an entirely
-zero aggregate but not for labelled construction.
+are nominal [0710]. D97 supplied a zero carrier for an entirely zero aggregate,
+but labelled construction still needs a shaped caller temporary for its
+source-ordered field expressions.
 
 **Chosen:** a bare or correctly nominal construction may appear directly where
 a flat ordinary-struct parameter has scalar fields only. Labels are checked
@@ -10860,7 +10883,8 @@ label remains a separate slice.
 
 The aggregate parameter slot retains the variant tag type, source-order cases
 and compact payload-field runs. D94 transports one storage address and copies
-the complete target-derived padded struct extent before the body; tag matching
+the complete target-derived padded struct extent for a storage source; D97's
+direct `zeroed` carrier clears that extent in the callee instead. Tag matching
 and payload aliases then operate on the independent callee slot exactly as on
 any local aggregate.
 
@@ -10890,9 +10914,9 @@ source order; fixed-array payloads use the same literal, repetition, `zeroed`
 and storage-copy forms D101 gives ordinary array fields. `of zeroed` selects
 the first case for an omitted variant field.
 
-Selection clears the complete padded unfolded part before payload writes, so
-inactive bytes and omitted payload leaves have the all-zero image. The IR
-retains field, case and payload-field identities; target tag placement, payload
+Selection clears the selected payload before payload writes, so omitted
+payload leaves have the all-zero image while inactive bytes are unspecified.
+The IR retains field, case and payload-field identities; target tag placement, payload
 offsets and padded extent remain backend-derived. The finished temporary then
 uses D102's unchanged one-position by-value transport.
 
@@ -10923,9 +10947,10 @@ construction with an ordinary-child label remains separate.
 
 The parameter slot retains an `Aggregate_Field_Shape` whose compact payload run
 is the child's declaration-order scalar and array leaves. D94's caller carrier
-still occupies one ABI position and the callee copies the complete recursively
-placed padded extent before running. Child field and element reads then reuse
-D88/D89's neutral parent/child identities.
+still occupies one ABI position: the callee copies a storage source's complete
+recursively placed padded extent or clears it for D97's direct `zeroed` carrier.
+Child field and element reads then reuse D88/D89's neutral parent/child
+identities.
 
 **Why preserve one slot:** splitting the child into ABI operands would erase
 its nominal boundary and make operand count depend on composition. The existing
@@ -10977,17 +11002,18 @@ made a returned struct's lifetime independent of the callee frame.
 **Chosen:** a function with an ordinary, variant-bearing or depth-one nested
 struct result receives one unspellable internal `usize` parameter naming
 caller-owned result storage. It precedes all source parameters in the existing
-register/stack run. The callee keeps its named result in an independently
-shaped local slot and, at every successful leave, copies the complete
-source-target-derived padded extent to that address. A typed local initializer
-may supply a matching aggregate-returning call as its value.
+register/stack run. The named result keeps its complete checked shape. It may
+occupy an independent callee slot, copied into the hidden destination on each
+successful exit, or use that destination as its storage when D116's
+observational conditions hold. A typed local initializer may supply a matching
+aggregate-returning call as its value.
 
 The checked IR item retains `Aggregate` as the declared result and keeps the
 complete neutral shape on its result slot. The call instruction itself has no
 aggregate value: its first operand is an opaque `Storage_Address` for the
 already-shaped destination, followed by source arguments. The verifier checks
 that operand against the hidden scalar parameter. Target offsets, padding and
-byte extent enter only when the backend emits the final copy.
+byte extent enter only during backend layout and any copy that is needed.
 
 **Why not return a pointer to callee storage:** that pointer would escape a dead
 frame and would turn by-value semantics into an alias. Returning fields in
@@ -11011,9 +11037,10 @@ well as a struct result.
 **Chosen:** a function may name a fixed-array return, assign it through the
 existing whole-array contextual forms, and initialize a matching typed local
 from its call. One leading unspellable `usize` parameter points at the caller's
-shaped array slot. On leave the callee copies exactly `length * element-size`
-bytes from its independent result slot. The call itself still returns no IR
-value.
+shaped array slot. The named result may use that storage under D116's
+conditions; otherwise each successful exit copies exactly
+`length * element-size` bytes from its independent result slot. The call
+itself still returns no IR value.
 
 Definite assignment records a whole-array fact for the named return; assigning
 known elements independently also suffices once every position is covered.
@@ -11040,17 +11067,18 @@ aggregate value would add no semantics and would lose that direct destination.
 **Chosen:** a matching struct- or fixed-array-returning call may initialize a
 typed local, assign a direct whole aggregate place, fill a named return in a
 block, or serve as that return's expression body. Lowering supplies the final
-place itself as the hidden result destination. Forwarding therefore performs
-callee-to-caller copies at each source call boundary but never materializes an
-aggregate SSA value or aliases one frame's storage into another.
+place itself as the hidden result destination. Forwarding never materializes
+an aggregate SSA value or aliases one frame's storage into another. A callee
+using an independent result slot copies at its successful exits; a callee
+meeting D116's direct-storage conditions need not copy there.
 
 Child-field destinations remain separate: they require a field-qualified
 hidden destination carrier before a returned call can fill them directly.
 
-**Why retain each boundary copy:** the language says aggregate arguments and
-results are values, not aliases. Tail-call storage forwarding could elide a
-copy later, but it is an optimization only when it preserves the independently
-observable named-return place and all source evaluation order.
+**Why permit a boundary without a copy:** by-value results require the same
+observable value and effect order, not a particular intermediate allocation.
+The independent slot remains available when direct storage would expose a
+partial result or change the named return's behavior.
 
 **The alternative:** materialize an aggregate result as an IR value and copy it into the destination afterwards. That is a second copy of every result and an aggregate SSA value the IR was designed not to have; naming the final place as the hidden destination removes both.
 
@@ -11078,8 +11106,8 @@ No target offset, byte extent or source-level pointer enters checked IR.
 **Why destination qualification belongs on the address:** copying first into a
 temporary and then into the field would be correct but would add an avoidable
 whole aggregate copy. Passing a qualified opaque destination preserves the
-same by-value result semantics because the callee writes only its independent
-named result until the leave copy.
+same by-value result semantics when the callee either commits its independent
+named result at the exit or meets D116's direct-storage conditions.
 
 **The alternative:** require a result destined for a field to go through a whole-aggregate local first. The hidden address already carries field identities for arguments, so the same carrier gives a field destination without a copy the reader would otherwise write.
 
@@ -11102,8 +11130,8 @@ as D106's hidden destination. Module inference from calls remains forbidden by
 [1940], because module images run no call before entry.
 
 **Why inference changes no ABI rule:** checking copies only source identity into
-the declaration, before lowering. Runtime still has exactly the same
-caller-owned destination and callee leave copy as an explicitly typed local.
+the declaration, before lowering. Runtime uses the same caller-owned
+destination and D116 commit rule as an explicitly typed local.
 
 **The alternative:** require the local's type to be spelled when it is initialized by an aggregate-returning call. The callee's signature names the body or the array shape completely; a spelled type would only be compared with it.
 
@@ -11130,10 +11158,11 @@ When later arguments change blocks, the temporary address uses the same saved
 scalar carrier as any earlier aggregate argument, preserving block-local IR and
 source evaluation order.
 
-**Why two copies remain semantic:** the inner return establishes a value in the
-caller and the outer `in` boundary establishes an independent callee value.
-Optimization may combine storage only after proving neither identity can be
-observed; the language and verifier do not depend on that optimization.
+**Why the boundaries remain semantic:** the inner return establishes a complete
+value in the caller and the outer `in` boundary establishes an independent
+callee value. The inner boundary need not copy under D116; optimization may
+combine argument storage only after proving neither identity can be observed.
+The language and verifier do not depend on either optimization.
 
 **The alternative:** bind a returned aggregate to a named local before it may be passed on. The fresh temporary is that local without a name, filled by the inner call's hidden destination and copied by the outer callee exactly as a named one would be.
 
@@ -11146,7 +11175,7 @@ IR records; and the nested calls in `runtime/struct-returns-cross-calls` and
 
 **The tour said** that discarding a result is explicit [1020] [1930]. A scalar
 call can simply leave its produced IR value unused, but D106 requires valid
-storage through the aggregate callee's leave copy.
+storage through the aggregate callee's result commit.
 
 **Chosen:** `_ = call()` for a struct or fixed-array result allocates a fresh
 shaped caller temporary, supplies it as the hidden destination, completes the
@@ -11288,25 +11317,37 @@ literal assignment by an equivalent call change whether later reads are legal.
 **Pinned by** `negative/aggregate-call-result-not-assigned-on-every-path` and
 `runtime/aggregate-results-across-branches` on Linux x86-64.
 
-### D116 — Every aggregate-result exit performs its own final copy
+### D116 — Aggregate-result exits commit a complete value
 
 **The tour said** that every reachable `return` requires the named return to be
 assigned [1890] [1910]. Aggregate caller-owned storage makes the consequence
 observable at more than the function's lexical end.
 
 **Chosen:** each accepted early or final exit from an aggregate-returning
-function copies the complete independent named-result slot into that call's
-hidden caller destination. An aggregate call may complete the named result
-immediately before either exit. Flow checking refuses an exit reached without
-the complete result; another arm having completed and exited does not lend its
-fact to that path.
+function delivers the complete named result to that call's hidden caller
+destination. The ordinary implementation keeps an independent named-result
+slot and copies its complete padded extent after that exit's cleanups. A
+compiler may instead construct the result in the caller destination and omit
+the final copy only when it can establish the same observable behavior: result
+construction makes no write to the caller destination on a failing path; no
+callee-visible alias, escaped result address, callback or cleanup can observe
+a partial or premature result; and source evaluation and cleanup still occur
+in order.
+This includes proving that any operation after the first direct write cannot
+fail or expose that write before a successful exit. When these conditions
+cannot be established, the independent slot and exit copy are required.
 
-**Why every exit copies:** redirecting only lexical fallthrough would make an
+An aggregate call may complete the named result immediately before either
+exit. Flow checking refuses an exit reached without the complete result;
+another arm having completed and exited does not lend its fact to that path.
+
+**Why every exit commits:** redirecting only lexical fallthrough would make an
 early `return` expose an unfilled caller image, while returning the callee slot's
-address would expose dead frame storage. Both violate the same by-value result
-boundary.
+address would expose dead frame storage. Direct construction can avoid both a
+second full extent and its transfer when the result is built once and cannot
+be observed until that exit commits it.
 
-**The alternative:** copy the named result once at a single merged exit block, or let one arm's completion satisfy another arm's exit. A merged exit runs cleanups in the wrong order relative to [1100]; a lent fact is exactly the soundness hole a path-insensitive join opens.
+**The alternative:** copy the named result once at a single merged exit block, or let one arm's completion satisfy another arm's exit. A merged exit runs cleanups in the wrong order relative to [1100]; a lent fact is exactly the soundness hole a path-insensitive join opens. Requiring a distinct slot even when direct construction is observationally equivalent adds storage and a whole-object transfer without protecting a value boundary.
 
 **Pinned by** `negative/aggregate-call-result-missing-at-early-exit` and
 `runtime/aggregate-results-across-early-exits` on Linux x86-64.
@@ -11432,10 +11473,10 @@ anonymous result values agree only when their ordered names and complete field
 types agree.
 
 The internal ABI transports every multiple result as one aggregate. The caller
-supplies D106's one hidden destination, the callee owns one independently shaped
-result slot, and each source named return writes its declaration-order field.
-Every early or final leave performs the existing complete aggregate copy to the
-caller. Direct and indirect calls, stack arguments and aggregate fields within
+supplies D106's one hidden destination, and each source named return writes its
+declaration-order field in the complete checked result shape. The callee uses
+an independent result slot and exit copies unless D116 permits direct storage.
+Direct and indirect calls, stack arguments and aggregate fields within
 the result add no second convention. A function-valued field is a `usize`
 carrier that retains its nested signature; aggregate-shaped field copies reuse
 the compact verified storage-copy operation.
@@ -11974,7 +12015,7 @@ final expression first fills D125's consumer-owned value storage, then that
 frame's reached entries run in reverse registration order, and only then does
 the edge reach its surrounding join. A successful `return` runs every reached
 entry from the innermost active frame outward, reverse within each frame,
-before D116's final result copy or scalar leave. Thus a defer written after a
+before D116's result commit or scalar leave. Thus a defer written after a
 guarded return is absent from the guard's taken edge, while an inner arm or
 bare-block defer runs before an outer one. An entry is removed before its call
 runs: if a control expression in that call returns, the still-pending entries

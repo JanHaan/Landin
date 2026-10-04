@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: direct zero carriers and stored nested variants cross register and stack positions after short-circuit and failing arguments with cleanup
+constructs: 0410, 0520, 0540, 0670, 0750, 0930, 1100, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64

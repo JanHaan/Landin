@@ -1,7 +1,7 @@
 class: runtime
 profiles: standard
-summary: ordinary children and their fixed-array leaves cross calls by value
+summary: ordinary children and fixed-array leaves cross register and stack calls by value
 constructs: 0080, 0410, 0520, 0670, 0750, 0930, 1920
 program: main.ldn
-status: 102
+status: 129
 targets: linux-x86-64, linux-arm64, macos-arm64

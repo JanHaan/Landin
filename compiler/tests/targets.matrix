@@ -2008,6 +2008,7 @@ runtime/variant-module-case-image-is-distinct | linux-x86-64, linux-arm64, macos
 runtime/variant-part-measurements-answer-for-the-target | linux-x86-64, linux-arm64, macos-arm64
 runtime/variant-returns-cross-calls | linux-x86-64, linux-arm64, macos-arm64
 runtime/variant-runtime-array-payload-writes-target-storage | linux-x86-64, linux-arm64, macos-arm64
+runtime/variant-selected-payload-representation | linux-x86-64, linux-arm64, macos-arm64
 runtime/variant-struct-arguments | linux-x86-64, linux-arm64, macos-arm64
 runtime/variant-struct-payloads | linux-x86-64, linux-arm64, macos-arm64
 runtime/variant-whole-copy-is-distinct | linux-x86-64, linux-arm64, macos-arm64
@@ -2017,6 +2018,7 @@ runtime/whole-arrays-copy-between-storage | linux-x86-64, linux-arm64, macos-arm
 runtime/wrapping-add-and-subtract-cross-the-boundaries | linux-x86-64, linux-arm64, macos-arm64
 runtime/wrapping-multiplication-keeps-low-products | linux-x86-64, linux-arm64, macos-arm64
 runtime/written-function-values | linux-x86-64, linux-arm64, macos-arm64
+runtime/zeroed-aggregate-carrier-order | linux-x86-64, linux-arm64, macos-arm64
 unit/checker-size-bounds | linux-x86-64, macos-arm64, synthetic-32
 unit/diagnostic-ordering | linux-x86-64, macos-arm64, synthetic-32
 unit/evidence-layout | linux-x86-64, synthetic-32

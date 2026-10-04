@@ -1075,10 +1075,294 @@ package body Landin.Tests.Backend_Suite is
             & " and the caller snapshots the one that precedes later"
             & " arguments");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "addq %rdx, %rax" & LF),
+           (Item, Contains (Text, HT & "leaq -20(%rbp), %rax" & LF
+                              & HT & "addq $4, %rax" & LF),
             "the nested array address follows its target-derived offset");
       end;
    end Aggregate_Arguments_Are_Copied_In_The_Callee;
+
+   --  D97's direct zero carrier consumes one ABI position, including a
+   --  stack position, without putting an 8 KiB array in the caller frame.
+   procedure Direct_Zeroed_Arguments_Clear_Only_Callee_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Direct_Zeroed_Arguments_Clear_Only_Callee_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "first: (data: [8192]u8, n: i32) -> (r: i32) =" & LF
+         & "    r = n" & LF
+         & "end first" & LF
+         & "seventh: (a: i32, b: i32, c: i32, d: i32, e: i32,"
+         & " f: i32, data: [8192]u8) -> (r: i32) =" & LF
+         & "    r = a + f" & LF
+         & "end seventh" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = first(zeroed, 1)"
+         & " + seventh(1, 2, 3, 4, 5, 6, zeroed)" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both direct zeroed arguments are accepted");
+      declare
+         Text : constant String := Emitted (Work);
+         Main_Start : constant Natural := Index (Text, "main:" & LF);
+      begin
+         Landin.Testing.Check
+           (Item, Main_Start > 0, "the caller is emitted");
+         if Main_Start > 0 then
+            declare
+               Main_Text : constant String := Text (Main_Start .. Text'Last);
+            begin
+               Landin.Testing.Check
+                 (Item, not Contains (Main_Text, "$8192")
+                  and then not Contains (Main_Text, "-8192(%rbp)"),
+                  "the caller has no whole-array temporary");
+            end;
+         end if;
+         Landin.Testing.Check
+           (Item, Occurrences (Text, HT & "rep stosb" & LF) = 2
+            and then Occurrences (Text, HT & "rep movsb" & LF) = 2,
+            "both callee slots select clear or copy from their carrier");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "pushq 16(%rbp)" & LF)
+            and then Contains (Text, HT & "testq %rsi, %rsi" & LF),
+            "a stack aggregate retains its one-position carrier");
+      end;
+   end Direct_Zeroed_Arguments_Clear_Only_Callee_Storage;
+
+   --  Both non-host emitters must dispatch a register and a stack aggregate
+   --  carrier to either a target-sized clear or the ordinary by-value copy.
+   procedure Non_Host_Zeroed_Carriers_Dispatch_At_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Non_Host_Zeroed_Carriers_Dispatch_At_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "first: (data: [64]u8) -> (r: i32) =" & LF
+        & "    r = i32(data[0])" & LF
+        & "end first" & LF
+        & "ninth: (a: i32, b: i32, c: i32, d: i32, e: i32,"
+        & " f: i32, g: i32, h: i32, data: [64]u8) -> (r: i32) =" & LF
+        & "    r = i32(data[63])" & LF
+        & "end ninth" & LF
+        & "use: () -> (r: i32) =" & LF
+        & "    mut data: [64]u8 = zeroed" & LF
+        & "    data[0] = 7" & LF
+        & "    data[63] = 9" & LF
+        & "    r = first(zeroed) + first(data)"
+        & " + ninth(1, 2, 3, 4, 5, 6, 7, 8, zeroed)"
+        & " + ninth(1, 2, 3, 4, 5, 6, 7, 8, data)" & LF
+        & "end use" & LF;
+   begin
+      for Target in 1 .. 3 loop
+         declare
+            Darwin : constant Boolean := Target = 1;
+            Arm64 : constant Boolean := Target <= 2;
+            Facts : constant Landin.Targets.Target_Facts :=
+              (case Target is
+                 when 1 => Landin.Targets.Darwin_Arm64,
+                 when 2 => Landin.Targets.Linux_Arm64,
+                 when others => Landin.Targets.Cortex_M);
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Assembly : Ada.Strings.Unbounded.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Lower (Work, Source, Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "the source lowers on each target");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               "both aggregate positions are accepted");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            if Arm64 then
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts,
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            else
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts,
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            end if;
+            declare
+               Text : constant String :=
+                 Ada.Strings.Unbounded.To_String (Assembly);
+               First_At : constant Natural := Index
+                 (Text, (if Darwin then "_first:" else "first:") & LF);
+               Ninth_At : constant Natural := Index
+                 (Text, (if Darwin then "_ninth:" else "ninth:") & LF);
+               Use_At : constant Natural := Index
+                 (Text, (if Darwin then "_use:" else "use:") & LF);
+            begin
+               Landin.Testing.Check
+                 (Item, First_At > 0 and then Ninth_At > First_At
+                  and then Use_At > Ninth_At,
+                  "both callee entries and their caller are emitted");
+               if First_At = 0 or else Ninth_At <= First_At
+                 or else Use_At <= Ninth_At
+               then
+                  return;
+               end if;
+               declare
+                  First_Text : constant String :=
+                    Text (First_At .. Ninth_At - 1);
+                  Ninth_Text : constant String :=
+                    Text (Ninth_At .. Use_At - 1);
+                  Use_Text : constant String := Text (Use_At .. Text'Last);
+                  procedure Check_Dispatch (Part : String);
+
+                  procedure Check_Dispatch (Part : String) is
+                  begin
+                     if Arm64 then
+                        Landin.Testing.Check
+                          (Item, Contains (Part, HT & "cbz x10,")
+                           and then Contains (Part,
+                             HT & "ldrb w12, [x10], #1" & LF)
+                           and then Contains (Part,
+                             HT & "str xzr, [x9], #8" & LF)
+                           and then Occurrences
+                             (Part, HT & "movz x11, #64" & LF) = 2
+                           and then Contains
+                             (Part, HT & "movz x11, #8" & LF),
+                           "arm64 selects a full copy or clear");
+                     else
+                        Landin.Testing.Check
+                          (Item, Contains (Part, HT & "cmp r2, #0" & LF)
+                           and then Contains (Part,
+                             HT & "ldrb r5, [r2]" & LF)
+                           and then Contains (Part,
+                             HT & "movs r5, #0" & LF)
+                           and then Occurrences
+                             (Part, HT & "movs r4, #64" & LF) = 2,
+                           "Cortex-M0 selects a full copy or clear");
+                     end if;
+                  end Check_Dispatch;
+               begin
+                  if Arm64 then
+                     Landin.Testing.Check
+                       (Item, Contains (First_Text, HT & "mov x10, x0" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "mov x10, x29" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "ldr x10, [x10]" & LF),
+                        "arm64 reads register and stack carriers");
+                     Landin.Testing.Check
+                       (Item, Occurrences
+                         (Use_Text, HT & "bl "
+                            & (if Darwin then "_first" else "first") & LF) = 2
+                        and then Occurrences
+                          (Use_Text, HT & "bl "
+                             & (if Darwin then "_ninth" else "ninth")
+                             & LF) = 2,
+                        "arm64 calls each position with zero and storage");
+                  else
+                     Landin.Testing.Check
+                       (Item, Contains (First_Text,
+                         HT & "ldr r2, [r6]" & LF)
+                        and then Contains (Ninth_Text,
+                          HT & "adds r6, #40" & LF
+                          & HT & "ldr r2, [r6]" & LF),
+                        "Cortex-M0 reads register home and stack carrier");
+                     Landin.Testing.Check
+                       (Item, Occurrences
+                         (Use_Text, HT & "bl first" & LF) = 2
+                        and then Occurrences
+                          (Use_Text, HT & "bl ninth" & LF) = 2,
+                        "Cortex-M0 calls each position with zero and storage");
+                  end if;
+                  Check_Dispatch (First_Text);
+                  Check_Dispatch (Ninth_Text);
+               end;
+            end;
+         end;
+      end loop;
+   end Non_Host_Zeroed_Carriers_Dispatch_At_Entry;
+
+   --  The internal zero carrier is not a C aggregate argument.  The C
+   --  classifier still reads a shaped, cleared caller object.
+   procedure C_Zeroed_Aggregates_Keep_Caller_Materialization
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Zeroed_Aggregates_Keep_Caller_Materialization
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Opcode;
+      use type IR.Value_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = layout(c) struct" & LF
+         & "    value: u64" & LF
+         & "end pair" & LF
+         & "extern(c) inspect: (data: pair) -> (r: u64)" & LF
+         & "use: () -> (r: u64) =" & LF
+         & "    r = inspect(zeroed)" & LF
+         & "end use" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the C aggregate call accepts zeroed");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Caller : constant IR.Item_Id := 2;
+         Clears : Natural := 0;
+         Call : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Caller) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+            begin
+               case IR.Op_Of (Unit, Caller, Value) is
+                  when IR.Clear_Array => Clears := Clears + 1;
+                  when IR.Call => Call := Value;
+                  when others => null;
+               end case;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Clears, 1, "C zeroed clears caller storage");
+         Landin.Testing.Check
+           (Item, Call /= IR.No_Value, "the C call is emitted");
+         if Call /= IR.No_Value then
+            Landin.Testing.Check
+              (Item, IR.Op_Of (Unit, Caller,
+                IR.Nth_Operand (Unit, Caller, Call, 1))
+                  = IR.Storage_Address,
+               "C receives the caller storage address for classification");
+         end if;
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "rep stosb" & LF)
+               and then Contains (Text, HT & "call inspect" & LF),
+               "the cleared C value is classified and passed normally");
+         end;
+      end;
+   end C_Zeroed_Aggregates_Keep_Caller_Materialization;
 
    --  A datum's block describes a value and is not code [1940], so it
    --  becomes an initialized object in `.data` at its own alignment rather
@@ -2142,6 +2426,51 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Field_Is_Read_At_Its_Own_Offset;
 
+   --  D46 still forms an array-bearing module field address from the
+   --  symbol, but a small nonzero offset needs no constant register.
+   procedure A_Field_After_A_Small_Array_Uses_An_Immediate
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Field_After_A_Small_Array_Uses_An_Immediate
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]usize" & LF
+         & "    count: u32" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "read: () -> none =" & LF
+         & "    value: u32 = state.count" & LF
+         & "end read" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, HT & "leaq state(%rip), %rcx" & LF
+               & HT & "addq $24, %rcx" & LF
+               & HT & "movl (%rcx), %eax"),
+            "the small field offset is added directly before its load");
+         Landin.Testing.Check
+           (Item,
+            not Contains (Text, HT & "movabsq $24, %rdx")
+              and then not Contains (Text, HT & "movq $24, %rdx"),
+            "the field offset is not loaded into a scratch register");
+      end;
+   end A_Field_After_A_Small_Array_Uses_An_Immediate;
+
    --  D46 can put a scalar sibling beyond the signed displacement of an
    --  x86-64 memory operand.  Like D18's far array element, the backend
    --  must form that address in registers rather than ask the assembler
@@ -2152,36 +2481,48 @@ package body Landin.Tests.Backend_Suite is
    procedure A_Field_After_A_Wide_Array_Uses_A_Register_Address
      (Item : in out Landin.Testing.Context)
    is
-      Work : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-      Ran  : Natural;
    begin
-      Lower
-        (Work,
-         "wide: type = struct" & LF
-         & "    prefix: [2147483648]u8" & LF
-         & "    tail: u8" & LF
-         & "end wide" & LF
-         & "mut state: wide" & LF
-         & "read: () -> none =" & LF
-         & "    value: u8 = state.tail" & LF
-         & "end read" & LF,
-         Ran);
-
-      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
-
-      declare
-         Text : constant String := Emitted (Work);
-      begin
-         Landin.Testing.Check
-           (Item, Contains (Text, HT & "leaq state(%rip), %rcx"),
-            "the wide sibling offset starts from the symbol address");
-         Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $2147483648, %rdx")
-                  and then Contains (Text, HT & "addq %rdx, %rcx")
-                  and then Contains (Text, HT & "movb (%rcx), %al"),
-            "the full target offset is added and then loaded");
-      end;
+      for Beyond in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Offset : constant String :=
+              (if Beyond then "2147483648" else "2147483647");
+            Ran : Natural;
+         begin
+            Lower
+              (Work,
+               "wide: type = struct" & LF
+               & "    prefix: [" & Offset & "]u8" & LF
+               & "    tail: u8" & LF
+               & "end wide" & LF
+               & "mut state: wide" & LF
+               & "read: () -> (value: u8) = value = state.tail end read" & LF
+               & "write: (value: u8) -> none = state.tail = value end write"
+               & LF, Ran);
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+            declare
+               Text : constant String := Emitted (Work);
+               Add : constant String :=
+                 (if Beyond then HT & "movabsq $" & Offset & ", %rdx" & LF
+                  & HT & "addq %rdx, %rcx"
+                  else HT & "addq $" & Offset & ", %rcx");
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences (Text,
+                    HT & "leaq state(%rip), %rcx" & LF & Add), 2,
+                  "read and write honor the signed immediate boundary");
+               Landin.Testing.Check
+                 (Item, Contains (Text, HT & "movb (%rcx), %al")
+                  and then Contains (Text, HT & "movb %al, (%rcx)"),
+                  "both operations use the computed full target address");
+               Landin.Testing.Check
+                 (Item, not Contains
+                    (Text, "state+" & Offset & "(%rip)"),
+                  "the boundary never becomes a symbol displacement");
+            end;
+         end;
+      end loop;
    end A_Field_After_A_Wide_Array_Uses_A_Register_Address;
 
    procedure An_Array_Field_After_A_Wide_Field_Uses_Registers
@@ -2539,8 +2880,7 @@ package body Landin.Tests.Backend_Suite is
                  (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
                and then Contains (Text, HT & "leaq source(%rip), %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Field_Offset & ", %rdx")
-               and then Contains (Text, HT & "addq %rdx, %rsi")
+                 (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
                  (Text, HT & "movabsq $" & Bytes & ", %rcx")
                and then Contains (Text, HT & "rep movsb")
@@ -2605,8 +2945,7 @@ package body Landin.Tests.Backend_Suite is
                  (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
                and then Contains (Text, HT & "leaq source(%rip), %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Field_Offset & ", %rdx")
-               and then Contains (Text, HT & "addq %rdx, %rsi")
+                 (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
                  (Text, HT & "movabsq $" & Bytes & ", %rcx")
                and then Contains (Text, HT & "rep movsb"),
@@ -3488,8 +3827,7 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Clear : constant String :=
               HT & "leaq state(%rip), %rdi" & LF
-              & HT & "movabsq $" & Offset & ", %rdx" & LF
-              & HT & "addq %rdx, %rdi" & LF
+              & HT & "addq $" & Offset & ", %rdi" & LF
               & HT & "xorl %eax, %eax" & LF
               & HT & "movabsq $" & Bytes & ", %rcx" & LF
               & HT & "cld" & LF
@@ -3548,8 +3886,7 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Address : constant String :=
               HT & "leaq state(%rip), %rcx" & LF
-              & HT & "movabsq $" & Offset & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF;
+              & HT & "addq $" & Offset & ", %rcx" & LF;
          begin
             Landin.Testing.Check
               (Item,
@@ -3611,10 +3948,8 @@ package body Landin.Tests.Backend_Suite is
             Text : constant String := Emitted (Work);
             Address : constant String :=
               HT & "leaq state(%rip), %rcx" & LF
-              & HT & "movabsq $" & Parent & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF
-              & HT & "movabsq $" & Leaf & ", %rdx" & LF
-              & HT & "addq %rdx, %rcx" & LF
+              & HT & "addq $" & Parent & ", %rcx" & LF
+              & HT & "addq $" & Leaf & ", %rcx" & LF
               & HT & "addq %rax, %rcx" & LF;
          begin
             Landin.Testing.Check_Equal
@@ -3667,10 +4002,8 @@ package body Landin.Tests.Backend_Suite is
 
          function Address (Name, Register : String) return String
          is (HT & "leaq " & Name & "(%rip), " & Register & LF
-             & HT & "movabsq $" & Parent & ", %rdx" & LF
-             & HT & "addq %rdx, " & Register & LF
-             & HT & "movabsq $" & Leaf & ", %rdx" & LF
-             & HT & "addq %rdx, " & Register & LF);
+             & HT & "addq $" & Parent & ", " & Register & LF
+             & HT & "addq $" & Leaf & ", " & Register & LF);
       begin
          Lower (Work, Source_Text, Ran);
          Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
@@ -4250,15 +4583,15 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "movl words(%rip), %eax"),
             "the first element needs no displacement");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $8, %rdx")
+           (Item, Contains (Text, HT & "addq $8, %rcx")
                   and then Contains (Text, HT & "movl (%rcx), %eax"),
             "the third is two elements along");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $5, %rdx")
+           (Item, Contains (Text, HT & "addq $5, %rcx")
                   and then Contains (Text, HT & "movb (%rcx), %al"),
             "and a one-byte element counts in ones");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movabsq $12, %rdx")
+           (Item, Contains (Text, HT & "addq $12, %rcx")
                   and then Contains (Text, HT & "movl %eax, (%rcx)"),
             "a written element reaches the same bytes");
          Landin.Testing.Check
@@ -4695,12 +5028,12 @@ package body Landin.Tests.Backend_Suite is
            (Item,
             not Contains (Wide, HT & "imulq $8, %rax, %rax")
               and then not Contains (Thin, HT & "imulq $4, %rax, %rax")
-              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $24, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $32, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $12, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $16, %rdx" & LF)
+              and then Contains (Wide, HT & "addq $16, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $24, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $32, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $8, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $12, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $16, %rcx" & LF)
               and then Occurrences
                 (Wide, HT & "movq %rax, (%rcx)" & LF) = 3
               and then Occurrences
@@ -4724,8 +5057,8 @@ package body Landin.Tests.Backend_Suite is
             "nested array copies derive the target byte extent");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $8, %rdx") > 0
-              and then Occurrences (Thin, HT & "movabsq $4, %rdx") > 0,
+            Occurrences (Wide, HT & "addq $8, %rcx") > 0
+              and then Occurrences (Thin, HT & "addq $4, %rcx") > 0,
             "variant payload bases replay target tag and payload padding");
       end;
    end Variant_Array_Payload_Writes_Follow_The_Target;
@@ -4782,6 +5115,7 @@ package body Landin.Tests.Backend_Suite is
         & "    variant_state = zeroed" & LF
         & "    variant_state.kind = wide_payload(word: 7, byte: 9)" & LF
         & "    local.kind = array_payload(row: zeroed)" & LF
+        & "    variant_state.kind = no_payload" & LF
         & "    match variant_state.kind" & LF
         & "        no_payload: _ = 1" & LF
         & "        wide_payload: _ = 2" & LF
@@ -4909,13 +5243,27 @@ package body Landin.Tests.Backend_Suite is
             "the selected u16 array payload has one separate six-byte clear");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $24, %rcx") = 4
-              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 4
+            Occurrences (Wide, HT & "movabsq $24, %rcx") = 2
+              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 2
+              and then Contains
+                (Wide, HT & "movabsq $8, %rcx" & LF
+                 & HT & "addq %rcx, %rdi" & LF
+                 & HT & "movabsq $16, %rcx" & LF)
+              and then Contains
+                (Thin, HT & "movabsq $4, %rcx" & LF
+                 & HT & "addq %rcx, %rdi" & LF
+                 & HT & "movabsq $8, %rcx" & LF)
               and then Contains (Wide, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Wide, HT & "movb $2, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $2, (%rcx)" & LF),
-            "selection and copy use the target-derived variant extent");
+            "selection clears only its selected payload");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Wide, HT & "rep stosb" & LF), 5,
+            "bare case adds no clear on the wide target");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Thin, HT & "rep stosb" & LF), 5,
+            "bare case adds no clear on the narrow target");
          Landin.Testing.Check
            (Item,
             Occurrences (Wide, HT & "rep movsb") = 2
@@ -4928,10 +5276,10 @@ package body Landin.Tests.Backend_Suite is
             "tag-only matches load the target-described u8 tag once");
          Landin.Testing.Check
            (Item,
-            Contains (Wide, HT & "movabsq $8, %rdx" & LF)
-              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $4, %rdx" & LF)
-              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF),
+            Contains (Wide, HT & "addq $8, %rcx" & LF)
+              and then Contains (Wide, HT & "addq $16, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $4, %rcx" & LF)
+              and then Contains (Thin, HT & "addq $8, %rcx" & LF),
             "payload stores replay each target's tag and field layout");
       end;
    end A_Measurement_Follows_The_Target;
@@ -7840,6 +8188,9 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);
       Landin.Testing.Register
+        (Into, "backend", "a field after a small array uses an immediate",
+         A_Field_After_A_Small_Array_Uses_An_Immediate'Access);
+      Landin.Testing.Register
         (Into, "backend", "a field after a wide array uses registers",
          A_Field_After_A_Wide_Array_Uses_A_Register_Address'Access);
       Landin.Testing.Register
@@ -7938,6 +8289,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "aggregate arguments are copied in the callee",
          Aggregate_Arguments_Are_Copied_In_The_Callee'Access);
+      Landin.Testing.Register
+        (Into, "backend", "direct zeroed arguments clear callee storage",
+         Direct_Zeroed_Arguments_Clear_Only_Callee_Storage'Access);
+      Landin.Testing.Register
+        (Into, "backend", "non-host zeroed carriers dispatch at entry",
+         Non_Host_Zeroed_Carriers_Dispatch_At_Entry'Access);
+      Landin.Testing.Register
+        (Into, "backend", "C zeroed aggregates keep caller materialization",
+         C_Zeroed_Aggregates_Keep_Caller_Materialization'Access);
       Landin.Testing.Register
         (Into, "backend", "narrow external arguments are extended",
          Narrow_External_Arguments_Are_Extended'Access);

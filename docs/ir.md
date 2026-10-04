@@ -242,7 +242,24 @@ carriers rather than becoming large scalar values. An internal address used
 to pass an aggregate is distinct from a source-language pointer. In
 particular, passing a value by an address carrier does not silently change
 the source operation into an alias: the receiving routine copies the
-aggregate where the calling contract requires it.
+aggregate where the calling contract requires it. A direct `zeroed` internal
+aggregate argument instead carries scalar zero in the same argument position;
+the callee clears its own complete shaped parameter slot. Stored values still
+carry addresses and are copied. C ABI arguments retain caller materialization
+and C classification. Lowering emits zero carriers in the final call block,
+after source-ordered argument evaluation, so later control-flow expressions
+cannot strand a carrier in a predecessor block.
+
+Variant selection retains the selected case identity. Each backend derives
+its padded payload extent, clears that payload and writes the tag; a bare
+case writes only the tag. Inactive bytes and layout padding are unspecified.
+Explicit whole-object `zeroed` still clears the complete object, and whole
+copies still transfer the complete reserved extent.
+
+Aggregate results currently retain separate named-result storage and the
+successful-exit copy. The specification permits direct caller storage only
+when equivalence for aliasing, partial results, failure and cleanup is proved;
+that permission is not an implemented result-storage optimization.
 
 Module data is also distinct from routine execution. A datum holds a static
 value description or image, including nested contents and function

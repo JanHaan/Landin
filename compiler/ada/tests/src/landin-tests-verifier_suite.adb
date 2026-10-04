@@ -4285,8 +4285,8 @@ package body Landin.Tests.Verifier_Suite is
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Site : Landin.Provenance.Origin;
       type Carrier_Case is
-        (Sound, Wrong_Parameter, Wrong_Result, Scalar_Tail, Aggregate_Tail,
-         Unpromoted_Tail);
+        (Sound, Wrong_Parameter, Zero_Parameter, Wrong_Result, Zero_Result,
+         Scalar_Tail, Aggregate_Tail, Unpromoted_Tail);
    begin
       Ready (Work, Site);
       for Indirect in Boolean loop
@@ -4339,7 +4339,9 @@ package body Landin.Tests.Verifier_Suite is
                  (Unit, Caller,
                   (Kind => IR.Frame_Slot, Slot => Storage), Site);
                Integer := IR.Emit_Number
-                 (Unit, Caller, Landin.Types.Usize, 1, False, Site);
+                 (Unit, Caller, Landin.Types.Usize,
+                  (if Which in Zero_Parameter | Zero_Result then 0 else 1),
+                  False, Site);
                Tail := IR.Emit_Number
                  (Unit, Caller,
                   (if Which = Unpromoted_Tail
@@ -4355,10 +4357,12 @@ package body Landin.Tests.Verifier_Suite is
                end if;
                IR.Add_Argument
                  (Unit, Caller, Call,
-                  (if Which = Wrong_Result then Integer else Address));
+                  (if Which in Wrong_Result | Zero_Result
+                   then Integer else Address));
                IR.Add_Argument
                  (Unit, Caller, Call,
-                  (if Which = Wrong_Parameter then Integer else Address));
+                  (if Which in Wrong_Parameter | Zero_Parameter
+                   then Integer else Address));
                if Which in Scalar_Tail | Aggregate_Tail | Unpromoted_Tail then
                   IR.Add_Argument
                     (Unit, Caller, Call,
@@ -6672,8 +6676,8 @@ package body Landin.Tests.Verifier_Suite is
       Facts : Landin.Targets.Target_Facts)
    is
       type Scenario_Kind is
-        (Sound, Sound_Nested, Sound_Indexed,
-         Wrong_Hidden_Integer, Wrong_Argument_Integer,
+        (Sound, Sound_Nested, Sound_Indexed, Sound_Zero,
+         Wrong_Hidden_Integer, Wrong_Hidden_Zero, Wrong_Argument_Integer,
          Wrong_Hidden_Shape, Wrong_Argument_Shape,
          Wrong_Hidden_Element, Wrong_Argument_Element);
       Work : Landin.Stages.Compilation :=
@@ -6832,7 +6836,9 @@ package body Landin.Tests.Verifier_Suite is
                     (Unit, Caller, Landin.Resolution.Program_Scope, Site);
                   IR.Enter (Unit, Caller, Block);
                   Integer := IR.Emit_Number
-                    (Unit, Caller, Landin.Types.Usize, 1, False, Site);
+                    (Unit, Caller, Landin.Types.Usize,
+                     (if Scenario in Sound_Zero | Wrong_Hidden_Zero
+                      then 0 else 1), False, Site);
                   Hidden_Value := IR.Emit_Storage_Address
                     (Unit, Caller,
                      (Kind => IR.Frame_Slot, Slot => Destination), Site,
@@ -6882,18 +6888,19 @@ package body Landin.Tests.Verifier_Suite is
                   end if;
                   IR.Add_Argument
                     (Unit, Caller, Called,
-                     (if Scenario = Wrong_Hidden_Integer
+                     (if Scenario in Wrong_Hidden_Integer | Wrong_Hidden_Zero
                       then Integer else Hidden_Value));
                   IR.Add_Argument (Unit, Caller, Called, Self);
                   IR.Add_Argument
                     (Unit, Caller, Called,
-                     (if Scenario = Wrong_Argument_Integer
+                     (if Scenario in Wrong_Argument_Integer | Sound_Zero
                       then Integer else Argument_Value));
                   IR.Emit_Leave (Unit, Caller, IR.No_Value, Site);
                   IR.Leave_Block (Unit, Caller);
                   Expect
                     (Item, V.Check (Unit, Facts),
                      (if Scenario in Sound | Sound_Nested | Sound_Indexed
+                        | Sound_Zero
                       then V.Nothing_Wrong else V.Operands_Disagree),
                      "single-result carrier: " & Form'Image & Scenario'Image
                        & " arrays " & Arrays'Image);

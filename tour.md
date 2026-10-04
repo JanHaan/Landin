@@ -1182,6 +1182,12 @@ A case is written where its variant part is the context: constructing into
 that part, and naming an arm of a match on it. It is not a value of its own
 apart from the part, and neither is the part apart from its struct: copy the
 struct, or match it (D241).
+Selecting a bare case writes only its tag. Selecting a case with a payload
+zeros that case's payload storage before writing its fields. The inactive
+case storage and layout padding have unspecified bytes after selection;
+`zeroed` still writes the complete all-zero image of the containing struct.
+The work of selection therefore follows the selected payload's size, while
+whole-struct zeroing and copying follow the struct's reserved size.
 
 ### [0700] Construction and conversion use the same form
 
