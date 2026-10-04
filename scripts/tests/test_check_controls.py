@@ -13,8 +13,10 @@ broken in one place, because a recorded sha256 cannot be invented.
 """
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -458,6 +460,31 @@ class CodeRules(unittest.TestCase):
                          ("prose", 7, ""))
         self.assertEqual((sections[5][0], sections[5][1], sections[5][2][0]),
                          ("landin", 12, ""))
+
+    def test_document_rules_skip_blanked_prose(self):
+        prose = "This paragraph is not Landin source.\n" * 500
+        source = (prose
+                  + "## core/first  — example\n"
+                  + "```landin\nvalue: u8 = 1\n```\n"
+                  + "## core/second  — example\n"
+                  + "```landin\nvalue: u8 = 2\nmut if: u8 = 3\n```\n"
+                  + "```landin\nend absent\n```\n")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "example.md"
+            path.write_text(source)
+            with mock.patch.object(checker, "module_banner",
+                                   wraps=checker.module_banner) as banners:
+                problems = checker.check(path)
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(any("keyword" in why for _, why in problems))
+        self.assertTrue(any("closes nothing" in why for _, why in problems))
+        self.assertLess(banners.call_count, len(source.split("\n")) + 20)
+
+    def test_numbered_code_keeps_source_positions(self):
+        problems = checker.check_numbered_code(
+            [(42, "mut if: u8 = 3"), (70, "end absent")])
+        self.assertEqual([n for n, _ in problems], [42, 70])
+        self.assertEqual(checker.check_code(["end absent"], 100)[0][0], 101)
 
 
 GRAMMAR = ["spec.md", "compiler/tests/fixtures",

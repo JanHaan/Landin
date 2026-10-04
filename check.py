@@ -316,7 +316,8 @@ def live_example_tokens(text):
 
 
 def check(path):
-    text = io.open(path, encoding="utf-8").read()
+    with io.open(path, encoding="utf-8") as source:
+        text = source.read()
     all_lines = text.split("\n")
     out = []
     basename = os.path.basename(path)
@@ -342,21 +343,21 @@ def check(path):
                                " or text"))
 
     #  Only the Landin code is checked. Findings and the changelog quote
-    #  the wording that decisions retired, on purpose.  The rules run over
-    #  the file with everything but the `landin` blocks blanked, so line
-    #  numbers hold and the two whole-file rules -- a name declared twice
-    #  in one module, an `end NAME` with no opener -- see every block.
-    code = [""] * len(all_lines)
+    #  the wording that decisions retired, on purpose. Keep source positions
+    #  with the code instead of scanning blanked prose on every rule pass.
+    #  The two whole-file rules still see every Landin block and module.
+    code = {}
     for kind, start, chunk in sections(all_lines):
         if kind == "landin":
             for i, line in enumerate(chunk):
-                code[start - 1 + i] = line
+                if line.strip():
+                    code[start + i] = line
     #  The module headings stay visible, so a name may repeat across the
     #  modules a prototype file contains without being declared twice.
-    for i, line in enumerate(all_lines):
+    for i, line in enumerate(all_lines, 1):
         if module_banner(line):
             code[i] = line
-    out += check_code(code, 0)
+    out += check_numbered_code(sorted(code.items()))
     return sorted(set(out))
 
 
@@ -430,11 +431,17 @@ def visible_code(lines):
 
 
 def check_code(lines, offset):
-    """The six cheap rules, over one stretch of code."""
+    """The six cheap rules over one stretch of code at a given line offset."""
+    return check_numbered_code(
+        [(n + offset, line) for n, line in enumerate(lines, 1)])
+
+
+def check_numbered_code(lines):
+    """The six cheap rules over source-numbered code and module headings."""
     out = []
 
     #  1. a reserved word standing where a name belongs
-    for n, line in enumerate(lines, 1):
+    for n, line in lines:
         if not looks_like_code(line):
             continue
         declaration_line = re.sub(
@@ -448,7 +455,8 @@ def check_code(lines, offset):
                 out.append((n, "%r is a keyword and cannot be a name" % word))
 
     #  2. 'when' rides only on an exit statement
-    for n, line in enumerate(visible_code(lines), 1):
+    masked = visible_code([line for _, line in lines])
+    for (n, _), line in zip(lines, masked):
         s = line.strip()
         if not re.search(r"\bwhen\b", s):
             continue
@@ -456,14 +464,14 @@ def check_code(lines, offset):
             out.append((n, "'when' outside an exit statement"))
 
     #  3. a convention marker at a call site, removed at 0.0.10
-    for n, line in enumerate(lines, 1):
+    for n, line in lines:
         if not looks_like_code(line):
             continue
         if re.search(r"[a-z_][a-z0-9_.]*\(\s*(?:inout|sink)\s+[a-z_]", line):
             out.append((n, "convention marker at a call site"))
 
     #  4. spellings a decision retired
-    for n, line in enumerate(lines, 1):
+    for n, line in lines:
         if line.lstrip().startswith(("--", "X", "Y", "Z", "W")):
             continue      # findings quote the wording that was wrong
         for dead, why in RETIRED.items():
@@ -474,7 +482,7 @@ def check_code(lines, offset):
     #  Names may repeat across the modules a prototype file contains.
     module = 0
     seen, where = collections.Counter(), collections.defaultdict(list)
-    for n, line in enumerate(lines, 1):
+    for n, line in lines:
         if module_banner(line):
             module += 1
         if line.startswith((" ", "\t", "-", "=")) or not line.strip():
@@ -492,7 +500,7 @@ def check_code(lines, offset):
 
     #  6. 'end NAME' with no opener of that name anywhere in the file
     openers = set()
-    for line in lines:
+    for _, line in lines:
         s = line.strip()
         if s.startswith("--"):
             continue
@@ -505,12 +513,12 @@ def check_code(lines, offset):
             openers.add(m.group(1))
         openers.update(re.findall(r"\b([a-z_][a-z0-9_]*)\s*\(", s))
         openers.update(re.findall(r"\.([a-z_][a-z0-9_]*)\s*\(", s))
-    for n, line in enumerate(lines, 1):
+    for n, line in lines:
         m = re.match(r"^end\s+([a-z_][a-z0-9_]*)\s*$", line.strip())
         if m and m.group(1) not in BLOCK_ENDS and m.group(1) not in openers:
             out.append((n, "'end %s' closes nothing of that name" % m.group(1)))
 
-    return [(n + offset, why) for n, why in out]
+    return out
 
 
 # --------------------------------------------------------------------------
