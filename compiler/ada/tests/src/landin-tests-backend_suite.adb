@@ -307,6 +307,52 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Branch_Names_Both_Of_Its_Edges;
 
+   --  Return values and the failure carrier are prepared at their own exits,
+   --  but all exits restore the same frame and saved registers.
+   procedure Multiple_Exits_Share_One_Epilogue
+     (Item : in out Landin.Testing.Context);
+
+   procedure Multiple_Exits_Share_One_Epilogue
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "f: (x: i32) -> (r: i32) ! problem =" & LF
+         & "    r = 0" & LF
+         & "    return when x == 0" & LF
+         & "    fail bad when x == 1" & LF
+         & "    r = 2" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Occurrences (Text, HT & "ret" & LF) = 1,
+            "the three exits emit one return instruction");
+         Landin.Testing.Check
+           (Item, Occurrences (Text, HT & "movq %rbp, %rsp" & LF) = 1,
+            "the frame is torn down once");
+         Landin.Testing.Check
+           (Item, Occurrences (Text, "jmp .L1_1_epilogue" & LF) = 2,
+            "early return and failure join the shared epilogue");
+         Landin.Testing.Check
+           (Item, Contains (Text, ", %r10d")
+             and then Contains (Text, "xorl %r10d, %r10d"),
+            "failure and successful returns retain their carrier values");
+      end;
+   end Multiple_Exits_Share_One_Epilogue;
+
    --  [0300] makes ordinary unsigned addition trap when its mathematical
    --  result does not fit.  Carry is that condition on x86-64, and the
    --  successful edge is the only one that stores the result.
@@ -8120,6 +8166,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a branch names both of its edges",
          A_Branch_Names_Both_Of_Its_Edges'Access);
+      Landin.Testing.Register
+        (Into, "backend", "multiple exits share one epilogue",
+         Multiple_Exits_Share_One_Epilogue'Access);
       Landin.Testing.Register
         (Into, "backend", "an aggregate control join passes one caller cell",
          An_Aggregate_Control_Join_Passes_One_Caller_Cell'Access);

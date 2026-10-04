@@ -1291,6 +1291,8 @@ package body Landin.Backend.X86_64 is
          Current_Block : Landin.IR.Block_Id := Landin.IR.No_Block;
          Next_Instruction : Landin.IR.Value_Id := Landin.IR.No_Value;
          Fused_Branch : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Exit_Count : Natural := 0;
+         Shared_Epilogue : constant String := Label (Item, 1) & "_epilogue";
 
          function Size_Of_Value
            (Value : Landin.IR.Value_Id) return Held_Size
@@ -2307,6 +2309,7 @@ package body Landin.Backend.X86_64 is
          end Reserve_Stack;
 
          procedure Emit_Epilogue (Value : Landin.IR.Value_Id);
+         procedure Emit_Epilogue_Body;
 
          procedure Emit_Epilogue (Value : Landin.IR.Value_Id) is
          begin
@@ -2315,8 +2318,30 @@ package body Landin.Backend.X86_64 is
                --  preparation. End location ranges before the first restore.
                Put (Dwarf.Label_Name
                  (Local_Prefix, "epilogue", Item, Natural (Value)) & ":");
-               Emit (".cfi_remember_state");
             end if;
+            if Exit_Count > 1 then
+               --  The final exit can fall through to the shared teardown.
+               if Current_Block /= Landin.IR.Block_Id
+                    (Landin.IR.Block_Count (Of_Unit, Item))
+                 or else Next_Instruction /= Landin.IR.No_Value
+               then
+                  Emit ("jmp " & Shared_Epilogue);
+               end if;
+            else
+               if Debug /= null then
+                  --  A later block may follow this sole exit in assembly.
+                  --  Keep its CFI state while emitting that block.
+                  Emit (".cfi_remember_state");
+               end if;
+               Emit_Epilogue_Body;
+               if Debug /= null then
+                  Emit (".cfi_restore_state");
+               end if;
+            end if;
+         end Emit_Epilogue;
+
+         procedure Emit_Epilogue_Body is
+         begin
             for Register in Allocation.Saved_Register loop
                if Allocation_Plan.Used (Register) then
                   Emit ("movq " & Cell (Save_Offset
@@ -2336,10 +2361,7 @@ package body Landin.Backend.X86_64 is
                Emit (".cfi_restore %rbp");
             end if;
             Emit ("ret");
-            if Debug /= null then
-               Emit (".cfi_restore_state");
-            end if;
-         end Emit_Epilogue;
+         end Emit_Epilogue_Body;
 
          procedure Conditional_Branch
            (Condition : String; Yes, No : Landin.IR.Block_Id);
@@ -5249,6 +5271,23 @@ package body Landin.Backend.X86_64 is
          end Emit_Instruction;
 
       begin
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Item, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Value : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               begin
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value) in
+                    Landin.IR.Leave | Landin.IR.Fail
+                  then
+                     Exit_Count := Exit_Count + 1;
+                  end if;
+               end;
+            end loop;
+         end loop;
+
          if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
@@ -5486,6 +5525,11 @@ package body Landin.Backend.X86_64 is
                end loop;
             end;
          end loop;
+
+         if Exit_Count > 1 then
+            Put (Shared_Epilogue & ":");
+            Emit_Epilogue_Body;
+         end if;
 
          if Debug /= null then
             Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
