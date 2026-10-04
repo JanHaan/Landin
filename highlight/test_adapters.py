@@ -229,6 +229,39 @@ def pygments_smoke(source: str) -> None:
                    for _, token, piece in spans)
 
 
+def kate_raw_smoke(kate: ET.ElementTree) -> None:
+    contexts = {
+        context.attrib["name"]: context
+        for context in kate.findall("./highlighting/contexts/context")
+    }
+    normal_rules = list(contexts["Normal"])
+    opener = next(rule for rule in normal_rules
+                  if rule.attrib.get("context") == "Raw String")
+    ordinary = next(rule for rule in normal_rules
+                    if rule.tag == "DetectChar" and rule.attrib.get("char") == '"')
+    assert opener.tag == "RegExpr" and normal_rules.index(opener) < normal_rules.index(ordinary)
+    assert opener.attrib["attribute"] == "String"
+
+    raw = contexts["Raw String"]
+    assert raw.attrib["attribute"] == "String"
+    assert raw.attrib["lineEndContext"] == "#stay"
+    (closer,) = list(raw)
+    assert closer.tag == "StringDetect"
+    assert closer.attrib == {"String": "%1", "dynamic": "true", "context": "#pop"}
+
+    opening = re.compile(opener.attrib["String"])
+    assert opening.match('"ordinary"') is None
+    for delimiter, body in (
+        ('"""', 'raw\n-- this is part of the raw literal\n'),
+        ('""""', 'raw\n""" -- still raw\n'),
+    ):
+        source = delimiter + body + delimiter + " public"
+        match = opening.match(source)
+        assert match is not None and match.group(1) == delimiter
+        closing = closer.attrib["String"].replace("%1", match.group(1))
+        assert source.find(closing, match.end()) == len(delimiter + body)
+
+
 def main() -> int:
     grammar = load_json("textmate/syntaxes/landin.tmLanguage.json")
     package = load_json("textmate/package.json")
@@ -252,6 +285,7 @@ def main() -> int:
     assert zed["grammars"]["landin"]["path"] == "highlight/tree-sitter"
     assert zed_language["path_suffixes"] == ["ldn"]
     assert kate.getroot().attrib["extensions"] == "*.ldn"
+    kate_raw_smoke(kate)
     assert notepad.getroot().find("UserLang").attrib["ext"] == "ldn"
 
     lexical = (ROOT / "tests/lexical.ldn").read_text(encoding="utf-8")
