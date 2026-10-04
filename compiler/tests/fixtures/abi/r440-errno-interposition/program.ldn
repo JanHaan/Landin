@@ -160,17 +160,17 @@ public main: () -> (code: i32) =
             _ = problem
             return
         end
-    return when first_written <> 2 or io.last_errno(state) <> 0
+    return when first_written <> 2 or hosted.last_errno(state) <> 0
     second_written: usize = io.write_some(state, some_stream, payload[2..<6])
         else (problem)
             _ = problem
             return
         end
-    return when second_written <> 1 or io.last_errno(state) <> 0
+    return when second_written <> 1 or hosted.last_errno(state) <> 0
     mut some_failed: bool = false
     failed_count: usize = io.write_some(state, some_stream, payload[3..<6])
         else (problem)
-            some_failed = problem == io.io_failed and io.last_errno(state) == 5
+            some_failed = problem == io.io_failed and hosted.last_errno(state) == 5
             0
         end
     return when not some_failed or failed_count <> 0
@@ -184,7 +184,7 @@ public main: () -> (code: i32) =
             _ = problem
             return
         end
-    return when empty_written <> 0 or io.last_errno(state) <> 0
+    return when empty_written <> 0 or hosted.last_errno(state) <> 0
       or r440_errno_check(10) <> 0
 
     code = 42
