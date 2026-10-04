@@ -9971,9 +9971,11 @@ package body Landin.Stages.Checking is
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => Message,
-                  Note    => "D138: deduction unifies the written parameter"
-                             & " pattern with the independently synthesized"
-                             & " argument descriptor exactly",
+                  Note    => "D138: deduction matches the written parameter"
+                             & " pattern against the independently"
+                             & " synthesized argument descriptor; only an"
+                             & " outer mutable reference may relax to"
+                             & " read-only",
                   Related => Syn.Origin (Pattern_Tree, Pattern),
                   Because => "the runtime parameter type pattern",
                   Into    => Found);
@@ -10258,7 +10260,8 @@ package body Landin.Stages.Checking is
             Actual       : Type_Descriptor;
             Argument     : Syn.Node_Id;
             Position     : Positive;
-            Map_Limit    : Natural) return Boolean;
+            Map_Limit    : Natural;
+            Outer_Reference : Boolean := False) return Boolean;
 
          function Match_Fixed_Pattern
            (Pattern_Tree : Syn.Tree;
@@ -10350,7 +10353,8 @@ package body Landin.Stages.Checking is
             Actual       : Type_Descriptor;
             Argument     : Syn.Node_Id;
             Position     : Positive;
-            Map_Limit    : Natural) return Boolean
+            Map_Limit    : Natural;
+            Outer_Reference : Boolean := False) return Boolean
          is
             Kind : constant Syn.Node_Kind := Syn.Kind (Pattern_Tree, Pattern);
 
@@ -10440,8 +10444,12 @@ package body Landin.Stages.Checking is
                      Atoms => Reference.Atoms,
                      others => <>);
                begin
-                  if Reference.Mutable /= Syn.Is_Referent_Mutable
-                    (Pattern_Tree, Pattern)
+                  if (Reference.Mutable /= Syn.Is_Referent_Mutable
+                        (Pattern_Tree, Pattern)
+                      and then not (Outer_Reference
+                        and then Reference.Mutable
+                        and then not Syn.Is_Referent_Mutable
+                          (Pattern_Tree, Pattern)))
                     or else Reference.View /= Ty.Ordinary_View
                     or else Reference.Empty_Atom /= Res.No_Declaration
                   then
@@ -10923,7 +10931,7 @@ package body Landin.Stages.Checking is
                           Descriptor_At (Caller_Tree, Argument, Got);
                         Agrees : constant Boolean := Match_Type_Pattern
                           (Template_Tree.all, Pattern, Actual, Argument,
-                           Index, 0);
+                           Index, 0, True);
                         pragma Unreferenced (Agrees);
                      begin
                         null;
@@ -18503,6 +18511,36 @@ package body Landin.Stages.Checking is
                        (if Wrote = Landin.Checking.No_Nominal_Type then 0
                         else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
                   begin
+                     if Wrote /= Landin.Checking.No_Nominal_Type
+                       and then Representation_Is_Private
+                         (Wrote, Syn.Source_Of (Of_Tree))
+                     then
+                        declare
+                           Template : constant Res.Declaration_Id :=
+                             Template_Declaration (Wrote);
+                           Template_Tree : constant not null access
+                             constant Syn.Tree :=
+                               Tree_For
+                                 (Res.Source_Of (Meanings.all, Template));
+                        begin
+                           Name_Bad.Report
+                             (Item    => Name_Bad.Inaccessible_Name,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Node),
+                              Message => "this type's representation is"
+                                         & " module-internal",
+                              Note    => "D150: a private identity may cross"
+                                         & " a public signature without"
+                                         & " exposing its fields",
+                              Related => Syn.Origin
+                                (Template_Tree.all,
+                                 Res.Node_Of (Meanings.all, Template)),
+                              Because => "declared without `public` here",
+                              Into    => Found);
+                        end;
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return Ty.Ill_Typed;
+                     end if;
                      if Which > 0
                        and then Landin.Checking.Has_Layout (Types.all, Wrote)
                        and then Landin.Checking.Field_Kind_Of
@@ -18874,6 +18912,12 @@ package body Landin.Stages.Checking is
                               else Field_At
                                      (Wrote, Syn.Name (Of_Tree, Node)));
                         begin
+                           if Wrote /= Landin.Checking.No_Nominal_Type
+                             and then Representation_Is_Private
+                               (Wrote, Syn.Source_Of (Of_Tree))
+                           then
+                              return False;
+                           end if;
                            if Which /= 0
                              and then Landin.Checking.Has_Layout
                                         (Types.all, Wrote)
@@ -19512,6 +19556,17 @@ package body Landin.Stages.Checking is
                              & " type that permits zero initialization",
                   Related => Syn.Origin (Of_Tree, Node),
                   Because => "this use of zeroed",
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
+            when Syn.Uninit_Literal =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "`uninit` requires an array field of a"
+                             & " private compact struct",
+                  Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
 
@@ -23841,6 +23896,44 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Value, Expected, Element, Element_Nominal,
                      Syn.Origin (Of_Tree, Field),
                      "the array field named here", Shape => Element_Shape);
+
+               when Syn.Uninit_Literal =>
+                  --  Only the defining module can construct a private
+                  --  nominal's raw inline field.  Packed aggregates have
+                  --  shared bit storage and cannot leave a field unwritten.
+                  if Res.Is_Public
+                       (Meanings.all,
+                        Landin.Checking.Template_Of (Types.all, Wrote))
+                    or else Representation_Is_Private
+                      (Wrote, Syn.Source_Of (Of_Tree))
+                    or else Landin.Checking.Layout_Of (Types.all, Wrote)
+                      = Landin.Layouts.Packed
+                    or else not Shape_Layout_Ready
+                      (Complete_Element
+                         (Element, Element_Nominal, Element_Shape))
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "`uninit` requires an array field of a"
+                                   & " private compact struct",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                  else
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Value, Ty.Fixed_Array);
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Value, Expected, Element,
+                        Shape => Element_Shape);
+                     if Element_Nominal /=
+                       Landin.Checking.No_Nominal_Type
+                     then
+                        Landin.Checking.Note_Array_Element_Nominal
+                          (Types.all, Of_Tree, Value, Element_Nominal);
+                     end if;
+                  end if;
 
                when others =>
                   declare

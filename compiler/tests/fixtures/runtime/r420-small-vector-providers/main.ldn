@@ -26,13 +26,13 @@ heap_path: () -> (ok: bool) =
     last: i32 = small.pop(values) else 0
     begin
         view := small.used(values)
-        ok = last == 19 and small.length(values) == 8
-             and small.capacity(values) == 16
+        ok = last == 19 and small.length(addr values) == 8
+             and small.capacity(addr values) == 16
              and view[0] == 11 and view[7] == 8
     end
     small.release(values, state)
     small.release(values, state)
-    ok = ok and small.length(values) == 0 and small.capacity(values) == 0
+    ok = ok and small.length(addr values) == 0 and small.capacity(addr values) == 0
 end heap_path
 
 arena_path: () -> (ok: bool) =
@@ -49,8 +49,8 @@ arena_path: () -> (ok: bool) =
     small.push(values, state, 25) else 0
     begin
         view := small.used(values)
-        ok = inline_free and small.length(values) == 5
-             and small.capacity(values) == 8
+        ok = inline_free and small.length(addr values) == 5
+             and small.capacity(addr values) == 8
              and view[0] == 21 and view[2] == 23 and view[4] == 25
              and mem.arena_used(state) == 12 * sizeof i32
     end
@@ -77,7 +77,7 @@ fixed_path: () -> (ok: bool) =
     begin
         view := small.used(values)
         view[1] = 42
-        ok = small.length(values) == 3 and small.capacity(values) == 4
+        ok = small.length(addr values) == 3 and small.capacity(addr values) == 4
              and view[0] == 31 and view[1] == 42 and view[2] == 33
     end
     small.release(values, state)
@@ -114,8 +114,8 @@ failing_path: () -> (ok: bool) =
     end
     begin
         view := small.used(values)
-        ok = first_failed and small.length(values) == 1
-             and small.capacity(values) == 1 and view[0] == 51
+        ok = first_failed and small.length(addr values) == 1
+             and small.capacity(addr values) == 1 and view[0] == 51
              and failing.delegated(state) == 0
              and pool.allocation_count(inner) == 0
     end
@@ -129,8 +129,8 @@ failing_path: () -> (ok: bool) =
     end
     begin
         view := small.used(values)
-        ok = ok and growth_failed and small.length(values) == 2
-             and small.capacity(values) == 2
+        ok = ok and growth_failed and small.length(addr values) == 2
+             and small.capacity(addr values) == 2
              and view[0] == 51 and view[1] == 52
              and failing.successes(state) == 1
              and failing.frees(state) == 0
@@ -141,8 +141,8 @@ failing_path: () -> (ok: bool) =
     small.push(values, state, 53) else 0
     begin
         view := small.used(values)
-        ok = ok and small.length(values) == 3
-             and small.capacity(values) == 4 and view[2] == 53
+        ok = ok and small.length(addr values) == 3
+             and small.capacity(addr values) == 4 and view[2] == 53
     end
     small.release(values, state)
     ok = ok and failing.attempts(state) == 4

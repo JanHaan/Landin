@@ -2087,6 +2087,10 @@
           "named": true
         },
         {
+          "type": "uninit_literal",
+          "named": true
+        },
+        {
           "type": "zeroed_literal",
           "named": true
         }
@@ -3874,6 +3878,10 @@
   {
     "type": "undo",
     "named": false
+  },
+  {
+    "type": "uninit_literal",
+    "named": true
   },
   {
     "type": "usize",

@@ -176,6 +176,13 @@ public release: (item: type, inout storage: raw(item))
     storage.prefix = storage.prefix[0..<tail]
 end release
 
+--  Forget the initialized prefix without changing the backing allocation.
+--  Values in that prefix are discarded; callers remain responsible for any
+--  resources those values refer to.
+public clear: (item: type, inout storage: raw(item)) -> none =
+    storage.prefix = storage.prefix[0..<0]
+end clear
+
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage)
                 ! raw_not_empty | raw_empty =

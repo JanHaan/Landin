@@ -139,7 +139,7 @@ keyword and never a name, so 'if' is not available as a binding;
 that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The kernel
-reserves forty-nine words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
+reserves fifty words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
 language. Once reserved, it is a keyword in every program, even one that
 does not use that construct. Type names are not among them: u32 and bool
 are ordinary declared names [0120] that the kernel happens to predeclare.
@@ -162,14 +162,14 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "begin"
               | "inc" | "inout" | "loop" | "match" | "mut" | "none" | "not"
               | "or" | "ptr" | "public" | "return" | "sink" | "sizeof"
               | "struct" | "then" | "true" | "try" | "type" | "unchecked"
-              | "undo" | "when" | "while" | "with" | "zeroed"
+              | "undo" | "uninit" | "when" | "while" | "with" | "zeroed"
 
 ```
 
 ### [1770] The kernel's literals include characters, floats and text
 
 The kernel's literals are integers, floats, characters, quoted text,
-the two booleans, and contextual `zeroed`.
+the two booleans, and contextual `zeroed` and `uninit`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. Each integer digit run starts and ends in
@@ -177,7 +177,9 @@ a digit of its base; any internal run of underscores separates digits.
 A number ends where its spelling ends: a letter, digit or underscore
 directly after one belongs to it, so `1u64` or `1.5f32` is one malformed
 literal rather than a number and a name (D245).
-`zeroed` has no type of its own: [0540] gives it
+`uninit` is D152's restricted private inline-array field initializer; it
+reserves storage without assigning an item image. It has no stand-alone
+value type. `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
@@ -205,7 +207,7 @@ type `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 
 ```landin-grammar
 literal     ::= integer | float | character | text | raw
-              | "true" | "false" | "zeroed"
+              | "true" | "false" | "zeroed" | "uninit"
 character   ::= "'" (character_escape | unicode_scalar) "'"
 unicode_scalar ::= any Unicode scalar except apostrophe, backslash or line_end
 character_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
@@ -12198,7 +12200,7 @@ classified failure boundary before the repository gate can pass.
 | `inout.exact-alias` | static | 0900 | L0337 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale, including an old pool pointer whose address and extent match a later reuse | `runtime/r250-references`, `runtime/r420-pool-provider` |
-| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 retains complete operand values in source order, allowing stable storage to supply them, and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
@@ -12225,7 +12227,7 @@ classified failure boundary before the repository gate can pass.
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io/hosted` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
-| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` copies at most N messages of up to `diag.message_capacity` bytes and counts later or oversized notes in `dropped` | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0337 for a sink path crossing a reference boundary or using a computed index; L0302 or L0315 for consumed-place and restoration checks | `negative/use-after-sink`, `negative/sunk-inout-not-restored`, `negative/r491-sink-slice-storage`, `positive/r491-sink-contained-places`, `positive/r491-sink-call-entry`, `negative/r491-sink-entry-overlap` |
@@ -13122,10 +13124,13 @@ structural atom-set, fixed-array, nominal, pointer/slice reference,
 `any`-concept or concrete function-signature descriptor; every repeat must
 agree exactly.
 
-A pointer or slice pattern first matches its reference kind, permission and
-ordinary view exactly, then recursively matches its complete referent
-descriptor. Deduction does not relax a mutable reference to a read-only
-pattern or treat a text view or pointer union as an ordinary reference.
+A pointer or slice pattern first matches its reference kind and ordinary view,
+then recursively matches its complete referent descriptor. When that written
+pattern is the outer runtime parameter type, a mutable argument may satisfy a
+read-only pointer or slice pattern under [0440]; the specialized parameter
+remains read-only. Permission in nested patterns still matches exactly, and a
+read-only argument never satisfies a mutable pattern. Deduction does not treat
+a text view or pointer union as an ordinary reference.
 Referent identity includes nested references, nominal identity, fixed-array
 extent, function signature and erased concept as applicable. A direct formal
 or stored nominal actual containing `any C` agrees only with that same C.
@@ -13267,8 +13272,9 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-zero-nominal-array-signatures`,
 `runtime/generic-declared-errors`,
 `runtime/generic-routine-inferred-errors`,
-`runtime/generic-try-effective-signature`, and
-`runtime/generic-same-key-recursion` and
+`runtime/generic-try-effective-signature`,
+`runtime/generic-same-key-recursion`,
+`runtime/r420-small-vector`, and
 `runtime/diagnostic-loggers-dispatch` on Linux x86-64. The malformed-error
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
@@ -13779,8 +13785,10 @@ concept constraint and a declared error set. A private
 member is distinguished from a missing one and related to its declaration.
 Public declarations may mention private identities, but those identities stay
 unnameable across the boundary, and a value carrying one does not expose that
-private type's fields. A contextual struct literal for that private identity
-is likewise refused: otherwise a public alias could bypass its constructor.
+private type's fields. A contextual literal cannot construct a private
+nominal from another module, including through a public wrapper's field;
+otherwise it could forge an initialized-prefix invariant. Array-field
+selection through a nested path obeys the same visibility rule.
 Variant cases inherit the containing type's
 visibility. A namespace itself is no runtime or type value. `public` on a
 conformance is refused; every unmarked conformance in the reached graph still
@@ -13817,6 +13825,8 @@ identities and diagnostics host-dependent. All were declined.
 **Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
 `negative/core-mem-private-representation`,
 `negative/core-arena-private-representation`,
+`negative/core-small-private-representation`,
+`negative/core-small-forged-storage`,
 `negative/core-text-frame-slice-escape`, `runtime/core-vec-pointer-storage`,
 and the parser, resolution, driver and hosted-entry cases.
 
@@ -15201,9 +15211,11 @@ before extending the witness by one. Neither step publishes spare capacity.
 `replace`, like `admit`, declares the inserted value `escaping`. `used` returns
 only the initialized witness, with mutable element permission and
 `from storage`. `release` checks for `raw_empty`, saves the typed former tail
-and then shortens the witness. `dispose` checks for `raw_not_empty`, returns
-the original byte pointer and clears the allocation state, witness and
-capacity.
+and then shortens the witness. `clear` shortens the witness to zero in one
+transition, retaining capacity and backing without reading the discarded
+values; callers still manage any resources those values refer to. `dispose`
+checks for `raw_not_empty`, returns
+the original byte pointer and clears the allocation state, witness and capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
 ownership remains the container's composition rather than state stored in
 `raw`.
@@ -15242,10 +15254,12 @@ its target extent and alignment, stores it and then returns the pointer;
 byte-specific `new_bytes` returns a private `byte_buffer` containing the full
 allocation extent and an initialized byte prefix. Zero count makes no provider
 call; nonzero count publishes a view only after every byte is initialized.
-`bytes` derives its mutable view from the owner. `drop_bytes` drains and clears
-the owner before freeing its original base and extent; a shortened borrowed
-slice is never used as allocation identity. These routines introduce no
-ownership, implicit destruction or exemption from shallow origin analysis.
+`bytes` derives its mutable view from the owner. `drop_bytes` empties the byte
+witness with `clear`, then `dispose` clears the descriptor before
+`drop_bytes` frees the saved original base and extent;
+a shortened borrowed slice is never used as allocation identity. These routines
+introduce no ownership, implicit destruction or exemption from shallow origin
+analysis.
 
 **The alternatives:** a built-in raw-storage kind would add syntax, type-table
 and backend machinery for an invariant a private module can express. A public
@@ -15315,14 +15329,36 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 The derived parser did not require maps and trees. The hosted core library
 slice supplies those libraries,
 the typed initialized-prefix slice witness and `core/small.small(item, N)`.
-Its honest initialized inline array keeps the written `zeroable` constraint,
-while its spilled arm owns a `core/vec.list(item)` and reuses that list's
-transactional growth. Ordinary traversal and sorting use `vec.used`;
+The vector has a public wrapper with one private nominal storage field.
+Its explicit `uninit` inline array has a readable prefix bounded by `count`;
+its separate `core/vec.list(item)` descriptor owns spilled storage and reuses
+that list's transactional growth. The written `zeroable` constraint remains
+on the public alias and operations, but no longer causes eager inline clearing.
+`small.push` declares its `inout` container `escaping` so an aggregate copied
+from the initialized inline prefix may be retained in the fresh list during
+first spill; a plain non-escaping `inout` source is refused by L0314.
+Pop and release shorten the readable prefix without clearing unused slots;
+release disposes a spill and resets only metadata. Ordinary traversal and
+sorting use `vec.used`;
 D180's source-free iterable item does not replace that retained-origin view.
 Allocator acquisition and ownership remain outside the compiler; the modules
 thread an allocator supplied by their caller on allocating/freeing operations.
 
-**The alternatives:** expose vector capacity as `[]mut item`, require
+`uninit` is a contextual initializer only for an explicitly labelled
+fixed-array field in a private compact nominal construction inside its
+defining module. It emits no store for that field and is refused for module
+static images, public representations, packed layouts, scalar fields and
+stand-alone arrays. Construction establishes the containing value for
+transport, but it does not create readable item images in the array. The
+defining module is responsible for writing an item before every typed read
+and for restricting public access to the initialized prefix. Existing
+aggregate transport still copies the complete padded extent, including
+unspecified bytes; only written fields and prefix elements have value
+meaning. This is a deliberately narrow raw-storage responsibility like
+D151's pointer-backed prefix. It does not change ordinary `zeroed`, D19/D22
+definite assignment for arrays, or D76 variant selection.
+
+**The alternatives:** expose raw-backed vector capacity as `[]mut item`, require
 `zeroable`, publish a partially copied replacement, store an allocator in each
 container, treat parser text as codepoints now, or implement the prototype's
 map and tree before a workload needs them. The first two repeat the false raw
@@ -15561,21 +15597,24 @@ two implementations use the same dynamic call path.
 
 **Chosen:** `core/diag.log(logger)` is an object-safe concept with `note` and
 `failed`. `note` receives a mutable self pointer, `core/text.position`, a
-`u8`-represented warning/error severity and an `escaping []u8` message, and
+`u8`-represented warning/error severity and a call-scoped `[]u8` message, and
 declares `core/io.io_failed`. `failed` reports whether any error-severity note
 has been received. A producer accepts `any diag.log` and invokes both entries
 through D147's ordinary erased evidence table; it neither names nor branches on
 the concrete logger.
 
 `bounded(capacity)` is a parameterized private nominal implementation. It
-retains the first `capacity` entries in order, counts every later note in
-`dropped`, and counts error severity even when that note is dropped. Overflow
-therefore returns normally and never raises `io_failed`. Entry and logger
-representation stay private; checked accessors report `out_of_bounds` rather
-than exposing unused storage. The final text types did not yet exist, so one entry retains the message address and byte length internally.
-The `escaping` parameter prevents a frame-backed slice at the capability
-boundary; explicit integer-pointer conversion remains subject to [0470]'s
-honest validity limit.
+copies up to `message_capacity` (256) bytes into each retained entry, so a
+producer may pass a frame-backed message through the shared concept. It
+retains fitting notes in order until `capacity` entries have been stored;
+every note that arrives after the entry limit or exceeds the byte limit
+increments `dropped`. Error severity is counted even when that note is
+dropped. Overflow returns normally and never raises `io_failed`. Entry and
+logger representation stay private; checked accessors report `out_of_bounds`
+rather than exposing unused storage. A returned entry owns its copied bytes
+and remains valid after the producer's frame ends.
+Its inline note array is explicitly `uninit` at construction; each owned
+entry is written before `stored` grows, and `note_at` checks that prefix.
 
 `streaming` retains a pointer to an erased `core/io.world` and a borrowed file,
 not a system-provider pointer. Its construction result derives from both
@@ -15598,14 +15637,15 @@ stop because its reporting policy is intentionally finite. Ignoring a failed
 stream write would claim delivery that did not happen. Giving each logger a
 different producer interface would erase the capability abstraction, while
 specializing the producer would make optimization the semantic basis contrary
-to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address was
-also declined; `escaping` states the lifetime consequence at the call.
+to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address
+was also declined. The bounded implementation uses a finite copy budget and
+reports an oversized note in `dropped` instead.
 
 **Pinned by** `runtime/diagnostic-loggers-dispatch`,
 `negative/core-diag-frame-message-escape`,
 `negative/core-diag-frame-world-escape`, the parameterized and erased
 conformance registers, the `diagnostics.retention`,
-`diagnostics.delivery-failure`, `origins.escape`, `pointer.integer-origin` and
+`diagnostics.delivery-failure`, `origins.escape` and
 `host.io-failure` guarantee rows, and the rooted fixture execution path's
 recorded merged output.
 

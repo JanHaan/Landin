@@ -704,6 +704,8 @@ slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
 foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
 `raw_empty`, and `raw_not_empty`.
+For byte storage, `clear` shortens the typed initialized prefix to
+zero in one step; it leaves the backing allocation for `dispose` to return.
 
 Growth uses two raw values. Allocate and reserve an empty replacement, copy
 the old initialized prefix into it, and roll that private replacement back if
@@ -733,7 +735,8 @@ and releases the original object extent through the supplied allocator.
 `mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
 every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
 slice, and `mem.drop_bytes(state, owner)` releases the original allocation and
-clears the owner. A zero count makes no allocation. A copied view or owner is
+clears the owner after the byte prefix is emptied. A zero count makes no
+allocation. A copied view or owner is
 still subject to manual lifetime discipline; consumption is not ownership.
 
 ### [0520] Array: a value
@@ -781,6 +784,11 @@ The first element supplies the element type, whether it is a number, a slice,
 a pointer or a struct, and every later element must be of that type (D241).
 
 ### [0540] zeroed is the all-bits-zero image of a type
+
+D152 also admits `uninit` as an explicit array-field initializer inside a
+private compact nominal construction. It leaves the field's bytes unspecified;
+the defining module must expose only items it has written. It is not an
+alternative spelling of `zeroed` and cannot initialize a stand-alone array.
 
 zeroed is the all-bits-zero image of a type. Two separate
 properties decide where it may appear. A type HAS a zero
@@ -3257,22 +3265,25 @@ release, makes no allocator call. These rules preserve the raw initialized
 prefix and publication order rather than exposing spare capacity as a slice.
 
 `core/small.small(t, capacity)` is the corresponding inline-capacity shape, with the
-written `t is zeroable` constraint [0550]. Its inline arm contains an honest
-initialized `[capacity]t`; a pointer item is therefore rejected even though
-`core/vec` accepts one. The spilled arm owns a `core/vec.list(t)`. A first
-spill allocates that list privately, copies the complete used inline prefix,
-admits the new value, and changes the variant arm only after all fallible work
-succeeds. Later growth is exactly `core/vec` growth. Zero inline capacity uses
-eight as its first nonzero capacity; otherwise first spill doubles `capacity` after a
-checked `usize` bound. Failed first spill or later growth leaves the active arm,
-length, capacity and initialized values unchanged.
+written `t is zeroable` constraint [0550]; a pointer item is therefore rejected
+even though `core/vec` accepts one. Its public wrapper contains private storage:
+an `[capacity]t` array whose unused slots have no readable item image, a count
+for its initialized prefix, a separate `core/vec.list(t)` spill descriptor, and
+a `spilled` flag. A first spill reserves a fresh list, copies the used inline
+prefix through an `escaping inout` container parameter, admits the new value,
+then publishes the descriptor and flag. Later growth uses `core/vec` growth.
+Zero inline capacity uses eight as its first nonzero capacity; otherwise first
+spill doubles `capacity` after a checked `usize` bound. Failed first spill or
+later growth leaves the published storage, length, capacity and initialized
+values unchanged.
 
 `small.used` takes the container `inout` and returns its initialized writable
-prefix `from` that place, whether the active arm is inline or spilled. The
+prefix `from` that place, whether storage is inline or spilled. The
 ordinary live-view rule [0830] consequently blocks spill and release until the
 view's last use. `pop` removes the tail without moving a spilled allocation;
 `release` frees an owned spilled extent exactly once and restores the empty
-inline arm. This is still [0860]'s shallow local guarantee: storing references
+inline state by resetting metadata, without clearing the array. This is still
+[0860]'s shallow local guarantee: storing references
 through some other alias would not establish whole-program escape safety.
 
 The two `core/mem` arena providers align the absolute returned address, not

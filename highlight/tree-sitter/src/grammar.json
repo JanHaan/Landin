@@ -5349,6 +5349,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "uninit_literal"
+        },
+        {
+          "type": "SYMBOL",
           "name": "character_literal"
         },
         {
@@ -5377,6 +5381,10 @@
     "zeroed_literal": {
       "type": "STRING",
       "value": "zeroed"
+    },
+    "uninit_literal": {
+      "type": "STRING",
+      "value": "uninit"
     },
     "float_literal": {
       "type": "TOKEN",
@@ -6915,6 +6923,10 @@
       {
         "type": "STRING",
         "value": "undo"
+      },
+      {
+        "type": "STRING",
+        "value": "uninit"
       },
       {
         "type": "STRING",

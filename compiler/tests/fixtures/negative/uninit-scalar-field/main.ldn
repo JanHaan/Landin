@@ -1,0 +1,9 @@
+public box: type = struct
+    flag: u8
+end box
+
+public main: () -> (code: i32) =
+    value: box = (flag: uninit)
+    _ = value
+    code = 0
+end main

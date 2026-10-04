@@ -67,7 +67,7 @@ ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = true
 end ast_is_expected
 
-notes_are_expected: (value: diag.bounded(8), inout ok: bool) -> none =
+notes_are_expected: (value: ptr diag.bounded(8), inout ok: bool) -> none =
     if diag.stored(value) <> 3 or diag.dropped(value) <> 0 then
         ok = false
         return
@@ -121,7 +121,7 @@ token_is: (source: []u8, inout scanning: lexer.state,
            what: lexer.kind, begins: usize, ends: usize) -> (yes: bool) =
     found: lexer.token = lexer.next(source, scanning)
     yes = found.what == what and text.ordinal(found.begins) == begins
-      and text.ordinal(found.ends) == ends and scanning.cursor == ends
+          and text.ordinal(found.ends) == ends and scanning.cursor == ends
 end token_is
 
 lexer_positions_are_expected: () -> (yes: bool) =
@@ -130,14 +130,14 @@ lexer_positions_are_expected: () -> (yes: bool) =
     source: []u8 = bytes[0..<20]
     mut scanning := lexer.open()
     yes = token_is(source, scanning, lexer.identifier, 0, 3)
-      and token_is(source, scanning, lexer.bad_character, 3, 4)
-      and token_is(source, scanning, lexer.number, 7, 10)
-      and token_is(source, scanning, lexer.identifier, 10, 11)
-      and token_is(source, scanning, lexer.string, 12, 16)
-      and token_is(source, scanning, lexer.newline, 16, 17)
-      and token_is(source, scanning, lexer.unterminated_string, 17, 19)
-      and token_is(source, scanning, lexer.newline, 19, 20)
-      and token_is(source, scanning, lexer.end_of_input, 20, 20)
+          and token_is(source, scanning, lexer.bad_character, 3, 4)
+          and token_is(source, scanning, lexer.number, 7, 10)
+          and token_is(source, scanning, lexer.identifier, 10, 11)
+          and token_is(source, scanning, lexer.string, 12, 16)
+          and token_is(source, scanning, lexer.newline, 16, 17)
+          and token_is(source, scanning, lexer.unterminated_string, 17, 19)
+          and token_is(source, scanning, lexer.newline, 19, 20)
+          and token_is(source, scanning, lexer.end_of_input, 20, 20)
 end lexer_positions_are_expected
 
 lexer_long_scans_are_expected: () -> (yes: bool) =
@@ -212,7 +212,7 @@ public main: () -> (code: i32) =
     dead_stream: io.file = opened
     mut source_bytes: [256]u8 = zeroed
     source_length: usize = world.read(opened, source_bytes[0..<256])
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
@@ -234,7 +234,7 @@ public main: () -> (code: i32) =
         return
     end
     mut valid: bool = ast_is_expected(tree) and bounded_log.failed()
-    notes_are_expected(collected, valid)
+    notes_are_expected(addr collected, valid)
     if not valid then
         return
     end if
@@ -245,7 +245,7 @@ public main: () -> (code: i32) =
     mut streaming_log: any diag.log = any(addr immediate)
     mut streamed_tree := parser.empty()
     parser.parse_file(source, streaming_log, second_arena, streamed_tree)
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
@@ -259,7 +259,7 @@ public main: () -> (code: i32) =
     mut missing_tree := parser.empty()
     mut saw_out_of_memory: bool = false
     parser.parse_file(source, quiet_log, tiny_arena, missing_tree)
-      else (problem)
+        else (problem)
         saw_out_of_memory = problem == mem.out_of_memory
     end
     if not saw_out_of_memory then
@@ -272,7 +272,7 @@ public main: () -> (code: i32) =
     mut interrupted_tree := parser.empty()
     mut saw_io_failure: bool = false
     parser.parse_file(source, broken_log, third_arena, interrupted_tree)
-      else (problem)
+        else (problem)
         saw_io_failure = problem == io.io_failed
     end
     if not saw_io_failure then
@@ -300,8 +300,8 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    if parser.length(blank_tree) <> 0 or diag.stored(blank_notes) <> 0
-      or diag.dropped(blank_notes) <> 0 then
+    if parser.length(blank_tree) <> 0 or diag.stored(addr blank_notes) <> 0
+      or diag.dropped(addr blank_notes) <> 0 then
         return
     end if
     mut long_at: usize = 0
@@ -323,12 +323,12 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    if not long_logger.failed() or diag.stored(long_notes) <> 1
+    if not long_logger.failed() or diag.stored(addr long_notes) <> 1
       or parser.length(long_tree) <> 1 then
         return
     end if
     long_zero: usize = 0
-    long_note := diag.note_at(long_notes, long_zero) else (missing)
+    long_note := diag.note_at(addr long_notes, long_zero) else (missing)
         _ = missing
         return
     end

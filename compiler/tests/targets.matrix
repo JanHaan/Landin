@@ -228,9 +228,11 @@ negative/core-memory-written-frame | linux-x86-64, linux-arm64, macos-arm64, syn
 negative/core-memory-written-live | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-pool-bookkeeping-frame-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-pool-frame-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/core-small-forged-storage | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-small-frame-view | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-small-live-view | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-small-pointer-item | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/core-small-private-representation | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-text-adapter-wrong-from | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1164,6 +1166,8 @@ negative/undo-cannot-see-later-local | linux-x86-64, linux-arm64, macos-arm64, s
 negative/undo-needs-call | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/undo-read-not-assigned-on-failure | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/unhandled-declared-error | linux-x86-64, linux-arm64, synthetic-32
+negative/uninit-public-array-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/uninit-scalar-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/unknown-byte | linux-x86-64, linux-arm64, macos-arm64
 negative/unterminated-raw-literal | linux-x86-64, linux-arm64, macos-arm64
 negative/unterminated-text-literal | linux-x86-64, linux-arm64, macos-arm64, synthetic-32

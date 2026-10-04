@@ -1,0 +1,11 @@
+import core/small
+import core/vec
+
+public main: () -> (code: i32) =
+    fresh := vec.new_list(item: i32)
+    mut value: small.small(i32, 4) =
+        (storage: (count: 4, inline_values: uninit,
+                   spill: fresh, spilled: false))
+    view := small.used(value)
+    code = view[0]
+end main

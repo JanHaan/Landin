@@ -12,16 +12,17 @@ public error: severity = 1
 entry_value: type = struct
     where: usize
     kind: severity
-    what_data: usize
+    what_bytes: [256]u8
     what_length: usize
 end entry_value
 
 public entry: type = entry_value
+public message_capacity: usize = 256
 public out_of_bounds: atom
 
 public log: type = concept (logger: type)
     note: (self: ptr mut logger, where: text.position, kind: severity,
-           escaping what: []u8) -> none ! io.io_failed
+           what: []u8) -> none ! io.io_failed
     failed: (self: ptr logger) -> (yes: bool)
 end log
 
@@ -35,22 +36,21 @@ end bounded_value
 public bounded: type (fixed capacity: usize) = bounded_value(capacity)
 
 bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
-               where: text.position, kind: severity, escaping what: []u8)
+               where: text.position, kind: severity, what: []u8)
               -> none ! io.io_failed =
-    if self.val.stored < capacity then
-        --  The entry keeps the message's address as an integer rather than
-        --  the view itself, so that an entry stays reference-free: the log
-        --  is then zero-initialisable and `note_at` returns a plain value
-        --  with no `from` clause.  The origin check happens at the call:
-        --  `what` is escaping, so a frame buffer is refused there, and a
-        --  logged view is the caller's to keep alive, as `escaping` says.
-        mut data: usize = 0
-        if lenof what > 0 then
-            data = usize(addr what[0])
-        end if
-        self.val.notes[self.val.stored] =
-            entry(where: text.ordinal(where), kind: kind,
-                  what_data: data, what_length: lenof what)
+    if self.val.stored < capacity and lenof what <= message_capacity then
+        --  An erased producer may pass frame bytes.  Retain a copy rather
+        --  than an address into the producer's storage.
+        mut saved: entry = zeroed
+        saved.where = text.ordinal(where)
+        saved.kind = kind
+        saved.what_length = lenof what
+        mut index: usize = 0
+        while index < lenof what do
+            saved.what_bytes[index] = what[index]
+            inc index
+        end while
+        self.val.notes[self.val.stored] = saved
         inc self.val.stored
     else
         inc self.val.dropped
@@ -66,23 +66,25 @@ bounded_failed: (fixed capacity: usize, self: ptr bounded(capacity))
 end bounded_failed
 
 public new_log: (fixed capacity: usize) -> (result: bounded(capacity)) =
-    result = zeroed
+    result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
 end new_log
 
-public stored: (fixed capacity: usize, value: bounded(capacity))
+--  Read-only pointers let both mutable and immutable log owners query without
+--  copying the bounded note array.
+public stored: (fixed capacity: usize, value: ptr bounded(capacity))
                -> (count: usize) =
-    count = value.stored
+    count = value.val.stored
 end stored
 
-public dropped: (fixed capacity: usize, value: bounded(capacity))
+public dropped: (fixed capacity: usize, value: ptr bounded(capacity))
                 -> (count: usize) =
-    count = value.dropped
+    count = value.val.dropped
 end dropped
 
-public note_at: (fixed capacity: usize, value: bounded(capacity), index: usize)
+public note_at: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
                 -> (result: entry) ! out_of_bounds =
-    fail out_of_bounds when index >= value.stored
-    result = value.notes[index]
+    fail out_of_bounds when index >= value.val.stored
+    result = value.val.notes[index]
 end note_at
 
 public position_of: (value: entry) -> (where: usize) =
@@ -100,9 +102,7 @@ end message_length
 public message_byte: (value: entry, index: usize)
                      -> (byte: u8) ! out_of_bounds =
     fail out_of_bounds when index >= value.what_length
-    address: usize = value.what_data + index
-    source: ptr u8 = ptr(address)
-    byte = source.val
+    byte = value.what_bytes[index]
 end message_byte
 
 (fixed capacity: usize) bounded_value(capacity) is log
@@ -142,7 +142,7 @@ public to: (state: ptr any io.world, where_to: ptr io.file)
 end to
 
 stream_note: (self: ptr mut streaming, where: text.position,
-              kind: severity, escaping what: []u8) -> none ! io.io_failed =
+              kind: severity, what: []u8) -> none ! io.io_failed =
     state: ptr any io.world = self.val.state
     where_to: ptr io.file = self.val.where_to
     if kind == error then

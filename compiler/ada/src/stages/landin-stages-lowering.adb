@@ -3938,6 +3938,8 @@ package body Landin.Stages.Lowering is
          then
             Write_Array_Arithmetic
               (Of_Tree, Node, Scope, Shape, Destination);
+         elsif Kind = Syn.Uninit_Literal then
+            null;
          elsif Kind = Syn.Zeroed_Literal then
             IR.Emit_Array_Clear
               (Unit.all, Filling, Destination.Place, Site,

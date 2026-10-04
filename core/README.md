@@ -12,7 +12,7 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
+| `core/mem` | `allocator`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
 | `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
@@ -107,3 +107,36 @@ paths. The complete driver's resource lane continues to use its static,
 caller-owned storage. Debugger snapshots and stack instrumentation are host
 artifacts, never an allocator capability or hidden target storage. These
 controls do not broaden the library or manual lifetime guarantees.
+
+## Container and diagnostic migration
+
+`mem.clear(storage)` and `vec.clear(values)` discard the initialized prefix
+without reading its values or freeing backing storage. Capacity and allocation
+identity remain unchanged. Dispose or release the allocation separately, and
+release any resources referenced by discarded values yourself. Byte-buffer
+disposal uses the same generic operation; there is no separate byte clear API.
+Zero-byte allocation, failure, matching-free and lifetime contracts are unchanged.
+
+`uninit` is now reserved. Rename identifiers with that spelling. Its only
+accepted use is an explicitly named inline array field in a compact private
+struct literal within the defining module. That module must initialize each
+element before a typed read. Whole-value transport remains a complete copy.
+Small-vector storage is private: use `small.new`, `push`, `pop`, `used` and
+`release` instead of constructing or inspecting its representation. Wrappers
+that forward a container to `small.push` must declare that parameter
+`escaping inout`; this makes the existing backing-lifetime responsibility
+explicit when inline aggregates move into spill storage.
+
+Pass `addr container` to `small.length`, `small.capacity`, `diag.stored`,
+`diag.dropped` and `diag.note_at`. These queries take read-only pointers and
+accept mutable or immutable containers without copying their inline capacity.
+Generic deduction permits mutable-to-read-only relaxation only for an outer
+runtime pointer or slice pattern; nested permissions still match exactly.
+
+Diagnostic `note` messages are call-scoped. Bounded logs copy messages of at
+most `diag.message_capacity` (256) bytes into owned entries. Longer messages
+are dropped whole, never truncated; they increment `dropped`, and errors still
+make `failed` true. Callers may reuse their message bytes after `note` returns.
+Each bounded entry reserves its full inline message capacity, even when the
+message is short; empty log construction leaves the private entry array
+uninitialized and initializes its counters only.

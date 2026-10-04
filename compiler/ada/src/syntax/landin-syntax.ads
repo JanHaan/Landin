@@ -234,6 +234,8 @@ package Landin.Syntax is
       False_Literal,
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Literal,
+      --  A private compact aggregate may leave one inline array unwritten.
+      Uninit_Literal,
       --  [0580]'s contextual empty slice.  Its aligned non-null base is
       --  derived from the destination element type by lowering/backend.
       Empty_Slice_Literal,

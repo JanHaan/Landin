@@ -27,24 +27,24 @@ public main: () -> (code: i32) =
     source: []u8 = "DEBUG keep\nINFO keep\nERROR keep"
     for at in usize(0)..<lenof source do input[at] = source[at] end for
     first: io.memory_file =
-      (name: "in", contents: input[0..<32], length: lenof source, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+        (name: "in", contents: input[0..<32], length: lenof source, cursor: 0,
+         readable: true, writable: false, opened: false, writing: false)
     second: io.memory_file =
-      (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-       readable: true, writable: true, opened: false, writing: false)
+        (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+         readable: true, writable: true, opened: false, writing: false)
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second
     arguments: [9]io.argument = [
-      (data: addr arg0[0], length: lenof arg0),
-      (data: addr arg1[0], length: lenof arg1),
-      (data: addr arg2[0], length: lenof arg2),
-      (data: addr arg3[0], length: lenof arg3),
-      (data: addr arg4[0], length: lenof arg4),
-      (data: addr arg5[0], length: lenof arg5),
-      (data: addr arg6[0], length: lenof arg6),
-      (data: addr arg7[0], length: lenof arg7),
-      (data: addr arg8[0], length: lenof arg8)]
+        (data: addr arg0[0], length: lenof arg0),
+        (data: addr arg1[0], length: lenof arg1),
+        (data: addr arg2[0], length: lenof arg2),
+        (data: addr arg3[0], length: lenof arg3),
+        (data: addr arg4[0], length: lenof arg4),
+        (data: addr arg5[0], length: lenof arg5),
+        (data: addr arg6[0], length: lenof arg6),
+        (data: addr arg7[0], length: lenof arg7),
+        (data: addr arg8[0], length: lenof arg8)]
     mut memory := io.memory_world(files[0..<2], arguments[0..<9],
                                   output[0..<128], errors[0..<128])
     memory.read_limit = 2
@@ -90,9 +90,33 @@ public main: () -> (code: i32) =
     return when not count_finite_region()
     code = 12
     return when not repeated_matches()
+    code = 13
+    return when not clear_reuses_storage()
     code = 42
 
 end main
+
+clear_reuses_storage: () -> (ok: bool) =
+    ok = false
+    mut backing: [8]u8 = zeroed
+    base: ptr mut u8 = addr backing[0]
+    slots: usize = 8
+    mut storage := mem.reserve(item: u8, base: base, slots: slots)
+    first: usize = mem.admit(storage, u8(17)) else slots
+    second: usize = mem.admit(storage, u8(29)) else slots
+    mem.clear(storage)
+    retained: bool = mem.initialized(storage) == 0
+                     and mem.capacity(storage) == slots
+    missing: u8 = mem.get(storage, first) else u8(99)
+    reused: usize = mem.admit(storage, u8(41)) else slots
+    taken: u8 = mem.release(storage) else u8(0)
+    released: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        return
+    end
+    ok = first == 0 and second == 1 and retained and missing == 99
+         and reused == 0 and taken == 41 and usize(released) == usize(base)
+end clear_reuses_storage
 
 --  One-byte chunks, an empty line, growth beyond 8 KiB, and an unterminated
 --  final line all pass through the same application and count destination.
@@ -112,8 +136,8 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
     for at in usize(1)..<usize(9999) do data[at] = 120 end for
     data[9999] = 10
     file: io.memory_file =
-      (name: "in", contents: data[0..<10000], length: 10000, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+        (name: "in", contents: data[0..<10000], length: 10000, cursor: 0,
+         readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
     args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
@@ -153,15 +177,15 @@ count_finite_region: () -> (ok: bool) =
     for at in usize(0)..<lenof prefix do source[at] = prefix[at] end for
     for at in lenof prefix..<usize(1024) do source[at] = 120 end for
     file: io.memory_file =
-      (name: "in", contents: source[0..<1024], length: 1024, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+        (name: "in", contents: source[0..<1024], length: 1024, cursor: 0,
+         readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
     args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
     mut world_state := io.memory_world(files[0..<1], args[0..<1],
-                                        out[0..<128], err[0..<128])
+                                       out[0..<128], err[0..<128])
     world: any io.world = any(addr world_state)
     mut backing: [512]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
@@ -174,7 +198,7 @@ count_finite_region: () -> (ok: bool) =
     end
     expected: []u8 = "0: 0\n1: 0\n2: 0\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
     ok = kept == 1 and not files[0].opened
-      and app.equal(out[0..<world_state.output_used], expected)
+         and app.equal(out[0..<world_state.output_used], expected)
 end count_finite_region
 
 --  Walk every allocation boundary until one complete run succeeds. The
@@ -184,16 +208,16 @@ failure_sweep: () -> (ok: bool) =
     mut budget: usize = 0
     while budget < 200 do
         first: io.memory_file =
-          (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-           readable: true, writable: false, opened: false, writing: false)
+            (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+             readable: true, writable: false, opened: false, writing: false)
         second: io.memory_file =
-          (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-           readable: true, writable: true, opened: false, writing: false)
+            (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+             readable: true, writable: true, opened: false, writing: false)
         mut files: [2]io.memory_file
         files[0] = first
         files[1] = second
         args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-          (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+                                (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
         mut world_state := io.memory_world(files[0..<2], args[0..<3], output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
         mut host := heap.host()
@@ -224,10 +248,10 @@ retained_arguments: () -> (ok: bool) =
     mut needle: [4]u8 = [107, 101, 101, 112]
     mut name: [2]u8 = [105, 110]
     args: [3]io.argument = [(data: addr arg2[0], length: lenof arg2),
-      (data: addr needle[0], length: 4), (data: addr name[0], length: 2)]
+                            (data: addr needle[0], length: 4), (data: addr name[0], length: 2)]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, opened: false, writing: false)
     mut world_state := io.memory_world(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
     mut host := heap.host()
@@ -346,17 +370,17 @@ io_failures: () -> (ok: bool) =
     ok = false
     for scenario in usize(0)..<usize(6) do
         first: io.memory_file =
-          (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-           readable: true, writable: false, opened: false, writing: false)
+            (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+             readable: true, writable: false, opened: false, writing: false)
         second: io.memory_file =
-          (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-           readable: true, writable: true, opened: false, writing: false)
+            (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+             readable: true, writable: true, opened: false, writing: false)
         mut files: [2]io.memory_file
         files[0] = first
         files[1] = second
         if scenario == 3 then files[1].contents = destination[0..<3] end if
         args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-          (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+                                (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
         mut argc: usize = 3
         if scenario == 4 then argc = 2 end if
         mut world_state := io.memory_world(files[0..<2], args[0..<argc], output[0..<128], errors[0..<128])
@@ -395,16 +419,16 @@ missing_input_preserves_output: () -> (ok: bool) =
     for at in usize(0)..<lenof previous do contents[at] = previous[at] end for
     mut files: [1]io.memory_file
     files[0] = (name: "out", contents: contents[0..<32],
-       length: lenof previous, cursor: 0, readable: true, writable: true,
-       opened: false, writing: false)
+                length: lenof previous, cursor: 0, readable: true, writable: true,
+                opened: false, writing: false)
     missing: []u8 = "missing"
     args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-      (data: addr arg7[0], length: lenof arg7),
-      (data: addr missing[0], length: lenof missing)]
+                            (data: addr arg7[0], length: lenof arg7),
+                            (data: addr missing[0], length: lenof missing)]
     mut out: [32]u8 = zeroed
     mut err: [32]u8 = zeroed
     mut world_state := io.memory_world(files[0..<1], args[0..<3],
-                                         out[0..<32], err[0..<32])
+                                       out[0..<32], err[0..<32])
     world: any io.world = any(addr world_state)
     mut host := heap.host()
     mut program := region.new_region(addr host)
@@ -415,9 +439,9 @@ missing_input_preserves_output: () -> (ok: bool) =
         0
     end
     ok = refused and files[0].length == lenof previous
-      and app.equal(contents[0..<lenof previous], previous)
-      and not files[0].opened and world_state.open_calls == 1
-      and world_state.close_calls == 0
+         and app.equal(contents[0..<lenof previous], previous)
+         and not files[0].opened and world_state.open_calls == 1
+         and world_state.close_calls == 0
 end missing_input_preserves_output
 
 diagnostics: () -> (ok: bool) =
@@ -426,14 +450,14 @@ diagnostics: () -> (ok: bool) =
     zero_text: []u8 = "0"
     bad_number: []u8 = "999999999999999999999999999999999999"
     args: [7]io.argument = [(data: addr arg4[0], length: lenof arg4),
-      (data: addr malformed[0], length: 1),
-      (data: addr arg4[0], length: lenof arg4), (data: addr zero_text[0], length: 1),
-      (data: addr arg4[0], length: lenof arg4),
-      (data: addr bad_number[0], length: lenof bad_number),
-      (data: addr arg8[0], length: lenof arg8)]
+                            (data: addr malformed[0], length: 1),
+                            (data: addr arg4[0], length: lenof arg4), (data: addr zero_text[0], length: 1),
+                            (data: addr arg4[0], length: lenof arg4),
+                            (data: addr bad_number[0], length: lenof bad_number),
+                            (data: addr arg8[0], length: lenof arg8)]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, opened: false, writing: false)
     mut world_state := io.memory_world(files[0..<1], args[0..<7], output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
     mut host := heap.host()
@@ -444,15 +468,15 @@ diagnostics: () -> (ok: bool) =
     kept: usize = app.run_logged(program, world, usize(3), log) else (problem) _ = problem
         return
     end
-    return when kept <> 3 or not log.failed() or diag.stored(logger) <> 3
-      or diag.dropped(logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
-    first: diag.entry = diag.note_at(logger, usize(0)) else (problem) _ = problem
+    return when kept <> 3 or not log.failed() or diag.stored(addr logger) <> 3
+      or diag.dropped(addr logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
+    first: diag.entry = diag.note_at(addr logger, usize(0)) else (problem) _ = problem
         return
     end
-    second: diag.entry = diag.note_at(logger, usize(1)) else (problem) _ = problem
+    second: diag.entry = diag.note_at(addr logger, usize(1)) else (problem) _ = problem
         return
     end
-    third: diag.entry = diag.note_at(logger, usize(2)) else (problem) _ = problem
+    third: diag.entry = diag.note_at(addr logger, usize(2)) else (problem) _ = problem
         return
     end
     return when not exact_note(first, "--every argument is not UTF-8, using 1\n")
@@ -488,12 +512,12 @@ bare_levels: () -> (ok: bool) =
     mut data: [11]u8 = zeroed
     for at in usize(0)..<lenof source do data[at] = source[at] end for
     args: [3]io.argument = [(data: addr arg0[0], length: lenof arg0),
-      (data: addr arg1[0], length: lenof arg1), (data: addr arg8[0], length: lenof arg8)]
+                            (data: addr arg1[0], length: lenof arg1), (data: addr arg8[0], length: lenof arg8)]
     expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
     for length in usize(10)..<usize(12) do
         mut files: [1]io.memory_file
         files[0] = (name: "in", contents: data[0..<11], length: length, cursor: 0,
-           readable: true, writable: false, opened: false, writing: false)
+                    readable: true, writable: false, opened: false, writing: false)
         mut world_state := io.memory_world(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
         mut host := heap.host()
@@ -524,16 +548,16 @@ repeated_matches: () -> (ok: bool) =
     for at in usize(0)..<lenof rest do data[11 + at] = rest[at] end for
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: data[0..<31], length: 31, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, opened: false, writing: false)
     every: []u8 = "2"
     args: [7]io.argument = [
-      (data: addr arg2[0], length: lenof arg2),
-      (data: addr arg1[0], length: lenof arg1),
-      (data: addr arg4[0], length: lenof arg4),
-      (data: addr every[0], length: lenof every),
-      (data: addr arg2[0], length: lenof arg2),
-      (data: addr arg3[0], length: lenof arg3),
-      (data: addr arg8[0], length: lenof arg8)]
+        (data: addr arg2[0], length: lenof arg2),
+        (data: addr arg1[0], length: lenof arg1),
+        (data: addr arg4[0], length: lenof arg4),
+        (data: addr every[0], length: lenof every),
+        (data: addr arg2[0], length: lenof arg2),
+        (data: addr arg3[0], length: lenof arg3),
+        (data: addr arg8[0], length: lenof arg8)]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
     mut world_state := io.memory_world(files[0..<1], args[0..<7],
@@ -548,7 +572,7 @@ repeated_matches: () -> (ok: bool) =
     end
     expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
     ok = kept == 1 and not files[0].opened
-      and app.equal(out[0..<world_state.output_used], expected)
+         and app.equal(out[0..<world_state.output_used], expected)
 end repeated_matches
 
 metadata_exhaustion: () -> (ok: bool) =

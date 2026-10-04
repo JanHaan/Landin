@@ -60,7 +60,7 @@ public main: () -> (code: i32) =
     end
     if spilled_removed.x <> 42 or spilled_removed.y <> 108 then return end if
     small.release(values, allocator)
-    if small.length(values) <> 0 or small.capacity(values) <> 2
+    if small.length(addr values) <> 0 or small.capacity(addr values) <> 2
       or allocator.live <> 0 or allocator.frees <> allocator.successes
     then return end if
     small.push(values, allocator, first) else (problem)

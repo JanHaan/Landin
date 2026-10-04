@@ -7816,6 +7816,11 @@ package body Landin.Syntax.Parser is
                   return Add (Zeroed_Literal, At_Item);
                end if;
 
+               if Peek = Tok.Kw_Uninit then
+                  Advance;
+                  return Add (Uninit_Literal, At_Item);
+               end if;
+
                if Peek = Tok.Left_Paren then
                   if Starts_Signature then
                      return Parse_Anonymous_Function;

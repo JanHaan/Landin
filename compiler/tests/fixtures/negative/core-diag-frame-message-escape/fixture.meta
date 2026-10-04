@@ -1,5 +1,5 @@
 class: negative
-summary: a diagnostic logger may retain its escaping message and refuses frame bytes
+summary: a diagnostic logger accepts frame bytes without relaxing unrelated escaping calls
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-diag-frame-message-escape
 codes: L0314

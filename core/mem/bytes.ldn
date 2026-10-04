@@ -40,12 +40,7 @@ public drop_bytes: (provider: type is allocator, inout state: provider,
                     inout value: buffer) -> none =
     return when value.extent == 0
     extent: usize = value.extent
-    while initialized(value.values) > 0 do
-        _ = release(value.values) else (problem)
-            _ = problem
-            return
-        end
-    end while
+    clear(value.values)
     block: ptr mut u8 = dispose(value.values) else (problem)
         _ = problem
         return

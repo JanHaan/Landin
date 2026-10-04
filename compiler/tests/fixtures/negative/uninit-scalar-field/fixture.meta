@@ -1,0 +1,8 @@
+class: negative
+summary: uninit in a scalar field reports a source refusal
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/uninit-scalar-field
+codes: L0304
+status: 1
+constructs: 0540, 0710, 1770
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

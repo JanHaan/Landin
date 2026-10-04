@@ -44,6 +44,12 @@ end audit_free
 
 audit is mem.allocator (alloc: audit_alloc, free: audit_free)
 
+readonly_queries: () -> (ok: bool) =
+    values := small.new(item: i32, inline_slots: 512)
+    ok = small.length(addr values) == 0
+         and small.capacity(addr values) == 512
+end readonly_queries
+
 zero_inline_capacity: () -> (ok: bool) =
     mut bytes: [64]u8 = zeroed
     mut state: audit =
@@ -58,7 +64,7 @@ zero_inline_capacity: () -> (ok: bool) =
     end
     begin
         view := small.used(values)
-        ok = small.length(values) == 1 and small.capacity(values) == 8
+        ok = small.length(addr values) == 1 and small.capacity(addr values) == 8
              and view[0] == 31 and state.attempts == 1
              and state.allocations == 1 and state.frees == 0
     end
@@ -84,19 +90,26 @@ larger_inline_capacity: () -> (ok: bool) =
     removed: i32 = small.pop(values) else 0
     begin
         view := small.used(values)
-        ok = removed == 43 and small.length(values) == 2
-             and small.capacity(values) == 3
+        ok = removed == 43 and small.length(addr values) == 2
+             and small.capacity(addr values) == 3
              and view[0] == 41 and view[1] == 52
              and state.attempts == 0 and state.frees == 0
     end
     small.release(values, state)
-    ok = ok and small.length(values) == 0
-         and small.capacity(values) == 3
+    ok = ok and small.length(addr values) == 0
+         and small.capacity(addr values) == 3
          and state.attempts == 0 and state.frees == 0
+    small.push(values, state, 99) else 0
+    begin
+        view := small.used(values)
+        ok = ok and lenof view == 1 and view[0] == 99
+             and state.attempts == 0
+    end
 end larger_inline_capacity
 
 public main: () -> (code: i32) =
-    if not zero_inline_capacity() or not larger_inline_capacity() then
+    if not readonly_queries() or not zero_inline_capacity()
+      or not larger_inline_capacity() then
         code = 1
         return
     end if
@@ -109,8 +122,8 @@ public main: () -> (code: i32) =
     mut values := small.new(item: i32, inline_slots: 1)
 
     small.push(values, state, 10) else 0
-    if state.attempts <> 0 or small.length(values) <> 1
-      or small.capacity(values) <> 1
+    if state.attempts <> 0 or small.length(addr values) <> 1
+      or small.capacity(addr values) <> 1
     then
         code = 1
         return
@@ -129,8 +142,8 @@ public main: () -> (code: i32) =
     end
     begin
         view := small.used(values)
-        if not first_failed or small.length(values) <> 1
-          or small.capacity(values) <> 1 or view[0] <> 11
+        if not first_failed or small.length(addr values) <> 1
+          or small.capacity(addr values) <> 1 or view[0] <> 11
           or state.allocations <> 0 or state.frees <> 0
         then
             code = 1
@@ -147,8 +160,8 @@ public main: () -> (code: i32) =
     end
     begin
         view := small.used(values)
-        if not growth_failed or small.length(values) <> 2
-          or small.capacity(values) <> 2
+        if not growth_failed or small.length(addr values) <> 2
+          or small.capacity(addr values) <> 2
           or view[0] <> 11 or view[1] <> 12
           or state.allocations <> 1 or state.frees <> 0
         then
@@ -161,7 +174,7 @@ public main: () -> (code: i32) =
     small.push(values, state, 13) else 0
     begin
         view := small.used(values)
-        if small.length(values) <> 3 or small.capacity(values) <> 4
+        if small.length(addr values) <> 3 or small.capacity(addr values) <> 4
           or view[0] <> 11 or view[1] <> 22 or view[2] <> 13
           or state.first_free_size <> 2 * sizeof i32
         then
@@ -172,8 +185,8 @@ public main: () -> (code: i32) =
 
     removed: i32 = small.pop(values) else 0
     small.release(values, state)
-    if removed == 13 and small.length(values) == 0
-      and small.capacity(values) == 1
+    if removed == 13 and small.length(addr values) == 0
+      and small.capacity(addr values) == 1
       and state.attempts == 4 and state.allocations == 2
       and state.frees == 2 and state.second_free_size == 4 * sizeof i32
     then

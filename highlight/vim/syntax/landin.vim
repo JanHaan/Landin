@@ -6,7 +6,7 @@ syntax region landinString start=/"/ skip=/\\./ end=/"/ oneline
 syntax region landinCharacter start=/'/ skip=/\\./ end=/'/ oneline
 syntax region landinRawString start=/\z("\{3,}\)/ end=/\z1/ keepend
 syntax match landinNumber /\<\%(0[xX][0-9A-Fa-f_]\+\%([.][0-9A-Fa-f_]\+\)\?\%([pP][-+]\?[0-9]\+\)\?\|0[bB][01_]\+\|0[oO][0-7_]\+\|[0-9][0-9_]*\%([.][0-9_]\+\)\?\%([eE][-+]\?[0-9]\+\)\?\)\>/
-syntax keyword landinKeyword addr align alignof and any arena as at atom begin big break caller complete concept continue dec defer distinct do else elsif end escaping extern fail fixed for from if import in inc inout is layout lenof link little loop match mut not of option or ptr public range register return set sink sizeof soa struct then try type unchecked undo variant volatile when while with
+syntax keyword landinKeyword addr align alignof and any arena as at atom begin big break caller complete concept continue dec defer distinct do else elsif end escaping extern fail fixed for from if import in inc inout is layout lenof link little loop match mut not of option or ptr public range register return set sink sizeof soa struct then try type unchecked undo uninit variant volatile when while with
 syntax keyword landinType bool cstring f16 f32 f64 i128 i16 i32 i64 i8 isize u128 u16 u32 u64 u8 usize utf16 utf8
 syntax keyword landinConstant false none noreturn true zeroed
 syntax keyword landinBuiltinModule assembler compiler linker
