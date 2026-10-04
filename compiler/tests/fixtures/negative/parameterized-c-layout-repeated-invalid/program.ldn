@@ -1,0 +1,7 @@
+cbox: type (item: type) = layout(c) struct
+    member: item
+end cbox
+good: cbox(u8)
+first: cbox([0]u8)
+second: cbox([0]u8)
+good_again: cbox(u8)

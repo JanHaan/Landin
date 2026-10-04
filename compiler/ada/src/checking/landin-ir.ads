@@ -4169,11 +4169,15 @@ private
    package Return_Source_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Return_Source_Association);
 
+   package Return_Source_Run_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Run);
+
    type Signature_Record is record
       Nonreturning : Boolean := False;
       Parameters : Run;
       Results    : Run;
       Sources    : Run;
+      Source_Runs : Run;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
       C_ABI      : Boolean := False;
@@ -4307,6 +4311,7 @@ private
       Signature_Parts : Signature_Part_Vectors.Vector;
       Assembly_Operands : Assembly_Operand_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
+      Return_Source_Runs : Return_Source_Run_Vectors.Vector;
       Evidence   : Evidence_Vectors.Vector;
       Evidence_Entries : Evidence_Entry_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;

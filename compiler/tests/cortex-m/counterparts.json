@@ -123,6 +123,12 @@
         "sizeof [2][]u8 == 16"
       ]
     ],
+    "utf8-ordinal-out-of-range-traps": [
+      [
+        "4294967296",
+        "4294967295"
+      ]
+    ],
     "core-mem-raw-storage": [
       [
         "slots * sizeof ptr node == 16",

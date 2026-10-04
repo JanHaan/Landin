@@ -40,6 +40,7 @@ public main: () -> (code: i32) =
     terminated: cstring = "A\u{0}ignored"
     prefix: []u8 = c_bytes(terminated)
     prefix_text: utf8 = c_text(terminated)
+    multibyte_text: utf8 = c_text("\u{a2}\u{2603}\u{1f600}")
     empty_c: cstring = ""
     empty_bytes: []u8 = c_bytes(empty_c)
     empty_text: utf8 = c_text(empty_c)
@@ -54,6 +55,7 @@ public main: () -> (code: i32) =
       and lenof prefix == 1
       and prefix[0] == 65
       and lenof prefix_text == 1
+      and lenof multibyte_text == 9
       and lenof empty_bytes == 0
       and lenof empty_text == 0
       and extracted_length("ok") == 4

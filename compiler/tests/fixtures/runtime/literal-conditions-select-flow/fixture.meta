@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: literal Boolean flow assignments and values execute on their selected paths
+program: main.ldn
+status: 15
+constructs: 0930, 1050, 1910
+targets: linux-x86-64, linux-arm64, macos-arm64

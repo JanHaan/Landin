@@ -381,12 +381,16 @@ The same installed tool inventory is verified before and after all lanes.
 `backend/corpus` retains the complete shared runtime/ABI inventory from
 `compiler/tests/cortex-m/corpus.json`. Every ordinary runtime case uses the
 four inherited profiles; specialization cases add none/all and speed/all.
-Ten explicit 32-bit/architecture counterparts retain the original hosted
+Eleven explicit 32-bit/architecture counterparts retain the original hosted
 sources and independent numeric expectations. `counterparts.json` records
 exact reviewed textual differences, checked before execution. Missing/new
 fixtures or counterpart drift fail the supervisor. Compiler-verdict and
 neutral-IR golden fixtures retain their native compiler-host checks; they have
 no independent execution oracle.
+
+The UTF-8 ordinal trap counterpart uses 4294967295, the largest Cortex-M0
+`usize`, to trap outside a three-scalar view. The hosted original keeps its
+4294967296 ordinal, which tests type-checking and lowering beyond `u32`.
 
 The corpus keeps source refusals, the disabled general C surface and physical
 image limits distinct from executed programs. Every whitelisted image-limit

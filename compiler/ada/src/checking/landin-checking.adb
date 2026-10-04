@@ -936,12 +936,288 @@ package body Landin.Checking is
         + Key.Digest;
    end Hash;
 
-   --  Only what Actuals_Agree compares by equality contributes, so tuples
-   --  that agree digest alike.  Atom sets, shapes, signatures and
-   --  references agree structurally and are left to the comparison.
-   function Digest (Actuals : Actual_Tuple) return Ada.Containers.Hash_Type;
+   --  These hashes follow the structural agreement rules above.  A hash
+   --  narrows the candidate bucket; Actuals_Agree still decides collisions.
+   function Complete_Array_Element
+     (Element : Landin.Types.Scalar_Name;
+      Nominal : Nominal_Type_Id;
+      Shape   : Field_Shape) return Field_Shape;
 
-   function Digest (Actuals : Actual_Tuple) return Ada.Containers.Hash_Type
+   function Mix
+     (Left, Right : Ada.Containers.Hash_Type)
+      return Ada.Containers.Hash_Type;
+
+   function Mix
+     (Left, Right : Ada.Containers.Hash_Type)
+      return Ada.Containers.Hash_Type
+   is
+      use type Ada.Containers.Hash_Type;
+   begin
+      return (Left * 31) xor Right;
+   end Mix;
+
+   function Bit (Value : Boolean) return Ada.Containers.Hash_Type
+     is (if Value then 1 else 0);
+
+   function Atom_Hash
+     (Of_Table : Table;
+      Id       : Atom_Set_Id;
+      With_Encodings : Boolean := False) return Ada.Containers.Hash_Type;
+   function Signature_Hash
+     (Of_Table : Table; Id : Signature_Id) return Ada.Containers.Hash_Type;
+   function Reference_Hash
+     (Of_Table : Table; Id : Reference_Id) return Ada.Containers.Hash_Type;
+   function Shape_Hash
+     (Of_Table : Table; Shape : Field_Shape)
+      return Ada.Containers.Hash_Type;
+   function Actual_Shape_Hash
+     (Of_Table : Table; Shape : Field_Shape)
+      return Ada.Containers.Hash_Type;
+   function Part_Hash
+     (Of_Table : Table; Part : Signature_Part)
+      return Ada.Containers.Hash_Type;
+
+   function Atom_Hash
+     (Of_Table : Table;
+      Id       : Atom_Set_Id;
+      With_Encodings : Boolean := False) return Ada.Containers.Hash_Type
+   is
+      use type Landin.Packed.Image;
+
+      type Member is record
+         Atom : Declaration_Id;
+         Encoding : Landin.Packed.Image;
+      end record;
+      type Members_Array is array (Positive range <>) of Member;
+
+      function Less (Left, Right : Member) return Boolean
+        is (Natural (Left.Atom) < Natural (Right.Atom));
+
+      procedure Sort is new Ada.Containers.Generic_Array_Sort
+        (Index_Type   => Positive,
+         Element_Type => Member,
+         Array_Type   => Members_Array,
+         "<"          => Less);
+
+      Members : Members_Array (1 .. Atom_Count (Of_Table, Id));
+      Width : constant Natural :=
+        (if With_Encodings then Encoding_Width (Of_Table, Id) else 0);
+      State : Landin.Packed.Image := 16#CBF2_9CE4_8422_2325#;
+
+      procedure Feed (Value : Landin.Packed.Image);
+
+      procedure Feed (Value : Landin.Packed.Image) is
+      begin
+         State := (State xor Value) * 16#0000_0100_0000_01B3#;
+      end Feed;
+   begin
+      for Index in Members'Range loop
+         Members (Index) :=
+           (Atom => Nth_Atom (Of_Table, Id, Index),
+            Encoding => (if Width = 0 then 0
+                         else Nth_Encoding (Of_Table, Id, Index)));
+      end loop;
+      Sort (Members);
+      Feed (Landin.Packed.Image (Members'Length));
+      Feed (Landin.Packed.Image (Width));
+
+      --  Agreement compares member count and membership, but ignores
+      --  order and duplicate distribution.  Equal encoded maps have one
+      --  image per atom; skip repeated atoms after sorting and feed each
+      --  complete image in canonical atom order.
+      for Index in Members'Range loop
+         if Index = Members'First
+           or else Members (Index).Atom /= Members (Index - 1).Atom
+         then
+            Feed (Landin.Packed.Image (Members (Index).Atom));
+            if Width /= 0 then
+               Feed (Members (Index).Encoding);
+            end if;
+         end if;
+      end loop;
+      return Ada.Containers.Hash_Type'Mod
+        (State xor (State / 2 ** 32));
+   end Atom_Hash;
+
+   function Shape_Hash
+     (Of_Table : Table; Shape : Field_Shape)
+      return Ada.Containers.Hash_Type
+   is
+      Result : Ada.Containers.Hash_Type :=
+        Field_Kind'Pos (Shape.Kind);
+   begin
+      case Shape.Kind is
+         when Scalar_Field =>
+            Result := Mix (Result, Landin.Types.Scalar_Name'Pos
+              (Shape.Element));
+            if Shape.Atoms /= No_Atom_Set then
+               Result := Mix (Result, Atom_Hash (Of_Table, Shape.Atoms));
+            end if;
+            if Shape.Signature /= No_Signature then
+               Result := Mix (Result, Signature_Hash
+                 (Of_Table, Shape.Signature));
+            end if;
+         when Reference_Field =>
+            declare
+               Ref : constant Reference_Descriptor :=
+                 Descriptor_Of (Of_Table, Shape.Reference);
+            begin
+               Result := Mix
+                 (Result, (if Ref.Kind = Landin.Types.Any_Value
+                   then Concept_Identities.Hash (Ref.Concept)
+                   else Reference_Hash (Of_Table, Shape.Reference)));
+            end;
+         when Fixed_Array_Field =>
+            Result := Mix
+              (Mix (Result, Ada.Containers.Hash_Type'Mod (Shape.Length)),
+               Shape_Hash (Of_Table, Array_Field_Element (Of_Table, Shape)));
+         when Aggregate_Field =>
+            Result := Mix (Result, Nominal_Identities.Hash (Shape.Nominal));
+         when Variant_Field =>
+            --  Variant equality is the complete record; a constant is safe
+            --  here because it is not a generic structural actual itself.
+            null;
+      end case;
+      return Result;
+   end Shape_Hash;
+
+   function Actual_Shape_Hash
+     (Of_Table : Table; Shape : Field_Shape)
+      return Ada.Containers.Hash_Type
+   is
+      Result : Ada.Containers.Hash_Type := Shape_Hash (Of_Table, Shape);
+   begin
+      if Shape.Kind = Fixed_Array_Field then
+         Result := Mix (Result, Actual_Shape_Hash
+           (Of_Table, Array_Field_Element (Of_Table, Shape)));
+      elsif Shape.Atoms /= No_Atom_Set then
+         Result := Mix (Result, Atom_Hash
+           (Of_Table, Shape.Atoms, With_Encodings => True));
+      end if;
+      return Result;
+   end Actual_Shape_Hash;
+
+   function Part_Hash
+     (Of_Table : Table; Part : Signature_Part)
+      return Ada.Containers.Hash_Type
+   is
+      Result : Ada.Containers.Hash_Type :=
+        Landin.Types.Type_Kind'Pos (Part.Kind);
+   begin
+      Result := Mix (Result, Landin.Syntax.Parameter_Convention'Pos
+        (Part.Convention));
+      Result := Mix (Result, Bit (Part.Escaping));
+      Result := Mix (Result, Bit (Part.Caller));
+      Result := Mix (Result, Ada.Containers.Hash_Type'Mod
+        (Part.Constraint));
+      case Part.Kind is
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            Result := Mix (Result, Reference_Hash
+              (Of_Table, Part.Reference));
+         when Landin.Types.Atom_Value =>
+            Result := Mix (Result, Atom_Hash (Of_Table, Part.Atoms));
+         when Landin.Types.Aggregate =>
+            Result := Mix (Result, Nominal_Identities.Hash (Part.Nominal));
+         when Landin.Types.Fixed_Array =>
+            Result := Mix
+              (Mix (Result, Ada.Containers.Hash_Type'Mod (Part.Length)),
+               Shape_Hash (Of_Table, Complete_Array_Element
+                 (Part.Element, Part.Nominal, Part.Element_Shape)));
+         when Landin.Types.Any_Value =>
+            Result := Mix (Result, Concept_Identities.Hash (Part.Concept));
+         when Landin.Types.Function_Value =>
+            Result := Mix (Result, Signature_Hash
+              (Of_Table, Part.Signature));
+         when others =>
+            null;
+      end case;
+      return Result;
+   end Part_Hash;
+
+   function Signature_Hash
+     (Of_Table : Table; Id : Signature_Id) return Ada.Containers.Hash_Type
+   is
+      Result : Ada.Containers.Hash_Type :=
+        Landin.Machine.Convention'Pos (Signature_Machine (Of_Table, Id));
+   begin
+      Result := Mix (Result, Bit (Signature_Never_Returns (Of_Table, Id)));
+      Result := Mix (Result, Bit (Signature_Uses_C_ABI (Of_Table, Id)));
+      Result := Mix (Result, Bit (Signature_Is_Variadic (Of_Table, Id)));
+      Result := Mix (Result, Error_Set_Form'Pos
+        (Signature_Error_Form (Of_Table, Id)));
+      if Signature_Error_Form (Of_Table, Id) = Concrete then
+         Result := Mix (Result, Atom_Hash
+           (Of_Table, Signature_Errors (Of_Table, Id)));
+      end if;
+      Result := Mix (Result, Ada.Containers.Hash_Type'Mod
+        (Signature_Parameter_Count (Of_Table, Id)));
+      for Index in 1 .. Signature_Parameter_Count (Of_Table, Id) loop
+         Result := Mix (Result, Part_Hash
+           (Of_Table, Nth_Signature_Parameter (Of_Table, Id, Index)));
+      end loop;
+      Result := Mix (Result, Ada.Containers.Hash_Type'Mod
+        (Signature_Result_Count (Of_Table, Id)));
+      for Index in 1 .. Signature_Result_Count (Of_Table, Id) loop
+         Result := Mix (Result, Part_Hash
+           (Of_Table, Nth_Signature_Result (Of_Table, Id, Index)));
+         Result := Mix (Result, Ada.Containers.Hash_Type'Mod
+           (Signature_Return_Source_Count (Of_Table, Id, Index)));
+         for Source in 1 .. Signature_Return_Source_Count
+           (Of_Table, Id, Index)
+         loop
+            Result := Mix (Result, Ada.Containers.Hash_Type'Mod
+              (Nth_Signature_Return_Source
+                (Of_Table, Id, Index, Source)));
+         end loop;
+      end loop;
+      return Result;
+   end Signature_Hash;
+
+   function Reference_Hash
+     (Of_Table : Table; Id : Reference_Id) return Ada.Containers.Hash_Type
+   is
+      Ref : constant Reference_Descriptor := Descriptor_Of (Of_Table, Id);
+      Result : Ada.Containers.Hash_Type :=
+        Landin.Types.Type_Kind'Pos (Ref.Kind);
+   begin
+      Result := Mix (Result, Landin.Types.Reference_View'Pos (Ref.View));
+      Result := Mix (Result, Bit (Ref.Mutable));
+      Result := Mix (Result, Ada.Containers.Hash_Type'Mod (Ref.Empty_Atom));
+      if Ref.Kind = Landin.Types.Any_Value then
+         return Mix (Result, Concept_Identities.Hash (Ref.Concept));
+      end if;
+      Result := Mix (Result, Landin.Types.Type_Kind'Pos (Ref.Referent));
+      case Ref.Referent is
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            Result := Mix (Result, Reference_Hash
+              (Of_Table, Ref.Reference));
+         when Landin.Types.Atom_Value =>
+            Result := Mix (Result, Atom_Hash (Of_Table, Ref.Atoms));
+         when Landin.Types.Fixed_Array =>
+            Result := Mix
+              (Mix (Result, Ada.Containers.Hash_Type'Mod (Ref.Length)),
+               Shape_Hash (Of_Table, Complete_Array_Element
+                 (Ref.Element, Ref.Element_Nominal, Ref.Element_Shape)));
+         when Landin.Types.Aggregate =>
+            Result := Mix (Result, Nominal_Identities.Hash (Ref.Nominal));
+         when Landin.Types.Any_Value =>
+            Result := Mix (Result, Concept_Identities.Hash (Ref.Concept));
+         when Landin.Types.Function_Value =>
+            Result := Mix (Result, Signature_Hash
+              (Of_Table, Ref.Signature));
+         when others =>
+            null;
+      end case;
+      return Result;
+   end Reference_Hash;
+
+   function Digest
+     (Of_Table : Table; Actuals : Actual_Tuple)
+      return Ada.Containers.Hash_Type;
+
+   function Digest
+     (Of_Table : Table; Actuals : Actual_Tuple)
+      return Ada.Containers.Hash_Type
    is
       use type Ada.Containers.Hash_Type;
       Result : Ada.Containers.Hash_Type :=
@@ -965,13 +1241,19 @@ package body Landin.Checking is
                   Mix (Landin.Types.Scalar_Name'Pos (Actual.Scalar));
                when Fixed_Array_Actual_Type =>
                   Mix (Ada.Containers.Hash_Type'Mod (Actual.Length));
+                  Mix (Actual_Shape_Hash
+                    (Of_Table, Array_Element_Shape_Of (Of_Table, Actual)));
                when Nominal_Actual_Type =>
                   Mix (Nominal_Identities.Hash (Actual.Nominal));
                when Any_Actual_Type =>
                   Mix (Concept_Identities.Hash (Actual.Concept));
-               when Atom_Set_Actual_Type | Function_Actual_Type
-                  | Reference_Actual_Type =>
-                  null;
+               when Atom_Set_Actual_Type =>
+                  Mix (Atom_Hash
+                    (Of_Table, Actual.Atoms, With_Encodings => True));
+               when Function_Actual_Type =>
+                  Mix (Signature_Hash (Of_Table, Actual.Signature));
+               when Reference_Actual_Type =>
+                  Mix (Reference_Hash (Of_Table, Actual.Reference));
             end case;
          end if;
       end loop;
@@ -981,26 +1263,41 @@ package body Landin.Checking is
    --  The instances whose actuals may agree with these, by position, in
    --  the order they were made.
    function Bucket
-     (Of_Map   : Template_Maps.Map;
+     (Of_Table : Table;
+      Of_Map   : Template_Maps.Map;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Overlay_Position_Vectors.Vector;
+
+   function Bucket
+     (Of_Table : Table;
+      Of_Map   : Template_Maps.Map;
       Template : Declaration_Id;
       Actuals  : Actual_Tuple) return Overlay_Position_Vectors.Vector
-     is (if Of_Map.Contains ((Template, Digest (Actuals)))
-         then Of_Map.Element ((Template, Digest (Actuals)))
-         else Overlay_Position_Vectors.Empty_Vector);
+   is
+      Key : constant Bucket_Key :=
+        (Template, Digest (Of_Table, Actuals));
+   begin
+      return (if Of_Map.Contains (Key)
+              then Of_Map.Element (Key)
+              else Overlay_Position_Vectors.Empty_Vector);
+   end Bucket;
 
    procedure Add_To_Bucket
-     (Into     : in out Template_Maps.Map;
+     (Of_Table : Table;
+      Into     : in out Template_Maps.Map;
       Template : Declaration_Id;
       Actuals  : Actual_Tuple;
       Position : Positive);
 
    procedure Add_To_Bucket
-     (Into     : in out Template_Maps.Map;
+     (Of_Table : Table;
+      Into     : in out Template_Maps.Map;
       Template : Declaration_Id;
       Actuals  : Actual_Tuple;
       Position : Positive)
    is
-      Key : constant Bucket_Key := (Template, Digest (Actuals));
+      Key : constant Bucket_Key :=
+        (Template, Digest (Of_Table, Actuals));
       Found : Template_Maps.Cursor := Into.Find (Key);
       Inserted : Boolean;
    begin
@@ -1022,7 +1319,9 @@ package body Landin.Checking is
       Actuals  : Actual_Tuple) return Nominal_Type_Id
    is
    begin
-      for Position of Bucket (Into.Nominal_Buckets, Template, Actuals) loop
+      for Position of Bucket
+        (Into, Into.Nominal_Buckets, Template, Actuals)
+      loop
          if Into.Nominal_Actual_Runs (Position).Count
               = Natural (Actuals.Members.Length)
          then
@@ -1057,7 +1356,7 @@ package body Landin.Checking is
          end loop;
          Into.Nominal_Templates.Append (Template);
          Add_To_Bucket
-           (Into.Nominal_Buckets, Template, Actuals,
+           (Into, Into.Nominal_Buckets, Template, Actuals,
             Into.Nominal_Templates.Last_Index);
          Into.Distinct_Bases.Append (Signature_Part'(others => <>));
          Into.Nominal_Spellings.Append (Landin.Source.Names.No_Name);
@@ -1084,6 +1383,17 @@ package body Landin.Checking is
       end if;
       return Intern (Into, Template, Actuals);
    end Intern_Nominal_Instance;
+
+   function Nominal_Instance_Candidate_Count
+     (Of_Table : Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Natural
+   is
+      Candidates : constant Overlay_Position_Vectors.Vector :=
+        Bucket (Of_Table, Of_Table.Nominal_Buckets, Template, Actuals);
+   begin
+      return Natural (Candidates.Length);
+   end Nominal_Instance_Candidate_Count;
 
    function Intern_Pointer_Union
      (Into    : in out Table;
@@ -1150,7 +1460,9 @@ package body Landin.Checking is
            "routine actuals belong to another checking table";
       end if;
 
-      for Position of Bucket (Into.Routine_Buckets, Template, Actuals) loop
+      for Position of Bucket
+        (Into, Into.Routine_Buckets, Template, Actuals)
+      loop
          declare
             Held : constant Routine_Instance_Record :=
               Into.Routine_Instances (Position);
@@ -1190,7 +1502,7 @@ package body Landin.Checking is
          end loop;
          Into.Routine_Instances.Append (Made);
          Add_To_Bucket
-           (Into.Routine_Buckets, Template, Actuals,
+           (Into, Into.Routine_Buckets, Template, Actuals,
             Into.Routine_Instances.Last_Index);
       end;
       return Routine_Identities.Nth
@@ -1695,11 +2007,18 @@ package body Landin.Checking is
      is (Of_Table.Layouts
            (Nominal_Identities.Position (Of_Table, Id)).State);
 
+   function Instance_Attempt_Count
+     (Of_Table : Table; Id : Nominal_Type_Id) return Natural
+     is (Of_Table.Layouts
+           (Nominal_Identities.Position (Of_Table, Id)).Attempts);
+
    procedure Begin_Instance
      (Into : in out Table; Id : Nominal_Type_Id) is
    begin
       Into.Layouts
         (Nominal_Identities.Position (Into, Id)).State := Instance_Building;
+      Into.Layouts
+        (Nominal_Identities.Position (Into, Id)).Attempts := 1;
    end Begin_Instance;
 
    procedure Invalidate_Instance
@@ -1714,6 +2033,10 @@ package body Landin.Checking is
    begin
       Into.Layouts
         (Nominal_Identities.Position (Into, Id)).State := Instance_Building;
+      Into.Layouts
+        (Nominal_Identities.Position (Into, Id)).Attempts :=
+          Into.Layouts
+            (Nominal_Identities.Position (Into, Id)).Attempts + 1;
    end Retry_Instance;
 
    function Nominal_Of
@@ -1912,8 +2235,22 @@ package body Landin.Checking is
 
    function Atom_Sets_Agree
      (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
-     is (Atom_Count (Of_Table, Left) = Atom_Count (Of_Table, Right)
-         and then Is_Subset (Of_Table, Left, Right));
+   is
+   begin
+      if Atom_Count (Of_Table, Left) /= Atom_Count (Of_Table, Right)
+        or else not Is_Subset (Of_Table, Left, Right)
+      then
+         return False;
+      end if;
+      for Index in 1 .. Atom_Count (Of_Table, Right) loop
+         if not Contains_Atom
+           (Of_Table, Left, Nth_Atom (Of_Table, Right, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Atom_Sets_Agree;
 
    function Atom_Set_Of
      (Of_Table : Table;
@@ -2490,11 +2827,6 @@ package body Landin.Checking is
       end if;
       return Left = Right;
    end Field_Shapes_Agree;
-
-   function Complete_Array_Element
-     (Element : Landin.Types.Scalar_Name;
-      Nominal : Nominal_Type_Id;
-      Shape   : Field_Shape) return Field_Shape;
 
    function Complete_Array_Element
      (Element : Landin.Types.Scalar_Name;
@@ -4120,6 +4452,20 @@ package body Landin.Checking is
       return Of_Table.Node_Evidence_Entries (Where);
    end Evidence_Entry_Of;
 
+   function Evidence_Run_Position_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      return (if Overlay /= 0
+                and then Of_Table.Node_Overlays (Overlay).Has_Evidence
+              then Of_Table.Node_Overlays (Overlay).Evidence_Run_Position
+              else 0);
+   end Evidence_Run_Position_Of;
+
    function Traversal_Evidence_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -4210,7 +4556,8 @@ package body Landin.Checking is
       Of_Tree   : Landin.Syntax.Tree;
       Node      : Landin.Syntax.Node_Id;
       Evidence  : Conformance_Id;
-      Which     : Positive)
+      Which     : Positive;
+      Run_Position : Positive)
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
@@ -4218,18 +4565,14 @@ package body Landin.Checking is
          raise Landin.Compiler_Defect with
            "one selection was assigned two evidence entries";
       end if;
-      if Into.Current_Routine = No_Routine_Instance then
-         Into.Node_Evidence (Where) := Evidence;
-         Into.Node_Evidence_Entries (Where) := Which;
-      else
-         declare
-            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
-         begin
-            Into.Node_Overlays (Overlay).Has_Evidence := True;
-            Into.Node_Overlays (Overlay).Evidence := Evidence;
-            Into.Node_Overlays (Overlay).Evidence_Entry := Which;
-         end;
-      end if;
+      declare
+         Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+      begin
+         Into.Node_Overlays (Overlay).Has_Evidence := True;
+         Into.Node_Overlays (Overlay).Evidence := Evidence;
+         Into.Node_Overlays (Overlay).Evidence_Entry := Which;
+         Into.Node_Overlays (Overlay).Evidence_Run_Position := Run_Position;
+      end;
    end Note_Evidence_Selection;
 
    function Result_Shapes_Agree
@@ -4611,6 +4954,7 @@ package body Landin.Checking is
       end;
 
       Built.State := Instance_Ready;
+      Built.Attempts := Instance_Attempt_Count (Into, Id);
       Into.Layouts (Nominal_Identities.Position (Into, Id)) := Built;
       Fits := True;
    end Lay_Out;

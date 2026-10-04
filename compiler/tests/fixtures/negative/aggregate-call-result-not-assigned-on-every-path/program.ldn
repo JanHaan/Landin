@@ -6,9 +6,9 @@ make: (value: i32) -> (result: pair) =
     result = (value: value)
 end make
 
-bad: () -> (result: i32) =
+bad: (take: bool) -> (result: i32) =
     mut chosen: pair
-    if true then
+    if take then
         chosen = make(42)
     else
         _ = 0

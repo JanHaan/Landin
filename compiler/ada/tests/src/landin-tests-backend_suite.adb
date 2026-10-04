@@ -6257,10 +6257,14 @@ package body Landin.Tests.Backend_Suite is
          & "    value = self.val.value" & LF
          & "end thing_code" & LF
          & "thing is display (code: thing_code)" & LF
+         & "generic_code: (t: type is display, self: ptr t)"
+         & "  -> (value: i32) =" & LF
+         & "    value = t.code(self)" & LF
+         & "end generic_code" & LF
          & "public main: () -> (code: i32) =" & LF
          & "    item: thing = (value: 42)" & LF
          & "    erased: any display = any(addr item)" & LF
-         & "    code = erased.code()" & LF
+         & "    code = erased.code() + generic_code(addr item) - 42" & LF
          & "end main" & LF,
          Ran);
 
@@ -6271,8 +6275,13 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
       begin
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & ".quad thing_code"), 2,
-            "direct and flattened tables retain the provider relocation");
+           (Item, Occurrences (Text, HT & ".quad thing_code"), 1,
+            "matching direct and erased tables share provider bytes");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, ".Llandin_evidence_1:" & LF
+                 & ".Llandin_evidence_2:" & LF & HT & ".quad 4"),
+            "direct and erased labels name the same physical table");
          Landin.Testing.Check
            (Item, Contains (Text, "movq 16(%rax), %rax"),
             "the flattened first function uses the target-derived offset");
@@ -6280,8 +6289,9 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, "call *"),
             "the erased function word feeds an indirect call");
          Landin.Testing.Check
-           (Item, Contains (Text, "leaq .Llandin_evidence_"),
-            "construction stores a real static table address");
+           (Item, Contains (Text, "leaq .Llandin_evidence_1")
+             and then Contains (Text, "leaq .Llandin_evidence_2"),
+            "generic and erased callers each retain their evidence identity");
       end;
    end Any_Dispatch_Uses_A_Flattened_Real_Table;
 

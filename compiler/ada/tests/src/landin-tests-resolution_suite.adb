@@ -1096,8 +1096,98 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Tables_Keep_Their_Tree_Identity;
 
+   procedure Traversal_Bindings_Keep_Their_Owners
+     (Item : in out Landin.Testing.Context);
+
+   procedure Traversal_Bindings_Keep_Their_Owners
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Source : Landin.Source.Source_Id;
+   begin
+      Source := Landin.Stages.Add_Source
+        (Work, "traversal-owners.ldn",
+         "f: (values: [2]i32) -> none =" & LF
+         & "    for first, index in values do" & LF
+         & "        _ = first" & LF
+         & "        _ = index" & LF
+         & "    end for" & LF
+         & "    for second in 0..<2 do" & LF
+         & "        _ = second" & LF
+         & "    end for" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 4, "the traversal reaches checking");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both traversal bindings are inferred");
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Source);
+         Fn : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Tree.all, 1);
+         Runs : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Body_Of (Tree.all, Fn);
+         Parameter : constant Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.Declaration_At
+             (Meanings.all, Source,
+              Landin.Syntax.Nth_Parameter (Tree.all, Fn, 1));
+      begin
+         Landin.Testing.Check
+           (Item, Parameter /= Landin.Resolution.No_Declaration
+            and then Landin.Resolution.Traversal_Owner
+              (Meanings.all, Parameter) = Landin.Syntax.No_Node,
+            "an ordinary parameter has no traversal owner");
+         for Position in 1 .. 2 loop
+            declare
+               Loop_Node : constant Landin.Syntax.Node_Id :=
+                 Landin.Syntax.Nth_Statement
+                   (Tree.all, Runs, Position);
+            begin
+               for Which in 1 .. 2 loop
+                  declare
+                     Binding : constant Landin.Syntax.Node_Id :=
+                       (if Which = 1 then Landin.Syntax.Traversal_Element
+                          (Tree.all, Loop_Node)
+                        else Landin.Syntax.Traversal_Index
+                          (Tree.all, Loop_Node));
+                  begin
+                     if Binding /= Landin.Syntax.No_Node then
+                        declare
+                           Id : constant Landin.Resolution.Declaration_Id :=
+                             Landin.Resolution.Declaration_At
+                               (Meanings.all, Source, Binding);
+                        begin
+                           Landin.Testing.Check
+                             (Item, Id /= Landin.Resolution.No_Declaration
+                              and then Landin.Resolution.Traversal_Owner
+                                (Meanings.all, Id) = Loop_Node,
+                              "the traversal binding names its own loop");
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+      end;
+   end Traversal_Bindings_Keep_Their_Owners;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "traversal bindings keep their owners",
+         Traversal_Bindings_Keep_Their_Owners'Access);
       Landin.Testing.Register
         (Into, "resolution", "tables keep their tree identity",
          Tables_Keep_Their_Tree_Identity'Access);

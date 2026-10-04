@@ -7,7 +7,7 @@ error[L0302]: `value` is read here and no path that arrives assigned it
   |
 4 |     mut value: i32
   |         ^^^^^ declared here with no value
-  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check
 error[L0302]: `first` is read here and no path that arrives assigned it
   --> ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn:23:9
    |
@@ -17,4 +17,4 @@ error[L0302]: `first` is read here and no path that arrives assigned it
    |
 14 |     mut first: i32
    |         ^^^^^ declared here with no value
-  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check

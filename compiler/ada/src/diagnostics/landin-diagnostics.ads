@@ -105,6 +105,7 @@ package Landin.Diagnostics is
       Name_End,        --  `end` names what it closes
       Mark_Mutable,    --  a binding that is written is declared `mut`
       Unmark_Mutable,  --  a binding nothing writes loses its `mut`
+      Remove_Unused_Local, --  an unused literal binding loses its line
       Compare);        --  `=` in an expression becomes `==`
 
    type Fix is private;
@@ -170,6 +171,13 @@ package Landin.Diagnostics is
    --  identity another compilation gave the same bytes.
    function Retargeted
      (Item : Diagnostic; Source : Landin.Source.Source_Id) return Diagnostic;
+
+   --  Reuse a diagnostic for another application of the same failed
+   --  instance. Its explanation, related template labels and fixes stay put.
+   function With_Primary
+     (Item   : Diagnostic;
+      Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Diagnostic;
 
    --  What a construct refused by name is, which [1830]'s second note
    --  says: a recorded boundary of a construct that is otherwise enabled,

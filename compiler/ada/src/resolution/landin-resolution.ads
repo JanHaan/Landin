@@ -266,6 +266,13 @@ package Landin.Resolution is
      with Pre  => Contains (Of_Table, Id),
           Post => Node_Of'Result /= Landin.Syntax.No_Node;
 
+   --  A traversal binding has no initializer.  Its for statement is known
+   --  when the resolver declares it, and the checker needs that header to
+   --  infer its type and follow provisional error types.
+   function Traversal_Owner (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Syntax.Node_Id
+     with Pre => Contains (Of_Table, Id);
+
    --  The other direction: which declaration a declaring node made, or
    --  No_Declaration for a node that declared nothing.  A node declares at
    --  most once, so this is the answer a scan of the declarations in order
@@ -470,6 +477,24 @@ package Landin.Resolution is
                            = Declare_Name'Result
                   and then Landin.Provenance.Contains
                              (Sites, Declare_Name'Result);
+
+   procedure Record_Traversal_Owner
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Id      : Declaration_Id;
+      Owner   : Landin.Syntax.Node_Id)
+     with Pre => Covers (Into, Of_Tree)
+                 and then Contains (Into, Id)
+                 and then Source_Of (Into, Id)
+                   = Landin.Syntax.Source_Of (Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Owner)
+                   = Landin.Syntax.For_Statement
+                 and then
+                   (Node_Of (Into, Id)
+                      = Landin.Syntax.Traversal_Element (Of_Tree, Owner)
+                    or else Node_Of (Into, Id)
+                      = Landin.Syntax.Traversal_Index (Of_Tree, Owner)),
+          Post => Traversal_Owner (Into, Id) = Owner;
 
    ------------------------------------------------------------------
    --  What a reference means
@@ -745,6 +770,7 @@ private
       Scope  : Scope_Id                    := No_Scope;
       Source : Landin.Source.Source_Id     := Landin.Source.No_Source;
       Node   : Landin.Syntax.Node_Id       := Landin.Syntax.No_Node;
+      Traversal_Owner : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
       Public : Boolean                     := False;
       Next_In_Scope : Declaration_Id        := No_Declaration;
    end record;

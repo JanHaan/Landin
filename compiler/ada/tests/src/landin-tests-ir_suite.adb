@@ -2298,10 +2298,92 @@ package body Landin.Tests.IR_Suite is
                "encoding table corruption case" & Natural'Image (Case_Id));
          end;
       end loop;
+      declare
+         Unit : IR.Unit;
+         First, Second, Third : IR.Atom_Set_Id;
+      begin
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         First := IR.Add_Atom_Set (Unit, [1 => 1]);
+         Second := IR.Add_Atom_Set (Unit, [1 => 2]);
+         Third := IR.Add_Atom_Set (Unit, [1 => 3]);
+         IR.Set_Encodings (Unit, Third, [1 => 0], 1);
+         IR.Set_Encodings (Unit, First, [1 => 0], 1);
+         IR.Set_Encodings (Unit, Second, [1 => 0], 1);
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "encoding runs may follow a different order than atom sets");
+         IR.Testing_Support.Overwrite_Encoding_Run (Unit, Second, 0, 1);
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind =
+              IR.Verifier.Atom_Set_Malformed,
+            "overlapping encoding runs leave a gap in coverage");
+      end;
    end Encoding_Tables_Are_Verified;
+
+   procedure Return_Sources_Keep_Per_Result_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure Return_Sources_Keep_Per_Result_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Part : constant IR.Signature_Part :=
+        (Kind => Landin.Types.Usize, others => <>);
+      Parts : constant IR.Signature_Part_Array := [1 => Part, 2 => Part,
+                                                   3 => Part];
+      Mixed : constant IR.Return_Source_Array :=
+        [7 => (Result => 2, Parameter => 3),
+         8 => (Result => 1, Parameter => 1),
+         9 => (Result => 2, Parameter => 1),
+         10 => (Result => 3, Parameter => 2),
+         11 => (Result => 1, Parameter => 3),
+         12 => (Result => 2, Parameter => 2)];
+      First, Same, Different, Empty : IR.Signature_Id;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      First := IR.Add_Signature_With_Results
+        (Unit, Parts, Parts, Sources => Mixed);
+      Same := IR.Add_Signature_With_Results
+        (Unit, Parts, Parts,
+         Sources => [(Result => 1, Parameter => 1),
+                     (Result => 1, Parameter => 3),
+                     (Result => 2, Parameter => 3),
+                     (Result => 2, Parameter => 1),
+                     (Result => 2, Parameter => 2),
+                     (Result => 3, Parameter => 2)]);
+      Different := IR.Add_Signature_With_Results
+        (Unit, Parts, Parts,
+         Sources => [(Result => 1, Parameter => 3),
+                     (Result => 1, Parameter => 1)]);
+      Empty := IR.Add_Signature_With_Results (Unit, Parts, Parts);
+      Landin.Testing.Check
+        (Item, IR.Signature_Return_Source_Count (Unit, First, 1) = 2
+         and then IR.Signature_Return_Source_Count (Unit, First, 2) = 3
+         and then IR.Signature_Return_Source_Count (Unit, First, 3) = 1
+         and then IR.Nth_Signature_Return_Source (Unit, First, 1, 2) = 3
+         and then IR.Nth_Signature_Return_Source (Unit, First, 2, 1) = 3
+         and then IR.Nth_Signature_Return_Source (Unit, First, 2, 2) = 1
+         and then IR.Nth_Signature_Return_Source (Unit, First, 2, 3) = 2
+         and then IR.Nth_Signature_Return_Source (Unit, First, 3, 1) = 2,
+         "interleaved sources retain their order within each result");
+      Landin.Testing.Check
+        (Item, IR.Signature_Return_Source_Count (Unit, Different, 2) = 0
+         and then IR.Signature_Return_Source_Count (Unit, Different, 3) = 0
+         and then IR.Signature_Return_Source_Count (Unit, Empty, 1) = 0
+         and then IR.Signatures_Agree (Unit, First, Same)
+         and then not IR.Signatures_Agree (Unit, First, Different),
+         "signature comparison uses each result's ordered sources");
+   end Return_Sources_Keep_Per_Result_Order;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir", "return sources keep per-result order",
+         Return_Sources_Keep_Per_Result_Order'Access);
       Landin.Testing.Register
         (Into, "ir", "encoding tables are verified",
          Encoding_Tables_Are_Verified'Access);

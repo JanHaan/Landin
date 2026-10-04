@@ -1,6 +1,6 @@
 import core/text
 
-nth: (source: utf8, index: u32) -> (result: u32) =
+nth: (source: utf8, index: usize) -> (result: u32) =
     result = source[index]
 end nth
 
@@ -29,7 +29,7 @@ public main: () -> (code: i32) =
     snowman: []u8 = text.bytes(source[3..3])
 
     --  Each ordinal agrees with the scalar traversal decodes there.
-    mut ordinal: u32 = 0
+    mut ordinal: usize = 0
     mut agree := true
     for scalar in source do
         agree = agree and scalar == nth(source, ordinal)

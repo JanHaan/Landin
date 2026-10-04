@@ -1,0 +1,25 @@
+true_arm: () -> (r: i32) =
+    if true then
+        r = 1
+    end if
+end true_arm
+
+false_then_true_elsif: () -> (r: i32) =
+    if false then
+        return
+    elsif true then
+        r = 2
+    end if
+end false_then_true_elsif
+
+unknown_then_true_elsif: (choose: bool) -> (r: i32) =
+    if choose then
+        r = 3
+    elsif true then
+        r = 4
+    end if
+end unknown_then_true_elsif
+
+value: () -> (r: i32) =
+    r = if true then 5 end if
+end value

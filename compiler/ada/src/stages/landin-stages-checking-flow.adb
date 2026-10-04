@@ -864,9 +864,9 @@ package body Landin.Stages.Checking.Flow is
                Source  => At_Source,
                Where   => At_Span,
                Message => Why,
-               Note    => "[1910]: no condition is believed, so a name"
-                          & " assigned in one arm of an `if` and not in"
-                          & " another is not assigned after it",
+               Note    => "[1910]: a name must be assigned on every path;"
+                          & " only written Boolean literals fix an `if`"
+                          & " condition for this check",
                Related => Landin.Provenance.Origin'
                  (Source => Res.Source_Of (Meanings.all, Id),
                   Where  => Syn.Anchor (Their_Tree.all, Their_Node)),
@@ -2367,7 +2367,12 @@ package body Landin.Stages.Checking.Flow is
                         Returned := Returned or Test_Edges.Returns;
                         Can_Test := Test_Edges.Falls_Through;
 
-                        if Can_Test then
+                        --  A written Boolean literal fixes this edge without
+                        --  folding an expression or believing a named value.
+                        if Can_Test
+                          and then Syn.Kind (Of_Tree, Condition)
+                            /= Syn.False_Literal
+                        then
                            declare
                               Branch : Assigned_Set := Remaining;
                               Branch_Edges : Edge_Facts;
@@ -2382,6 +2387,10 @@ package body Landin.Stages.Checking.Flow is
                                  Any_Path := True;
                               end if;
                            end;
+                        end if;
+                        if Syn.Kind (Of_Tree, Condition) = Syn.True_Literal
+                        then
+                           Can_Test := False;
                         end if;
                      end;
                   end loop;

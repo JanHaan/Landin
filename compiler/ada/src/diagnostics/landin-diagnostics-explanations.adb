@@ -640,6 +640,13 @@ package body Landin.Diagnostics.Explanations is
                & " selects infallible `iterable`; `try for` prefers `falli"
                & "ble_iterable` when both exist and may use ordinary `iter"
                & "able` when there is no fallible conformance.",
+            when Catalogue.Unused_Pure_Local =>
+               "An immutable local that is never used and is initialized"
+               & " by a direct scalar literal can be removed without chang"
+               & "ing the program's meaning (D251). The warning offers tha"
+               & "t removal as an exact fix when the declaration occupies "
+               & "its own line. A declaration whose initializer may perfor"
+               & "m work is not warned about.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -1237,6 +1244,13 @@ package body Landin.Diagnostics.Explanations is
                & "    end for"
                & LF
                & "end main"
+               & LF,
+            when Catalogue.Unused_Pure_Local =>
+               "unused: () -> none ="
+               & LF
+               & "    count: i32 = 42"
+               & LF
+               & "end unused"
                & LF,
             when Catalogue.No_Toolchain =>
                "",

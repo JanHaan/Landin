@@ -7,6 +7,8 @@ package body Landin.Backend is
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Shape_Kind;
+   use type Landin.IR.Field_Shape;
+   use type Landin.IR.Item_Id;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Byte_Alignment;
    use type Landin.Types.Type_Kind;
@@ -14,6 +16,29 @@ package body Landin.Backend is
    package IR renames Landin.IR;
    package Targets renames Landin.Targets;
    package Layout renames Landin.Targets.Layouts;
+
+   function Shares_Evidence_Table
+     (Of_Unit : IR.Unit; Direct, Erased : IR.Evidence_Id) return Boolean
+   is
+   begin
+      if IR.Evidence_Is_Erased (Of_Unit, Direct)
+        or else not IR.Evidence_Is_Erased (Of_Unit, Erased)
+        or else IR.Evidence_Represented (Of_Unit, Direct)
+                  /= IR.Evidence_Represented (Of_Unit, Erased)
+        or else IR.Evidence_Entry_Count (Of_Unit, Direct)
+                  /= IR.Evidence_Entry_Count (Of_Unit, Erased)
+      then
+         return False;
+      end if;
+      for Which in 1 .. IR.Evidence_Entry_Count (Of_Unit, Direct) loop
+         if IR.Evidence_Entry_Target (Of_Unit, Direct, Which)
+              /= IR.Evidence_Entry_Target (Of_Unit, Erased, Which)
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Shares_Evidence_Table;
 
    function Stack_Add
      (Left, Right, Maximum : Targets.Byte_Count) return Targets.Byte_Count

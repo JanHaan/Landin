@@ -190,6 +190,8 @@ package Landin.Diagnostics.Catalogue is
       Foreign_Boundary,
       Linkage_Contract,
       Traversal_Source,
+      --  D251 also admits removing a whole unused, effect-free local.
+      Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -295,6 +297,7 @@ package Landin.Diagnostics.Catalogue is
             when Foreign_Boundary => "L0346",
             when Linkage_Contract => "L0347",
             when Traversal_Source => "L0348",
+            when Unused_Pure_Local              => "L0349",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -329,7 +332,7 @@ package Landin.Diagnostics.Catalogue is
                .. Invalid_Tool_Directive => Error,
             when Call_Argument_Match .. Traversal_Source => Error,
             --  A warning never refuses a program; see Fixes below.
-            when Mutable_Never_Written => Warning,
+            when Mutable_Never_Written | Unused_Pure_Local => Warning,
             when No_Toolchain .. Firmware_Frame_Exceeds_Stack => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
@@ -364,6 +367,7 @@ package Landin.Diagnostics.Catalogue is
                .. Mutable_Never_Written => Live,
             when Call_Argument_Match .. Traversal_Source
                => Live,
+            when Unused_Pure_Local => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
@@ -586,6 +590,8 @@ package Landin.Diagnostics.Catalogue is
             when Traversal_Source =>
                "[1150]/D180: a for source is a range, a traversable"
                & " value or one exact iterable conformance",
+            when Unused_Pure_Local =>
+               "D251: an unused local with an effect-free literal initializer",
             when No_Toolchain          =>
                "[1550]: the requested output cannot be made with the"
                & " target, settings or available toolchain",
@@ -644,6 +650,7 @@ package Landin.Diagnostics.Catalogue is
                .. Mutable_Never_Written => True,
             when Call_Argument_Match .. Traversal_Source
                => True,
+            when Unused_Pure_Local => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
@@ -682,6 +689,7 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range
                .. Mutable_Never_Written =>
                True,
+            when Unused_Pure_Local => True,
             when Call_Argument_Match .. Traversal_Source
                => True,
             when No_Toolchain .. Firmware_Frame_Exceeds_Stack => False);
@@ -813,7 +821,7 @@ package Landin.Diagnostics.Catalogue is
             when Invalid_Option_Declaration | Invalid_Tool_Directive => 1,
             --  D251: the judgement is the compiler's and not the language's,
             --  and the note says so.
-            when Mutable_Never_Written => 1,
+            when Mutable_Never_Written | Unused_Pure_Local => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.
@@ -849,7 +857,7 @@ package Landin.Diagnostics.Catalogue is
             when Assignment_In_Expression => May_Fix,
             --  D251 admits a warning only with the exact repair that
             --  settles it, so every occurrence carries one.
-            when Mutable_Never_Written => Must_Fix,
+            when Mutable_Never_Written | Unused_Pure_Local => Must_Fix,
             when others => No_Fix);
 
    function Count return Natural

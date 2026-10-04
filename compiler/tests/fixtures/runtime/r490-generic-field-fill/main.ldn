@@ -13,6 +13,10 @@ rows: type = struct
     second: [2]i32
     third: [2]i32
 end rows
+row_pair: type = struct
+    first: [2]i32
+    second: [2]i32
+end row_pair
 nested: type = struct
     first: triple
     second: triple
@@ -60,6 +64,10 @@ public main: () -> (code: i32) =
     refs: pointers = (label: 1, of addr backing)
     functions: callbacks = (label: 2, of ordinary)
     state = (first: 10, of state.first + 1)
+    mut array_state: row_pair = (first: [0, 0], second: [11, 12])
+    array_state = (first: [2 of 4], of [2 of array_state.second[0]])
+    array_state = (first: [2 of 6], of [2 of fallible() else (error)
+        _ = error array_state.second[0] end])
     mut cases_ok: bool = false
     match c.kind
         empty: cases_ok = false
@@ -72,9 +80,12 @@ public main: () -> (code: i32) =
         values(first, second, third):
             static_ok = first == 1 and second == 8 and third == 8
     end match
-    code = if trace == 6 and v.first == 1 and v.second == 2 and v.third == 2
+    code = if trace == 7 and v.first == 1 and v.second == 2 and v.third == 2
               and f.first and not f.second and not f.third
               and r.first[0] == 1 and r.second[0] == 3 and r.third[1] == 4
+              and array_state.first[0] == 6
+              and array_state.second[0] == 11
+              and array_state.second[1] == 11
               and n.second.second == 2 and n.third.third == 2
               and constant.second == 7 and constant.third == 7
               and cases_ok and static_ok and recovered.second == 6

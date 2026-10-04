@@ -485,6 +485,13 @@
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
+    "runtime/cstring-conversion-truncated-traps": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+    },
     "runtime/cstring-first-nul-validation": {
       "mode": "refuse",
       "codes": [
@@ -1921,7 +1928,9 @@
       "mode": "execute"
     },
     "runtime/utf8-ordinal-out-of-range-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "counterpart": "utf8-ordinal-out-of-range-traps",
+      "reason": "Cortex-M0 uses a 32-bit usize: its maximum representable ordinal is outside the three-scalar text, while the hosted fixture retains the above-u32 ordinal."
     },
     "runtime/utf8-position-at-end-traps": {
       "mode": "execute"

@@ -1568,6 +1568,17 @@ package Landin.Checking is
                   and then Template_Of
                     (Into, Intern_Nominal_Instance'Result) = Template;
 
+   --  Read-only cache inspection for compiler performance regressions.
+   --  Agreement still decides identity within this candidate bucket.
+   function Nominal_Instance_Candidate_Count
+     (Of_Table : Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Template /= No_Declaration
+                 and then Natural (Template) <= Declaration_Limit (Of_Table)
+                 and then Holds (Of_Table, Actuals);
+
    --  [0480]/[1870]: a union of two or more atoms and one pointer type is
    --  a structural two-cell aggregate.  Its identity is interned here with
    --  no source template, keyed by the complete atom set and the complete
@@ -1780,6 +1791,16 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
+   --  The exact evidence-run position selected by a constrained formal.
+   --  Two formals may carry the same conformance but have distinct positions.
+   function Evidence_Run_Position_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
    --  D180: a `for` over a struct or `any C` retains the selected iterable
    --  conformance; `try for` may retain fallible_iterable instead.  The four
    --  entry positions remain the concept declaration's order; this fact
@@ -1835,28 +1856,44 @@ package Landin.Checking is
       Of_Tree   : Landin.Syntax.Tree;
       Node      : Landin.Syntax.Node_Id;
       Evidence  : Conformance_Id;
-      Which     : Positive)
+      Which     : Positive;
+      Run_Position : Positive)
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node)
                   and then Holds (Into, Evidence)
                   and then Which <= Conformance_Entry_Count
-                    (Into, Evidence),
+                    (Into, Evidence)
+                  and then Current_Routine_View (Into)
+                    /= No_Routine_Instance
+                  and then Run_Position <= Routine_Evidence_Count
+                    (Into, Current_Routine_View (Into))
+                  and then Nth_Routine_Evidence
+                    (Into, Current_Routine_View (Into), Run_Position)
+                      = Evidence,
           Post => Evidence_Of (Into, Of_Tree, Node) = Evidence
                   and then Evidence_Entry_Of
-                    (Into, Of_Tree, Node) = Which;
+                    (Into, Of_Tree, Node) = Which
+                  and then Evidence_Run_Position_Of
+                    (Into, Of_Tree, Node) = Run_Position;
 
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
    --  recursion guard for a parameterized body; Ready retains the completed
-   --  layout. Invalid retains no application provenance and may transition
-   --  back to Building so each use replays its dependent failure. None of
-   --  these states is part of the interning key.
+   --  layout. Invalid retains no application provenance. A checking run
+   --  caches its dependent reports separately and places their primary at
+   --  each application. An uncached failure may transition back to Building.
+   --  None of these states is part of the interning key.
    type Instance_State is
      (Instance_Unseen, Instance_Building, Instance_Ready, Instance_Invalid);
 
    function Instance_State_Of
      (Of_Table : Table; Id : Nominal_Type_Id) return Instance_State
+     with Pre => Holds (Of_Table, Id);
+
+   --  Number of body/layout attempts for this identity in the checking run.
+   function Instance_Attempt_Count
+     (Of_Table : Table; Id : Nominal_Type_Id) return Natural
      with Pre => Holds (Of_Table, Id);
 
    procedure Begin_Instance
@@ -1871,10 +1908,9 @@ package Landin.Checking is
                   and then Instance_State_Of (Into, Id) = Instance_Building,
           Post => Instance_State_Of (Into, Id) = Instance_Invalid;
 
-   --  Invalid records a target-layout attempt, not a failure owned by the
-   --  canonical identity.  D137 requires an actual-dependent diagnostic at
-   --  every application, so the stage may replay that bounded body walk
-   --  while retaining this same interned identity and actual tuple.
+   --  Retry an invalid instance only when its failure has no cached report
+   --  for the current checking run (for example, a prior attempt without
+   --  application provenance). The canonical identity and tuple remain.
    procedure Retry_Instance
      (Into : in out Table; Id : Nominal_Type_Id)
      with Pre  => Holds (Into, Id)
@@ -2685,6 +2721,7 @@ private
    type Aggregate_Layout is record
       Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
       State  : Instance_State := Instance_Unseen;
+      Attempts : Natural := 0;
       --  Payload shapes share Field_Shapes but have no top-level offset.
       --  Keep the two run starts distinct once a variant contributes those
       --  extra shapes between ordinary aggregate layouts.
@@ -2737,6 +2774,7 @@ private
       Has_Evidence : Boolean := False;
       Evidence     : Conformance_Id := No_Conformance;
       Evidence_Entry : Natural := 0;
+      Evidence_Run_Position : Natural := 0;
    end record;
 
    package Node_Overlay_Vectors is new Ada.Containers.Vectors

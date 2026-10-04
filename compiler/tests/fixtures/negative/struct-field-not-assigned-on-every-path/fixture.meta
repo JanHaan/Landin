@@ -1,5 +1,5 @@
 class: negative
-summary: a field assigned in one arm of an if is not assigned after it, because [1910] believes no condition
+summary: a field assigned in one arm of a nonliteral if is not assigned after it under [1910]
 constructs: 0670, 0750, 1810, 1910
 program: program.ldn
 codes: L0302

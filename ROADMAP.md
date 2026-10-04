@@ -428,8 +428,10 @@ spellings. `refine explain` is a subcommand printing
 `docs/diagnostics.md`, generated into the compiler as an exhaustive case, so
 every code is explained and each example is compiled to its own code. D251
 admits a warning only as the compiler's judgement with the exact fix that
-settles it; the first and only lint is L0326, a local `mut` nothing needed,
-pinned by `negative/mut-never-written`, and `codes:` pins warnings on every
+settles it; L0326 diagnoses a local `mut` nothing needed, and L0349 diagnoses
+an unused local with a direct scalar literal initializer. The fixtures
+`negative/mut-never-written` and `negative/unused-pure-local` pin them, and
+`codes:` pins warnings on every
 fixture that compiles a program. `scripts/driver_manifest.py` held every
 commit to its parent: status, assembly, build report and source map agree for
 all 8,169 entries, and the only report differences are added help lines and

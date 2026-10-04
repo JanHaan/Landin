@@ -162,6 +162,10 @@ package body Landin.Resolution is
      return Landin.Syntax.Node_Id
      is (Element (Of_Table, Id).Node);
 
+   function Traversal_Owner (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Syntax.Node_Id
+     is (Element (Of_Table, Id).Traversal_Owner);
+
    function Is_Public (Of_Table : Table; Id : Declaration_Id)
      return Boolean
      is (Element (Of_Table, Id).Public);
@@ -473,6 +477,7 @@ package body Landin.Resolution is
             Scope  => Inside,
             Source => Landin.Syntax.Source_Of (Of_Tree),
             Node   => Node,
+            Traversal_Owner => Landin.Syntax.No_Node,
             Public =>
               (Kind in Landin.Syntax.Function_Declaration
                       | Landin.Syntax.Atom_Declaration
@@ -513,6 +518,22 @@ package body Landin.Resolution is
       end;
       return Fresh;
    end Declare_Name;
+
+   procedure Record_Traversal_Owner
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Id      : Declaration_Id;
+      Owner   : Landin.Syntax.Node_Id)
+   is
+      pragma Unreferenced (Of_Tree);
+      Held : Declaration := Into.Declarations (Positive (Id));
+   begin
+      if Held.Traversal_Owner /= Landin.Syntax.No_Node then
+         raise Compiler_Defect with "traversal binding has two owners";
+      end if;
+      Held.Traversal_Owner := Owner;
+      Into.Declarations.Replace_Element (Positive (Id), Held);
+   end Record_Traversal_Owner;
 
    function Declaration_At
      (Of_Table : Table;

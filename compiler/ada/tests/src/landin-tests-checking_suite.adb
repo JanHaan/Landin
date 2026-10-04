@@ -30,6 +30,7 @@ with Landin.Types;
 
 package body Landin.Tests.Checking_Suite is
 
+   use type Landin.Diagnostics.Label;
    use type Landin.IR.Item_Id;
    use type Landin.IR.Verifier.Fault_Kind;
    use type Landin.IR.Nominal_Type_Id;
@@ -1585,6 +1586,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Nominal_Instances_Intern_Normalized_Actuals
      (Item : in out Landin.Testing.Context);
 
+   procedure Structural_Buckets_Separate_Equal_Sum_Sets
+     (Item : in out Landin.Testing.Context);
+
    procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context);
 
@@ -1881,6 +1885,21 @@ package body Landin.Tests.Checking_Suite is
              (Types.all, [Right_Template, Left_Template]);
          Set_Left : constant Landin.Checking.Atom_Set_Id :=
            Landin.Checking.Add_Atom_Set (Types.all, [1 => Left_Template]);
+         Set_Repeated_Left : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Left_Template, Left_Template, Right_Template]);
+         Set_Repeated_Right : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Right_Template, Left_Template, Right_Template]);
+         Set_Double_Left : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Left_Template, Left_Template]);
+         Set_Encoded_Left : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Left_Template, Right_Template]);
+         Set_Encoded_Right : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Left_Template, Right_Template]);
          Signature_Left : constant Landin.Checking.Signature_Id :=
            Landin.Checking.Add_Signature
              (Types.all,
@@ -1911,6 +1930,16 @@ package body Landin.Tests.Checking_Suite is
                 [1 => (Kind => Landin.Types.Aggregate,
                        Nominal => Left_Empty, Site => Site, others => <>)],
               Site, Set_Left_Right, Landin.Checking.Concrete);
+         Signature_Encoded_Left : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all, Landin.Checking.No_Signature_Parts,
+              Landin.Checking.No_Signature_Parts,
+              Site, Set_Encoded_Left, Landin.Checking.Concrete);
+         Signature_Encoded_Right : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all, Landin.Checking.No_Signature_Parts,
+              Landin.Checking.No_Signature_Parts,
+              Site, Set_Encoded_Right, Landin.Checking.Concrete);
          Wrapper_Left : constant Landin.Checking.Signature_Id :=
            Landin.Checking.Add_Signature
              (Types.all,
@@ -1933,6 +1962,21 @@ package body Landin.Tests.Checking_Suite is
                 [1 => (Kind => Landin.Types.Fixed_Array, Length => 3,
                        Nominal => Left_Empty, Site => Site, others => <>)],
               Site);
+         Reference_Left : constant Landin.Checking.Reference_Id :=
+           Landin.Checking.Add_Reference
+             (Types.all, (Kind => Landin.Types.Pointer_Value,
+                          Referent => Landin.Types.Aggregate,
+                          Nominal => Left_Empty, others => <>));
+         Reference_Alias : constant Landin.Checking.Reference_Id :=
+           Landin.Checking.Add_Reference
+             (Types.all, (Kind => Landin.Types.Pointer_Value,
+                          Referent => Landin.Types.Aggregate,
+                          Nominal => Left_Empty, others => <>));
+         Reference_Different : constant Landin.Checking.Reference_Id :=
+           Landin.Checking.Add_Reference
+             (Types.all, (Kind => Landin.Types.Pointer_Value,
+                          Referent => Landin.Types.Aggregate,
+                          Nominal => Right_Empty, others => <>));
 
          Hex_Value, Decimal_Value : Landin.Types.Magnitude;
          Hex_Overflow, Decimal_Overflow : Boolean;
@@ -1943,11 +1987,19 @@ package body Landin.Tests.Checking_Suite is
          Nested, Nested_Again : Landin.Checking.Nominal_Type_Id;
          Atom_Set, Atom_Set_Alias, Atom_Set_Different :
            Landin.Checking.Nominal_Type_Id;
+         Atom_Set_Repeated, Atom_Set_Repeated_Alias :
+           Landin.Checking.Nominal_Type_Id;
+         Atom_Set_Encoded_Left, Atom_Set_Encoded_Right :
+           Landin.Checking.Nominal_Type_Id;
          Scalar_Array, Scalar_Array_Count :
            Landin.Checking.Nominal_Type_Id;
          Aggregate_Array, Other_Aggregate_Array :
            Landin.Checking.Nominal_Type_Id;
          Function_Key, Function_Alias, Function_Different :
+           Landin.Checking.Nominal_Type_Id;
+         Function_Encoded_Left, Function_Encoded_Right :
+           Landin.Checking.Nominal_Type_Id;
+         Reference_Key, Reference_Key_Alias, Reference_Key_Different :
            Landin.Checking.Nominal_Type_Id;
          Ordered, Reversed, Scalar_Kind, Fixed_Kind :
            Landin.Checking.Nominal_Type_Id;
@@ -2084,6 +2136,36 @@ package body Landin.Tests.Checking_Suite is
               and then Atom_Set /= Atom_Set_Different,
             "atom-set actual identity is structural rather than descriptor"
             & " order");
+         Atom_Set_Repeated := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Repeated_Left)));
+         Atom_Set_Repeated_Alias := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Repeated_Right)));
+         Landin.Testing.Check
+           (Item,
+            Atom_Set_Repeated = Atom_Set_Repeated_Alias
+              and then Atom_Set_Repeated /= Atom_Set
+              and then not Landin.Checking.Atom_Sets_Agree
+                (Types.all, Set_Double_Left, Set_Left_Right),
+            "equal atom sets hash alike even with repeated members");
+         Landin.Checking.Set_Encodings
+           (Types.all, Set_Encoded_Left, [0, 1], 1);
+         Landin.Checking.Set_Encodings
+           (Types.all, Set_Encoded_Right, [1, 0], 1);
+         Atom_Set_Encoded_Left := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Encoded_Left)));
+         Atom_Set_Encoded_Right := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Encoded_Right)));
+         Landin.Testing.Check
+           (Item, Atom_Set_Encoded_Left /= Atom_Set_Encoded_Right,
+            "different atom encodings distinguish direct actuals");
 
          Scalar_Array := Landin.Checking.Intern_Nominal_Instance
            (Types.all, Left_Template,
@@ -2126,6 +2208,35 @@ package body Landin.Tests.Checking_Suite is
             Function_Key = Function_Alias
               and then Function_Key /= Function_Different,
             "nested function signatures use complete structural identity");
+         Function_Encoded_Left := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Function_Type_Actual
+                   (Types.all, Signature_Encoded_Left)));
+         Function_Encoded_Right := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Function_Type_Actual
+                   (Types.all, Signature_Encoded_Right)));
+         Landin.Testing.Check
+           (Item, Function_Encoded_Left = Function_Encoded_Right,
+            "signature error sets ignore representation encodings");
+
+         Reference_Key := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Reference_Type_Actual
+                   (Types.all, Reference_Left)));
+         Reference_Key_Alias := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Reference_Type_Actual
+                   (Types.all, Reference_Alias)));
+         Reference_Key_Different := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Reference_Type_Actual
+                   (Types.all, Reference_Different)));
+         Landin.Testing.Check
+           (Item,
+            Reference_Key = Reference_Key_Alias
+              and then Reference_Key /= Reference_Key_Different,
+            "reference actuals reuse structurally equal descriptors");
 
          Ordered := Landin.Checking.Intern_Nominal_Instance
            (Types.all, Left_Template,
@@ -2441,6 +2552,241 @@ package body Landin.Tests.Checking_Suite is
             "target-dependent layout cannot enter a nominal actual key");
       end;
    end Nominal_Instances_Intern_Normalized_Actuals;
+
+   procedure Structural_Buckets_Separate_Equal_Sum_Sets
+     (Item : in out Landin.Testing.Context)
+   is
+      Pair_Count : constant Positive := 64;
+
+      function Source_Text return String;
+
+      function Source_Text return String is
+         Text : US.Unbounded_String := US.Null_Unbounded_String;
+      begin
+         for Index in 1 .. 2 * Pair_Count loop
+            US.Append (Text, "a" & Image (Index) & ": atom" & LF);
+         end loop;
+         US.Append
+           (Text, "bucket: type (item: type) = struct" & LF
+            & "    value: usize" & LF & "end bucket" & LF);
+         return US.To_String (Text);
+      end Source_Text;
+
+      function One (Actual : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple;
+
+      function One (Actual : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple
+      is
+         Result : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals;
+      begin
+         Landin.Checking.Append_Actual (Result, Actual);
+         return Result;
+      end One;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "equal-sum-atom-sets.ldn", Source_Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the atom declarations and generic template are accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id)
+                   = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Template : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (2 * Pair_Count + 1);
+         Atoms : array (Positive range 1 .. 2 * Pair_Count) of
+           Landin.Provenance.Declaration_Id;
+         Same_Sum : Boolean := True;
+         Consecutive : Boolean := True;
+         Four_Count : Natural := 0;
+      begin
+         for Index in Atoms'Range loop
+            Atoms (Index) := Declaration_At (Index);
+            Consecutive := Consecutive and then
+              Natural (Atoms (Index))
+                = Natural (Atoms (1)) + Index - 1;
+         end loop;
+         for Index in 1 .. Pair_Count loop
+            Same_Sum := Same_Sum and then
+              Natural (Atoms (Index))
+                + Natural (Atoms (2 * Pair_Count + 1 - Index))
+                  = Natural (Atoms (1)) + Natural (Atoms (2 * Pair_Count));
+         end loop;
+         Landin.Testing.Check
+           (Item, Template /= Landin.Provenance.No_Declaration
+                    and then Same_Sum and then Consecutive,
+            "the atom declarations form consecutive equal-sum pairs");
+         if Template = Landin.Provenance.No_Declaration
+           or else not Same_Sum or else not Consecutive
+         then
+            return;
+         end if;
+
+         for Index in 1 .. Pair_Count loop
+            declare
+               Left : constant Landin.Provenance.Declaration_Id :=
+                 Atoms (Index);
+               Right : constant Landin.Provenance.Declaration_Id :=
+                 Atoms (2 * Pair_Count + 1 - Index);
+               Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Add_Atom_Set (Types.all, [Left, Right]);
+               Actuals : constant Landin.Checking.Actual_Tuple :=
+                 One (Landin.Checking.Atom_Set_Type_Actual
+                        (Types.all, Set_Id));
+               Before : constant Natural :=
+                 Landin.Checking.Nominal_Instance_Candidate_Count
+                   (Types.all, Template, Actuals);
+               Made : Landin.Checking.Nominal_Type_Id;
+            begin
+               Made := Landin.Checking.Intern_Nominal_Instance
+                 (Types.all, Template, Actuals);
+               Landin.Testing.Check
+                 (Item, Before = 0
+                    and then Landin.Checking.Nominal_Instance_Candidate_Count
+                      (Types.all, Template, Actuals) = 1,
+                  "equal-sum pair" & Image (Index)
+                  & " visits only its own candidate");
+               declare
+                  Alias_Set : constant Landin.Checking.Atom_Set_Id :=
+                    Landin.Checking.Add_Atom_Set
+                      (Types.all, [Right, Left]);
+                  Alias_Actuals : constant Landin.Checking.Actual_Tuple :=
+                    One (Landin.Checking.Atom_Set_Type_Actual
+                           (Types.all, Alias_Set));
+               begin
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Checking.Nominal_Instance_Candidate_Count
+                       (Types.all, Template, Alias_Actuals) = 1
+                     and then Landin.Checking.Intern_Nominal_Instance
+                       (Types.all, Template, Alias_Actuals) = Made,
+                     "reordered pair" & Image (Index)
+                     & " reuses its instance");
+               end;
+            end;
+         end loop;
+
+         --  Review 2's four-member family: indices 1..128 with sum 258
+         --  and squared sum 22,022.  Consecutive declaration IDs shift
+         --  both moments equally for every member of the family.
+         for A in 1 .. 2 * Pair_Count - 3 loop
+            for B in A + 1 .. 2 * Pair_Count - 2 loop
+               for C in B + 1 .. 2 * Pair_Count - 1 loop
+                  declare
+                     D : constant Integer :=
+                       4 * Pair_Count + 2 - A - B - C;
+                  begin
+                     if D in C + 1 .. 2 * Pair_Count
+                       and then A * A + B * B + C * C + D * D = 22_022
+                     then
+                        Four_Count := Four_Count + 1;
+                        declare
+                           Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                             Landin.Checking.Add_Atom_Set
+                               (Types.all,
+                                [Atoms (A), Atoms (B), Atoms (C),
+                                 Atoms (D)]);
+                           Actuals : constant Landin.Checking.Actual_Tuple :=
+                             One (Landin.Checking.Atom_Set_Type_Actual
+                                    (Types.all, Set_Id));
+                           Before : constant Natural :=
+                             Landin.Checking.Nominal_Instance_Candidate_Count
+                               (Types.all, Template, Actuals);
+                           Made : Landin.Checking.Nominal_Type_Id;
+                        begin
+                           Made := Landin.Checking.Intern_Nominal_Instance
+                             (Types.all, Template, Actuals);
+                           Landin.Testing.Check
+                             (Item, Before = 0
+                                and then
+                                  Landin.Checking
+                                    .Nominal_Instance_Candidate_Count
+                                    (Types.all, Template, Actuals) = 1,
+                              "same-moment set" & Image (Four_Count)
+                              & " has one candidate");
+                           declare
+                              Alias_Set : constant
+                                Landin.Checking.Atom_Set_Id :=
+                                  Landin.Checking.Add_Atom_Set
+                                    (Types.all,
+                                     [Atoms (D), Atoms (C), Atoms (B),
+                                      Atoms (A)]);
+                              Alias_Actuals : constant
+                                Landin.Checking.Actual_Tuple :=
+                                  One
+                                    (Landin.Checking.Atom_Set_Type_Actual
+                                       (Types.all, Alias_Set));
+                           begin
+                              Landin.Testing.Check
+                                (Item,
+                                 Landin.Checking
+                                   .Nominal_Instance_Candidate_Count
+                                   (Types.all, Template, Alias_Actuals) = 1
+                                 and then
+                                   Landin.Checking.Intern_Nominal_Instance
+                                     (Types.all, Template, Alias_Actuals)
+                                       = Made,
+                                 "reordered same-moment set"
+                                 & Image (Four_Count)
+                                 & " reuses its instance");
+                           end;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end loop;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Four_Count, 63,
+            "all reviewed same-moment sets were exercised");
+      end;
+   end Structural_Buckets_Separate_Equal_Sum_Sets;
 
    procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context)
@@ -4125,6 +4471,12 @@ package body Landin.Tests.Checking_Suite is
    procedure Repeated_Invalid_Instances_Report_Each_Application
      (Item : in out Landin.Testing.Context);
 
+   procedure Repeated_Packed_Instances_Keep_Application_Primaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Repeated_C_Layout_Instances_Keep_Application_Primaries
+     (Item : in out Landin.Testing.Context);
+
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context);
 
@@ -4968,8 +5320,13 @@ package body Landin.Tests.Checking_Suite is
          "huge: type (fixed count: u64) = struct" & LF
          & "    bytes: [count]u64" & LF
          & "end huge" & LF
+         & "wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
          & "first: huge(18446744073709551615)" & LF
-         & "second: huge(18446744073709551615)" & LF);
+         & "second: huge(18446744073709551615)" & LF
+         & "third: wrapper(huge(18446744073709551615))" & LF
+         & "fourth: wrapper(huge(18446744073709551615))" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
          Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -4986,19 +5343,31 @@ package body Landin.Tests.Checking_Suite is
          First : constant Landin.Syntax.Node_Id :=
            Landin.Syntax.Declared_Type
              (Of_Tree.all,
-              Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
          Second : constant Landin.Syntax.Node_Id :=
            Landin.Syntax.Declared_Type
              (Of_Tree.all,
-              Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 4));
+         Third : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 5));
+         Fourth : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 6));
       begin
          Landin.Testing.Check
-           (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 2
+           (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 4
              and then Landin.Diagnostics.Code
                (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
              and then Landin.Diagnostics.Code
-               (Landin.Diagnostics.Get (Reports, 2)) = "L0300",
-            "one cached invalid identity replays its dependent failure");
+               (Landin.Diagnostics.Get (Reports, 2)) = "L0300"
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 3)) = "L0300"
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 4)) = "L0300",
+            "invalid identities report at direct and promoted uses");
          Landin.Testing.Check
            (Item, Landin.Diagnostics.Span_Of
               (Landin.Diagnostics.Primary
@@ -5013,13 +5382,257 @@ package body Landin.Tests.Checking_Suite is
             "the repeated failures retain distinguishable application"
             & " primaries");
          Landin.Testing.Check
-           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 1
+           (Item, Landin.Diagnostics.Span_Of
+              (Landin.Diagnostics.Primary
+                 (Landin.Diagnostics.Get (Reports, 3)))
+                    = Landin.Syntax.Where (Of_Tree.all, Third)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Primary
+                  (Landin.Diagnostics.Get (Reports, 4)))
+                    = Landin.Syntax.Where (Of_Tree.all, Fourth),
+            "promoted nominal failures use each wrapper application");
+         Landin.Testing.Check
+           (Item, Landin.Diagnostics.Label_Count
+              (Landin.Diagnostics.Get (Reports, 1)) = 1
+             and then Landin.Diagnostics.Label_Count
+               (Landin.Diagnostics.Get (Reports, 2)) = 1
+             and then Landin.Diagnostics.Nth_Label
+               (Landin.Diagnostics.Get (Reports, 1), 1)
+                 = Landin.Diagnostics.Nth_Label
+                   (Landin.Diagnostics.Get (Reports, 2), 1)
+             and then Landin.Diagnostics.Note_Count
+               (Landin.Diagnostics.Get (Reports, 1)) = 1
+             and then Landin.Diagnostics.Nth_Note
+               (Landin.Diagnostics.Get (Reports, 1), 1)
+                 = Landin.Diagnostics.Nth_Note
+                   (Landin.Diagnostics.Get (Reports, 2), 1),
+            "the cached report retains its template label and explanation");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 2
              and then Landin.Checking.Instance_State_Of
                (Types.all, Landin.Checking.Nth_Nominal_Type (Types.all, 1))
-                  = Landin.Checking.Instance_Invalid,
-            "replay retains one canonical identity and one tuple");
+                  = Landin.Checking.Instance_Invalid
+             and then Landin.Checking.Instance_Attempt_Count
+               (Types.all, Landin.Checking.Nth_Nominal_Type (Types.all, 1))
+                  = 1
+             and then Landin.Checking.Instance_Attempt_Count
+               (Types.all, Landin.Checking.Nth_Nominal_Type (Types.all, 2))
+                  = 1,
+            "four primaries require one body attempt per canonical key");
       end;
    end Repeated_Invalid_Instances_Report_Each_Application;
+
+   procedure Repeated_Packed_Instances_Keep_Application_Primaries
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "repeated-packed-invalid.ldn",
+         "image: type (item: type) = layout(packed) struct" & LF
+         & "    value: item at 0..7" & LF
+         & "end image" & LF
+         & "good: image(u8)" & LF
+         & "first: image(u64)" & LF
+         & "second: image(u64)" & LF
+         & "good_again: image(u8)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      declare
+         Reports : constant Landin.Diagnostics.Diagnostic_List :=
+           Landin.Stages.Report (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Body_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 1));
+         Field : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Of_Tree.all, Body_Node, 1);
+         Ready_Once : Natural := 0;
+         Invalid_Once : Natural := 0;
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
+         Second : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 4));
+      begin
+         Landin.Testing.Check
+           (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 2
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 1)) = "L0336"
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 2)) = "L0336",
+            "only the two u64 packed applications fail");
+         Landin.Testing.Check
+           (Item, Landin.Diagnostics.Label_Count
+              (Landin.Diagnostics.Get (Reports, 1)) = 1
+             and then Landin.Diagnostics.Label_Count
+               (Landin.Diagnostics.Get (Reports, 2)) = 1
+             and then Landin.Diagnostics.Span_Of
+              (Landin.Diagnostics.Primary
+                 (Landin.Diagnostics.Get (Reports, 1)))
+                    = Landin.Syntax.Where (Of_Tree.all, First)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Primary
+                  (Landin.Diagnostics.Get (Reports, 2)))
+                    = Landin.Syntax.Where (Of_Tree.all, Second)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Nth_Label
+                  (Landin.Diagnostics.Get (Reports, 1), 1))
+                    = Landin.Syntax.Where (Of_Tree.all, Field)
+             and then Landin.Diagnostics.Nth_Label
+               (Landin.Diagnostics.Get (Reports, 1), 1)
+                 = Landin.Diagnostics.Nth_Label
+                   (Landin.Diagnostics.Get (Reports, 2), 1),
+            "each packed failure points to its use and relates the field");
+         for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+            begin
+               if Landin.Checking.Instance_Attempt_Count
+                    (Types.all, Instance) = 1
+               then
+                  case Landin.Checking.Instance_State_Of
+                    (Types.all, Instance)
+                  is
+                     when Landin.Checking.Instance_Ready =>
+                        Ready_Once := Ready_Once + 1;
+                     when Landin.Checking.Instance_Invalid =>
+                        Invalid_Once := Invalid_Once + 1;
+                     when others =>
+                        null;
+                  end case;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 2
+             and then Ready_Once = 1 and then Invalid_Once = 1,
+            "valid and invalid actuals each have one canonical attempt");
+      end;
+   end Repeated_Packed_Instances_Keep_Application_Primaries;
+
+   procedure Repeated_C_Layout_Instances_Keep_Application_Primaries
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "repeated-c-layout-invalid.ldn",
+         "cbox: type (item: type) = layout(c) struct" & LF
+         & "    member: item" & LF
+         & "end cbox" & LF
+         & "good: cbox(u8)" & LF
+         & "first: cbox([0]u8)" & LF
+         & "second: cbox([0]u8)" & LF
+         & "good_again: cbox(u8)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      declare
+         Reports : constant Landin.Diagnostics.Diagnostic_List :=
+           Landin.Stages.Report (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Body_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 1));
+         Field : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Of_Tree.all, Body_Node, 1);
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
+         Second : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 4));
+         Ready_Once : Natural := 0;
+         Invalid_Once : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 2
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 1)) = "L0346"
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 2)) = "L0346",
+            "only the two zero-length C field applications fail");
+         Landin.Testing.Check
+           (Item, Landin.Diagnostics.Label_Count
+              (Landin.Diagnostics.Get (Reports, 1)) = 1
+             and then Landin.Diagnostics.Label_Count
+               (Landin.Diagnostics.Get (Reports, 2)) = 1
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Primary
+                  (Landin.Diagnostics.Get (Reports, 1)))
+                    = Landin.Syntax.Where (Of_Tree.all, First)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Primary
+                  (Landin.Diagnostics.Get (Reports, 2)))
+                    = Landin.Syntax.Where (Of_Tree.all, Second)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Nth_Label
+                  (Landin.Diagnostics.Get (Reports, 1), 1))
+                    = Landin.Syntax.Where (Of_Tree.all, Field)
+             and then Landin.Diagnostics.Nth_Label
+               (Landin.Diagnostics.Get (Reports, 1), 1)
+                 = Landin.Diagnostics.Nth_Label
+                   (Landin.Diagnostics.Get (Reports, 2), 1),
+            "each C layout failure relates the substituted field");
+         for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+            begin
+               if Landin.Checking.Instance_Attempt_Count
+                    (Types.all, Instance) = 1
+               then
+                  case Landin.Checking.Instance_State_Of
+                    (Types.all, Instance)
+                  is
+                     when Landin.Checking.Instance_Ready =>
+                        Ready_Once := Ready_Once + 1;
+                     when Landin.Checking.Instance_Invalid =>
+                        Invalid_Once := Invalid_Once + 1;
+                     when others =>
+                        null;
+                  end case;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 2
+             and then Ready_Once = 1 and then Invalid_Once = 1,
+            "C-compatible and invalid actuals each have one body attempt");
+      end;
+   end Repeated_C_Layout_Instances_Keep_Application_Primaries;
 
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context)
@@ -10091,16 +10704,17 @@ package body Landin.Tests.Checking_Suite is
                    (Types.all, Concept, Repeated, Empty, Empty, Src,
                     Point_Node, Landin.Checking.Declared_Conformance);
             begin
-               --  Atom_Sets_Agree counts members, so a set listing one atom
-               --  twice agrees with a three-atom set that holds its atoms.
-               --  Such a row has no exact spelling and is still found by
-               --  comparison, from a key that has one and from itself.
+               --  A repeated-member row has no exact spelling. Structural
+               --  agreement is symmetric: the extra atom in Distinct must
+               --  not be hidden by the repeated member in Repeated. The
+               --  unspelled row still finds itself through comparison.
                Landin.Testing.Check
                  (Item, Landin.Checking.Find_Conformance
-                    (Types.all, Concept, Distinct, Empty) = Unspelled
+                    (Types.all, Concept, Distinct, Empty)
+                       = Landin.Checking.No_Conformance
                   and then Landin.Checking.Find_Conformance
                     (Types.all, Concept, Repeated, Empty) = Unspelled,
-                  "a row without an exact spelling is still found");
+                  "unspelled rows preserve symmetric atom-set agreement");
             end;
          end;
       end;
@@ -14822,6 +15436,9 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "nominal instances intern normalized actuals",
          Nominal_Instances_Intern_Normalized_Actuals'Access);
       Landin.Testing.Register
+        (Into, "checking", "structural buckets separate equal-sum sets",
+         Structural_Buckets_Separate_Equal_Sum_Sets'Access);
+      Landin.Testing.Register
         (Into, "checking", "routine instance views keep source facts",
          Routine_Instance_Views_Keep_Source_Facts_Separate'Access);
       Landin.Testing.Register
@@ -14882,8 +15499,14 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "nominal layout edges exclude identity mentions",
          Nominal_Layout_Requirements_Distinguish_Identity_And_Value'Access);
       Landin.Testing.Register
-        (Into, "checking", "invalid instances replay at each application",
+        (Into, "checking", "invalid instances reuse one body attempt",
          Repeated_Invalid_Instances_Report_Each_Application'Access);
+      Landin.Testing.Register
+        (Into, "checking", "packed invalid instances reuse body attempts",
+         Repeated_Packed_Instances_Keep_Application_Primaries'Access);
+      Landin.Testing.Register
+        (Into, "checking", "C layout invalid instances reuse body attempts",
+         Repeated_C_Layout_Instances_Keep_Application_Primaries'Access);
       Landin.Testing.Register
         (Into, "checking", "invalid unused templates are checked",
          Invalid_Parameterized_Templates_Are_Checked_When_Unused'Access);

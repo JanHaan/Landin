@@ -1,4 +1,4 @@
-f: () -> none =
+f: (leave: bool) -> none =
     a: [0]i32 = zeroed
-    b := a + -(begin (if true then return end if) end)
+    b := a + -(begin (if leave then return end if) end)
 end f

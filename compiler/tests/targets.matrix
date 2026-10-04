@@ -602,8 +602,10 @@ negative/parameterized-alias-unused-fixed-bool | linux-x86-64, linux-arm64, maco
 negative/parameterized-alias-unused-function-result | linux-x86-64, linux-arm64, macos-arm64
 negative/parameterized-alias-unused-nontype | linux-x86-64, linux-arm64, macos-arm64
 negative/parameterized-alias-unused-unknown | linux-x86-64, linux-arm64, macos-arm64
+negative/parameterized-c-layout-repeated-invalid | linux-x86-64, macos-arm64
 negative/parameterized-conformance-collision | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/parameterized-conformance-entry-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/parameterized-packed-repeated-invalid | linux-x86-64, macos-arm64
 negative/parameterized-struct-alias-cycle-inner-first | linux-x86-64, linux-arm64, macos-arm64
 negative/parameterized-struct-alias-cycle-outer-first | linux-x86-64, linux-arm64, macos-arm64
 negative/parameterized-struct-argument-kinds | linux-x86-64, linux-arm64, macos-arm64
@@ -1172,13 +1174,14 @@ negative/uninit-scalar-field | linux-x86-64, linux-arm64, macos-arm64, synthetic
 negative/unknown-byte | linux-x86-64, linux-arm64, macos-arm64
 negative/unterminated-raw-literal | linux-x86-64, linux-arm64, macos-arm64
 negative/unterminated-text-literal | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/unused-pure-local | linux-x86-64, macos-arm64, synthetic-32
 negative/upper-case-name | linux-x86-64, linux-arm64, macos-arm64
 negative/use-after-sink | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/use-after-sink-across-loop | linux-x86-64, linux-arm64, macos-arm64
 negative/use-after-sink-scalar | linux-x86-64, linux-arm64, macos-arm64
 negative/usize-is-not-u64 | linux-x86-64, linux-arm64, macos-arm64
 negative/utf16-indexing-is-not-utf8-indexing | linux-x86-64, linux-arm64, macos-arm64
-negative/utf8-index-needs-u32-or-position | linux-x86-64, linux-arm64, macos-arm64
+negative/utf8-index-needs-usize-or-position | linux-x86-64, macos-arm64
 negative/utf8-index-position-identity-is-exact | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64
@@ -1298,6 +1301,7 @@ positive/line-ends-mixed | linux-x86-64, linux-arm64, macos-arm64
 positive/literal-at-the-widest-value | linux-x86-64, linux-arm64, macos-arm64
 positive/literal-bases | linux-x86-64, linux-arm64, macos-arm64
 positive/literal-booleans | linux-x86-64, linux-arm64, macos-arm64
+positive/literal-conditions-select-flow | linux-x86-64, macos-arm64
 positive/literal-takes-a-sibling-type | linux-x86-64, linux-arm64, macos-arm64
 positive/local-array-computed-element-after-whole-copy | linux-x86-64, linux-arm64, macos-arm64
 positive/local-array-copy | linux-x86-64, linux-arm64, macos-arm64
@@ -1578,6 +1582,7 @@ runtime/core-tree-provider-failures | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-vec-pointer-storage | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-vec-used-references | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-vec-used-sort | linux-x86-64, linux-arm64, macos-arm64
+runtime/cstring-conversion-truncated-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/cstring-first-nul-validation | linux-x86-64, linux-arm64, macos-arm64
 runtime/cstring-traversal-invalid-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/declared-errors-direct-and-inferred | linux-x86-64, linux-arm64, macos-arm64
@@ -1676,6 +1681,7 @@ runtime/large-array-offset-is-addressed | linux-x86-64, linux-arm64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64, linux-arm64, macos-arm64
 runtime/lenof-named-fixed-arrays | linux-x86-64, linux-arm64, macos-arm64
 runtime/line-end-continues-expression | linux-x86-64, linux-arm64, macos-arm64
+runtime/literal-conditions-select-flow | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-index-reads-and-writes | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-index-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/local-array-computed-store-traps | linux-x86-64, linux-arm64, macos-arm64

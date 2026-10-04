@@ -7002,37 +7002,51 @@ package body Landin.Backend.X86_64 is
             declare
                Evidence : constant Landin.IR.Evidence_Id :=
                  Landin.IR.Evidence_Id (Position);
+               Alias_Previous : constant Boolean := Position > 1
+                 and then Shares_Evidence_Table
+                   (Of_Unit, Landin.IR.Evidence_Id (Position - 1), Evidence);
+               Alias_Next : constant Boolean :=
+                 Position < Landin.IR.Evidence_Count (Of_Unit)
+                   and then Shares_Evidence_Table
+                     (Of_Unit, Evidence,
+                      Landin.IR.Evidence_Id (Position + 1));
                Size : Landin.Targets.Byte_Count;
                Alignment : Landin.Targets.Byte_Alignment;
             begin
-               Begin_Item_Section
-                 (".data.rel.ro.local.landin_evidence_", """aw"",@progbits",
-                  Position);
-               Landin.Backend.Field_Extent
-                 (Of_Unit, Landin.IR.Evidence_Represented
-                    (Of_Unit, Evidence), Facts, Size, Alignment);
-               Emit
-                 (".balign "
-                  & Trimmed
-                      (Landin.Targets.Byte_Alignment'Image
-                         (Landin.Targets.Pointer_Alignment (Facts))));
-               Put (Evidence_Symbol (Evidence) & ":");
-               Emit
-                 (".quad "
-                  & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
-               Emit
-                 (".quad "
-                  & Trimmed
-                      (Landin.Targets.Byte_Alignment'Image (Alignment)));
-               for Which in 1 .. Landin.IR.Evidence_Entry_Count
-                 (Of_Unit, Evidence)
-               loop
+               if not Alias_Previous then
+                  Begin_Item_Section
+                    (".data.rel.ro.local.landin_evidence_", """aw"",@progbits",
+                     Position);
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Landin.IR.Evidence_Represented
+                       (Of_Unit, Evidence), Facts, Size, Alignment);
+                  Emit
+                    (".balign "
+                     & Trimmed
+                         (Landin.Targets.Byte_Alignment'Image
+                            (Landin.Targets.Pointer_Alignment (Facts))));
+                  Put (Evidence_Symbol (Evidence) & ":");
+                  if Alias_Next then
+                     Put (Evidence_Symbol
+                       (Landin.IR.Evidence_Id (Position + 1)) & ":");
+                  end if;
                   Emit
                     (".quad "
-                     & Symbol
-                         (Landin.IR.Evidence_Entry_Target
-                            (Of_Unit, Evidence, Which)));
-               end loop;
+                     & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
+                  Emit
+                    (".quad "
+                     & Trimmed
+                         (Landin.Targets.Byte_Alignment'Image (Alignment)));
+                  for Which in 1 .. Landin.IR.Evidence_Entry_Count
+                    (Of_Unit, Evidence)
+                  loop
+                     Emit
+                       (".quad "
+                        & Symbol
+                            (Landin.IR.Evidence_Entry_Target
+                               (Of_Unit, Evidence, Which)));
+                  end loop;
+               end if;
             end;
          end loop;
       end if;

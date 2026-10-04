@@ -1275,11 +1275,12 @@ have been assigned by every path that arrives there. For multiple results the
 question is asked independently of every named return. Aggregate fields retain
 independent facts, including a function field read as the callee of a call; the
 callee expression is checked before any argument expression.
-No condition is believed. A name assigned in one arm of an
-'if' and not in another is not assigned after it, and 'if
-true then r = 1 end if' leaves r unassigned, because a
-checker that read the condition to decide this would be
-running the program in order to check it.
+A written Boolean literal fixes its `if` edge: `true` takes the arm and
+`false` skips it. No other condition is believed. A name assigned in one
+reachable arm of `if c` and not another is not assigned after it, even if
+`c` was initialized with `true`. Only the written literal is used here;
+interpreting expressions to decide their value would make legality depend
+on constant folding.
 'return when' is a return [1810], so what the function hands
 back is assigned above it and not below.
 A control-flow edge has independent fallthrough, successful-return, and
@@ -2360,18 +2361,29 @@ because a linked routine or a debugger may write it. The warning runs only on
 a program the checker accepted and only in a routine body it checked, so an
 uninstantiated generic says nothing.
 
+L0349 warns about an unused immutable local whose initializer is a direct
+integer, float, character or boolean literal. The checker finds no resolved
+reference to the binding and offers deletion of its whole line as an exact
+fix. It warns only when the binding is alone on that line, has no attached
+doc comment, is not part of a shared declaration, and belongs to a checked
+routine body. Calls, names,
+aggregate construction and other expressions are excluded: deleting those
+could remove work. A module binding is excluded for the same external-use
+reason as L0326.
+
 **The alternatives:** no lints at all, which [1850] reads as. That leaves the
 compiler unable to say what it knows about a program it accepts, and pushes
 the judgement into a second tool whose rules drift from the checker's. Unused
 imports were declined as a first lint: an import adds its module to the
 program and its conformances to the one register [1280], so removing one can
-change what the program means. Unused immutable locals were declined because
-the only way to quiet one is a discard [1930], which is a judgement about
-wasted work the language chose not to make.
+change what the program means. Unused immutable locals with an initializer
+that may do work are still declined: quieting one by adding a discard [1930]
+would judge that work as wasted. A direct scalar literal has no such work,
+and deleting its unused declaration is an exact repair.
 
-**Pinned by** `negative/mut-never-written`, which applies the fix and compiles
-the result clean, and the `codes:` of every accepted fixture whose program
-warns.
+**Pinned by** `negative/mut-never-written` and
+`negative/unused-pure-local`, which apply the fixes and compile the results
+clean, and the `codes:` of every accepted fixture whose program warns.
 
 ### D254 — A doc comment is the run of lines directly above a declaration
 
@@ -5611,11 +5623,11 @@ cases, and the `source.lexical` and `text.literal-storage` guarantee rows.
 
 ### D182 — UTF-8 index type selects ordinal scan or direct position
 
-**Result superseded by D249.** The two operations, their exact argument types,
-their evaluation order and their traps stand. The `[]u8` result, with its
-read-only permission and source origin, is replaced by the decoded `u32`. The
+**Result superseded by D249 and D259.** The two operations, their evaluation
+order and their traps stand. D249 replaced the `[]u8` result with the decoded
+`u32`; D259 replaced the exact `u32` ordinal argument with `usize`. The
 reasoning below is retained as history, and the fixtures it names were
-reshaped or renamed by D249.
+reshaped or renamed by those decisions.
 
 **The tour said** that [0610] gives `utf8` two indexing conformances: an
 integer selects one codepoint by ordinal with a linear scan, while a position
@@ -5651,7 +5663,8 @@ and text slicing and traversal remain separate work. D181's validation,
 identity, pooling, terminator, origin and literal-error rules, plus existing
 array, byte-slice, range and evidence behavior, are unchanged.
 
-**The alternatives:** take `usize` because arrays do, accept every integer,
+**The alternatives:** take `usize` because arrays do (adopted later by D259
+when the width limit became clear), accept every integer,
 expose a raw byte for position indexing, scan positions from the start, return
 `u32`, include the terminator, inherit indexing through every text carrier, or
 report a declared error. Those choices contradict [1270]'s written `u32`
@@ -5665,7 +5678,7 @@ indexing. All were declined.
 `runtime/utf8-position-at-end-traps`,
 `runtime/utf8-position-not-boundary-traps`,
 `negative/utf16-indexing-is-not-utf8-indexing`,
-`negative/utf8-index-needs-u32-or-position`,
+`negative/utf8-index-needs-usize-or-position`,
 `negative/utf8-index-position-identity-is-exact`,
 `negative/utf8-index-result-is-not-a-place`,
 `negative/utf8-index-result-has-no-address`, retained hosted-text and
@@ -5829,6 +5842,9 @@ L0303, each saying that the index decodes a value. The encoded bytes of one
 codepoint are D183's one-scalar inclusive range, which keeps `utf8` identity
 and copies nothing.
 
+D259 later changes the exact ordinal argument to `usize`; the decoded result
+and position form remain as chosen here.
+
 Lowering checks the selected leading byte's address, lets its class fix the
 width and its payload mask, then folds six bits from each continuation byte in
 one loop shared by every width, with masks and shifts rather than D184's
@@ -5852,10 +5868,43 @@ declined.
 `runtime/utf8-position-not-boundary-traps`,
 `negative/utf8-index-result-has-no-address`,
 `negative/utf8-index-result-is-not-a-place`,
-`negative/utf8-index-needs-u32-or-position`,
+`negative/utf8-index-needs-usize-or-position`,
 `runtime/core-mem-initialized-objects`, `runtime/core-tree-indices`,
 `runtime/text-range-slicing`, `runtime/derived-containers`, and the
 `text.indexing` guarantee row.
+
+### D259 — UTF-8 ordinal indexes span the text view
+
+**The earlier decision said** that D182's exact `u32` ordinal keeps [1270]'s
+written conformance and distinguishes it from the opaque byte position. But
+D181 permits a validated `utf8` view with a `usize` byte length, and D183 and
+D184 use `usize` positions to reach its full extent. On a 64-bit target,
+4,294,967,297 ASCII bytes form a valid view whose final scalar has ordinal
+4,294,967,296. A `u32` index cannot name it.
+
+**Chosen:** the exact ordinal argument of `utf8` indexing is `usize`. An
+untyped integer literal receives `usize` context; another integer type,
+including `u32`, is L0301 without an explicit conversion. The scan's counter
+and requested ordinal use `usize`, so every scalar of a view whose byte
+length is representable by `usize` has a representable ordinal. The counter
+advances only after an in-bounds leading byte; it cannot wrap before the
+end of a valid view. The `core/text.position` byte-offset form, decoded `u32`
+result, evaluation order and checked-address traps stay as in D182 and D249.
+On a 32-bit target, `usize` remains 32 bits and matches the view's length
+domain without widening the machine representation.
+
+**The alternatives:** retain `u32` and cap `utf8` views to that many scalars,
+or accept both `u32` and `usize` ordinals. The cap would reject an otherwise
+valid byte view on 64-bit targets. Two ordinal types would add a conformance
+and make the same indexing operation depend on overload selection. One exact
+target-sized argument keeps the existing rule that the index type decides the
+operation and follows the view's representable size.
+
+**Pinned by** `runtime/utf8-indexing`,
+`runtime/utf8-ordinal-out-of-range-traps`,
+`negative/utf8-index-needs-usize-or-position`, and the `text.indexing`
+guarantee row. Large-view reachability follows from the type domains; the
+fixtures do not allocate a multi-gigabyte view.
 
 ### D250 — A range selection is a view, not a place
 
@@ -6577,7 +6626,7 @@ a struct could be a local nothing written in a body had any.
 was written is refused and names `p.y`. `inc p.x` reads and writes the same
 field, so it wants that field assigned above it, exactly as `inc n` wants
 `n`. Every arm of an `if` merges its fields the way [1910] already merges
-its names, and no condition is believed there either.
+its names; only written Boolean literals select an edge there too.
 
 D54 later applies the same field boundary when an array-bearing struct is
 copied whole. Scalar fields keep these individual bits; a fixed-array field is
@@ -10155,9 +10204,14 @@ separate statement.
 
 Written labels commit in source order. The fill is then evaluated once into
 ordinary temporary storage and copied to omitted fields in declaration order.
-The same rule covers case payloads, whole assignments, construction calls and
-nested aggregate/array fields. A failure or control transfer during evaluation
-uses ordinary recovery and cleanup; no copy is performed on an edge that leaves.
+When exactly one omitted field receives an unpacked array repetition in an
+ordinary struct, the repeated element is evaluated before any array write and
+the repetition may write directly into that field. This avoids a full-array
+temporary and copy while preserving aliased reads and leaving edges during
+element evaluation. Other fills retain temporary storage. The temporary rule
+covers case payloads, whole assignments, construction calls and nested
+aggregate/array fields. A failure or control transfer during evaluation uses
+ordinary recovery and cleanup; no copy is performed on an edge that leaves.
 A module image requires the same compile-time values as explicit labels and
 reuses the existing recursive image representation. Reference-containing fills
 retain their origins, and repeated copies confer no ownership or allocation
@@ -11300,9 +11354,10 @@ records; and `runtime/indirect-function-abi` on Linux x86-64.
 
 ### D115 — Aggregate call completion is an ordinary assignment fact
 
-**The tour said** that no condition is believed and a name assigned in one
-branch but not another is not assigned after the branch [1910]. A call's hidden
-result destination does not create an exception to that rule.
+**The tour said** that a nonliteral condition is not believed and a name
+assigned in one branch but not another is not assigned after the branch
+[1910]. A call's hidden result destination does not create an exception to
+that rule.
 
 **Chosen:** when an aggregate-returning call completes into a local place, that
 place gains exactly the same definite-assignment fact as a whole-place
@@ -11875,23 +11930,27 @@ dispatch.
 Branches, loops, traversal, the cleanup an edge selects, and what the
 checker will not believe about a condition.
 
-### D7 — No condition is believed
+### D7 — Written Boolean literals fix branch reachability
 
 **The tour said** that a binding declared with no value must be assigned
 before use [0080] and that every named return must be assigned before the
 function returns [0930]. Neither says what a checker may conclude from a
 condition.
 
-**Chosen:** nothing [1910]. `if true then r = 1 end if` leaves `r`
-unassigned, and a branch with no `else` contributes a path that changes
-nothing.
+**Chosen:** the written `true` and `false` literals select or skip an `if`
+arm for definite assignment [1910]. `if true then r = 1 end if` assigns
+`r`; a missing `else` contributes an unchanged path only when no written
+`true` arm covers it. Every other condition, including a name initialized
+with `true`, keeps both edges.
 
-**The alternative:** fold constant conditions and believe them. It accepts
-more real programs, and it makes a program's legality depend on how clever
-the compiler's folding is — so adding an optimisation would change what
-compiles.
+**The alternative:** treating even a written literal as unknown rejects
+programs whose only executable path assigns the result and makes L0302's
+reachability claim false. Folding nonliteral constant conditions would make
+legality depend on how clever the compiler's folding is, so adding an
+optimisation would change what compiles; that remains declined.
 
 **Pinned by** `positive/assigned-on-every-path`,
+`positive/literal-conditions-select-flow`,
 `negative/assigned-on-one-path-only`, `negative/condition-is-not-believed`.
 
 ### D124 — Control values distinguish fallthrough from return-compatible edges
@@ -11900,7 +11959,8 @@ compiles.
 that an arm which leaves needs no placeholder [1030], and that every named
 return is assigned before return [0930]. It did not say which flow facts survive
 when value-producing and returning arms meet, nor how one rule covers an `if`,
-an exhaustive `match`, and a bare block without believing a condition [1910].
+an exhaustive `match`, and a bare block without believing a nonliteral
+condition [1910].
 
 **Chosen:** `if`, exhaustive `match`, and bare `begin` blocks are expressions as
 well as their existing statement forms. A block is its source-ordered statement
@@ -11908,7 +11968,8 @@ run followed by an optional final expression. In a value context, every
 reachable edge that falls through must produce that final value. An edge that
 returns is compatible without producing one, but [0930] still requires the
 function's named result on that edge. A reached `if` with no `else` has an
-untaken fallthrough edge and therefore cannot produce a value there.
+untaken fallthrough edge unless a written `true` arm covers the remaining
+tests; that edge cannot produce a value.
 
 Every control edge carries the independent facts `Falls_Through` and `Returns`.
 Only states on fallthrough edges participate in a definite-assignment join; a
@@ -12188,7 +12249,7 @@ classified failure boundary before the repository gate can pass.
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `text.conversion` | trap | 0310, 0430, 0570, 0600, 0660, 0790, 0940, 1050, 1650, 1880, 1950, 1960 | four exact immutable source-derived conversions connect []u8, utf8 and first-NUL cstring carriers; direct UTF-8 validation traps, checked core/text adapters report invalid_text, empty carriers retain origin, mutable views and pointer-to-cstring are L0301, and byte/decimal helpers allocate nothing and preserve output on refusal | `negative/pointer-to-cstring-conversion`, `negative/text-conversion-exact-identities`, `negative/text-conversion-mutable-source`, `runtime/core-text-runtime-helpers`, `runtime/cstring-first-nul-validation`, `runtime/text-conversion-invalid-traps`, `runtime/text-conversion-overlong-traps`, `runtime/text-conversion-out-of-range-traps`, `runtime/text-conversion-truncated-traps`, `runtime/text-ordinary-conversions` |
-| `text.indexing` | trap | 0380, 0430, 0600, 0610, 1050, 1900, 1950, 1960 | utf8 indexed by exact u32 scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either decodes that codepoint to a u32 value, L0301 rejects every other argument or text identity, L0337 an address of the value, L0303 rejects writing through it, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-u32-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-not-a-place`, `negative/utf8-index-result-has-no-address`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
+| `text.indexing` | trap | 0380, 0430, 0600, 0610, 1050, 1900, 1950, 1960 | utf8 indexed by exact usize scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either decodes that codepoint to a u32 value, L0301 rejects every other argument or text identity, L0337 an address of the value, L0303 rejects writing through it, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-usize-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-not-a-place`, `negative/utf8-index-result-has-no-address`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
 | `text.traversal` | trap | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320, 1650, 1950, 1960 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL and validates before decoding, malformed foreign encoding traps even in unchecked, ordinary carriers are L0348, and mutation is L0303 | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/cstring-traversal-invalid-traps`, `runtime/hosted-text-traversal` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type`, `negative/r480-recovery-zero-divisor` |
@@ -13055,8 +13116,11 @@ unconditional by-value recursion are therefore rejected even when no instance
 is requested. A truly
 actual-dependent failure is primary at each application and relates the field
 or expression in the template. An invalid layout state stores no application
-provenance: a repeated use of the same canonical key re-evaluates the bounded
-body walk so it receives its own primary while retaining one identity and
+provenance. The checking run caches the dependent diagnostics from the first
+failed layout attempt for a canonical key and gives each repeated use its own
+primary at that application's source span without walking the template body
+again. An attempt with no application provenance may be retried when a later
+application needs a site-specific primary. The key retains one identity and
 tuple. Fixed actuals remain integer literals or
 forwarded fixed formals. Parameterized atom unions are enabled under D135's
 structural-set and alias-substitution rules; its later hosted-parity audit
@@ -13077,9 +13141,10 @@ only by such signature references each have a finite pointer-carrier layout,
 independent of declaration order. When a declared or anonymous routine's
 multiple named results form D128's caller-owned aggregate, its direct result
 parts materialize before their target placement is measured; that ABI use does
-not promote a nested callback signature into a by-value edge. A failed replay
-is cached at its application node, so one written application has one primary
-while a second written application still receives its own dependent report. A
+not promote a nested callback signature into a by-value edge. A failed
+application remains cached at its syntax node, so one written application has
+one primary while a second written application receives the canonical
+failure's diagnostic with its own primary. A
 zero-length nominal array at a field or payload still validates its element
 identity and is not an escape from the recursion rule.
 
@@ -13413,13 +13478,23 @@ places them at 0, 4 and 8. A table with `N` direct functions occupies
 `(N + 2) * pointer_bytes`. `Landin.Evidence` owns semantic positions;
 `Landin.Targets` alone derives these offsets, extent and alignment.
 
-A concrete generic call passes the direct table and then each distinct table in
-its represented-formal constraint/parent closure, depth-first in concept
-declaration order, for every constrained type formal in generic-formal order.
-This preserves D142's separate parent conformances while making inherited
-entries reachable without flattening a child table. The existing caller-owned
-aggregate result address remains first, evidence pointers follow, and written
-runtime parameters remain after them in source signature order.
+A ready concrete generic instance retains a hidden evidence position only for
+a table read by a direct constrained member selection in its checked body.
+Constructing `any` uses a static erased table and does not select a hidden
+generic evidence parameter. Selection uses the instance fact view after
+checking; the compiler keeps the direct table and each distinct table in its
+represented-formal constraint/parent closure only when that body selects its
+position. Equal conformance identities belonging to different type formals
+remain separate positions if the body selects both; selecting only one formal
+retains only its position. Retained positions follow depth-first concept
+declaration order within each formal, then generic-formal order. A concrete
+call supplies exactly that run, even when the caller itself is generic. This preserves D142's
+separate parent conformances while making inherited entries reachable without
+flattening a child table. The existing caller-owned aggregate result address
+remains first, retained evidence pointers follow, and written runtime
+parameters remain after them in source signature order. A body with no entry
+selection has no hidden evidence positions. Conformance lookup and checking
+still require the full constraint closure, independent of this physical run.
 Static type and fixed formals still create no runtime position. Inside the
 active routine view, `T.entry(...)` loads the declaration-order function word
 from that hidden table and makes the ordinary verified indirect call. D221
@@ -13430,8 +13505,7 @@ Size and alignment remain table members even where the current concrete view ans
 instance's type actual. The node's complete concrete descriptor lives only in
 the active instance overlay. Later shared and `any` consumers therefore use the
 same semantic measurement and provider schema; D147 gives the erased consumer
-a separate flattened physical table without changing these direct generic
-offsets.
+a flattened table view without changing these direct generic offsets.
 
 The Linux baseline may alias two concrete generic symbols to one emitted body
 only when a bounded IR comparison proves their signatures, slots, operand graph
@@ -13452,11 +13526,16 @@ the language definition. Calling providers directly from constrained generic
 bodies would leave a table that no executed path proved. All were declined.
 
 **Pinned by** `runtime/generic-evidence-indirect`,
-`runtime/generic-composed-evidence`, `runtime/generic-parameterized-evidence`,
-`runtime/allocator-vec-pressure`,
+`runtime/generic-composed-evidence`,
+`runtime/generic-any-construction-evidence`,
+`runtime/generic-parameterized-evidence`,
+`runtime/allocator-vec-pressure`, and
 `negative/parameterized-conformance-entry-signature-mismatch`; the target case
-`evidence ordering and layout`; the backend case `generic evidence is ordered indirect
-and shared`; IR verifier evidence identity, entry and signature checks; and the
+`evidence ordering and layout`; the lowering case `generic instances keep
+selected evidence`, `erased construction adds no hidden evidence`, and `shared
+conformance keeps selected formals`; the
+backend case `generic evidence is ordered indirect and shared`; IR verifier
+evidence identity, entry and signature checks; and the
 recorded target and lowering artefacts.
 
 ### D145 — `any C` has direct-concept identity and explicit pointer erasure
@@ -13554,7 +13633,7 @@ conformance ABI-incompatible. All were declined.
 **The tour said** that the pair is two words [1370], that calls go through its
 table with data first [1390], and that erased and generic evidence are one
 semantic mechanism [1690]. D144 deliberately kept parent conformance tables
-separate and fixed direct generic offsets, so it did not say how one erased
+separate and fixed direct table member offsets, so it did not say how one erased
 table pointer reaches inherited entries.
 
 **Chosen:** the target-neutral pair order is data pointer then table pointer.
@@ -13569,14 +13648,19 @@ just as it erases a checked pointer to one `usize`; that carrier creates no
 source array/index operation, while evidence descriptors and verifier checks
 still own every table function position and signature.
 
-A concrete conformance used by `any` receives a distinct physical erased table.
-It repeats D144's size/alignment prefix and then flattens object-safe provider
-function words: direct concept entries first, followed depth-first by each
-distinct represented-formal constraint and named parent in declaration order.
+A concrete conformance used by `any` receives a distinct erased evidence
+identity. Its table repeats D144's size/alignment prefix and then flattens
+object-safe provider function words: direct concept entries first, followed
+depth-first by each distinct represented-formal constraint and named parent in
+declaration order.
+When the represented shape and ordered provider words match the adjacent direct
+table, both identities label the same physical cells; this includes a
+parentless conformance. Otherwise the erased table occupies separate cells.
 The parent conformance identities and their D144 direct tables remain separate;
-the flattened table repeats relocations rather than flattening semantic
-conformance identity. Consequently D144's generic offsets and hidden arguments
-remain unchanged. An inherited call uses its flattened semantic position.
+additional flattened entries repeat relocations rather than flattening semantic
+conformance identity. Consequently D144's generic table offsets remain
+unchanged; a generic instance's hidden arguments follow its selected evidence
+run. An inherited call uses its flattened semantic position.
 
 Construction evaluates and stores the data pointer, then stores the selected
 static flattened-table address. Dispatch loads the pair's table, loads the
@@ -14330,10 +14414,12 @@ Recursive evidence proof is conservative and cannot assume its own conclusion.
 No speculative guard, clone or fallback runtime allocation is required.
 
 The bootstrap specializes proved entry calls in existing concrete bodies. It
-retains their hidden aggregate-result destination and hidden evidence parameter
-positions, error convention and calling convention. A replaced indirect call
-must have exactly the provider's physical argument/result meaning. Evidence
-size and alignment remain available with specialization off. Physically equal
+retains their hidden aggregate-result destination and the evidence parameter
+positions selected for that body under D144, error convention and calling
+convention. Dispatch specialization does not remove a used evidence position.
+A replaced indirect call must have exactly the provider's physical
+argument/result meaning. Evidence size and alignment remain available with
+specialization off. Physically equal
 bodies may share only after complete retained machine meaning, relocation,
 convention and observable address-identity checks; IR spelling equality alone
 is not permission to fold different code.
@@ -14388,8 +14474,8 @@ that may trap or touch memory cannot disappear merely because their value is
 unused. Inputs and outputs of each transformation remain verified IR.
 
 **The alternatives:** universal monomorphization, metadata-only devirtualization,
-a profile-guided runtime, unconditional evidence-ABI erasure, or new optimizer
-freedom inside `unchecked`. They respectively make code duplication semantic,
+a profile-guided runtime, erasure of evidence used by the checked body, or new
+optimizer freedom inside `unchecked`. They respectively make code duplication semantic,
 confuse expected and incoming evidence, add target machinery, break indirect
 and aggregate calls, or change existing programs' outcomes. All are rejected.
 
@@ -16316,7 +16402,7 @@ source-derived reference conversions:
 | immutable ordinary `[]u8` | `utf8` | validate shortest-form UTF-8 |
 | `utf8` | immutable ordinary `[]u8` | none |
 | `cstring` | immutable ordinary `[]u8` | scan to the first NUL |
-| `cstring` | `utf8` | scan to the first NUL, then validate |
+| `cstring` | `utf8` | validate while measuring to the first NUL |
 
 Each result retains the source base, the source-derived origin and immutable
 permission. A length-bearing result retains the source length or the measured
@@ -16346,10 +16432,13 @@ store, scan or validation follows.
 A `cstring` is the read-only byte carrier published by a foreign C-text
 boundary. Its pointer must have accessible backing through a first NUL byte,
 but its pre-NUL bytes are not thereby promised to be valid UTF-8. Scanning to
-ordinary bytes does not decode them. Scanning stops before validation, so
-`C2 00` yields a one-byte ordinary view but is truncated UTF-8 when converted
-to `utf8`; bytes after the first NUL are unobserved. Literal pooling remains
-stronger: D181 constructs valid encoded bytes and appends its own terminator.
+ordinary bytes does not decode them. Direct `cstring` to `utf8` conversion
+validates each sequence while measuring the prefix: a NUL ends the text only
+between sequences, and a NUL in place of a continuation makes the sequence
+truncated. Thus `C2 00` yields a one-byte ordinary view but traps when
+converted to `utf8`; bytes after the first NUL are unobserved. Literal
+pooling remains stronger: D181 constructs valid encoded bytes and appends
+its own terminator.
 D184 traversal validates foreign C text before each scalar decode and traps
 on malformed encoding, even in `unchecked`, without reading beyond the first
 NUL. Inaccessible storage or a missing terminator remains [0430]'s pointer

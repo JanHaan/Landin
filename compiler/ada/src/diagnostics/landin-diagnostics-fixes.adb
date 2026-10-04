@@ -52,6 +52,18 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Unmark_Mutable;
 
+   function Remove_Unused_Local
+     (Source : Landin.Source.Source_Id;
+      Line   : Landin.Source.Span;
+      Name   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Remove_Unused_Local, Exact, "remove unused `" & Name & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Line, ""));
+      return Result;
+   end Remove_Unused_Local;
+
    function Compare
      (Source : Landin.Source.Source_Id;
       Where  : Landin.Source.Span) return Fix

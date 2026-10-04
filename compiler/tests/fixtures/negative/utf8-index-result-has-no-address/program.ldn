@@ -1,4 +1,4 @@
-bad: (source: utf8, index: u32) -> none =
+bad: (source: utf8, index: usize) -> none =
     pointer := addr source[index]
     _ = pointer
 end bad

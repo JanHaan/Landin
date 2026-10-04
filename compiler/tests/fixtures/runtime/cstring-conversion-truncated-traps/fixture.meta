@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: direct C text conversion traps when a multibyte sequence ends at the first NUL
+constructs: 0310, 0430, 0600, 0660, 1650
+program: main.ldn
+root: ../../../../..
+run_args: abcd
+traps: yes
+targets: linux-x86-64, linux-arm64, macos-arm64
+codes: L0326, L0326, L0326

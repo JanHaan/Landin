@@ -1,0 +1,6 @@
+-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.
+public main: () -> (code: i32) =
+    source: utf8 = "one"
+    missing: u32 = source[4294967295]
+    code = i32(missing)
+end main
