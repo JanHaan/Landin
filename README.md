@@ -38,7 +38,7 @@ targets and the microcontrollers people buy.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | eleven complete programs the compiler emits and the gate runs on every push: a sensor poll that puts concepts, runtime dispatch, a lent arena and declared failures together, seven small algorithms, and correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
+| `examples.md` | eleven complete programs the compiler emits and the gate runs on each full gate run: a sensor poll that puts concepts, runtime dispatch, a lent arena and declared failures together, seven small algorithms, and correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
@@ -96,8 +96,9 @@ job.
 
 The exact-revision native acceptance that approved every revision through
 0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
-every push it runs every target, Linux x86-64, Linux arm64 and macOS arm64
-natively with GDB
+every push it runs every target unless the verified explanatory-only reuse
+exception below applies. Full runs cover Linux x86-64, Linux arm64 and macOS
+arm64 natively with GDB
 and LLDB and Cortex-M under QEMU, both compiler modes, and the
 document, binding and editor-grammar checks. Same-run release build artifacts
 avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
@@ -110,9 +111,9 @@ across hosts; disagreement fails the aggregate gate. It does not assemble, link 
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
 compiler test.
-The declared explanatory-only remote reuse policy is described in
-`AGENTS.md`. Its implementation remains disabled pending live GitHub
-verification; document and script checks always run.
+The verified explanatory-only remote reuse policy in `AGENTS.md` permits
+qualifying edits to reuse a full successful main gate from the preceding
+seven days. Document and script checks always run.
 
 `environments/native-ci/README.md` describes the retired arrangement. To
 render:

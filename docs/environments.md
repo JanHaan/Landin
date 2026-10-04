@@ -3,7 +3,8 @@
 Canonical hosting is GitHub; git.sr.ht
 is a mirror. The exact-revision native acceptance described below approved
 every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
-is what runs now, on every target on every push. Historical SourceHut gate
+is what runs now, on every target unless a push meets the verified
+explanatory-only reuse policy below. Historical SourceHut gate
 results below keep their original meaning. The acceptance operations described
 here are historical; `scripts/ci/` has been removed.
 
@@ -16,13 +17,13 @@ at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
 identities. See the [native Mac guide](../environments/macos-arm64/README.md)
 for current development commands and the retired acceptance record.
 
-The declared explanatory-only remote reuse policy is described in
-`AGENTS.md`. Its implementation remains disabled pending live GitHub
-verification; document and script checks always run.
+The verified explanatory-only remote reuse policy in `AGENTS.md` permits
+qualifying edits to reuse a full successful main gate from the preceding
+seven days. Document and script checks always run.
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
-through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on every
-push. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
+through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on each
+full gate run. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
 checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 ## Environments
@@ -36,7 +37,7 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 | QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane and the called `determinism.yml` comparison; `links.yml`, `release.yml` and `pages.yml` run separately | working |
+| GitHub Actions | `gate.yml` runs every target unless the verified explanatory-only reuse policy above applies: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane and the called `determinism.yml` comparison; `links.yml`, `release.yml` and `pages.yml` run separately | working |
 
 The retired acceptance controller ran the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion ran debug compiler-host

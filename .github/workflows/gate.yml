@@ -1,4 +1,4 @@
-#  The gate: every target the compiler has, on every push.
+#  The gate: every target, unless verified explanatory edits reuse a full pass.
 #
 #  Verification lanes have separate verdicts.  A release build job on each
 #  host supplies an artifact to its same-host lanes; consumers check its
@@ -20,13 +20,8 @@
 #  every target.
 #  Cross-host determinism also contributes to the aggregate gate status.
 #
-#  Whole-job times below were measured on these runners, four vCPUs on Linux
-#  and three cores on macOS, install and build included; lane times inside
-#  them were measured on an ubuntu:24.04 container pinned to four CPUs and on
-#  an eight-core Mac, except cortex-m's, measured on its runner.  cortex-m,
-#  sixteen and a half minutes, sets the gate's length; the two arm64 jobs
-#  take eleven and eight.
-#  Shared build artifacts are not acceptance records; new timings are pending.
+#  AGENTS.md records observed job timings and their measurement limits.
+#  Shared build artifacts are not acceptance records.
 
 name: gate
 
@@ -39,7 +34,7 @@ permissions:
   contents: read
 
 jobs:
-  # Reuse is held disabled until the live GitHub validation is recorded.
+  # Reuse requires the verified explanatory-only conditions in AGENTS.md.
   inputs:
     runs-on: ubuntu-24.04
     permissions:
@@ -60,8 +55,8 @@ jobs:
             darwin-host-release darwin-parity lldb arm64-compiler arm64-release \
             'determinism / manifest (x86_64-linux)' \
             'determinism / manifest (aarch64-linux)' \
-            'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate
-          echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate \
+            >> "$GITHUB_OUTPUT"
 
   #  Documents, grammar and the transcription tables.  Nothing to install
   #  and nothing to build, so this is the fastest verdict available.

@@ -464,7 +464,8 @@ test $? -eq 42
 
 Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
-checks all eleven on every push.
+checks all eleven on each full gate run. `AGENTS.md` describes the verified
+explanatory-only reuse exception.
 
 The test program validates its complete suite-name inventory before any
 selected or complete run. It rejects missing and unlisted suites separately

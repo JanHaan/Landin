@@ -83,15 +83,18 @@ nix build .#refine-bin
 ```
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. It runs every target the compiler has, in jobs that
-report separate verdicts. A release build on each host supplies checked
-executables to its same-host lanes; the final `gate` job fails unless every
-build and verification job, including cross-host determinism, succeeded:
+push and pull request. Unless the verified explanatory-only exception below
+applies, it runs every target the compiler has, in jobs that report separate
+verdicts. A release build on each host supplies checked executables to its
+same-host lanes. The final `gate` job requires every build and verification
+job, including cross-host determinism, to succeed or be skipped under verified
+reuse; document and script checks must always succeed.
 
 A declared explanatory edit confined to the content of `README.md`,
 `ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a full successful `main`
-gate from the preceding seven days after live GitHub verification enables
-this path. Until that verification is recorded, every lane still runs.
+gate from the preceding seven days. Live GitHub verification of a full main
+run, the classifier output and a skipped-lane aggregate gate completed before
+this path was enabled.
 Every intervening commit must carry the exact line `Gate: explanatory`;
 the event must be a push to `main` or a same-repository pull request whose
 author has write access. Declare only changes to explanation, with no

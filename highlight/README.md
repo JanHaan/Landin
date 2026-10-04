@@ -157,8 +157,9 @@ for: `--integration` without it exits non-zero rather than reporting a corpus
 pass that did not run. It was made so after the grammar was found to have
 drifted from the enabled kernel unnoticed, 48 of 846 sources failing,
 because the pass could be requested and skipped in the same run. The gate's
-`editor-grammar` job runs it on every push with the release binary of the
+`editor-grammar` job runs it on each full gate run with the release binary of the
 CLI version `tree-sitter/package.json` names, checked against the sha256 in
 `environments/pins.sh`, and fails if regenerating the parser changes the
-committed one. Each editor directory contains the
-shortest installation path for that editor.
+committed one. `AGENTS.md` describes the verified explanatory-only reuse
+exception. Each editor directory contains the shortest installation path for
+that editor.

@@ -171,8 +171,9 @@ object-quality lane, `scripts/tests`, and `check.py`'s control suite; and run
 the fixture execution suite with many workers, which is how a race in the
 harness's reads went unseen. This takes on R730-22 and R730-25.
 
-Exit evidence: `gate.yml` runs each of those on every push, a failure in any
-fails the gate, every end-to-end target claim is a verdict in a record the
+Exit evidence: `gate.yml` runs each of those on every push or meets the R8
+gate's explanatory-only reuse exception; a failure in any required job fails
+the gate, every end-to-end target claim is a verdict in a record the
 coverage readers read rather than a run, and the documents stop describing
 the gate as Linux and debug only.
 
@@ -1384,7 +1385,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-06 | Scale and self-hosting | Flow snapshots, declaration-origin matrices, folding and dependency walks and IR scratch arrays have storage and stack costs that grow with input size. | — | — | retired: R8.20 bounded a routine's declarations and a struct's fields (D247, L0325), measured every stage's storage, and made the remaining declaration-origin facts shared between branches; the identified whole-unit IR optimization scratch was subsequently moved off the stack. Automatic per-routine IR-value arrays remain outside L0325's bounds; SR-08 owns the deferred sparse origin representation |
 | R551-10 | Competitive optimization | Atom and symbol allocation and imported-module lookup repeat identity scans; simplification keeps size-dependent scratch work. | — | — | retired: R8.20 keyed atom codes, linker spellings, machine-body sharing and imported modules, and simplification forgets only what it stored |
 | SR-02 | Scale and self-hosting | The corpus at one worker measured 4,523 s on CI against 3,592 s before the parallelism change; single shared-hardware samples cannot tell variance from a regression. | — | — | retired: three repeated runs on one host put the corpus at one worker at 5,599 to 5,654 seconds before the parallelism change and 5,657 to 5,713 after it, a one per cent cost, and R8.20's tree runs it in 1,400 to 1,436 |
-| R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on every push with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
+| R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
 | R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 
 ## Retained positions

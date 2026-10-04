@@ -30,8 +30,9 @@ FizzBuzz writes its conventional one hundred lines, and the three Benchmark
 Game programs write their official correctness output; the other seven programs
 print nothing. Status 42 means the checks in `main` passed, and any other
 returned status makes the runtime fixture fail. The gate checks all four
-output oracles and all eleven programs on every push, on Linux x86-64 and on
-macOS arm64. On a Mac, select `--target=darwin-arm64` in the command above.
+output oracles and all eleven programs on each full gate run, on Linux x86-64
+and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
+exception. On a Mac, select `--target=darwin-arm64` in the command above.
 
 ## Sensors
 
