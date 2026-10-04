@@ -660,7 +660,7 @@ package body Landin.Testing.Fakes is
                  Unbounded.To_String (Host.State.Data.Output_Path);
                Item : File_Entry :=
                  (Unbounded.To_Unbounded_String (Path),
-                  Unbounded.To_Unbounded_String ("fake executable"),
+                  Host.State.Data.Output_Content,
                   A_File, 0);
                Found : Natural := 0;
             begin
@@ -717,6 +717,14 @@ package body Landin.Testing.Fakes is
    begin
       Host.State.Data.Produces_Output := Produced;
    end Set_Output_Produced;
+
+   procedure Set_Output_Content
+     (Host : in out Fake_Tool_Runner; Content : String)
+   is
+   begin
+      Host.State.Data.Output_Content := Unbounded.To_Unbounded_String
+        (Content);
+   end Set_Output_Content;
 
    procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner) is
    begin

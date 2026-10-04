@@ -196,6 +196,10 @@ package Landin.Testing.Fakes is
    procedure Set_Output_Produced
      (Host : in out Fake_Tool_Runner; Produced : Boolean);
 
+   --  Bytes published by a successful fake tool, for post-link consumers.
+   procedure Set_Output_Content
+     (Host : in out Fake_Tool_Runner; Content : String);
+
    --  Simulate a zero-exit tool moving the reserved old output back.
    procedure Set_Move_Backup_Back (Host : in out Fake_Tool_Runner);
 
@@ -329,6 +333,8 @@ private
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
       Produces_Output : Boolean := True;
+      Output_Content : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String ("fake executable");
       Moves_Backup_Back : Boolean := False;
       Output_Store : Store_Access := null;
       Output_Path : Unbounded.Unbounded_String;

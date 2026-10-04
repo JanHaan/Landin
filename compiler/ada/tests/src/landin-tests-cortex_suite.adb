@@ -1314,6 +1314,9 @@ package body Landin.Tests.Cortex_Suite is
       Args.Append ("-o");
       Args.Append ("p.elf");
       Args.Append ("p.ldn");
+      --  The reserved old output must not supply the post-link evidence.
+      Host.Add_File ("p.elf", "old invalid ELF");
+      Tools.Set_Output_Content (Data);
       Tools.Set_Result (0, "");
       declare
          Built : constant Landin.Driver.Outcome :=
@@ -1392,9 +1395,8 @@ package body Landin.Tests.Cortex_Suite is
                     (Item, Tools.Run_Count, 2,
                      "assembly and freestanding link are separate calls");
                   Landin.Testing.Check_Equal
-                    (Item, Host.Write_Count, 3,
-                     "assembly, linker script and fake link output"
-                     & " are written");
+                    (Item, Host.Write_Count, 2,
+                     "compiler writes assembly and linker script");
                   Landin.Testing.Check
                     (Item, Ada.Strings.Fixed.Index
                        (Tools.Last_Command, "-nostdlib") > 0,
