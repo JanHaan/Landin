@@ -36,6 +36,10 @@ The host suite builds the debug compiler. The two result directories must not
 exist before their runners create them; `mktemp -d` gives each run a fresh
 parent directory.
 
+The declared explanatory-only remote reuse policy is described in
+`AGENTS.md`. Its implementation remains disabled pending live GitHub
+verification; document and script checks always run.
+
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
 pushing changes that can affect compiler behavior, generated source or

@@ -39,6 +39,30 @@ permissions:
   contents: read
 
 jobs:
+  # Reuse is held disabled until the live GitHub validation is recorded.
+  inputs:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      reuse: ${{ steps.reuse.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Inspect a recent full pass for explanatory-only changes
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/gate_inputs.py reuse gate.yml \
+            documents scripts compiler linux-release-build release bindings \
+            editor-grammar cortex-m scaling darwin-release-build darwin-host \
+            darwin-host-release darwin-parity lldb arm64-compiler arm64-release \
+            'determinism / manifest (x86_64-linux)' \
+            'determinism / manifest (aarch64-linux)' \
+            'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate
+          echo 'reuse=false' >> "$GITHUB_OUTPUT"
+
   #  Documents, grammar and the transcription tables.  Nothing to install
   #  and nothing to build, so this is the fastest verdict available.
   #
@@ -82,6 +106,8 @@ jobs:
   #  compiler and no corpus.  scripts/test.sh builds first, so this is also
   #  where a compile error is reported.
   compiler:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -145,6 +171,8 @@ jobs:
   #  Compile the release executables once on Linux for the corpus, Cortex-M
   #  and scaling lanes.  The archive preserves executable permissions.
   linux-release-build:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -175,7 +203,8 @@ jobs:
   #  make those five times slower and add no coverage of their own.
   #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
   release:
-    needs: linux-release-build
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -240,6 +269,8 @@ jobs:
   #  The C binding generator against its pinned Clang, including the
   #  byte-for-byte regeneration of the committed fixture.  47 s.
   bindings:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -267,6 +298,8 @@ jobs:
   #  the release binary is fetched and checked against its pin instead.
   #  Regenerating the parser must reproduce the committed one.  10 s.
   editor-grammar:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -298,7 +331,8 @@ jobs:
   #  Four workers, each with its own shared GDB: 612 s on the runner, and the
   #  whole job sixteen and a half minutes.
   cortex-m:
-    needs: linux-release-build
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -352,7 +386,8 @@ jobs:
   #  runs on this runner a few seconds apart, so the verdict does not
   #  depend on its speed.
   scaling:
-    needs: linux-release-build
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -381,6 +416,8 @@ jobs:
   #  Compile the Darwin release executables once for the host suite,
   #  hosted parity and LLDB lanes.
   darwin-release-build:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -412,6 +449,8 @@ jobs:
   #  without the two that execute Linux programs, then determinism closures,
   #  native report identity and the server.
   darwin-host:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -459,7 +498,8 @@ jobs:
   #  The same native host checks with the release compiler, using the
   #  checked artifact from this revision's Darwin release build.
   darwin-host-release:
-    needs: darwin-release-build
+    needs: [inputs, darwin-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -507,7 +547,8 @@ jobs:
   #  and at eight alike.  On this image the whole job takes fourteen
   #  minutes.
   darwin-parity:
-    needs: darwin-release-build
+    needs: [inputs, darwin-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 90
     env:
@@ -556,7 +597,8 @@ jobs:
   #  panic sessions and the source-debugging contract, with every dSYM,
   #  DWARF and Mach-O identity check.  41 s on a Mac, five minutes as a job.
   lldb:
-    needs: darwin-release-build
+    needs: [inputs, darwin-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -591,6 +633,8 @@ jobs:
   #  corpus.  The same steps as `compiler` on the other architecture.
   #  Eleven minutes as a job.
   arm64-compiler:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
@@ -636,6 +680,8 @@ jobs:
   #  bindings for the standard AAPCS64 with the pinned Clang's arm64 build.
   #  Eight minutes as a job.
   arm64-release:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
@@ -703,20 +749,21 @@ jobs:
   #  Build and compare assembly manifests on Linux and macOS in the same
   #  workflow run, so a host disagreement also fails the aggregate status.
   determinism:
+    needs: inputs
+    if: needs.inputs.outputs.reuse != 'true'
     uses: ./.github/workflows/determinism.yml
 
   #  The one check a branch rule requires: every job above succeeded.
   gate:
     if: always()
-    needs: [documents, scripts, compiler, linux-release-build, release,
+    needs: [inputs, documents, scripts, compiler, linux-release-build, release,
             bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
             darwin-host, darwin-host-release, darwin-parity, lldb,
             arm64-compiler, arm64-release, determinism]
     runs-on: ubuntu-24.04
     steps:
-      - name: Every job succeeded
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every job succeeded, or was skipped for a verified reused pass
         env:
-          RESULTS: ${{ toJSON(needs.*.result) }}
-        run: |
-          echo "$RESULTS"
-          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); sys.exit(0 if r and all(x == "success" for x in r) else 1)'
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/gate_inputs.py verdict --always documents scripts

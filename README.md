@@ -109,6 +109,10 @@ across hosts; disagreement fails the aggregate gate. It does not assemble, link 
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
 compiler test.
+The declared explanatory-only remote reuse policy is described in
+`AGENTS.md`. Its implementation remains disabled pending live GitHub
+verification; document and script checks always run.
+
 `environments/native-ci/README.md` describes the retired arrangement. To
 render:
 

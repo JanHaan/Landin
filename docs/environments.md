@@ -16,6 +16,10 @@ at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
 identities. See the [native Mac guide](../environments/macos-arm64/README.md)
 for current development commands and the retired acceptance record.
 
+The declared explanatory-only remote reuse policy is described in
+`AGENTS.md`. Its implementation remains disabled pending live GitHub
+verification; document and script checks always run.
+
 Embedded firmware and freestanding library consumers run on Linux x86-64
 through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on every
 push. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`

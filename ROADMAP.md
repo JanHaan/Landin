@@ -264,7 +264,9 @@ against 1,281 with Renode, and the job 15.5 minutes against 26.7, at
 
 - Nothing outside `ROADMAP.md` cites a work item but the status pointer.
 - The frontend's scaling benchmark holds in the gate.
-- Every target the compiler has runs in the gate on every push.
+- Every target the compiler has runs in the gate on every push, or, for an
+  edit declared explanatory to four documents no target lane reads, passed
+  on `main` within the week.
 - Every Cortex-M peripheral check runs on QEMU in the gate, and Renode is
   gone.
 

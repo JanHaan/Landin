@@ -88,6 +88,19 @@ report separate verdicts. A release build on each host supplies checked
 executables to its same-host lanes; the final `gate` job fails unless every
 build and verification job, including cross-host determinism, succeeded:
 
+A declared explanatory edit confined to the content of `README.md`,
+`ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a full successful `main`
+gate from the preceding seven days after live GitHub verification enables
+this path. Until that verification is recorded, every lane still runs.
+Every intervening commit must carry the exact line `Gate: explanatory`;
+the event must be a push to `main` or a same-repository pull request whose
+author has write access. Declare only changes to explanation, with no
+change to language rules, targets, scope or acceptance claims. The source
+tree key preserves all other bytes, paths and modes. Missing, partial,
+expired or mismatching evidence runs everything. Documents and script
+checks always run, and a reused run can never itself supply the full pass.
+The aggregate gate covers each build, test and determinism host separately.
+
 | job | runner | runs |
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
