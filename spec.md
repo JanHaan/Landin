@@ -14529,12 +14529,19 @@ uses only its failure read ordering. A seq_cst fence has acquire and release
 semantics in addition to the SC constraints below.
 
 Happens-before is the transitive closure of sequenced-before, these
-synchronizes-with edges, and explicitly specified platform synchronization
-(such as thread creation/join or the interrupt exclusion protocol below).
-It is acyclic. Sequentially consistent operations and fences additionally
-have one total order consistent with happens-before and each object's
-modification order. For precision, A is coherence-before B on one atomic object when A precedes B
-in modification order, A supplies B's read value, or A reads a modification
+synchronizes-with edges, and explicitly specified platform synchronization.
+For hosted threads, successful creation synchronizes with the first action of
+the new thread: actions sequenced before creation happen-before its actions.
+The thread's completion synchronizes with successful return from joining that
+thread: its actions happen-before actions sequenced after the join. Failed
+creation or join establishes no such edge. These edges also order ordinary
+memory; accesses made concurrently between creation and join still need their
+own synchronization. The interrupt exclusion protocol below supplies another
+platform edge. Happens-before is acyclic. Sequentially consistent operations
+and fences additionally have one total order consistent with happens-before
+and each object's modification order. For precision, A is coherence-before B
+on one atomic object when A precedes B in modification order, A supplies B's
+read value, or A reads a modification
 that precedes B in modification order; take the transitive closure of these
 edges. Successful RMWs have both read and write roles, without a self edge.
 For every coherence-before pair A, B, the SC total order S must satisfy:

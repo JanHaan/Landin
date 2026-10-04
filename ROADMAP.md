@@ -1120,7 +1120,10 @@ Hosted threads, and the atomic wrapper type over D227's builtins that answers
 Cortex-M0's missing read-modify-write explicitly. This takes on R730-21.
 
 Exit evidence: consumers of both on every applicable target, with failure
-oracles.
+oracles. The hosted thread facility implements D227's creation and join
+happens-before edges: executable cases publish ordinary data before starting a
+worker and observe its ordinary writes after joining it, on each hosted
+target, with no other synchronization supplying either edge.
 
 ### R14 gate
 
