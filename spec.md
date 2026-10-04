@@ -2008,7 +2008,10 @@ external-writer obligations remain.
 The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
 printable characters. Directives, comments, statement separators and labels
 are refused in an ordinary block, which is straight-line: it cannot branch,
-call, return or change control mode. At the default `armv6-m` level the
+call, return or change control mode, except that Cortex-M0 `svc` enters the
+SVC exception handler at vector 11. That handler decides whether execution
+resumes after `svc`; this exception does not admit other control transfers
+in an ordinary block. At the default `armv6-m` level the
 accepted spelling is a bounded subset of ARMv6-M unified assembly; its
 instruction allowlist is an implementation limit, pinned by the machine
 checks. At `armv7-m` and `armv7e-m`, the checker retains the text and
@@ -14918,7 +14921,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
 ASCII, lines, no directive, comment, separator or label, and straight-line
-control in an ordinary block. The instruction allowlist is an `armv6-m`
+control in an ordinary block except for Cortex-M0's `svc` exception entry. The instruction allowlist is an `armv6-m`
 implementation limit; at higher M-profile levels and on hosted targets the
 checker refuses control transfer by mnemonic and leaves which instructions
 exist to the assembler.
