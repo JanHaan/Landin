@@ -283,9 +283,9 @@ package body Landin.Tests.Harness_Suite is
          "host scope excludes the three target workload cases");
       Landin.Testing.Check
         (Item, Landin.Testing.Is_Registered
-           (Complete, "fixture execution", "unused hosted bridge is discarded")
+           (Complete, "fixture execution", "hosted bridges link and run")
          and then not Landin.Testing.Is_Registered
-           (Host, "fixture execution", "unused hosted bridge is discarded"),
+           (Host, "fixture execution", "hosted bridges link and run"),
          "host scope excludes native linked bridge execution");
       Landin.Testing.Check
         (Item, Landin.Testing.Is_Registered

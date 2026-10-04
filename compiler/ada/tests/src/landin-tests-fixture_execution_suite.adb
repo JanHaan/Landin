@@ -17,6 +17,7 @@ with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
 with Landin.Targets;
+with Landin.Targets.Capabilities;
 with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
@@ -38,6 +39,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Platform.Termination;
    use type Landin.Platform.Capture_Mode;
    use type Landin.Targets.Architecture;
+   use type Landin.Targets.Capabilities.Backend_Kind;
 
    Fixture_Root : constant String := "../tests/fixtures";
    Selected     : Unbounded.Unbounded_String;
@@ -807,24 +809,26 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  this reason: accepted, emitted, executed.
    ------------------------------------------------------------------
 
-   procedure Unused_Hosted_Bridge_Is_Discarded
+   procedure Hosted_Bridges_Link_And_Run
      (Item : in out Landin.Testing.Context);
 
-   procedure Unused_Hosted_Bridge_Is_Discarded
+   procedure Hosted_Bridges_Link_And_Run
      (Item : in out Landin.Testing.Context)
    is
       Host    : Landin.Platform.Native.Native_Filesystem;
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       LF      : constant String := [ASCII.LF];
 
-      --  Link a hosted main that never reaches the bridge and check that
-      --  the executable holds none of the Absent symbols, then run it.
-      --  Each program differs only in what keeps the bridge unreachable.
-      procedure Check_Discarded
-        (Name, Program : String; Absent : Landin.Platform.Path_List);
+      --  Every hosted lane links and runs these consumers. Only Linux
+      --  x86-64 currently gives each item its own section and collects dead
+      --  sections, so only that backend promises the Absent symbols vanish.
+      procedure Check_Linked
+        (Name, Program : String; Absent : Landin.Platform.Path_List;
+         Required : String := "");
 
-      procedure Check_Discarded
-        (Name, Program : String; Absent : Landin.Platform.Path_List)
+      procedure Check_Linked
+        (Name, Program : String; Absent : Landin.Platform.Path_List;
+         Required : String := "")
       is
          Source  : constant String := Output_Directory & Name & ".ldn";
          Built   : constant String := Output_Directory & Name;
@@ -867,12 +871,22 @@ package body Landin.Tests.Fixture_Execution_Suite is
          if Symbols.Ended = Landin.Platform.Exited
            and then Symbols.Exit_Code = 0
          then
-            for Symbol of Absent loop
+            if Landin.Targets.Capabilities.Backend_For (Lanes.Target)
+              = Landin.Targets.Capabilities.Linux_X86_64_ELF
+            then
+               for Symbol of Absent loop
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index
+                       (Unbounded.To_String (Symbols.Output), Symbol) = 0,
+                     Name & ": " & Symbol & " is absent from the executable");
+               end loop;
+            end if;
+            if Required /= "" then
                Landin.Testing.Check
                  (Item, Ada.Strings.Fixed.Index
-                    (Unbounded.To_String (Symbols.Output), Symbol) = 0,
-                  Name & ": " & Symbol & " is absent from the executable");
-            end loop;
+                    (Unbounded.To_String (Symbols.Output), Required) > 0,
+                  Name & ": the reachable bridge remains linked");
+            end if;
          end if;
 
          Run_Program
@@ -883,7 +897,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             and then Ran.Exit_Code = 0
             and then Unbounded.Length (Ran.Output) = 0,
             Name & ": hosted main runs");
-      end Check_Discarded;
+      end Check_Linked;
 
       Main : constant String :=
         "public main: () -> (code: i32) = code = 0 end main" & LF;
@@ -895,7 +909,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       --  not part of this program.
       Absent.Append ("_landin_host_text_length");
       Absent.Append ("strlen@");
-      Check_Discarded
+      Check_Linked
         ("unused-host-bridge",
          "extern(c) _landin_host_text_length:"
          & " (data: ptr u8) -> (length: usize)" & LF & Main,
@@ -905,7 +919,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Absent.Clear;
       Absent.Append ("dead_argument_reader");
       Absent.Append ("_landin_host_argument_count");
-      Check_Discarded
+      Check_Linked
         ("dead-host-bridge-caller",
          Count
          & "dead_argument_reader: () -> (n: usize) ="
@@ -918,7 +932,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Absent.Append ("dead_holder");
       Absent.Append ("held_argument_reader");
       Absent.Append ("_landin_host_argument_count");
-      Check_Discarded
+      Check_Linked
         ("dead-host-bridge-datum",
          Count
          & "counter: type = () -> (n: usize)" & LF
@@ -937,7 +951,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Absent.Append ("dead_erased_reader");
       Absent.Append ("evidence_argument_reader");
       Absent.Append ("_landin_host_argument_count");
-      Check_Discarded
+      Check_Linked
         ("dead-host-bridge-evidence",
          Count
          & "counting: type = concept (t: type)" & LF
@@ -957,7 +971,16 @@ package body Landin.Tests.Fixture_Execution_Suite is
          & "end dead_erased_reader" & LF
          & Main,
          Absent);
-   end Unused_Hosted_Bridge_Is_Discarded;
+
+      --  Collection must retain a reachable bridge. Every hosted lane
+      --  executes this call, whose count excludes the program name.
+      Check_Linked
+        ("live-host-bridge-caller",
+         Count & "public main: () -> (code: i32) =" & LF
+         & "    code = i32(_landin_host_argument_count())" & LF
+         & "end main" & LF,
+         Landin.Platform.No_Arguments, "_landin_host_argument_count");
+   end Hosted_Bridges_Link_And_Run;
 
    procedure Every_Positive_Fixture_Is_Emitted
      (Item : in out Landin.Testing.Context);
@@ -2005,8 +2028,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Recorded_Expectations_Hold'Access);
       if Include_Target_Workloads then
          Landin.Testing.Register
-           (Into, "fixture execution", "unused hosted bridge is discarded",
-            Unused_Hosted_Bridge_Is_Discarded'Access);
+           (Into, "fixture execution", "hosted bridges link and run",
+            Hosted_Bridges_Link_And_Run'Access);
          Landin.Testing.Register
            (Into, "fixture execution", "every positive fixture is emitted",
             Every_Positive_Fixture_Is_Emitted'Access);

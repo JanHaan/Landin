@@ -74,7 +74,11 @@ executable keeps only what the entry, a C object or another kept section
 reaches: a bridge that is declared but never called, or reached only from an
 unreachable routine or datum, is absent along with its libc dependency. The
 hidden argument initializer is emitted with any bridge support ([1975]), so a
-C-owned startup can still call it.
+C-owned startup can still call it. Linux arm64 and Darwin arm64 do not yet
+perform this per-item section collection; unreferenced hosted bridges and
+consumers may remain in their executables. The native bridge controls use
+the selected hosted lane, with symbol-absence assertions on Linux x86-64
+and a reachable-bridge execution control whenever the case runs.
 
 Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
 and GNU build-id arguments. Darwin queries the selected driver with
