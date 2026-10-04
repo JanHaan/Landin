@@ -56,6 +56,13 @@ package body Landin.IR.Simplification is
          Required_Proof : array (1 .. Held.Values.Count) of Boolean :=
            [others => False];
          Eligible : array (1 .. Held.Slots.Count) of Boolean;
+         Local_Store : array (1 .. Held.Slots.Count) of Boolean;
+         Pending : array (1 .. Held.Slots.Count) of Value_Id :=
+           [others => No_Value];
+         Pending_Tracked : array (1 .. Held.Slots.Count) of Boolean :=
+           [others => False];
+         Pending_Slots : array (1 .. Held.Slots.Count) of Positive;
+         Pending_Count : Natural := 0;
          Stored : array (1 .. Held.Slots.Count) of Value_Id :=
            [others => No_Value];
          --  The slots Stored holds a value for, so that forgetting them all
@@ -65,7 +72,17 @@ package body Landin.IR.Simplification is
          Remembered_Count : Natural := 0;
          Last_Block : Block_Id := No_Block;
 
+         procedure Forget_Pending;
          procedure Forget_Stores;
+
+         procedure Forget_Pending is
+         begin
+            for Index in 1 .. Pending_Count loop
+               Pending (Pending_Slots (Index)) := No_Value;
+               Pending_Tracked (Pending_Slots (Index)) := False;
+            end loop;
+            Pending_Count := 0;
+         end Forget_Pending;
 
          procedure Forget_Stores is
          begin
@@ -85,10 +102,12 @@ package body Landin.IR.Simplification is
                when Frame_Slot =>
                   if Place.Slot /= No_Slot then
                      Eligible (Positive (Place.Slot)) := False;
+                     Local_Store (Positive (Place.Slot)) := False;
                   end if;
                when Runtime_Address =>
                   if Place.Address /= No_Slot then
                      Eligible (Positive (Place.Address)) := False;
+                     Local_Store (Positive (Place.Address)) := False;
                   end if;
                when Module_Datum => null;
             end case;
@@ -309,10 +328,12 @@ package body Landin.IR.Simplification is
                Slot : constant Slot_Record := Into.Slots
                  (Held.Slots.First + S);
             begin
-               Eligible (S) := not Slot.Aggregate and then not Slot.Array_Shape
+               Local_Store (S) :=
+                 not Slot.Aggregate and then not Slot.Array_Shape
                  and then not Slot.Addressed and then Slot.Pointee = No_Pointee
                  and then Slot.Signature = No_Signature
-                 and then Slot.Atom_Set = No_Atom_Set
+                 and then Slot.Atom_Set = No_Atom_Set;
+               Eligible (S) := Local_Store (S)
                  and then Slot.Of_Type not in Landin.Types.Float_Name;
             end;
          end loop;
@@ -334,6 +355,7 @@ package body Landin.IR.Simplification is
                if Code.Slot /= No_Slot and then Code.Op not in Load | Store
                then
                   Eligible (Positive (Code.Slot)) := False;
+                  Local_Store (Positive (Code.Slot)) := False;
                end if;
                --  [1630]: a block writes its output slots itself, so no
                --  store before it may stand in for a load after it.
@@ -344,11 +366,46 @@ package body Landin.IR.Simplification is
                   begin
                      if Output /= No_Slot then
                         Eligible (Positive (Output)) := False;
+                        Local_Store (Positive (Output)) := False;
                      end if;
                   end;
                end loop;
             end;
          end loop;
+         --  A plain local store has no observer before the next write to
+         --  that slot in this block.  A load, block boundary or other write
+         --  ends the proof.  Its value preparation remains subject to the
+         --  backward demand pass, which keeps any calls or traps.
+         for V in Alias'Range loop
+            declare
+               Code : constant Instruction := Code_At (Value_Id (V));
+            begin
+               if Code.In_Block /= Last_Block then
+                  Forget_Pending;
+                  Last_Block := Code.In_Block;
+               end if;
+               if Code.Op = Store and then Local_Store (Positive (Code.Slot))
+               then
+                  if Pending (Positive (Code.Slot)) /= No_Value then
+                     Keep (Held.Values.First
+                           + Positive (Pending (Positive (Code.Slot)))) :=
+                       False;
+                  elsif not Pending_Tracked (Positive (Code.Slot)) then
+                     Pending_Count := Pending_Count + 1;
+                     Pending_Slots (Pending_Count) := Positive (Code.Slot);
+                     Pending_Tracked (Positive (Code.Slot)) := True;
+                  end if;
+                  Pending (Positive (Code.Slot)) := Value_Id (V);
+               elsif Code.Op = Load
+                 and then Local_Store (Positive (Code.Slot))
+               then
+                  Pending (Positive (Code.Slot)) := No_Value;
+               elsif Effects.Of_Code (Code.Op).Writes then
+                  Forget_Pending;
+               end if;
+            end;
+         end loop;
+         Last_Block := No_Block;
          for V in Alias'Range loop
             declare
                Code : Instruction := Code_At (Value_Id (V));

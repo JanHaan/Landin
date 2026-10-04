@@ -68,6 +68,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    function Count (Code : IR.Unit; Op : IR.Opcode) return Natural;
    procedure Constant_Shifts (Item : in out Landin.Testing.Context);
    procedure Effect_Preservation (Item : in out Landin.Testing.Context);
+   procedure Overwritten_Local_Stores (Item : in out Landin.Testing.Context);
    procedure Memory_Events (Item : in out Landin.Testing.Context);
    procedure Static_Dispatch (Item : in out Landin.Testing.Context);
    procedure Exposed_Evidence (Item : in out Landin.Testing.Context);
@@ -261,6 +262,67 @@ package body Landin.Tests.IR_Optimization_Suite is
            (Item, Text (Work), Before, "a settled rewrite is repeatable");
       end;
    end Effect_Preservation;
+
+   procedure Overwritten_Local_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Stores
+        (Source : String; Removed : Natural; Trap : Boolean := False;
+         Unused_Number : Boolean := False);
+
+      procedure Check_Stores
+        (Source : String; Removed : Natural; Trap : Boolean := False;
+         Unused_Number : Boolean := False)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      begin
+         Lower (Item, Work, Source);
+         declare
+            Code : IR.Unit renames Landin.Stages.Code (Work).all;
+            Before : constant Natural := Count (Code, IR.Store);
+            Numbers : constant Natural := Count (Code, IR.Number);
+         begin
+            IR.Simplification.Run (Code, Landin.Targets.Linux_X86_64,
+                                   Opt.Size);
+            Landin.Testing.Check_Equal
+              (Item, Count (Code, IR.Store) + Removed, Before,
+               "only unread, overwritten local stores disappear");
+            if Trap then
+               Landin.Testing.Check_Equal
+                 (Item, Count (Code, IR.Divide), 1,
+                  "discarding the store keeps its possible divide trap");
+            end if;
+            if Unused_Number then
+               Landin.Testing.Check_Equal
+                 (Item, Count (Code, IR.Number) + 1, Numbers,
+                  "discarding the store removes its unused literal");
+            end if;
+         end;
+      end Check_Stores;
+   begin
+      Check_Stores
+        ("public f: () -> (r: i32) = "
+         & "mut x: i32 = 1 x = 2 r = x end f", 1,
+         Unused_Number => True);
+      Check_Stores
+        ("public f: () -> (r: f32) = "
+         & "mut x: f32 = 1.0 x = 2.0 r = x end f", 1,
+         Unused_Number => True);
+      Check_Stores
+        ("public f: (d: i32) -> (r: i32) = "
+         & "mut x: i32 = 10 / d x = 2 r = x end f", 1, True);
+      Check_Stores
+        ("public f: () -> (r: i32) = "
+         & "mut x: i32 = 1 y: i32 = x x = 2 r = y + x end f", 0);
+      Check_Stores
+        ("public f: () -> (r: i32) = "
+         & "mut x: i32 = 1 p: ptr mut i32 = addr x "
+         & "x = 2 r = p.val end f", 0);
+      Check_Stores
+        ("public f: (flag: bool) -> (r: i32) = "
+         & "mut x: i32 = 1 if flag then x = 2 end if r = x end f", 0);
+   end Overwritten_Local_Stores;
 
    procedure Static_Dispatch (Item : in out Landin.Testing.Context) is
    begin
@@ -1573,6 +1635,9 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "constant shifts", Constant_Shifts'Access);
       Landin.Testing.Register
         (Into, "ir opt", "effect preservation", Effect_Preservation'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "overwritten local stores",
+         Overwritten_Local_Stores'Access);
       Landin.Testing.Register
         (Into, "ir opt", "static dispatch", Static_Dispatch'Access);
       Landin.Testing.Register
