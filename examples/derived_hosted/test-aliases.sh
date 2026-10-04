@@ -31,3 +31,26 @@ for kind in relative parent symlink hardlink exact distinct; do
     cmp -s input.log saved.log
     printf '%s: pass\n' "$kind"
 done
+
+# A genuinely absent output is permitted. Lookup failures must preserve the
+# input, and a missing input must leave an existing output untouched.
+rm -f output.log
+"$filter" --out output.log input.log > stdout.txt 2> stderr.txt
+cmp -s output.log saved.log
+printf 'absent output: pass\n'
+
+ln -s cycle-b cycle-a
+ln -s cycle-a cycle-b
+for target in cycle-a input.log/child; do
+    if "$filter" --out "$target" input.log > stdout.txt 2> stderr.txt; then
+        exit 1
+    fi
+    cmp -s input.log saved.log
+done
+printf 'output lookup failures: pass\n'
+
+if "$filter" --out output.log absent-input.log > stdout.txt 2> stderr.txt; then
+    exit 1
+fi
+cmp -s output.log saved.log
+printf 'missing input preserves output: pass\n'

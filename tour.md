@@ -4156,6 +4156,14 @@ without a host call, and `write_some` returns zero. Close consumes the handle
 once even on failure, and never blindly retries EINTR. The public failure atoms remain payload-free; detailed
 diagnostics use ordinary state rather than a new exception mechanism.
 
+`world.same_file(left, right)` checks whether two paths identify the same
+file, following symbolic links and recognizing hard links. The left path
+must exist; failure to inspect it is an error. An absent right path returns
+false, but other lookup failures are errors. The log filter checks this
+before truncating an output. Names must remain stable during the check and
+open: this is not an atomic operation. Custom world providers must implement
+both `same_file` and `write_some` when migrating to this interface.
+
 The bounded library provider is `core/io.memory`, constructed with
 `memory_world(files, arguments, output, errors)`. Its caller supplies every
 file name, content buffer, descriptor and output extent. Files must already

@@ -1,0 +1,61 @@
+import core/io
+import core/io/hosted
+
+extern(c) identity_select: (scenario: i32) -> none
+extern(c) identity_check: (expected_calls: i32) -> (good: bool)
+extern(c) identity_setup: () -> (good: bool)
+extern(c) identity_path: (which: i32) -> (path: ptr u8)
+extern(c) identity_cleanup: () -> none
+
+public main: () -> (code: i32) =
+    mut state: hosted.system = hosted.host()
+    world: any io.world = any(addr state)
+    left: [5]u8 = [108, 101, 102, 116, 0]
+    right: [6]u8 = [114, 105, 103, 104, 116, 0]
+    for scenario in i32(1)..<i32(9) do
+        code = scenario
+        identity_select(scenario)
+        mut failed: bool = false
+        same: bool = world.same_file(addr left[0], addr right[0]) else (problem)
+            failed = problem == io.io_failed
+            false
+        end
+        if scenario <= 3 then
+            return when failed or same <> (scenario == 1)
+              or hosted.last_errno(state) <> 0 or not identity_check(2)
+        elsif scenario == 4 then
+            return when failed or same or hosted.last_errno(state) <> 0
+              or not identity_check(2)
+        elsif scenario == 5 then
+            return when not failed or hosted.last_errno(state) <> 2
+              or not identity_check(1)
+        elsif scenario == 7 then
+            return when not failed or hosted.last_errno(state) <> 13
+              or not identity_check(1)
+        elsif scenario == 8 then
+            return when not failed or hosted.last_errno(state) <> 5
+              or not identity_check(2)
+        else
+            return when not failed or hosted.last_errno(state) <> 13
+              or not identity_check(2)
+        end if
+    end for
+
+    code = 20
+    return when not identity_setup()
+    identity_select(0)
+    for which in i32(0)..<i32(5) do
+        mut failed: bool = false
+        same: bool = io.same_file(state, identity_path(0), identity_path(which))
+          else (problem)
+            failed = problem == io.io_failed
+            false
+        end
+        if failed or same <> (which <= 2) then
+            identity_cleanup()
+            return
+        end if
+    end for
+    identity_cleanup()
+    code = 42
+end main

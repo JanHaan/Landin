@@ -2014,6 +2014,14 @@
     },
     "runtime/sensors": {
       "mode": "execute"
+    },
+    "abi/core-io-file-identity": {
+      "mode": "restriction",
+      "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/core-io-file-identity/fixture.meta"
+    },
+    "runtime/core-io-identity-memory": {
+      "mode": "execute"
     }
   }
 }

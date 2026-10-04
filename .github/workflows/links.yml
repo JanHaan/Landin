@@ -16,6 +16,7 @@ on:
       - '**.md'
       - 'lychee.toml'
       - '.github/workflows/links.yml'
+      - 'scripts/links_inputs.py'
   schedule:
     #  Mondays, early UTC.
     - cron: '17 6 * * 1'

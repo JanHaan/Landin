@@ -157,15 +157,17 @@ GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
 property note, and glibc's loader refuses an executable whose level the
-processor lacks.
+processor lacks. Linux arm64 emits no ISA-level note and supplies no
+corresponding loader-refusal protection; its execution environment must
+support the selected level.
 Darwin's lowest processor, Apple's M1, has more than `armv8-a`; the default
 assumes less than any Mac has, which is sound, and a build for Apple silicon
 may select `armv8.1-a`. Each test lane runs the levels a runtime fixture's
 `levels:` names for its own family, asks its host processor for every
 feature first (`/proc/cpuinfo`, `hw.optional.arm.FEAT_LSE`) and fails
 rather than skipping a level the host lacks, and requires the executable it
-ran to show the level: the ISA note on Linux, the LSE instructions and no
-exclusive loop on Darwin, hardware division and no 32-bit helper on
+ran to show the level: the ISA note on Linux x86-64, the LSE instructions
+and no exclusive loop on arm64, hardware division and no 32-bit helper on
 Cortex-M, where `armv7-m` runs on QEMU's Cortex-M3.
 
 ## Native source debugging

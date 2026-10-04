@@ -96,6 +96,8 @@ end system_open_write
 system_same_file: (self: ptr mut system, left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io.io_failed =
     self.val.failure_errno = 0
+    fail io.io_failed when alignof native_stat <> 8
+      or sizeof native_stat <> native_stat_size
     mut first: native_stat = zeroed
     mut second: native_stat = zeroed
     if stat(left, addr first) <> 0 then

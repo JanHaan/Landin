@@ -166,9 +166,6 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
     end while
     fail bad_argument when lenof input == 0
     fail bad_argument when lenof output > 0 and equal(input, output)
-    if lenof output > 0 then
-        fail bad_argument when try world.same_file(addr input[0], addr output[0])
-    end if
     --  Keep the output path until run has opened the input reader. Opening
     --  it here would truncate an existing output on an input-open failure.
     initial: count_dest = zeroed
@@ -183,10 +180,11 @@ end prepare_logged
 
 public open_output: (provider: type is mem.allocator, inout allocator: provider,
                      world: any io.world, inout value: config)
-                    -> none ! mem.out_of_memory
+                    -> none ! bad_argument | mem.out_of_memory
                             | io.not_found | io.no_access | io.io_failed =
     path: []u8 = value.output_path
     if lenof path > 0 then
+        fail bad_argument when try world.same_file(value.input, addr path[0])
         stream: io.file = try world.open_write(addr path[0])
         initial: text_dest = (stream: stream)
         object := (mem.new(allocator, initial) else (problem)

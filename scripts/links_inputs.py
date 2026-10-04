@@ -33,7 +33,8 @@ def inputs(event, before):
         changed = git("diff", "--name-only", "-z", "--diff-filter=ACMRT",
                       before, "HEAD", "--", "*.md")
         config = git("diff", "--name-only", "-z", before, "HEAD", "--",
-                     "lychee.toml", ".github/workflows/links.yml")
+                     "lychee.toml", ".github/workflows/links.yml",
+                     "scripts/links_inputs.py")
     except subprocess.CalledProcessError:
         return FULL, "full"
 

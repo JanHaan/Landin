@@ -88,6 +88,13 @@ class LinkInputsTests(unittest.TestCase):
         self.assertEqual(links_inputs.inputs("workflow_dispatch", ""),
                          (links_inputs.FULL, "full"))
 
+    def test_selector_change_checks_every_document(self):
+        Path("scripts").mkdir()
+        Path("scripts/links_inputs.py").write_text("# changed selector\n")
+        self.commit()
+        self.assertEqual(links_inputs.inputs("push", self.before),
+                         (links_inputs.FULL, "full"))
+
     def test_unavailable_base_falls_back_to_full_scan(self):
         self.assertEqual(links_inputs.inputs("push", "0" * 40),
                          (links_inputs.FULL, "full"))

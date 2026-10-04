@@ -1849,7 +1849,13 @@ privileged language operations. `core/io/hosted` turns descriptors and
 pointer-and-length argument views into ordinary values, maps foreseeable host
 failures onto declared atoms, and threads its `world(provider)` concept as the
 authority for opening files and touching streams [1660] [1680]. Direct Linux
-syscalls are not part of this route.
+syscalls are not part of this route. The required `world.write_some` reports
+counted progress for one attempt, with no transfer on failure and no host
+call for an empty slice. `world.same_file` follows path aliases and compares
+file identity before any destructive output open; a missing output returns
+false, while failed input lookup or other output lookup failures refuse.
+It assumes stable names, rather than providing race-safe output opening.
+D153 states these ordinary library contracts and their provider obligations.
 
 ### [1990] Firmware and machine directives have explicit target contracts
 
@@ -15323,7 +15329,8 @@ pointer-and-length descriptor `from self`. Thus an in-memory provider may
 return caller backing under the same contract, while the system provider does
 not disguise a source-free global pointer with a false origin annotation.
 
-Every `world` entry has D146's exact first `self` pointer. Open, close, read,
+Every `world` entry has D146's exact first `self` pointer. Open, identity
+comparison, close, read,
 `write` and `write_some` use `ptr mut provider`; standard streams, argument
 count and argument lookup use `ptr provider`. The system provider is ordinary composed conformance
 evidence and may be erased behind `any world`; generic wrappers retain the
@@ -15350,6 +15357,21 @@ and `open_write` map Linux libc `ENOENT` to `not_found`,
 `EPERM`, `EACCES` or `EROFS` to `no_access`, and every other failure to `io_failed`.
 `open_write` supplies `O_WRONLY | O_CREAT | O_TRUNC` and mode `0666`, subject
 to the process umask.
+
+The required `world.same_file(left, right)` entry compares filesystem identity
+without opening or truncating either path. The input `left` must exist and be
+inspectable; any failure inspecting it is `io_failed`. An absent `right`
+returns false; every other failure inspecting it is `io_failed`. The hosted
+provider follows symlinks and compares the full native device and inode
+fields through a target-selected libc `stat` binding. Its private records
+are checked against native C headers on each supported host. The memory
+provider compares the first matching file-table indices under the same
+missing-input and missing-output contract. Identity lookup does not require
+opening a memory file or change its contents, cursor or counters. Neither
+provider promises an atomic check-and-open operation: callers relying on the
+result must ensure that names are not concurrently replaced. Every world
+provider supplies both `same_file` and `write_some`; existing implementations
+must add these entries to their conformance evidence.
 
 The pointer-path entries require an already NUL-terminated path. The ordinary
 dynamic adapters take a byte view plus caller-owned writable scratch, reject

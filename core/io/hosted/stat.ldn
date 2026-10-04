@@ -12,6 +12,7 @@ native_time: type = struct
 end native_time
 
 fixed if compiler.c_sysv_lp64 then
+    native_stat_size: usize = 144
     native_stat: type = struct
         device: u64
         inode: u64
@@ -30,6 +31,7 @@ fixed if compiler.c_sysv_lp64 then
         reserved: [3]i64
     end native_stat
 elsif compiler.c_aapcs64_lp64 then
+    native_stat_size: usize = 128
     native_stat: type = struct
         device: u64
         inode: u64
@@ -49,6 +51,7 @@ elsif compiler.c_aapcs64_lp64 then
         reserved: [2]u32
     end native_stat
 else
+    native_stat_size: usize = 144
     native_stat: type = struct
         device: i32
         mode: u16
@@ -69,13 +72,6 @@ else
         spare: i32
         reserved: [2]i64
     end native_stat
-end if
-
-compiler.assert(alignof native_stat == 8)
-fixed if compiler.c_aapcs64_lp64 then
-    compiler.assert(sizeof native_stat == 128)
-else
-    compiler.assert(sizeof native_stat == 144)
 end if
 
 extern(c) stat: (path: ptr u8, result: ptr mut native_stat) -> (status: i32)

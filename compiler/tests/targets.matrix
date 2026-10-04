@@ -8,6 +8,7 @@ prototype-2 | linux-x86-64, linux-arm64, macos-arm64
 prototype-3 | linux-x86-64, linux-arm64, macos-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, linux-arm64, macos-arm64
 abi/aapcs64-varargs-both-banks | linux-arm64
+abi/core-io-file-identity | linux-x86-64, linux-arm64, macos-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64
 abi/r440-bindings-generated | linux-x86-64
 abi/r440-errno-interposition | linux-x86-64, linux-arm64, macos-arm64
@@ -1554,6 +1555,7 @@ runtime/control-expression-edges-keep-source-order | linux-x86-64, linux-arm64, 
 runtime/control-expression-function-values | linux-x86-64, linux-arm64, macos-arm64
 runtime/copy-before-sink-remains-live | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-io-erased-system | linux-x86-64, linux-arm64, macos-arm64
+runtime/core-io-identity-memory | linux-x86-64, linux-arm64, macos-arm64, cortex-m0
 runtime/core-mem-allocators | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-mem-arena-boundaries | linux-x86-64, linux-arm64, macos-arm64
 runtime/core-mem-dispose-empty | linux-x86-64, linux-arm64, macos-arm64

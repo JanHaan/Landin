@@ -1,0 +1,45 @@
+import core/io
+
+public main: () -> (code: i32) =
+    code = 1
+    mut first: [1]u8 = [65]
+    mut second: [1]u8 = [66]
+    mut files: [2]io.memory_file = [
+      (name: "a", contents: first[0..<1], length: 1, cursor: 0,
+       readable: false, writable: false, opened: false, writing: false),
+      (name: "b", contents: second[0..<1], length: 1, cursor: 0,
+       readable: true, writable: true, opened: false, writing: false)]
+    args: [1]io.argument = [(data: addr first[0], length: 0)]
+    mut out: [0]u8 = zeroed
+    mut err: [0]u8 = zeroed
+    mut state := io.memory_world(files[0..<2], args[0..<0],
+                                  out[0..<0], err[0..<0])
+    a: [2]u8 = [97, 0]
+    b: [2]u8 = [98, 0]
+    missing: [2]u8 = [99, 0]
+    distinct: bool = io.same_file(state, addr a[0], addr b[0]) else (problem)
+        _ = problem
+        return
+    end
+    return when distinct
+    world: any io.world = any(addr state)
+    same: bool = world.same_file(addr a[0], addr a[0]) else (problem)
+        _ = problem
+        return
+    end
+    return when not same
+    absent: bool = world.same_file(addr a[0], addr missing[0]) else (problem)
+        _ = problem
+        return
+    end
+    return when absent
+    mut refused: bool = false
+    _ = world.same_file(addr missing[0], addr a[0]) else (problem)
+        refused = problem == io.io_failed
+        false
+    end
+    return when not refused or state.open_calls <> 0 or state.close_calls <> 0
+      or files[0].opened or files[1].opened or first[0] <> 65 or second[0] <> 66
+      or files[0].length <> 1 or files[1].length <> 1
+    code = 42
+end main
