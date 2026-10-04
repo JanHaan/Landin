@@ -30,17 +30,31 @@ class ResourceEvidence(unittest.TestCase):
         measurements = [sample.copy() for _ in range(5)]
         if failure:
             measurements[2] = RuntimeError("no positive peak memory measurement")
+        measurements = iter(measurements)
+
+        def measure(*args):
+            sample = next(measurements)
+            assembly = Path(args[3] + ".s")
+            assembly.write_text("partial" if isinstance(sample, Exception) else "assembly")
+            if isinstance(sample, Exception):
+                raise sample
+            return sample
+
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "evidence"
             with (mock.patch.object(resources, "workloads",
                                     return_value={"case": {"main.ldn": ""}}),
                   mock.patch.object(resources.scaling, "build_launcher", return_value="launcher"),
-                  mock.patch.object(resources.scaling, "measure", side_effect=measurements),
+                  mock.patch.object(resources.scaling, "measure", side_effect=measure),
                   mock.patch.object(resources, "stack_probe", return_value={"status": 139}),
                   mock.patch.object(resources.resource, "setrlimit"),
                   contextlib.redirect_stdout(io.StringIO())):
                 status = resources.main(["--refine", sys.executable, "--output", str(output)])
             record = json.loads((output / "resources.json").read_text())
+            remaining = list(output.rglob("*.s"))
+            self.assertEqual(len(remaining), 1 if failure else 0)
+            if failure:
+                self.assertEqual(remaining[0].read_text(), "partial")
         return status, record
 
     def test_low_stack_failures_are_observations_not_new_policy(self):
@@ -50,6 +64,8 @@ class ResourceEvidence(unittest.TestCase):
         self.assertEqual(len(row["samples"]), 5)
         self.assertEqual(len(row["stack_probes"]), 4)
         self.assertEqual(row["summary"]["peak_kib_max"], 1234)
+        self.assertEqual(row["samples"][0]["assembly"]["bytes"], 8)
+        self.assertEqual(len(row["samples"][0]["assembly"]["sha256"]), 64)
         self.assertIn("binary_sha256", record)
         self.assertIn("source_sha256", row)
 
