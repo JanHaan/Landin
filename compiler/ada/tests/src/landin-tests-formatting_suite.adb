@@ -138,9 +138,10 @@ package body Landin.Tests.Formatting_Suite is
    end Edits_Problem;
 
    --  Formats Text and requires everything the layout promises of it:
-   --  space-only edits, the same tokens and comments, no line end added,
-   --  and a second format that offers nothing.  Returns the formatted
-   --  text, or the refused one unchanged.
+   --  space-only edits, the same tokens and comments, no extra line end,
+   --  one final LF after nonblank content (unless empty), and a second
+   --  format that offers nothing.  Returns the formatted text, or the
+   --  refused one unchanged.
    function Held
      (Item  : in out Landin.Testing.Context;
       Label : String;
@@ -173,8 +174,20 @@ package body Landin.Tests.Formatting_Suite is
          Landin.Testing.Fail
            (Item, Label & ": formatting changed a token or a comment");
       end if;
-      if Line_Count (Out_Text) > Line_Count (Text) + 1 then
+      if Line_Count (Out_Text) > Line_Count (Text)
+        + (if Text'Length > 0 and then Text (Text'Last) not in LF | CR
+           then 1 else 0)
+      then
          Landin.Testing.Fail (Item, Label & ": formatting added a line");
+      end if;
+      if Out_Text'Length > 0
+        and then (Out_Text'Length = 1
+                  or else Out_Text (Out_Text'Last) /= LF
+                  or else Out_Text (Out_Text'Last - 1) in ' ' | Tab | LF | CR)
+      then
+         Landin.Testing.Fail
+           (Item, Label & ": formatting left a blank or unterminated"
+            & " final line");
       end if;
 
       declare
