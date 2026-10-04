@@ -80,7 +80,7 @@ is missing. With no selection, analysis makes no firmware entry claim.
 | `textDocument/definition` | where the name under the cursor is declared |
 | `textDocument/hover` | what the name or expression under the cursor is, and its doc comment |
 | `textDocument/formatting` | D252's layout, as edits |
-| `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix |
+| `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix; ranges have exclusive ends, while an empty range acts as a cursor position |
 
 A diagnostic carries its catalogue code, a link to its explanation on the
 reading copy of [`docs/diagnostics.md`](diagnostics.md), every secondary
