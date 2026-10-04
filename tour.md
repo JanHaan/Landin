@@ -3737,11 +3737,10 @@ spelling rather than a keyword each: extern(c) today,
 extern(interrupt) for handlers whose entry, exit and vector
 placement differ, extern(naked) for no prologue at all, and
 room for extern(aapcs), extern(sysv), extern(win64) later.
-The ones worth real work eventually are Fortran, whose ABI
-is trivial and whose numeric libraries are everywhere, and
-Swift, which puts its error in a register of its own just
-as Landin does. Zig, Odin, Rust and Python all speak C, so
-there is nothing to gain there.
+Fortran's numeric libraries and Swift's separate error channel make
+direct interop candidates. Neither convention is specified or scheduled;
+the Language evolution register in `ROADMAP.md` gives each a trigger.
+Zig, Odin, Rust and Python all speak C, so there is nothing to gain there.
 
 The enabled Cortex forms are distinct function types: both machine conventions
 require nongeneric `() -> none` definitions with no declared failures. Their
