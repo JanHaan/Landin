@@ -211,8 +211,18 @@ package body Landin.Testing.Fakes is
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
    begin
       Host.Writes.Data.Raises := True;
+      Host.Writes.Data.Reads_Before_Raise := 0;
       Host.Writes.Data.Read_Exception := Reason;
    end Raise_On_Read;
+
+   procedure Raise_On_Read_After
+     (Host : in out Fake_Filesystem; Reads : Natural;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
+   begin
+      Host.Writes.Data.Raises := True;
+      Host.Writes.Data.Reads_Before_Raise := Reads;
+      Host.Writes.Data.Read_Exception := Reason;
+   end Raise_On_Read_After;
 
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
@@ -225,10 +235,15 @@ package body Landin.Testing.Fakes is
       Content := Unbounded.Null_Unbounded_String;
 
       if Host.Writes.Data.Raises then
-         Host.Writes.Data.Raises := False;
-         Ada.Exceptions.Raise_Exception
-           (Host.Writes.Data.Read_Exception,
-            "a fake read injected an exception");
+         if Host.Writes.Data.Reads_Before_Raise > 0 then
+            Host.Writes.Data.Reads_Before_Raise :=
+              Host.Writes.Data.Reads_Before_Raise - 1;
+         else
+            Host.Writes.Data.Raises := False;
+            Ada.Exceptions.Raise_Exception
+              (Host.Writes.Data.Read_Exception,
+               "a fake read injected an exception");
+         end if;
       end if;
 
       if Index = 0 then

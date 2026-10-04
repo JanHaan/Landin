@@ -1965,9 +1965,9 @@ package body Landin.Driver is
                "a rooted module request needs exactly one entry directory");
          end if;
 
-         --  Informational actions wait for every command-line validation,
-         --  but do not discover or read sources, or run compiler stages.
-         if Wants_Usage or else Wants_Identity then
+         --  Informational actions and invalid requests wait for every
+         --  command-line diagnostic, then return before reading sources.
+         if Wants_Usage or else Wants_Identity or else Bad_Use then
             if Bad_Use or else Landin.Stages.Failed (Context) then
                Result.Report := Unbounded.To_Unbounded_String
                  (Landin.Stages.Rendered_Report (Context));

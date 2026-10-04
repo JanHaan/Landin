@@ -2403,19 +2403,71 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Target_With_No_Backend_Emits_Nothing;
 
-   --  A refused program is not emitted, for the same reason the lowering
-   --  refuses to run on one: a file written from a failed compilation is a
-   --  plausible artefact of nothing.
-   --  A defect is the compiler failing, not the program being wrong, and
-   --  the two arrive together: by the time one is raised the run has
-   --  usually already decided several things about the source.  Losing
-   --  those leaves a user with `internal compiler defect` and nothing to
-   --  act on, when the report already held the sentence that mattered.
-   --
-   --  The unknown option is what puts a diagnostic in the report before
-   --  anything is read, and the read is where the defect is injected: a
-   --  tool runs only on a compilation that was not refused, so a defect
-   --  there could never have one before it.
+   --  A known command-line misuse is returned before either a named source
+   --  or the entry directory of a rooted program can be read.  Inject both
+   --  defect and host exceptions to make any attempted read visible.
+   procedure Invalid_Requests_Do_Not_Read_Sources
+     (Item : in out Landin.Testing.Context);
+
+   procedure Invalid_Requests_Do_Not_Read_Sources
+     (Item : in out Landin.Testing.Context)
+   is
+      type Exception_List is
+        array (Positive range <>) of Ada.Exceptions.Exception_Id;
+      Failures : constant Exception_List :=
+        [Compiler_Defect'Identity, Constraint_Error'Identity,
+         Program_Error'Identity, Ada.Assertions.Assertion_Error'Identity,
+         Host_Exhausted'Identity, Storage_Error'Identity,
+         External_Tool_Failed'Identity];
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("fine.ldn",
+         "public main: () -> (code: i32) =" & LF
+         & "    code = 0" & LF & "end main" & LF);
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      for Rooted in Boolean loop
+         for Reason of Failures loop
+            Host.Raise_On_Read (Reason);
+            declare
+               Args : Landin.Platform.Path_List :=
+                 Both ("--wat", "--also-wat");
+            begin
+               if Rooted then
+                  Args.Append ("--root=root");
+                  Args.Append ("entry");
+               else
+                  Args.Append ("fine.ldn");
+               end if;
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute (Args, Host, Tools);
+                  Report : constant String :=
+                    Unbounded.To_String (Result.Report);
+               begin
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Misuse,
+                     "an invalid request remains misuse without a read");
+                  Landin.Testing.Check_Equal
+                    (Item, Occurrences (Report, "L0002"), 2,
+                     "both option diagnostics are returned once");
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Count (Result.Found), 2,
+                     "both diagnostics are available as data");
+                  Landin.Testing.Check
+                    (Item, Contains (Report, "--wat")
+                       and then Contains (Report, "--also-wat"),
+                     "both unknown options are named");
+               end;
+            end;
+         end loop;
+      end loop;
+   end Invalid_Requests_Do_Not_Read_Sources;
+
+   --  A source diagnostic already reported survives a later defect, while
+   --  host and resource failures still escape to the executable's handler.
    procedure A_Defect_Keeps_What_Was_Reported
      (Item : in out Landin.Testing.Context);
 
@@ -2434,42 +2486,29 @@ package body Landin.Tests.Driver_Suite is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
    begin
-      Host.Add_File
-        ("fine.ldn",
-         "public main: () -> (code: i32) =" & LF
-         & "    code = 0" & LF & "end main" & LF);
+      Host.Add_File ("fine.ldn", "value: u32 = 1" & LF);
       for Reason of Defects loop
-         Host.Raise_On_Read (Reason);
-
+         Host.Raise_On_Read_After (1, Reason);
          declare
             Result : constant Landin.Driver.Outcome :=
               Landin.Driver.Execute
-                (Both ("--wat", "fine.ldn"), Host, Tools);
+                (["absent.ldn", "fine.ldn"], Host, Tools);
             Report : constant String := Unbounded.To_String (Result.Report);
          begin
-            Landin.Testing.Check
-              (Item, Contains (Report, "L0002"),
-               "what the run had already reported survives the defect");
-            Landin.Testing.Check
-              (Item, Contains (Report, "internal compiler defect"),
-               "and the defect is written under it");
             Landin.Testing.Check_Equal
               (Item, Result.Status, Landin.Driver.Status_Defect,
-               "and the status says the compiler failed, not the program");
-
-            --  Once each: the report is rendered on one path or the other
-            --  and never on both.
+               "a later defect takes its own status");
             Landin.Testing.Check_Equal
-              (Item, Occurrences (Report, "L0002"), 1,
-               "the diagnostic is not rendered twice");
+              (Item, Occurrences (Report, "L0003"), 1,
+               "the earlier source diagnostic survives once");
             Landin.Testing.Check_Equal
               (Item, Occurrences (Report, "internal compiler defect"), 1,
-               "and neither is the defect");
+               "the later defect appears once");
          end;
       end loop;
 
       for Reason of Host_Failures loop
-         Host.Raise_On_Read (Reason);
+         Host.Raise_On_Read_After (1, Reason);
          declare
             Escaped : Boolean := False;
          begin
@@ -2477,7 +2516,7 @@ package body Landin.Tests.Driver_Suite is
                declare
                   Result : constant Landin.Driver.Outcome :=
                     Landin.Driver.Execute
-                      (Both ("--wat", "fine.ldn"), Host, Tools);
+                      (["absent.ldn", "fine.ldn"], Host, Tools);
                begin
                   Landin.Testing.Fail
                     (Item, "a host exception became status"
@@ -2569,6 +2608,9 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Defect_Is_A_Status_And_Not_An_Escape;
 
+   --  A refused program is not emitted, for the same reason the lowering
+   --  refuses to run on one: a file written from a failed compilation is a
+   --  plausible artefact of nothing.
    procedure A_Refused_Program_Writes_Nothing
      (Item : in out Landin.Testing.Context);
 
@@ -5062,6 +5104,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a defect is a status and not an escape",
          A_Defect_Is_A_Status_And_Not_An_Escape'Access);
+      Landin.Testing.Register
+        (Into, "driver", "invalid requests do not read sources",
+         Invalid_Requests_Do_Not_Read_Sources'Access);
       Landin.Testing.Register
         (Into, "driver", "a defect keeps what was reported",
          A_Defect_Keeps_What_Was_Reported'Access);

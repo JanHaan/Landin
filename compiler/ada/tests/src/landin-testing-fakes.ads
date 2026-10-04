@@ -66,12 +66,15 @@ package Landin.Testing.Fakes is
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
-   --  The same injection, at the read.  A tool runs only on a
-   --  compilation that was not refused, so a defect there can never have
-   --  a diagnostic before it; a read happens after the driver has already
-   --  reported an unknown option, which is where the promise bites.
+   --  Inject an exception at the next read.  An invalid request must return
+   --  its diagnostics before this injection can fire.
    procedure Raise_On_Read
      (Host : in out Fake_Filesystem;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
+
+   --  Let Reads calls to Read_File finish before injecting.
+   procedure Raise_On_Read_After
+     (Host : in out Fake_Filesystem; Reads : Natural;
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
 
    --  Make every later write answer Not_Writable without retaining bytes.
@@ -285,11 +288,11 @@ private
       Files : File_Vectors.Vector;
       --  Latest successful write per path, separate from the live namespace.
       Items : File_Vectors.Vector;
-      --  Armed by Raise_On_Read and cleared by the read it fires on, so
-      --  one arming is one exception.  It lives here rather than in the
-      --  record because Read_File takes its host as a constant view, the
-      --  same reason the writes do.
+      --  Armed by Raise_On_Read or Raise_On_Read_After and cleared by the
+      --  read it fires on, so one arming is one exception.  It lives here
+      --  because Read_File takes its host as a constant view.
       Raises       : Boolean := False;
+      Reads_Before_Raise : Natural := 0;
       Read_Exception : Ada.Exceptions.Exception_Id :=
         Compiler_Defect'Identity;
       Refuses_Write : Boolean := False;
