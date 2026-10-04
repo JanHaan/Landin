@@ -745,6 +745,16 @@ The chips people buy: RP2040 and RP2350, STM32, and Espressif's ESP32,
 ESP32-S and ESP32-C series. Emulators first, as before, and boards beside
 them rather than instead of them.
 
+An item may describe a noncoherent cached memory profile without admitting
+it for firmware. Before the first R12 item claims support for such a profile,
+it must provide platform-specific DMA cache maintenance and evidence for
+cache levels, aliases, cache-line ownership and device visibility points.
+Require target execution of transmit and receive consumers and bounded
+failure oracles for stale reads and lost dirty bytes when maintenance is
+omitted. Cacheless profiles need no such provider. A cached profile without
+this evidence remains unsupported through the R12 gate; R12.10, R12.30,
+R12.40 and R12.50 each apply this rule to any profile they first admit.
+
 ### R12.10 — Describe devices
 
 Status: planned
@@ -755,8 +765,11 @@ vector mappings selected per device instead of the fixed constrained profile,
 and boot image formats as target facts. The selected device's interrupt numbers
 must map to absolute vector slots (external IRQ0 is slot 16), with its reserved
 slots kept zero and its implemented slots available to typed handlers. This
-schedules the SVD and linker halves of R551-33, R730-05's larger profiles and
-the Cortex-M toolchain move SR-01. When device selection lands, [1990]/D229's
+schedules the SVD and linker halves of R551-33, R730-05's larger profiles,
+R551-08's bounded emission policy and the Cortex-M toolchain move SR-01.
+The emission policy must be in force before admitting images larger than
+32 KiB; the retained constrained profile remains available while that policy
+is established. When device selection lands, [1990]/D229's
 fixed vector slot exclusions must become profile-specific; the current
 constrained profile remains a reference.
 
@@ -786,6 +799,12 @@ Fixture checks select RP2040 and the second generated family by device identity 
 compare each selected boot image format fact with an independently recorded
 expectation for that device; a wrong or absent format fails the checks. The
 firmware ELF alone does not establish this selection.
+
+Small source/IR shapes must demonstrate that compact inputs cannot cause
+unbounded assembler repetition or object growth under the emission policy,
+with the forbidden giant-fixture boundary retained. Check this bound before
+enabling a larger profile; this schedules the policy and its evidence without
+choosing a new numeric compiler limit here.
 
 ### R12.20 — The first board
 
@@ -892,6 +911,11 @@ lanes it does not replace.
 - The RP2040 board run starts at power-on from the flashed boot image and
   reaches compiler-owned startup through its checked second stage.
 
+- Every admitted noncoherent cached profile has its platform maintenance
+  provider and DMA visibility-point evidence from its first admitting item.
+- R12.10's bounded emission policy and small-shape controls pass before any
+  profile larger than the retained 32 KiB image is admitted.
+
 ## R13 — The library
 
 A standard library split where the capability model already splits it.
@@ -927,9 +951,10 @@ Status: planned
 Depends on: R13.10, R12.30
 
 What firmware on the R12 boards needs, each facility driven by a complete
-consumer: peripheral configuration beyond one baud rate, cache maintenance for
-the cached profiles, C on Cortex-M, and `core/text`'s missing half for working
-with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
+consumer: peripheral configuration beyond one baud rate, a reusable
+freestanding cache-maintenance interface over the platform providers required
+when cached profiles were admitted in R12, C on Cortex-M, and `core/text`'s
+missing half for working with `utf8` in place. This schedules R551-34's freestanding part, and B5's,
 and R730-02, R730-07, R730-09 and SR-05.
 
 Exit evidence: each facility's consumer running on its targets with failure
@@ -1198,7 +1223,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
 | R551-07 | Scale and self-hosting | Final linker placement is not preflighted: Linux RIP-relative reach, Darwin's 2 GiB static-image collision and arm64 branch reach. Merged: R730-05, seventeen shared programs exceed the 32 KiB flash, 16 KiB RAM and 4 KiB stack profile in 72 capacity verdicts. | Before general large-image support, or a workload that needs it. | Bounded reach and layout evidence with the native control and its status-42 oracle retained. R12.10 takes R730-05's larger profiles. | open |
-| R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | open |
+| R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | scheduled R12.10 |
 | R551-09 | Competitive optimization | Guarded cleanups can expand quickly despite correct pop-before-run order. | A measured cleanup workload with unacceptable growth. | Selectors, effects and order preserved, with bounded size compared before and after. | open |
 | R551-11 | Competitive optimization | Frame and allocation planning is repeated by preflight, emission and debug output. | Profiling justifies sharing the plans. | One immutable plan owning emission and debug locations, with debugger agreement. | open |
 | R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin stack homes have no register allocation. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
@@ -1213,7 +1238,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
 | R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, cache maintenance for cached device profiles; R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
+| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
 | R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
