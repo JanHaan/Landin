@@ -38,9 +38,9 @@ L0203  Live     [1560]: a builtin tool namespace binding or use is unavailable
 L0300  Live     a compile-time magnitude its context or target does not hold
 L0398  Live     [0740]: a known register image violates its reserved-bit write policy
 L0301  Live     [1890]: a value's type is not the one its context or operation requires
-L0302  Live     [1910]: a name read on a path that does not assign it
+L0302  Live     [1910], [0910], [0930]: a place unassigned at a read or exit
 L0303  Live     [1900]: a place that may not be written
-L0304  Live     [1920]: a name used in a way the kernel does not enable
+L0304  Live     [1830]: a known form used where the language does not permit it
 L0305  Live     [1940]/D136/D202: a required static value or initial image that the compiler cannot establish before runtime
 L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
 L0324  Live     [1510]: a compile-time assertion is false
@@ -61,7 +61,7 @@ L0320  Live     [0270] [1750]: a text literal contains a malformed escape or inv
 L0321  Live     [0210] [0220] [0230]: a float has a complete fraction and exponent when required
 L0322  Live     [0250] [0270]: a character literal spells exactly one Unicode scalar value
 L0323  Live     [0280] [1750]: raw content is UTF-8 and every nonblank line has the closing delimiter's indentation
-L0325  Live     D247: an implementation limit on how many declarations a routine or fields a struct holds
+L0325  Live     D247: an implementation limit on declarations in a routine or fields in a struct body or variant case
 L0390  Live     [1530]/D202: an option must be unconditional, have an available name and use a supported scalar type
 L0391  Live     [1510]/[1590]/D202: a tool directive needs one argument; linker.library needs a quoted portable library name
 L0326  Live     D251: a local declared `mut` that nothing writes

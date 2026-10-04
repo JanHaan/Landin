@@ -169,7 +169,7 @@ fails the gate, every end-to-end target claim is a verdict in a record the
 coverage readers read rather than a run, and the documents stop describing
 the gate as Linux and debug only.
 
-Done: `gate.yml` runs eleven worker jobs on every push and a final `gate` job
+Done: `gate.yml` runs its worker jobs on every push and a final `gate` job
 that fails unless all succeeded: `check.py`, every `scripts/tests` module with its
 controls, the debug and the release corpus at eight workers with the
 determinism closures and report identity, object quality and GDB, the

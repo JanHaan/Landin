@@ -151,10 +151,10 @@ package Landin.Diagnostics.Catalogue is
       --  D164's raw literal has matching delimiters, UTF-8 source and one
       --  exact indentation prefix.
       Malformed_Raw_Literal,
-      --  D247's storage bounds: a routine or a struct wider than the
-      --  compiler holds.  An implementation limit, like L0111, and the
-      --  checker's because counting what a routine declares needs the
-      --  resolver's scopes.
+      --  D247's storage bounds: too many declarations in a routine or
+      --  fields in a struct body or variant case. An implementation limit,
+      --  like L0111, and the checker's because counting what a routine
+      --  declares needs the resolver's scopes.
       Size_Limit_Exceeded,
       Invalid_Option_Declaration,
       Invalid_Tool_Directive,
@@ -506,8 +506,8 @@ package Landin.Diagnostics.Catalogue is
                "[0280] [1750]: raw content is UTF-8 and every nonblank"
                & " line has the closing delimiter's indentation",
             when Size_Limit_Exceeded =>
-               "D247: an implementation limit on how many declarations a"
-               & " routine or fields a struct holds",
+               "D247: an implementation limit on declarations in a routine"
+               & " or fields in a struct body or variant case",
             when Invalid_Option_Declaration =>
                "[1530]/D202: an option must be unconditional, have an"
                & " available name and use a supported scalar type",

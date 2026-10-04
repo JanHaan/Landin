@@ -33,8 +33,9 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-The same IR feeds three emitters: Linux x86-64 and Darwin arm64 emit hosted
-executables, while Cortex-M0 emits firmware. The IR is expressed without
+The same IR feeds three emitters: x86-64 emits Linux hosted executables,
+shared arm64 emits Linux and Darwin hosted executables, and Cortex-M0 emits
+firmware. The IR is expressed without
 machine registers, stack offsets or instruction encodings. Each backend
 translates its operations into machine instructions and supplies the calling
 convention and object-format details.

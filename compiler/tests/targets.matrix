@@ -1174,6 +1174,7 @@ negative/utf8-index-needs-u32-or-position | linux-x86-64, linux-arm64, macos-arm
 negative/utf8-index-position-identity-is-exact | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64
+negative/variant-case-declaration-duplicate-payload | linux-x86-64, macos-arm64
 negative/variant-case-does-not-belong | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-duplicate | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-payload-disagrees | linux-x86-64, linux-arm64, macos-arm64

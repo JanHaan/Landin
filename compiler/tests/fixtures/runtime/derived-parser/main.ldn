@@ -336,7 +336,7 @@ public main: () -> (code: i32) =
       or diag.message_length(long_note) <> 16 then
         return
     end if
-    long_item := parser.long_at(long_tree, 0) else (missing)
+    long_item := parser.at(long_tree, 0) else (missing)
         _ = missing
         return
     end

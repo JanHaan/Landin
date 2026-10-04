@@ -362,8 +362,9 @@ package body Landin.Diagnostics.Explanations is
                & "n [0280] [1750].",
             when Catalogue.Size_Limit_Exceeded =>
                "An implementation limit, not a rule of the language: a r"
-               & "outine declares, or a struct holds, more than the compil"
-               & "er admits (D247). Split it.",
+               & "outine has too many declarations, or a struct body or va"
+               & "riant case has too many fields (D247). Split the routine"
+               & " or reduce the fields in the body or case.",
             when Catalogue.Invalid_Option_Declaration =>
                "An `option` declaration breaks [1530]/D202: it is inside"
                & " a fixed arm, reuses a compiler-owned configuration atom"
