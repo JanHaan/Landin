@@ -3,7 +3,6 @@ with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces;
 with Interfaces.C;
-with Interfaces;
 with Interfaces.C.Strings;
 with System;
 

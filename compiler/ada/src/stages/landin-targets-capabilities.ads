@@ -51,17 +51,9 @@ package Landin.Targets.Capabilities is
 
    function Hosted_System_Of (Facts : Target_Facts) return Hosted_System;
 
-   --  The GNU configuration triplet the platform's toolchain is installed
-   --  under, so that the backend can find an assembler and linker by the
-   --  convention every GNU toolchain already follows: cross tools carry the
-   --  `--target` argument as a prefix, which is why the pinned GNAT appears
-   --  as `x86_64-pc-linux-gnu-gcc` on Linux x86-64,
-   --  `aarch64-linux-gnu-gcc` on Linux arm64 and
-   --  `aarch64-apple-darwin24.6.0-gcc` on this macOS host.  Each was
-   --  measured in its own environment rather than recalled.
    --  The target's toolchain triplet.  Linux and Cortex-M use it as the
-   --  prefix of their GNU compiler driver: `x86_64-pc-linux-gnu-gcc` and
-   --  `arm-none-eabi-gcc` respectively.  Darwin carries
+   --  prefix of their GNU compiler driver: `x86_64-pc-linux-gnu-gcc`,
+   --  `aarch64-linux-gnu-gcc` or `arm-none-eabi-gcc`.  Darwin carries
    --  `arm64-apple-darwin` as target metadata but defaults independently
    --  to Apple's `/usr/bin/clang`.
    --
