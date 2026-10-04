@@ -156,9 +156,9 @@ composed_seven_buckets: () -> (ok: bool) =
                 ok = false
                 return
             end
-        placed = placed and first_seen.key.identity == 3
-                        and second_seen.key.identity == 4
-                        and third_seen.key.identity == 2
+        placed = placed and first_seen.key.identity == 2
+                        and second_seen.key.identity == 3
+                        and third_seen.key.identity == 4
     end
     map.remove(value, first) else 0
     removed: bool = missing_value(value, 2, 4294967296)

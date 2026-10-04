@@ -142,3 +142,26 @@ make `failed` true. Callers may reuse their message bytes after `note` returns.
 Each bounded entry reserves its full inline message capacity, even when the
 message is short; empty log construction leaves the private entry array
 uninitialized and initializes its counters only.
+
+## Migrating container providers and indices
+
+Allocator conformances now provide `grow(state, block, old_size, new_size,
+alignment) -> bool`. A provider may always return false; refusal must change
+neither storage nor provider state. Success retains the address and existing
+bytes and transfers ownership of the enlarged extent to the caller, which
+later frees that exact extent. Zero-byte vectors retain allocation and free
+calls rather than using this extension path.
+
+`pool.slot` no longer has `occupied`. Its `size` is the maximum `usize` for a
+vacant slot, including after a successful free; zero denotes an occupied
+zero-byte request. Direct constructors must also retain `free_index`, which
+belongs to the pool's lowest-index free heap. Prefer `pool.over` to initialize
+the caller's metadata and use the public allocation/count operations.
+
+Tree IDs, ordinal arguments and leaf counts now use `usize`; migrate explicitly
+typed `u32` callers. Names remain borrowed. Node records retain constant-time
+branch range sums in two target-sized cumulative words. Map iteration is now
+insertion order: updating a value retains position, while removing and
+reinserting appends. Public map compositions must preserve both live links per
+bucket, the head/tail pair, and the capacity-valued end markers. Increased
+record sizes can reduce capacity within the same backing extent.

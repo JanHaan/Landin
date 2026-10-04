@@ -855,13 +855,15 @@ make the node representation serializable: copying a text descriptor does not
 copy or relocate its backing. [0860]'s shallow reference-field limits still
 apply to the retained names.
 
-The library uses the `distinct u32` representation shown above for
+The library uses a widened `distinct usize` representation rather than the
+compact historical sketch above for
 `node_id`. Construction and extraction are explicit; the `id` and `ordinal`
 convenience functions retain that same boundary. This replaces the earlier
 one-field nominal workaround. New branches may name only existing contiguous
 children. Empty
 branches are allowed, and shared children are counted once per incoming path.
-Each immutable node stores its checked `u32` leaf total, so queries use bounded
+Each immutable node stores its checked `usize` leaf total and a two-word
+cumulative total, so range sums and queries use constant work and bounded
 stack space even for deep structures. Overflow is a declared refusal before
 publication. The recursive code below remains the equivalent counting sketch,
 not the library's execution strategy.

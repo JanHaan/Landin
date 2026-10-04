@@ -83,7 +83,7 @@ public add_branch: (provider: type is mem.allocator, inout value: tree_value,
                    ! mem.out_of_memory | too_many_nodes
                    | invalid_children | too_many_leaves =
     id = try next_id(length(value))
-    begins: usize = usize(usize(first))
+    begins: usize = usize(first)
     amount: usize = usize(count)
     available: usize = length(value)
     fail invalid_children when begins > available
@@ -131,7 +131,7 @@ end add_branch
 
 public get: (value: tree_value, id: node_id)
             -> (result: node_value from value) ! no_such_node =
-    result = vec.get(value.nodes, usize(usize(id))) else (problem)
+    result = vec.get(value.nodes, usize(id)) else (problem)
         _ = problem
         fail no_such_node
     end

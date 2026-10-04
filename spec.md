@@ -16085,10 +16085,10 @@ inner allocator.
 the monotonic `core/mem.arena` and hosted `core/heap`. Construction receives an
 explicit byte pointer and exact extent, a positive uniform slot size, a finite
 slot count, a slot alignment, and a caller-supplied initialized `[]mut
-pool.slot`. Each record holds occupancy, the live request extent, and one
+pool.slot`. Each record holds the live request extent or vacancy sentinel, and one
 free-index heap entry; the heap uses the same caller-supplied slice and no
 other storage. The slice length is the explicit finite bookkeeping capacity and
-the requested slot count may not exceed it. Construction clears the active
+the requested slot count may not exceed it. Construction initializes the active
 records only after every configuration check succeeds. The caller reserves
 those records for the provider while it is in use. Its result's `from base,
 bookkeeping` clause retains both when the actuals have tracked origins, and a
