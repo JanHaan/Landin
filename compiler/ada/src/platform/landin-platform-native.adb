@@ -3,6 +3,7 @@ with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces.C;
 with Interfaces;
+with Interfaces.C.Strings;
 with System;
 
 package body Landin.Platform.Native is
@@ -126,6 +127,61 @@ package body Landin.Platform.Native is
       return Same_Object
         (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) /= 0;
    end Paths_Overlap;
+
+   overriding function Paths_Overlap_Any
+     (Host : Native_Filesystem; Left : String; Rights : Path_List)
+      return Boolean
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      Paths : aliased Strings.chars_ptr_array
+        (1 .. C.size_t (Rights.Length)) := (others => Strings.Null_Ptr);
+      function Overlaps_Any
+        (Destination : C.char_array;
+         Sources : System.Address;
+         Count : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_overlaps_any";
+      Overlap : Boolean;
+   begin
+      if Rights.Is_Empty then
+         return False;
+      end if;
+      if Left = ""
+        or else (for some Byte of Left => Byte = Character'Val (0))
+      then
+         return True;
+      end if;
+      for Index in Paths'Range loop
+         declare
+            Right : constant String := Rights (Positive (Index));
+         begin
+            if Right = ""
+              or else (for some Byte of Right => Byte = Character'Val (0))
+            then
+               for Free_Index in Paths'Range loop
+                  Strings.Free (Paths (Free_Index));
+               end loop;
+               return True;
+            end if;
+            Paths (Index) := Strings.New_String (Right);
+         end;
+      end loop;
+      Overlap := Overlaps_Any
+        (C.To_C (Left), Paths'Address, C.size_t (Rights.Length)) /= 0;
+      for Index in Paths'Range loop
+         Strings.Free (Paths (Index));
+      end loop;
+      return Overlap;
+   exception
+      when others =>
+         for Index in Paths'Range loop
+            Strings.Free (Paths (Index));
+         end loop;
+         raise;
+   end Paths_Overlap_Any;
 
    overriding function Working_Directory
      (Host : Native_Filesystem) return String

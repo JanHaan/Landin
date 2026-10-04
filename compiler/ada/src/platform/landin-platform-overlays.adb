@@ -48,6 +48,18 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Paths_Overlap (Left, Right));
 
+   overriding function Paths_Overlap_Any
+     (Host : Overlay; Left : String; Rights : Path_List) return Boolean
+   is
+   begin
+      for Right of Rights loop
+         if Left = Right then
+            return True;
+         end if;
+      end loop;
+      return Host.Under.Paths_Overlap_Any (Left, Rights);
+   end Paths_Overlap_Any;
+
    overriding function Same_File
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Same_File (Left, Right));

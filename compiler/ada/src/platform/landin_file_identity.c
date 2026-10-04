@@ -37,6 +37,8 @@
 int landin_same_file(const char *left, const char *right);
 int landin_same_existing_file(const char *left, const char *right);
 int landin_existing_file_key(const char *path, char *key, size_t length);
+int landin_overlaps_any(const char *left, const char *const *rights,
+                        size_t count);
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
 int landin_directory_access_denied(const char *path);
@@ -313,6 +315,21 @@ static int same_name(const struct destination *a, const struct destination *b)
     return landin_names_alias(a->name, b->name, name_rules(a->directory));
 }
 
+static int destinations_overlap(const struct destination *a,
+                                const struct destination *b)
+{
+    if (a->exists && b->exists)
+        return a->object.st_dev == b->object.st_dev
+            && a->object.st_ino == b->object.st_ino;
+    /* In a stable namespace, an existing and an absent object cannot alias. */
+    if (a->exists != b->exists)
+        return 0;
+    if (a->parent.st_dev != b->parent.st_dev
+        || a->parent.st_ino != b->parent.st_ino)
+        return 0;
+    return same_name(a, b);
+}
+
 int landin_same_file(const char *left, const char *right)
 {
     struct destination a;
@@ -320,16 +337,28 @@ int landin_same_file(const char *left, const char *right)
 
     if (destination(left, &a, 0) != 0 || destination(right, &b, 0) != 0)
         return -1;
-    if (a.exists && b.exists)
-        return a.object.st_dev == b.object.st_dev
-            && a.object.st_ino == b.object.st_ino;
-    /* In a stable namespace, an existing and an absent object cannot alias. */
-    if (a.exists != b.exists)
+    return destinations_overlap(&a, &b);
+}
+
+/* One preflight destination against the loaded sources. A failed lookup is
+   overlap, just as landin_same_file's -1 is at the Ada boundary. */
+int landin_overlaps_any(const char *left, const char *const *rights,
+                        size_t count)
+{
+    struct destination a;
+    struct destination b;
+    size_t i;
+
+    if (count == 0)
         return 0;
-    if (a.parent.st_dev != b.parent.st_dev
-        || a.parent.st_ino != b.parent.st_ino)
-        return 0;
-    return same_name(&a, &b);
+    if (destination(left, &a, 0) != 0)
+        return 1;
+    for (i = 0; i < count; ++i) {
+        if (destination(rights[i], &b, 0) != 0
+            || destinations_overlap(&a, &b) != 0)
+            return 1;
+    }
+    return 0;
 }
 
 /* Input deduplication needs positive existing-object identity. In particular,

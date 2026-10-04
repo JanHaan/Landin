@@ -196,6 +196,19 @@ package body Landin.Testing.Fakes is
       return False;
    end Paths_Overlap;
 
+   overriding function Paths_Overlap_Any
+     (Host : Fake_Filesystem; Left : String;
+      Rights : Landin.Platform.Path_List) return Boolean
+   is
+   begin
+      for Right of Rights loop
+         if Host.Paths_Overlap (Left, Right) then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Paths_Overlap_Any;
+
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean
    is

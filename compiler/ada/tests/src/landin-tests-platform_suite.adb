@@ -1318,6 +1318,27 @@ package body Landin.Tests.Platform_Suite is
          and then not Host.Same_File
            (Original, Original & Character'Val (0) & "ignored"),
          "contents, missing leaves and invalid paths cannot prove identity");
+      declare
+         Sources : Landin.Platform.Path_List;
+      begin
+         Landin.Testing.Check
+           (Item, not Host.Paths_Overlap_Any (Original, Sources),
+            "an empty identity batch has no collision");
+         Sources.Append (Root & "/copy.ldn");
+         Sources.Append (Root & "/new.json");
+         Landin.Testing.Check
+           (Item, not Host.Paths_Overlap_Any (Original, Sources),
+            "a batch of distinct paths stays distinct");
+         Sources.Append (Root & "/symbolic.json");
+         Landin.Testing.Check
+           (Item, Host.Paths_Overlap_Any (Original, Sources),
+            "a late symbolic alias collides in a batch");
+         Landin.Testing.Check
+           (Item, Host.Paths_Overlap_Any (Root & "/new.s",
+                                           Landin.Platform.Arguments
+                                             (Root & "/parent/new.s")),
+            "missing leaves under aliased parents collide in a batch");
+      end;
    end Native_Path_Identity;
 
    --  The name rule the native identity adapter applies to two absent

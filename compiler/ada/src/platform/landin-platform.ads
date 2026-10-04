@@ -50,6 +50,12 @@ package Landin.Platform is
    function Paths_Overlap
      (Host : Filesystem; Left, Right : String) return Boolean is abstract;
 
+   --  Compare one destination with a snapshot of source paths. Native hosts
+   --  can reuse the resolved destination throughout the batch.
+   function Paths_Overlap_Any
+     (Host : Filesystem; Left : String; Rights : Path_List)
+      return Boolean is abstract;
+
    --  True only for proven identity of existing objects. Unknown identity
    --  is False: source deduplication must never discard an uncertain input.
    --  Like Paths_Overlap, this assumes no concurrent namespace replacement.

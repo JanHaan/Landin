@@ -1121,6 +1121,7 @@ package body Landin.Driver is
               or else Landin.IR.Caller_Source_Count
                 (Landin.Stages.Code (Context).all) > 0;
             Destinations : Landin.Platform.Path_List;
+            Source_Paths : Landin.Platform.Path_List;
             Cortex : constant Boolean :=
               Landin.Targets.Architecture_Of (Facts)
                 = Landin.Targets.Cortex_M0;
@@ -1193,6 +1194,12 @@ package body Landin.Driver is
                   end if;
                end loop;
             end if;
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               Source_Paths.Append
+                 (Landin.Source.Name
+                    (Landin.Stages.Source
+                       (Context, Landin.Stages.Nth_Source (Context, Index))));
+            end loop;
             if Report_Seen then
                for Path of Destinations loop
                   if Conflicts_With (Path) then
@@ -1204,23 +1211,13 @@ package body Landin.Driver is
                      return;
                   end if;
                end loop;
-               for Index in 1 .. Landin.Stages.Source_Count (Context) loop
-                  declare
-                     Path : constant String := Landin.Source.Name
-                       (Landin.Stages.Source
-                          (Context,
-                           Landin.Stages.Nth_Source (Context, Index)));
-                  begin
-                     if Conflicts_With (Path) then
-                        Bad_Use := True;
-                        Note_Failure
-                          (Code_Unknown_Option,
-                           "build report collides with source: "
-                           & Report_Path);
-                        return;
-                     end if;
-                  end;
-               end loop;
+               if Host.Paths_Overlap_Any (Report_Path, Source_Paths) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "build report collides with source: " & Report_Path);
+                  return;
+               end if;
             end if;
 
             for Index in Destinations.First_Index .. Destinations.Last_Index
@@ -1237,27 +1234,20 @@ package body Landin.Driver is
                      return;
                   end if;
                end loop;
-               for Source in 1 .. Landin.Stages.Source_Count (Context) loop
-                  if Host.Paths_Overlap
-                    (Destinations (Index), Landin.Source.Name
-                       (Landin.Stages.Source
-                          (Context,
-                           Landin.Stages.Nth_Source (Context, Source))))
-                    or else (Emit = Emit_Executable and then Debug_Enabled
-                      and then Landin.Backend.Toolchain.Debug_Overwrites
-                        (Product_Path, Landin.Source.Name
-                           (Landin.Stages.Source (Context,
-                             Landin.Stages.Nth_Source (Context, Source))),
-                         Facts, Host))
-                  then
-                     Bad_Use := True;
-                     Note_Failure
-                       (Code_Unknown_Option,
-                        "artifact collides with source: "
-                        & Destinations (Index));
-                     return;
-                  end if;
-               end loop;
+               if Host.Paths_Overlap_Any
+                 (Destinations (Index), Source_Paths)
+                 or else (Emit = Emit_Executable and then Debug_Enabled
+                   and then (for some Path of Source_Paths =>
+                     Landin.Backend.Toolchain.Debug_Overwrites
+                       (Product_Path, Path, Facts, Host)))
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "artifact collides with source: "
+                     & Destinations (Index));
+                  return;
+               end if;
             end loop;
 
             if Cortex and then not Firmware_Seen
