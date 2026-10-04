@@ -11,7 +11,8 @@ public process: (provider: type is mem.allocator, inout allocator: provider,
     defer drop_message(allocator, pending)
     kept = 0
     loop do
-        line: []u8 = next_line(allocator, reading, world) else (problem)
+        line: []u8 = next_line_at_least(allocator, reading, world,
+                                       cfg.leading_level) else (problem)
             break when problem == at_end
             fail mem.out_of_memory when problem == mem.out_of_memory
             fail io.io_failed

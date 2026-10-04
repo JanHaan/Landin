@@ -21,6 +21,8 @@ arg5: []u8 = "2"
 arg6: []u8 = "--out"
 arg7: []u8 = "out"
 arg8: []u8 = "in"
+arg_error: []u8 = "ERROR"
+arg_debug: []u8 = "DEBUG"
 
 public main: () -> (code: i32) =
     code = 1
@@ -69,6 +71,8 @@ public main: () -> (code: i32) =
       or memory.close_calls <> 2 or memory.write_calls <> 7
     code = 2
     return when not long_lines()
+    code = 11
+    return when not skipped_long_lines()
     code = 3
     return when not failure_sweep()
     code = 4
@@ -202,6 +206,62 @@ count_finite_region: () -> (ok: bool) =
     ok = kept == 1 and not files[0].opened
          and app.equal(out[0..<world_state.output_used], expected)
 end count_finite_region
+--  A leading level filter discards long lines, including an unterminated
+--  final one, without needing allocator space proportional to their length.
+skipped_long_lines: () -> (ok: bool) =
+    ok = false
+    mut host := heap.host()
+    mut source := mem.new_bytes(host, usize(20011)) else (problem) _ = problem
+        return
+    end
+    defer mem.drop_bytes(host, source)
+    ok = skipped_long_lines_in(mem.bytes(source))
+end skipped_long_lines
+
+skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
+    ok = false
+    first: []u8 = "DEBUG "
+    for at in usize(0)..<lenof first do data[at] = first[at] end for
+    for at in usize(6)..<usize(9999) do data[at] = 120 end for
+    data[9999] = 10
+    selected: []u8 = "ERROR keep\n"
+    for at in usize(0)..<lenof selected do data[10000 + at] = selected[at] end for
+    for at in usize(0)..<lenof first do data[10011 + at] = first[at] end for
+    for at in usize(10017)..<usize(20011) do data[at] = 120 end for
+    mut destination: [32]u8 = zeroed
+    mut errors: [32]u8 = zeroed
+    mut files: [2]io.memory_file
+    files[0] = (name: "in", contents: data[0..<20011], length: 20011,
+                cursor: 0, readable: true, writable: false,
+                opened: false, writing: false)
+    files[1] = (name: "out", contents: destination[0..<32], length: 0,
+                cursor: 0, readable: true, writable: true,
+                opened: false, writing: false)
+    args: [7]io.argument = [(data: addr arg0[0], length: lenof arg0),
+      (data: addr arg_debug[0], length: lenof arg_debug),
+      (data: addr arg0[0], length: lenof arg0),
+      (data: addr arg_error[0], length: lenof arg_error),
+      (data: addr arg6[0], length: lenof arg6),
+      (data: addr arg7[0], length: lenof arg7),
+      (data: addr arg8[0], length: lenof arg8)]
+    mut memory := io.memory_world(files[0..<2], args[0..<7],
+                                  destination[0..<0], errors[0..<32])
+    memory.read_limit = 3
+    world: any io.world = any(addr memory)
+    mut backing: [1024]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut arena := mem.arena_over_unchecked(base, usize(8192))
+    mut program := region.new_region(addr arena)
+    kept: usize = app.run(program, world, usize(7)) else (problem)
+        _ = problem
+        region.release_region(program)
+        return
+    end
+    region.release_region(program)
+    ok = kept == 1 and files[1].length == lenof selected
+      and app.equal(destination[0..<lenof selected], selected)
+      and not files[0].opened and not files[1].opened
+end skipped_long_lines_in
 
 --  Walk every allocation boundary until one complete run succeeds. The
 --  counted parent includes both region metadata and application payloads.

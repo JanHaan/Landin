@@ -4202,7 +4202,8 @@ backing must remain valid, transfer ranges must not overlap, counters need
 headroom, and stale handles can address a reopened slot. D153 records these
 bounds. The complete derived hosted application, `examples/derived_hosted`,
 uses this same world interface, copies retained arguments, assembles complete
-lines and selects heterogeneous filters and destinations at runtime. Its derivation
+kept lines and selects heterogeneous filters and destinations at runtime. A
+leading level filter discards rejected lines from a bounded prefix. Its derivation
 manifest records exact argument, buffering, retry and cleanup policies.
 
 Both providers expose each user argument as a pointer and byte length, never as

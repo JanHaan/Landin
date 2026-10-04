@@ -33,8 +33,12 @@ a missing input leaves an existing output file untouched.
 Input is split on LF, which is removed from each line. Other bytes, including
 CR, remain unchanged. Empty lines are real lines, a final unterminated line is
 returned once, and a trailing LF creates no phantom line. Reader chunks have
-an explicit size, while lines and text messages grow through the supplied
-allocator without a fixed line-length limit. Allocation and read failures are
+an explicit size, while kept lines and copied messages grow through the supplied
+allocator without a fixed line-length limit. Consecutive leading `--level`
+filters can reject a line from at most six prefix bytes; the reader then
+discards it through the same fixed-size chunk, including an unterminated final
+line. A line that reaches another filter is assembled before that filter runs.
+Allocation and read failures are
 terminal for that reader; its partial internal line is not a retry protocol.
 
 Every argument is copied before parsing, including a private trailing NUL for
