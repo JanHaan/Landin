@@ -1849,6 +1849,7 @@ package body Landin.Backend.Arm64 is
          procedure C_Entry;
          procedure C_Call (Value : Landin.IR.Value_Id);
          procedure C_Result (Value : Landin.IR.Value_Id);
+         C_Result_Place : AAPCS64_ABI.Location;
 
          procedure C_Chunk
            (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean)
@@ -1918,6 +1919,8 @@ package body Landin.Backend.Arm64 is
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
          begin
+            --  Every leave in this routine has the same C result carrier.
+            C_Result_Place := Plan.Result;
             if Hidden > 0 then
                if Plan.Result.Shape.Indirect then
                   Emit ("mov x9, x8");
@@ -2067,26 +2070,25 @@ package body Landin.Backend.Arm64 is
          end C_Call;
 
          procedure C_Result (Value : Landin.IR.Value_Id) is
-            Plan : constant AAPCS64_ABI.Plan := AAPCS64_ABI.Signature_Plan
-              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+            Place : AAPCS64_ABI.Location renames C_Result_Place;
          begin
-            if Plan.Result.Shape.Size = 0 then
+            if Place.Shape.Size = 0 then
                return;
-            elsif Plan.Result.Shape.Indirect then
+            elsif Place.Shape.Indirect then
                Load_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1), "x9");
                Frame_Address (Slot_Offset
                  (Layout, Landin.IR.Result_Slot (Of_Unit, Item)), "x10");
-               Copy_Bytes (Plan.Result.Shape.Size);
+               Copy_Bytes (Place.Shape.Size);
             else
-               if Plan.Result.Shape.Aggregate then
+               if Place.Shape.Aggregate then
                   Frame_Address (Slot_Offset
                     (Layout, Landin.IR.Result_Slot (Of_Unit, Item)), "x13");
                else
                   Frame_Address (Value_Offset (Layout,
                     Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1)), "x13");
                end if;
-               for Chunk in 1 .. Plan.Result.Shape.Count loop
-                  C_Chunk (Plan.Result, Chunk, False);
+               for Chunk in 1 .. Place.Shape.Count loop
+                  C_Chunk (Place, Chunk, False);
                end loop;
                Extend ("x0", Result);
             end if;
