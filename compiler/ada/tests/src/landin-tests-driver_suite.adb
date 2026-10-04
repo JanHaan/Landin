@@ -15,6 +15,7 @@ package body Landin.Tests.Driver_Suite is
 
    use type Landin.Platform.Termination;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Capture_Mode;
 
    function Contains (Text : String; Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
@@ -3076,6 +3077,46 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Libraries_Keep_Their_Written_Order;
 
+   procedure Failed_Darwin_Archive_Reports_Stderr
+     (Item : in out Landin.Testing.Context);
+
+   procedure Failed_Darwin_Archive_Reports_Stderr
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File
+        ("main.ldn", "linker.library(""missing"")" & LF & Entry_Program);
+      Args.Append ("--target=darwin-arm64");
+      Args.Append ("--emit=exe");
+      Args.Append ("main.ldn");
+      Tools.Set_Result
+        (7, "", Error_Output => "archive query failed: invalid SDK" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a failed archive query is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0501")
+            and then Contains
+              (Report, "cannot resolve Darwin archive libmissing.a")
+            and then Contains (Report, "archive query failed: invalid SDK"),
+            "the diagnostic names the archive and carries tool stderr");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 1, "linking stops after the failed query");
+         Landin.Testing.Check
+           (Item, Tools.Call_At (1).Capture = Landin.Platform.Output_Only,
+            "the archive query keeps stdout separate from stderr");
+      end;
+   end Failed_Darwin_Archive_Reports_Stderr;
+
    procedure Builtin_Imports_Never_Search_Roots
      (Item : in out Landin.Testing.Context);
 
@@ -4979,6 +5020,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "libraries keep their written order",
          Libraries_Keep_Their_Written_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "failed Darwin archive reports stderr",
+         Failed_Darwin_Archive_Reports_Stderr'Access);
       Landin.Testing.Register
         (Into, "driver", "builtin imports never search roots",
          Builtin_Imports_Never_Search_Roots'Access);

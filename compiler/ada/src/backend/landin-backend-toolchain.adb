@@ -185,6 +185,22 @@ package body Landin.Backend.Toolchain is
            or else Result.Exit_Code /= 0
          then
             Ready := False;
+            declare
+               Output : constant String :=
+                 Ada.Strings.Unbounded.To_String (Result.Output);
+            begin
+               Result.Output := Ada.Strings.Unbounded.To_Unbounded_String
+                 ("cannot resolve Darwin archive lib" & Library & ".a");
+               if Output /= "" then
+                  Ada.Strings.Unbounded.Append
+                    (Result.Output, ASCII.LF & Output);
+               end if;
+               if Ada.Strings.Unbounded.Length (Result.Error_Output) > 0 then
+                  Ada.Strings.Unbounded.Append
+                    (Result.Output, ASCII.LF
+                     & Ada.Strings.Unbounded.To_String (Result.Error_Output));
+               end if;
+            end;
             return;
          end if;
          declare
