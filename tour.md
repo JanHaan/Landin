@@ -927,10 +927,12 @@ sum_four: (values: [4]f32) -> (sum: f32) =
     end for
 end sum_four
 
-va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
-vb := va * va
-sc := va * 2.0        -- a scalar on either side is fine
-s := sum_four(vb)     -- ordinary function, not a reduction builtin
+array_example: () -> (sc: [4]f32, s: f32) =
+    va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
+    vb := va * va
+    sc = va * 2.0        -- a scalar on either side is fine
+    s = sum_four(vb)     -- ordinary function, not a reduction builtin
+end array_example
 ```
 
 D209 lifts `+`, `-`, `*`, `/` and unary `-` over numeric arrays, and `%`,
