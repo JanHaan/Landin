@@ -141,19 +141,20 @@ lists each target's levels. The level is a value beside `Target_Facts`, so
 every capability query above, and every layout, calling convention and C
 ABI, is the same at every level of a family.
 
-| target | default | other levels | what a higher level selects | its tool arguments |
+| target | default | other levels | what a higher level selects | tool arguments and assembly directives |
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
 | `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly above the baseline; `-Wa,-march=` with the level at every level |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly |
-| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | `.arch` in the assembly, `-march=` for the assembler and linker |
+| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
 plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
 instruction is refused by the assembler unless the build assumes v3. Linux
 arm64 likewise passes its selected level to the assembler at every level,
-including the baseline. The pinned
+including the baseline. The default Cortex `armv6-m` level likewise
+names its CPU in both tool arguments and assembly directive. The pinned
 GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
