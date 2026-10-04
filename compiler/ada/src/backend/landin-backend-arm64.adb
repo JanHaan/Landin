@@ -39,6 +39,7 @@ package body Landin.Backend.Arm64 is
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Element_Total;
+   use type Landin.Optimization.Objective;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
    use type Landin.Types.Folded;
@@ -166,23 +167,287 @@ package body Landin.Backend.Arm64 is
       return Count;
    end Save_Count;
 
-   --  The reference frame with one eight-byte home per declared register.
+   type Value_Location is record
+      Home : Natural := 0;
+      Register : Natural := 0;
+      Size : Held_Size := Landin.Targets.Byte_8;
+      Address_Required : Boolean := False;
+   end record;
+   package Location_Vectors is new Ada.Containers.Vectors
+     (Positive, Value_Location);
+   type Allocation_Plan is record
+      Values : Location_Vectors.Vector;
+      Homes : Natural := 0;
+      Saves : Saved_Set := [others => False];
+   end record;
+
+   function Allocate
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Allocation_Plan;
+
+   function Allocate
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Allocation_Plan
+   is
+      Value_Count : constant Natural := Landin.IR.Value_Count (Of_Unit, Item);
+      Result : Allocation_Plan;
+   begin
+      Result.Values := Location_Vectors.To_Vector
+        (Value_Location'(others => <>),
+         Ada.Containers.Count_Type (Value_Count));
+      Result.Saves := Declared (Of_Unit, Item);
+      if Options.Optimize = Landin.Optimization.None then
+         for Index in 1 .. Value_Count loop
+            declare
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+            begin
+               if Kind in Landin.Types.Scalar_Name then
+                  Result.Homes := Result.Homes + 1;
+                  Result.Values (Index).Home := Result.Homes;
+                  Result.Values (Index).Size := Size_Of (Kind, Facts);
+               end if;
+            end;
+         end loop;
+         return Result;
+      end if;
+      declare
+         type Counts is array (Positive range <>) of Natural;
+         package Count_Buffers is new Landin.Backend.Work_Arrays
+           (Natural, Counts, 0);
+         Start_Data, Last_Data, Sequence_Data, Next_Release_Data,
+           Next_Free_Data : Count_Buffers.Buffer (Value_Count);
+         Release_Data : Count_Buffers.Buffer (Value_Count + 1);
+         Starts : Counts renames Start_Data.Data.all;
+         Lasts : Counts renames Last_Data.Data.all;
+         Sequence : Counts renames Sequence_Data.Data.all;
+         Releases : Counts renames Release_Data.Data.all;
+         Next_Release : Counts renames Next_Release_Data.Data.all;
+         Next_Free : Counts renames Next_Free_Data.Data.all;
+         Free_Homes : array (Held_Size) of Natural := [others => 0];
+         Busy_Until : array (19 .. 28) of Natural := [others => 0];
+         Declared_Set : constant Saved_Set := Result.Saves;
+         Tick : Natural := 0;
+         Traffic : Natural := 0;
+      begin
+         for Block_Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            declare
+               Block : constant Landin.IR.Block_Id :=
+                 Landin.IR.Block_Id (Block_Index);
+            begin
+               for Position in 1 .. Landin.IR.Length
+                 (Of_Unit, Item, Block)
+               loop
+                  declare
+                     Index : constant Positive := Positive
+                       (Landin.IR.Nth_Value
+                          (Of_Unit, Item, Block, Position));
+                  begin
+                     Tick := Tick + 1;
+                     Sequence (Tick) := Index;
+                     Starts (Index) := Tick;
+                     Lasts (Index) := Tick;
+                  end;
+               end loop;
+            end;
+         end loop;
+         for Index in 1 .. Value_Count loop
+            declare
+               Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id
+                 (Index);
+               Op : constant Landin.IR.Opcode := Landin.IR.Op_Of
+                 (Of_Unit, Item, Value);
+            begin
+               if Landin.IR.Result_Of (Of_Unit, Item, Value) in
+                 Landin.Types.Scalar_Name
+               then
+                  Traffic := Traffic + 1;
+               end if;
+               for Position in 1 .. Landin.IR.Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  declare
+                     Operand : constant Positive := Positive
+                       (Landin.IR.Nth_Operand
+                          (Of_Unit, Item, Value, Position));
+                  begin
+                     Lasts (Operand) := Natural'Max
+                       (Lasts (Operand), Starts (Index));
+                     Traffic := Traffic + 1;
+                     if Op in Landin.IR.Assembly | Landin.IR.Call
+                       | Landin.IR.Indirect_Call
+                     then
+                        Result.Values (Operand).Address_Required := True;
+                     end if;
+                  end;
+               end loop;
+               if Op = Landin.IR.Evidence_Self then
+                  declare
+                     Projection : constant Landin.IR.Value_Id :=
+                       Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
+                     Receiver : constant Positive := Positive
+                       (Landin.IR.Nth_Operand
+                          (Of_Unit, Item, Projection, 1));
+                  begin
+                     Lasts (Receiver) := Natural'Max
+                       (Lasts (Receiver), Starts (Index));
+                  end;
+               end if;
+               if Op in Landin.IR.Call | Landin.IR.Indirect_Call then
+                  Result.Values (Index).Address_Required := True;
+               elsif Op = Landin.IR.Leave
+                 and then Landin.IR.Signature_Of (Of_Unit, Item)
+                   /= Landin.IR.No_Signature
+                 and then Landin.IR.Signature_Uses_C_ABI
+                   (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+               then
+                  for Position in 1 .. Landin.IR.Operand_Count
+                    (Of_Unit, Item, Value)
+                  loop
+                     Result.Values (Positive (Landin.IR.Nth_Operand
+                       (Of_Unit, Item, Value, Position)))
+                         .Address_Required := True;
+                  end loop;
+               end if;
+            end;
+         end loop;
+         for Position in 1 .. Value_Count loop
+            declare
+               Index : constant Positive := Positive (Sequence (Position));
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+               Released : Natural := Releases (Position);
+            begin
+               while Released /= 0 loop
+                  declare
+                     Old : Value_Location renames Result.Values (Released);
+                  begin
+                     Next_Free (Old.Home) := Free_Homes (Old.Size);
+                     Free_Homes (Old.Size) := Old.Home;
+                     Released := Next_Release (Released);
+                  end;
+               end loop;
+               if Kind in Landin.Types.Scalar_Name then
+                  declare
+                     Place : Value_Location renames Result.Values (Index);
+                  begin
+                     Place.Size := Size_Of (Kind, Facts);
+                     if Options.Optimize = Landin.Optimization.Speed
+                       and then Traffic >= 12
+                       and then not Place.Address_Required
+                       and then Kind not in Landin.Types.Float_Name
+                       and then Lasts (Index) > Position
+                     then
+                        for Number in Busy_Until'Range loop
+                           if not Declared_Set (Number)
+                             and then Busy_Until (Number) < Position
+                           then
+                              Place.Register := Number;
+                              Busy_Until (Number) := Lasts (Index);
+                              Result.Saves (Number) := True;
+                              exit;
+                           end if;
+                        end loop;
+                     end if;
+                     if Place.Register = 0 then
+                        if Free_Homes (Place.Size) /= 0 then
+                           Place.Home := Free_Homes (Place.Size);
+                           Free_Homes (Place.Size) := Next_Free (Place.Home);
+                        else
+                           Result.Homes := Result.Homes + 1;
+                           Place.Home := Result.Homes;
+                        end if;
+                        Next_Release (Index) :=
+                          Releases (Lasts (Index) + 1);
+                        Releases (Lasts (Index) + 1) := Index;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+      return Result;
+   end Allocate;
+
+   function Frame_For
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Plan : Allocation_Plan;
+      Maximum : Landin.Targets.Byte_Count) return Frame;
+
+   function Frame_For
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Plan : Allocation_Plan;
+      Maximum : Landin.Targets.Byte_Count) return Frame
+   is
+      Saves : constant Natural := Save_Count (Plan.Saves);
+   begin
+      if Options.Optimize = Landin.Optimization.None then
+         if Saves = 0 then
+            return Laid_Out (Of_Unit, Item, Facts, Maximum);
+         end if;
+         return Laid_Out (Of_Unit, Item, Facts, Maximum, Saves);
+      end if;
+      declare
+         package Mask_Buffers is new Landin.Backend.Work_Arrays
+           (Boolean, Home_Mask, True);
+         package Value_Buffers is new Landin.Backend.Work_Arrays
+           (Natural, Spill_Assignments, 0);
+         package Extent_Buffers is new Landin.Backend.Work_Arrays
+           (Landin.Targets.Layouts.Field_Extent,
+            Landin.Targets.Layouts.Field_Extent_Array, (0, 1));
+         Slots_Data : Mask_Buffers.Buffer
+           (Landin.IR.Slot_Count (Of_Unit, Item));
+         Values_Data : Value_Buffers.Buffer (Natural (Plan.Values.Length));
+         Spills_Data : Extent_Buffers.Buffer (Plan.Homes);
+         Values : Spill_Assignments renames Values_Data.Data.all;
+         Spills : Landin.Targets.Layouts.Field_Extent_Array renames
+           Spills_Data.Data.all;
+         Save_Homes : constant Landin.Targets.Layouts.Field_Extent_Array
+           (1 .. Saves) := [others => (8, 8)];
+      begin
+         for Index in Values'Range loop
+            declare
+               Place : Value_Location renames Plan.Values (Index);
+            begin
+               Values (Index) := Place.Home;
+               if Place.Home /= 0 then
+                  Spills (Place.Home) :=
+                    (Landin.Targets.Byte_Count
+                       (Landin.Targets.Bytes (Place.Size)),
+                     Landin.Targets.Alignment_Of (Facts, Place.Size));
+               end if;
+            end;
+         end loop;
+         return Laid_Out
+           (Of_Unit, Item, Facts, Slots_Data.Data.all, Values,
+            Spills, Save_Homes, Maximum);
+      end;
+   end Frame_For;
+
+   --  Preflight, emission and debug output rebuild the same deterministic
+   --  value plan; only source slots have debugger locations.
    function Routine_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
       Maximum : Landin.Targets.Byte_Count) return Frame;
 
    function Routine_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
       Maximum : Landin.Targets.Byte_Count) return Frame
    is
-      Saves : constant Natural := Save_Count (Declared (Of_Unit, Item));
+      Plan : constant Allocation_Plan :=
+        Allocate (Of_Unit, Item, Facts, Options);
    begin
-      if Saves = 0 then
-         return Laid_Out (Of_Unit, Item, Facts, Maximum);
-      end if;
-      return Laid_Out (Of_Unit, Item, Facts, Maximum, Saves);
+      return Frame_For (Of_Unit, Item, Facts, Options, Plan, Maximum);
    end Routine_Frame;
 
    function Debug_Plan
@@ -195,9 +460,8 @@ package body Landin.Backend.Arm64 is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Frame
    is
-      pragma Unreferenced (Options);
    begin
-      return Routine_Frame (Of_Unit, Item, Facts, 16#7fff_ffff#);
+      return Routine_Frame (Of_Unit, Item, Facts, Options, 16#7fff_ffff#);
    end Debug_Plan;
 
    function Debug_Frame
@@ -250,14 +514,13 @@ package body Landin.Backend.Arm64 is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean
    is
-      pragma Unreferenced (Options);
       Limit : constant Landin.Targets.Byte_Count := 16#7fff_ffff#;
       Layout : Frame;
    begin
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Routine_Frame (Of_Unit, Item, Facts, Limit);
+      Layout := Routine_Frame (Of_Unit, Item, Facts, Options, Limit);
       if Extent (Layout) > Limit then
          return False;
       end if;
@@ -1219,9 +1482,11 @@ package body Landin.Backend.Arm64 is
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Layout : constant Frame := Routine_Frame
-           (Of_Unit, Item, Facts, 16#7fff_ffff#);
-         Saves : constant Saved_Set := Declared (Of_Unit, Item);
+         Plan : constant Allocation_Plan :=
+           Allocate (Of_Unit, Item, Facts, Options);
+         Layout : constant Frame := Frame_For
+           (Of_Unit, Item, Facts, Options, Plan, 16#7fff_ffff#);
+         Saves : constant Saved_Set := Plan.Saves;
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
@@ -1291,8 +1556,13 @@ package body Landin.Backend.Arm64 is
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9") is
          begin
-            Frame_Memory (False, Size_Of_Value (Value), Register,
-                          Value_Offset (Layout, Value));
+            if Plan.Values (Positive (Value)).Register /= 0 then
+               Emit ("mov " & Register & ", x" & Trimmed (Natural'Image
+                 (Plan.Values (Positive (Value)).Register)));
+            else
+               Frame_Memory (False, Size_Of_Value (Value), Register,
+                             Value_Offset (Layout, Value));
+            end if;
          end Load_Value;
 
          procedure Store_Value
@@ -1328,8 +1598,24 @@ package body Landin.Backend.Arm64 is
                   Put (Done & ":");
                end;
             end if;
-            Frame_Memory (True, Size_Of_Value (Value), Register,
-                          Value_Offset (Layout, Value));
+            if Plan.Values (Positive (Value)).Register /= 0 then
+               declare
+                  Destination : constant String := "x" & Trimmed
+                    (Natural'Image (Plan.Values (Positive (Value)).Register));
+                  Bits : constant Natural := 8 * Natural
+                    (Landin.Targets.Bytes (Size_Of_Value (Value)));
+               begin
+                  if Bits = 64 then
+                     Emit ("mov " & Destination & ", " & Register);
+                  else
+                     Emit ("ubfx " & Destination & ", " & Register
+                           & ", #0, #" & Trimmed (Natural'Image (Bits)));
+                  end if;
+               end;
+            else
+               Frame_Memory (True, Size_Of_Value (Value), Register,
+                             Value_Offset (Layout, Value));
+            end if;
          end Store_Value;
 
          procedure Load_Slot
@@ -3417,7 +3703,11 @@ package body Landin.Backend.Arm64 is
          Platform_Directive (Platform.End_Function (Format, Symbol (Item)));
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
-             (Item => Item, Frame_Bytes => Extent (Layout), others => <>));
+             (Item => Item, Frame_Bytes => Extent (Layout),
+              Spill_Bytes => Spill_Bytes (Layout),
+              Save_Bytes => Save_Bytes (Layout),
+              Register_Count => Save_Count (Plan.Saves),
+              Spill_Count => Plan.Homes, others => <>));
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs

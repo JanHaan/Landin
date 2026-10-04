@@ -8450,8 +8450,98 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end Size_Float_Conversions_Share_Decode;
 
+   procedure Arm64_Scalar_Homes_Reuse_And_Promote
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Scalar_Homes_Reuse_And_Promote
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Reference_Text, Size_Text, Speed_Text :
+        Ada.Strings.Unbounded.Unbounded_String;
+      Reference_Report, Size_Report, Speed_Report :
+        Landin.Build_Reports.Report;
+
+      procedure Build
+        (Mode : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Report : in out Landin.Build_Reports.Report);
+
+      procedure Build
+        (Mode : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Report : in out Landin.Build_Reports.Report)
+      is
+      begin
+         Landin.Backend.Arm64.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Stages.Target (Work),
+            (Optimize => Mode, Specialize => Landin.Optimization.Off),
+            Text, Report);
+      end Build;
+
+      function Traffic
+        (Text : Ada.Strings.Unbounded.Unbounded_String) return Natural;
+
+      function Traffic
+        (Text : Ada.Strings.Unbounded.Unbounded_String) return Natural
+      is
+         Source : constant String := Ada.Strings.Unbounded.To_String (Text);
+      begin
+         return Occurrences (Source, HT & "ldr ")
+           + Occurrences (Source, HT & "str ");
+      end Traffic;
+   begin
+      Lower
+        (Work, "public f: (x: i32) -> (result: i32) =" & LF
+         & "    result = (((((((x + 1) + 1) + 1) + 1) + 1) + 1) + 1)"
+         & LF & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "scalar chain lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Build (Landin.Optimization.None, Reference_Text, Reference_Report);
+      Build (Landin.Optimization.Size, Size_Text, Size_Report);
+      Build (Landin.Optimization.Speed, Speed_Text, Speed_Report);
+      Landin.Testing.Check
+        (Item, Landin.Build_Reports.Nth_Routine
+           (Size_Report, 1).Frame_Bytes
+           < Landin.Build_Reports.Nth_Routine
+               (Reference_Report, 1).Frame_Bytes,
+         "nonoverlapping scalar values share frame homes");
+      Landin.Testing.Check
+        (Item, Landin.Build_Reports.Nth_Routine
+           (Speed_Report, 1).Frame_Bytes
+           < Landin.Build_Reports.Nth_Routine
+               (Reference_Report, 1).Frame_Bytes
+           and then Traffic (Speed_Text) < Traffic (Size_Text),
+         "saved registers lower scalar traffic and keep the frame smaller");
+      Landin.Testing.Check
+        (Item, Landin.Build_Reports.Nth_Routine
+           (Size_Report, 1).Spill_Count
+           < Landin.Build_Reports.Nth_Routine
+               (Reference_Report, 1).Spill_Count
+           and then Landin.Build_Reports.Nth_Routine
+             (Speed_Report, 1).Register_Count > 0,
+         "the build report names reused spills and promoted registers");
+      Landin.Testing.Check
+        (Item, Contains
+           (Ada.Strings.Unbounded.To_String (Speed_Text), "str x19, [x15]")
+           and then Contains
+             (Ada.Strings.Unbounded.To_String (Speed_Text),
+              "ldr x19, [x15]"),
+         "promoted values preserve the callee-saved register");
+   end Arm64_Scalar_Homes_Reuse_And_Promote;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "arm64 scalar homes reuse and promote",
+         Arm64_Scalar_Homes_Reuse_And_Promote'Access);
       Landin.Testing.Register
         (Into, "backend", "Cortex scalar homes reuse adjacent address",
          Cortex_Scalar_Homes_Reuse_Adjacent_Address'Access);
