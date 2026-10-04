@@ -1098,6 +1098,21 @@ class RoadmapStructure(unittest.TestCase):
                 self.assertTrue(any(where == "docs/ir.md" and cited in why
                                     for where, why in said))
 
+    def test_site_sources_are_checked_but_generated_pages_are_not(self):
+        from check_controls import tree
+        with tree(written={
+                "docs/site/README.md": "See %s for the rest.\n" % PLANNED,
+                "docs/site/llms.py": "# See %s for the rest.\n" % MEASURED,
+                "docs/site/site/index.html": "See %s for the rest.\n" % CLOSED,
+        }):
+            said = [(where, why) for where, _, why
+                    in checker.check_roadmap_citations(True)]
+        self.assertEqual(
+            {where for where, _ in said},
+            {"docs/site/README.md", "docs/site/llms.py"})
+        self.assertTrue(any(PLANNED in why for _, why in said))
+        self.assertTrue(any(MEASURED in why for _, why in said))
+
     def test_a_letter_and_a_digit_is_not_a_citation(self):
         #  The inherited review records are spelled like a byte, a decision
         #  and an erratum, so the rule leaves them to review.
