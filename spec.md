@@ -15521,10 +15521,14 @@ the public error set. Excess nesting is reported and recovered internally.
 Only `core/mem.out_of_memory` and `core/io.io_failed` leave `parse_file`.
 
 The same parser body runs with bounded and streaming D154 providers. No
-specialized parser copy is emitted or required. Loops and the complete UTF-8
-text model were not yet enabled, so scanner, recovery and sequence walks use
-recursion over `core/text`'s byte positions; that is an implementation
-substitution, not a second parser design.
+specialized parser copy is emitted or required. When loops and the complete
+UTF-8 text model were not yet enabled, scanner, recovery and sequence walks
+used recursion over `core/text`'s byte positions as an implementation
+substitution, not a second parser design. Now that loops are enabled, recovery
+skips malformed-line tokens in a loop: the recursive walk could exhaust the
+process stack before reaching a boundary. Scanner and sequence walks remain
+recursive, and recovery still leaves newline, brace and end tokens for its
+caller.
 
 The program also pins general compilation rules already implied by the
 language. A `try` call followed by another statement is the statement form of
