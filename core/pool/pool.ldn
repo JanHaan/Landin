@@ -237,7 +237,19 @@ pool_free: (inout state: fixed_pool,
     dec state.live_count
 end pool_free
 
-fixed_pool is mem.allocator (alloc: pool_alloc, free: pool_free)
+pool_grow: (inout state: fixed_pool, block: ptr mut u8,
+            old_size: usize, new_size: usize, alignment: usize)
+           -> (grown: bool) =
+    _ = state.live_count
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end pool_grow
+
+fixed_pool is mem.allocator (alloc: pool_alloc, grow: pool_grow,
+                             free: pool_free)
 
 public capacity: (state: provider) -> (count: usize) =
     count = state.slot_count

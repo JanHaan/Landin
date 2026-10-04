@@ -23,7 +23,19 @@ probe_free: (inout state: probe, block: ptr mut u8, size: usize) -> none =
     state.last_free_size = size
 end probe_free
 
-probe is mem.allocator (alloc: probe_alloc, free: probe_free)
+probe_grow: (inout state: probe, block: ptr mut u8,
+             old_size: usize, new_size: usize, alignment: usize)
+            -> (grown: bool) =
+    _ = state.calls
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end probe_grow
+
+probe is mem.allocator (alloc: probe_alloc, grow: probe_grow,
+                        free: probe_free)
 
 zero_item: type = [0]u8
 

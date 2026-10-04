@@ -72,8 +72,21 @@ counted_free: (inner_provider: type,
     end if
 end counted_free
 
+counted_grow: (inner_provider: type,
+               inout state: counted(inner_provider), block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (grown: bool) =
+    _ = state.live
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end counted_grow
+
 (inner_provider: type is mem.allocator) counted(inner_provider)
-    is mem.allocator (alloc: counted_alloc, free: counted_free)
+    is mem.allocator (alloc: counted_alloc, grow: counted_grow,
+                      free: counted_free)
 
 public remaining: (inner_provider: type,
                    state: counted(inner_provider)) -> (count: usize) =

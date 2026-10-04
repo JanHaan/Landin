@@ -12,8 +12,8 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
-| `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth copies privately, rolls back on failure and publishes a complete replacement last. |
+| `core/mem` | `allocator` with `alloc`/`grow`/`free`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
+| `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
@@ -26,6 +26,8 @@ padding; it need not have a distinct address. Arena free does not reclaim
 individual allocations. A pool zero-byte request consumes a slot and must be
 freed with its original size. `new_bytes(0)` instead returns an empty descriptor
 without asking the provider. These are deliberately distinct contracts.
+An arena can extend its current top allocation if the larger extent fits;
+other allocations between vector growths force the normal replacement path.
 
 Zero-sized vector elements retain logical capacity in `usize`; it is not
 silently truncated to a physical byte count. Nonzero byte-count overflow is

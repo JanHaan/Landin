@@ -10395,7 +10395,7 @@ identified the helper-side-effect path that argument omitted.
 
 **Chosen:** withdraw both builtin forms. An arena is an ordinary allocator
 value with explicit backing and extent, such as `mem.arena_over`. Ordinary
-conformance supplies allocation and free. The existing inout-receiver
+conformance supplies allocation, optional in-place growth and free. The existing inout-receiver
 `mem.allocator` is a generic evidence contract, not itself object-safe; an
 ordinary pointer-receiver adapter permits calls through `any` without changing
 that contract. The frontend has no privileged knowledge of `core/mem`. The
@@ -15298,7 +15298,12 @@ minimum unresolved. The allocator pressure case and D151 established the
 honest raw-storage boundary, but did not compose it into the modules the
 derived parser can use.
 
-**Chosen:** `core/mem.allocator(provider)` has `alloc` and `free` entries.
+**Chosen:** `core/mem.allocator(provider)` has `alloc`, `grow` and `free`
+entries. `grow` may extend the same block from an old byte extent to a larger
+one; it returns false without changing the block or provider when it cannot.
+Callers fall back to allocation, transfer and free after a refusal. This
+addition lets a monotonic arena extend its current top allocation without
+spending the old extent again; other providers may always refuse.
 Allocation reports the declared `out_of_memory` atom. `arena_over` builds a
 monotonic allocator over a caller-supplied pointer and byte extent, aligning
 each successful result and refusing a result that does not fit. `fail_over`
@@ -15316,12 +15321,13 @@ semantics; the named refusals now report that disposition.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
-`get` and `pop` expose only initialized values. Growth allocates an empty
-replacement, transfers the complete initialized prefix, rolls
-back that replacement on failure, and publishes it only after draining and
-freeing the old storage. D194 replaces the original recursive traversal with
-ordinary loops for positive-sized items and checks capacity arithmetic before
-allocation. Zero-sized items use a bulk witness transition.
+`get` and `pop` expose only initialized values. Growth first offers the
+provider an in-place extension. If refused, it allocates an empty replacement,
+iteratively transfers the complete initialized prefix, rolls back that
+replacement on failure, and publishes it only after draining and freeing the
+old storage. D194 replaces the original recursive traversal with
+ordinary loops for positive-sized items and bulk witness transitions for
+zero-sized items, and checks capacity arithmetic before allocation.
 A failing reserve leaves the old list and its values
 unchanged. Pointer elements are valid inputs; no `zeroable` constraint is
 introduced. `get` and `pop` translate raw bounds/empty results to
@@ -15761,7 +15767,7 @@ language does not have.
 
 The block half is refused because four questions decide it and neither
 document answers one of them. Which type the block name has, and how it meets
-[1360]'s two-operation allocator contract without the frontend depending on
+[1360]'s allocator contract without the frontend depending on
 `core/mem`. Where the region's bytes come from and how many, on a host and on
 a 32 KB part, given that [0820]'s own promise is that the extent is exact
 rather than guessed. Whether exhaustion is `out_of_memory` or a trap. And how
@@ -15908,8 +15914,14 @@ composition. It is not a public test API or a promise that a particular growth
 factor is part of the list's public interface.
 
 Positive-sized copy and drain use loops with stack usage independent of list
-length; zero-sized copy and drain take constant work. Only the old initialized
-prefix is transferred. The fresh list remains private until
+length; zero-sized copy and drain take constant work. Only the
+old initialized prefix is transferred. A positive-byte vector may instead
+extend its existing allocation when the provider confirms that the same block
+owns the larger extent. Its initialized prefix and pointer stay in place;
+only its private capacity changes. A refusal changes neither provider nor
+vector state and proceeds to the ordinary replacement allocation. Zero-byte
+items always use the replacement path and retain their exact allocation/free
+counts. For replacement, the fresh list remains private until
 that copy succeeds and the old initialized values have been drained and their
 allocation freed with its original exact byte extent. Publication is last.
 Failed allocation leaves pointer values and the list shape intact, and a retry

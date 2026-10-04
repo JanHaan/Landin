@@ -2786,7 +2786,7 @@ value parameter may appear among them.
                                item:  list_item,  next:   list_next)
 
 (provider: type is allocator) counted(provider) is allocator
-    (alloc: counted_alloc, free: counted_free)
+    (alloc: counted_alloc, grow: counted_grow, free: counted_free)
 ```
 
 The functions supplying the entries are generic themselves.
@@ -3152,6 +3152,8 @@ with in C because it is too awkward.
 allocator: type = concept (provider: type)
     alloc: (inout a: provider, size: usize, alignment: usize)
            -> (p: ptr mut u8) ! out_of_memory
+    grow: (inout a: provider, p: ptr mut u8, old_size: usize,
+           new_size: usize, alignment: usize) -> (grown: bool)
     free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
@@ -3165,6 +3167,10 @@ makes the type `list(t, provider)`, so a list in an arena and a list
 on the heap become different types and no function takes
 both. Threading keeps the type parameterised by `t` alone,
 and costs one argument at every call that can allocate.
+`grow` may extend the same block to a larger byte extent without moving it.
+A refusal returns `false` with the block and provider unchanged, so a container
+can try a fresh allocation. An arena can use this when the block is its latest
+allocation; providers without in-place growth return `false`.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
 monotonic provider over an explicit extent. The separately imported
