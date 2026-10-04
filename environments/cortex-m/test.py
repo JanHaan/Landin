@@ -168,6 +168,32 @@ class ProbeFailures(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'inventory disagrees'):
                     inventory()
 
+    def test_corpus_hashes_compiler_once_and_direct_fixture_retains_digest(self):
+        import backend
+        import backend_corpus
+        from setup import sha
+        from unittest.mock import patch
+        name = 'runtime/fixed-conditional-runtime'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            refine = root / 'refine'
+            refine.write_bytes(b'compiler identity')
+            output = root / 'corpus'
+            output.mkdir()
+            with (patch('backend.build', return_value=root / 'program.elf'),
+                  patch('backend.execute'),
+                  patch('backend.sha', wraps=sha) as fixture_digest,
+                  patch('backend_corpus.sha', wraps=sha) as corpus_digest,
+                  patch('backend_corpus.inventory', return_value={name: {'mode': 'execute'}})):
+                summary = backend_corpus.execute(output, root, refine)
+                self.assertEqual(len(summary['results']), 4)
+                self.assertEqual(fixture_digest.call_count, 0)
+                self.assertEqual(corpus_digest.call_count, 1)
+                self.assertEqual(summary['compiler_sha256'], sha(refine))
+                direct = backend.fixture(Run(root, root), refine, name, 'none', 'off')
+                self.assertEqual(direct['compiler_sha256'], summary['compiler_sha256'])
+                self.assertEqual(fixture_digest.call_count, 1)
+
     def test_a_level_must_change_the_executed_image(self):
         from backend import LEVELS, levels_of, level_flags
         from backend_corpus import divide_lowering

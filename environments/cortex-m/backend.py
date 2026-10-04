@@ -214,7 +214,8 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     return elf
 
 
-def fixture(run, refine, name, optimize, specialize, level='armv6-m'):
+def fixture(run, refine, name, optimize, specialize, level='armv6-m',
+            include_compiler_sha256=True):
     source = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(source / 'fixture.meta')
     require(meta['class'] == 'runtime', 'development selector requires runtime fixture')
@@ -232,8 +233,11 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m'):
     elf = build(run, refine, inputs, optimize, specialize, level=level)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else
             int(meta.get('status', '0')), meta.get('traps') == 'yes', level=level)
-    return {'fixture': name, 'optimize': optimize, 'specialize': specialize,
-            'compiler_sha256': sha(refine), 'status': 'passed'}
+    result = {'fixture': name, 'optimize': optimize, 'specialize': specialize,
+              'status': 'passed'}
+    if include_compiler_sha256:
+        result['compiler_sha256'] = sha(refine)
+    return result
 
 
 def levels_of(meta):

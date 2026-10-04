@@ -153,7 +153,8 @@ def execute(output, tools, refine, selected=(), profiles=()):
                 result.update(source_refusal(run, refine, name, row))
             else:
                 try:
-                    fixture(run, refine, name, opt, spec, level)
+                    fixture(run, refine, name, opt, spec, level,
+                            include_compiler_sha256=False)
                     result['verdict'] = 'executed'
                     if level != 'armv6-m':
                         result['lowering'] = divide_lowering(run)
