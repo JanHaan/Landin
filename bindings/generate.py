@@ -1128,10 +1128,10 @@ class Generator:
         # C typedefs and objects share the ordinary identifier namespace with
         # parameters/locals. Reserve every header declaration, not just the
         # selected record: casts can also name nested types and called functions.
-        used = self.ast.identifiers | self._c_symbols
+        used: set[str] = set()
         result = []
         for name in names:
-            while name in used:
+            while name in used or name in self.ast.identifiers or name in self._c_symbols:
                 name += "_"
             used.add(name)
             result.append(name)
