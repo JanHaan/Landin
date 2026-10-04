@@ -1515,12 +1515,11 @@ package body Landin.Driver is
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
                        Landin.Source_Maps.Create
-                         (Context, Unbounded.To_String (Emitted),
+                         (Context, Emitted,
                           All_Sources => Debug_Enabled,
                           Panic => (if Panic_Map then Panic'Access else null),
                           Digests => Digests'Access);
                   begin
-                     Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
                      Map_JSON := Map.JSON;
                   end;

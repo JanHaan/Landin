@@ -32,6 +32,7 @@ package body Landin.Tests.Host_Reports_Suite is
    procedure Byte_Encoding (Item : in out Landin.Testing.Context);
    procedure Adapter_Bytes (Item : in out Landin.Testing.Context);
    procedure Map_And_Report (Item : in out Landin.Testing.Context);
+   procedure Large_Assembly_Map_Bytes (Item : in out Landin.Testing.Context);
    procedure Whole_Plans (Item : in out Landin.Testing.Context);
    procedure Refused_Plans (Item : in out Landin.Testing.Context);
    procedure Host_Identity (Item : in out Landin.Testing.Context);
@@ -82,11 +83,13 @@ package body Landin.Tests.Host_Reports_Suite is
         & Landin.Source.Source_Id'Image (Id)
         & ",""path_hex"":""71220aff2e6c646e"",""source_sha256"":"""
         & GNAT.SHA256.Digest (Source) & """}";
-      Assembly : constant String := "# assembly" & LF;
+      Assembly_Input : constant String := "# assembly" & LF;
+      Assembly : US.Unbounded_String :=
+        US.To_Unbounded_String (Assembly_Input);
       Build_Id : constant String := GNAT.SHA256.Digest
-        ("Landin caller files" & LF & Files & LF & Assembly);
+        ("Landin caller files" & LF & Files & LF & Assembly_Input);
       Expected_Assembly : constant String :=
-        Assembly & "# Landin caller files " & Build_Id & LF;
+        Assembly_Input & "# Landin caller files " & Build_Id & LF;
    begin
       Landin.IR.Note_Caller_Source (Landin.Stages.Code (Context).all, Id);
       declare
@@ -98,7 +101,7 @@ package body Landin.Tests.Host_Reports_Suite is
             Digests => Digests'Access);
       begin
          Landin.Testing.Check_Equal
-           (Item, US.To_String (Map.Assembly), Expected_Assembly,
+           (Item, US.To_String (Assembly), Expected_Assembly,
             "shared encoding preserves the complete build identity");
          Landin.Testing.Check_Equal
            (Item, US.To_String (Map.JSON),
@@ -154,6 +157,31 @@ package body Landin.Tests.Host_Reports_Suite is
          end;
       end loop;
    end Map_And_Report;
+   procedure Large_Assembly_Map_Bytes
+     (Item : in out Landin.Testing.Context)
+   is
+      Context : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Original : constant String := [1 .. 131_073 => 'x'];
+      Assembly : US.Unbounded_String := US.To_Unbounded_String (Original);
+      Build_Id : constant String := GNAT.SHA256.Digest
+        ("Landin caller files" & LF & LF & Original);
+      Expected : constant String :=
+        Original & "# Landin caller files " & Build_Id & LF;
+      Map : constant Landin.Source_Maps.Artifact :=
+        Landin.Source_Maps.Create (Context, Assembly);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Map.Build_Id, Build_Id,
+         "the streamed build identity includes every original byte");
+      Landin.Testing.Check_Equal
+        (Item, US.To_String (Assembly), Expected,
+         "the identity is appended without changing assembly bytes");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+          (US.To_String (Map.JSON), GNAT.SHA256.Digest (Expected)) > 0,
+         "the emitted assembly digest crosses both hash chunk boundaries");
+   end Large_Assembly_Map_Bytes;
 
    procedure Whole_Plans (Item : in out Landin.Testing.Context) is
       Report : Reports.Report;
@@ -433,6 +461,9 @@ package body Landin.Tests.Host_Reports_Suite is
       Landin.Testing.Register
         (Into, "host reports", "debug map and report share source digests",
          Map_And_Report'Access);
+      Landin.Testing.Register
+        (Into, "host reports", "large assembly map preserves hashes",
+         Large_Assembly_Map_Bytes'Access);
       Landin.Testing.Register
         (Into, "host reports", "whole discriminated plans",
          Whole_Plans'Access);

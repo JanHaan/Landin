@@ -13,9 +13,32 @@ package body Landin.Source_Maps is
    function Hex (Value : String) return String
      renames Landin.Byte_Encoding.Hex;
 
+   procedure Update_Assembly
+     (Hash : in out GNAT.SHA256.Context;
+      Assembly : US.Unbounded_String);
+
+   procedure Update_Assembly
+     (Hash : in out GNAT.SHA256.Context;
+      Assembly : US.Unbounded_String)
+   is
+      Length : constant Natural := US.Length (Assembly);
+      First : Positive := 1;
+   begin
+      while First <= Length loop
+         declare
+            Last : constant Positive :=
+              (if Length - First < 65_535 then Length else First + 65_535);
+         begin
+            GNAT.SHA256.Update (Hash, US.Slice (Assembly, First, Last));
+            exit when Last = Length;
+            First := Last + 1;
+         end;
+      end loop;
+   end Update_Assembly;
+
    function Create
      (Context : in out Landin.Stages.Compilation;
-      Assembly : String;
+      Assembly : in out US.Unbounded_String;
       All_Sources : Boolean := False;
       Panic : access constant Landin.Panics.Plan := null;
       Digests : access Landin.Source_Digests.Cache := null) return Artifact
@@ -23,6 +46,8 @@ package body Landin.Source_Maps is
       Files : US.Unbounded_String;
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : Artifact;
+      Build_Hash : GNAT.SHA256.Context := GNAT.SHA256.Initial_Context;
+      Assembly_Hash : GNAT.SHA256.Context := GNAT.SHA256.Initial_Context;
    begin
       for Index in 1 .. (if All_Sources or Panic /= null
                          then Landin.Stages.Source_Count (Context)
@@ -69,18 +94,21 @@ package body Landin.Source_Maps is
             US.Append (Files, "}");
          end;
       end loop;
-      Result.Build_Id := GNAT.SHA256.Digest
-        ("Landin caller files" & LF & US.To_String (Files) & LF & Assembly);
+      GNAT.SHA256.Update (Build_Hash, "Landin caller files" & LF);
+      GNAT.SHA256.Update (Build_Hash, US.To_String (Files));
+      GNAT.SHA256.Update (Build_Hash, String'(1 => LF));
+      Update_Assembly (Build_Hash, Assembly);
+      Result.Build_Id := GNAT.SHA256.Digest (Build_Hash);
       --  Even a path-only or comment-only source change must distinguish
       --  the assembly artifacts. This comment allocates no runtime bytes.
-      Result.Assembly := US.To_Unbounded_String
-        (Assembly & "# Landin caller files " & Result.Build_Id & LF);
-      US.Append (Result.Assembly, Landin.Backend.Toolchain.Identity_Section
+      US.Append (Assembly, "# Landin caller files " & Result.Build_Id & LF);
+      US.Append (Assembly, Landin.Backend.Toolchain.Identity_Section
         (Result.Build_Id, Landin.Stages.Target (Context)));
+      Update_Assembly (Assembly_Hash, Assembly);
       Result.JSON := US.To_Unbounded_String
         ("{" & LF & "  ""build_id"":""" & Result.Build_Id & """," & LF
          & "  ""assembly_sha256"":"""
-         & GNAT.SHA256.Digest (US.To_String (Result.Assembly))
+         & GNAT.SHA256.Digest (Assembly_Hash)
          & """," & LF & "  ""files"": [" & LF & US.To_String (Files)
          & LF & "  ]" & LF & "}" & LF);
       return Result;

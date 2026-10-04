@@ -11,13 +11,14 @@ with Landin.Source_Digests;
 package Landin.Source_Maps is
    type Artifact is record
       Build_Id : String (1 .. 64);
-      Assembly : Ada.Strings.Unbounded.Unbounded_String;
       JSON : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
+   --  Append the identity to Assembly in place.  Its original bytes enter
+   --  Build_Id; the complete result enters assembly_sha256.
    function Create
      (Context : in out Landin.Stages.Compilation;
-      Assembly : String;
+      Assembly : in out Ada.Strings.Unbounded.Unbounded_String;
       All_Sources : Boolean := False;
       Panic : access constant Landin.Panics.Plan := null;
       Digests : access Landin.Source_Digests.Cache := null) return Artifact;
