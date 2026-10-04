@@ -4,21 +4,24 @@
 --  these cases hold Landin.Formatting to both.  The rules are the page's
 --  pairs, read from the page so it cannot drift from what the formatter
 --  does.  The edges are the bytes no example shows.  The corpus case is
---  the item's evidence: every Landin source in the repository is either
---  refused whole or formatted into the same tokens and the same comments,
---  and formatting the result again offers nothing.  The last case is what
---  the gate holds: `core`, the examples and the running examples are
---  formatted already.
+--  the item's evidence: every Landin source that scans and parses is
+--  formatted into the same tokens and comments, and formatting the result
+--  again offers nothing.  Sources that fail to scan or parse are refused
+--  whole.  The last case is what the gate holds: `core`, the examples and
+--  the running examples are formatted already.
 
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
+with Landin.Diagnostics.Lexical;
 with Landin.Formatting;
 with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Syntax.Parser;
+with Landin.Syntax;
 with Landin.Tokens.Lexer;
 with Landin.Tokens;
 
@@ -150,9 +153,25 @@ package body Landin.Tests.Formatting_Suite is
    function Held
      (Item  : in out Landin.Testing.Context;
       Label : String;
+      Text  : String;
+      Once  : Landin.Formatting.Result) return String;
+
+   function Held
+     (Item  : in out Landin.Testing.Context;
+      Label : String;
       Text  : String) return String
    is
       Once : constant Landin.Formatting.Result := Format (Text);
+   begin
+      return Held (Item, Label, Text, Once);
+   end Held;
+
+   function Held
+     (Item  : in out Landin.Testing.Context;
+      Label : String;
+      Text  : String;
+      Once  : Landin.Formatting.Result) return String
+   is
       Out_Text : constant String := Unbounded.To_String (Once.Text);
    begin
       if Once.Outcome = Landin.Formatting.Refused then
@@ -474,6 +493,29 @@ package body Landin.Tests.Formatting_Suite is
    is
       Files, Refused, Changed : Natural := 0;
 
+      --  Classify the source without asking the formatter.  A formatter
+      --  refusal with its own report must not turn a parseable corpus file
+      --  into an acceptable refusal.
+      function Parses (Text : String) return Boolean;
+
+      function Parses (Text : String) return Boolean is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Found   : Landin.Diagnostics.Diagnostic_List;
+      begin
+         Landin.Tokens.Lexer.Lex
+           (Sources.Get (Sources.Add ("probe.ldn", Text)), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+         declare
+            Tree : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            pragma Unreferenced (Tree);
+         begin
+            return not Found.Has_Errors;
+         end;
+      end Parses;
+
       --  Shapes the corpus holds once or twice, named so deleting one
       --  fails here instead of shrinking what this proves.  The first six
       --  are formatted, the last two refused.
@@ -497,10 +539,15 @@ package body Landin.Tests.Formatting_Suite is
       procedure Visit (Path, Text : String);
 
       procedure Visit (Path, Text : String) is
+         Parseable : constant Boolean := Parses (Text);
          Answer : constant Landin.Formatting.Result := Format (Text);
-         After  : constant String := Held (Item, Path, Text);
+         After  : constant String := Held (Item, Path, Text, Answer);
       begin
          Files := Files + 1;
+         Landin.Testing.Check
+           (Item, (Answer.Outcome = Landin.Formatting.Formatted) = Parseable,
+            Path & (if Parseable then " parses but was refused"
+                    else " does not parse but was formatted"));
          if Answer.Outcome = Landin.Formatting.Refused then
             Refused := Refused + 1;
          elsif After /= Text then
@@ -525,7 +572,7 @@ package body Landin.Tests.Formatting_Suite is
          & Files'Image & " were");
       Landin.Testing.Check
         (Item, Refused > 0 and then Refused < Files / 10,
-         "only sources that fail to scan or parse are refused, and"
+         "scan or parse refusals remain a minority, and"
          & Refused'Image & " were");
       Landin.Testing.Check
         (Item, Changed > 0, "and some were not in the layout");
