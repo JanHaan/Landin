@@ -85,6 +85,12 @@ public main: () -> (code: i32) =
     used = text.write_u32(output, used, 4294967295) else 99
     output_bytes: []u8 = text.written(output, used) else []
 
+    mut edge_storage: [13]u8 = [of 0]
+    mut edge: []mut u8 = edge_storage[0..<lenof edge_storage]
+    mut edge_used: usize = text.write_u32(edge, 0, 0) else 99
+    edge_used = text.write_u32(edge, edge_used, 10) else 99
+    edge_used = text.write_u32(edge, edge_used, 1000000000) else 99
+
     mut small_storage: [3]u8 = [7, 8, 9]
     mut small: []mut u8 = small_storage[0..<lenof small_storage]
     mut refused_write: bool = false
@@ -133,6 +139,10 @@ public main: () -> (code: i32) =
       and used == 11 and lenof output_bytes == 11
       and output_bytes[0] == 65 and output_bytes[1] == 52
       and output_bytes[10] == 53
+      and edge_used == 13 and edge[0] == 48
+      and edge[1] == 49 and edge[2] == 48
+      and edge[3] == 49 and edge[4] == 48
+      and edge[11] == 48 and edge[12] == 48
       and refused_write and small[0] == 7 and small[1] == 8
       and small[2] == 9
     then

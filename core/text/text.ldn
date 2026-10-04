@@ -324,22 +324,24 @@ public write_u32: (inout into: []mut u8, used: usize, value: u32)
                   -> (next: usize) ! no_space =
     fail no_space when used > lenof into
     mut digits: usize = 1
-    mut remaining: u32 = value
-    mut divisor: u32 = 1
-    while remaining >= 10 do
-        remaining /= 10
-        divisor *= 10
+    mut threshold: u32 = 10
+    while value >= threshold do
         inc digits
+        break when threshold == 1000000000
+        threshold *= 10
     end while
     fail no_space when digits > lenof into - used
 
-    mut offset: usize = 0
-    while divisor > 0 do
-        digit: u8 = u8(value / divisor % 10)
+    mut remaining: u32 = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: u32 = remaining / 10
+        digit: u8 = u8(remaining - quotient * 10)
+        dec offset
         into[used + offset] = digit + 48
-        divisor /= 10
-        inc offset
+        remaining = quotient
     end while
+    into[used] = u8(remaining) + 48
     next = used + digits
 end write_u32
 
