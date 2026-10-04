@@ -110,6 +110,44 @@ class GrammarCorpusCache(unittest.TestCase):
                 self.assertTrue(any("other.ldn" in where for where, _, _
                                     in CHECK.check_grammar_corpus(True)))
                 self.assertEqual(len(calls), 6)
+class FixtureMetadataCache(unittest.TestCase):
+    def test_reuses_metadata_without_leaking_the_firmware_row(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            meta = root / "compiler/tests/fixtures/positive/example/fixture.meta"
+            meta.parent.mkdir(parents=True)
+            meta.write_text("targets: linux-x86-64\n", encoding="utf-8")
+            driver = root / "compiler/tests/driver/fixture.json"
+            driver.parent.mkdir(parents=True)
+            driver.write_text('{"targets": "cortex-m"}', encoding="utf-8")
+            with patch.object(CHECK, "ROOT", str(root)):
+                records = CHECK.fixture_records()
+                meta.write_text("targets: macos-arm64\n", encoding="utf-8")
+                self.assertIs(CHECK.fixture_records(), records)
+                self.assertEqual(records["positive/example"][1]["targets"],
+                                 "linux-x86-64")
+                augmented = CHECK.prototype_evidence_records()
+                self.assertIn("firmware/derived-driver", augmented)
+                self.assertNotIn("firmware/derived-driver", records)
+            CHECK._fixture_records.cache_clear()
+
+    def test_a_different_root_reads_its_own_metadata(self):
+        with tempfile.TemporaryDirectory() as first, \
+                tempfile.TemporaryDirectory() as second:
+            for root, target in ((Path(first), "linux-x86-64"),
+                                 (Path(second), "macos-arm64")):
+                meta = root / "compiler/tests/fixtures/positive/example/fixture.meta"
+                meta.parent.mkdir(parents=True)
+                meta.write_text("targets: %s\n" % target, encoding="utf-8")
+            with patch.object(CHECK, "ROOT", first):
+                left = CHECK.fixture_records()
+            with patch.object(CHECK, "ROOT", second):
+                right = CHECK.fixture_records()
+            self.assertEqual(left["positive/example"][1]["targets"],
+                             "linux-x86-64")
+            self.assertEqual(right["positive/example"][1]["targets"],
+                             "macos-arm64")
+            CHECK._fixture_records.cache_clear()
 
 
 if __name__ == "__main__":

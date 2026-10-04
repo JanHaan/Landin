@@ -4536,19 +4536,28 @@ def markdown_register(relative, heading, columns):
 
 def fixture_records():
     """The metadata facts the coverage registers are allowed to cite."""
+    return _fixture_records(ROOT)
+
+
+#  Full document checks share this read-only snapshot across the diagnostic,
+#  coverage and construct matrices.  Key by root so checks of temporary test
+#  trees do not reuse the repository's metadata.
+@lru_cache(maxsize=1)
+def _fixture_records(root):
     records = {}
-    root = os.path.join(ROOT, "compiler/tests/fixtures")
-    if not os.path.isdir(root):
+    fixtures = os.path.join(root, "compiler/tests/fixtures")
+    if not os.path.isdir(fixtures):
         return records
-    for kind in sorted(os.listdir(root)):
-        directory = os.path.join(root, kind)
+    for kind in sorted(os.listdir(fixtures)):
+        directory = os.path.join(fixtures, kind)
         if not os.path.isdir(directory):
             continue
         for name in sorted(os.listdir(directory)):
             meta = os.path.join(directory, name, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            text = io.open(meta, encoding="utf-8").read()
+            with io.open(meta, encoding="utf-8") as stream:
+                text = stream.read()
             fields = {}
             for line in text.splitlines():
                 if line.startswith("#") or ":" not in line:
@@ -4855,7 +4864,7 @@ def prototype_evidence_records():
     It is not a hosted fixture and must never enter that harness implicitly.
     The one explicit record joins the same generated prototype reading copy.
     """
-    records = fixture_records()
+    records = dict(fixture_records())
     path = "compiler/tests/driver/fixture.json"
     with io.open(os.path.join(ROOT, path), encoding="utf-8") as stream:
         fields = json.load(stream)
