@@ -394,6 +394,25 @@ class CodeRules(unittest.TestCase):
     def test_when_on_an_exit_statement_passes(self):
         self.assertEqual(self.said("    break when ready\n"), [])
 
+    def test_when_inside_literals_and_comments_is_not_a_keyword(self):
+        code = (
+            'greeting: utf8 = "wait when ready"\n'
+            'escaped: utf8 = "say \\" when ready"\n'
+            'raw: utf8 = """wait\n'
+            'when ready\n'
+            '"""\n'
+            '-- when ready\n'
+            '--( outer when\n'
+            'inner when --( nested when )-- )--\n'
+            'somewhen: u32 = 1\n')
+        self.assertEqual(self.said(code), [])
+
+    def test_when_after_a_literal_is_still_reported(self):
+        said = self.said('    value = "wait when ready" when ready\n')
+        self.assertIn("'when' outside an exit statement", said)
+        self.assertIn("'when' outside an exit statement",
+                      self.said("    value = thing\twhen(ready)\n"))
+
     def test_one_name_declared_twice_in_a_module_is_reported(self):
         said = self.said("value: u32 = 1\nvalue: u32 = 2\n")
         self.assertTrue(any("twice" in why or "declared" in why

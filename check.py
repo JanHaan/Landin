@@ -360,6 +360,75 @@ def check(path):
     return sorted(set(out))
 
 
+def visible_code(lines):
+    """Keep code positions while masking literals and comments.
+
+    This is only for the cheap `when` placement rule, not a second lexer.
+    Raw literals and block comments can cross lines, so their state carries
+    across the input rather than restarting at each line.
+    """
+    raw_quotes = 0
+    block_depth = 0
+    for line in lines:
+        visible = list(line)
+        i = 0
+        while i < len(line):
+            start = i
+            if block_depth:
+                if line.startswith("--(", i):
+                    block_depth += 1
+                    i += 3
+                elif line.startswith(")--", i):
+                    block_depth -= 1
+                    i += 3
+                else:
+                    i += 1
+            elif raw_quotes:
+                if line[i] == '"':
+                    while i < len(line) and line[i] == '"':
+                        i += 1
+                    if i - start >= raw_quotes:
+                        i = start + raw_quotes
+                        raw_quotes = 0
+                else:
+                    i += 1
+            elif line.startswith("--(", i):
+                block_depth = 1
+                i += 3
+            elif line.startswith("--", i):
+                i = len(line)
+            elif line[i] == '"':
+                while i < len(line) and line[i] == '"':
+                    i += 1
+                if i - start >= 3:
+                    raw_quotes = i - start
+                else:
+                    i = start + 1
+                    while i < len(line):
+                        if line[i] == "\\":
+                            i = min(i + 2, len(line))
+                        elif line[i] == '"':
+                            i += 1
+                            break
+                        else:
+                            i += 1
+            elif line[i] == "'":
+                i += 1
+                while i < len(line):
+                    if line[i] == "\\":
+                        i = min(i + 2, len(line))
+                    elif line[i] == "'":
+                        i += 1
+                        break
+                    else:
+                        i += 1
+            else:
+                i += 1
+                continue
+            visible[start:i] = [" "] * (i - start)
+        yield "".join(visible)
+
+
 def check_code(lines, offset):
     """The six cheap rules, over one stretch of code."""
     out = []
@@ -379,9 +448,9 @@ def check_code(lines, offset):
                 out.append((n, "%r is a keyword and cannot be a name" % word))
 
     #  2. 'when' rides only on an exit statement
-    for n, line in enumerate(lines, 1):
+    for n, line in enumerate(visible_code(lines), 1):
         s = line.strip()
-        if not looks_like_code(line) or " when " not in s:
+        if not re.search(r"\bwhen\b", s):
             continue
         if not re.match(r"^(break|continue|return|fail)\b", s):
             out.append((n, "'when' outside an exit statement"))
