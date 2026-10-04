@@ -15,7 +15,7 @@ int main(void) {
     assert(setrlimit(RLIMIT_CORE, &no_core) == 0);
 #if defined(__linux__)
     /* A piped core handler ignores RLIMIT_CORE; suppress it for these forks. */
-    assert(prctl(PR_SET_DUMPABLE, 0) == 0);
+    assert(prctl(PR_SET_DUMPABLE, 0L, 0L, 0L, 0L) == 0);
 #endif
     for (unsigned raw = 0; raw != 256; ++raw) {
         unsigned field = (raw / 4) % 8;
