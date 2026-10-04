@@ -16,8 +16,8 @@ sieve: (inout composite: [101]bool) -> none =
     view[1] = true
     first_candidate: usize = 2
     for candidate in first_candidate..<lenof view do
-        if not view[candidate] then
-            mut multiple: usize = candidate + candidate
+        if not view[candidate] and candidate <= (lenof view - 1) / candidate then
+            mut multiple: usize = candidate * candidate
             while multiple < lenof view do
                 view[multiple] = true
                 multiple += candidate

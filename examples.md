@@ -382,7 +382,7 @@ end main
 
 ## Sieve of Eratosthenes
 
-The sieve exercises caller-owned fixed storage, writable and read-only slices, computed indexing, zeroed initialization, and nested traversal. It marks composites through 100 and verifies both the prime count and boundary values. This is the bounded-array form of the [Rosetta Code task](https://rosettacode.org/wiki/Sieve_of_Eratosthenes).
+The sieve exercises caller-owned fixed storage, writable and read-only slices, computed indexing, zeroed initialization, and nested traversal. It marks composites through 100 and verifies both the prime count and boundary values. Each prime starts marking at its square because smaller multiples already have a smaller prime factor; the division guard keeps that square within the array. This is the bounded-array form of the [Rosetta Code task](https://rosettacode.org/wiki/Sieve_of_Eratosthenes).
 
 Fixture source: `compiler/tests/fixtures/runtime/sieve-of-eratosthenes/main.ldn`.
 
@@ -405,8 +405,8 @@ sieve: (inout composite: [101]bool) -> none =
     view[1] = true
     first_candidate: usize = 2
     for candidate in first_candidate..<lenof view do
-        if not view[candidate] then
-            mut multiple: usize = candidate + candidate
+        if not view[candidate] and candidate <= (lenof view - 1) / candidate then
+            mut multiple: usize = candidate * candidate
             while multiple < lenof view do
                 view[multiple] = true
                 multiple += candidate
