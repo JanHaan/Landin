@@ -3668,30 +3668,24 @@ package body Landin.Stages.Lowering is
          Sources : array (1 .. Count) of Stored_Place;
          Borrowed : array (1 .. Count) of Boolean := [others => False];
          Arrays : array (1 .. Count) of Boolean := [others => False];
-         --  A name lookup cannot call code or mutate an earlier operand.
-         --  Restrict borrowing to this complete, side-effect-free form.
-         Named_Arrays : constant Boolean :=
+         --  Names and scalar literals cannot mutate an earlier operand.
+         --  Scalar values are still evaluated once into their small slots.
+         function Stable_Operand (Operand : Syn.Node_Id) return Boolean is
+           (if Type_At (Of_Tree, Operand) = Ty.Fixed_Array
+            then Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
+            else Syn.Kind (Of_Tree, Operand) in
+              Syn.Name_Reference | Syn.Integer_Literal | Syn.Float_Literal);
+
+         Stable_Operands : constant Boolean :=
            not Updating and then
              (if Unary then
-                Syn.Kind (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
-                  = Syn.Name_Reference
-                and then Type_At
-                  (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
-                    = Ty.Fixed_Array
+                Stable_Operand (Syn.Operand_Of (Of_Tree, Node))
               else
-                Syn.Kind (Of_Tree, Syn.Left_Of (Of_Tree, Node))
-                  = Syn.Name_Reference
-                and then Syn.Kind
-                  (Of_Tree, Syn.Right_Of (Of_Tree, Node))
-                    = Syn.Name_Reference
-                and then Type_At
-                  (Of_Tree, Syn.Left_Of (Of_Tree, Node))
-                    = Ty.Fixed_Array
-                and then Type_At
-                  (Of_Tree, Syn.Right_Of (Of_Tree, Node))
-                    = Ty.Fixed_Array);
+                Stable_Operand (Syn.Left_Of (Of_Tree, Node))
+                and then Stable_Operand (Syn.Right_Of (Of_Tree, Node)));
          Unpacked_Destination : constant Boolean :=
-           Destination.Base = 0
+           Destination.Place.Kind /= IR.Runtime_Address
+             and then Destination.Base = 0
              and then Destination.Steps.Is_Empty
              and then Stored_Shape (Destination, Shape).Packing.Bits = 0;
          Answer : Stored_Place;
@@ -3716,18 +3710,17 @@ package body Landin.Stages.Lowering is
             begin
                Arrays (Position) :=
                  Type_At (Of_Tree, Operand) = Ty.Fixed_Array;
-               if Named_Arrays and then Unpacked_Destination then
+               if Arrays (Position) and then Stable_Operands
+                 and then Unpacked_Destination
+               then
                   Sources (Position) :=
                     Lower_Stored_Place (Of_Tree, Operand, Scope);
                   Borrowed (Position) :=
                     Sources (Position).Place.Kind /= IR.Runtime_Address
                     and then Sources (Position).Base = 0
                     and then Sources (Position).Steps.Is_Empty
-                    and then
-                      (if Destination.Place.Kind = IR.Runtime_Address
-                       then Sources (Position).Place.Kind = IR.Frame_Slot
-                       else not Same_Root
-                         (Sources (Position).Place, Destination.Place))
+                    and then not Same_Root
+                      (Sources (Position).Place, Destination.Place)
                     and then Stored_Shape
                       (Sources (Position), Shape).Packing.Bits = 0;
                end if;
@@ -3757,7 +3750,7 @@ package body Landin.Stages.Lowering is
 
          Direct_Answer := Unpacked_Destination
            and then (for all Position in Borrowed'Range =>
-                       Borrowed (Position));
+                       not Arrays (Position) or else Borrowed (Position));
          if Direct_Answer then
             Answer := Destination;
          else
@@ -3842,9 +3835,8 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling, Answer.Place.Datum,
                            Index, Value, Site);
                      when IR.Runtime_Address =>
-                        IR.Emit_Shaped_Store
-                          (Unit.all, Filling, Answer.Place.Address,
-                           0, Index, Value, Site);
+                        raise Landin.Compiler_Defect with
+                          "array arithmetic answer is not direct storage";
                   end case;
                   One := IR.Emit_Number
                     (Unit.all, Filling, Ty.Usize, 1, False, Site);

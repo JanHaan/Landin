@@ -24,9 +24,18 @@ public main: () -> (code: i32) =
     source = [1, 2, 3]
     calls = 0
     source = source + scalar()
+    mut aliased: row = [1, 2, 3]
+    other: row = [10, 20, 30]
+    p: ptr mut row = addr aliased
+    p.val = aliased + other
+    mut broadcast: row = [0, 0, 0]
+    broadcast = aliased + 2
     if a[0] == 11 and a[1] == 22 and a[2] == 33
       and b[0] == 11 and b[1] == 22 and b[2] == 33 and ordered
       and calls == 1 and source[0] == 3 and source[1] == 4
       and source[2] == 5
+      and aliased[0] == 11 and aliased[1] == 22 and aliased[2] == 33
+      and broadcast[0] == 13 and broadcast[1] == 24
+      and broadcast[2] == 35
     then code = 42 else code = 1 end if
 end main
