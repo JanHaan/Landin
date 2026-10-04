@@ -1572,7 +1572,7 @@ bound to a module binding whose value is known. Not a call.
 There is no compile-time execution in this language, so a
 call is not a value the compiler holds, and [1830] refuses
 it as the construct it is rather than as a type error.
-Ordinary integer `+`, `-`, `*`, `/` and `rem` in a module image fold in the
+Ordinary integer `+`, `-`, `*`, `/` and `%` in a module image fold in the
 signed range from `-(2**64 - 1)` through `2**64 - 1`, independently of the host
 and destination width. Every intermediate must fit that fold range; the final
 image must fit its declared or inferred integer type. Thus a module binding
