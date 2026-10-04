@@ -105,9 +105,14 @@ shape is:
     "plain_char": "signed",
     "enum_policy": "clang-default"
   },
-  "declarations": []
+  "declarations": [
+    {"kind": "alias", "name": "size_type", "landin_name": "size_type"}
+  ]
 }
 ```
+
+At least one declaration is required. This example assumes the selected header
+defines a `size_type` typedef; replace it with a declaration in your header.
 
 `namespace` prefixes generated C symbols. Generated declaration order is stable,
 and every selected name must exist in Clang's AST. The metadata digest records
