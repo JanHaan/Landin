@@ -24,8 +24,9 @@ public equal: (left: []u8, right: []u8) -> (yes: bool) =
     yes = true
 end equal
 
---  Copy every user argument before parsing. Configuration, needles, and NUL
---  paths retain allocated copies, never the provider's argument descriptors.
+--  Copy every user argument before parsing. Admit each source byte directly
+--  into raw storage, then one NUL; no initialized byte is overwritten.
+--  Configuration, needles, and paths retain the allocated copies.
 public copy_arguments: (provider: type is mem.allocator, inout allocator: provider,
                         world: any io.world)
                        -> (arguments: vec.list([]u8))
@@ -39,12 +40,24 @@ public copy_arguments: (provider: type is mem.allocator, inout allocator: provid
         end
         maximum: usize = 0 -% 1
         fail mem.out_of_memory when arg.length == maximum
-        owner := try mem.new_bytes(allocator, arg.length + 1)
-        buffer := mem.bytes(owner)
-        copied: []u8 = io.copy_argument(arg, buffer) else (problem)
+        extent: usize = arg.length + 1
+        block: ptr mut u8 = try mem.allocate(allocator, extent, alignof u8)
+        mut owner := mem.reserve(item: u8, base: block, slots: extent)
+        mut index: usize = 0
+        while index < arg.length do
+            current: ptr u8 = ptr(usize(arg.data) + index)
+            _ = mem.admit(owner, current.val) else (problem)
+                _ = problem
+                fail bad_argument
+            end
+            inc index
+        end while
+        _ = mem.admit(owner, u8(0)) else (problem)
             _ = problem
             fail bad_argument
         end
+        initialized: []mut u8 = mem.used(owner)
+        copied: []u8 = initialized[0..<arg.length]
         for byte in copied do fail bad_argument when byte == 0 end for
         try vec.push(arguments, allocator, copied)
     end for

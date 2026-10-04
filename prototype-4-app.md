@@ -655,9 +655,11 @@ end on_progress
 ```
 Hosted entry. The sketch names its argument adapter `io.args`; the complete
 derivative uses the supplied world's `argument_count` and `argument` entries,
-then copies their bytes through `io.copy_argument` into initialized storage.
-Its hosted `entry` routine imports `core/io/hosted` and is the only place
-that acquires the heap and system world. No uninitialized view constructor is implied.
+then admits their bytes directly into run-lifetime raw storage and appends one
+NUL for paths. The ordinary `io.copy_argument` remains available for callers
+with initialized scratch. Its hosted `entry` routine imports `core/io/hosted`
+and is the only place that acquires the heap and system world.
+No uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
     mut h := hosted.host()

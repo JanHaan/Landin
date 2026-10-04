@@ -35,7 +35,9 @@ terminal for that reader; its partial internal line is not a retry protocol.
 
 Every argument is copied before parsing, including a private trailing NUL for
 paths. Configuration and match filters therefore survive later mutation of a
-memory provider's argument buffers. The reader returns a `from reading` view,
+memory provider's argument buffers. The copy admits each source byte into
+private raw storage, then admits the terminator; it never zeroes bytes that the
+copy will overwrite. The reader returns a `from reading` view,
 consumed before its next refill. Count delivery classifies that borrowed line
 without copying it. For text delivery, `process` copies each kept line into an
 owned message and appends one LF before calling an ordinary erased destination.
