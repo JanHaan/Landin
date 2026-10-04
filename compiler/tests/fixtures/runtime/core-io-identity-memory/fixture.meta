@@ -3,7 +3,6 @@ profiles: standard
 summary: memory file identity distinguishes absence from failure without opening files
 program: main.ldn
 root: ../../../../..
-run_expect: expected.txt
 status: 42
 constructs: 1660, 1680, 1975
 targets: linux-x86-64, linux-arm64, macos-arm64

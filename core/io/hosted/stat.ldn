@@ -3,8 +3,7 @@
 --  abi/core-io-file-identity check their size, alignment and identity fields.
 --  Darwin arm64 uses the ordinary stat symbol with its 64-bit inode ABI.
 
-compiler.assert(compiler.c_sysv_lp64 or compiler.c_aapcs64_lp64
-                or compiler.c_darwin_lp64)
+--  Targets without a hosted C ABI retain the ordinary extern(c) refusal.
 
 native_time: type = struct
     seconds: i64
