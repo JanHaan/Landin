@@ -5,11 +5,18 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
+#if defined(__linux__)
+#include <sys/prctl.h>
+#endif
 #include <unistd.h>
 extern int32_t decode(uint8_t);
 int main(void) {
     const struct rlimit no_core = {0, 0};
     assert(setrlimit(RLIMIT_CORE, &no_core) == 0);
+#if defined(__linux__)
+    /* A piped core handler ignores RLIMIT_CORE; suppress it for these forks. */
+    assert(prctl(PR_SET_DUMPABLE, 0) == 0);
+#endif
     for (unsigned raw = 0; raw != 256; ++raw) {
         unsigned field = (raw / 4) % 8;
         if (field == 0 || field == 1 || field == 4) {
