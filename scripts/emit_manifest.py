@@ -53,22 +53,27 @@ MAX_WORKERS = 4
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
 #  target-specific C or machine facilities; the fixed-conditional fixtures
-#  select a Linux-only declaration.  Keep this list explicit: a new shared
+#  select an x86-64-only declaration.  Keep this list explicit: a new shared
 #  refusal must not become evidence of equal assembly merely by agreeing on
 #  every host.
 REFUSAL_PAIRS = {
     ("external-scalar-c-boundary", "cortex-m0"),
     ("fixed-conditional-cross-file-forward", "cortex-m0"),
     ("fixed-conditional-cross-file-forward", "darwin-arm64"),
+    ("fixed-conditional-cross-file-forward", "linux-arm64"),
     ("fixed-conditional-generic-activity", "cortex-m0"),
     ("fixed-conditional-generic-activity", "darwin-arm64"),
+    ("fixed-conditional-generic-activity", "linux-arm64"),
     ("fixed-conditional-nested-inactive", "cortex-m0"),
     ("fixed-conditional-nested-inactive", "darwin-arm64"),
+    ("fixed-conditional-nested-inactive", "linux-arm64"),
     ("fixed-conditional-selects-declarations", "cortex-m0"),
     ("fixed-conditional-selects-declarations", "darwin-arm64"),
+    ("fixed-conditional-selects-declarations", "linux-arm64"),
     ("r440-array-callback-type-argument", "cortex-m0"),
     ("r440-c-aliases", "cortex-m0"),
     ("r440-c-aliases", "darwin-arm64"),
+    ("r440-c-aliases", "linux-arm64"),
     ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
     ("r440-checker-helper-normalized-imports", "cortex-m0"),
