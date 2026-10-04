@@ -793,13 +793,26 @@ Status: planned
 Depends on: R12.10
 
 Raspberry Pi Pico, an RP2040 with the ARMv6-M the backend already emits: its
-second-stage boot, flashing through a debug probe, and a smoke procedure
-checked against the emulator lanes' oracles.
+second-stage boot and flashing through a debug probe. Port the prototype-1
+UART/DMA application to real RP2040 peripheral addresses, clock, reset and
+pad setup, and DMA/interrupt and stop semantics. Define a device-specific
+physical trace oracle for injected UART data, echo and GPIO effects, and
+observable DMA/interrupt progress. This item owns R730-01's first pinned
+physical-board run and smoke procedure.
 
-Exit evidence: the derived driver running on the board, its captured trace
-checked against the same oracle, and the run recorded here. The board run
-also delivers IRQ5 and observes the typed handler whose absolute slot-21
-placement is required by R12.10.
+The existing derived driver retains its synthetic peripheral map and drain
+contract in the emulator lane; only source-level scenarios whose premises
+hold on both devices are shared.
+
+Exit evidence: check the flashed RP2040 image's second-stage bytes and
+checksum, then record a power-cycle boot from that image, without a probe-set
+program counter or RAM-loaded program. It must reach compiler-owned startup
+through the ROM-loaded second stage and execute the board smoke test. Check
+the captured board-port trace against its physical oracle and record the run
+here. The synthetic driver and its own emulator oracle remain in the gate;
+compare shared scenario outcomes only where their contracts overlap. The
+board run also delivers IRQ5 and observes the typed handler whose absolute
+slot-21 placement is required by R12.10.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M4F
 
@@ -857,20 +870,27 @@ Status: planned
 Depends on: R12.20, R12.30, R12.40, R12.50
 
 A self-hosted runner with the boards attached, run for `main` and by hand and
-never for a pull request from a fork. This takes on R730-01.
+never for a pull request from a fork. This extends R12.20's first-board
+readiness evidence to recurring smoke runs on every supported board.
 
-Exit evidence: every board this phase supports runs its smoke procedure in the
-gate, beside the emulator lanes it does not replace.
+Exit evidence: every board this phase supports runs its smoke procedure
+against a device-specific physical oracle in the gate, beside the emulator
+lanes it does not replace.
 
 ### R12 gate
 
 - RP2040, RP2350, an STM32 board, ESP32, ESP32-S3 and ESP32-C run
-  compiler-owned firmware in emulation and on hardware.
+  compiler-owned firmware in emulation and on hardware, each against an oracle
+  valid for that device or emulator model. The synthetic driver remains an
+  emulator lane.
 
 - Each new freestanding target/profile executes an assembly block with an
   integer operand and has an IR verifier refusal for an invalid register in
   its target gate: each new Cortex-M profile, each RV32 target, and both
   Xtensa LX6 and LX7. This evidence is required before its milestone completes.
+
+- The RP2040 board run starts at power-on from the flashed boot image and
+  reaches compiler-owned startup through its checked second stage.
 
 ## R13 — The library
 
@@ -1196,7 +1216,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, cache maintenance for cached device profiles; R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
-| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against the emulator lanes' oracles, which stay mandatory. | scheduled R12.60 |
+| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
 | R730-03 | Release readiness | D227's ordering trials and bounded store-buffer models are evidence, not a formal proof; no wait-free or timing bound is claimed. | Before a claim beyond the bounded models, or any timing bound. | A stated proof or checked model agreeing with the native trials. | open |
 | R730-06 | Release readiness | Stack paint and SP observation are measurements, not worst-case bounds; 64 spare flash bytes is a fit, not a budget; reset assumes no NMI or fault in its window. | Before a production budget, worst-case stack or fault-tolerant reset claim. | A workload and interrupt model with a checked bound, and reset-window behaviour with executable evidence. | open |
 | R730-07 | Broader standard library | Cortex-M0 C source capabilities, `core/c` and header generation are disabled; 33 shared programs are general-C restrictions there. | A freestanding program that must call or be called from C. | An ILP32 `core/c`, Cortex-M0 C signatures, generated bindings from a pinned device C header under a checked Cortex-M0 ABI, and executable firmware fixtures using the generated declarations and adapters with failure oracles; the 33 restrictions re-decided. | scheduled R13.20 |
