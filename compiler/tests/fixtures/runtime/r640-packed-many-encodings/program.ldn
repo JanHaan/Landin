@@ -1,0 +1,50 @@
+a0: atom
+a1: atom
+a2: atom
+a3: atom
+a4: atom
+a5: atom
+a6: atom
+a7: atom
+a8: atom
+a9: atom
+a10: atom
+a11: atom
+a12: atom
+a13: atom
+a14: atom
+a15: atom
+mode: type = u64 (
+    a0 = 0xffff_ffff_ffff_ffff | a1 = 1 | a2 = 14 | a3 = 3
+  | a4 = 12 | a5 = 5 | a6 = 10 | a7 = 7
+  | a8 = 0x8000_0000_0000_0000 | a9 = 9 | a10 = 6 | a11 = 11
+  | a12 = 4 | a13 = 13 | a14 = 2 | a15 = 0
+)
+image: type = layout(packed, u64) struct
+    field: mode at 0..63
+end image
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    raw: ptr mut u64 = ptr(usize(addr value))
+    value.field = a0
+    if raw.val <> 0xffff_ffff_ffff_ffff or value.field <> a0 then
+        code = 1
+        return
+    end if
+    value.field = a15
+    if raw.val <> 0 or value.field <> a15 then
+        code = 2
+        return
+    end if
+    raw.val = 0x8000_0000_0000_0000
+    if value.field <> a8 then
+        code = 3
+        return
+    end if
+    raw.val = 6
+    if value.field <> a10 then
+        code = 4
+        return
+    end if
+    code = 42
+end main

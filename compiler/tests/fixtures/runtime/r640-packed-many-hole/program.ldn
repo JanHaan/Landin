@@ -1,0 +1,16 @@
+a: atom
+b: atom
+c: atom
+d: atom
+e: atom
+mode: type = u64 (a = 0 | b = 2 | c = 4 | d = 6 | e = 8)
+image: type = layout(packed, u64) struct
+    field: mode at 0..63
+end image
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    raw: ptr mut u64 = ptr(usize(addr value))
+    raw.val = 3
+    _ = value.field
+    code = 1
+end main

@@ -396,6 +396,11 @@ package body Landin.Backend.X86_64 is
       --  excludes exposed routines before final-body equality comparisons.
       Shareable : Home_Mask (1 .. Landin.IR.Item_Count (Of_Unit)) :=
         [others => False];
+      --  Inline mapping words are assembly directives and therefore absent
+      --  from Machine's final-instruction comparison.  A routine carrying
+      --  them cannot use instruction-only body sharing.
+      Has_Inline_Map_Table : Home_Mask
+        (1 .. Landin.IR.Item_Count (Of_Unit)) := [others => False];
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id);
 
@@ -890,6 +895,8 @@ package body Landin.Backend.X86_64 is
          end if;
          return Shareable (Positive (Left))
            and then Shareable (Positive (Right))
+           and then not Has_Inline_Map_Table (Positive (Left))
+           and then not Has_Inline_Map_Table (Positive (Right))
            and then Signatures_Have_One_ABI
              (Landin.IR.Signature_Of (Of_Unit, Left),
               Landin.IR.Signature_Of (Of_Unit, Right),
@@ -2555,31 +2562,120 @@ package body Landin.Backend.X86_64 is
             procedure Packed_Atom
               (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean)
             is
+               use type Landin.Packed.Image;
                Done : constant String := Value_Label (Value) & "_encoded";
+               Bad : constant String := Done & "_bad";
+               Table : constant String := Done & "_table";
+               Search : constant String := Done & "_search";
+               Lower : constant String := Done & "_lower";
+               Found : constant String := Done & "_found";
+               Count : constant Natural :=
+                 (if Set_Id = Landin.IR.No_Atom_Set then 0
+                  else Landin.IR.Atom_Count (Of_Unit, Set_Id));
+               type Mapping is record
+                  From, Into : Landin.Packed.Image;
+               end record;
+               Mappings : array (1 .. Count) of Mapping;
             begin
                if Set_Id = Landin.IR.No_Atom_Set then
                   return;
                end if;
-               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
+               for Index in Mappings'Range loop
                   declare
-                     Next : constant String := Done & "_"
-                       & Trimmed (Natural'Image (Index));
                      Code : constant Landin.Packed.Image := Landin.Packed.Image
                        (Atom_Code (Atoms_Ranked,
                         Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)));
                      Raw : constant Landin.Packed.Image :=
                        Landin.IR.Nth_Encoding (Of_Unit, Set_Id, Index);
                   begin
-                     Emit ("movabsq $" & Trimmed (Landin.Packed.Image'Image
-                       ((if Encode then Code else Raw))) & ", %r11");
-                     Emit ("cmpq %r11, %rax");
-                     Emit ("jne " & Next);
-                     Emit ("movabsq $" & Trimmed (Landin.Packed.Image'Image
-                       ((if Encode then Raw else Code))) & ", %rax");
-                     Emit ("jmp " & Done);
-                     Put (Next & ":");
+                     Mappings (Index) :=
+                       (From => (if Encode then Code else Raw),
+                        Into => (if Encode then Raw else Code));
                   end;
                end loop;
+
+               --  A few names cost less as direct comparisons than as a
+               --  search setup.  This path has a fixed maximum of four.
+               if Count <= 4 then
+                  for Index in Mappings'Range loop
+                     declare
+                        Next : constant String := Done & "_"
+                          & Trimmed (Natural'Image (Index));
+                     begin
+                        Emit ("movabsq $" & Trimmed
+                          (Landin.Packed.Image'Image (Mappings (Index).From))
+                          & ", %r11");
+                        Emit ("cmpq %r11, %rax");
+                        Emit ("jne " & Next);
+                        Emit ("movabsq $" & Trimmed
+                          (Landin.Packed.Image'Image (Mappings (Index).Into))
+                          & ", %rax");
+                        Emit ("jmp " & Done);
+                        Put (Next & ":");
+                     end;
+                  end loop;
+                  Emit_Panic (Landin.Panics.Bad_Conversion);
+                  Put (Done & ":");
+                  return;
+               end if;
+
+               --  Sort once at compile time.  The search's instruction
+               --  count is independent of the number of atom names; each
+               --  entry adds only two 64-bit table words.  Unsigned `jb`
+               --  keeps full-width encodings in their bit-pattern order.
+               for Index in 2 .. Count loop
+                  declare
+                     Current : constant Mapping := Mappings (Index);
+                     Position : Positive := Index;
+                  begin
+                     while Position > 1 and then
+                       Mappings (Position - 1).From > Current.From
+                     loop
+                        Mappings (Position) := Mappings (Position - 1);
+                        Position := Position - 1;
+                     end loop;
+                     Mappings (Position) := Current;
+                  end;
+               end loop;
+
+               Has_Inline_Map_Table (Positive (Item)) := True;
+               Emit ("jmp " & Search);
+               Emit (".p2align 3");
+               Put (Table & ":");
+               for Pair of Mappings loop
+                  Emit (".quad " & Trimmed
+                    (Landin.Packed.Image'Image (Pair.From)) & ", "
+                    & Trimmed (Landin.Packed.Image'Image (Pair.Into)));
+               end loop;
+               Put (Search & ":");
+               Emit ("leaq " & Table & "(%rip), %r11");
+               Emit ("xorl %r8d, %r8d");
+               Emit ("movl $" & Trimmed (Natural'Image (Count))
+                 & ", %edx");
+               declare
+                  Loop_Label : constant String := Done & "_loop";
+               begin
+                  Put (Loop_Label & ":");
+                  Emit ("cmpq %rdx, %r8");
+                  Emit ("jae " & Bad);
+                  Emit ("leaq (%r8,%rdx), %r9");
+                  Emit ("shrq $1, %r9");
+                  Emit ("shlq $4, %r9");
+                  Emit ("cmpq (%r11,%r9), %rax");
+                  Emit ("je " & Found);
+                  Emit ("jb " & Lower);
+                  Emit ("shrq $4, %r9");
+                  Emit ("leaq 1(%r9), %r8");
+                  Emit ("jmp " & Loop_Label);
+                  Put (Lower & ":");
+                  Emit ("shrq $4, %r9");
+                  Emit ("movq %r9, %rdx");
+                  Emit ("jmp " & Loop_Label);
+               end;
+               Put (Found & ":");
+               Emit ("movq 8(%r11,%r9), %rax");
+               Emit ("jmp " & Done);
+               Put (Bad & ":");
                Emit_Panic (Landin.Panics.Bad_Conversion);
                Put (Done & ":");
             end Packed_Atom;
@@ -7011,7 +7107,9 @@ package body Landin.Backend.X86_64 is
                begin
                   if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
                     and then not Landin.IR.Is_External (Of_Unit, Item)
-                    and then (if Optimized then Shareable (Right)
+                    and then (if Optimized then
+                                Shareable (Right)
+                                and then not Has_Inline_Map_Table (Right)
                               else Template /= Landin.IR.No_Declaration)
                   then
                      declare
