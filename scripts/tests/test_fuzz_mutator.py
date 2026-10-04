@@ -163,11 +163,14 @@ class Mutator(unittest.TestCase):
                 self.assertEqual(server.notify.call_args.args[0],
                                  "textDocument/didClose")
 
-    def test_reproducer_preflight_requires_both_local_diagnostics(self):
+    def test_reproducer_preflight_requires_all_local_diagnostics(self):
         path = (fuzz.HERE / "reproducers/min-100299.ldn").resolve()
-        for codes, local, accepted in ((["L0301", "L0303"], True, True),
-                                       (["L0301"], True, False),
-                                       (["L0301", "L0303"], False, False)):
+        for codes, local, accepted in ((["L0336", "L0339", "L0303"], True, True),
+                                       (["L0336", "L0303"], True, False),
+                                       (["L0339", "L0303"], True, False),
+                                       (["L0336", "L0339"], True, False),
+                                       (["L0301", "L0303"], True, False),
+                                       (["L0336", "L0339", "L0303"], False, False)):
             with self.subTest(codes=codes, local=local):
                 server = Mock()
                 server.diagnostics = []

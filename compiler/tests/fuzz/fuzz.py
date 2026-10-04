@@ -360,8 +360,8 @@ def check_reproducer(server, path, text):
     codes = {item.get("code") for report in server.diagnostics
              if report.get("uri") == path.as_uri()
              for item in report.get("diagnostics", [])}
-    if not {"L0301", "L0303"} <= codes:
-        raise Broken("reproducer check did not reach L0301 and L0303")
+    if not {"L0336", "L0339", "L0303"} <= codes:
+        raise Broken("reproducer check did not reach L0336, L0339 and L0303")
 
 
 def batch_one(refine, seconds, mutant):

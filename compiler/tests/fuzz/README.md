@@ -35,7 +35,7 @@ mutants, the driver opens `negative/core-failing-needs-mutable-inner` unchanged
 and requires its L0340 diagnostic at line 10. That diagnostic comes after
 `core/failing` and `core/heap` resolve; a run that loses imports fails here.
 The reproducers are separate seeds, so each is copied into its own temporary
-module for the run. The unchanged `min-100299.ldn` must report L0301 and
+module for the run. The unchanged `min-100299.ldn` must report L0336, L0339 and
 L0303 before the mutants run; sibling reproducers cannot mask its checker path.
 
 One server serves fifty mutants, each its own document. Each fixture is
@@ -102,17 +102,17 @@ not a second copy of those tests:
 
 | reproducer | mutated fixture | exit | codes |
 | --- | --- | --- | --- |
-| `min-100299.ldn` | `negative/caller-parameter-read-only` | 1 | L0340, L0303 |
+| `min-100299.ldn` | `negative/caller-parameter-read-only` | 1 | L0336, L0339, L0303 |
 | `min-100930.ldn` | `negative/function-field-unassigned` | 1 | L0201, L0302 |
-| `min-102470.ldn` | `negative/r440-origin-guarded-fail-value` | 1 | L0201, L0340 |
+| `min-102470.ldn` | `negative/r440-origin-guarded-fail-value` | 1 | L0201, L0329 |
 | `min-103330.ldn` | `negative/r640-zero-field` | 1 | L0201, L0302 |
-| `min-103712.ldn` | `negative/struct-array-field-element-zeroed-immutable` | 1 | L0340, L0303 |
+| `min-103712.ldn` | `negative/struct-array-field-element-zeroed-immutable` | 1 | L0336, L0303 |
 | `min-103790.ldn` | `negative/struct-array-field-repetition-element-mismatch` | 1 | L0201 |
-| `min-104991.ldn` | `positive/r440-origin-forwarding-positions` | 1 | L0302, L0201, L0340, L0316 |
+| `min-104991.ldn` | `positive/r440-origin-forwarding-positions` | 1 | L0302, L0201, L0339, L0316, L0332 |
 | `min-201739.ldn` | `negative/immutable-struct-field` | 1 | L0201, L0303 |
 | `min-205764.ldn` | `negative/struct-copy-across-types` | 1 | L0201 |
-| `min-207488.ldn` | `positive/r440-origin-untaken-cleanups` | 1 | L0201, L0340 |
-| `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0340 |
+| `min-207488.ldn` | `positive/r440-origin-untaken-cleanups` | 1 | L0201, L0332, L0329 |
+| `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0332 |
 | `min-207836.ldn` | `positive/struct-array-field-element-zeroed` | 1 | L0201, L0302 |
 
 ## What it is not
