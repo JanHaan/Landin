@@ -141,7 +141,7 @@ package body Landin.Platform.Native is
       package Strings renames Interfaces.C.Strings;
       use type C.int;
       Paths : aliased Strings.chars_ptr_array
-        (1 .. C.size_t (Rights.Length)) := (others => Strings.Null_Ptr);
+        (1 .. C.size_t (Rights.Length)) := [others => Strings.Null_Ptr];
       function Overlaps_Any
         (Destination : C.char_array;
          Sources : System.Address;
