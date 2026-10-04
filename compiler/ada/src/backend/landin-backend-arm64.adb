@@ -3397,6 +3397,10 @@ package body Landin.Backend.Arm64 is
       --  what that carries.
       function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded;
 
+      --  Only a cache miss needs the value and slot scratch buffers.
+      function Evaluate (Item : Landin.IR.Item_Id)
+        return Landin.Types.Folded;
+
       --  Each datum is folded once.  [0130] makes a module a set, so one
       --  module value may name another as often as it likes: `b = a + a`
       --  reaches `a` twice, and a chain of those without this would cost
@@ -3411,7 +3415,9 @@ package body Landin.Backend.Arm64 is
       Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
         [others => Unseen];
 
-      function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded is
+      function Evaluate (Item : Landin.IR.Item_Id)
+        return Landin.Types.Folded
+      is
          Answer : Landin.Types.Folded := 0;
 
          --  [0410] fixes the order of a binary's operands, so the lowering
@@ -3460,26 +3466,6 @@ package body Landin.Backend.Arm64 is
            return Landin.IR.Value_Id
            is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
       begin
-         --  D177 resolves every module bool through the shared static-image
-         --  folder.  In particular, a short-circuit Branch is routine CFG
-         --  and never reaches this datum-emission walk.
-         if Landin.IR.Has_Bool_Image (Of_Unit, Item) then
-            return Landin.IR.Bool_Image (Of_Unit, Item);
-         end if;
-
-         case Fold_At (Natural (Item)) is
-            when Settled =>
-               return Fold_Of (Natural (Item));
-
-            when Running =>
-               raise Compiler_Defect
-                 with "a module value names itself through a chain the "
-                      & "checker was to have refused";
-
-            when Unseen =>
-               Fold_At (Natural (Item)) := Running;
-         end case;
-
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             for Position in 1 .. Landin.IR.Length
                                    (Of_Unit, Item,
@@ -3906,6 +3892,31 @@ package body Landin.Backend.Arm64 is
          Fold_Of (Natural (Item)) := Answer;
          Fold_At (Natural (Item)) := Settled;
          return Answer;
+      end Evaluate;
+
+      function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded is
+      begin
+         --  D177 resolves every module bool through the shared static-image
+         --  folder.  In particular, a short-circuit Branch is routine CFG
+         --  and never reaches the datum-emission walk or its scratch arrays.
+         if Landin.IR.Has_Bool_Image (Of_Unit, Item) then
+            return Landin.IR.Bool_Image (Of_Unit, Item);
+         end if;
+
+         case Fold_At (Natural (Item)) is
+            when Settled =>
+               return Fold_Of (Natural (Item));
+
+            when Running =>
+               raise Compiler_Defect
+                 with "a module value names itself through a chain the "
+                      & "checker was to have refused";
+
+            when Unseen =>
+               Fold_At (Natural (Item)) := Running;
+         end case;
+
+         return Evaluate (Item);
       end Folded;
 
       --  How wide a store the assembler is asked for, at each size.
