@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   manifest:
+    name: manifest (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:

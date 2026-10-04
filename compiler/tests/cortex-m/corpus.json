@@ -6,6 +6,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/aapcs64-varargs-both-banks/fixture.meta"
     },
+    "abi/core-io-file-identity": {
+      "mode": "restriction",
+      "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/core-io-file-identity/fixture.meta"
+    },
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -314,6 +319,13 @@
     "runtime/break-in-value-block": {
       "mode": "execute"
     },
+    "runtime/c-aliases-unsigned-char": {
+      "mode": "refuse",
+      "codes": [
+        "L0324"
+      ],
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
+    },
     "runtime/caller-is-an-ordinary-name": {
       "mode": "execute"
     },
@@ -388,6 +400,9 @@
         "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+    },
+    "runtime/core-io-identity-memory": {
+      "mode": "execute"
     },
     "runtime/core-mem-allocators": {
       "mode": "execute"
@@ -571,10 +586,10 @@
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
-    "runtime/division-by-arguments-at-every-width": {
+    "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
     },
-    "runtime/division-and-remainder-exit-with-their-results": {
+    "runtime/division-by-arguments-at-every-width": {
       "mode": "execute"
     },
     "runtime/erased-named-recovery": {
@@ -831,6 +846,9 @@
       "mode": "execute"
     },
     "runtime/line-end-continues-expression": {
+      "mode": "execute"
+    },
+    "runtime/literal-conditions-select-flow": {
       "mode": "execute"
     },
     "runtime/local-array-computed-index-reads-and-writes": {
@@ -1125,15 +1143,15 @@
       "profile_limit": "selected-image",
       "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
-    "runtime/r420-memory-world-cortex": {
-      "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Caller-backed I/O selects core/io without hosted declarations. The generic world calls retain the memory provider evidence table and its methods. Every profile attempts execution; only measured stack, flash or RAM overflow can exclude its image, and an image limit is not runtime evidence."
-    },
     "runtime/r420-memory-world-boundaries": {
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
+    },
+    "runtime/r420-memory-world-cortex": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. The generic world calls retain the memory provider evidence table and its methods. Every profile attempts execution; only measured stack, flash or RAM overflow can exclude its image, and an image limit is not runtime evidence."
     },
     "runtime/r420-object-buffer-providers": {
       "mode": "refuse",
@@ -1237,13 +1255,6 @@
       "mode": "execute"
     },
     "runtime/r440-c-aliases": {
-      "mode": "refuse",
-      "codes": [
-        "L0324"
-      ],
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
-    },
-    "runtime/c-aliases-unsigned-char": {
       "mode": "refuse",
       "codes": [
         "L0324"
@@ -1671,6 +1682,9 @@
     "runtime/r720-discards-evaluate-once": {
       "mode": "execute"
     },
+    "runtime/r720-feature-interactions": {
+      "mode": "execute"
+    },
     "runtime/r720-inferred-arrays-hold-references": {
       "mode": "execute"
     },
@@ -1746,6 +1760,9 @@
       "mode": "execute"
     },
     "runtime/selection-sort": {
+      "mode": "execute"
+    },
+    "runtime/sensors": {
       "mode": "execute"
     },
     "runtime/shared-declarations-evaluate-once": {
@@ -1953,6 +1970,9 @@
     "runtime/utf8-slice-upper-not-boundary-traps": {
       "mode": "execute"
     },
+    "runtime/variable-shifts-at-every-width": {
+      "mode": "execute"
+    },
     "runtime/variant-case-construction-runs-in-source-order": {
       "mode": "execute"
     },
@@ -1997,6 +2017,9 @@
     "runtime/variant-runtime-array-payload-writes-target-storage": {
       "mode": "execute"
     },
+    "runtime/variant-selected-payload-representation": {
+      "mode": "execute"
+    },
     "runtime/variant-struct-arguments": {
       "mode": "execute"
     },
@@ -2007,9 +2030,6 @@
       "mode": "execute"
     },
     "runtime/variant-zeroed-storage-is-distinct": {
-      "mode": "execute"
-    },
-    "runtime/variable-shifts-at-every-width": {
       "mode": "execute"
     },
     "runtime/whole-array-elements": {
@@ -2025,23 +2045,6 @@
       "mode": "execute"
     },
     "runtime/written-function-values": {
-      "mode": "execute"
-    },
-    "runtime/r720-feature-interactions": {
-      "mode": "execute"
-    },
-    "runtime/sensors": {
-      "mode": "execute"
-    },
-    "abi/core-io-file-identity": {
-      "mode": "restriction",
-      "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/core-io-file-identity/fixture.meta"
-    },
-    "runtime/core-io-identity-memory": {
-      "mode": "execute"
-    },
-    "runtime/variant-selected-payload-representation": {
       "mode": "execute"
     },
     "runtime/zeroed-aggregate-carrier-order": {
