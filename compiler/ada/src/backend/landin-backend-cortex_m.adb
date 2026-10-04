@@ -2239,28 +2239,51 @@ package body Landin.Backend.Cortex_M is
                Input : Landin.IR.Value_Id := Landin.IR.No_Value);
 
             --  r0/r1 is a little-endian word pair; r2 is already in 0..63.
-            --  ARMv6-M has no RRX, so carry between right-shifted words is
-            --  an explicit low-bit extraction. Only r2/r3 are scratch.
+            --  ARMv6-M has no RRX. Split at a word boundary and use register
+            --  shifts to transfer the crossing bits. Only r2/r3 are scratch.
             procedure Shift_Pair (Left : Boolean; Signed : Boolean := False)
             is
-               Loop_Name : constant String := Fresh;
+               Small : constant String := Fresh;
+               Done : constant String := Fresh;
             begin
-               Emit ("cmp r2, #0");
-               Emit ("beq " & Loop_Name & "_done");
-               Put (Loop_Name & ":");
+               Emit ("cmp r2, #32");
+               Emit ("bcc " & Small);
+               Emit ("subs r2, #32");
                if Left then
-                  Emit ("lsls r0, r0, #1");
-                  Emit ("adcs r1, r1");
+                  Emit ("mov r1, r0");
+                  Emit ("movs r0, #0");
+                  Emit ("lsls r1, r2");
                else
-                  Emit ("lsls r3, r1, #31");
+                  Emit ("mov r0, r1");
+                  if Signed then
+                     Emit ("asrs r1, r1, #31");
+                     Emit ("asrs r0, r2");
+                  else
+                     Emit ("movs r1, #0");
+                     Emit ("lsrs r0, r2");
+                  end if;
+               end if;
+               Emit ("b " & Done);
+               Put (Small & ":");
+               if Left then
+                  Emit ("mov r3, r0");
+                  Emit ("lsls r0, r2");
+                  Emit ("lsls r1, r2");
+                  Emit ("rsbs r2, r2, #0");
+                  Emit ("adds r2, #32");
+                  Emit ("lsrs r3, r2");
+                  Emit ("orrs r1, r3");
+               else
+                  Emit ("mov r3, r1");
                   Emit ((if Signed then "asrs" else "lsrs")
-                    & " r1, r1, #1");
-                  Emit ("lsrs r0, r0, #1");
+                    & " r1, r2");
+                  Emit ("lsrs r0, r2");
+                  Emit ("rsbs r2, r2, #0");
+                  Emit ("adds r2, #32");
+                  Emit ("lsls r3, r2");
                   Emit ("orrs r0, r3");
                end if;
-               Emit ("subs r2, #1");
-               Emit ("bne " & Loop_Name);
-               Put (Loop_Name & "_done:");
+               Put (Done & ":");
             end Shift_Pair;
 
             procedure Packed_Atom
