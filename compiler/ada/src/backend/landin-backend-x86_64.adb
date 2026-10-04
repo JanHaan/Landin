@@ -7032,6 +7032,10 @@ package body Landin.Backend.X86_64 is
                               then
                                  Shared_With (Right) :=
                                    Landin.IR.Item_Id (Left);
+                                 --  Sharing uses streams and signatures,
+                                 --  never the discarded assembly text.
+                                 Bodies (Right) :=
+                                   Unbounded.Null_Unbounded_String;
                                  exit;
                               end if;
                            end loop;
@@ -7058,6 +7062,7 @@ package body Landin.Backend.X86_64 is
                   Begin_Item_Section
                     (".text.landin_routine_", """ax"",@progbits", Index);
                   Unbounded.Append (Out_Text, Bodies (Index));
+                  Bodies (Index) := Unbounded.Null_Unbounded_String;
                   Landin.Build_Reports.Append (Report, Statistics (Index));
                else
                   --  An alias is still this routine's symbol: a public one
