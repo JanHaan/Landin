@@ -2295,6 +2295,8 @@ package body Landin.Backend.Arm64 is
                  Array_Length_Of (Storage, Field, Which, Payload, Nested);
                Stride : constant Landin.Targets.Byte_Count :=
                  Element_Bytes_Of (Storage, Field, Which, Payload, Nested);
+               Scale : Landin.Targets.Byte_Count := Stride;
+               Shift : Natural := 0;
             begin
                Load_Value (Operand (1), "x13");
                if not Unchecked then
@@ -2302,10 +2304,21 @@ package body Landin.Backend.Arm64 is
                   Emit ("cmp x13, x14");
                   Emit ("b.hs " & Trap);
                end if;
-               Immediate ("x14", Pattern (Stride));
-               Emit ("mul x13, x13, x14");
+               while Scale > 1 and then Scale mod 2 = 0 loop
+                  Scale := Scale / 2;
+                  Shift := Shift + 1;
+               end loop;
+               if Scale /= 1 then
+                  Immediate ("x14", Pattern (Stride));
+                  Emit ("mul x13, x13, x14");
+               end if;
                Storage_Address (Storage, Field, "x10", Which, Payload, Nested);
-               Emit ("add x10, x10, x13");
+               if Scale = 1 and then Shift > 0 then
+                  Emit ("add x10, x10, x13, lsl #"
+                        & Trimmed (Natural'Image (Shift)));
+               else
+                  Emit ("add x10, x10, x13");
+               end if;
                if Below'Length > 0 then
                   Add_Offset ("x10", Path_Offset
                     (Element_Shape_Of (Storage, Field, Which, Payload, Nested),
