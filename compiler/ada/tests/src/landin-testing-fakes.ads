@@ -15,6 +15,7 @@ with Landin.Platform;
 package Landin.Testing.Fakes is
 
    type Fake_Filesystem is limited new Landin.Platform.Filesystem with private;
+   type Fake_Filesystem_Access is access all Fake_Filesystem;
 
    procedure Add_File
      (Host : in out Fake_Filesystem; Path : String; Content : String);
@@ -252,6 +253,11 @@ package Landin.Testing.Fakes is
    --  Where the scripted input pauses: byte offsets into it, ascending.
    procedure Pause_At (Host : in out Fake_Channel; Offset : Natural);
 
+   --  Replace a disk file when input resumes after a pause.
+   procedure Edit_At
+     (Host : in out Fake_Channel; Offset : Natural;
+      Files : Fake_Filesystem_Access; Path, Content : String);
+
    function Output (Host : Fake_Channel) return String;
 
    function Logged (Host : Fake_Channel) return String;
@@ -376,11 +382,23 @@ private
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Natural);
 
+   type Timed_Edit is record
+      Offset  : Natural;
+      Path    : Unbounded.Unbounded_String;
+      Content : Unbounded.Unbounded_String;
+   end record;
+
+   package Edit_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Timed_Edit);
+
    type Fake_Channel is limited new Landin.Platform.Channel with record
       Input  : Unbounded.Unbounded_String;
       Next   : Positive := 1;
       Chunk  : Positive := 4096;
       Pauses : Offset_Vectors.Vector;
+      Edits  : Edit_Vectors.Vector;
+      Next_Edit : Positive := 1;
+      Files  : Fake_Filesystem_Access;
       Output : Unbounded.Unbounded_String;
       Log    : Unbounded.Unbounded_String;
    end record;

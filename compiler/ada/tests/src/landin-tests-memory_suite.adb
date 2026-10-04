@@ -29,6 +29,8 @@ with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
+with Interfaces.C;
+with System;
 
 with Landin.Driver;
 with Landin.Json;
@@ -67,11 +69,146 @@ package body Landin.Tests.Memory_Suite is
    Checker    : aliased Landin.Stages.Checking.Instance;
    Lowerer    : aliased Landin.Stages.Lowering.Instance;
 
-   --  Room for what cannot be the compilation's: the harness's own
-   --  transcript grows by a line per check.  A compilation of this program
-   --  holds megabytes, so a leak of even a small part of one per run is
-   --  far past this after the measured runs.
+   --  Allow bounded settling, but reject growth that continues across both
+   --  parts of the measured tail.  A per-run leak can otherwise fit under
+   --  the total allowance and pass forever.
    Tolerance : constant Long_Long_Integer := 64 * 1024;
+
+   function Flat
+     (Settled, Midpoint, Final : Long_Long_Integer) return Boolean is
+     (Final - Settled <= Tolerance and then Final <= Midpoint);
+
+   function Flat
+     (Settled, Midpoint, Late, Final : Long_Long_Integer) return Boolean is
+     (Final - Settled <= Tolerance
+      and then not (Late > Midpoint and then Final > Late));
+
+   --  Execute returns only after its per-run result has been finalized.
+   --  Every sample, including the last, is taken at that same point.
+   procedure Measure_Repeated
+     (Meter     : Landin.Platform.Native.Native_Meter;
+      Warm      : Positive;
+      Measured  : Positive;
+      Execute   : not null access function (Run : Positive) return Boolean;
+      Settled   : out Long_Long_Integer;
+      Midpoint  : out Long_Long_Integer;
+      Late      : out Long_Long_Integer;
+      Final     : out Long_Long_Integer;
+      Completed : out Boolean);
+
+   procedure Measure_Repeated
+     (Meter     : Landin.Platform.Native.Native_Meter;
+      Warm      : Positive;
+      Measured  : Positive;
+      Execute   : not null access function (Run : Positive) return Boolean;
+      Settled   : out Long_Long_Integer;
+      Midpoint  : out Long_Long_Integer;
+      Late      : out Long_Long_Integer;
+      Final     : out Long_Long_Integer;
+      Completed : out Boolean) is
+   begin
+      pragma Assert (Measured >= 4);
+      Settled := 0;
+      Midpoint := 0;
+      Late := 0;
+      Final := 0;
+      Completed := False;
+      for Run in 1 .. Warm + Measured loop
+         if not Execute (Run) then
+            return;
+         end if;
+         Final := Meter.Sample.Allocated_Bytes;
+         if Run = Warm then
+            Settled := Final;
+         elsif Run = Warm + Measured / 2 then
+            Midpoint := Final;
+         elsif Run = Warm + Measured / 2 + Measured / 4 then
+            Late := Final;
+         end if;
+      end loop;
+      Completed := True;
+   end Measure_Repeated;
+
+   procedure Gate_Rejects_Linear_Growth
+     (Item : in out Landin.Testing.Context);
+
+   procedure Gate_Rejects_Linear_Growth
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item, Flat (0, 60 * 1024, 60 * 1024, 60 * 1024),
+         "a bounded one-time allocation may settle");
+      Landin.Testing.Check
+        (Item, Flat (0, 0, 464, 464),
+         "a late one-time allocation may settle");
+      Landin.Testing.Check
+        (Item, not Flat
+           (0, 10 * 3 * 1024, 15 * 3 * 1024, 20 * 3 * 1024),
+         "3 KiB per check is rejected within twenty checks");
+      Landin.Testing.Check
+        (Item, not Flat
+           (0, 3 * 20 * 512, 4 * 20 * 512, 6 * 20 * 512),
+         "512 bytes per edit is rejected within six sessions");
+      Landin.Testing.Check
+        (Item, not Flat (0, 70 * 1024, 70 * 1024, 70 * 1024),
+         "the bound still rejects a large one-time allocation");
+   end Gate_Rejects_Linear_Growth;
+
+   procedure Gate_Sees_Retained_Run_Growth
+     (Item : in out Landin.Testing.Context);
+
+   procedure Gate_Sees_Retained_Run_Growth
+     (Item : in out Landin.Testing.Context) is
+      use type System.Address;
+      function C_Malloc (Size : Interfaces.C.size_t) return System.Address
+        with Import, Convention => C, External_Name => "malloc";
+      procedure C_Free (Block : System.Address)
+        with Import, Convention => C, External_Name => "free";
+      --  Run this case before the larger compiler cases fill the allocator's
+      --  512-byte cache, so the meter can see each retained allocation.
+      Held : array (1 .. 8) of System.Address :=
+        [others => System.Null_Address];
+      Meter : Landin.Platform.Native.Native_Meter;
+      Settled, Midpoint, Late, Final : Long_Long_Integer;
+      Completed : Boolean;
+
+      function Retain_One (Run : Positive) return Boolean;
+
+      function Retain_One (Run : Positive) return Boolean is
+         Transient : Unbounded.Unbounded_String;
+      begin
+         if Run = 5 then
+            Transient :=
+              Unbounded.To_Unbounded_String (String'(1 .. 8 * 1024 => 't'));
+         end if;
+         Held (Run) := C_Malloc (512);
+         return Held (Run) /= System.Null_Address
+           and then (Run /= 5 or else Unbounded.Length (Transient) = 8 * 1024);
+      end Retain_One;
+   begin
+      Measure_Repeated
+        (Meter, Warm => 2, Measured => 6, Execute => Retain_One'Access,
+         Settled => Settled, Midpoint => Midpoint, Late => Late,
+         Final => Final,
+         Completed => Completed);
+      declare
+         Small_Leak_Rejected : constant Boolean :=
+           Completed and then Final - Settled in 1 .. Tolerance
+           and then Late > Midpoint and then Final > Late
+           and then not Flat (Settled, Midpoint, Late, Final);
+      begin
+         for Block of Held loop
+            C_Free (Block);
+         end loop;
+         Landin.Testing.Check
+           (Item, Small_Leak_Rejected,
+            "post-run samples reject 512 retained bytes per run below 64 KiB"
+            & " despite a finalized transient result"
+            & "; total " & Long_Long_Integer'Image (Final - Settled)
+            & ", tail parts " & Long_Long_Integer'Image (Late - Midpoint)
+            & " and " & Long_Long_Integer'Image (Final - Late));
+      end;
+   end Gate_Sees_Retained_Run_Growth;
 
    function Image (Value : Long_Long_Integer) return String;
 
@@ -102,8 +239,7 @@ package body Landin.Tests.Memory_Suite is
    end Request;
 
    --  Runs the request Warm times unmeasured and Measured times more, and
-   --  checks that the bytes in use after the last run are those after the
-   --  last warm-up.
+   --  checks both the total growth and whether it persists across the tail.
    procedure Repeat
      (Item     : in out Landin.Testing.Context;
       Emitting : Boolean;
@@ -122,38 +258,39 @@ package body Landin.Tests.Memory_Suite is
       Tools : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Meter : Landin.Platform.Native.Native_Meter;
       Arguments : constant Landin.Platform.Path_List := Request (Emitting);
-      Settled : Long_Long_Integer := 0;
-      Accepted : Boolean := True;
+      Settled, Midpoint, Late, Final : Long_Long_Integer;
+      Completed : Boolean;
+
+      function Execute_One (Run : Positive) return Boolean;
+
+      function Execute_One (Run : Positive) return Boolean is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Arguments, Host, Tools);
+      begin
+         if Result.Status /= Landin.Driver.Status_Success then
+            Landin.Testing.Fail
+              (Item, What & ": run" & Run'Image & " refused the program:"
+               & Unbounded.To_String (Result.Report));
+            return False;
+         end if;
+         return True;
+      end Execute_One;
    begin
       Ada.Directories.Create_Path (Scratch);
-      for Run in 1 .. Warm + Measured loop
-         declare
-            Result : constant Landin.Driver.Outcome :=
-              Landin.Driver.Execute (Arguments, Host, Tools);
-         begin
-            if Result.Status /= Landin.Driver.Status_Success then
-               Accepted := False;
-               Landin.Testing.Fail
-                 (Item, What & ": run" & Run'Image & " refused the program:"
-                  & Unbounded.To_String (Result.Report));
-               return;
-            end if;
-            if Run = Warm then
-               Settled := Meter.Sample.Allocated_Bytes;
-            end if;
-         end;
-      end loop;
-
-      declare
-         Final : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
-      begin
-         Landin.Testing.Check
-           (Item, Accepted and then Final - Settled <= Tolerance,
-            What & ": after" & Measured'Image & " more runs the allocator "
-            & "holds " & Image (Final - Settled) & " bytes more than after "
-            & "the first" & Warm'Image & "; at most " & Image (Tolerance)
-            & " may remain");
-      end;
+      Measure_Repeated
+        (Meter, Warm, Measured, Execute_One'Access,
+         Settled, Midpoint, Late, Final, Completed);
+      if not Completed then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, Flat (Settled, Midpoint, Late, Final),
+         What & ": after" & Measured'Image & " more runs the allocator "
+         & "holds " & Image (Final - Settled) & " bytes more than after "
+         & "the first" & Warm'Image & "; tail parts grew by "
+         & Image (Late - Midpoint) & " and " & Image (Final - Late)
+         & " bytes; at most " & Image (Tolerance)
+         & " total and no sustained tail growth may remain");
    end Repeat;
 
    --  What an editor does on every keystroke: format the same file again.
@@ -166,9 +303,27 @@ package body Landin.Tests.Memory_Suite is
       Tools : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Meter : Landin.Platform.Native.Native_Meter;
       Arguments : Landin.Platform.Path_List;
-      Settled : Long_Long_Integer := 0;
+      Settled, Midpoint, Late, Final : Long_Long_Integer;
+      Completed : Boolean;
       Warm : constant := 3;
       Measured : constant := 20;
+
+      function Execute_One (Run : Positive) return Boolean;
+
+      function Execute_One (Run : Positive) return Boolean is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Arguments, Host, Tools);
+      begin
+         if Result.Status not in Landin.Driver.Status_Success
+                               | Landin.Driver.Status_Reported
+         then
+            Landin.Testing.Fail
+              (Item, "formatting run" & Run'Image & " was refused:"
+               & Unbounded.To_String (Result.Report));
+            return False;
+         end if;
+         return True;
+      end Execute_One;
    begin
       Landin.Platform.Add (Arguments, "fmt");
       Landin.Platform.Add (Arguments, "--check");
@@ -179,33 +334,20 @@ package body Landin.Tests.Memory_Suite is
          Landin.Platform.Add
            (Arguments, Repository & "/examples/derived_hosted/" & Name);
       end loop;
-      for Run in 1 .. Warm + Measured loop
-         declare
-            Result : constant Landin.Driver.Outcome :=
-              Landin.Driver.Execute (Arguments, Host, Tools);
-         begin
-            if Result.Status not in Landin.Driver.Status_Success
-                                  | Landin.Driver.Status_Reported
-            then
-               Landin.Testing.Fail
-                 (Item, "formatting run" & Run'Image & " was refused:"
-                  & Unbounded.To_String (Result.Report));
-               return;
-            end if;
-            if Run = Warm then
-               Settled := Meter.Sample.Allocated_Bytes;
-            end if;
-         end;
-      end loop;
-      declare
-         Final : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
-      begin
-         Landin.Testing.Check
-           (Item, Final - Settled <= Tolerance,
-            "formatting the derived log filter: after" & Measured'Image
-            & " more runs the allocator holds " & Image (Final - Settled)
-            & " bytes more; at most " & Image (Tolerance) & " may remain");
-      end;
+      Measure_Repeated
+        (Meter, Warm, Measured, Execute_One'Access,
+         Settled, Midpoint, Late, Final, Completed);
+      if not Completed then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, Flat (Settled, Midpoint, Late, Final),
+         "formatting the derived log filter: after" & Measured'Image
+         & " more runs the allocator holds " & Image (Final - Settled)
+         & " bytes more; tail parts grew by " & Image (Late - Midpoint)
+         & " and " & Image (Final - Late) & " bytes; at most "
+         & Image (Tolerance) & " total and no sustained tail growth"
+         & " may remain");
    end Formatting_Stays_Flat;
 
    procedure Checking_Stays_Flat (Item : in out Landin.Testing.Context);
@@ -335,6 +477,7 @@ package body Landin.Tests.Memory_Suite is
       Host     : aliased Landin.Platform.Native.Native_Filesystem;
       Meter    : Landin.Platform.Native.Native_Meter;
       Settled  : Long_Long_Integer := 0;
+      Midpoint : Long_Long_Integer := 0;
       Warm     : constant := 2;
       Measured : constant := 6;
       Directory : constant String :=
@@ -432,22 +575,32 @@ package body Landin.Tests.Memory_Suite is
          end;
          if Run = Warm then
             Settled := Meter.Sample.Allocated_Bytes;
+         elsif Run = Warm + Measured / 2 then
+            Midpoint := Meter.Sample.Allocated_Bytes;
          end if;
       end loop;
       declare
          Final : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
       begin
          Landin.Testing.Check
-           (Item, Final - Settled <= Tolerance,
+           (Item, Flat (Settled, Midpoint, Final),
             "serving the derived log filter: after" & Measured'Image
             & " more sessions of twenty edits the allocator holds "
             & Image (Final - Settled) & " bytes more; at most "
-            & Image (Tolerance) & " may remain");
+            & Image (Tolerance) & " total and "
+            & Image (Final - Midpoint)
+            & " in the last half; no tail growth may remain");
       end;
    end Serving_Stays_Flat;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "memory", "gate rejects linear growth",
+         Gate_Rejects_Linear_Growth'Access);
+      Landin.Testing.Register
+        (Into, "memory", "a gate sees retained run growth",
+         Gate_Sees_Retained_Run_Growth'Access);
       Landin.Testing.Register
         (Into, "memory", "checking stays flat",
          Checking_Stays_Flat'Access);

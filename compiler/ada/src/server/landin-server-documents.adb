@@ -1,8 +1,12 @@
 with Ada.Strings.Fixed;
+with Ada.Unchecked_Deallocation;
 
 package body Landin.Server.Documents is
 
    package Unbounded renames Ada.Strings.Unbounded;
+
+   procedure Free is new Ada.Unchecked_Deallocation
+     (Landin.Server.Texts.Buffer, Buffer_Access);
 
    Hex : constant String := "0123456789ABCDEF";
 
@@ -137,33 +141,94 @@ package body Landin.Server.Documents is
       Path  : constant String :=
         (if Named /= "" then Named else Untitled_Path (URI));
    begin
-      Into.Open.Include
-        (URI, (URI     => Unbounded.To_Unbounded_String (URI),
-               Path    => Unbounded.To_Unbounded_String (Path),
-               Text    => Unbounded.To_Unbounded_String (Text),
-               Version => Version));
+      declare
+         Previous : Buffer_Access :=
+           (if Into.Open.Contains (URI) then Into.Open.Element (URI).Data
+            else null);
+         Data : Buffer_Access := new Landin.Server.Texts.Buffer;
+      begin
+         begin
+            Landin.Server.Texts.Open (Data.all, Text);
+            Into.Open.Include
+              (URI, (URI     => Unbounded.To_Unbounded_String (URI),
+                     Path    => Unbounded.To_Unbounded_String (Path),
+                     Version => Version, Data => Data));
+         exception
+            when others =>
+               Free (Data);
+               raise;
+         end;
+         Free (Previous);
+      end;
       Into.Held.Hold (Path, Text);
    end Open;
 
+   --  The held copy of a document about to change is out of date and is
+   --  read by nothing before Flush holds the new text, so let it go now
+   --  rather than keep a whole superseded source through a burst.  The
+   --  path stays held, empty, so it is still listed in its directory.
+   procedure Unhold (Into : in out Store; URI : String);
+
+   procedure Unhold (Into : in out Store; URI : String) is
+      Held : constant Document := Into.Open.Element (URI);
+   begin
+      if not Landin.Server.Texts.Is_Dirty (Held.Data.all) then
+         Into.Held.Hold (Unbounded.To_String (Held.Path), "");
+      end if;
+   end Unhold;
+
    procedure Change
-     (Into : in out Store; URI : String; Version : Long_Long_Integer;
-      Text : String)
+     (Into : in out Store; URI : String; Text : String) is
+   begin
+      Unhold (Into, URI);
+      Landin.Server.Texts.Replace (Into.Open.Element (URI).Data.all, Text);
+   end Change;
+
+   procedure Edit
+     (Into : in out Store; URI : String;
+      First, Last : Landin.Server.Positions.Position;
+      Unit : Landin.Server.Positions.Encoding; Text : String) is
+   begin
+      Unhold (Into, URI);
+      Landin.Server.Texts.Edit
+        (Into.Open.Element (URI).Data.all, First, Last, Unit, Text);
+   end Edit;
+
+   procedure Set_Version
+     (Into : in out Store; URI : String; Version : Long_Long_Integer)
    is
       Held : Document := Into.Open.Element (URI);
    begin
       Held.Version := Version;
-      Held.Text := Unbounded.To_Unbounded_String (Text);
       Into.Open.Replace (URI, Held);
-      Into.Held.Hold (Unbounded.To_String (Held.Path), Text);
-   end Change;
+   end Set_Version;
+
+   procedure Flush (Into : in out Store) is
+   begin
+      for Held of Into.Open loop
+         if Landin.Server.Texts.Is_Dirty (Held.Data.all) then
+            declare
+               Text : constant String :=
+                 Landin.Server.Texts.Content (Held.Data.all);
+            begin
+               Into.Held.Hold (Unbounded.To_String (Held.Path), Text);
+               --  Analysis already paid to assemble the source.  One slice
+               --  of it makes the next edit's walk short again.
+               Landin.Server.Texts.Open (Held.Data.all, Text);
+            end;
+         end if;
+      end loop;
+   end Flush;
 
    procedure Close (Into : in out Store; URI : String) is
    begin
       if Into.Open.Contains (URI) then
          declare
+            Data : Buffer_Access := Into.Open.Element (URI).Data;
             Path : constant String :=
               Unbounded.To_String (Into.Open.Element (URI).Path);
          begin
+            Free (Data);
             Into.Open.Delete (URI);
             if Unbounded.To_String (Into.Active_URI) = URI then
                Into.Active_URI := Unbounded.Null_Unbounded_String;
@@ -171,7 +236,8 @@ package body Landin.Server.Documents is
             Into.Held.Release (Path);
             for Held of Into.Open loop
                if Unbounded.To_String (Held.Path) = Path then
-                  Into.Held.Hold (Path, Unbounded.To_String (Held.Text));
+                  Into.Held.Hold
+                    (Path, Landin.Server.Texts.Content (Held.Data.all));
                   exit;
                end if;
             end loop;
@@ -182,16 +248,28 @@ package body Landin.Server.Documents is
    procedure Activate
      (Into : in out Store; URI : String; Changed : out Boolean) is
       Held : constant Document := Into.Open.Element (URI);
+      Text : constant String := Landin.Server.Texts.Content (Held.Data.all);
       Previous : Unbounded.Unbounded_String;
       Status : Landin.Platform.Read_Status;
    begin
       Into.Held.Read_File
         (Unbounded.To_String (Held.Path), Previous, Status);
-      Changed := not Unbounded."=" (Previous, Held.Text);
+      Changed := Unbounded.To_String (Previous) /= Text;
       Into.Held.Hold
-        (Unbounded.To_String (Held.Path), Unbounded.To_String (Held.Text));
+        (Unbounded.To_String (Held.Path), Text);
       Into.Active_URI := Unbounded.To_Unbounded_String (URI);
    end Activate;
+
+   overriding procedure Finalize (Into : in out Store) is
+   begin
+      for Held of Into.Open loop
+         declare
+            Data : Buffer_Access := Held.Data;
+         begin
+            Free (Data);
+         end;
+      end loop;
+   end Finalize;
 
    function Is_Open (From : Store; URI : String) return Boolean
      is (From.Open.Contains (URI));

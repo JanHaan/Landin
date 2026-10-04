@@ -74,6 +74,17 @@ package Landin.Syntax.Forest is
      with Pre => Count (From) > Count (Into),
           Post => Count (Into) = Count (Into)'Old + 1;
 
+   --  Copy an immutable parse into another compilation.  Re-intern names
+   --  because a Name_Id only has meaning in the table that issued it.
+   procedure Copy_Add
+     (Into       : in out Table;
+      From       : aliased Table;
+      Id         : Landin.Source.Source_Id;
+      From_Names : Landin.Source.Names.Table;
+      Into_Names : in out Landin.Source.Names.Table)
+     with Pre  => Contains (From, Id),
+          Post => Count (Into) = Count (Into)'Old + 1;
+
    --  The tree a source was parsed into, by reference and read only.
    function Tree_Of (Of_Forest : aliased Table; Id : Landin.Source.Source_Id)
      return not null access constant Tree

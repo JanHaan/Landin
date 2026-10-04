@@ -11,7 +11,7 @@ function! GetLandinIndent()
   if l:previous == 0 | return 0 | endif
   let l:indent = indent(l:previous)
   let l:line = substitute(getline(l:previous), '--.*$', '', '')
-  if l:line =~# '\v(=|\<(then|begin|struct|concept|variant)\>)\s*$'
+  if l:line =~# '\m\%(=\|\<\%(then\|begin\|struct\|concept\|variant\|do\)\>\)\s*$'
     let l:indent += shiftwidth()
   endif
   if getline(v:lnum) =~# '^\s*\%(end\>\|else\>\|elsif\>\||\)'

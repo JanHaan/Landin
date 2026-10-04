@@ -106,7 +106,8 @@ def main():
         result = {"workload": {"modules": 4, "routines_per_module": 300,
                               "shared_routines": 500, "broken_modules": 2,
                               "same_queries": 40, "alternating_queries": 40,
-                              "edits": 20, "units": "bytes and KiB"}}
+                              "edits": 20, "burst_edits": 256,
+                              "units": "bytes and KiB"}}
         for name, binary in (("baseline", args.baseline), ("combined", args.refine)):
             result[name] = run(binary.resolve(), probe, root, paths, text, name)
         args.output.write_text(json.dumps(result, indent=2) + "\n")
@@ -203,6 +204,31 @@ def run(binary, probe, root, paths, text, label):
         for index in range(4):
             hover(index)
         sample(f"edit-{version - 1}")
+    # Queue an edit burst in one write. This exercises slice metadata before
+    # the next analysis materializes the source. Older servers receive the
+    # equivalent full replacements according to their advertised capability.
+    initialized = next(m for m in seen if "result" in m and
+                       "capabilities" in (m.get("result") or {}))
+    incremental = initialized["result"]["capabilities"]["textDocumentSync"]["change"] == 2
+    burst = bytearray()
+    for version in range(22, 278):
+        change = {"text": " "}
+        if incremental:
+            change["range"] = {"start": {"line": 0, "character": 0},
+                               "end": {"line": 0, "character": 0}}
+        else:
+            change["text"] = " " * (version - 21) + text + "\n"
+        message = {"jsonrpc": "2.0", "method": "textDocument/didChange",
+                   "params": {"textDocument": {"uri": paths[0].as_uri(),
+                                               "version": version},
+                              "contentChanges": [change]}}
+        data = json.dumps(message).encode()
+        burst.extend(b"Content-Length: %d\r\n\r\n" % len(data) + data)
+    process.stdin.write(burst)
+    process.stdin.flush()
+    for index in range(4):
+        hover(index)
+    sample("edit-burst-256-cached")
     # Closing an imported document invalidates analyses in remaining modules.
     imported = root / "shared/shared.ldn"
     send("textDocument/didOpen", {"textDocument": {"uri": imported.as_uri(),
@@ -233,6 +259,7 @@ def run(binary, probe, root, paths, text, label):
             "compiler_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
             "samples": samples,
             "requests": identifier, "publications": len(diagnostics),
+            "incremental_burst": incremental,
             "diagnostic_codes": codes}
 
 

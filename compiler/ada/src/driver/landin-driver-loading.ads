@@ -14,6 +14,7 @@
 
 with Landin.Platform;
 with Landin.Stages;
+with Landin.Stages.Syntax;
 
 package Landin.Driver.Loading is
 
@@ -35,7 +36,8 @@ package Landin.Driver.Loading is
       Entry_Directory : String;
       Missing_Directories : access Landin.Platform.Path_List := null;
       Previous        : access Landin.Stages.Compilation := null;
-      Watch_Syntax    : access procedure (Name : String) := null);
+      Watch_Syntax    : access procedure (Name : String) := null;
+      Cache           : access Landin.Stages.Syntax.Parse_Cache := null);
 
    function Joined_Path (Directory, Child : String) return String;
 

@@ -1,3 +1,4 @@
+with Ada.Strings.Fixed;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Finalization;
@@ -13,10 +14,12 @@ with Landin.Server.Analysis;
 with Landin.Server.Answers;
 with Landin.Server.Documents;
 with Landin.Server.Positions;
+with Landin.Server.Texts;
 with Landin.Server.Transport;
 with Landin.Source;
 with Landin.Source.Sets;
 with Landin.Stages;
+with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Targets.Levels;
 with Landin.Targets.Selection;
@@ -33,6 +36,7 @@ package body Landin.Server.Sessions is
    use type Landin.Source.Source_Id;
    use type Landin.Server.Documents.Document;
    use type Landin.Targets.Architecture;
+   use type Landin.Platform.Read_Status;
 
    --  JSON-RPC's and the protocol's error codes.
    Parse_Error          : constant := -32700;
@@ -110,12 +114,17 @@ package body Landin.Server.Sessions is
    use Caches;
    package Path_Maps is new Ada.Containers.Indefinite_Ordered_Maps
      (Key_Type => String, Element_Type => Landin.Server.Documents.Document);
+   use type String_Sets.Set;
+
+   package Path_User_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+     (Key_Type => String, Element_Type => String_Sets.Set);
 
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
       Host    : not null access constant Landin.Platform.Filesystem'Class;
       Status  : out Exit_Status;
-      On_Analysis : access procedure := null)
+      On_Analysis : access procedure := null;
+      Statistics : access Publication_Statistics := null)
    is
       From      : Landin.Server.Transport.Reader;
       Store     : Landin.Server.Documents.Store (Host);
@@ -138,6 +147,7 @@ package body Landin.Server.Sessions is
       Firmware_Entry : Unbounded.Unbounded_String;
       Started   : Boolean := False;
       Stopping  : Boolean := False;
+      Watch_Registration_Offered : Boolean := False;
       --  Modules whose documents changed since they were last published.
       Stale     : String_Sets.Set;
       --  Every path each module's last report published to, so a path it
@@ -146,6 +156,34 @@ package body Landin.Server.Sessions is
       --  Candidate directories of imports missing at the last report.
       Missing   : Text_Maps.Map;
       Cached    : Analysis_Cache;
+      --  The inverse of Published, maintained when a report is replaced or
+      --  its last open document closes.  Edits need only visit users of the
+      --  edited path.
+      Path_Users : Path_User_Maps.Map;
+
+      procedure Add_User (Path, Key : String);
+
+      procedure Add_User (Path, Key : String) is
+         Users : String_Sets.Set :=
+           (if Path_Users.Contains (Path)
+            then Path_Users.Element (Path) else String_Sets.Empty_Set);
+      begin
+         Users.Include (Key);
+         Path_Users.Include (Path, Users);
+      end Add_User;
+
+      procedure Remove_User (Path, Key : String);
+
+      procedure Remove_User (Path, Key : String) is
+         Users : String_Sets.Set := Path_Users.Element (Path);
+      begin
+         Users.Exclude (Key);
+         if Users.Is_Empty then
+            Path_Users.Delete (Path);
+         else
+            Path_Users.Replace (Path, Users);
+         end if;
+      end Remove_User;
 
       procedure Send (Item : String);
 
@@ -264,19 +302,22 @@ package body Landin.Server.Sessions is
         (URI   : String;
          Visit : not null access procedure
            (Context : in out Landin.Stages.Compilation;
-            Answer  : Landin.Server.Analysis.Result));
+            Answer  : Landin.Server.Analysis.Result);
+         Parse_Cache : access Landin.Stages.Syntax.Parse_Cache := null);
 
       procedure With_Analysis
         (URI   : String;
          Visit : not null access procedure
            (Context : in out Landin.Stages.Compilation;
-            Answer  : Landin.Server.Analysis.Result))
+            Answer  : Landin.Server.Analysis.Result);
+         Parse_Cache : access Landin.Stages.Syntax.Parse_Cache := null)
       is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
          Item : Analysis_Access;
          New_Entry : Boolean := False;
       begin
+         Landin.Server.Documents.Flush (Store);
          Activate (URI);
          if Cached.Entries.Contains (Key) then
             Item := Cached.Entries.Element (Key);
@@ -293,7 +334,8 @@ package body Landin.Server.Sessions is
                   On_Analysis.all;
                end if;
                Landin.Server.Analysis.Analyse
-                 (Facts, Level, Store.Held, Asked, Item.Context, Item.Answer);
+                 (Facts, Level, Store.Held, Asked, Item.Context, Item.Answer,
+                  Cache => Parse_Cache);
             end;
             Cached.Entries.Insert (Key, Item);
             New_Entry := False;
@@ -310,9 +352,15 @@ package body Landin.Server.Sessions is
       end With_Analysis;
 
       --  Publish every source of the module of URI.
-      procedure Publish (URI : String);
+      procedure Publish
+        (URI   : String;
+         Cache : access Landin.Stages.Syntax.Parse_Cache;
+         Shared : Boolean);
 
-      procedure Publish (URI : String) is
+      procedure Publish
+        (URI   : String;
+         Cache : access Landin.Stages.Syntax.Parse_Cache;
+         Shared : Boolean) is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
 
@@ -411,6 +459,12 @@ package body Landin.Server.Sessions is
             for Path of Was loop
                if not Now.Contains (Path) then
                   Clear_Unless_Shared (Key, Path);
+                  Remove_User (Path, Key);
+               end if;
+            end loop;
+            for Path of Now loop
+               if not Was.Contains (Path) then
+                  Add_User (Path, Key);
                end if;
             end loop;
             declare
@@ -428,7 +482,19 @@ package body Landin.Server.Sessions is
             end;
          end Visit;
       begin
-         With_Analysis (URI, Visit'Access);
+         if Shared then
+            if Statistics /= null then
+               Statistics.Cached_Publications :=
+                 Statistics.Cached_Publications + 1;
+            end if;
+            With_Analysis (URI, Visit'Access, Cache);
+         else
+            if Statistics /= null then
+               Statistics.Uncached_Publications :=
+                 Statistics.Uncached_Publications + 1;
+            end if;
+            With_Analysis (URI, Visit'Access);
+         end if;
       exception
          when Storage_Error =>
             raise;
@@ -443,7 +509,88 @@ package body Landin.Server.Sessions is
       procedure Publish_Stale;
 
       procedure Publish_Stale is
+         Cache : aliased Landin.Stages.Syntax.Parse_Cache;
+         Seen : String_Sets.Set;
+         Shared : String_Sets.Set;
       begin
+         if Stale.Is_Empty then
+            if Statistics /= null then
+               Statistics.Empty_Rounds := Statistics.Empty_Rounds + 1;
+            end if;
+            return;
+         end if;
+         Landin.Server.Documents.Flush (Store);
+         if Natural (Stale.Length) > 1 then
+            --  The last publications identify paths that can occur in
+            --  more than one of the pending modules.  Unique sources need
+            --  no copy, and one pending module needs no cache at all.
+            for Key of Stale loop
+               if Published.Contains (Key) then
+                  declare
+                     Earlier : constant String := Published.Element (Key);
+                     First : Positive := Earlier'First;
+                  begin
+                     for Index in Earlier'Range loop
+                        if Earlier (Index) = ASCII.LF then
+                           declare
+                              Path : constant String :=
+                                Earlier (First .. Index - 1);
+                           begin
+                              if Seen.Contains (Path) then
+                                 Shared.Include (Path);
+                              else
+                                 Seen.Include (Path);
+                              end if;
+                           end;
+                           First := Index + 1;
+                        end if;
+                     end loop;
+                  end;
+               end if;
+            end loop;
+         end if;
+         --  URI aliases can project different bytes while a round is being
+         --  published. Keep those paths out of its held-byte snapshot.
+         Seen.Clear;
+         for Opened of Store.Open loop
+            declare
+               Path : constant String := Unbounded.To_String (Opened.Path);
+            begin
+               if Seen.Contains (Path) then
+                  Shared.Exclude (Path);
+               else
+                  Seen.Include (Path);
+               end if;
+            end;
+         end loop;
+         if not Shared.Is_Empty then
+            for Path of Shared loop
+               Landin.Stages.Syntax.Limit_To (Cache, Path);
+            end loop;
+            for Opened of Store.Open loop
+               declare
+                  Path : constant String :=
+                    Unbounded.To_String (Opened.Path);
+               begin
+                  if Shared.Contains (Path) then
+                     declare
+                        Content : Unbounded.Unbounded_String;
+                        Status : Landin.Platform.Read_Status;
+                     begin
+                        if Statistics /= null then
+                           Statistics.Held_Snapshots :=
+                             Statistics.Held_Snapshots + 1;
+                        end if;
+                        Store.Held.Read_File (Path, Content, Status);
+                        if Status = Landin.Platform.Read_Ok then
+                           Landin.Stages.Syntax.Hold
+                             (Cache, Path, Unbounded.To_String (Content));
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
          while not Stale.Is_Empty loop
             declare
                Key : constant String := Stale.First_Element;
@@ -467,49 +614,64 @@ package body Landin.Server.Sessions is
                   if Landin.Server.Documents.Module_Key
                        (Store, Unbounded.To_String (Held.URI)) = Key
                   then
-                     Publish (Unbounded.To_String (Held.URI));
-                     --  Each alias needs its own analysis and diagnostics.
+                     Publish
+                       (Unbounded.To_String (Held.URI), Cache'Access,
+                        not Shared.Is_Empty);
                      exit when not Has_Alias;
                   end if;
                end loop;
             end;
          end loop;
+         if Statistics /= null then
+            Statistics.Reused_Parses := Statistics.Reused_Parses
+              + Landin.Stages.Syntax.Reuse_Count (Cache);
+         end if;
       end Publish_Stale;
 
+      procedure Mark_Stale_Path (Path : String);
       procedure Mark_Stale (URI : String);
+
+      procedure Mark_Stale_Path (Path : String) is
+         Slash : constant Natural :=
+           Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward);
+         Directory : constant String :=
+           (if Slash > Path'First then Path (Path'First .. Slash - 1)
+            else "");
+      begin
+         Clear (Cached);
+         if Path_Users.Contains (Path) then
+            for User of Path_Users.Element (Path) loop
+               Stale.Include (User);
+            end loop;
+         end if;
+         for Held of Store.Open loop
+            declare
+               Key : constant String := Landin.Server.Documents.Module_Key
+                 (Store, Unbounded.To_String (Held.URI));
+            begin
+               if Key = Directory or else Key = Path then
+                  Stale.Include (Key);
+               end if;
+            end;
+         end loop;
+         --  A newly created source can satisfy a formerly absent import.
+         for Position in Missing.Iterate loop
+            if Directory /= "" and then Unbounded.Index
+              (Unbounded.To_Unbounded_String
+                 (ASCII.LF & Text_Maps.Element (Position)),
+               ASCII.LF & Directory & ASCII.LF) > 0
+            then
+               Stale.Include (Text_Maps.Key (Position));
+            end if;
+         end loop;
+      end Mark_Stale_Path;
 
       procedure Mark_Stale (URI : String) is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
-         Path : constant String :=
-           Landin.Server.Documents.Held_Path (Store, URI);
       begin
-         Clear (Cached);
          Stale.Include (Key);
-         --  A change to a file another module imports makes that module
-         --  stale too: every open module that reported on this path.
-         for Position in Published.Iterate loop
-            if Unbounded.Index
-                 (Unbounded.To_Unbounded_String
-                    (ASCII.LF & Text_Maps.Element (Position)),
-                  ASCII.LF
-                  & Path
-                  & ASCII.LF) > 0
-            then
-               Stale.Include (Text_Maps.Key (Position));
-            end if;
-         end loop;
-         --  A source opened in a formerly absent import directory makes
-         --  that import available even though no source was published there.
-         for Position in Missing.Iterate loop
-            if Unbounded.Index
-                 (Unbounded.To_Unbounded_String
-                    (ASCII.LF & Text_Maps.Element (Position)),
-                  ASCII.LF & Key & ASCII.LF) > 0
-            then
-               Stale.Include (Text_Maps.Key (Position));
-            end if;
-         end loop;
+         Mark_Stale_Path (Landin.Server.Documents.Held_Path (Store, URI));
       end Mark_Stale;
 
       ------------------------------------------------------------------
@@ -521,6 +683,15 @@ package body Landin.Server.Sessions is
       procedure Initialize (Message : J.Document; Id, Params : J.Value) is
          General  : constant J.Value := J.Member
            (Message, J.Member (Message, Params, "capabilities"), "general");
+         Watched  : constant J.Value := J.Member
+           (Message,
+            J.Member
+              (Message,
+               J.Member
+                 (Message, J.Member (Message, Params, "capabilities"),
+                  "workspace"),
+               "didChangeWatchedFiles"),
+            "dynamicRegistration");
          Offered  : constant J.Value :=
            J.Member (Message, General, "positionEncodings");
          Settings : constant J.Value :=
@@ -530,14 +701,23 @@ package body Landin.Server.Sessions is
          Root_URI : constant J.Value := J.Member (Message, Params, "rootUri");
          Bad      : Unbounded.Unbounded_String;
 
+         procedure Add_Error (Description : String);
          procedure Add_Root (URI : String);
+
+         procedure Add_Error (Description : String) is
+         begin
+            if Unbounded.Length (Bad) > 0 then
+               Unbounded.Append (Bad, ASCII.LF);
+            end if;
+            Unbounded.Append (Bad, Description);
+         end Add_Error;
 
          procedure Add_Root (URI : String) is
             Path : constant String :=
               Landin.Server.Documents.Root_Path_Of (URI);
          begin
             if Path = "" then
-               Unbounded.Append (Bad, "a root is not a file URI: " & URI);
+               Add_Error ("a root is not a file URI: " & URI);
             else
                Store.Roots.Append (Path);
             end if;
@@ -572,7 +752,7 @@ package body Landin.Server.Sessions is
                      if J.Is_Kind (Message, One, J.String_Value) then
                         Add_Root (J.Text (Message, One));
                      else
-                        Unbounded.Append (Bad, "a root is not a string");
+                        Add_Error ("a root is not a string");
                      end if;
                   end;
                end loop;
@@ -604,14 +784,14 @@ package body Landin.Server.Sessions is
                   if Landin.Targets.Selection.Is_Described (Name) then
                      Facts := Landin.Targets.Selection.Described (Name);
                   else
-                     Unbounded.Append (Bad, "unknown target: " & Name);
+                     Add_Error ("unknown target: " & Name);
                   end if;
                end;
             elsif J.Is_Present (Target) then
-               Unbounded.Append (Bad, "a target is a string");
+               Add_Error ("a target is a string");
             elsif not Has_Default then
-               Unbounded.Append
-                 (Bad, "no target describes this compiler's host, "
+               Add_Error
+                 ("no target describes this compiler's host, "
                   & Landin.Targets.Selection.Build_Triplet
                   & "; name one with the target option");
             end if;
@@ -631,13 +811,13 @@ package body Landin.Server.Sessions is
                   if Landin.Targets.Levels.Is_Level_Of (Facts, Name) then
                      Level := Landin.Targets.Levels.Level_Named (Facts, Name);
                   else
-                     Unbounded.Append
-                       (Bad, "unknown level for "
-                        & Landin.Targets.Name (Facts) & ": " & Name);
+                     Add_Error
+                       ("unknown level for " & Landin.Targets.Name (Facts)
+                        & ": " & Name);
                   end if;
                end;
             elsif J.Is_Present (Named) then
-               Unbounded.Append (Bad, "a level is a string");
+               Add_Error ("a level is a string");
             end if;
          end;
 
@@ -657,8 +837,7 @@ package body Landin.Server.Sessions is
                        or else not J.Is_Kind (Message, Value, J.String_Value)
                        or else J.Text (Message, Value) = ""
                      then
-                        Unbounded.Append
-                          (Bad, "invalid build option: " & Name);
+                        Add_Error ("invalid build option: " & Name);
                      else
                         Options.Append
                           (Name & "=" & J.Text (Message, Value));
@@ -666,7 +845,7 @@ package body Landin.Server.Sessions is
                   end;
                end loop;
             elsif J.Is_Present (Given) then
-               Unbounded.Append (Bad, "options are an object");
+               Add_Error ("options are an object");
             end if;
          end;
 
@@ -676,24 +855,25 @@ package body Landin.Server.Sessions is
          begin
             if J.Is_Kind (Message, Named, J.String_Value) then
                if J.Text (Message, Named) = "" then
-                  Unbounded.Append (Bad, "firmwareEntry is empty");
+                  Add_Error ("firmwareEntry is empty");
                elsif Landin.Targets.Architecture_Of (Facts)
                  /= Landin.Targets.Cortex_M0
                then
-                  Unbounded.Append
-                    (Bad, "firmwareEntry requires target cortex-m0");
+                  Add_Error ("firmwareEntry requires target cortex-m0");
                else
                   Firmware_Entry :=
                     Unbounded.To_Unbounded_String (J.Text (Message, Named));
                end if;
             elsif J.Is_Present (Named) then
-               Unbounded.Append (Bad, "firmwareEntry is a string");
+               Add_Error ("firmwareEntry is a string");
             end if;
          end;
 
          Respond (Id_Text (Message, Id), Landin.Server.Answers.Capabilities
            (Unit));
          Started := True;
+         Watch_Registration_Offered :=
+           J.Is_Kind (Message, Watched, J.True_Value);
          if Unbounded.Length (Bad) > 0 then
             Tell (1, "refine: " & Unbounded.To_String (Bad));
          end if;
@@ -712,6 +892,110 @@ package body Landin.Server.Sessions is
          return (if J.Is_Kind (Message, URI, J.String_Value)
                  then J.Text (Message, URI) else "");
       end Document_URI;
+
+      --  Reject malformed coordinates rather than letting a bad edit
+      --  silently name the beginning or end of a different line.
+      function Read_Position
+        (Message : J.Document; Value : J.Value;
+         Where : out Positions.Position) return Boolean;
+
+      function Read_Position
+        (Message : J.Document; Value : J.Value;
+         Where : out Positions.Position) return Boolean
+      is
+         Line : constant J.Value := J.Member (Message, Value, "line");
+         Column : constant J.Value := J.Member (Message, Value, "character");
+      begin
+         Where := (others => 0);
+         if not J.Is_Integer (Message, Line)
+           or else not J.Is_Integer (Message, Column)
+           or else J.Integer_Of (Message, Line) not in
+             0 .. J.Integer_Value (Natural'Last)
+           or else J.Integer_Of (Message, Column) not in
+             0 .. J.Integer_Value (Natural'Last)
+         then
+            return False;
+         end if;
+         Where := (Line => Natural (J.Integer_Of (Message, Line)),
+                   Character => Natural (J.Integer_Of (Message, Column)));
+         return True;
+      end Read_Position;
+
+      --  A change's range, if it has one.  Well_Formed is False for a
+      --  change with no text, or a range that is malformed or ends before
+      --  it starts.
+      procedure Read_Change
+        (Message : J.Document; Change : J.Value;
+         Well_Formed, Ranged : out Boolean;
+         First, Last : out Positions.Position);
+
+      procedure Read_Change
+        (Message : J.Document; Change : J.Value;
+         Well_Formed, Ranged : out Boolean;
+         First, Last : out Positions.Position)
+      is
+         Text : constant J.Value := J.Member (Message, Change, "text");
+         Edit_Range : constant J.Value := J.Member (Message, Change, "range");
+      begin
+         First := (others => 0);
+         Last := (others => 0);
+         Ranged := J.Is_Present (Edit_Range);
+         Well_Formed := J.Is_Kind (Message, Text, J.String_Value);
+         if Well_Formed and then Ranged then
+            Well_Formed :=
+              J.Is_Kind (Message, Edit_Range, J.Object_Value)
+              and then Read_Position
+                (Message, J.Member (Message, Edit_Range, "start"), First)
+              and then Read_Position
+                (Message, J.Member (Message, Edit_Range, "end"), Last)
+              and then Landin.Server.Texts.In_Order (First, Last);
+         end if;
+      end Read_Change;
+
+      --  Apply the changes in notification order.  A range is measured in
+      --  the text left by the preceding change, in the negotiated unit.
+      --  Every change is read before any is applied, and an in-order range
+      --  always applies, so a refused notification changes nothing and no
+      --  text has to be kept to undo one.
+      function Change_Document
+        (Message : J.Document; Changes : J.Value; URI : String;
+         Version : Long_Long_Integer) return Boolean;
+
+      function Change_Document
+        (Message : J.Document; Changes : J.Value; URI : String;
+         Version : Long_Long_Integer) return Boolean
+      is
+         Well_Formed, Ranged : Boolean;
+         First, Last : Positions.Position;
+      begin
+         for Index in 1 .. J.Length (Message, Changes) loop
+            Read_Change
+              (Message, J.Element (Message, Changes, Index),
+               Well_Formed, Ranged, First, Last);
+            if not Well_Formed then
+               return False;
+            end if;
+         end loop;
+         for Index in 1 .. J.Length (Message, Changes) loop
+            declare
+               Change : constant J.Value :=
+                 J.Element (Message, Changes, Index);
+               Text : constant String :=
+                 J.Text (Message, J.Member (Message, Change, "text"));
+            begin
+               Read_Change
+                 (Message, Change, Well_Formed, Ranged, First, Last);
+               if Ranged then
+                  Landin.Server.Documents.Edit
+                    (Store, URI, First, Last, Unit, Text);
+               else
+                  Landin.Server.Documents.Change (Store, URI, Text);
+               end if;
+            end;
+         end loop;
+         Landin.Server.Documents.Set_Version (Store, URI, Version);
+         return True;
+      end Change_Document;
 
       procedure Notification
         (Message : J.Document; Method : String; Params : J.Value);
@@ -732,6 +1016,16 @@ package body Landin.Server.Sessions is
             null;
          elsif not Started then
             null;
+         elsif Method = "initialized" then
+            if Watch_Registration_Offered then
+               Send ("{""jsonrpc"":""2.0"",""id"":""refine-watch"",""method"":"
+                     & """client/registerCapability"",""params"":"
+                     & "{""registrations"":[{""id"":""refine-ldn-files"","
+                     & """method"":""workspace/didChangeWatchedFiles"","
+                     & """registerOptions"":"
+                     & "{""watchers"":[{""globPattern"":""**/*.ldn""}]}}]}}");
+               Watch_Registration_Offered := False;
+            end if;
          elsif Method = "textDocument/didOpen" then
             declare
                Text : constant J.Value := J.Member (Message, Item, "text");
@@ -753,21 +1047,39 @@ package body Landin.Server.Sessions is
                  and then J.Is_Kind (Message, Changes, J.Array_Value)
                  and then J.Length (Message, Changes) > 0
                then
-                  --  Full synchronisation: the last change is the buffer.
-                  declare
-                     Text : constant J.Value := J.Member
-                       (Message,
-                        J.Element (Message, Changes,
-                                   J.Length (Message, Changes)),
-                        "text");
-                  begin
-                     if J.Is_Kind (Message, Text, J.String_Value) then
-                        Landin.Server.Documents.Change
-                          (Store, URI, Version_Number,
-                           J.Text (Message, Text));
-                        Mark_Stale (URI);
-                     end if;
-                  end;
+                  if Change_Document
+                    (Message, Changes, URI, Version_Number)
+                  then
+                     Mark_Stale (URI);
+                  end if;
+               end if;
+            end;
+         elsif Method = "workspace/didChangeWatchedFiles" then
+            declare
+               Changes : constant J.Value :=
+                 J.Member (Message, Params, "changes");
+            begin
+               if J.Is_Kind (Message, Changes, J.Array_Value) then
+                  for Index in 1 .. J.Length (Message, Changes) loop
+                     declare
+                        Changed : constant J.Value :=
+                          J.Element (Message, Changes, Index);
+                        File_URI : constant J.Value :=
+                          J.Member (Message, Changed, "uri");
+                     begin
+                        if J.Is_Kind (Message, File_URI, J.String_Value) then
+                           declare
+                              Path : constant String :=
+                                Landin.Server.Documents.Path_Of
+                                  (J.Text (Message, File_URI));
+                           begin
+                              if Path /= "" then
+                                 Mark_Stale_Path (Path);
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end loop;
                end if;
             end;
          elsif Method = "textDocument/didClose" then
@@ -813,6 +1125,8 @@ package body Landin.Server.Sessions is
                                     Clear_Unless_Shared
                                       (Key, Earlier (First .. Index - 1));
                                  end if;
+                                 Remove_User
+                                   (Earlier (First .. Index - 1), Key);
                                  First := Index + 1;
                               end if;
                            end loop;
@@ -877,9 +1191,6 @@ package body Landin.Server.Sessions is
             return;
          end if;
 
-         --  Answer from the documents as they now stand.
-         Publish_Stale;
-
          if Method = "textDocument/formatting" then
             declare
                Path    : constant String :=
@@ -888,6 +1199,7 @@ package body Landin.Server.Sessions is
                Read    : Landin.Platform.Read_Status;
                Sources : Landin.Source.Sets.Source_Set;
             begin
+               Landin.Server.Documents.Flush (Store);
                Activate (URI);
                Store.Held.Read_File (Path, Content, Read);
                declare
@@ -900,6 +1212,9 @@ package body Landin.Server.Sessions is
                end;
             end;
          else
+            --  Semantic queries need the current module analysis. Formatting
+            --  uses the held text alone, so it need not wait for this check.
+            Publish_Stale;
             declare
                Result : Unbounded.Unbounded_String :=
                  Unbounded.To_Unbounded_String ("null");
@@ -938,6 +1253,9 @@ package body Landin.Server.Sessions is
       Fault   : Unbounded.Unbounded_String;
    begin
       Status := 1;
+      if Statistics /= null then
+         Statistics.all := (others => 0);
+      end if;
       loop
          --  Analysis waits until no more input is ready: a burst of edits
          --  is one analysis, and a request analyses first if it must.

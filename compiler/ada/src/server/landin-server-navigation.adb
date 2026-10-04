@@ -1,3 +1,4 @@
+with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
@@ -35,9 +36,17 @@ package body Landin.Server.Navigation is
       Spaces : Tok.Spacing.Table;
       Source : Landin.Source.Source_Id) return String
    is
+      type Line_Range is record
+         From : Positive;
+         Stop : Natural;
+      end record;
+      package Line_Ranges is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Line_Range);
+
       --  Text is read as one-based for these indices.
       Bytes : constant String (1 .. Text'Length) := Text;
-      Found : Unbounded.Unbounded_String;
+      Lines : Line_Ranges.Vector;
+      Length : Natural := 0;
       --  The first byte of the line being looked above.
       Start : Natural := Natural'Min (Natural (Offset), Bytes'Length) + 1;
    begin
@@ -101,16 +110,41 @@ package body Landin.Server.Navigation is
                From : constant Positive :=
                  (if Lead + 3 <= Stop and then Bytes (Lead + 3) = ' '
                   then Lead + 4 else Lead + 3);
-               Line : constant String := Bytes (From .. Stop);
+               Line_Length : constant Natural :=
+                 (if From <= Stop then Stop - From + 1 else 0);
             begin
-               Found := Unbounded.To_Unbounded_String
-                 (if Unbounded.Length (Found) = 0 then Line
-                  else Line & ASCII.LF & Unbounded.To_String (Found));
+               --  Preserve the old treatment of empty lines nearest the
+               --  declaration: they add no separator until text is found.
+               if Line_Length > 0 or else Length > 0 then
+                  Lines.Append (Line_Range'(From => From, Stop => Stop));
+                  Length := Length + Line_Length
+                    + (if Natural (Lines.Length) > 1 then 1 else 0);
+               end if;
             end;
             Start := First;
          end;
       end loop;
-      return Unbounded.To_String (Found);
+      declare
+         Result : String (1 .. Length);
+         Next   : Positive := 1;
+      begin
+         for Index in reverse 1 .. Natural (Lines.Length) loop
+            if Index < Natural (Lines.Length) then
+               Result (Next) := ASCII.LF;
+               Next := Next + 1;
+            end if;
+            declare
+               Line : constant Line_Range := Lines.Element (Index);
+            begin
+               if Line.From <= Line.Stop then
+                  Result (Next .. Next + Line.Stop - Line.From) :=
+                    Bytes (Line.From .. Line.Stop);
+                  Next := Next + Line.Stop - Line.From + 1;
+               end if;
+            end;
+         end loop;
+         return Result;
+      end;
    end Doc_Comment;
 
    function Node_At

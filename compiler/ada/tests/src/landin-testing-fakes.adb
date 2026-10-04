@@ -844,6 +844,19 @@ package body Landin.Testing.Fakes is
       Host.Pauses.Append (Offset);
    end Pause_At;
 
+   procedure Edit_At
+     (Host : in out Fake_Channel; Offset : Natural;
+      Files : Fake_Filesystem_Access; Path, Content : String)
+   is
+   begin
+      Host.Files := Files;
+      Host.Edits.Append
+        (Timed_Edit'
+           (Offset  => Offset,
+            Path    => Unbounded.To_Unbounded_String (Path),
+            Content => Unbounded.To_Unbounded_String (Content)));
+   end Edit_At;
+
    --  The input left before the next pause, in bytes.
    function Before_Pause (Host : Fake_Channel) return Natural;
 
@@ -865,19 +878,34 @@ package body Landin.Testing.Fakes is
       Into : out String;
       Last : out Natural)
    is
-      Left : constant Natural :=
-        (if Before_Pause (Host) = 0
-         then Unbounded.Length (Host.Input) - Host.Next + 1
-         else Before_Pause (Host));
-      Taken : constant Natural :=
-        Natural'Min (Left, Natural'Min (Into'Length, Host.Chunk));
    begin
-      Last := Into'First + Taken - 1;
-      if Taken > 0 then
-         Into (Into'First .. Last) := Unbounded.Slice
-           (Host.Input, Host.Next, Host.Next + Taken - 1);
-         Host.Next := Host.Next + Taken;
-      end if;
+      while Host.Next_Edit <= Natural (Host.Edits.Length)
+        and then Host.Edits (Host.Next_Edit).Offset = Host.Next - 1
+      loop
+         declare
+            Edit : constant Timed_Edit := Host.Edits (Host.Next_Edit);
+         begin
+            Add_File
+              (Host.Files.all, Unbounded.To_String (Edit.Path),
+               Unbounded.To_String (Edit.Content));
+            Host.Next_Edit := Host.Next_Edit + 1;
+         end;
+      end loop;
+      declare
+         Left : constant Natural :=
+           (if Before_Pause (Host) = 0
+            then Unbounded.Length (Host.Input) - Host.Next + 1
+            else Before_Pause (Host));
+         Taken : constant Natural :=
+           Natural'Min (Left, Natural'Min (Into'Length, Host.Chunk));
+      begin
+         Last := Into'First + Taken - 1;
+         if Taken > 0 then
+            Into (Into'First .. Last) := Unbounded.Slice
+              (Host.Input, Host.Next, Host.Next + Taken - 1);
+            Host.Next := Host.Next + Taken;
+         end if;
+      end;
    end Read;
 
    --  At a pause, the editor is waiting: nothing is ready, though more

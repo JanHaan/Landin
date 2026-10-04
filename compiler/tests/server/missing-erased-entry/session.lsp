@@ -7,7 +7,7 @@
 -> {"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///workspace/main.ldn"},"position":{"line":0,"character":0}}}
 -> {"jsonrpc":"2.0","id":4,"method":"shutdown"}
 -> {"jsonrpc":"2.0","method":"exit"}
-<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
+<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":2},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","version":1,"diagnostics":[{"range":{"start":{"line":4,"character":20},"end":{"line":4,"character":24}},"severity":1,"code":"L0308","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0308"},"source":"refine","message":"this runtime concept has no entry called `code`\nnote: [1390]: an `any` member names one concept entry"}]}}
 <- {"jsonrpc":"2.0","id":2,"result":{"contents":{"kind":"markdown","value":"```landin\ndisplay: type = concept (t: type)\n```"},"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":7}}}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","version":2,"diagnostics":[]}}

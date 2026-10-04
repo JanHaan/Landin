@@ -67,14 +67,59 @@
       (set-match-data (list start (point)))
       t)))
 
+(defvar-local landin--raw-scan-cache nil
+  "Buffer tick and last scanned position for the raw matcher.")
+
+(defun landin--skip-quoted-string ()
+  "Move past one ordinary quoted string at point."
+  (let ((quote (char-after))
+        (done nil))
+    (forward-char 1)
+    (while (and (not done) (not (eobp)))
+      (cond
+       ((eq (char-after) ?\\)
+        (forward-char (min 2 (- (point-max) (point)))))
+       ((eq (char-after) quote)
+        (forward-char 1)
+        (setq done t))
+       ((eq (char-after) ?\n)
+        (setq done t))
+       (t (forward-char 1))))))
+
 (defun landin--match-raw-string (limit)
-  "Find one quote-counted raw string beginning before LIMIT."
-  (when (re-search-forward "\"\{3,\}" limit t)
-    (let ((start (match-beginning 0))
-          (delimiter (match-string-no-properties 0)))
-      (search-forward delimiter nil 'move)
-      (set-match-data (list start (point)))
-      t)))
+  "Find one quote-counted raw string beginning before LIMIT.
+Scan from a known code position so comment quotes cannot open a raw string."
+  (let* ((origin (point))
+         (tick (buffer-chars-modified-tick))
+         (cached landin--raw-scan-cache)
+         (found nil))
+    (goto-char (if (and cached (= (car cached) tick)
+                        (<= (cdr cached) origin))
+                   (cdr cached)
+                 (point-min)))
+    (while (and (not found) (< (point) limit))
+      (cond
+       ((looking-at "--(")
+        (landin--match-block-comment (point-max)))
+       ((looking-at "--")
+        (forward-line 1))
+       ((looking-at "\"\\\{3,\\\}")
+        (let ((start (point))
+              (delimiter (match-string-no-properties 0)))
+          (goto-char (match-end 0))
+          (when (search-forward delimiter nil 'move)
+            (setq landin--raw-scan-cache (cons tick (point))))
+          (when (>= start origin)
+            (setq found (cons start (point))))))
+       ((memq (char-after) (string-to-list "\"'"))
+        (landin--skip-quoted-string))
+       (t (forward-char 1))))
+    (if found
+        (progn
+          (set-match-data (list (car found) (cdr found)))
+          t)
+      (setq landin--raw-scan-cache (cons tick (point)))
+      nil)))
 
 (defconst landin-font-lock-keywords
   `((landin--match-block-comment (0 font-lock-comment-face t))
@@ -109,14 +154,44 @@
                 (treesit-font-lock-rules
                  :language 'landin :feature 'comment '((comment) @font-lock-comment-face)
                  :language 'landin :feature 'definition
-                 '((function_declaration name: (identifier) @font-lock-function-name-face)
-                   (type_declaration name: (identifier) @font-lock-type-face))
+                 '((type_declaration name: (identifier) @font-lock-type-face)
+                   (concept_declaration name: (identifier) @font-lock-type-face))
+                 :language 'landin :feature 'keyword
+                 '(["addr" "alignof" "any" "as" "atom" "begin" "break" "complete"
+                    "concept" "continue" "dec" "defer" "do" "else" "elsif" "end"
+                    "escaping" "extern" "fail" "fixed" "for" "from" "if" "import"
+                    "in" "inc" "inout" "is" "loop" "match" "mut" "none" "option"
+                    "ptr" "public" "return" "sink" "sizeof" "struct" "then" "try"
+                    "type" "unchecked" "undo" "variant" "when" "while" "with"]
+                   @font-lock-keyword-face
+                   (measurement_expression operator: (identifier) @font-lock-keyword-face
+                                           (:match "\\`lenof\\'" @font-lock-keyword-face))
+                   (of_keyword (identifier) @font-lock-keyword-face
+                               (:match "\\`of\\'" @font-lock-keyword-face)))
+                 :language 'landin :feature 'string
+                 '([(text_literal) (raw_literal) (character_literal)]
+                   @font-lock-string-face)
                  :language 'landin :feature 'type '((scalar_type) @font-lock-builtin-face)
                  :language 'landin :feature 'constant
                  '((boolean_literal) @font-lock-constant-face
                    (zeroed_literal) @font-lock-constant-face
                    (uninit_literal) @font-lock-constant-face
-                   (integer_literal) @font-lock-number-face)))
+                   (integer_literal) @font-lock-number-face
+                   (float_literal) @font-lock-number-face)
+                 :language 'landin :feature 'function
+                 '((function_declaration name: (identifier) @font-lock-function-name-face)
+                   (extern_declaration name: (identifier) @font-lock-function-name-face)
+                   (call_expression function: (indexed_expression
+                                               (identifier) @font-lock-function-call-face))
+                   (labeled_application function: (indexed_expression
+                                                  (identifier) @font-lock-function-call-face)))
+                 :language 'landin :feature 'operator
+                 '(["=" ":=" "!" "|" "+" "*" "/" "%" "+%" "*%" "<<" ">>"
+                    "&" "^" "~" "==" "<>" "<" "<=" ">" ">=" ".." "..<"
+                    "+=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>="
+                    "+%=" "*%=" "and" "not" "or"
+                    (minus) (minus_equals) (minus_percent) (minus_percent_equals)
+                    (arrow)] @font-lock-operator-face)))
     (treesit-major-mode-setup)))
 
 ;;;###autoload

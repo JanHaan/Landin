@@ -34,7 +34,7 @@ package body Landin.Server.Answers is
       J.Name (Written, "openClose");
       J.Write_Boolean (Written, True);
       J.Name (Written, "change");
-      J.Write_Integer (Written, 1);
+      J.Write_Integer (Written, 2);
       J.End_Object (Written);
       J.Name (Written, "definitionProvider");
       J.Write_Boolean (Written, True);
