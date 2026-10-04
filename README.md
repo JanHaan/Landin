@@ -18,7 +18,8 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.2.3. The compiler can build and run Landin programs
-for Linux x86-64 and native macOS arm64, and builds firmware for Cortex-M0. It handles functions, user-defined data types, generic
+for Linux x86-64, Linux arm64 and native macOS arm64, and builds firmware for
+Cortex-M0. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
 `any`. Hosted containers, allocators, text and I/O in `core`, a complete
 recovering configuration parser and a hosted log filter now run alongside the
@@ -41,7 +42,7 @@ targets and the microcontrollers people buy.**
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
-| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 and Darwin arm64 backends and native toolchain paths, and its own test harness. |
+| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the x86-64, arm64 and Cortex-M backends and their toolchain paths, and its own test harness. |
 | `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
 | `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
 | `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
