@@ -4601,10 +4601,11 @@ a whole, so D22 permits a later compiler-known or computed index read.
 Lowering records one target-neutral `Clear_Array` instruction with no operands
 and no result. D57 later gives field zero of that destination-only operation a
 whole aggregate's padded extent as well; its array meaning is unchanged. The
-Linux x86-64 backend forms the slot address, takes the target
-byte extent, and emits one forward `rep stosb` clear. Compiler work and IR size
-therefore remain independent of the target-sized length D18 admits, and no
-array-valued temporary or hidden zero datum exists.
+Linux x86-64 backend forms the slot address and takes the target byte extent.
+It emits bounded scalar zero stores for one to six bytes or exactly eight
+bytes; other extents retain the forward `rep stosb` clear. Compiler work and
+IR size therefore remain independent of the target-sized length D18 admits,
+and no array-valued temporary or hidden zero datum exists.
 
 This remains one contextual initializer. D28 does not infer a shape for
 `name := zeroed`; D30 separately admits array assignment, D39/D40 typed module
@@ -4710,10 +4711,11 @@ array place or value.
 The destination is reached first; `zeroed` evaluates no source expressions and
 names no source storage. Lowering emits one `Clear_Array` carrying that local
 frame slot or module datum; D49 additionally carries the declaration-order field
-identity, never a target byte offset. The verifier resolves its complete array shape, and
-the backend derives the byte extent from target facts before emitting one
-forward byte clear. There is no hidden zero datum, array temporary, source
-operand, or compiler enumeration of D18's target-sized length.
+identity, never a target byte offset. The verifier resolves its complete array
+shape, and the backend derives the byte extent from target facts. Linux x86-64
+uses bounded scalar zero stores for one to six bytes or exactly eight bytes;
+other extents retain `rep stosb`. There is no hidden zero datum, array
+temporary, source operand, or compiler enumeration of D18's target-sized length.
 
 A normally completed assignment marks a local destination assigned as a whole,
 so every compiler-known and computed element may then be read. There is no
@@ -6983,7 +6985,8 @@ the shape, rejecting an absent field or a scalar field with the same faults D48
 uses. Each backend derives the field offset, element width, and byte extent from
 its selected target. Linux x86-64 forms a module field base in registers so a
 D18-wide preceding field remains addressable, uses the L0504-bounded displacement
-for a frame field, and emits one forward byte clear. A zero extent gives
+for a frame field. It uses bounded scalar zero stores for one to six bytes or
+exactly eight bytes; other extents retain `rep stosb`. A zero extent gives
 `rep stosb` a zero count.
 
 **Why only the contextual clear:** a field supplies exactly the shape and
@@ -7057,10 +7060,11 @@ remains field-zero-only.
 Each backend derives both field offsets, the source element width, and the byte
 extent from its selected target. Linux x86-64 register-forms a module field on
 either side when a D18-wide preceding field puts its offset outside a signed
-displacement, uses L0504-bounded frame displacements for local fields, and emits
-one forward `rep movsb`. Distinct fields and distinct storage do not overlap;
-an exact self-copy names the same range, which the forward copy preserves. A
-zero extent gives the operation a zero count.
+displacement and uses L0504-bounded frame displacements for local fields. It
+uses scalar register moves for one to six bytes or exactly eight bytes; other
+extents retain one forward `rep movsb`. Distinct fields and distinct storage
+do not overlap; an exact self-copy names the same range, which either
+transfer preserves. A zero extent gives the operation a zero count.
 
 **Why the contextual endpoints:** the compact D20 operation already expresses
 the complete source read and destination write without enumerating D18's
@@ -7555,8 +7559,10 @@ whole fixed-array storage, as before, or D57's whole aggregate storage; a
 positive field remains an array field. The verifier explicitly admits only an
 array or aggregate at field zero before any shaped accessor. Each backend
 derives an aggregate's complete padded extent from target facts and clears
-every byte, including padding, in one forward operation. No field enumeration,
-hidden zero object, target offset or new opcode is introduced.
+every byte, including padding. Linux x86-64 uses bounded scalar zero stores
+for one to six bytes or exactly eight bytes; other extents retain `rep stosb`.
+No field enumeration, hidden zero object, target offset or new opcode is
+introduced.
 
 An invalid struct body already owns its field/layout report and never reaches
 lowering. An explicit module struct zero image in this slice, inferred `name := zeroed`,
@@ -9090,13 +9096,14 @@ the tag, case count, payload kinds, scalar types and array lengths to agree.
 These are explicit release-build checks.
 
 The backend replays D74's tag-first maximum-payload layout for the selected
-target, forms both field addresses and copies the complete padded part with one
-forward byte run. Distinct aggregate roots do not overlap; a self-copy names
-the identical range, which the forward run preserves. Copying the padded part
-also carries any unspecified inactive bytes; it need not inspect the source
-tag. An explicit `zeroed` source still has [0540]'s complete all-zero image.
-Scalar and fixed-array fields remain separate operations in declaration order,
-exactly as D54 specified.
+target, forms both field addresses and copies the complete padded part. Extents
+of one to six bytes or exactly eight bytes use bounded scalar chunks; other
+nonzero extents retain one forward byte run. Distinct aggregate roots do not
+overlap; a self-copy names the identical range, which either transfer preserves.
+Copying the padded part also carries any unspecified inactive bytes; it need
+not inspect the source tag. An explicit `zeroed` source still has [0540]'s
+complete all-zero image. Scalar and fixed-array fields remain separate
+operations in declaration order, exactly as D54 specified.
 
 **Why a compact part copy:** selecting the active case and copying only its
 payload would branch on runtime state and make the copy sequence depend on the

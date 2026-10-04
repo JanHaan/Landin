@@ -1860,14 +1860,68 @@ package body Landin.Backend.X86_64 is
             end if;
          end Carry;
 
-         --  Chunk transport never touches argument or result registers as
-         --  scratch.  %r11 is the object base and %r10 holds one eightbyte.
-         --  Partial final chunks read/write only bytes inside the object.
          function Displacement
            (Offset : Landin.Targets.Byte_Count; Base : String) return String
            is (Trimmed (Landin.Targets.Byte_Count'Image (Offset))
                & "(" & Base & ")");
 
+         --  Assembly of the seven-byte scalar copy/clear is 18/16 bytes,
+         --  versus 13/15 for the string path.  All other extents through
+         --  eight bytes save code with scalar chunks.  Keep this path bounded
+         --  so large arrays never make emitted code proportional to extent.
+         function Use_Scalar_Transfer
+           (Bytes : Landin.Targets.Byte_Count) return Boolean
+           is (Bytes in 1 .. 6 or else Bytes = 8);
+
+         function Transfer_Chunk
+           (Remaining : Landin.Targets.Byte_Count) return Held_Size
+           is (if Remaining >= 8 then Landin.Targets.Byte_8
+               elsif Remaining >= 4 then Landin.Targets.Byte_4
+               elsif Remaining >= 2 then Landin.Targets.Byte_2
+               else Landin.Targets.Byte_1);
+
+         procedure Emit_Small_Copy (Bytes : Landin.Targets.Byte_Count);
+         procedure Emit_Small_Clear (Bytes : Landin.Targets.Byte_Count);
+
+         procedure Emit_Small_Copy (Bytes : Landin.Targets.Byte_Count) is
+            Offset : Landin.Targets.Byte_Count := 0;
+         begin
+            while Offset < Bytes loop
+               declare
+                  Chunk : constant Held_Size :=
+                    Transfer_Chunk (Bytes - Offset);
+               begin
+                  Emit ("mov" & Suffix (Chunk) & " "
+                        & Displacement (Offset, "%rsi") & ", "
+                        & Accumulator (Chunk));
+                  Emit ("mov" & Suffix (Chunk) & " "
+                        & Accumulator (Chunk) & ", "
+                        & Displacement (Offset, "%rdi"));
+                  Offset := Offset + Landin.Targets.Byte_Count
+                    (Landin.Targets.Bytes (Chunk));
+               end;
+            end loop;
+         end Emit_Small_Copy;
+
+         procedure Emit_Small_Clear (Bytes : Landin.Targets.Byte_Count) is
+            Offset : Landin.Targets.Byte_Count := 0;
+         begin
+            while Offset < Bytes loop
+               declare
+                  Chunk : constant Held_Size :=
+                    Transfer_Chunk (Bytes - Offset);
+               begin
+                  Emit ("mov" & Suffix (Chunk) & " $0, "
+                        & Displacement (Offset, "%rdi"));
+                  Offset := Offset + Landin.Targets.Byte_Count
+                    (Landin.Targets.Bytes (Chunk));
+               end;
+            end loop;
+         end Emit_Small_Clear;
+
+         --  C ABI chunk transport never touches argument or result registers
+         --  as scratch.  %r11 is the object base and %r10 holds one eightbyte.
+         --  Partial final chunks read/write only bytes inside the object.
          function Chunk_Bytes
            (Shape : C_ABI.Classification; Index : Positive)
             return Landin.Targets.Byte_Count
@@ -3693,13 +3747,17 @@ package body Landin.Backend.X86_64 is
                         Storage_Address
                           (Source, Source_Field, "%rsi",
                            Nested => Source_Nested);
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Bytes))
-                           & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep movsb");
+                        if Use_Scalar_Transfer (Bytes) then
+                           Emit_Small_Copy (Bytes);
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Bytes))
+                              & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep movsb");
+                        end if;
                      end if;
                   end;
 
@@ -3736,13 +3794,17 @@ package body Landin.Backend.X86_64 is
                         Nested => Into_Nested);
                      Storage_Address
                        (Source, Field, "%rsi", Nested => From_Nested);
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Bytes))
-                        & ", %rcx");
-                     Emit ("cld");
-                     Emit ("rep movsb");
+                     if Use_Scalar_Transfer (Bytes) then
+                        Emit_Small_Copy (Bytes);
+                     else
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                     end if;
                   end;
 
                when Landin.IR.Clear_Array =>
@@ -3764,14 +3826,18 @@ package body Landin.Backend.X86_64 is
                      if Bytes > 0 then
                         Storage_Address
                           (Destination, Field, "%rdi", Nested => Nested);
-                        Emit ("xorl %eax, %eax");
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Bytes))
-                           & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep stosb");
+                        if Use_Scalar_Transfer (Bytes) then
+                           Emit_Small_Clear (Bytes);
+                        else
+                           Emit ("xorl %eax, %eax");
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Bytes))
+                              & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep stosb");
+                        end if;
                      end if;
                   end;
 

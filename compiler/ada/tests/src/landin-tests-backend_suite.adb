@@ -2797,8 +2797,13 @@ package body Landin.Tests.Backend_Suite is
                and then Contains
                  (Text, HT & "leaq " & Source & "(%rbp), %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Bytes & ", %rcx")
-               and then Contains (Text, HT & "rep movsb"),
+                 (Text,
+                  (if Bytes = "8" then
+                     HT & "movq 0(%rsi), %rax" & LF
+                     & HT & "movq %rax, 0(%rdi)"
+                   else
+                     HT & "movabsq $" & Bytes & ", %rcx" & LF
+                     & HT & "cld" & LF & HT & "rep movsb")),
                "the local array field copy follows target frame layout");
          end;
       end Check_Local;
@@ -2820,8 +2825,9 @@ package body Landin.Tests.Backend_Suite is
               (Text, HT & "movabsq $2147483648, %rdx") >= 2
             and then Contains (Text, HT & "addq %rdx, %rdi")
             and then Contains (Text, HT & "addq %rdx, %rsi")
-            and then Contains (Text, HT & "movabsq $2, %rcx")
-            and then Contains (Text, HT & "rep movsb"),
+            and then Contains
+              (Text, HT & "movw 0(%rsi), %ax" & LF
+               & HT & "movw %ax, 0(%rdi)"),
             "the wide module array field forms both complete addresses");
       end;
 
@@ -2882,8 +2888,13 @@ package body Landin.Tests.Backend_Suite is
                and then Contains
                  (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Bytes & ", %rcx")
-               and then Contains (Text, HT & "rep movsb")
+                 (Text,
+                  (if Bytes = "8" then
+                     HT & "movq 0(%rsi), %rax" & LF
+                     & HT & "movq %rax, 0(%rdi)"
+                   else
+                     HT & "movabsq $" & Bytes & ", %rcx" & LF
+                     & HT & "cld" & LF & HT & "rep movsb"))
                and then Contains
                  (Text, HT & "leaq " & Clear_At & "(%rbp), %rdi")
                and then Contains
@@ -2947,8 +2958,13 @@ package body Landin.Tests.Backend_Suite is
                and then Contains
                  (Text, HT & "addq $" & Field_Offset & ", %rsi")
                and then Contains
-                 (Text, HT & "movabsq $" & Bytes & ", %rcx")
-               and then Contains (Text, HT & "rep movsb"),
+                 (Text,
+                  (if Bytes = "8" then
+                     HT & "movq 0(%rsi), %rax" & LF
+                     & HT & "movq %rax, 0(%rdi)"
+                   else
+                     HT & "movabsq $" & Bytes & ", %rcx" & LF
+                     & HT & "cld" & LF & HT & "rep movsb")),
                "inferred local field addresses follow the target");
          end;
       end Check_Target;
@@ -2991,8 +3007,7 @@ package body Landin.Tests.Backend_Suite is
             and then Contains
                        (Text, HT & "movabsq $2147483648, %rdx")
             and then Contains (Text, HT & "addq %rdx, %rdi")
-            and then Contains (Text, HT & "movabsq $2, %rcx")
-            and then Contains (Text, HT & "rep stosb"),
+            and then Contains (Text, HT & "movw $0, 0(%rdi)"),
             "the full field offset is added before its two bytes clear");
       end;
    end A_Wide_Array_Field_Clear_Uses_Registers;
@@ -3055,9 +3070,12 @@ package body Landin.Tests.Backend_Suite is
                  (Text,
                   HT & "leaq " & Destination_Field & "(%rbp), %rdi" & LF
                   & HT & "leaq " & Source_Field & "(%rbp), %rsi" & LF
-                  & HT & "movabsq $" & Bytes & ", %rcx" & LF
-                  & HT & "cld" & LF
-                  & HT & "rep movsb" & LF),
+                  & (if Bytes = "8" then
+                       HT & "movq 0(%rsi), %rax" & LF
+                       & HT & "movq %rax, 0(%rdi)" & LF
+                     else
+                       HT & "movabsq $" & Bytes & ", %rcx" & LF
+                       & HT & "cld" & LF & HT & "rep movsb" & LF)),
                "both frame field addresses and the extent follow the target");
          end;
       end Check_Local;
@@ -3079,8 +3097,9 @@ package body Landin.Tests.Backend_Suite is
             and then Contains (Text, HT & "addq %rdx, %rsi")
             and then Occurrences
               (Text, HT & "movabsq $2147483648, %rdx") = 2
-            and then Contains (Text, HT & "movabsq $2, %rcx")
-            and then Contains (Text, HT & "rep movsb"),
+            and then Contains
+              (Text, HT & "movw 0(%rsi), %ax" & LF
+               & HT & "movw %ax, 0(%rdi)"),
             "both wide module field offsets are formed in registers");
       end;
 
@@ -3126,9 +3145,8 @@ package body Landin.Tests.Backend_Suite is
                   & HT & "leaq source(%rip), %rsi" & LF
                   & HT & "movabsq $2147483648, %rdx" & LF
                   & HT & "addq %rdx, %rsi" & LF
-                  & HT & "movabsq $2, %rcx" & LF
-                  & HT & "cld" & LF
-                  & HT & "rep movsb" & LF),
+                  & HT & "movw 0(%rsi), %ax" & LF
+                  & HT & "movw %ax, 0(%rdi)" & LF),
                "the fresh slot and wide field source follow the target");
          end;
       end Check_Target;
@@ -5158,10 +5176,8 @@ package body Landin.Tests.Backend_Suite is
            & HT & "cld" & LF
            & HT & "rep stosb" & LF;
          Payload_Clear : constant String :=
-           HT & "xorl %eax, %eax" & LF
-           & HT & "movabsq $6, %rcx" & LF
-           & HT & "cld" & LF
-           & HT & "rep stosb" & LF;
+           HT & "movl $0, 0(%rdi)" & LF
+           & HT & "movw $0, 4(%rdi)" & LF;
       begin
          Landin.Testing.Check
            (Item, Contains (Wide, "here:" & LF & HT & ".quad 8" & LF),
