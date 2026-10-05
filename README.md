@@ -243,8 +243,10 @@ This is the maintained inventory of what the compiler does today:
   defaulting to what the backend always emitted. A program reads a level as
   `compiler.feature.NAME` in `fixed if`. A level changes instructions and
   never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
-  `armv8.1-a` and hardware division at `armv7-m`, each executed at both
-  levels, the last on QEMU's Cortex-M3.
+  `armv8.1-a` on Linux and macOS, and hardware division at `armv7-m`, each
+  executed at both levels, the last on QEMU's Cortex-M3. The assembler holds
+  an assembly block to the level, and a level runs only on a processor that
+  confirms it; an unconfirmed level fails as unverified.
 - **Code generation.** Target code and the build report are byte-identical
   whatever the build directory, environment or order, on all four targets;
   the hosted linked image is not claimed. Compact numeric-array loops,

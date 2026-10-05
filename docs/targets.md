@@ -144,18 +144,22 @@ ABI, is the same at every level of a family.
 | target | default | other levels | what a higher level selects | tool arguments and assembly directives |
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
-| `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly above the baseline; `-Wa,-march=` with the level at every level |
+| `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly, and `-Wa,-march=` with the level, at every level |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
 plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
-instruction is refused by the assembler unless the build assumes v3. Linux
-arm64 likewise passes its selected level to the assembler at every level,
-including the baseline. Darwin arm64 emits `.arch` at both levels so its
-default also refuses LSE instructions in an `assembler.block`. The default Cortex `armv6-m` level likewise
-names its CPU in both tool arguments and assembly directive. The pinned
+instruction is refused by the assembler unless the build assumes v3. Both
+arm64 targets emit `.arch` at both levels, and Linux arm64 also passes the
+level to the assembler, so an `assembler.block` using an LSE instruction is
+refused unless the build assumes `armv8.1-a`. The test program holds each
+Linux lane's own assembler to that, below and at the level, and a build that
+names a family's default is the build that names none, byte for byte in its
+assembly, its tool invocation and its build report. The default Cortex
+`armv6-m` level likewise names its CPU in both tool arguments and assembly
+directive. The pinned
 GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
@@ -166,12 +170,20 @@ support the selected level.
 Darwin's lowest processor, Apple's M1, has more than `armv8-a`; the default
 assumes less than any Mac has, which is sound, and a build for Apple silicon
 may select `armv8.1-a`. Each test lane runs the levels a runtime fixture's
-`levels:` names for its own family, asks its host processor for every
-feature first (`/proc/cpuinfo`, `hw.optional.arm.FEAT_LSE`) and fails
-rather than skipping a level the host lacks, and requires the executable it
-ran to show the level: the ISA note on Linux x86-64, the LSE instructions
-and no exclusive loop on arm64, hardware division and no 32-bit helper on
-Cortex-M, where `armv7-m` runs on QEMU's Cortex-M3.
+`levels:` names for its own family, and runs one only once the processor
+that runs the lane confirms every feature of it. A native Linux lane reads
+its host's `/proc/cpuinfo`; a cross Linux lane asks its runner rather than
+assuming an emulator has everything, because QEMU's `-cpu cortex-a53` has
+no LSE, so a C program the lane's driver links copies `/proc/cpuinfo` as the
+runner presents it; Darwin asks `hw.optional.arm.FEAT_LSE`. A level nothing
+confirmed fails as `UNVERIFIED` rather than being skipped, and is never
+inferred from the default's run or from another target's lane. The test
+program says on standard error which levels were confirmed and by what.
+Each lane requires the executable it ran to show the level: the ISA note on
+Linux x86-64; on arm64 the LSE instructions and no `ldxr`/`stxr` loop at
+`armv8.1-a`, and no LSE instruction in the default's image of the same
+fixture; and hardware division and no 32-bit helper on Cortex-M, where
+`armv7-m` runs on QEMU's Cortex-M3.
 
 ## Native source debugging
 
@@ -388,9 +400,9 @@ and in what order they run.
 The last row is measured, not assumed. On the pinned Linux toolchain two links
 of one unchanged assembly differ in six bytes, in the same directory and from
 the same command, because `x86_64-pc-linux-gnu-gcc` writes its random
-temporary object name (`ccXXXXXX.o`) into the symbol table. Darwin's came out
-identical, which is one toolchain's tidiness rather than a contract. The gate
-therefore checks that the assembly the link consumed was byte-identical and
+temporary object name (`ccXXXXXX.o`) into the symbol table, and the Linux
+arm64 driver does the same. Darwin's came out identical, which is one
+toolchain's tidiness rather than a contract. The gate therefore checks that the assembly the link consumed was byte-identical and
 reports the image residue; a reproducible hosted image belongs to the
 release readiness successor.
 
