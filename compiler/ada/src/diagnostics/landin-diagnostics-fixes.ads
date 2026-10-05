@@ -22,8 +22,9 @@ package Landin.Diagnostics.Fixes is
      with Pre => Landin.Source.Length (Where) > 0;
 
    --  The name after `end` at Where becomes Declared, the name of what it
-   --  closes.  Exact: the grammar says what the name must be, and a
-   --  closing name has no meaning of its own to change.
+   --  closes, or the whole closer at Where becomes Declared when that is
+   --  spelled `end word`.  Exact: the grammar says what the closer must
+   --  be, and a closing word has no meaning of its own to change.
    function Name_End
      (Source   : Landin.Source.Source_Id;
       Where    : Landin.Source.Span;

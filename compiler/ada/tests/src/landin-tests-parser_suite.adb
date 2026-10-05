@@ -3596,7 +3596,7 @@ package body Landin.Tests.Parser_Suite is
          & "end f g: () -> (r: i32) = call(0) end g", "", "f,g");
       Check ("public prefixes retain the statement",
          "f: () -> (r: i32) = public public public r = 1 end f "
-         & "g: () -> (r: i32) = 2 end g", "L0108,L0108,L0108", "f,g");
+         & "g: () -> (r: i32) = 2 end g", "L0108", "f,g");
    end Calls_Respect_The_Nesting_Limit;
 
    procedure Fixed_Conditions_Survive_Missing_Openers

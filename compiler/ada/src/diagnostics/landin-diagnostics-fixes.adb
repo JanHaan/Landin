@@ -20,7 +20,11 @@ package body Landin.Diagnostics.Fixes is
       Declared : String) return Fix
    is
       Result : Fix := Make_Fix
-        (Name_End, Exact, "close it with `end " & Declared & "`");
+        (Name_End, Exact,
+         (if Declared'Length > 4
+            and then Declared (Declared'First .. Declared'First + 3) = "end "
+          then "close it with `" & Declared & "`"
+          else "close it with `end " & Declared & "`"));
    begin
       Add_Edit (Result, Make_Edit (Source, Where, Declared));
       return Result;

@@ -136,13 +136,14 @@ package body Landin.Tests.Mutation_Suite is
    --  of 1,829 refused mutants, gave 596 one report on the changed line,
    --  43 reporting outside their function, 521 reading the rest of the body
    --  as declarations, 406 claiming a written closer missing and 1,108 with
-   --  a primary span off a token.
+   --  a primary span off a token.  Recovery that keeps to the structure the
+   --  program writes took those to 1,291, 21, 12, 28 and 503.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 596;
-   Ceiling_Outside    : constant := 43;
-   Ceiling_Left_Body  : constant := 521;
-   Ceiling_False_Unclosed : constant := 406;
-   Ceiling_Off_Token  : constant := 1_108;
+   Floor_One_On_Line  : constant := 1_291;
+   Ceiling_Outside    : constant := 21;
+   Ceiling_Left_Body  : constant := 12;
+   Ceiling_False_Unclosed : constant := 28;
+   Ceiling_Off_Token  : constant := 503;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));

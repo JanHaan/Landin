@@ -15148,6 +15148,40 @@ syntax error, which is what an editor had before.
 `server/only a body is stood in for`, `server/analysis continues past a body`,
 `server/analysis agrees with refine` and `server/refused sources are served`.
 
+### D260 — A parse reports a mistake once, inside the construct it is in
+
+**The discrepancy:** nothing in the language says where a parser resumes after
+a mistake, and the compiler resumed wherever a declaration could begin. One
+misplaced word in a body, `v: u32 mut = 41`, ended the body there: the function
+was reported never closed although its `end main` was two lines down, and
+every later line of the body was read as a declaration of the file and
+reported again. Of 1,829 refused single-token changes to the bodies of the
+positive programs, 596 gave one report on the changed line.
+
+**Chosen:** recovery keeps to the structure the program writes, and only after
+a mistake, so a program the parser accepts is read exactly as before. A
+function's closer is found before its body is read: the first `end name`
+after it that begins a line no deeper than the declaration's, or shares its
+line. Inside the body, a statement reports at most once, and what follows on
+its line is the rest of that mistake. A value with more of its block after
+it is reported as not being a statement, and the block goes on. A closer that
+no open construct takes, such as `end` written twice, is one report and is
+passed over. An `end` beginning a line, with a word that no construct around
+it takes exactly, closes the innermost construct that wanted a word, and is
+reported with the closer it needed. "Never closed" is said of a construct only
+when the closer that ends it belongs to a construct around it. Declaration
+recovery passes over brackets as well as parentheses.
+
+**The alternatives:** resuming at the next line whatever it holds, which
+reads a continued expression as a new statement. Treating indentation as
+structure, which [1750] rules out: the fence is found by indentation, but
+only to choose between closers the grammar already accepts, and a program
+that parses is never read differently. Reporting every mistake a statement
+holds, which reports the first mistake's consequences as if they were others.
+
+**Pinned by** the `mutation` suite, `parser/calls respect the nesting limit`
+and `negative/misspelt-keyword-is-offered-the-keyword`.
+
 ### D255 — A build assumes a CPU feature level, and a level changes no layout
 
 **From** [1500] and [1550].
