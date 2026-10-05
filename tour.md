@@ -1,10 +1,8 @@
 # Learn Landin in Y minutes
 
-Ada, but small. Zig, but sweeter. One systems language aiming to span
-32 KB to 32 TB. Move fast, keep the pointers, and let the compiler tell you when
-you are being an idiot. The 32 TB endpoint is an unverified project goal:
-what it measures at the hosted end and what evidence would prove it remain
-open. Current hosted support does not establish a 32 TB bound.
+Ada, but small. Zig, but sweeter. One systems language from 32 KB to
+32 TB*. Move fast, keep the pointers, and let the compiler tell you when
+you are being an idiot.
 
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
@@ -53,6 +51,10 @@ decisions taken while implementing them. Where the two could be read
 differently, `spec.md` decides. Everything still open, every
 implementation dependency and every disposition is owned by ROADMAP.md,
 not by a second list here.
+
+*32 TB is an unverified goal. What it measures at the hosted end, and what
+evidence would prove it, are still open, and nothing hosted today
+establishes it. Terabytes may vary.
 
 ---
 

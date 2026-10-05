@@ -1,12 +1,8 @@
 # Landin
 
-> Ada, but small. Zig, but sweeter. One systems language aiming to span
-> 32 KB to 32 TB. Move fast, keep the pointers, and let the compiler tell you
+> Ada, but small. Zig, but sweeter. One systems language from 32 KB to
+> 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
-
-The 32 TB endpoint is an unverified project goal. What it measures at the
-hosted end, and what evidence would prove it, remain open. The hosted programs
-running today do not establish a 32 TB bound.
 
 A systems programming language, its compiler and a small standard
 library, designed and built from scratch. Named after Peter Landin, who
@@ -318,3 +314,7 @@ What `refine` produces is not a derivative work of `refine`. Compiling a
 program places no licensing condition on that program, and neither does
 linking `core/*` into it — which is the point of a language that has to fit
 in 32 KB of somebody else's flash.
+
+*32 TB is an unverified goal. What it measures at the hosted end, and what
+evidence would prove it, are still open, and nothing hosted today
+establishes it. Terabytes may vary.

@@ -1042,6 +1042,10 @@ GUIDE_CSS = """
 
 section.landing{padding-top:4rem}
 section.landing > p.lead{max-width:42rem; color:var(--ink-soft); margin:-.2rem 0 1.4rem}
+/*  The pitch's asterisk, and where it sends the reader.  */
+.hero a.asterisk{text-decoration:none; color:var(--accent)}
+p.fine-print{margin:4rem 0 0; max-width:42rem; color:var(--ink-faint);
+  font-size:.72rem; line-height:1.5}
 
 /*  The program: one whole fixture, with what it uses beside it.  */
 /*  The listing asks for its longest line and gets it: a code panel that
@@ -1956,15 +1960,28 @@ PITCH_LINKS = {
 }
 
 
+#  The pitch's one asterisk, and the paragraph the tour opens with it.
+#  The claim keeps its punchline and the qualification goes where an
+#  asterisk always sends it: the bottom of the page.
+FINE_PRINT_MARK = "32 TB*"
+
+
+def fine_print(paras):
+    """The tour's footnote to its pitch, so the asterisk lands somewhere."""
+    return next((p for p in paras if p.startswith("*")), "")
+
+
 def pitch_html(text):
     out = esc(text)
     for name, href in PITCH_LINKS.items():
         out = out.replace(esc(name), f'<a href="{esc(href)}">{esc(name)}</a>', 1)
-    return out
+    return out.replace(FINE_PRINT_MARK,
+                       '32 TB<a class="asterisk" href="#fine-print" '
+                       'aria-label="the fine print">*</a>', 1)
 
 
 def index_page(docs, counts, intro, status, progress, program, symbols,
-               says):
+               says, footnote):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
@@ -2047,6 +2064,8 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
                 '<h2>every document</h2>'
                 f'<div class="shelf">{"".join(rows)}</div>'
                 '</section>')
+    body.append(f'<p class="fine-print" id="fine-print">'
+                f'{esc(footnote)}</p>')
 
     hero = "".join(f"<p>{pitch_html(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
@@ -2473,6 +2492,7 @@ def main(argv):
     if len(docs) == len(DOCS) and len(guides) == len(GUIDES):
         tour_text = (source / "tour.md").read_text()
         intro = tour_intro(tour_text)[:2]
+        footnote = fine_print(tour_intro(tour_text))
         missing = [name for name in PITCH_LINKS
                    if not any(name in para for para in intro)]
         if missing:
@@ -2488,6 +2508,10 @@ def main(argv):
         if not intro:
             raise SystemExit("render_html: tour.md has no opening prose "
                              "for the front page")
+        if (FINE_PRINT_MARK in " ".join(intro)) != bool(footnote):
+            raise SystemExit("render_html: the tour's pitch and its fine "
+                             "print must come together: an asterisk "
+                             "with nothing under it, or the other way round")
         if not status:
             raise SystemExit("render_html: README.md has no **Status:** "
                              "line for the front page")
@@ -2497,14 +2521,15 @@ def main(argv):
 
         (SITE / "index.html").write_text(
             index_page(DOCS + GUIDES, counts, intro, status, progress, program,
-                       guide_symbols, says))
+                       guide_symbols, says, footnote))
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
         for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
             print(f"{SITE.name}/{name}"
                   f"{(SITE / name).stat().st_size / 1024:>10.0f} KB")
-        front = ([("the pitch", " ".join(intro)), ("the status", status)]
+        front = ([("the pitch", " ".join(intro)), ("the status", status),
+                  ("the fine print", footnote)]
                  + [(f'roadmap {item["key"]}', item["title"])
                     for item in (progress["recent"]
                                  + [one for one in (progress["current"],
