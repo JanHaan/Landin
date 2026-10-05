@@ -627,7 +627,7 @@ gate was green on every job on `6750dfcb`.
 
 ### R11.25 — Linux arm64 feature-level evidence
 
-Status: planned
+Status: complete
 Depends on: R11.20
 
 Add recurring Linux arm64 checks for the baseline `armv8-a` and selected
@@ -649,6 +649,31 @@ evidence is unverified, never supplied by baseline or Darwin success.
 Audit the completed Linux arm64 lane for an executed assembly block with an
 integer operand and an IR verifier refusal for an invalid arm64 register.
 Retain both as recurring gate checks; this audit does not reopen R11.20.
+
+Done: a level now runs only on a processor that confirms every feature of
+it. A native Linux lane reads its own `/proc/cpuinfo`; a cross lane asks its
+runner, through a C program its driver links, rather than assuming an
+emulator has everything, since QEMU's `-cpu cortex-a53` has no LSE. A level
+nothing confirmed fails as unverified and is never inferred from the
+default's run or from Darwin. The arm64 image check could not fail, looking
+for `ldaxr`/`stxr` where the baseline loop is `ldxr`/`stxr`; it now refuses
+the loop at `armv8.1-a` and any LSE instruction in the default's image, and
+catches an exchange left as a loop. linux-arm64 gained `fixed if` fixtures for
+`lse`, `crc32` and `rdm` at the default, an explicit `armv8-a` and `armv8.1-a`;
+a driver case requiring the default and explicit `armv8-a` to emit the same
+assembly, link command and build report for atomics, a `layout(c)` record
+across the C boundary and a variadic call; Linux add, exchange and
+compare-exchange held to exclusive loops and LSE; and an LSE assembly block
+selected by `compiler.feature.lse`. Each Linux lane's own assembler refuses
+`ldaddal` below `armv8.1-a` and `shlx` below `x86-64-v3`, at the default and
+the named lower levels, and runs the block at its level. Every hosted lane
+must execute `assembly-operands`, and the verifier refuses x18, x29, x30, sp
+and x31 under both arm64 descriptions. No compiler source changed, and
+`driver_manifest.py` agreed at all 11,729 entries. The Mac ran the Darwin
+parity corpus and host suite, and its `linux/arm64` container the whole test
+program and GDB sessions, confirming `armv8.1-a` natively. The gate was green
+on every job on `b2a51df7`, where `arm64-compiler` and `arm64-release`
+confirmed `armv8.1-a` from the runner's own `/proc/cpuinfo`.
 
 ### R11.26 — Make one mistake one diagnostic
 

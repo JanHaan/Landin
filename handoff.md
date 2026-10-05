@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R11.25 — Linux arm64 feature-level evidence (planned).**
+**Next roadmap item: R11.26 — Make one mistake one diagnostic (planned).**
 
 ---
 

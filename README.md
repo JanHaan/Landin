@@ -303,7 +303,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R11.25 — Linux arm64 feature-level evidence (planned).**
+**Next roadmap item: R11.26 — Make one mistake one diagnostic (planned).**
 
 ## License
 
