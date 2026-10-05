@@ -24,6 +24,7 @@ package body Landin.Syntax.Parser is
    use type Landin.Layouts.Policy;
    use type Tok.Token_Kind;
    use type Tok.Space_Kind;
+   use type Syn.Failure;
 
    ------------------------------------------------------------------
    --  The declared recovery boundaries
@@ -148,6 +149,7 @@ package body Landin.Syntax.Parser is
       Label     : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
       Fence     : Natural := 0;
       Indent    : Integer := -1;
+      Opened    : Natural := 0;
       Arm       : Boolean := False;
       Completes : Boolean := False;
    end record;
@@ -363,6 +365,7 @@ package body Landin.Syntax.Parser is
             function Here return Landin.Source.Span;
             function Point return Landin.Source.Span;
             function After_Previous return Landin.Source.Span;
+            function Begins_Line (At_Index : Tok.Token_Index) return Boolean;
             function Named_Here return Landin.Source.Names.Name_Id;
             function Named_Ahead (Distance : Tok.Token_Index)
               return Landin.Source.Names.Name_Id;
@@ -1135,6 +1138,82 @@ package body Landin.Syntax.Parser is
                   then To_List (Shared_Run)
                   else [1 => Parsed]);
 
+            --  A report about a token that is not there is put on the
+            --  token that is, where a reader looks, rather than on the gap
+            --  before it, and says what that token is.  A gap at the end of
+            --  the file, or before a token on a later line, stays where it
+            --  is: what follows it is not what the mistake left out.  The
+            --  answer is Last when the report stays at its gap.
+            function Gap_Token
+              (Where : Landin.Source.Span) return Tok.Token_Index;
+
+            function Gap_Token
+              (Where : Landin.Source.Span) return Tok.Token_Index
+            is
+               Low  : Tok.Token_Index := 1;
+               High : Tok.Token_Index := Last;
+            begin
+               if Landin.Source.Length (Where) /= 0 then
+                  return Last;
+               end if;
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.First then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low = Last or else Low = 1
+                 or else Tok.Where (From, Low - 1).Last /= Where.First
+                 or else Begins_Line (Low)
+                 or else Tok.Kind (From, Low) not in Tok.Kernel_Kind
+               then
+                  return Last;
+               end if;
+               return Low;
+            end Gap_Token;
+
+            function On_A_Token
+              (Where : Landin.Source.Span; Item : Syn.Failure)
+               return Landin.Source.Span;
+
+            function On_A_Token
+              (Where : Landin.Source.Span; Item : Syn.Failure)
+               return Landin.Source.Span
+            is (if Item = Syn.Unclosed_Construct
+                  or else Gap_Token (Where) = Last
+                then Where
+                else Tok.Where (From, Gap_Token (Where)));
+
+            function Found_Instead
+              (Where : Landin.Source.Span; Item : Syn.Failure) return String;
+
+            function Found_Instead
+              (Where : Landin.Source.Span; Item : Syn.Failure) return String
+            is (if Item = Syn.Unclosed_Construct
+                  or else Gap_Token (Where) = Last
+                then ""
+                else
+                  (case Tok.Kind (From, Gap_Token (Where)) is
+                     when Tok.Spelled_Kind =>
+                       ", not `"
+                       & Tok.Spelling (Tok.Kind (From, Gap_Token (Where)))
+                       & "`",
+                     when Tok.Identifier =>
+                       ", not the name `"
+                       & Landin.Source.Names.Spelling
+                           (Names,
+                            Tok.Name (Tok.Token_At
+                              (From, Gap_Token (Where))))
+                       & "`",
+                     when others =>
+                       ", not this"));
+
             procedure Complain
               (Item    : Syn.Failure;
                Where   : Landin.Source.Span;
@@ -1198,8 +1277,13 @@ package body Landin.Syntax.Parser is
                Syn.Report
                  (Item    => Item,
                   Source  => Origin_Of,
-                  Where   => Where,
-                  Message => Message,
+                  Where   =>
+                    (if On_A_Token (Where, Item) = Related
+                     then Where else On_A_Token (Where, Item)),
+                  Message =>
+                    (if On_A_Token (Where, Item) = Related
+                     then Message
+                     else Message & Found_Instead (Where, Item)),
                   Note    =>
                     (if Inequality_Typo
                      then Note & " [0350]: write `<>` for inequality;"
@@ -1379,8 +1463,6 @@ package body Landin.Syntax.Parser is
             --  Whether a token is the first on its line.  Space carries no
             --  meaning [1750], so this is only ever asked after a mistake,
             --  to say where the statement that made it was written to end.
-            function Begins_Line (At_Index : Tok.Token_Index) return Boolean;
-
             function Begins_Line (At_Index : Tok.Token_Index) return Boolean
             is
                Pieces : constant Tok.Space_Range :=
@@ -1657,9 +1739,13 @@ package body Landin.Syntax.Parser is
                   and then Own.Kind in If_Closer | Loop_Closer | While_Closer
                                        | For_Closer | Unchecked_Closer
                                        | Match_Closer | Label_Closer
-                  and then Begins_Line (Index)
-                  and then (Own.Indent < 0
-                            or else Indent_Of (Index) <= Own.Indent)
+                  and then
+                    (if Begins_Line (Index)
+                     then Own.Indent < 0
+                          or else Indent_Of (Index) <= Own.Indent
+                     else Own.Opened /= 0
+                          and then On_One_Line
+                            (Tok.Token_Index (Own.Opened), Index))
                   and then not Outer_Takes_Exactly (Below));
 
             type Placement is (Leave, Stray);
@@ -1680,12 +1766,6 @@ package body Landin.Syntax.Parser is
                Top := Open_Closers.Last_Index;
                if Closes (Open_Closers (Top)) then
                   return Leave;
-               end if;
-               --  `end end`: the first was written twice.
-               if Peek = Tok.Kw_End and then Ahead (1) = Tok.Kw_End
-                 and then not Begins_Line (Index + 1)
-               then
-                  return Stray;
                end if;
                if Outer_Takes_Exactly (Top - 1)
                  or else Misclosed (Open_Closers (Top), Top - 1)
@@ -6897,9 +6977,11 @@ package body Landin.Syntax.Parser is
                      declare
                         At_Name : constant Landin.Source.Span := Here;
                      begin
+                        --  What is wrong is what follows the name.
                         Complain
                           (Item    => Syn.Token_Expected,
-                           Where   => After_Previous,
+                           Where   => (First => At_Name.Last,
+                                       Last  => At_Name.Last),
                            Message => "a statement that begins with a"
                                       & " name is a binding, an"
                                       & " assignment or a call",
@@ -6955,6 +7037,7 @@ package body Landin.Syntax.Parser is
                                 else Loop_Closer),
                   Label     => Label,
                   Indent    => Line_Indent (Index),
+                  Opened    => Natural (Index),
                   Completes => True,
                   others    => <>);
                Closed : Closing;
@@ -7110,6 +7193,7 @@ package body Landin.Syntax.Parser is
                Opened : constant Landin.Source.Span :=
                  (if Starts = Landin.Source.Empty_Span then Here else Starts);
                Opened_Indent : constant Natural := Line_Indent (Index);
+               Opened_Token : constant Natural := Natural (Index);
                Element : Node_Id;
                Index : Node_Id := No_Node;
                Lower : Node_Id := No_Node;
@@ -7125,6 +7209,7 @@ package body Landin.Syntax.Parser is
                                 then Label_Closer else For_Closer),
                   Label     => Label,
                   Indent    => Opened_Indent,
+                  Opened    => Opened_Token,
                   Completes => True,
                   others    => <>);
                Closed : Closing;
@@ -7397,7 +7482,8 @@ package body Landin.Syntax.Parser is
                Depth := Depth + 1;
                Else_Closes_Arm := False;
                Push ((Kind   => If_Closer, Arm => True,
-                      Indent => Line_Indent (Index), others => <>));
+                      Indent => Line_Indent (Index),
+                      Opened => Natural (Index), others => <>));
 
                loop
                   declare
@@ -7452,6 +7538,7 @@ package body Landin.Syntax.Parser is
                if Close_Construct
                  (Own        => (Kind   => If_Closer,
                                  Indent => Line_Indent (Opened_Index),
+                                 Opened => Natural (Opened_Index),
                                  others => <>),
                   Word       => "if",
                   Opened     => At_If,
@@ -7507,6 +7594,7 @@ package body Landin.Syntax.Parser is
                Runs     : Node_Id;
                Saved_Else : constant Boolean := Else_Closes_Arm;
                Opened_Indent : constant Natural := Line_Indent (Index);
+               Opened_Token : constant Natural := Natural (Index);
             begin
                if Too_Deep (At_Begin) then
                   Advance;
@@ -7528,6 +7616,7 @@ package body Landin.Syntax.Parser is
                                  else Bare_Closer),
                       Label  => Label,
                       Indent => Opened_Indent,
+                      Opened => Opened_Token,
                       others => <>));
                Runs := Parse_Block (Context, Allow_Value => True);
                Pop;
@@ -7542,7 +7631,8 @@ package body Landin.Syntax.Parser is
                if Labelled
                  and then Close_Construct
                    (Own        => (Kind   => Label_Closer, Label => Label,
-                                   Indent => Opened_Indent, others => <>),
+                                   Indent => Opened_Indent,
+                                   Opened => Opened_Token, others => <>),
                     Word       => Landin.Source.Names.Spelling (Names, Label),
                     Opened     => At_Begin,
                     Unclosed   => "this labelled block is never closed",
@@ -7633,6 +7723,7 @@ package body Landin.Syntax.Parser is
                Kept    : Boolean;
                Saved_Else : constant Boolean := Else_Closes_Arm;
                Opened_Indent : constant Natural := Line_Indent (Index);
+               Opened_Token : constant Natural := Natural (Index);
             begin
                if Too_Deep (At_Word) then
                   Advance;
@@ -7657,14 +7748,15 @@ package body Landin.Syntax.Parser is
                   null;
                end;
                Push ((Kind   => Unchecked_Closer, Indent => Opened_Indent,
-                      others => <>));
+                      Opened => Opened_Token, others => <>));
                Runs := Parse_Block (Context, Allow_Value => False);
                Pop;
 
                Kept := False;
                if Close_Construct
                  (Own        => (Kind   => Unchecked_Closer,
-                                 Indent => Opened_Indent, others => <>),
+                                 Indent => Opened_Indent,
+                                 Opened => Opened_Token, others => <>),
                   Word       => "unchecked",
                   Opened     => At_Word,
                   Unclosed   => "this unchecked region is never closed",

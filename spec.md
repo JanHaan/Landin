@@ -15170,7 +15170,10 @@ passed over. An `end` beginning a line, with a word that no construct around
 it takes exactly, closes the innermost construct that wanted a word, and is
 reported with the closer it needed. "Never closed" is said of a construct only
 when the closer that ends it belongs to a construct around it. Declaration
-recovery passes over brackets as well as parentheses.
+recovery passes over brackets as well as parentheses. A report that a token
+is missing goes on the token written in its place when that token is on the
+same line, and says what it is: "followed by `then`, not the name `thne`".
+At a line's end, and before end of file, it stays where the token belonged.
 
 **The alternatives:** resuming at the next line whatever it holds, which
 reads a continued expression as a new statement. Treating indentation as

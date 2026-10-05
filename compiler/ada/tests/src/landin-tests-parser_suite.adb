@@ -3657,7 +3657,8 @@ package body Landin.Tests.Parser_Suite is
                  (Item, Landin.Diagnostics.Message
                     (Landin.Diagnostics.Primary
                        (Landin.Diagnostics.Get (Found, 1))),
-                  "`fixed` conditional is followed by `if`",
+                  "`fixed` conditional is followed by `if`,"
+                  & " not the name `flag`",
                   "the report identifies the missing opener");
             end if;
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Parsed) loop
