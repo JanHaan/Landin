@@ -7704,7 +7704,8 @@ package body Landin.Tests.Backend_Suite is
          if Landin.Stages.Failed (Work) then
             return "";
          end if;
-         if Facts = Landin.Targets.Darwin_Arm64 then
+         if Facts in Landin.Targets.Darwin_Arm64 | Landin.Targets.Linux_Arm64
+         then
             Landin.Backend.Arm64.Emit
               (Landin.Stages.Code (Work).all,
                Landin.Stages.Meanings (Work).all,
@@ -7751,6 +7752,10 @@ package body Landin.Tests.Backend_Suite is
            "armv8-a");
       LSE : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8.1-a");
+      Linux_Base : constant String :=
+        Emitted (Landin.Targets.Linux_Arm64, Atomics, "armv8-a");
+      Linux_LSE : constant String :=
+        Emitted (Landin.Targets.Linux_Arm64, Atomics, "armv8.1-a");
       Base_M : constant String :=
         Emitted (Landin.Targets.Cortex_M, Division, "armv6-m");
       Seven : constant String :=
@@ -7782,6 +7787,40 @@ package body Landin.Tests.Backend_Suite is
         (Item, Occurrences (LSE, "dmb ish")
                  = Occurrences (Base_Arm, "dmb ish"),
          "LSE keeps every fence the loop had");
+      --  Linux arm64 shares the family's levels (D256), so each of add,
+      --  exchange and compare-exchange is its own exclusive loop at the
+      --  baseline and its own LSE instruction at Armv8.1-A, under the same
+      --  fences, there too.
+      Landin.Testing.Check
+        (Item, Contains (Linux_Base, ".arch armv8-a" & LF)
+           and then Contains (Linux_Base, "ldxrb w9, [x10]" & LF
+                                & HT & "add w12, w9, w11" & LF
+                                & HT & "stxrb w13, w12, [x10]")
+           and then Contains (Linux_Base, "ldxrh w9, [x10]" & LF
+                                & HT & "mov w12, w11" & LF
+                                & HT & "stxrh w13, w12, [x10]")
+           and then Contains (Linux_Base, "ldxr w9, [x10]" & LF
+                                & HT & "cmp w9, w11")
+           and then Occurrences (Linux_Base, "clrex") = 1
+           and then Occurrences (Linux_Base, "ldxr") = 4
+           and then Occurrences (Linux_Base, "stxr") = 4
+           and then Occurrences (Linux_Base, "ldadd") = 0
+           and then Occurrences (Linux_Base, "swp") = 0
+           and then Occurrences (Linux_Base, "cas") = 0,
+         "Linux armv8-a adds, exchanges and compare-exchanges by"
+         & " exclusive loops");
+      Landin.Testing.Check
+        (Item, Contains (Linux_LSE, ".arch armv8.1-a" & LF)
+           and then Contains (Linux_LSE, "ldaddalb w11, w9, [x10]")
+           and then Contains (Linux_LSE, "swpalh w11, w9, [x10]")
+           and then Contains (Linux_LSE, "casal w9, w12, [x10]")
+           and then Contains (Linux_LSE, "ldaddal x11, x9, [x10]")
+           and then Occurrences (Linux_LSE, "ldxr") = 0
+           and then Occurrences (Linux_LSE, "stxr") = 0
+           and then Occurrences (Linux_LSE, "clrex") = 0
+           and then Occurrences (Linux_LSE, "dmb ish")
+                      = Occurrences (Linux_Base, "dmb ish"),
+         "Linux armv8.1-a does each in one LSE instruction, fenced alike");
       Landin.Testing.Check
         (Item, Contains (Base_M, ".cpu cortex-m0" & LF)
            and then Occurrences (Base_M, "bl __aeabi_idivmod") = 1
@@ -7943,7 +7982,9 @@ package body Landin.Tests.Backend_Suite is
 
    --  [1630] on arm64: a declared x19 saved in its frame home and restored
    --  with CFI, the text filled at each operand's width, and the verifier's
-   --  refusal of x18, the platform register no block may name.
+   --  refusal, under Darwin's description and Linux's alike, of x18, the
+   --  platform register no block may name, and of every other name that is
+   --  no operand register.
    procedure Arm64_Assembly_Saves_What_It_Declares
      (Item : in out Landin.Testing.Context);
 
@@ -7957,6 +7998,16 @@ package body Landin.Tests.Backend_Suite is
       Ran  : Natural;
       Assembly : Ada.Strings.Unbounded.Unbounded_String;
       Report : Landin.Build_Reports.Report;
+      Arm64_Targets : constant array (1 .. 2) of Landin.Targets.Target_Facts
+        := [Landin.Targets.Darwin_Arm64, Landin.Targets.Linux_Arm64];
+      type Name_Access is access constant String;
+      X18 : aliased constant String := "x18";
+      X29 : aliased constant String := "x29";
+      X30 : aliased constant String := "x30";
+      SP  : aliased constant String := "sp";
+      X31 : aliased constant String := "x31";
+      Refused_Names : constant array (1 .. 5) of Name_Access :=
+        [X18'Access, X29'Access, X30'Access, SP'Access, X31'Access];
    begin
       Lower
         (Work,
@@ -7997,16 +8048,30 @@ package body Landin.Tests.Backend_Suite is
                Block := IR.Value_Id (V);
             end if;
          end loop;
-         IR.Testing_Support.Overwrite_Assembly_Operand
-           (Code.all, 1, Block, 3,
-            IR.Operand_At
-              (IR.Discarded, Landin.Source.Names.No_Name, "x18",
-               Landin.Types.Not_Typed));
-         Landin.Testing.Check
-           (Item, IR.Verifier.Check
-              (Code.all, Landin.Targets.Darwin_Arm64).Kind
-                = IR.Verifier.Assembly_Register_Refused,
-            "the verifier refuses x18, which arm64 never names");
+         --  Both arm64 descriptions share the one register rule (D256):
+         --  the block as lowered verifies, and the platform register, the
+         --  frame and link registers, the stack pointer and a name past the
+         --  bank are each refused once written into its discarded operand.
+         for Facts of Arm64_Targets loop
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Code.all, Facts).Kind
+                       = IR.Verifier.Nothing_Wrong,
+               Landin.Targets.Name (Facts) & ": the lowered block verifies");
+         end loop;
+         for Name of Refused_Names loop
+            IR.Testing_Support.Overwrite_Assembly_Operand
+              (Code.all, 1, Block, 3,
+               IR.Operand_At
+                 (IR.Discarded, Landin.Source.Names.No_Name, Name.all,
+                  Landin.Types.Not_Typed));
+            for Facts of Arm64_Targets loop
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Code.all, Facts).Kind
+                          = IR.Verifier.Assembly_Register_Refused,
+                  Landin.Targets.Name (Facts) & ": the verifier refuses "
+                  & Name.all & ", which arm64 never names");
+            end loop;
+         end loop;
       end;
    end Arm64_Assembly_Saves_What_It_Declares;
 

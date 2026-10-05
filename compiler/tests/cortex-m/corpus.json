@@ -257,6 +257,9 @@
     "runtime/array-zeroed-assignment-clears-storage": {
       "mode": "execute"
     },
+    "runtime/assembly-block-at-its-arm64-level": {
+      "mode": "execute"
+    },
     "runtime/assembly-block-at-its-level": {
       "mode": "execute"
     },

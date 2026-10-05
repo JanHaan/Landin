@@ -48,6 +48,9 @@ end-to-end/feature-level-armv7-m-has-idiv | cortex-m
 end-to-end/feature-level-armv8-1-a-has-lse | macos-arm64
 end-to-end/feature-level-default-lacks-bmi2 | linux-x86-64
 end-to-end/feature-level-linux-arm64-armv8-1-a-has-lse | linux-arm64
+end-to-end/feature-level-linux-arm64-armv8-1-a-selects-lse | linux-arm64
+end-to-end/feature-level-linux-arm64-armv8-a-selects-without-lse | linux-arm64
+end-to-end/feature-level-linux-arm64-default-lacks-lse | linux-arm64
 end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
@@ -1526,6 +1529,7 @@ runtime/array-of-structs | linux-x86-64, linux-arm64, macos-arm64
 runtime/array-repetition-evaluates-once | linux-x86-64, linux-arm64, macos-arm64
 runtime/array-returns-cross-calls | linux-x86-64, linux-arm64, macos-arm64
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64, linux-arm64, macos-arm64
+runtime/assembly-block-at-its-arm64-level | linux-arm64, macos-arm64
 runtime/assembly-block-at-its-level | linux-x86-64, linux-arm64, macos-arm64
 runtime/assembly-every-general-register | linux-x86-64, linux-arm64, macos-arm64
 runtime/assembly-memory-boundary | linux-x86-64, linux-arm64, macos-arm64

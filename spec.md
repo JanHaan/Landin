@@ -15242,15 +15242,21 @@ within its family`, `positive/feature-level-selects-declarations`,
 `end-to-end/feature-level-default-lacks-bmi2`,
 `end-to-end/feature-level-x86-64-v3-has-bmi2`,
 `end-to-end/feature-level-armv8-1-a-has-lse`,
+`end-to-end/feature-level-linux-arm64-default-lacks-lse`,
+`end-to-end/feature-level-linux-arm64-armv8-a-selects-without-lse`,
+`end-to-end/feature-level-linux-arm64-armv8-1-a-selects-lse`,
 `end-to-end/feature-level-armv6-m-lacks-idiv`,
-`end-to-end/feature-level-armv7-m-has-idiv` and
+`end-to-end/feature-level-armv7-m-has-idiv`,
 `end-to-end/feature-level-of-another-family`,
-`x86 opt/a level selects its shifts`, `fixtures/profiles are explicit` and
+`x86 opt/a level selects its shifts`, `fixtures/profiles are explicit`,
+`backend/a level selects its instructions`, `driver/the arm64 default is
+armv8-a`, `fixture execution/an assembly block is held to its level`,
 `runtime/variable-shifts-at-every-width`, which executes at `x86-64-v3` too,
-`backend/a level selects its instructions`, and `runtime/r630-memory-scalars`,
-which the Darwin lane executes at `armv8.1-a` too, and
-`runtime/assembly-block-at-its-level`, which selects a BMI2 assembly block
-by `compiler.feature.bmi2` and runs at both x86-64 levels,
+`runtime/r630-memory-scalars`, which the Linux arm64 and Darwin lanes
+execute at `armv8.1-a` too, `runtime/assembly-block-at-its-level`, which
+selects a BMI2 assembly block by `compiler.feature.bmi2` and runs at both
+x86-64 levels, `runtime/assembly-block-at-its-arm64-level`, which selects an
+LSE block by `compiler.feature.lse` and runs at both arm64 levels, and
 `runtime/division-by-arguments-at-every-width`,
 `runtime/a-zero-divisor-traps` and `runtime/signed-division-overflow-traps`,
 which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.

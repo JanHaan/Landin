@@ -21,6 +21,7 @@ package body Landin.Tests.Driver_Suite is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
    LF : constant Character := Character'Val (10);
+   HT : constant Character := Character'Val (9);
    CR : constant Character := Character'Val (13);
 
    function Arguments_Of (First : String) return Landin.Platform.Path_List;
@@ -1387,6 +1388,95 @@ package body Landin.Tests.Driver_Suite is
            and then Contains (Third, """level"":""x86-64-v3"""),
          "a selected level reaches the assembler, linker and report");
    end A_Level_Is_Selected_Within_Its_Family;
+
+   --  D255 on Linux arm64: a build that names `armv8-a` is the build that
+   --  names no level.  A program with atomics, a `layout(c)` record passed
+   --  across the C boundary in both directions and a variadic C call is
+   --  emitted and linked both ways, and the assembly, the tool invocation
+   --  and the build report must be the same bytes, so the two agree in
+   --  every instruction and in the ABI they lower to.  The linked image is
+   --  not compared: its driver writes a temporary object name into it.
+   procedure The_Arm64_Default_Is_Armv8_A
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Arm64_Default_Is_Armv8_A
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "pair: type = layout(c) struct" & LF
+        & "    first: u32" & LF
+        & "    second: f64" & LF
+        & "end pair" & LF
+        & "extern(c) collect: (count: i32, ...) -> (total: i32)" & LF
+        & "extern(c) take: (value: pair) -> (sum: f64)" & LF
+        & "public extern(c) give: (value: pair) -> (back: pair) =" & LF
+        & "    back = value" & LF
+        & "end give" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    mut cell: u32 = 40" & LF
+        & "    old := compiler.atomic_add(addr cell, 1, compiler.seq_cst)"
+        & LF
+        & "    swapped := compiler.atomic_exchange(addr cell, 42,"
+        & " compiler.acq_rel)" & LF
+        & "    seen := compiler.atomic_compare_exchange(addr cell, 42, 43,"
+        & " compiler.seq_cst, compiler.acquire)" & LF
+        & "    sum := take(give((first: old, second: 1.5)))" & LF
+        & "    written := collect(2, swapped, sum)" & LF
+        & "    code = i32(seen) + written" & LF
+        & "end main" & LF;
+
+      function Built (Level : String) return String;
+
+      function Built (Level : String) return String is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args  : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Program);
+         Tools.Set_Result (0, "");
+         Args.Append ("--target=linux-arm64");
+         if Level /= "" then
+            Args.Append ("--level=" & Level);
+         end if;
+         Args.Append ("--emit=exe");
+         Args.Append ("--build-report=build.json");
+         Args.Append ("-o");
+         Args.Append ("app");
+         Args.Append ("main.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "linux-arm64 links at level '" & Level & "': "
+            & Unbounded.To_String (Result.Report));
+         return Host.Written (Landin.Driver.Assembly_Beside ("app"))
+           & " |" & Tools.Last_Command & " |" & Host.Written ("build.json");
+      end Built;
+
+      Plain : constant String := Built ("");
+      Named : constant String := Built ("armv8-a");
+      Higher : constant String := Built ("armv8.1-a");
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Plain, HT & ".arch armv8-a" & LF)
+           and then Contains (Plain, HT & "ldxr w")
+           and then Contains (Plain, HT & "stxr w")
+           and then not Contains (Plain, HT & "ldaddal")
+           and then Contains (Plain, " -Wa,-march=armv8-a ")
+           and then Contains (Plain, """level"":""armv8-a"""),
+         "the default is armv8-a in the assembly, the assembler and the"
+         & " report");
+      Landin.Testing.Check_Equal
+        (Item, Named, Plain,
+         "naming armv8-a is building without a level, byte for byte");
+      Landin.Testing.Check
+        (Item, Higher /= Plain
+           and then Contains (Higher, HT & ".arch armv8.1-a" & LF)
+           and then Contains (Higher, HT & "ldaddal w")
+           and then Contains (Higher, HT & "swpal w")
+           and then Contains (Higher, HT & "casal w"),
+         "the comparison can tell a level apart");
+   end The_Arm64_Default_Is_Armv8_A;
 
    --  Help is a documented surface: it has to be deterministic, and nothing
    --  exercised it.
@@ -5098,6 +5188,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a level is selected within its family",
          A_Level_Is_Selected_Within_Its_Family'Access);
+      Landin.Testing.Register
+        (Into, "driver", "the arm64 default is armv8-a",
+         The_Arm64_Default_Is_Armv8_A'Access);
       Landin.Testing.Register
         (Into, "driver", "help is printed", Help_Is_Printed'Access);
       Landin.Testing.Register

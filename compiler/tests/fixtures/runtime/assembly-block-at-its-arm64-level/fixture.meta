@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a fixed if on compiler.feature.lse selects an LSE assembly block at armv8.1-a and a plain read-modify-write at the baseline, and both run
+constructs: 1500, 1630
+program: main.ldn
+status: 42
+targets: linux-arm64, macos-arm64
+levels: armv8.1-a

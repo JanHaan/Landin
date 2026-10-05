@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 gives linux-arm64 at an explicit armv8-a none of armv8.1-a's features, so fixed if selects the arm without LSE, CRC32 or RDM
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-arm64
+expect: expected.txt
+args: --target=linux-arm64 --level=armv8-a ../tests/fixtures/end-to-end/feature-level-linux-arm64-armv8-a-selects-without-lse/main.ldn
+status: 0

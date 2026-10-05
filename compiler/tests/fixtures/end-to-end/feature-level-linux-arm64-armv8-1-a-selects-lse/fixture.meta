@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 gives linux-arm64 at armv8.1-a LSE, CRC32 and RDM, so fixed if selects the arm that has them
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-arm64
+expect: expected.txt
+args: --target=linux-arm64 --level=armv8.1-a ../tests/fixtures/end-to-end/feature-level-linux-arm64-armv8-1-a-selects-lse/main.ldn
+status: 0

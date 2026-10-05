@@ -1,0 +1,6 @@
+error[L0324]: compile-time assertion is false
+  --> ../tests/fixtures/end-to-end/feature-level-linux-arm64-default-lacks-lse/main.ldn:1:17
+  |
+1 | compiler.assert(compiler.feature.lse)
+  |                 ^^^^^^^^^^^^^^^^^^^^
+  = note: [1510]: compiler.assert requires a true fixed bool expression

@@ -10,6 +10,7 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
+with Ada.Text_IO;
 
 with Landin.Backend.Toolchain;
 with Landin.Optimization;
@@ -40,6 +41,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Platform.Capture_Mode;
    use type Landin.Targets.Architecture;
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Capabilities.Hosted_System;
 
    Fixture_Root : constant String := "../tests/fixtures";
    Selected     : Unbounded.Unbounded_String;
@@ -1100,15 +1102,18 @@ package body Landin.Tests.Fixture_Execution_Suite is
      is (Levels_Of_Family (Case_Item, Lanes.Target));
 
    --  An arm64 executable carries no level note, so the image that ran is
-   --  held to the level by its instructions: at Armv8.1-A an atomic
-   --  read-modify-write is one LSE instruction, and no exclusive-monitor
-   --  loop of the default remains.  The lane's toolchain says which
-   --  objdump reads the image.
+   --  held to its level by its instructions.  At Armv8.1-A an atomic
+   --  read-modify-write is one LSE instruction and none of the default's
+   --  exclusive-monitor loops, `ldxr` and `stxr` at any width, remains; at
+   --  the default the same fixture's image holds no LSE instruction at all.
+   --  The lane's toolchain says which objdump reads the image.
    procedure Check_Arm64_Level
-     (Built, Label : String; Item : in out Landin.Testing.Context);
+     (Built, Label : String; Leveled : Boolean;
+      Item : in out Landin.Testing.Context);
 
    procedure Check_Arm64_Level
-     (Built, Label : String; Item : in out Landin.Testing.Context)
+     (Built, Label : String; Leveled : Boolean;
+      Item : in out Landin.Testing.Context)
    is
       Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Listing : Landin.Platform.Tool_Result;
@@ -1128,70 +1133,199 @@ package body Landin.Tests.Fixture_Execution_Suite is
       declare
          Text : constant String := Unbounded.To_String (Listing.Output);
 
+         --  A mnemonic at the start of an instruction, so `ldxr` also
+         --  finds `ldxrb` and `ldxrh` and never the acquiring `ldaxr`.
          function Has (Word : String) return Boolean
            is (Ada.Strings.Fixed.Index (Text, ASCII.HT & Word) > 0);
+
+         LSE : constant Boolean :=
+           Has ("ldaddal") or else Has ("swpal") or else Has ("casal");
       begin
          Landin.Testing.Check
-           (Item, Has ("ldaddal") or else Has ("swpal") or else Has ("casal"),
-            Label & ": the image holds an LSE instruction");
-         Landin.Testing.Check
-           (Item, not Has ("ldaxr") and then not Has ("stlxr"),
-            Label & ": no exclusive-monitor loop remains");
+           (Item, Listing.Ended = Landin.Platform.Exited
+                    and then Listing.Exit_Code = 0
+                    and then Has ("ret"),
+            Label & ": " & Tool & " disassembled the image");
+         if Leveled then
+            Landin.Testing.Check
+              (Item, LSE, Label & ": the image holds an LSE instruction");
+            Landin.Testing.Check
+              (Item, not Has ("ldxr") and then not Has ("stxr"),
+               Label & ": no exclusive-monitor loop remains");
+         else
+            Landin.Testing.Check
+              (Item, not LSE,
+               Label & ": the default's image holds no LSE instruction");
+         end if;
       end;
    end Check_Arm64_Level;
 
-   --  Whether this processor has every feature of a level of the lane's
-   --  family.  The deliberate exception to the fake platform: what is asked
-   --  is the real host's processor, because a level above it must be
-   --  refused rather than run and hoped, and the kernel's flags are where
-   --  Linux says what the processor has.  The flags are the kernel's names,
-   --  which are the feature names of D255 but for `cx16`, `lahf_lm`, `pni`
-   --  for SSE3 and `abm` for LZCNT on x86-64, whose line is `flags`, and
-   --  `atomics` for LSE and `asimdrdm` for RDM on arm64, whose line is
-   --  `Features`.  A cross lane's runner is an emulator that offers every
-   --  level the lane has, so the host is not asked.
-   function Host_Has_Level
-     (Host : Landin.Platform.Filesystem'Class; Level : String;
-      Missing : out Unbounded.Unbounded_String) return Boolean;
+   --  What the processor that runs the lane's executables says it has: the
+   --  line of /proc/cpuinfo that lists its features, `flags` on x86-64 and
+   --  `Features` on arm64, with a space at each end.  The deliberate
+   --  exception to the fake platform: what is asked is a real processor,
+   --  because a level above it must be refused rather than run and hoped.
+   --  A native lane reads this host's own file.  A cross lane's runner is
+   --  asked rather than assumed, because an emulator presents the processor
+   --  it emulates, and QEMU's `-cpu cortex-a53` has no LSE: a C program the
+   --  lane's driver links copies the file the runner shows it.  Any other
+   --  lane has no Linux to ask, so a level there is unverified.  Asked once,
+   --  before the workers start, so every run reads one answer.
+   Processor_Asked   : Boolean := False;
+   Processor_Flags   : Unbounded.Unbounded_String;
+   Processor_Source  : Unbounded.Unbounded_String;
+   Processor_Problem : Unbounded.Unbounded_String;
 
-   function Host_Has_Level
-     (Host : Landin.Platform.Filesystem'Class; Level : String;
-      Missing : out Unbounded.Unbounded_String) return Boolean
-   is
-      package L renames Landin.Targets.Levels;
+   procedure Ask_Lane_Processor (Host : Landin.Platform.Filesystem'Class);
+
+   procedure Ask_Lane_Processor (Host : Landin.Platform.Filesystem'Class) is
+      Line : constant String :=
+        (if Landin.Targets.Architecture_Of (Lanes.Target)
+              = Landin.Targets.Arm64
+         then "Features" else "flags");
       Text : Unbounded.Unbounded_String;
-      Read : Landin.Platform.Read_Status;
-      Selected : constant L.Feature_Level :=
-        L.Level_Named (Lanes.Target, Level);
-      Is_Arm64 : constant Boolean :=
-        Landin.Targets.Architecture_Of (Lanes.Target) = Landin.Targets.Arm64;
-      Line : constant String := (if Is_Arm64 then "Features" else "flags");
-      Flags : Unbounded.Unbounded_String;
+
+      procedure Refuse (Problem : String);
+
+      procedure Refuse (Problem : String) is
+      begin
+         Processor_Problem := Unbounded.To_Unbounded_String (Problem);
+      end Refuse;
    begin
-      Missing := Unbounded.Null_Unbounded_String;
-      if not Lanes.Is_Native then
-         return True;
+      if Processor_Asked then
+         return;
       end if;
-      Host.Read_File ("/proc/cpuinfo", Text, Read);
-      if Read /= Landin.Platform.Read_Ok then
-         Missing := Unbounded.To_Unbounded_String ("/proc/cpuinfo");
-         return False;
+      Processor_Asked := True;
+      if Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+        /= Landin.Targets.Capabilities.Linux
+      then
+         Refuse ("the " & Lanes.Target_Name & " lane has no /proc/cpuinfo"
+                 & " to confirm a level with");
+         return;
+      elsif Lanes.Is_Native then
+         Processor_Source :=
+           Unbounded.To_Unbounded_String ("this host's /proc/cpuinfo");
+         declare
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Read_File ("/proc/cpuinfo", Text, Read);
+            if Read /= Landin.Platform.Read_Ok then
+               Refuse ("this host's /proc/cpuinfo is unreadable");
+               return;
+            end if;
+         end;
+      elsif Lanes.Runner = "" then
+         Refuse ("the cross lane names no runner to ask");
+         return;
+      else
+         Processor_Source := Unbounded.To_Unbounded_String
+           ("/proc/cpuinfo as " & Lanes.Runner & " presents it");
+         declare
+            Source : constant String :=
+              Output_Directory & "lane-processor.c";
+            Built : constant String := Output_Directory & "lane-processor";
+            Driver : constant String :=
+              Landin.Backend.Toolchain.Driver_For
+                (Lanes.Target, Lanes.Toolchain);
+            Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+            Written : Landin.Platform.Write_Status;
+            Args : Landin.Platform.Path_List;
+            Linked : Landin.Platform.Tool_Result;
+            Copied : Landin.Platform.Tool_Result;
+         begin
+            Host.Write_File
+              (Source,
+               "#include <stdio.h>" & ASCII.LF
+               & "int main(void)" & ASCII.LF
+               & "{" & ASCII.LF
+               & "    FILE *info = fopen(""/proc/cpuinfo"", ""r"");"
+               & ASCII.LF
+               & "    int c;" & ASCII.LF
+               & "    if (info == NULL)" & ASCII.LF
+               & "        return 1;" & ASCII.LF
+               & "    while ((c = fgetc(info)) != EOF)" & ASCII.LF
+               & "        putchar(c);" & ASCII.LF
+               & "    return fclose(info) != 0;" & ASCII.LF
+               & "}" & ASCII.LF,
+               Written);
+            if Written /= Landin.Platform.Write_Ok then
+               Refuse ("the processor probe could not be written");
+               return;
+            end if;
+            Args.Append (Source);
+            Args.Append ("-o");
+            Args.Append (Built);
+            Runner.Run (Driver, Args, Linked, Landin.Platform.Merged);
+            if Linked.Ended /= Landin.Platform.Exited
+              or else Linked.Exit_Code /= 0
+            then
+               Refuse (Driver & " could not link the processor probe: "
+                       & Unbounded.To_String (Linked.Output));
+               return;
+            end if;
+            Run_Program
+              (Runner, Built, Landin.Platform.No_Arguments, Copied,
+               Landin.Platform.Output_Only);
+            if Copied.Ended /= Landin.Platform.Exited
+              or else Copied.Exit_Code /= 0
+            then
+               Refuse (Lanes.Runner & " could not run the processor probe: "
+                       & Unbounded.To_String (Copied.Output)
+                       & Unbounded.To_String (Copied.Error_Output));
+               return;
+            end if;
+            Text := Copied.Output;
+         end;
       end if;
       declare
          Whole : constant String := Unbounded.To_String (Text);
          At_Flags : constant Natural :=
            Ada.Strings.Fixed.Index (Whole, Line & ASCII.HT);
-         Ends : Natural;
+         Colon : constant Natural :=
+           (if At_Flags = 0 then 0
+            else Ada.Strings.Fixed.Index (Whole, ":", At_Flags));
+         Ends : constant Natural :=
+           (if At_Flags = 0 then 0
+            else Ada.Strings.Fixed.Index (Whole, "" & ASCII.LF, At_Flags));
       begin
-         if At_Flags = 0 then
-            Missing := Unbounded.To_Unbounded_String ("a flags line");
-            return False;
+         if Colon = 0 or else (Ends /= 0 and then Colon > Ends) then
+            Refuse (Unbounded.To_String (Processor_Source) & " has no "
+                    & Line & " line");
+            return;
          end if;
-         Ends := Ada.Strings.Fixed.Index (Whole, "" & ASCII.LF, At_Flags);
-         Flags := Unbounded.To_Unbounded_String
-           (Whole (At_Flags .. (if Ends = 0 then Whole'Last else Ends - 1))
+         Processor_Flags := Unbounded.To_Unbounded_String
+           (Whole (Colon .. (if Ends = 0 then Whole'Last else Ends - 1))
             & " ");
+         Unbounded.Replace_Element (Processor_Flags, 1, ' ');
       end;
+   end Ask_Lane_Processor;
+
+   --  Whether the lane's processor has every feature of a level of its
+   --  family.  The flags are the kernel's names, which are the feature
+   --  names of D255 but for `cx16`, `lahf_lm`, `pni` for SSE3 and `abm` for
+   --  LZCNT on x86-64, and `atomics` for LSE and `asimdrdm` for RDM on
+   --  arm64.  A level nothing confirmed is unverified, never inferred from
+   --  the default's run or from another target's lane.
+   function Host_Has_Level
+     (Level : String; Missing : out Unbounded.Unbounded_String)
+      return Boolean;
+
+   function Host_Has_Level
+     (Level : String; Missing : out Unbounded.Unbounded_String)
+      return Boolean
+   is
+      package L renames Landin.Targets.Levels;
+      Selected : constant L.Feature_Level :=
+        L.Level_Named (Lanes.Target, Level);
+   begin
+      Missing := Unbounded.Null_Unbounded_String;
+      if not Processor_Asked then
+         raise Compiler_Defect
+           with "a level was run before the lane's processor was asked";
+      elsif Unbounded.Length (Processor_Problem) > 0 then
+         Missing := Processor_Problem;
+         return False;
+      end if;
       for Each in L.Feature loop
          if L.Has (Selected, Each) then
             declare
@@ -1205,14 +1339,44 @@ package body Landin.Tests.Fixture_Execution_Suite is
                      when L.Rdm        => "asimdrdm",
                      when others       => L.Spelling (Each));
             begin
-               if Unbounded.Index (Flags, " " & Kernel & " ") = 0 then
+               if Unbounded.Index (Processor_Flags, " " & Kernel & " ") = 0
+               then
                   Unbounded.Append (Missing, " " & L.Spelling (Each));
                end if;
             end;
          end if;
       end loop;
-      return Unbounded.Length (Missing) = 0;
+      if Unbounded.Length (Missing) > 0 then
+         Missing := Unbounded.To_Unbounded_String
+           (Unbounded.To_String (Processor_Source) & " lacks"
+            & Unbounded.To_String (Missing));
+         return False;
+      end if;
+      return True;
    end Host_Has_Level;
+
+   --  Say on standard error which levels the lane's processor confirmed and
+   --  from where.  Not in the transcript, which is the same on every host
+   --  that runs a lane; a processor's feature list is not.
+   procedure Report_Levels (Levels : Landin.Platform.Path_List);
+
+   procedure Report_Levels (Levels : Landin.Platform.Path_List) is
+      Missing : Unbounded.Unbounded_String;
+   begin
+      for Level of Levels loop
+         if Host_Has_Level (Level, Missing) then
+            Ada.Text_IO.Put_Line
+              (Ada.Text_IO.Standard_Error,
+               "landin_tests: " & Lanes.Target_Name & " " & Level
+               & " confirmed by " & Unbounded.To_String (Processor_Source));
+         else
+            Ada.Text_IO.Put_Line
+              (Ada.Text_IO.Standard_Error,
+               "landin_tests: " & Lanes.Target_Name & " " & Level
+               & " UNVERIFIED: " & Unbounded.To_String (Missing));
+         end if;
+      end loop;
+   end Report_Levels;
 
    procedure Run_Runtime
      (Case_Item : Fixture;
@@ -1251,10 +1415,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
          declare
             Missing : Unbounded.Unbounded_String;
          begin
-            if not Host_Has_Level (Host, Level, Missing) then
+            if not Host_Has_Level (Level, Missing) then
                Landin.Testing.Fail
-                 (Item, Label & ": this processor cannot run " & Level
-                  & "; it lacks" & Unbounded.To_String (Missing));
+                 (Item, Label & ": UNVERIFIED, not run: "
+                  & Unbounded.To_String (Missing));
                return;
             end if;
          end;
@@ -1286,9 +1450,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
          --  the image that then runs, so the lowering is shown to have
          --  reached the bytes, not only the assembly text.  An arm64
          --  executable carries no note, so its image is held to holding
-         --  the level's instructions and not the default's sequence.
-         if Level /= "" and then Lanes.Target_Name = "linux-arm64" then
-            Check_Arm64_Level (Built, Label, Item);
+         --  the level's instructions and not the default's sequence, and
+         --  the default's image of a fixture that names a level is held to
+         --  holding none of them.
+         if Lanes.Target_Name = "linux-arm64"
+           and then (Level /= "" or else not Lane_Levels (Case_Item).Is_Empty)
+         then
+            Check_Arm64_Level (Built, Label, Level /= "", Item);
          elsif Level /= "" then
             declare
                Note : Landin.Platform.Tool_Result;
@@ -1518,6 +1686,169 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
    end Run_ABI;
 
+   --  D255: the assembler is held to the build's level, the default
+   --  included, so an assembly block can use no instruction the level does
+   --  not have.  On the lane's own toolchain a block naming an instruction
+   --  of a higher level -- BMI2's `shlx` on x86-64, LSE's `ldaddal` on arm64
+   --  -- is refused by the assembler at every level below the one that adds
+   --  it, the default unnamed and named, and assembles at that level.  The
+   --  accepted build runs only where the lane's processor confirms the
+   --  level; anywhere else its run is unverified.
+   procedure An_Assembly_Block_Is_Held_To_Its_Level
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Assembly_Block_Is_Held_To_Its_Level
+     (Item : in out Landin.Testing.Context)
+   is
+      Host   : Landin.Platform.Native.Native_Filesystem;
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      LF     : constant String := [ASCII.LF];
+      Is_X86 : constant Boolean :=
+        Landin.Targets.Architecture_Of (Lanes.Target)
+          = Landin.Targets.X86_64;
+      --  Labelled as a runtime program, which it is: a lane with no driver
+      --  refuses it exactly as it refuses every runtime fixture.
+      Name   : constant String := "runtime/assembly-held-to-its-level";
+      File   : constant String := "assembly-held-to-its-level";
+      Source : constant String := Output_Directory & File & ".ldn";
+      Block  : constant String :=
+        (if Is_X86
+         then "    r = assembler.block(""shlxq {b}, {a}, {a}""," & LF
+              & "        inout a: u64 at general = value," & LF
+              & "        in b: u64 at general = 1)" & LF
+         else "    r = assembler.block(""ldaddal {a}, {a}, [{p}]""," & LF
+              & "        inout a: u64 at general = value," & LF
+              & "        in p: usize at general = usize(addr cell))" & LF
+              & "    r = r + cell - value" & LF);
+      Program : constant String :=
+        "mut cell: u64 = 21" & LF
+        & "doubled: (value: u64) -> (r: u64) =" & LF
+        & Block
+        & "end doubled" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = i32(doubled(21))" & LF
+        & "end main" & LF;
+      Instruction : constant String := (if Is_X86 then "shlx" else "ldaddal");
+      Refusal : constant String :=
+        (if Is_X86 then "`shlx' is not supported on"
+         else "selected processor does not support `ldaddal");
+      --  The levels below the one that adds the instruction: the default
+      --  unnamed, then each named.  arm64 has one, so it is named once.
+      Below_Count : constant Positive := (if Is_X86 then 3 else 2);
+
+      function Below (Each : Positive) return String
+        is (if Each = 1 then ""
+            elsif Is_X86 then (if Each = 2 then "x86-64-v1" else "x86-64-v2")
+            else "armv8-a");
+
+      Level : constant String := (if Is_X86 then "x86-64-v3" else "armv8.1-a");
+      Written : Landin.Platform.Write_Status;
+
+      function Build (At_Level, Built : String)
+        return Landin.Platform.Tool_Result;
+
+      function Build (At_Level, Built : String)
+        return Landin.Platform.Tool_Result
+      is
+         Args : Landin.Platform.Path_List;
+         Removed : Landin.Platform.Remove_Status;
+         Outcome : Landin.Platform.Tool_Result;
+      begin
+         Host.Remove_File (Built, Removed);
+         if At_Level /= "" then
+            Args.Append ("--level=" & At_Level);
+         end if;
+         Args.Append ("--emit=exe");
+         Args.Append ("-o");
+         Args.Append (Built);
+         if Lanes.Toolchain /= "" then
+            Args.Append ("--toolchain=" & Lanes.Toolchain);
+         end if;
+         Args.Append (Source);
+         Runner.Run
+           (Refine_Path, Lane_Arguments (Args), Outcome,
+            Landin.Platform.Merged);
+         return Outcome;
+      end Build;
+   begin
+      if Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+        = Landin.Targets.Capabilities.No_Hosted_System
+      then
+         Landin.Testing.Fail
+           (Item, Lanes.Target_Name & " links no hosted program to hold");
+         return;
+      end if;
+      Host.Write_File (Source, Program, Written);
+      if Written /= Landin.Platform.Write_Ok then
+         Landin.Testing.Fail (Item, Name & ": the source was not written");
+         return;
+      end if;
+
+      --  The accepted build goes through the runtime fixtures' own producer,
+      --  so a lane with no driver refuses it as it refuses theirs.
+      declare
+         Label : constant String := Name & " [at " & Level & "]";
+         Built : constant String := Output_Directory & File & "-" & Level;
+         Args : Landin.Platform.Path_List;
+         Ready : Boolean;
+         Missing : Unbounded.Unbounded_String;
+         Ran : Landin.Platform.Tool_Result;
+      begin
+         Args.Append ("--level=" & Level);
+         Args.Append ("--emit=exe");
+         Args.Append ("-o");
+         Args.Append (Built);
+         if Lanes.Toolchain /= "" then
+            Args.Append ("--toolchain=" & Lanes.Toolchain);
+         end if;
+         Args.Append (Source);
+         Produce_Output
+           (Host, Runner, Refine_Path, Label, Built, Lane_Arguments (Args),
+            Item, Ready);
+         if not Ready then
+            return;
+         end if;
+         Ask_Lane_Processor (Host);
+         if not Host_Has_Level (Level, Missing) then
+            Landin.Testing.Fail
+              (Item, Label & ": UNVERIFIED, not run: "
+               & Unbounded.To_String (Missing));
+            return;
+         end if;
+         Run_Program
+           (Runner, Built, Landin.Platform.No_Arguments, Ran,
+            Landin.Platform.Merged);
+         Landin.Testing.Check
+           (Item, Ran.Ended = Landin.Platform.Exited
+              and then Ran.Exit_Code = 42,
+            Label & ": the block runs" & LF
+            & Unbounded.To_String (Ran.Output));
+      end;
+
+      --  Only then the refusals, which need the driver that just linked.
+      for Each in 1 .. Below_Count loop
+         declare
+            Below_Level : constant String := Below (Each);
+            Label : constant String :=
+              Name & (if Each = 1 then " [at the default]"
+                      else " [at an explicit " & Below_Level & "]");
+            Built : constant String :=
+              Output_Directory & File & "-below-" & Natural'Image (Each)(2);
+            Outcome : constant Landin.Platform.Tool_Result :=
+              Build (Below_Level, Built);
+            Said : constant String := Unbounded.To_String (Outcome.Output);
+         begin
+            Landin.Testing.Check
+              (Item, Outcome.Ended = Landin.Platform.Exited
+                 and then Outcome.Exit_Code = 1
+                 and then Ada.Strings.Fixed.Index (Said, "error[L0501]") > 0
+                 and then Ada.Strings.Fixed.Index (Said, Refusal) > 0
+                 and then not Host.Exists (Built),
+               Label & ": the assembler refuses " & Instruction & LF & Said);
+         end;
+      end loop;
+   end An_Assembly_Block_Is_Held_To_Its_Level;
+
    procedure Runtime_Fixtures_Execute
      (Item : in out Landin.Testing.Context);
 
@@ -1618,8 +1949,28 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end;
          end loop;
 
+         declare
+            Levels : Landin.Platform.Path_List;
+         begin
+            for Piece of Work (1 .. Last) loop
+               if Piece.Kind = Runtime_Piece then
+                  for Level of Lane_Levels (Nth (Found, Piece.Index)) loop
+                     if not Levels.Contains (Level) then
+                        Levels.Append (Level);
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+            if not Levels.Is_Empty then
+               Ask_Lane_Processor (Host);
+               Report_Levels (Levels);
+            end if;
+         end;
          Run_Each (Work (1 .. Last), Item);
       end;
+
+      --  And the lane's own assembler, held to the build's level.
+      An_Assembly_Block_Is_Held_To_Its_Level (Item);
 
       Landin.Testing.Check_Equal
         (Item, Runtime_Ran,
@@ -1639,6 +1990,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
          "every ABI profile was attempted");
       Landin.Testing.Check
         (Item, Runtime_Ran > 0, "the runtime obligation remains present");
+      --  [1630]'s audit: every hosted lane executes an assembly block whose
+      --  operands are integers, so the lane runs that fixture or is red.
+      Landin.Testing.Check
+        (Item, (for some Index in 1 .. Count (Found) =>
+                  Label_Of (Nth (Found, Index)) = "runtime/assembly-operands"
+                  and then In_Lane (Nth (Found, Index))),
+         "the lane executes an assembly block with integer operands");
       Landin.Testing.Check
         (Item, ABI_Ran > 0, "the ABI obligation remains present");
    end Runtime_Fixtures_Execute;
@@ -1700,6 +2058,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
                elsif Class (Case_Item) = Negative_Program then
                   Run_Negative (Case_Item, Program, Item);
                elsif Class (Case_Item) = Runtime then
+                  if not Lane_Levels (Case_Item).Is_Empty then
+                     Ask_Lane_Processor (Host);
+                     Report_Levels (Lane_Levels (Case_Item));
+                  end if;
                   for Profile in 1 .. Profile_Count (Case_Item) loop
                      Run_Runtime (Case_Item, Host, Program, Profile, Item);
                      for Level of Lane_Levels (Case_Item) loop

@@ -1,0 +1,24 @@
+-- An assembly block may use what the build's CPU feature level has.  This
+-- program selects an LSE block where the level has LSE and a plain
+-- read-modify-write where it does not, so both builds give the same answer
+-- and each uses only what its level has: the baseline's assembler is held to
+-- the baseline, and refuses `ldaddal` there.
+mut total: u64 = 40
+
+fixed if compiler.feature.lse then
+    add_to: (at: usize, amount: u64) -> (old: u64) =
+        old = assembler.block("ldaddal {a}, {a}, [{p}]",
+                              inout a: u64 at general = amount,
+                              in p: usize at general = at)
+    end add_to
+else
+    add_to: (at: usize, amount: u64) -> (old: u64) =
+        old = total
+        total = total + amount
+    end add_to
+end if
+
+public main: () -> (code: i32) =
+    old := add_to(usize(addr total), 2)
+    code = if old == 40 then i32(total) else 1 end if
+end main

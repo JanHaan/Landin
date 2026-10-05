@@ -1,0 +1,16 @@
+-- D255: armv8-a, named, holds none of the arm64 level features, so each
+-- fixed if selects its else arm; a wrong selection names an undefined value.
+fixed if compiler.feature.lse then
+    atomics: i32 = wrongly_lse
+else
+    atomics: i32 = 0
+end if
+fixed if compiler.feature.crc32 or compiler.feature.rdm then
+    others: i32 = wrongly_crc32_or_rdm
+else
+    others: i32 = 0
+end if
+compiler.assert(not compiler.feature.lse)
+compiler.assert(not compiler.feature.crc32)
+compiler.assert(not compiler.feature.rdm)
+compiler.assert(not compiler.feature.bmi2 and not compiler.feature.idiv)

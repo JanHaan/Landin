@@ -1,0 +1,17 @@
+-- D255: armv8.1-a holds LSE, CRC32 and RDM on linux-arm64 as on Darwin, so
+-- each fixed if selects its first arm; a wrong selection names an undefined
+-- value.
+fixed if compiler.feature.lse then
+    atomics: i32 = 1
+else
+    atomics: i32 = wrongly_without_lse
+end if
+fixed if compiler.feature.crc32 and compiler.feature.rdm then
+    others: i32 = 1
+else
+    others: i32 = wrongly_without_crc32_or_rdm
+end if
+compiler.assert(compiler.feature.lse)
+compiler.assert(compiler.feature.crc32)
+compiler.assert(compiler.feature.rdm)
+compiler.assert(not compiler.feature.bmi2 and not compiler.feature.idiv)

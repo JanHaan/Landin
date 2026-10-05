@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 assumes armv8-a on linux-arm64 when no level is selected, which has no LSE
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-arm64
+expect: expected.txt
+args: --target=linux-arm64 ../tests/fixtures/end-to-end/feature-level-linux-arm64-default-lacks-lse/main.ldn
+status: 1
