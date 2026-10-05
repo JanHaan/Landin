@@ -1647,9 +1647,10 @@ package body Landin.Syntax.Parser is
 
             --  Whether the innermost construct, which closes with `end`
             --  and a word, takes an `end` written with another word or
-            --  none.  It does when the `end` begins a line, where a closer
-            --  is written, and no construct around it is closed by that
-            --  `end` exactly: then the word is the mistake.
+            --  none.  It does when the `end` begins a line no deeper than
+            --  the construct's, where its closer is written, and no
+            --  construct around it is closed by that `end` exactly: then
+            --  the word is the mistake.
             function Misclosed (Own : Closer; Below : Natural) return Boolean
               is (Peek = Tok.Kw_End
                   and then not Closes (Own)
@@ -1657,6 +1658,8 @@ package body Landin.Syntax.Parser is
                                        | For_Closer | Unchecked_Closer
                                        | Match_Closer | Label_Closer
                   and then Begins_Line (Index)
+                  and then (Own.Indent < 0
+                            or else Indent_Of (Index) <= Own.Indent)
                   and then not Outer_Takes_Exactly (Below));
 
             type Placement is (Leave, Stray);
@@ -1803,6 +1806,8 @@ package body Landin.Syntax.Parser is
                  and then Peek in Tok.Kw_If | Tok.Kw_Loop | Tok.Kw_While
                                   | Tok.Kw_For | Tok.Kw_Match
                                   | Tok.Kw_Unchecked | Tok.Identifier
+                 and then (Ahead (1) = Tok.End_Of_Input
+                           or else Begins_Line (Index + 1))
                then
                   Advance;
                end if;
@@ -5977,7 +5982,39 @@ package body Landin.Syntax.Parser is
                      --  it.  What is left is the rest of a mistake the
                      --  body already reported, or one it has not: say it
                      --  once, and close the function where it is closed.
-                     if Own.Fence /= 0
+                     --  Without a closing name, an expression body that
+                     --  stopped before the line's `end` stopped at what
+                     --  follows its value on that line.
+                     if Own.Fence = 0
+                       and then Peek not in Tok.Kw_End | Tok.End_Of_Input
+                       and then not Begins_Line (Index)
+                     then
+                        declare
+                           Scan : Tok.Token_Index := Index;
+                        begin
+                           while Scan < Last
+                             and then Tok.Kind (From, Scan) /= Tok.Kw_End
+                             and then not Begins_Line (Scan)
+                           loop
+                              Scan := Scan + 1;
+                           end loop;
+                           if Tok.Kind (From, Scan) = Tok.Kw_End
+                             and then not Begins_Line (Scan)
+                           then
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Join (Here,
+                                                  Tok.Where (From, Scan - 1)),
+                                 Message => "this does not continue the"
+                                            & " expression before it",
+                                 Note    => "[1820]: an expression continues"
+                                            & " only with an operator, a"
+                                            & " selection, an index or a"
+                                            & " call");
+                              Index := Scan;
+                           end if;
+                        end;
+                     elsif Own.Fence /= 0
                        and then Natural (Index) < Own.Fence
                      then
                         Complain
@@ -6917,6 +6954,7 @@ package body Landin.Syntax.Parser is
                                 elsif Is_While then While_Closer
                                 else Loop_Closer),
                   Label     => Label,
+                  Indent    => Line_Indent (Index),
                   Completes => True,
                   others    => <>);
                Closed : Closing;
@@ -7071,6 +7109,7 @@ package body Landin.Syntax.Parser is
             is
                Opened : constant Landin.Source.Span :=
                  (if Starts = Landin.Source.Empty_Span then Here else Starts);
+               Opened_Indent : constant Natural := Line_Indent (Index);
                Element : Node_Id;
                Index : Node_Id := No_Node;
                Lower : Node_Id := No_Node;
@@ -7085,6 +7124,7 @@ package body Landin.Syntax.Parser is
                  (Kind      => (if Label /= Landin.Source.Names.No_Name
                                 then Label_Closer else For_Closer),
                   Label     => Label,
+                  Indent    => Opened_Indent,
                   Completes => True,
                   others    => <>);
                Closed : Closing;
@@ -7342,6 +7382,7 @@ package body Landin.Syntax.Parser is
             --         ("else" block)? "end" "if"                  [1810]
             function Parse_If (Context : Frame) return Node_Id is
                At_If     : constant Landin.Source.Span := Here;
+               Opened_Index : constant Tok.Token_Index := Index;
                Arms      : Slot_Vectors.Vector;
                Else_Node : Node_Id := No_Node;
                Saved_Else : constant Boolean := Else_Closes_Arm;
@@ -7355,7 +7396,8 @@ package body Landin.Syntax.Parser is
 
                Depth := Depth + 1;
                Else_Closes_Arm := False;
-               Push ((Kind => If_Closer, Arm => True, others => <>));
+               Push ((Kind   => If_Closer, Arm => True,
+                      Indent => Line_Indent (Index), others => <>));
 
                loop
                   declare
@@ -7408,7 +7450,9 @@ package body Landin.Syntax.Parser is
                --  is, for whatever construct needs it, so one missing
                --  `end` is one report rather than two.
                if Close_Construct
-                 (Own        => (Kind => If_Closer, others => <>),
+                 (Own        => (Kind   => If_Closer,
+                                 Indent => Line_Indent (Opened_Index),
+                                 others => <>),
                   Word       => "if",
                   Opened     => At_If,
                   Unclosed   => "this branch is never closed",
@@ -7462,6 +7506,7 @@ package body Landin.Syntax.Parser is
                  (if Starts = Landin.Source.Empty_Span then Here else Starts);
                Runs     : Node_Id;
                Saved_Else : constant Boolean := Else_Closes_Arm;
+               Opened_Indent : constant Natural := Line_Indent (Index);
             begin
                if Too_Deep (At_Begin) then
                   Advance;
@@ -7482,6 +7527,7 @@ package body Landin.Syntax.Parser is
                Push ((Kind   => (if Labelled then Label_Closer
                                  else Bare_Closer),
                       Label  => Label,
+                      Indent => Opened_Indent,
                       others => <>));
                Runs := Parse_Block (Context, Allow_Value => True);
                Pop;
@@ -7495,8 +7541,8 @@ package body Landin.Syntax.Parser is
 
                if Labelled
                  and then Close_Construct
-                   (Own        => (Kind => Label_Closer, Label => Label,
-                                   others => <>),
+                   (Own        => (Kind   => Label_Closer, Label => Label,
+                                   Indent => Opened_Indent, others => <>),
                     Word       => Landin.Source.Names.Spelling (Names, Label),
                     Opened     => At_Begin,
                     Unclosed   => "this labelled block is never closed",
@@ -7586,6 +7632,7 @@ package body Landin.Syntax.Parser is
                Runs    : Node_Id;
                Kept    : Boolean;
                Saved_Else : constant Boolean := Else_Closes_Arm;
+               Opened_Indent : constant Natural := Line_Indent (Index);
             begin
                if Too_Deep (At_Word) then
                   Advance;
@@ -7609,13 +7656,15 @@ package body Landin.Syntax.Parser is
                begin
                   null;
                end;
-               Push ((Kind => Unchecked_Closer, others => <>));
+               Push ((Kind   => Unchecked_Closer, Indent => Opened_Indent,
+                      others => <>));
                Runs := Parse_Block (Context, Allow_Value => False);
                Pop;
 
                Kept := False;
                if Close_Construct
-                 (Own        => (Kind => Unchecked_Closer, others => <>),
+                 (Own        => (Kind   => Unchecked_Closer,
+                                 Indent => Opened_Indent, others => <>),
                   Word       => "unchecked",
                   Opened     => At_Word,
                   Unclosed   => "this unchecked region is never closed",
