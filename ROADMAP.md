@@ -650,6 +650,63 @@ Audit the completed Linux arm64 lane for an executed assembly block with an
 integer operand and an IR verifier refusal for an invalid arm64 register.
 Retain both as recurring gate checks; this audit does not reopen R11.20.
 
+### R11.26 — Make one mistake one diagnostic
+
+Status: planned
+Depends on: R10.30
+
+R10.30 gave diagnostics fixes; it did not make them find the mistake. One
+misplaced word in a body, `v: u32 mut = 41`, gives eight reports, none
+naming `mut`. With each body line of the clean positive fixtures changed by
+one token (deleted, doubled, swapped or a stray word inserted), 694 refused
+mutants gave one report in 32%. In 65% the parser left the function and read
+the rest of the file as declarations ("this begins no declaration"), and 24%
+claimed a function closed two lines later was never closed. The first report
+was on the changed line in 99%: the parser finds the mistake and then
+abandons the construct it is in. An audit of every agent session since
+R10.30, 228 refused compiles of which about 75 were accidental, found
+agents giving up, misreading the cause or claiming success past printed
+errors. The reports that worked were written for one mistake, said what was
+found and gave the corrected form.
+
+Fix the mechanisms rather than each mistake:
+
+- Recovery respects structure. Openers and named closers are matched before
+  a body is parsed; a broken statement resumes at the next statement of its
+  own block and never leaves the enclosing construct; "never closed" is said
+  only when no closer exists; declaration resync skips balanced brackets.
+- A refused statement is diagnosed by the smallest repair that makes it
+  parse: one token deleted, inserted, swapped with its neighbour or moved to
+  the statement's start, tried on that statement alone. A repair found is the
+  report and an exact R10.30 fix; none found says what token was found and
+  after what, never only what belonged at the gap.
+- A report's primary span is the token it is about, never whitespace or a
+  line end; a secondary label never repeats it; one cause repeated is one
+  report with a count. A note cites the rule that failed, not the construct's
+  general paragraph or a grammar production.
+- A checker refusal poisons what it refuses, so a dependent error is not
+  reported: an unknown label before the parameter it leaves unfilled, an
+  unresolved import before its uses. A type error names both types and where
+  the deciding one came from; checker vocabulary that names no source
+  construct stays out of messages.
+- An import that resolves to nothing is refused at the import, not accepted.
+  A local that shadows a named return is reported at the shadowing binding.
+- Driver reports carry no source line when they have no source, distinguish
+  misuse of a known option from an unknown one, and suggest near options and
+  targets. An internal compiler defect names its stage and source span. An
+  assembler refusal of an assembly block is reported at that block.
+
+Negative fixtures that pin today's cascades as expected codes are re-pinned to
+the single report, not defended.
+
+Exit evidence: the single-token mutation suite runs in the gate over the
+positive corpus with a fixed seed. No mutant inside a body reports outside its
+enclosing function, none claims an existing closer is missing, and at least
+90% give exactly one report on the changed line. Every primary span is on a
+token. The accidental refusals the session audit found are negative fixtures,
+each pinning one report and, where the repair is mechanical, a fix the `fixes`
+suite compiles clean.
+
 ### R11.30 — FreeBSD x86-64 and arm64
 
 Status: planned
@@ -741,6 +798,8 @@ derive or refuse as decided.
 
 - R11.25 passes recurring Linux arm64 baseline and higher-level feature,
   instruction-selection, assembler and confirmed-runner execution checks.
+- A single-token mistake in a body gives one report at the mistake, held in
+  the gate by R11.26's mutation suite.
 - Linux arm64, FreeBSD x86-64, FreeBSD arm64 and rv64 Linux each run the
   corpus in the gate, with a separate verdict for each architecture.
 - A conversion names its type as written, without an alias.
