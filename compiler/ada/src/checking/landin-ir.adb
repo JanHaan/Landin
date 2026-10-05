@@ -462,6 +462,7 @@ package body Landin.IR is
       Mix (Ada.Containers.Hash_Type'Mod (Shape.Signature));
       Mix (Ada.Containers.Hash_Type'Mod (Shape.Atoms));
       Mix (Ada.Containers.Hash_Type'Mod (Shape.Pointee));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Slice_Element));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Nominal_Position));
       return Result;
    end Hash;
@@ -729,38 +730,6 @@ package body Landin.IR is
       end if;
       Into.Code (Value_At (Into, Item, Value)).Pointee := Pointee;
    end Set_Pointee;
-
-   procedure Set_Slice_Element
-     (Into : in out Unit; Item : Item_Id; Element : Pointee_Id) is
-   begin
-      if not Holds (Into, Item) or else not Holds (Into, Element)
-        or else Kind_Of (Into, Item) /= Datum
-        or else Result_Of (Into, Item) /= Landin.Types.Fixed_Array
-      then
-         raise Landin.Compiler_Defect with "invalid slice datum annotation";
-      end if;
-      Into.Items (Positive (Item)).Slice_Element_Of := Element;
-   end Set_Slice_Element;
-
-   procedure Set_Slice_Element
-     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
-      Element : Pointee_Id) is
-   begin
-      if not Holds (Into, Item, Slot) or else not Holds (Into, Element)
-        or else not Is_Array (Into, Item, Slot)
-      then
-         raise Landin.Compiler_Defect with "invalid slice slot annotation";
-      end if;
-      Into.Slots (Slot_At (Into, Item, Slot)).Slice_Element := Element;
-   end Set_Slice_Element;
-
-   function Slice_Element_Of
-     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
-     is (Element (Of_Unit, Item).Slice_Element_Of);
-
-   function Slice_Element_Of
-     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Slice_Element);
 
    function Atom_Set_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Atom_Sets.Length));
@@ -2137,7 +2106,8 @@ package body Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Type : Landin.Types.Scalar_Name;
-      Length  : Element_Total)
+      Length  : Element_Total;
+      Slice_Element : Pointee_Id := No_Pointee)
    is
    begin
       Set_Array
@@ -2147,6 +2117,7 @@ package body Landin.IR is
                       Length  => 1,
                       others  => <>),
          Length);
+      Into.Items (Positive (Item)).Slice_Element_Of := Slice_Element;
    end Set_Array;
 
    procedure Set_Array
@@ -2185,6 +2156,7 @@ package body Landin.IR is
            (if Element (Of_Unit, Item).Element_Run = 0 then 0 else 1),
          Payloads_First => Element (Of_Unit, Item).Element_Run,
          Nominal        => Element (Of_Unit, Item).Element.Nominal,
+         Slice_Element  => Element (Of_Unit, Item).Slice_Element_Of,
          others         => <>);
 
    function Array_Length
@@ -2566,16 +2538,20 @@ package body Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Length   : Element_Total;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Slice_Element : Pointee_Id := No_Pointee) return Slot_Id
    is
-   begin
-      return Add_Array_Slot
+      Made : constant Slot_Id := Add_Array_Slot
         (Into, Item,
          Field_Shape'(Kind    => Scalar_Field_Shape,
                       Element => Of_Type,
                       Length  => 1,
                       others  => <>),
          Length, Declares, Site);
+   begin
+      Into.Slots (Slot_At (Into, Item, Made)).Slice_Element :=
+        Slice_Element;
+      return Made;
    end Add_Array_Slot;
 
    function Add_Array_Slot
@@ -2631,6 +2607,7 @@ package body Landin.IR is
          Cases          => (if Held.Element_Run = 0 then 0 else 1),
          Payloads_First => Held.Element_Run,
          Nominal        => Held.Element.Nominal,
+         Slice_Element  => Held.Slice_Element,
          others         => <>);
    end Whole_Slot_Array_Shape;
 
@@ -2808,10 +2785,12 @@ package body Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Length   : Element_Total;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Slice_Element : Pointee_Id := No_Pointee) return Slot_Id
    is
       Made : constant Slot_Id :=
-        Add_Array_Slot (Into, Item, Of_Type, Length, Declares, Site);
+        Add_Array_Slot
+          (Into, Item, Of_Type, Length, Declares, Site, Slice_Element);
       Held : Item_Record := Element (Into, Item);
    begin
       Open_Run (Held.Parameters, Natural (Into.Parameters.Length));

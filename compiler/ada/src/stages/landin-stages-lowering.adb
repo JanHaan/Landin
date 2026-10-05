@@ -573,6 +573,11 @@ package body Landin.Stages.Lowering is
       function Pointee_For
         (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id;
 
+      --  The element a slice reference views, for the debugger's
+      --  description of its descriptor; No_Pointee for anything else.
+      function Slice_Element_For
+        (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id;
+
       function Neutral_Result_Part
         (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
 
@@ -1912,6 +1917,7 @@ package body Landin.Stages.Lowering is
                         else IR.No_Pointee),
                      Length =>
                        (if Descriptor.Kind = Ty.Pointer_Value then 1 else 2),
+                     Slice_Element => Slice_Element_For (Source.Reference),
                      others => <>);
                end;
 
@@ -2030,7 +2036,9 @@ package body Landin.Stages.Lowering is
             when Ty.Slice_Value | Ty.Any_Value =>
                Shape :=
                  (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
-                  Length => 2, others => <>);
+                  Length => 2,
+                  Slice_Element => Slice_Element_For (Descriptor.Reference),
+                  others => <>);
             when others =>
                raise Landin.Compiler_Defect with
                  "an incomplete pointer referent reached lowering";
@@ -2038,31 +2046,30 @@ package body Landin.Stages.Lowering is
          return IR.Add_Pointee (Unit.all, Shape);
       end Pointee_For;
 
-      --  The element a declared slice reaches, for source debugging alone:
-      --  the carrier stays two usize words to everything that executes.
-      procedure Note_Slice_Element
-        (Id : Res.Declaration_Id; Item : IR.Item_Id;
-         Slot : IR.Slot_Id := IR.No_Slot);
-
-      procedure Note_Slice_Element
-        (Id : Res.Declaration_Id; Item : IR.Item_Id;
-         Slot : IR.Slot_Id := IR.No_Slot)
+      function Slice_Element_For
+        (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id
       is
       begin
-         if Landin.Checking.Type_Of (Types.all, Id) /= Ty.Slice_Value then
-            return;
+         if Reference = Landin.Checking.No_Reference
+           or else not Landin.Checking.Holds (Types.all, Reference)
+         then
+            return IR.No_Pointee;
          end if;
          declare
-            Element : constant IR.Pointee_Id := Pointee_For
-              (Landin.Checking.Reference_Of (Types.all, Id));
+            Descriptor : constant Landin.Checking.Reference_Descriptor :=
+              Landin.Checking.Descriptor_Of (Types.all, Reference);
          begin
-            if Slot = IR.No_Slot then
-               IR.Set_Slice_Element (Unit.all, Item, Element);
-            else
-               IR.Set_Slice_Element (Unit.all, Item, Slot, Element);
+            if Descriptor.Kind /= Ty.Slice_Value
+              or else Descriptor.Referent not in Ty.Scalar_Name
+                | Ty.Function_Value | Ty.Atom_Value | Ty.Pointer_Value
+                | Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                | Ty.Any_Value
+            then
+               return IR.No_Pointee;
             end if;
+            return Pointee_For (Reference);
          end;
-      end Note_Slice_Element;
+      end Slice_Element_For;
 
       function Packed_Field_Node
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
@@ -2105,7 +2112,13 @@ package body Landin.Stages.Lowering is
          elsif Held in Ty.Slice_Value | Ty.Any_Value then
             return
               (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
-               Length => 2, others => <>);
+               Length => 2,
+               Slice_Element =>
+                 (if Held = Ty.Slice_Value
+                  then Slice_Element_For
+                    (Landin.Checking.Reference_Of (Types.all, Of_Tree, Node))
+                  else IR.No_Pointee),
+               others => <>);
          elsif Held = Ty.Fixed_Array then
             declare
                Element : constant IR.Field_Shape :=
@@ -2239,6 +2252,8 @@ package body Landin.Stages.Lowering is
                         else IR.No_Pointee),
                      Length =>
                        (if Descriptor.Kind = Ty.Slice_Value then 2 else 1),
+                     Slice_Element => Slice_Element_For
+                       (Landin.Checking.Reference_Of (Types.all, Actual)),
                      others => <>);
                end;
             when Landin.Checking.Any_Actual_Type =>
@@ -2267,7 +2282,9 @@ package body Landin.Stages.Lowering is
             when Ty.Slice_Value | Ty.Any_Value =>
                return
                  (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
-                  Length => 2, others => <>);
+                  Length => 2,
+                  Slice_Element => Slice_Element_For (Part.Reference),
+                  others => <>);
             when Ty.Function_Value =>
                return
                  (Kind => IR.Scalar_Field_Shape,
@@ -3011,8 +3028,9 @@ package body Landin.Stages.Lowering is
          if Held in Ty.Slice_Value | Ty.Any_Value then
             Slots (Positive (Id)) := IR.Add_Array_Slot
               (Unit.all, Filling, Ty.Usize, 2, Id,
-               Site_Of (Of_Tree, Node));
-            Note_Slice_Element (Id, Filling, Slots (Positive (Id)));
+               Site_Of (Of_Tree, Node),
+               Slice_Element_For
+                 (Landin.Checking.Reference_Of (Types.all, Id)));
             return Slots (Positive (Id));
          end if;
 
@@ -3152,7 +3170,9 @@ package body Landin.Stages.Lowering is
          if Held in Ty.Slice_Value | Ty.Any_Value then
             return IR.Add_Array_Slot
               (Unit.all, Filling, Ty.Usize, 2,
-               Res.No_Declaration, Site);
+               Res.No_Declaration, Site,
+               Slice_Element_For
+                 (Landin.Checking.Reference_Of (Types.all, Of_Tree, Node)));
          end if;
 
          if Held = Ty.Fixed_Array then
@@ -5946,7 +5966,9 @@ package body Landin.Stages.Lowering is
          then
             return
               (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
-               Length => 2, others => <>);
+               Length => 2,
+               Slice_Element => Slice_Element_For (Descriptor.Reference),
+               others => <>);
          end if;
          raise Landin.Compiler_Defect with
            "a malformed slice element descriptor reached lowering";
@@ -9908,7 +9930,8 @@ package body Landin.Stages.Lowering is
          begin
             if Part.Kind in Ty.Slice_Value | Ty.Any_Value then
                return IR.Add_Array_Slot
-                 (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration, Site);
+                 (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration, Site,
+                  Slice_Element_For (Part.Reference));
             elsif Part.Kind = Ty.Fixed_Array then
                return IR.Add_Array_Slot
                  (Unit.all, Filling, Neutral_Element (Part),
@@ -14530,7 +14553,10 @@ package body Landin.Stages.Lowering is
                      elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         Shape :=
                           (Kind => IR.Array_Field_Shape,
-                           Element => Ty.Usize, Length => 2, others => <>);
+                           Element => Ty.Usize, Length => 2,
+                           Slice_Element => Slice_Element_For
+                             (Landin.Checking.Reference_Of (Types.all, Id)),
+                           others => <>);
                      else
                         Shape :=
                           (Kind => IR.Scalar_Field_Shape,
@@ -14569,8 +14595,9 @@ package body Landin.Stages.Lowering is
                   Slots (Positive (Id)) :=
                     IR.Add_Array_Parameter
                       (Unit.all, Filling, Ty.Usize, 2, Id,
-                       Site_Of (Of_Tree, Param));
-                  Note_Slice_Element (Id, Filling, Slots (Positive (Id)));
+                       Site_Of (Of_Tree, Param),
+                       Slice_Element_For
+                         (Landin.Checking.Reference_Of (Types.all, Id)));
                elsif Held = Ty.Aggregate then
                   declare
                      Nominal : constant Landin.Checking.Nominal_Type_Id :=
@@ -15110,7 +15137,8 @@ package body Landin.Stages.Lowering is
                            IR.Element_Total (Result_Part.Length));
                      elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         IR.Set_Array
-                          (Unit.all, Made, Ty.Usize, 2);
+                          (Unit.all, Made, Ty.Usize, 2,
+                           Slice_Element_For (Result_Part.Reference));
                      end if;
                      IR.Set_Signature
                        (Unit.all, Made, Signature_For (Source_Signature));
@@ -15180,8 +15208,9 @@ package body Landin.Stages.Lowering is
                   --  and a run of them would be as long as the
                   --  count, which reaches four billion.
                   if Held in Ty.Slice_Value | Ty.Any_Value then
-                     IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
-                     Note_Slice_Element (Id, Made);
+                     IR.Set_Array (Unit.all, Made, Ty.Usize, 2,
+                        Slice_Element_For
+                          (Landin.Checking.Reference_Of (Types.all, Id)));
                   elsif Held = Ty.Fixed_Array then
                      IR.Set_Array
                        (Unit.all, Made,
@@ -15392,7 +15421,8 @@ package body Landin.Stages.Lowering is
                      IR.Set_Atom_Set
                        (Unit.all, Made, Atom_Set_For (Part.Atoms));
                   elsif Held in Ty.Slice_Value | Ty.Any_Value then
-                     IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
+                     IR.Set_Array (Unit.all, Made, Ty.Usize, 2,
+                        Slice_Element_For (Part.Reference));
                   elsif Held = Ty.Fixed_Array then
                      --  A generic item has no declaration-local array fact;
                      --  its complete substituted result lives in the
@@ -15462,7 +15492,10 @@ package body Landin.Stages.Lowering is
                              (Landin.Checking.Atom_Set_Of
                                 (Types.all, Declaration_At (Src, Gives))));
                      elsif Held in Ty.Slice_Value | Ty.Any_Value then
-                        IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
+                        IR.Set_Array (Unit.all, Made, Ty.Usize, 2,
+                           Slice_Element_For
+                             (Landin.Checking.Reference_Of
+                                (Types.all, Declaration_At (Src, Gives))));
                      end if;
                      IR.Set_Signature
                        (Unit.all, Made,

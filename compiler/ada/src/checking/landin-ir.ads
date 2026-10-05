@@ -463,6 +463,15 @@ package Landin.IR is
       --  Aggregate_Field_Shape's own identity, or Array_Field_Shape's
       --  aggregate element identity.  Scalar and variant shapes have none.
       Nominal   : Nominal_Type_Id            := No_Nominal_Type;
+      --  On a slice's carrier -- the two-usize array a slice, a `utf8`
+      --  among them, is lowered as -- the element the slice reaches, kept
+      --  in the pointee arena for source debugging, which presents the
+      --  carrier as an element pointer and a length.  It is a description
+      --  and nothing else: it is not pointee evidence, no layout reads it,
+      --  the verifier neither requires nor trusts it, and Same_Shape
+      --  ignores it.  No_Pointee where lowering does not know the element,
+      --  as for an erased `any`.
+      Slice_Element : Pointee_Id             := No_Pointee;
    end record;
 
    type Field_Shape_Array is array (Positive range <>) of Field_Shape;
@@ -1356,7 +1365,8 @@ package Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Type : Landin.Types.Scalar_Name;
-      Length  : Element_Total)
+      Length  : Element_Total;
+      Slice_Element : Pointee_Id := No_Pointee)
      with Pre  => Holds (Into, Item)
                   and then Result_Of (Into, Item)
                            = Landin.Types.Fixed_Array,
@@ -1999,13 +2009,16 @@ package Landin.IR is
 
    --  A fixed-array cell carries the repeated element once and its target-
    --  width length, never a length-sized field run.
+   --  Slice_Element is the element a slice's carrier reaches; see
+   --  Field_Shape.
    function Add_Array_Slot
      (Into     : in out Unit;
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
       Length   : Element_Total;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Slice_Element : Pointee_Id := No_Pointee) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
@@ -2222,7 +2235,8 @@ package Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Length   : Element_Total;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Slice_Element : Pointee_Id := No_Pointee) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
                   and then Declares /= No_Declaration
@@ -3908,27 +3922,6 @@ package Landin.IR is
       Pointee : Pointee_Id)
      with Pre => Holds (Into, Item, Value) and then Holds (Into, Pointee);
 
-   --  Source debugging's view of a slice, a `utf8` among them: the element
-   --  its two-word carrier reaches, kept for a declared slot or datum.  It
-   --  is a description for a debugger and nothing else; no verifier, pass
-   --  or emitter reads it, so a slice carries no pointee promise.
-   procedure Set_Slice_Element
-     (Into : in out Unit; Item : Item_Id; Element : Pointee_Id)
-     with Pre => Holds (Into, Item) and then Holds (Into, Element);
-
-   procedure Set_Slice_Element
-     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
-      Element : Pointee_Id)
-     with Pre => Holds (Into, Item, Slot) and then Holds (Into, Element);
-
-   function Slice_Element_Of
-     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
-     with Pre => Holds (Of_Unit, Item);
-
-   function Slice_Element_Of
-     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
-     with Pre => Holds (Of_Unit, Item, Slot);
-
    --  What every Emit that defines a value promises: the value is the
    --  next one, it carries the opcode asked for, and it is the last
    --  instruction of the block that was open.
@@ -4065,6 +4058,7 @@ private
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Pointee     : Pointee_Id                 := No_Pointee;
+      --  The element a slice carrier slot reaches; see Field_Shape.
       Slice_Element : Pointee_Id               := No_Pointee;
    end record;
 
@@ -4130,6 +4124,7 @@ private
       --  is idempotent, so only zero-or-more matters.
       Unchecked_Depth : Natural                := 0;
       Pointee     : Pointee_Id                 := No_Pointee;
+      --  The element a slice carrier datum reaches; see Field_Shape.
       Slice_Element_Of : Pointee_Id            := No_Pointee;
    end record;
 

@@ -219,9 +219,6 @@ package body Landin.Backend.Dwarf is
          Node : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
          Item : Item_Id := No_Item;
          Slot : Slot_Id := No_Slot;
-         --  A slice's element: its carrier is presented as a pointer to
-         --  that element and a length rather than as two bare words.
-         Slice : Pointee_Id := No_Pointee;
       end record;
       package Descriptions is new Ada.Containers.Vectors
         (Positive, Description);
@@ -422,8 +419,10 @@ package body Landin.Backend.Dwarf is
               (Info.Trees.all, Desc.Source);
          end if;
          Put (T (Index) & ":");
-         if Desc.Slice /= No_Pointee then
-            Slice_Type (Desc.Slice);
+         if Shape.Kind = Array_Field_Shape
+           and then Shape.Slice_Element /= No_Pointee
+         then
+            Slice_Type (Shape.Slice_Element);
             return;
          elsif Shape.Kind = Aggregate_Field_Shape
            and then Shape.Nominal /= No_Nominal_Type
@@ -856,13 +855,6 @@ package body Landin.Backend.Dwarf is
                             and then not Is_Address (Of_Unit, Item, Slot)
                           then Intern ((Shape => Shape, Item => Item,
                                        Slot => Slot, others => <>))
-                          elsif Is_Array (Of_Unit, Item, Slot)
-                            and then Slice_Element_Of
-                              (Of_Unit, Item, Slot) /= No_Pointee
-                          then Intern ((Shape => Shape,
-                                       Slice => Slice_Element_Of
-                                         (Of_Unit, Item, Slot),
-                                       others => <>))
                           else Shape_Type (Shape));
                   U (if Parameter then 3 else 10);
                   Str (Decl_Name (Binding));
@@ -1009,11 +1001,7 @@ package body Landin.Backend.Dwarf is
          Typ : Positive;
       begin
          if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array then
-            Typ := (if Slice_Element_Of (Of_Unit, Item) /= No_Pointee
-                    then Intern ((Shape => Whole_Array_Shape (Of_Unit, Item),
-                                  Slice => Slice_Element_Of (Of_Unit, Item),
-                                  others => <>))
-                    else Shape_Type (Whole_Array_Shape (Of_Unit, Item)));
+            Typ := Shape_Type (Whole_Array_Shape (Of_Unit, Item));
          elsif Result_Of (Of_Unit, Item) = Landin.Types.Aggregate then
             if Nominal_Of (Of_Unit, Item) = No_Nominal_Type then
                return;

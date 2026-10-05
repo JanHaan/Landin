@@ -192,19 +192,31 @@ debug_unions: (union_param: ptr mut i32) -> (result: i32) =
 end debug_unions
 
 --  A module table whose element type nothing but the table reaches, read
---  through a slice: a debugger names both, and the slice's length.
+--  through a slice: a debugger names both, and the slice's length.  The
+--  slice is also a struct's field, a pointer's referent and an array's
+--  element, and is the same element pointer and length in each.
 debug_entry: type = struct
     entry_key: u32
     entry_weight: u16
 end debug_entry
 
+debug_view_holder: type = struct
+    held_view: []debug_entry
+    held_tag: u32
+end debug_view_holder
+
 mut debug_table: [3]debug_entry = [of (entry_key: 0, entry_weight: 0)]
 
 debug_slices: (table_view: []debug_entry) -> (result: i32) =
+    view_holder: debug_view_holder = (held_view: table_view, held_tag: 5)
+    view_pointer: ptr []debug_entry = addr table_view
+    view_pair: [2][]debug_entry = [table_view, table_view[1..<3]]
     slice_ready: i32 = 1
     result = 1
     if lenof table_view == 3 and table_view[1].entry_key == 7
       and table_view[2].entry_weight == 9 and slice_ready == 1
+      and view_holder.held_tag == 5 and view_pointer.val[1].entry_key == 7
+      and view_pair[1][1].entry_weight == 9
     then result = 42 end if
 end debug_slices
 

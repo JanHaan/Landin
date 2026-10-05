@@ -179,6 +179,18 @@ def run(debugger, config_path):
         record('slice element', view_type.GetFieldAtIndex(0).GetType().GetPointeeType().GetName(),
                'debug_entry')
         values(f, 'slices', {'table_view.len': 3})
+        # The same element pointer and length in a field, behind a pointer and
+        # as an array's element.
+        for name, view in (('field', f.FindVariable('view_holder').GetChildMemberWithName('held_view')),
+                           ('pointee', f.FindVariable('view_pointer').Dereference()),
+                           ('element', f.FindVariable('view_pair').GetChildAtIndex(1))):
+            record('slice ' + name + ' type', view.GetType().GetName(), '[]debug_entry')
+            record('slice ' + name + ' element', view.GetType().GetFieldAtIndex(0).GetType()
+                   .GetPointeeType().GetName(), 'debug_entry')
+        values(f, 'nested slices', {'view_holder.held_view.len': 3,
+                                    'view_pointer.*.len': 3,
+                                    'view_pair.1.len': 2,
+                                    'view_pair.1.ptr.*.entry_key': 7})
         table = target.FindFirstGlobalVariable('debug_table')
         assert table.IsValid(), 'module table has no debug variable'
         record('table type', table.GetType().GetArrayElementType().GetName(), 'debug_entry')

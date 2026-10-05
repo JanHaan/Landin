@@ -419,12 +419,19 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
     emit_section(lines, "slices-ready-line", ["frame", "info line"])
     emit_section(lines, "slices-types", ["ptype table_view", "ptype debug_table",
                                          "ptype struct debug_entry"])
+    emit_section(lines, "slices-nested-types",
+                 ["ptype view_holder", "ptype view_pointer", "ptype view_pair"])
     emit_values(lines, "slices", (
         ("length", "table_view.len"),
         ("key", "table_view.ptr[1].entry_key"),
         ("weight", "table_view.ptr[2].entry_weight"),
         ("table_key", "debug_table[1].entry_key"),
         ("same_base", "table_view.ptr == &debug_table[0]"),
+        ("held_length", "view_holder.held_view.len"),
+        ("held_key", "view_holder.held_view.ptr[1].entry_key"),
+        ("pointed_length", "view_pointer->len"),
+        ("pair_length", "view_pair[1].len"),
+        ("pair_weight", "view_pair[1].ptr[1].entry_weight"),
     ))
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
@@ -774,11 +781,24 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                           r"\s*u16 entry_weight;\s*\} \[3\]", slice_types)
             is not None,
             f"module table or slice type is not presented: {slice_types!r}")
+    nested_types = marker_section(transcript, "slices-nested-types")
+    view = r"struct \[\]debug_entry \{\s*struct debug_entry \*ptr;\s*usize len;\s*\}"
+    require(re.search(r"struct debug_view_holder \{\s*struct \[\]debug_entry held_view;",
+                      nested_types) is not None
+            and re.search(view + r" \*\n", nested_types) is not None
+            and re.search(view + r" \[2\]\n", nested_types) is not None,
+            f"a slice in a field, behind a pointer or in an array is not"
+            f" its element pointer and length: {nested_types!r}")
     expect_value(transcript, "slices.length", 3)
     expect_value(transcript, "slices.key", 7)
     expect_value(transcript, "slices.weight", 9)
     expect_value(transcript, "slices.table_key", 7)
     expect_value(transcript, "slices.same_base", 1)
+    expect_value(transcript, "slices.held_length", 3)
+    expect_value(transcript, "slices.held_key", 7)
+    expect_value(transcript, "slices.pointed_length", 3)
+    expect_value(transcript, "slices.pair_length", 2)
+    expect_value(transcript, "slices.pair_weight", 9)
     expect_line(transcript, "assembly-block-line",
                 source_lines["assembly-block"], "debug_assembly")
     expect_line(transcript, "assembly-ready-line",

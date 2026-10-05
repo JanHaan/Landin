@@ -25,6 +25,7 @@ package body Landin.IR.Shape_Measurement is
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Signature));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Atoms));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Pointee));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Slice_Element));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.First));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.Bits));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.Storage));
