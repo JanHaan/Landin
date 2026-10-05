@@ -1,6 +1,6 @@
 # Landin prototype 2 — a parser full of recoverable errors
 
-Current with specification 0.2.3. Its own findings Y1-Y7 are resolved
+Current with specification 0.2.4. Its own findings Y1-Y7 are resolved
 below, except Y4, which stays an open watch in the roadmap's register.
 
 The point of this one is the word recoverable. A parser must not stop
