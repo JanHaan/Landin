@@ -1,0 +1,6 @@
+error[L0201]: `i32` is a type, and a type is not a value
+  --> ../tests/fixtures/negative/scalar-type-is-not-a-value/program.ldn:3:12
+  |
+3 |     code = i32 x
+  |            ^^^
+  = note: [0700]: a value is converted to `i32` by calling it, as in `i32(value)`

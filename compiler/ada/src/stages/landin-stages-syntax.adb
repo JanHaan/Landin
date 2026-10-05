@@ -1,6 +1,7 @@
 with Ada.Unchecked_Deallocation;
 with Landin.Diagnostics.Lexical;
 with Landin.Source;
+with Landin.Syntax.Repairs;
 with Landin.Tokens.Lexer;
 
 package body Landin.Stages.Syntax is
@@ -149,6 +150,12 @@ package body Landin.Stages.Syntax is
                      --  One tree and space row per source, in source order.
                      Landin.Syntax.Forest.Add
                        (Trees.all, Stream, Names.all, Found);
+                     --  D261: a refused statement is reported as the
+                     --  smallest change that makes it parse.
+                     if Landin.Diagnostics.Has_Errors (Found) then
+                        Found := Landin.Syntax.Repairs.Restated
+                          (Snapshot, Trees.Tree_Of (Id).all, Found);
+                     end if;
                      Landin.Tokens.Spacing.Add (Spaces.all, Stream);
                   else
                      Cache.Reused := Cache.Reused + 1;

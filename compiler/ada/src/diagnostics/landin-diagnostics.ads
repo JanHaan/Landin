@@ -106,7 +106,11 @@ package Landin.Diagnostics is
       Mark_Mutable,    --  a binding that is written is declared `mut`
       Unmark_Mutable,  --  a binding nothing writes loses its `mut`
       Remove_Unused_Local, --  an unused literal binding loses its line
-      Compare);        --  `=` in an expression becomes `==`
+      Compare,         --  `=` in an expression becomes `==`
+      Delete_Token,    --  one written token is removed
+      Insert_Token,    --  one token is written where none was
+      Swap_Tokens,     --  two neighbouring tokens change places
+      Move_Token);     --  one token moves to its statement's start
 
    type Fix is private;
 

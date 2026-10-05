@@ -215,6 +215,8 @@ package body Landin.Syntax.Parser is
             --  does a statement exist to be quiet in.
             Body_Level : Natural := 0;
             Statement_Reported : Boolean := False;
+            --  Whether anything was reported in the routine being read.
+            Routine_Reported : Boolean := False;
 
             --  The constructs open around the block being read, outermost
             --  first, and the `end name` index a function is fenced by.
@@ -959,6 +961,7 @@ package body Landin.Syntax.Parser is
                Reported := Natural'Max (Reported, Natural (Index));
                if Body_Level > 0 then
                   Statement_Reported := True;
+                  Routine_Reported := True;
                end if;
             end Mark_Reported;
 
@@ -1214,6 +1217,16 @@ package body Landin.Syntax.Parser is
                      when others =>
                        ", not this"));
 
+            --  Whether a message says what belongs at a place, so what
+            --  was found there completes it: it names the token wanted
+            --  last, as `then` or `:`.  A message that already says what
+            --  the found thing is is complete.
+            function Asks_For_A_Token (Message : String) return Boolean;
+
+            function Asks_For_A_Token (Message : String) return Boolean
+              is (Message'Length > 0
+                  and then Message (Message'Last) = '`');
+
             procedure Complain
               (Item    : Syn.Failure;
                Where   : Landin.Source.Span;
@@ -1282,6 +1295,7 @@ package body Landin.Syntax.Parser is
                      then Where else On_A_Token (Where, Item)),
                   Message =>
                     (if On_A_Token (Where, Item) = Related
+                       or else not Asks_For_A_Token (Message)
                      then Message
                      else Message & Found_Instead (Where, Item)),
                   Note    =>
@@ -1478,6 +1492,54 @@ package body Landin.Syntax.Parser is
                end loop;
                return False;
             end Begins_Line;
+
+            --  Whether a bracket opened before token At_Index is still open
+            --  at it, by the balance of the line it begins and the lines
+            --  above it back to a line with nothing open.  A line inside an
+            --  open bracket continues the statement above it.
+            function Inside_Open_Bracket (At_Index : Tok.Token_Index)
+              return Boolean;
+
+            function Inside_Open_Bracket (At_Index : Tok.Token_Index)
+              return Boolean
+            is
+               Open : Integer := 0;
+               Position : Tok.Token_Index := At_Index;
+            begin
+               --  Walk back over at most a few lines: a bracket opened
+               --  further away than that is not one a statement left.
+               for Lines in 1 .. 8 loop
+                  exit when Position = 1;
+                  Position := Position - 1;
+                  case Tok.Kind (From, Position) is
+                     when Tok.Left_Paren | Tok.Left_Bracket =>
+                        Open := Open + 1;
+                        if Open > 0 then
+                           return True;
+                        end if;
+                     when Tok.Right_Paren | Tok.Right_Bracket =>
+                        Open := Open - 1;
+                     when others =>
+                        null;
+                  end case;
+                  while Position > 1 and then not Begins_Line (Position) loop
+                     Position := Position - 1;
+                     case Tok.Kind (From, Position) is
+                        when Tok.Left_Paren | Tok.Left_Bracket =>
+                           Open := Open + 1;
+                           if Open > 0 then
+                              return True;
+                           end if;
+                        when Tok.Right_Paren | Tok.Right_Bracket =>
+                           Open := Open - 1;
+                        when others =>
+                           null;
+                     end case;
+                  end loop;
+                  exit when Open = 0;
+               end loop;
+               return False;
+            end Inside_Open_Bracket;
 
             --  After a statement that reported, the rest of its line is
             --  what the mistake left behind, and reading it as statements
@@ -6045,6 +6107,7 @@ package body Landin.Syntax.Parser is
                then
                   declare
                      Saved_Reported : constant Boolean := Statement_Reported;
+                     Saved_Routine : constant Boolean := Routine_Reported;
                      Own : constant Closer :=
                        (Kind   => Function_Closer,
                         Fence  => Fence_For (Named, Declaration_First),
@@ -6054,6 +6117,7 @@ package body Landin.Syntax.Parser is
                      Push (Own);
                      Body_Level := Body_Level + 1;
                      Statement_Reported := False;
+                     Routine_Reported := False;
                      Active_Frame := Context;
                      Body_Node := Parse_Body (Context);
                      Active_Frame := (others => <>);
@@ -6109,6 +6173,7 @@ package body Landin.Syntax.Parser is
                      end if;
                      Body_Level := Body_Level - 1;
                      Statement_Reported := Saved_Reported;
+                     Routine_Reported := Saved_Routine;
                      Pop;
                   end;
                else
@@ -6379,15 +6444,28 @@ package body Landin.Syntax.Parser is
 
                loop
                   if At_Closer and then Place_Closer = Stray then
-                     Refuse_Stray_Closer;
-                     Statement_Reported := False;
+                     declare
+                        Own_Line : constant Boolean := Begins_Line (Index);
+                     begin
+                        --  A closer written inside a statement is part of
+                        --  that statement's mistake, and the rest of the
+                        --  line is too.
+                        Refuse_Stray_Closer;
+                        if Own_Line then
+                           Statement_Reported := False;
+                        else
+                           Skip_Rest_Of_Line;
+                        end if;
+                     end;
                   end if;
                   exit when At_Closer;
 
                   --  A statement written on a line of its own is a new
                   --  one; one that shares the line of a report is what
                   --  that report's mistake left behind.
-                  if Begins_Line (Index) then
+                  if Begins_Line (Index)
+                    and then not Inside_Open_Bracket (Index)
+                  then
                      Statement_Reported := False;
                   end if;
                   declare
@@ -7419,6 +7497,14 @@ package body Landin.Syntax.Parser is
                end if;
 
                Selected := Transfer_Target (Target);
+
+               --  A loop an earlier mistake in this routine lost leaves
+               --  its transfers without a target, and they are that
+               --  mistake's consequence, not mistakes of their own.
+               if Selected = 0 and then Routine_Reported then
+                  return Add
+                    (Error_Statement, Starts, Join (Starts, After_Previous));
+               end if;
 
                if Selected = 0 then
                   Complain
@@ -9234,6 +9320,7 @@ package body Landin.Syntax.Parser is
                  and then Name (Result, Target_Of (Result, Callee))
                             = Assembler_Id;
                Operand_Seen     : Boolean := False;
+               Opener           : constant Tok.Token_Index := Index;
             begin
                if not Expect
                         (Wanted  => Tok.Left_Paren,
@@ -9464,10 +9551,19 @@ package body Landin.Syntax.Parser is
                          Related => Starts,
                          Because => "the value called")
                then
-                  Resync (List_Anchor);
-
-                  if Peek = Tok.Right_Paren then
+                  --  The `)` that closes this `(` is known before the list
+                  --  is read; a list that went wrong resumes there, so the
+                  --  rest of it is not read as statements.
+                  Prepare_Lookahead;
+                  if Lookahead (Opener).Closing > Natural (Index) then
+                     Index := Tok.Token_Index (Lookahead (Opener).Closing);
                      Advance;
+                  else
+                     Resync (List_Anchor);
+
+                     if Peek = Tok.Right_Paren then
+                        Advance;
+                     end if;
                   end if;
                end if;
 

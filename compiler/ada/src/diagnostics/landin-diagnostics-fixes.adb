@@ -30,6 +30,91 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Name_End;
 
+   function Delete_Token
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String;
+      Level   : Applicability) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Delete_Token, Level, "remove `" & Word & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Written));
+      return Result;
+   end Delete_Token;
+
+   function Insert_Token
+     (Source      : Landin.Source.Source_Id;
+      Where       : Landin.Source.Span;
+      Inserted    : String;
+      Word        : String;
+      Level       : Applicability;
+      Placeholder : Boolean := False;
+      Neighbour   : String := "";
+      After       : Boolean := True) return Fix
+   is
+      Where_Said : constant String :=
+        (if Neighbour = "" then " here"
+         elsif After then " after `" & Neighbour & "`"
+         else " before `" & Neighbour & "`");
+      Result : Fix := Make_Fix
+        (Insert_Token, Level,
+         (if Placeholder
+          then "write " & (if Word = "0" then "a value"
+                           elsif Word = "u32" then "a type"
+                           else "a name") & Where_Said
+          else "write `" & Word & "`" & Where_Said));
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Inserted));
+      return Result;
+   end Insert_Token;
+
+   function Swap_Tokens
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Swapped  : String;
+      First    : String;
+      Second   : String;
+      Level    : Applicability) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Swap_Tokens, Level,
+         "write `" & Second & "` before `" & First & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Swapped));
+      return Result;
+   end Swap_Tokens;
+
+   function Call_With
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String;
+      Level   : Applicability) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Insert_Token, Level,
+         "call `" & Word & "` with its operand in parentheses");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Written));
+      return Result;
+   end Call_With;
+
+   function Move_Token
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Moved  : String;
+      Word   : String;
+      Level  : Applicability) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Move_Token, Level, "`" & Word & "` goes first");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Moved));
+      return Result;
+   end Move_Token;
+
    function Mark_Mutable
      (Source : Landin.Source.Source_Id;
       Before : Landin.Source.Byte_Offset;

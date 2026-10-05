@@ -1,0 +1,7 @@
+class: negative
+summary: [1810] an `end` that closes nothing inside a statement is reported at the `end` and removed, and the body goes on
+program: program.ldn
+codes: L0110
+fixed: program.fixed
+constructs: 1800, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

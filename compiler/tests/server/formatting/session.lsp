@@ -20,7 +20,7 @@ pause
 <- {"jsonrpc":"2.0","id":3,"result":[]}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/f.ldn","version":2,"diagnostics":[]}}
 <- {"jsonrpc":"2.0","id":4,"result":null}
-<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/f.ldn","version":3,"diagnostics":[{"range":{"start":{"line":1,"character":10},"end":{"line":1,"character":10}},"severity":1,"code":"L0103","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0103"},"source":"refine","message":"a parenthesised expression is closed with `)`\nnote: [1810]: a parenthesized expression is one primary expression","relatedInformation":[{"location":{"uri":"file:///workspace/f.ldn","range":{"start":{"line":1,"character":8},"end":{"line":1,"character":9}}},"message":"opened here"}]}]}}
+<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/f.ldn","version":3,"diagnostics":[{"range":{"start":{"line":1,"character":9},"end":{"line":1,"character":10}},"severity":1,"code":"L0103","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0103"},"source":"refine","message":"`)` belongs after `x`\nnote: written as `y = (x)` the line parses","relatedInformation":[{"location":{"uri":"file:///workspace/f.ldn","range":{"start":{"line":1,"character":8},"end":{"line":1,"character":9}}},"message":"opened here"}]}]}}
 <- {"jsonrpc":"2.0","id":5,"error":{"code":-32602,"message":"the document is not open"}}
 <- {"jsonrpc":"2.0","id":6,"result":null}
 exit: 0

@@ -30,6 +30,7 @@ with Landin.Source.Sets;
 with Landin.Syntax;
 with Landin.Syntax.Parser;
 with Landin.Testing.Fakes;
+with Landin.Testing.Fixes;
 with Landin.Testing.Fixtures;
 with Landin.Tokens;
 with Landin.Tokens.Lexer;
@@ -127,6 +128,9 @@ package body Landin.Tests.Mutation_Suite is
       Repeated_Secondary : Natural := 0;
       Reports    : Natural := 0;
       Defects    : Natural := 0;
+      Repaired   : Natural := 0;
+      Repair_Parses : Natural := 0;
+      Repair_Restores : Natural := 0;
    end record;
 
    --  The bounds the suite holds the compiler to.  The share is what the
@@ -139,12 +143,15 @@ package body Landin.Tests.Mutation_Suite is
    --  a primary span off a token.  Recovery that keeps to the structure the
    --  program writes took those to 1,309, 21, 1, 18 and 493, and putting a
    --  missing token's report on the token found instead to 1,403 and 146.
+   --  Reporting a refused statement as the smallest change that mends it
+   --  took them to 1,449 and 88.  Set LANDIN_MUTATION_TRACE to log each
+   --  repair that does not give back the program the mutant came from.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_403;
+   Floor_One_On_Line  : constant := 1_449;
    Ceiling_Outside    : constant := 21;
    Ceiling_Left_Body  : constant := 1;
    Ceiling_False_Unclosed : constant := 18;
-   Ceiling_Off_Token  : constant := 146;
+   Ceiling_Off_Token  : constant := 88;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
@@ -171,6 +178,30 @@ package body Landin.Tests.Mutation_Suite is
       end loop;
       return Line;
    end Line_Of;
+
+   --  Line Line of Text, without its line end.
+   function Line_Text (Text : String; Line : Positive) return String;
+
+   function Line_Text (Text : String; Line : Positive) return String is
+      Seen  : Positive := 1;
+      First : Natural := Text'First;
+   begin
+      for Index in Text'Range loop
+         if Seen = Line then
+            First := Index;
+            exit;
+         end if;
+         if Text (Index) = LF then
+            Seen := Seen + 1;
+         end if;
+      end loop;
+      for Index in First .. Text'Last loop
+         if Text (Index) = LF then
+            return Text (First .. Index - 1);
+         end if;
+      end loop;
+      return Text (First .. Text'Last);
+   end Line_Text;
 
    ------------------------------------------------------------------
    --  The campaign
@@ -203,6 +234,7 @@ package body Landin.Tests.Mutation_Suite is
 
       procedure Measure
         (Label    : String;
+         Original : String;
          Line     : Positive;
          Kind     : Change;
          Touched  : String;
@@ -212,6 +244,7 @@ package body Landin.Tests.Mutation_Suite is
 
       procedure Measure
         (Label    : String;
+         Original : String;
          Line     : Positive;
          Kind     : Change;
          Touched  : String;
@@ -256,6 +289,75 @@ package body Landin.Tests.Mutation_Suite is
          Ran := Landin.Driver.Execute (Arguments, Host, Tools);
 
          Counted.Mutants := Counted.Mutants + 1;
+
+         --  A single-token repair claims the program parses with it; hold
+         --  the first one offered to that, and count how often it gives
+         --  back the program the mutant was made from.
+         if Diag.Count (Ran.Found) > 0
+           and then Diag.Fix_Count (Diag.Get (Ran.Found, 1)) > 0
+           and then Diag.Kind (Diag.Nth_Fix (Diag.Get (Ran.Found, 1), 1))
+             in Diag.Delete_Token | Diag.Insert_Token | Diag.Swap_Tokens
+              | Diag.Move_Token
+         then
+            declare
+               Only_First : Diag.Diagnostic_List;
+               Clashed : Boolean;
+            begin
+               Only_First.Append (Diag.Get (Ran.Found, 1));
+               declare
+                  Fixed : constant String :=
+                    Landin.Testing.Fixes.Applied
+                      (Only_First, 1, Mutant, Clashed);
+                  Sources : Landin.Source.Sets.Source_Set;
+                  Names   : Landin.Source.Names.Table;
+                  Stream  : Tok.Token_Stream;
+                  Found   : Diag.Diagnostic_List;
+                  Id      : constant Landin.Source.Source_Id :=
+                    Sources.Add ("fixed.ldn", Fixed);
+               begin
+                  Counted.Repaired := Counted.Repaired + 1;
+                  Tok.Lexer.Lex (Sources.Get (Id), Names, Stream);
+                  Landin.Diagnostics.Lexical.Report (Stream, Found);
+                  declare
+                     Parsed : constant Landin.Syntax.Tree :=
+                       Landin.Syntax.Parser.Parse (Stream, Names, Found);
+                     pragma Unreferenced (Parsed);
+                  begin
+                     --  The repair mends its line; a mistake the change
+                     --  made elsewhere, such as a label it took from a
+                     --  later `break`, is that line's own report.
+                     if not Clashed
+                       and then
+                         (for all Index in 1 .. Diag.Count (Found) =>
+                            Diag.Level (Diag.Get (Found, Index)) /= Diag.Error
+                            or else Line_Of
+                              (Fixed,
+                               Diag.Span_Of (Diag.Primary
+                                 (Diag.Get (Found, Index))).First) > Line)
+                     then
+                        Counted.Repair_Parses := Counted.Repair_Parses + 1;
+                     else
+                        Landin.Testing.Fail
+                          (Item, Label & ":" & Image (Line) & " "
+                           & Kind'Image & " `" & Touched
+                           & "`: the offered repair does not parse");
+                     end if;
+                  end;
+                  if Fixed = Original then
+                     Counted.Repair_Restores :=
+                       Counted.Repair_Restores + 1;
+                  elsif Ada.Environment_Variables.Exists
+                          ("LANDIN_MUTATION_TRACE")
+                  then
+                     Unbounded.Append
+                       (Log, "TRACE " & Label & ":" & Image (Line) & LF
+                        & "  mutant: " & Line_Text (Mutant, Line) & LF
+                        & "  fixed:  " & Line_Text (Fixed, Line) & LF
+                        & "  was:    " & Line_Text (Original, Line) & LF);
+                  end if;
+               end;
+            end;
+         end if;
 
          if Ran.Status = Landin.Driver.Status_Defect then
             Counted.Defects := Counted.Defects + 1;
@@ -568,7 +670,7 @@ package body Landin.Tests.Mutation_Suite is
                               end case;
 
                               Measure
-                                (Label, Line, Kind,
+                                (Label, Text, Line, Kind,
                                  Unbounded.To_String (Touched), Excused,
                                  Unbounded.To_String (Mutant), Within);
                            end;
@@ -621,6 +723,9 @@ package body Landin.Tests.Mutation_Suite is
            & ", secondary repeating the primary "
            & Image (Counted.Repeated_Secondary)
            & ", defects " & Image (Counted.Defects)
+           & ", single-token repairs offered " & Image (Counted.Repaired)
+           & " (" & Image (Counted.Repair_Parses) & " parse, "
+           & Image (Counted.Repair_Restores) & " give back the program)"
            & "; the exit asks for " & Image (Exit_Share_Percent)
            & "% one on the line";
          Written : Landin.Platform.Write_Status;

@@ -1,0 +1,9 @@
+class: negative
+summary: [0700] converts a value by calling its type, and a scalar type name written as a value is reported as a type, not as an undeclared name
+program: program.ldn
+codes: L0201
+constructs: 0700, 1790, 1860
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/scalar-type-is-not-a-value/program.ldn
+status: 1

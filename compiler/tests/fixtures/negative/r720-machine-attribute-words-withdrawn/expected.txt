@@ -1,4 +1,4 @@
-error[L0103]: a link label requires `:`
+error[L0103]: a link label requires `:`, not `)`
   --> ../tests/fixtures/negative/r720-machine-attribute-words-withdrawn/main.ldn:4:10
   |
 4 | link(weak) handler: () -> none =

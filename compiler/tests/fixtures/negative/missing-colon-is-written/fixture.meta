@@ -1,0 +1,7 @@
+class: negative
+summary: [1790] names a binding's type after `:`, and a missing one is reported where it belongs and written there
+program: program.ldn
+codes: L0103
+fixed: program.fixed
+constructs: 0040, 0060, 1790
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

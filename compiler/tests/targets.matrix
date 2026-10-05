@@ -271,6 +271,10 @@ negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, macos-arm64
 negative/discard-of-nothing | linux-x86-64, linux-arm64, macos-arm64
 negative/divisor-is-zero | linux-x86-64, linux-arm64, macos-arm64
 negative/divisor-is-zero-in-a-body | linux-x86-64, linux-arm64, macos-arm64
+negative/doubled-colon-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/doubled-equal-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/doubled-mut-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/doubled-operator-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/driver-unknown-option | linux-x86-64, linux-arm64, macos-arm64
 negative/duplicate-in-a-body | linux-x86-64, linux-arm64, macos-arm64
 negative/duplicate-in-a-module | linux-x86-64, linux-arm64, macos-arm64
@@ -479,6 +483,8 @@ negative/malformed-hex-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/measuring-refused-types | linux-x86-64, linux-arm64, macos-arm64
+negative/misplaced-mut-is-moved-to-the-front | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/missing-colon-is-written | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/missing-end | linux-x86-64, linux-arm64, macos-arm64
 negative/missing-then | linux-x86-64, linux-arm64, macos-arm64
 negative/misspelt-argument-label-is-offered-its-parameter | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1052,6 +1058,7 @@ negative/scalar-selection-derived-origins | linux-x86-64, linux-arm64, macos-arm
 negative/scalar-selection-operand-escaping | linux-x86-64, linux-arm64, macos-arm64
 negative/scalar-struct-field-is-not-indexable | linux-x86-64, linux-arm64, macos-arm64
 negative/scalar-traversal-source-escaping | linux-x86-64, linux-arm64, macos-arm64
+negative/scalar-type-is-not-a-value | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/selected-pointer-live-view | linux-x86-64, linux-arm64, macos-arm64
 negative/selection-from-a-call | linux-x86-64, linux-arm64, macos-arm64
 negative/selection-from-a-scalar | linux-x86-64, linux-arm64, macos-arm64
@@ -1068,6 +1075,7 @@ negative/sink-past-continue | linux-x86-64, linux-arm64, macos-arm64
 negative/sink-repeated-by-while | linux-x86-64, linux-arm64, macos-arm64
 negative/sink-through-dereference | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/slice-comparison-refused | linux-x86-64, linux-arm64, macos-arm64
+negative/stray-end-in-a-statement-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/struct-argument-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-array-field-clear-keeps-fields-separate | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-array-field-clear-not-on-every-path | linux-x86-64, linux-arm64, macos-arm64

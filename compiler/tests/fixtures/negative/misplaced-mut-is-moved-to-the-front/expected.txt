@@ -1,0 +1,8 @@
+error[L0100]: `mut` begins the statement, not here
+  --> ../tests/fixtures/negative/misplaced-mut-is-moved-to-the-front/program.ldn:2:12
+  |
+2 |     v: u32 mut = 41
+  |            ^^^
+  = note: written as `mut v: u32 = 41` the line parses
+  = help: `mut` goes first
+  = help: remove `mut`

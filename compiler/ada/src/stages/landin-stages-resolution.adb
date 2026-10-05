@@ -1306,6 +1306,26 @@ package body Landin.Stages.Resolution is
                     (Meanings.all, Syn.Source_Of (Of_Tree), Named)
                   then
                      null;
+                  --  [1790]: a scalar type is predeclared, so its name is
+                  --  in every scope; written where a value belongs it is
+                  --  not a misspelling.  Converting a value to it is a
+                  --  call, `i32(x)` [0700].
+                  elsif Named /= Landin.Source.Names.No_Name
+                    and then
+                      (for some Scalar in Landin.Types.Scalar_Name =>
+                         Spelled (Named) = Landin.Types.Spelling (Scalar))
+                  then
+                     Names.Report
+                       (Item    => Names.Unresolved_Name,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Node),
+                        Message => "`" & Spelled (Named)
+                                   & "` is a type, and a type is not a"
+                                   & " value",
+                        Note    => "[0700]: a value is converted to `"
+                                   & Spelled (Named) & "` by calling it, as"
+                                   & " in `" & Spelled (Named) & "(value)`",
+                        Into    => Found);
                   elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report
                        (Item    => Names.Unresolved_Name,

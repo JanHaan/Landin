@@ -15185,6 +15185,57 @@ holds, which reports the first mistake's consequences as if they were others.
 **Pinned by** the `mutation` suite, `parser/calls respect the nesting limit`
 and `negative/misspelt-keyword-is-offered-the-keyword`.
 
+### D261 — A refused statement is reported as the smallest change that mends it
+
+**The discrepancy:** a parser reports what it needed where it stopped, which
+is often not what a person wrote wrong. `v: u32 mut = 41` needs a name after
+`mut`, and "a name belongs here" at `=` names neither the word nor the fix;
+`r =` reported at the next line's `else` sent a reader to the wrong line.
+
+**Chosen:** the first error the parser reports on a line of a routine body is
+tried against one-token changes of that line alone, in the order they are
+offered: a word written twice in a row with one copy removed; `mut`, `try`,
+`inc`, `dec` or `public` moved to the line's start; two neighbouring tokens
+swapped; the token the parser asked for written where it stopped, before any
+other token or at the line's end; and last, any token removed. The ones that
+keep every token written come first, because they keep what the person wrote.
+A change counts when the line parses on its own as one statement, or as its
+block's value where it ends the block of a routine that returns one, and when
+the routine with it parses to the end of the line and reports no more after it
+than before. Changes that leave the same tokens are one repair. The report
+moves to the token the first repair touches, says what the change is, gives the
+line as the source would read with only that edit, and offers up to three
+repairs.
+
+A repair is Likely. It is Exact, which a tool may apply unasked and an editor
+prefers, only when every change that mends the line writes the same line and
+that line removes one copy of a token written twice in a row: `x:: u32` and
+`1 + + 2` have one reading, and nothing is guessed. A stand-in for a name, a
+value or a type is never Exact.
+
+A line is not tried when it is a closer or a divider, a `match` arm, a
+continuation of the line above, the line a routine's signature is written on,
+longer than forty tokens, or when the report already carries a fix or spans a
+construct of its own.
+
+**The alternatives:** Exact whenever one repair alone mends the line. It was
+the first rule and was withdrawn: a repair found by parsing alone still guesses
+what was meant, and the guess is unique only because the search stopped; an
+Exact fix is applied by editors and agents without asking, so a wrong one
+silently changes what a program does. Searching every keyword and punctuation
+mark at every position, which finds more repairs at about a hundred parses a
+token. Running the trial inside the parser in the statement's own block, which
+reaches into every token access of the parser.
+
+**Pinned by** the `mutation` suite, which applies every offered repair and
+requires its line to parse; `negative/misplaced-mut-is-moved-to-the-front`,
+whose recorded report offers the move first and the removal second;
+`negative/missing-colon-is-written`, `negative/stray-end-in-a-statement-is-removed`,
+`negative/doubled-operator-is-removed`, `negative/doubled-equal-is-removed`,
+`negative/doubled-colon-is-removed` and `negative/doubled-mut-is-removed`,
+whose every offered repair the `fixes` suite compiles clean; `server/repair-actions`, which holds the preference an
+editor sees to the two levels; and `server/formatting`.
+
 ### D255 — A build assumes a CPU feature level, and a level changes no layout
 
 **From** [1500] and [1550].

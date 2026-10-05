@@ -1,8 +1,8 @@
 error[L0103]: an assembly operand is placed `at` a register
-  --> ../tests/fixtures/negative/assembly-operand-without-register/program.ldn:2:46
+  --> ../tests/fixtures/negative/assembly-operand-without-register/program.ldn:2:47
   |
 2 |     assembler.block("movs {v}, #1", in v: u32 = value)
-  |                                              ^
+  |                                               ^
   --> ../tests/fixtures/negative/assembly-operand-without-register/program.ldn:2:37
   |
 2 |     assembler.block("movs {v}, #1", in v: u32 = value)

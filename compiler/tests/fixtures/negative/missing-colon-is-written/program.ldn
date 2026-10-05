@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    mut cell u64 = 40
+    inc cell
+    code = i32(cell)
+end main

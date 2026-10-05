@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    total: u32 = 42
+    code = i32(total)
+end main

@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    count: u32 = 41
+    code = i32(count) end
+end main

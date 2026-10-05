@@ -31,6 +31,56 @@ package Landin.Diagnostics.Fixes is
       Declared : String) return Fix
      with Pre => Landin.Source.Length (Where) > 0;
 
+   --  D261's single-token repairs.  Level is the caller's: Likely, except
+   --  Exact for removing one copy of a token written twice in a row when
+   --  no other change mends the line.  Insert_Token writing a stand-in is
+   --  always Likely.  Where covers the bytes replaced.
+   function Delete_Token
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String;
+      Level   : Applicability) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
+   --  Where is what Inserted replaces, often nothing.
+   --  Neighbour is the written token the insertion goes after, or before
+   --  when After is False, so two insertions of one word read apart.
+   function Insert_Token
+     (Source      : Landin.Source.Source_Id;
+      Where       : Landin.Source.Span;
+      Inserted    : String;
+      Word        : String;
+      Level       : Applicability;
+      Placeholder : Boolean := False;
+      Neighbour   : String := "";
+      After       : Boolean := True) return Fix;
+
+   function Swap_Tokens
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Swapped  : String;
+      First    : String;
+      Second   : String;
+      Level    : Applicability) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
+   function Call_With
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String;
+      Level   : Applicability) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
+   function Move_Token
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Moved  : String;
+      Word   : String;
+      Level  : Applicability) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
    --  `mut` inserted at Before, where the binding's declaration begins,
    --  so a binding that is written may be.  Likely: the write may be the
    --  mistake rather than the declaration.

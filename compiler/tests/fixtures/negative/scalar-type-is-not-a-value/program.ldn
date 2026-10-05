@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    x: u32 = 1
+    code = i32 x
+end main

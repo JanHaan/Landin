@@ -849,8 +849,10 @@ package Landin.Diagnostics.Catalogue is
             --  [0980]'s argument label, offered the parameters it is near.
             --  The row admits a fix; only that one occurrence offers one.
             when Call_Argument_Match => May_Fix,
-            --  A keyword that was required and a name near it written.
-            when Token_Expected => May_Fix,
+            --  A keyword that was required and a name near it written,
+            --  and D261's smallest repair of a refused statement.
+            when Name_Expected | Type_Expected | Expression_Expected
+               | Token_Expected | Stray_Token => May_Fix,
             --  [1800]'s closing name, which can only be the declared one.
             when End_Name_Mismatch => May_Fix,
             --  [1900]'s written binding, offered `mut`.
