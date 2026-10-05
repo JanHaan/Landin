@@ -411,6 +411,7 @@ negative/import-selected-namespace-unbound | linux-x86-64, linux-arm64, macos-ar
 negative/import-selected-private | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/import-selected-private-representation | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/import-selected-reserved | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/import-without-a-root-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/imported-private-name | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/increment-unassigned-local-array-element | linux-x86-64, linux-arm64, macos-arm64
 negative/index-a-scalar | linux-x86-64, linux-arm64, macos-arm64
@@ -462,6 +463,7 @@ negative/local-array-initializer-from-unassigned | linux-x86-64, linux-arm64, ma
 negative/local-array-literal-element-mismatch | linux-x86-64, linux-arm64, macos-arm64
 negative/local-array-literal-inferred-element-mismatch | linux-x86-64, linux-arm64, macos-arm64
 negative/local-array-literal-length-mismatch | linux-x86-64, linux-arm64, macos-arm64
+negative/local-shadowing-a-named-return-is-reported-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/local-struct-inferred-not-on-every-path | linux-x86-64, linux-arm64, macos-arm64
 negative/local-struct-inferred-source-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/local-struct-initializer-nominal-mismatch | linux-x86-64, linux-arm64, macos-arm64

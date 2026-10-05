@@ -1,0 +1,9 @@
+class: negative
+summary: [1420] an import is found under a root, and without --root one is refused at the import, once, and its name is not reported again where it is used
+program: program.ldn
+codes: L0006
+constructs: 1420, 1440, 1860
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/import-without-a-root-is-refused-there/program.ldn
+status: 1

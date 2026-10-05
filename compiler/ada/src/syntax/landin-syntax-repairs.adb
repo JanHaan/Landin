@@ -335,9 +335,11 @@ package body Landin.Syntax.Repairs is
             declare
                One : constant Routine := Routines (Low);
             begin
+               --  The body runs from where it begins to the routine's
+               --  closer: a body the parser read only part of has an
+               --  extent that stops where it stopped.
                if Where.First >= One.Runs.First
-                 and then Where.First <= One.Runs.Last
-                 and then One.Runs.Last > One.Runs.First
+                 and then Where.First < One.Whole.Last
                then
                   Returns_Value := One.Returns;
                   Routine_First := Natural (One.Whole.First) + 1;
@@ -1034,6 +1036,16 @@ package body Landin.Syntax.Repairs is
                   Consider ((Called, Position, Asked));
                end if;
             end loop;
+            --  A binding whose `:` was left out: `x u32 = 1`.  The one
+            --  insertion besides what the parser asked for, because a
+            --  line that begins with a name and another word is a binding
+            --  more often than anything else the grammar has.
+            if Natural (Pieces.Length) >= 2
+              and then Pieces (1).Kind = Tok.Identifier
+              and then Pieces (2).Kind /= Tok.Colon
+            then
+               Consider ((Inserted, 2, Want_Colon));
+            end if;
             if Stopped /= 0 then
                Consider ((Inserted, Stopped, Asked));
             elsif Stop_At_End (Item, Pieces) then

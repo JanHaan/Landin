@@ -11962,6 +11962,35 @@ descriptions through verified IR; `positive/r491-noreturn-signatures` retains
 the former refusal's exact source as accepted syntax; D232 supplies panic
 dispatch.
 
+### D263 — A mistake is reported where it was made, not where it shows
+
+**The discrepancy:** a checker refusal is often found by what it leaves
+behind. A misspelt argument label also leaves its parameter unfilled, and the
+call was reported for the missing parameter first and the label second; a
+local in a body with a named return's name declares a new name, and the only
+report was that the function could end with the return unassigned, at the
+function's head.
+
+**Chosen:** the cause is reported and its consequence is not. A call with an
+argument label that names no parameter reports the label, with the parameter
+it is near, and not the parameter it leaves unfilled; a generic call's
+unmatched argument does the same. A body binding, or a destructured name,
+spelled like a named return that is then not assigned is reported at that
+binding as declaring a new name, with the return it hides; the function is
+not reported for the same return. A scalar type name written where a value
+belongs is reported as a type, with [0700]'s conversion, rather than as a
+name that is not declared.
+
+**The alternatives:** refusing every body binding that shares a return's
+name, which also refuses a deliberate inner name in a nested block whose
+return is assigned elsewhere; keeping both reports and ordering the cause
+first, which still reports one mistake twice.
+
+**Pinned by** `negative/misspelt-argument-label-is-offered-its-parameter`,
+`negative/named-call-unknown`,
+`negative/local-shadowing-a-named-return-is-reported-there` and
+`negative/scalar-type-is-not-a-value`.
+
 ## DECISIONS: CONTROL FLOW
 
 Branches, loops, traversal, the cleanup an edge selects, and what the
@@ -14236,6 +14265,28 @@ corpus, as L0111's is. Pointer scratch is pinned by the verifier cases
 including injected allocation failures, and the optimization case
 `cyclic islands`, which retains the 10,000-block reachability verdicts.
 
+### D262 — An import with no root to find it under is refused at the import
+
+**The discrepancy:** [1420] finds an import under the roots `--root` names,
+and a compilation of named files has none. The import was read, bound
+nothing and was never reported: every use of its name was then reported as
+"not declared in any scope", with [1860]'s note that it is a misspelling,
+which it is not.
+
+**Chosen:** with no root, an import that names a module is refused at the
+import, once, as the module not found, with a note saying to compile the
+module's directory with `--root`. Its names are refused as D242 refuses a
+name an import could not supply, so no use of them is reported again. D202's
+`import compiler`, `import assembler` and `import linker` name the toolchain,
+need no root and are unchanged.
+
+**The alternatives:** searching the source's own directory as an implicit
+root, which makes a file's meaning depend on what sits beside it; leaving
+the import silent and improving the use's message, which reports the same
+mistake once for every use.
+
+**Pinned by** `negative/import-without-a-root-is-refused-there`.
+
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
 The C boundary, the machine directives, the entry point, and the
@@ -15162,8 +15213,15 @@ positive programs, 596 gave one report on the changed line.
 a mistake, so a program the parser accepts is read exactly as before. A
 function's closer is found before its body is read: the first `end name`
 after it that begins a line no deeper than the declaration's, or shares its
-line. Inside the body, a statement reports at most once, and what follows on
-its line is the rest of that mistake. A value with more of its block after
+line, or a bare `end` alone on such a line when it comes first. Nothing in
+the body is read past that closer: to the body it is the `end` that closes
+whatever is open, and recovery that would skip further stops there, so a
+mistake is never reported in another routine. Inside the body, a statement
+reports at most once, and what follows on its line, including a construct
+opened there, is the rest of that mistake; lines inside a bracket it opened
+are part of it too. A header that lacks `then` or `do` where it belongs
+begins its body after one written later on its line. A transfer's label is
+written on its line, so a name on the next line begins the next statement. A value with more of its block after
 it is reported as not being a statement, and the block goes on. A closer that
 no open construct takes, such as `end` written twice, is one report and is
 passed over. An `end` beginning a line, with a word that no construct around

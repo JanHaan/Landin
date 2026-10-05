@@ -531,6 +531,11 @@ package body Landin.Stages.Checking.Flow is
         (At_Span : Landin.Source.Span;
          State   : Assigned_Set;
          Message : String);
+      function Assigned_Everywhere
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean;
+      function Shadowing_Local
+        (Named : Landin.Source.Names.Name_Id) return Syn.Node_Id;
+      function Inside_Anonymous (Node : Syn.Node_Id) return Boolean;
       procedure Require_Inout_Places_Live
         (At_Span : Landin.Source.Span; State : Assigned_Set);
       function Element_Is_Assigned
@@ -970,6 +975,57 @@ package body Landin.Stages.Checking.Flow is
          return False;
       end Has_Consumed_Part;
 
+      --  Whether a return is assigned as a whole on this path, the
+      --  question Require_Assigned answers for a scalar or a whole value.
+      function Assigned_Everywhere
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean
+        is (Id = Res.No_Declaration
+            or else not Is_Tracked (Id)
+            or else State.Fields.Contains ((Id, 0)));
+
+      --  The first binding in the body, at any depth, that declares Named:
+      --  a local or destructured name, outside any nested anonymous
+      --  function, whose own scope it is.
+      function Shadowing_Local
+        (Named : Landin.Source.Names.Name_Id) return Syn.Node_Id
+      is
+         Body_Extent : constant Landin.Source.Span :=
+           Syn.Where (Of_Tree, Body_Node);
+      begin
+         for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+            --  A destructured field carries its result's label as its
+            --  name; the local it declares is its Destructured_Name.
+            if Syn.Kind (Of_Tree, Node) in Syn.Binding
+                                         | Syn.Destructured_Name
+              and then Syn.Name (Of_Tree, Node) = Named
+              and then Landin.Source.Contains
+                (Body_Extent, Syn.Where (Of_Tree, Node))
+              and then not Inside_Anonymous (Node)
+            then
+               return Node;
+            end if;
+         end loop;
+         return Syn.No_Node;
+      end Shadowing_Local;
+
+      --  Whether Node lies inside an anonymous function in the body.
+      function Inside_Anonymous (Node : Syn.Node_Id) return Boolean is
+         Body_Extent : constant Landin.Source.Span :=
+           Syn.Where (Of_Tree, Body_Node);
+      begin
+         for Other in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Other) = Syn.Anonymous_Function
+              and then Landin.Source.Contains
+                (Body_Extent, Syn.Where (Of_Tree, Other))
+              and then Landin.Source.Contains
+                (Syn.Where (Of_Tree, Other), Syn.Where (Of_Tree, Node))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Inside_Anonymous;
+
       procedure Require_Returns_Assigned
         (At_Span : Landin.Source.Span;
          State   : Assigned_Set;
@@ -986,6 +1042,36 @@ package body Landin.Stages.Checking.Flow is
                  or else Landin.Checking.Type_Of (Types.all, Id)
                            /= Ty.Ill_Typed
                then
+                  --  A local of the return's name in the body declares a
+                  --  new name rather than assigning the return [1840]:
+                  --  that binding is the mistake, and the report goes
+                  --  there, once, rather than at the function.
+                  if not Assigned_Everywhere (Id, State) then
+                     declare
+                        Shadow : constant Syn.Node_Id := Shadowing_Local
+                          (Syn.Name (Of_Tree, Returned));
+                     begin
+                        if Shadow /= Syn.No_Node then
+                           Bad.Report
+                             (Item    => Bad.Not_Definitely_Assigned,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Shadow),
+                              Message => "this declares a new `"
+                                & Spelled (Syn.Name (Of_Tree, Returned))
+                                & "`, so the return of that name is never"
+                                & " assigned",
+                              Note    => "[1840]: a binding in a body hides"
+                                & " the return it shares a name with;"
+                                & " assign the return with `"
+                                & Spelled (Syn.Name (Of_Tree, Returned))
+                                & " = ...`",
+                              Related => Syn.Origin (Of_Tree, Returned),
+                              Because => "the return it hides",
+                              Into    => Sink.all);
+                           goto Next_Return;
+                        end if;
+                     end;
+                  end if;
                   Require_Assigned
                     (Syn.Source_Of (Of_Tree), At_Span, Id, State,
                      Message & " `" & Spelled (Syn.Name (Of_Tree, Returned))
@@ -1005,6 +1091,7 @@ package body Landin.Stages.Checking.Flow is
                   end if;
                end if;
             end;
+            <<Next_Return>>
          end loop;
       end Require_Returns_Assigned;
 

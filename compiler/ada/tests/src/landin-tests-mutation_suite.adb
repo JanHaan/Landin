@@ -144,14 +144,17 @@ package body Landin.Tests.Mutation_Suite is
    --  program writes took those to 1,309, 21, 1, 18 and 493, and putting a
    --  missing token's report on the token found instead to 1,403 and 146.
    --  Reporting a refused statement as the smallest change that mends it
-   --  took them to 1,449 and 88.  Set LANDIN_MUTATION_TRACE to log each
-   --  repair that does not give back the program the mutant came from.
+   --  took them to 1,449 and 88.  Recovery that never reads past the
+   --  closer of the function it is in took them to 1,495 and 59, and
+   --  left none outside its function, leaving its body, or claiming that
+   --  a closer it has is missing: those three are held at zero, as the
+   --  exit evidence requires.  Set LANDIN_MUTATION_TRACE to log each
+   --  repair that does not give back the program the mutant came from,
+   --  and LANDIN_MUTATION_KEEP=name:line to keep that mutant's text in
+   --  the scratch directory as kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_449;
-   Ceiling_Outside    : constant := 21;
-   Ceiling_Left_Body  : constant := 1;
-   Ceiling_False_Unclosed : constant := 18;
-   Ceiling_Off_Token  : constant := 88;
+   Floor_One_On_Line  : constant := 1_495;
+   Ceiling_Off_Token  : constant := 59;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
@@ -283,6 +286,17 @@ package body Landin.Tests.Mutation_Suite is
             end loop;
          end;
 
+         if Ada.Environment_Variables.Exists ("LANDIN_MUTATION_KEEP")
+           and then Label & ":" & Image (Line)
+             = Ada.Environment_Variables.Value ("LANDIN_MUTATION_KEEP")
+         then
+            declare
+               Kept : Landin.Platform.Write_Status;
+            begin
+               Real.Write_File
+                 (Scratch & "/kept-mutant.ldn", Mutant, Kept);
+            end;
+         end if;
          Host.Add_File ("mutant.ldn", Mutant);
          Arguments.Append ("--target=linux-x86-64");
          Arguments.Append ("mutant.ldn");
@@ -745,18 +759,15 @@ package body Landin.Tests.Mutation_Suite is
            (Item, Counted.One_On_Line >= Floor_One_On_Line,
             "no fewer mutants than before give one report on their line: "
             & Summary);
-         Landin.Testing.Check
-           (Item, Counted.Outside <= Ceiling_Outside,
-            "no more mutants than before report outside their function: "
-            & Summary);
-         Landin.Testing.Check
-           (Item, Counted.Begins_No_Declaration <= Ceiling_Left_Body,
-            "no more mutants than before leave the body they are in: "
-            & Summary);
-         Landin.Testing.Check
-           (Item, Counted.False_Unclosed <= Ceiling_False_Unclosed,
-            "no more mutants than before claim a written closer is"
-            & " missing: " & Summary);
+         Landin.Testing.Check_Equal
+           (Item, Counted.Outside, 0,
+            "no mutant reports outside its function");
+         Landin.Testing.Check_Equal
+           (Item, Counted.Begins_No_Declaration, 0,
+            "no mutant leaves the body it is in");
+         Landin.Testing.Check_Equal
+           (Item, Counted.False_Unclosed, 0,
+            "no mutant claims that a closer it has is missing");
          Landin.Testing.Check
            (Item, Counted.Off_Token <= Ceiling_Off_Token,
             "no more primary spans than before miss a token: " & Summary);

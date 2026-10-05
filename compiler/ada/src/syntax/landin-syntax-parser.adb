@@ -195,6 +195,19 @@ package body Landin.Syntax.Parser is
 
             Index : Tok.Token_Index := 1;
 
+            --  How far the parse may read: the end of the file, or inside
+            --  a function whose closer was found before its body, that
+            --  closer.  Recovery skips forward and never past it, so a
+            --  mistake in a body is reported inside that body and the
+            --  closer stays for the function that owns it.  A program the
+            --  parser accepts never reaches it from inside the body.
+            Wall : Tok.Token_Index := Last;
+            --  Set when something asked to move past the wall: from then on
+            --  the wall reads as the end of input, so every loop that runs
+            --  to the end of the file stops there, as it would at the file's
+            --  own end.  Taking the wall as a closer clears it.
+            Past_Wall : Boolean := False;
+
             --  Heap-backed, per-parse facts about the immutable token stream.
             --  Allocate only when a discriminator needs lookahead. Each open
             --  delimiter gets its independently balanced close; conformance
@@ -222,6 +235,8 @@ package body Landin.Syntax.Parser is
             --  first, and the `end name` index a function is fenced by.
             Open_Closers : Closer_Vectors.Vector;
             Named_Ends : Closing_Names.Map;
+            --  Every `end` that begins a line, in token order.
+            Line_Ends : Token_Index_Vectors.Vector;
             Named_Ends_Ready : Boolean := False;
             Declaration_First : Tok.Token_Index := 1;
 
@@ -591,13 +606,20 @@ package body Landin.Syntax.Parser is
 
             ------------------------------------------------------------
 
+            --  The wall reads as `end`, which every construct in the body
+            --  takes as a closer, and nothing beyond it is visible.
             function Peek return Tok.Token_Kind
-              is (Tok.Kind (From, Index));
+              is (if Index >= Wall and then Wall < Last
+                  then (if Past_Wall then Tok.End_Of_Input else Tok.Kw_End)
+                  else Tok.Kind (From, Index));
 
             function Ahead (Distance : Tok.Token_Index)
               return Tok.Token_Kind
               is (if Index + Distance <= Last
+                    and then (Wall = Last or else Index + Distance < Wall)
                   then Tok.Kind (From, Index + Distance)
+                  elsif Wall < Last and then Index + Distance = Wall
+                  then Tok.Kw_End
                   else Tok.End_Of_Input);
 
             function Kind_At (Distance : Natural) return Tok.Token_Kind
@@ -951,8 +973,10 @@ package body Landin.Syntax.Parser is
             --  Never past End_Of_Input, which no production consumes.
             procedure Advance is
             begin
-               if Index < Last then
+               if Index < Wall then
                   Index := Index + 1;
+               elsif Wall < Last then
+                  Past_Wall := True;
                end if;
             end Advance;
 
@@ -1406,8 +1430,9 @@ package body Landin.Syntax.Parser is
             --  Away from an anchor the scan must advance.
             procedure Resync (Wanted : Tok.Kind_Set) is
             begin
-               if Index < Last and then not Wanted (Peek) then
-                  Index := Tok.Skip_To (From, Index + 1, Wanted);
+               if Index < Wall and then not Wanted (Peek) then
+                  Index := Tok.Token_Index'Min
+                    (Tok.Skip_To (From, Index + 1, Wanted), Wall);
                end if;
             end Resync;
 
@@ -1422,11 +1447,13 @@ package body Landin.Syntax.Parser is
             procedure Resync_Declaration is
                Nesting : Natural := 0;
             begin
-               while Index < Last loop
+               while Index < Wall loop
                   declare
                      Start : constant Tok.Token_Index := Index;
                      Found : constant Tok.Token_Index :=
-                       Tok.Skip_To (From, Index + 1, Declaration_Anchor);
+                       Tok.Token_Index'Min
+                         (Tok.Skip_To (From, Index + 1, Declaration_Anchor),
+                          Wall);
                   begin
                      for Step in Start .. Found - 1 loop
                         case Tok.Kind (From, Step) is
@@ -1458,8 +1485,16 @@ package body Landin.Syntax.Parser is
 
             procedure Resync_Statement is
             begin
-               while Index < Last loop
-                  Index := Tok.Skip_To (From, Index + 1, Statement_Anchor);
+               --  A closer or divider already in hand is where the broken
+               --  statement ends; it belongs to the construct around it.
+               if Peek in Tok.Kw_End | Tok.Kw_Else | Tok.Kw_Elsif
+                         | Tok.Kw_Complete | Tok.End_Of_Input
+               then
+                  return;
+               end if;
+               while Index < Wall loop
+                  Index := Tok.Token_Index'Min
+                    (Tok.Skip_To (From, Index + 1, Statement_Anchor), Wall);
                   exit when Peek = Tok.End_Of_Input;
                   exit when Peek not in Tok.Identifier | Tok.Underscore;
                   exit when Peek = Tok.Underscore
@@ -1547,14 +1582,71 @@ package body Landin.Syntax.Parser is
             --  belongs to the construct around the statement.
             procedure Skip_Rest_Of_Line;
 
-            procedure Skip_Rest_Of_Line is
+            --  A header whose opener was not where it belonged: the opener
+            --  written later on the header's line, after the mistake, is
+            --  where the body begins.  Nothing is skipped when the line
+            --  holds no such word; the body then begins where the header
+            --  stopped, as it always has.
+            procedure Resume_After (Opener : Tok.Token_Kind);
+
+            procedure Resume_After (Opener : Tok.Token_Kind) is
+               Scan : Tok.Token_Index := Index;
             begin
-               while Peek /= Tok.End_Of_Input
-                 and then not Begins_Line (Index)
-                 and then Peek not in Tok.Kw_End | Tok.Kw_Else | Tok.Kw_Elsif
-                                      | Tok.Kw_Complete
+               while Scan < Wall
+                 and then not Begins_Line (Scan)
+                 and then Tok.Kind (From, Scan) /= Opener
                loop
+                  Scan := Scan + 1;
+               end loop;
+               if Scan < Wall and then not Begins_Line (Scan)
+                 and then Tok.Kind (From, Scan) = Opener
+               then
+                  Index := Scan + 1;
+               end if;
+            end Resume_After;
+
+            --  A construct opened on the skipped part of a line is skipped
+            --  with it, to the `end` that closes it, so its body is not
+            --  read as the enclosing block's and its closer is not left to
+            --  a construct that does not own it.
+            procedure Skip_Rest_Of_Line is
+               Opened : Natural := 0;
+            begin
+               loop
+                  exit when Peek = Tok.End_Of_Input;
+                  if Opened = 0 then
+                     exit when Begins_Line (Index);
+                     exit when Peek in Tok.Kw_End | Tok.Kw_Else
+                                     | Tok.Kw_Elsif | Tok.Kw_Complete;
+                  end if;
+                  if Peek in Tok.Kw_Begin | Tok.Kw_Do | Tok.Kw_Then
+                    | Tok.Kw_Match
+                    and then not (Peek = Tok.Kw_Begin
+                                  and then Index > 1
+                                  and then Tok.Kind (From, Index - 1)
+                                    = Tok.Kw_Unchecked)
+                  then
+                     --  `then` opens an arm only when it ends its line.
+                     if Peek /= Tok.Kw_Then or else Begins_Line (Index + 1)
+                     then
+                        Opened := Opened + 1;
+                     end if;
+                  elsif Peek = Tok.Kw_End and then Opened > 0 then
+                     Opened := Opened - 1;
+                     Advance;
+                     --  The word an `end` repeats belongs to it.
+                     if not Begins_Line (Index)
+                       and then (Peek = Tok.Identifier
+                                 or else Peek in Tok.Kw_If | Tok.Kw_Loop
+                                   | Tok.Kw_While | Tok.Kw_For
+                                   | Tok.Kw_Match | Tok.Kw_Unchecked)
+                     then
+                        Advance;
+                     end if;
+                     goto Next;
+                  end if;
                   Advance;
+                  <<Next>>
                end loop;
             end Skip_Rest_Of_Line;
 
@@ -1616,11 +1708,47 @@ package body Landin.Syntax.Parser is
               (Named  : Landin.Source.Names.Name_Id;
                Opened : Tok.Token_Index) return Natural;
 
+            function Bare_Fence
+              (Opened : Tok.Token_Index;
+               Indent : Natural;
+               Upto   : Natural) return Natural;
+
+            --  How far the line after the one holding token At_Index is
+            --  indented, or 0 at the end of the file.
+            function Next_Line_Indent (At_Index : Tok.Token_Index)
+              return Natural;
+
+            function Next_Line_Indent (At_Index : Tok.Token_Index)
+              return Natural
+            is
+               Position : Tok.Token_Index := At_Index + 1;
+            begin
+               while Position < Last and then not Begins_Line (Position) loop
+                  Position := Position + 1;
+               end loop;
+               return (if Position >= Last then 0
+                       else Natural'Max (0, Indent_Of (Position)));
+            end Next_Line_Indent;
+
+            --  The indentation of the first line after the one a
+            --  declaration begins on: where its body is written.
+            function Body_Indent (Opened : Tok.Token_Index) return Natural;
+
+            function Body_Indent (Opened : Tok.Token_Index) return Natural is
+               Position : Tok.Token_Index := Opened + 1;
+            begin
+               while Position < Last and then not Begins_Line (Position) loop
+                  Position := Position + 1;
+               end loop;
+               return Natural'Max (0, Indent_Of (Position));
+            end Body_Indent;
+
             function Fence_For
               (Named  : Landin.Source.Names.Name_Id;
                Opened : Tok.Token_Index) return Natural
             is
                Indent : constant Natural := Line_Indent (Opened);
+               Named_Fence : Natural := 0;
             begin
                if Landin.Source.Names."=" (Named, Landin.Source.Names.No_Name)
                then
@@ -1628,6 +1756,11 @@ package body Landin.Syntax.Parser is
                end if;
                if not Named_Ends_Ready then
                   for Position in 1 .. Last - 1 loop
+                     if Tok.Kind (From, Position) = Tok.Kw_End
+                       and then Begins_Line (Position)
+                     then
+                        Line_Ends.Append (Position);
+                     end if;
                      if Tok.Kind (From, Position) = Tok.Kw_End
                        and then Tok.Kind (From, Position + 1) = Tok.Identifier
                      then
@@ -1658,7 +1791,7 @@ package body Landin.Syntax.Parser is
                     Named_Ends.Find (Named);
                begin
                   if not Closing_Names.Has_Element (Found) then
-                     return 0;
+                     return Bare_Fence (Opened, Indent, 0);
                   end if;
                   declare
                      Run : constant Token_Index_Vectors.Vector :=
@@ -1688,19 +1821,78 @@ package body Landin.Syntax.Parser is
                            At_End : constant Integer :=
                              Indent_Of (Run (Position));
                         begin
+                           --  Or one written after the body's last
+                           --  statement, ending its line, as a short
+                           --  body is: `r = value end consume`.
                            if (At_End >= 0 and then At_End <= Indent)
                              or else (At_End < 0
                                       and then On_One_Line
                                         (Opened, Run (Position)))
+                             or else (At_End < 0
+                                      and then
+                                        (Run (Position) + 2 > Last
+                                         or else Begins_Line
+                                           (Run (Position) + 2))
+                                      and then Next_Line_Indent
+                                        (Run (Position) + 1) <= Indent)
                            then
-                              return Natural (Run (Position));
+                              Named_Fence := Natural (Run (Position));
+                              exit;
                            end if;
                         end;
                      end loop;
-                     return 0;
+                     return Bare_Fence (Opened, Indent, Named_Fence);
                   end;
                end;
             end Fence_For;
+
+            --  A bare `end` that begins a line no deeper than the function
+            --  closes it as well as its `end name` does, when it comes
+            --  first: `end` alone is [1800]'s closer, and a body written
+            --  deeper than its function has nothing else at that depth.
+            --  The fence is whichever comes first; Upto, when not zero,
+            --  is the named one.
+            function Bare_Fence
+              (Opened : Tok.Token_Index;
+               Indent : Natural;
+               Upto   : Natural) return Natural
+            is
+               Low  : Natural := 0;
+               High : Natural := Natural (Line_Ends.Length);
+            begin
+               --  The first line-beginning `end` after Opened.
+               while Low < High loop
+                  declare
+                     Middle : constant Positive := Low + (High - Low) / 2 + 1;
+                  begin
+                     if Line_Ends (Middle) <= Opened then
+                        Low := Middle;
+                     else
+                        High := Middle - 1;
+                     end if;
+                  end;
+               end loop;
+               --  Only a body written deeper than its function tells its
+               --  own closer from a bare `end` inside it.
+               --  A function with its own `end name` is closed there.
+               if Upto /= 0 or else Body_Indent (Opened) <= Indent then
+                  return Upto;
+               end if;
+               for Position in Low + 1 .. Natural (Line_Ends.Length) loop
+                  exit when Upto /= 0
+                    and then Natural (Line_Ends (Position)) >= Upto;
+                  if Indent_Of (Line_Ends (Position)) <= Indent
+                    and then
+                      (Line_Ends (Position) = Last - 1
+                       or else Begins_Line (Line_Ends (Position) + 1)
+                       or else Tok.Kind (From, Line_Ends (Position) + 1)
+                         = Tok.End_Of_Input)
+                  then
+                     return Natural (Line_Ends (Position));
+                  end if;
+               end loop;
+               return Upto;
+            end Bare_Fence;
 
             --  Whether the token in hand closes the construct Open
             --  describes, by the test that construct makes.
@@ -1866,6 +2058,18 @@ package body Landin.Syntax.Parser is
             --  else, which the construct handles as it always has.
             type Closing is (Read, Misclosed_Read, Left, Absent);
 
+            --  The word a construct's `end` is followed by.
+            function Closing_Word (Own : Closer) return Tok.Token_Kind
+              is (case Own.Kind is
+                    when If_Closer        => Tok.Kw_If,
+                    when Loop_Closer      => Tok.Kw_Loop,
+                    when While_Closer     => Tok.Kw_While,
+                    when For_Closer       => Tok.Kw_For,
+                    when Unchecked_Closer => Tok.Kw_Unchecked,
+                    when Match_Closer     => Tok.Kw_Match,
+                    when Label_Closer     => Tok.Identifier,
+                    when others           => Tok.End_Of_Input);
+
             function Close_Construct
               (Own        : Closer;
                Word       : String;
@@ -1901,6 +2105,17 @@ package body Landin.Syntax.Parser is
                                    | Tok.Kw_Match | Tok.Kw_Unchecked)
                      then
                         Advance;
+                        --  `end let loop`: the closing word follows a stray
+                        --  one, and closes this construct as written.
+                        if not Begins_Line (Index)
+                          and then
+                            (Peek = Closing_Word (Own)
+                             and then
+                               (Peek /= Tok.Identifier
+                                or else Named_Here = Own.Label))
+                        then
+                           Advance;
+                        end if;
                      end if;
                      Complain
                        (Item    => Syn.Token_Expected,
@@ -1987,7 +2202,7 @@ package body Landin.Syntax.Parser is
             is
                Scan : Tok.Token_Index := Index;
             begin
-               while Scan < Last loop
+               while Scan < Wall loop
                   if Tok.Kind (From, Scan) = Tok.Kw_End
                     and then Scan + 1 <= Last
                     and then Tok.Kind (From, Scan + 1) = Tok.Identifier
@@ -2738,6 +2953,25 @@ package body Landin.Syntax.Parser is
                   Named := Named_Here;
                   Advance;
                   return At_Name;
+               end if;
+
+               --  A closer on a later line belongs to the construct around
+               --  the name that was not written: the name is missing where
+               --  the line ended, and the closer is left for its owner.
+               if Body_Level > 0
+                 and then Peek in Tok.Kw_End | Tok.Kw_Else | Tok.Kw_Elsif
+                                | Tok.Kw_Complete
+                 and then Begins_Line (Index)
+                 and then Index > 1
+               then
+                  Complain
+                    (Item    => Syn.Name_Expected,
+                     Where   => After_Previous,
+                     Message => "a name belongs here",
+                     Note    => "[1760]: a name is lower case, and a word"
+                                & " the keyword rule spells is that"
+                                & " keyword");
+                  return After_Previous;
                end if;
 
                Complain
@@ -6108,6 +6342,7 @@ package body Landin.Syntax.Parser is
                   declare
                      Saved_Reported : constant Boolean := Statement_Reported;
                      Saved_Routine : constant Boolean := Routine_Reported;
+                     Saved_Wall : constant Tok.Token_Index := Wall;
                      Own : constant Closer :=
                        (Kind   => Function_Closer,
                         Fence  => Fence_For (Named, Declaration_First),
@@ -6119,7 +6354,13 @@ package body Landin.Syntax.Parser is
                      Statement_Reported := False;
                      Routine_Reported := False;
                      Active_Frame := Context;
+                     if Own.Fence /= 0 and then Own.Fence < Natural (Wall)
+                     then
+                        Wall := Tok.Token_Index (Own.Fence);
+                     end if;
                      Body_Node := Parse_Body (Context);
+                     Wall := Saved_Wall;
+                     Past_Wall := False;
                      Active_Frame := (others => <>);
 
                      --  The body ended before the `end name` that closes
@@ -7153,6 +7394,7 @@ package body Landin.Syntax.Parser is
                                  else "[1130]: `loop do`"),
                      Related => Opened,
                      Because => "this loop");
+                  Resume_After (Tok.Kw_Do);
                end if;
 
                Target_Depth := Target_Depth + 1;
@@ -7365,6 +7607,7 @@ package body Landin.Syntax.Parser is
                      Note    => "[1150]: `for item in source do`",
                      Related => Opened,
                      Because => "this traversal");
+                  Resume_After (Tok.Kw_Do);
                end if;
 
                Target_Depth := Target_Depth + 1;
@@ -7476,7 +7719,14 @@ package body Landin.Syntax.Parser is
                Selected : Natural;
             begin
                Advance;
-               if Peek = Tok.Identifier then
+               --  A label is written beside its transfer; a name on the
+               --  next line begins the next statement.  This decides only
+               --  for a name that names no enclosing loop or block, so a
+               --  program the parser accepts reads as it did.
+               if Peek = Tok.Identifier
+                 and then (not Begins_Line (Index)
+                           or else Transfer_Target (Named_Here) /= 0)
+               then
                   Target := Named_Here;
                   Advance;
                end if;
@@ -7587,7 +7837,9 @@ package body Landin.Syntax.Parser is
                         Note    => "[1810]: if condition `then` block",
                         Related => At_If,
                         Because => "this branch");
-                     pragma Unreferenced (Kept);
+                     if not Kept then
+                        Resume_After (Tok.Kw_Then);
+                     end if;
                      declare
                         Saved : constant Boolean := Else_Closes_Arm;
                      begin
@@ -9555,7 +9807,9 @@ package body Landin.Syntax.Parser is
                   --  is read; a list that went wrong resumes there, so the
                   --  rest of it is not read as statements.
                   Prepare_Lookahead;
-                  if Lookahead (Opener).Closing > Natural (Index) then
+                  if Lookahead (Opener).Closing > Natural (Index)
+                    and then Lookahead (Opener).Closing < Natural (Wall)
+                  then
                      Index := Tok.Token_Index (Lookahead (Opener).Closing);
                      Advance;
                   else

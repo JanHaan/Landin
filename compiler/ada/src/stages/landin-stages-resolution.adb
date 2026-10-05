@@ -1,9 +1,11 @@
 with Ada.Containers.Hashed_Maps;
+with Ada.Strings.Unbounded;
 
 with Landin.Memory;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Fixes;
+with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Resolution;
 with Landin.Diagnostics.Suggestions;
 with Landin.Modules;
@@ -17,6 +19,8 @@ with Landin.Syntax;
 
 package body Landin.Stages.Resolution is
 
+   package Unbounded renames Ada.Strings.Unbounded;
+   package Modules_Report renames Landin.Diagnostics.Modules;
    package Names renames Landin.Diagnostics.Resolution;
    package Res renames Landin.Resolution;
    package Syn renames Landin.Syntax;
@@ -1914,6 +1918,71 @@ package body Landin.Stages.Resolution is
               (Node : Syn.Node_Id; Target : Landin.Modules.Module_Id;
                Selected : Boolean);
 
+            procedure Report_Rootless_Import
+              (Tree : Syn.Tree; Source : Landin.Source.Source_Id;
+               Node : Syn.Node_Id);
+
+            procedure Report_Rootless_Import
+              (Tree : Syn.Tree; Source : Landin.Source.Source_Id;
+               Node : Syn.Node_Id)
+            is
+               Path : Unbounded.Unbounded_String;
+               Alias_Node : constant Syn.Node_Id :=
+                 Syn.Import_Alias_Of (Tree, Node);
+            begin
+               for Segment in 1 .. Syn.Import_Segment_Count (Tree, Node) loop
+                  if Segment > 1 then
+                     Unbounded.Append (Path, "/");
+                  end if;
+                  Unbounded.Append
+                    (Path, Spelled (Syn.Name
+                       (Tree, Syn.Nth_Import_Segment (Tree, Node, Segment))));
+               end loop;
+               Modules_Report.Report
+                 (Item    => Modules_Report.Module_Not_Found,
+                  Source  => Source,
+                  Where   => Syn.Where (Tree, Node),
+                  Message => "module `" & Unbounded.To_String (Path)
+                             & "` is not found: no import root was given",
+                  Note    => "[1420]: an import is found under the roots"
+                             & " --root names; compile the module's"
+                             & " directory with --root=DIR",
+                  Into    => Found);
+               --  Every name the import would have bound is refused.
+               if Syn.Import_Selection_Count (Tree, Node) > 0 then
+                  for Selected in 1 .. Syn.Import_Selection_Count (Tree, Node)
+                  loop
+                     declare
+                        One : constant Syn.Node_Id :=
+                          Syn.Nth_Import_Selection (Tree, Node, Selected);
+                     begin
+                        if Syn.Name (Tree, One)
+                          /= Landin.Source.Names.No_Name
+                        then
+                           Res.Refuse_Import
+                             (Meanings.all, Source, Syn.Name (Tree, One),
+                              Syn.Origin (Tree, One));
+                        end if;
+                     end;
+                  end loop;
+               else
+                  declare
+                     Bound : constant Syn.Node_Id :=
+                       (if Alias_Node /= Syn.No_Node then Alias_Node
+                        else Syn.Nth_Import_Segment
+                          (Tree, Node, Syn.Import_Segment_Count (Tree, Node)));
+                  begin
+                     if Syn.Name (Tree, Bound)
+                       /= Landin.Source.Names.No_Name
+                     then
+                        Res.Refuse_Import
+                          (Meanings.all, Source, Syn.Name (Tree, Bound),
+                           Syn.Origin (Tree, Bound));
+                     end if;
+                  end;
+               end if;
+            end Report_Rootless_Import;
+
             procedure Bind_Import
               (Node : Syn.Node_Id; Target : Landin.Modules.Module_Id;
                Selected : Boolean)
@@ -2021,7 +2090,25 @@ package body Landin.Stages.Resolution is
                   Alias_Node : constant Syn.Node_Id :=
                     Syn.Import_Alias_Of (Of_Tree.all, Node);
                begin
-                  if Syn.Import_Selection_Count (Of_Tree.all, Node) > 0 then
+                  --  [1420]: an import names a module found under a root.
+                  --  Named files with no --root have no root, and the import
+                  --  resolves to nothing: say so at the import, once, and
+                  --  refuse its names (D242) so no use of them is reported
+                  --  again as a misspelling it is not.
+                  --  D202's `import compiler` and its siblings name the
+                  --  toolchain, not a module, and need no root.
+                  if Target = Landin.Modules.No_Module
+                    and then Landin.Modules.Directory_Path
+                      (Graph.all, Landin.Modules.Entry_Module) = ""
+                    and then not
+                      (Syn.Import_Segment_Count (Of_Tree.all, Node) = 1
+                       and then Reserved_Tool_Name
+                         (Syn.Name (Of_Tree.all,
+                            Syn.Nth_Import_Segment (Of_Tree.all, Node, 1))))
+                  then
+                     Report_Rootless_Import (Of_Tree.all, Source_Id, Node);
+                  elsif Syn.Import_Selection_Count (Of_Tree.all, Node) > 0
+                  then
                      for Selected in
                        1 .. Syn.Import_Selection_Count (Of_Tree.all, Node)
                      loop

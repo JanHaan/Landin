@@ -1,0 +1,5 @@
+import core/text
+
+count: () -> (view: []u8) =
+    view = text.bytes("abc")
+end count

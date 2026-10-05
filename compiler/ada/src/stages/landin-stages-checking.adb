@@ -9496,6 +9496,9 @@ package body Landin.Stages.Checking is
               (1 .. Positive'Max (1, Formal_Count)) of Boolean :=
                 [others => False];
             Valid : Boolean := True;
+            --  An argument this template has no parameter for is the one
+            --  mistake; the parameter it was meant for is left unfilled.
+            Unmatched : Natural := 0;
 
             procedure Report_Static
               (Argument : Syn.Node_Id; Position : Positive; Message : String);
@@ -9768,6 +9771,7 @@ package body Landin.Stages.Checking is
                           (Template_Tree.all, Function_Node),
                         Because => "the generic routine template",
                         Into    => Found);
+                     Unmatched := Unmatched + 1;
                      Valid := False;
                   end if;
                end;
@@ -9790,6 +9794,7 @@ package body Landin.Stages.Checking is
 
             for Position in 1 .. Total loop
                if not Seen (Position)
+                 and then Unmatched = 0
                  and then not Syn.Is_Caller
                    (Template_Tree.all,
                     Syn.Nth_Parameter
@@ -13224,6 +13229,9 @@ package body Landin.Stages.Checking is
               [others => Syn.No_Node];
             Next_Positional : Natural := 0;
             Valid : Boolean := True;
+            --  A label that names no parameter is the one mistake; the
+            --  parameter it was meant for is left unfilled by it.
+            Unknown_Labels : Natural := 0;
          begin
             if Variadic then
                for Written in 1 .. Written_Count loop
@@ -13389,6 +13397,7 @@ package body Landin.Stages.Checking is
                                    Syn.Anchor (Of_Tree, Argument), Offered),
                               Into    => Found);
                         end;
+                        Unknown_Labels := Unknown_Labels + 1;
                         Valid := False;
                      end if;
                   end if;
@@ -13472,6 +13481,7 @@ package body Landin.Stages.Checking is
                if not Seen (Position)
                  and then not Landin.Checking.Nth_Signature_Parameter
                    (Types.all, Signature, Position).Caller
+                 and then Unknown_Labels = 0
                then
                   declare
                      Parameter : constant Landin.Checking.Signature_Part :=

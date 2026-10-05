@@ -1,0 +1,9 @@
+pair: () -> (low: u32, high: u32) =
+    low = 1
+    high = 2
+end pair
+
+span: () -> (low: u32, high: u32) =
+    (low: low, high: top) := pair()
+    high = top
+end span

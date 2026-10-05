@@ -1,0 +1,6 @@
+error[L0006]: module `core/text` is not found: no import root was given
+  --> ../tests/fixtures/negative/import-without-a-root-is-refused-there/program.ldn:1:1
+  |
+1 | import core/text
+  | ^^^^^^^^^^^^^^^^
+  = note: [1420]: an import is found under the roots --root names; compile the module's directory with --root=DIR

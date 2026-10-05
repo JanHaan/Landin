@@ -1,0 +1,10 @@
+error[L0302]: this declares a new `low`, so the return of that name is never assigned
+  --> ../tests/fixtures/negative/local-shadowing-a-named-return-is-reported-there/program.ldn:7:11
+  |
+7 |     (low: low, high: top) := pair()
+  |           ^^^
+  --> ../tests/fixtures/negative/local-shadowing-a-named-return-is-reported-there/program.ldn:6:14
+  |
+6 | span: () -> (low: u32, high: u32) =
+  |              ^^^^^^^^ the return it hides
+  = note: [1840]: a binding in a body hides the return it shares a name with; assign the return with `low = ...`
