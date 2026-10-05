@@ -36,6 +36,7 @@ with Landin.Tests.Json_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
 with Landin.Tests.Memory_Suite;
+with Landin.Tests.Mutation_Suite;
 with Landin.Tests.Optimization_Driver_Suite;
 with Landin.Tests.Optimization_Foundations_Suite;
 with Landin.Tests.Parser_Suite;
@@ -104,6 +105,7 @@ procedure Landin_Tests is
       "lexer            ",
       "lowering         ",
       "memory           ",
+      "mutation         ",
       "opt driver       ",
       "opt foundations  ",
       "parser           ",
@@ -381,6 +383,7 @@ begin
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Lowering_Suite.Register (Cases);
    Landin.Tests.Memory_Suite.Register (Cases);
+   Landin.Tests.Mutation_Suite.Register (Cases);
    Landin.Tests.Optimization_Driver_Suite.Register (Cases);
    Landin.Tests.Optimization_Foundations_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);
