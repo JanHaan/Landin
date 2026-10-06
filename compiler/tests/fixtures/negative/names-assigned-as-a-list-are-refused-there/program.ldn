@@ -1,0 +1,3 @@
+bounds: () -> (low: u32, high: u32) =
+    (low, high) = (1, 2)
+end bounds

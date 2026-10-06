@@ -153,6 +153,20 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Remove_Unused_Local;
 
+   function Measure_Bare
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Word     : String;
+      Measured : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Measure_Bare, Likely,
+         "write `" & Word & " " & Measured & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, " " & Measured));
+      return Result;
+   end Measure_Bare;
+
    function Compare
      (Source : Landin.Source.Source_Id;
       Where  : Landin.Source.Span) return Fix

@@ -1,0 +1,7 @@
+choice: type = struct
+    x: u32
+end choice
+
+size: () -> (n: usize) =
+    n = sizeof choice
+end size

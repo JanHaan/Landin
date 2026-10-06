@@ -1,0 +1,3 @@
+shape: type = concept (t: type)
+    area: (s: t) -> (a: u32)
+end shape

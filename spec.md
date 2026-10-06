@@ -15276,7 +15276,21 @@ value or a type is never Exact.
 A line is not tried when it is a closer or a divider, a `match` arm, a
 continuation of the line above, the line a routine's signature is written on,
 longer than forty tokens, or when the report already carries a fix or spans a
-construct of its own.
+construct of its own. Nor is it tried when a value was asked for and a word
+that begins only a statement stands there: `b = inc a` is reported as a
+statement where a value belongs, because removing `inc` would mend the line
+by changing what it does. For the same reason no repair removes a word that
+says what a statement or an operand does: `inc`, `dec`, `return`, `fail`,
+`defer`, `undo`, `in` and `inout`.
+
+Where a form is plainly another construct written in its wrong place, the
+parser names that construct instead of what it stopped on, and reads on as if
+it were written right: `sizeof(t)` is a measure with a call's parentheses,
+`name: concept (...)` a concept missing its `type =`, `else (_)` an error
+binding that binds nothing, `(a, b) = value` a destructuring written with
+an assignment's `=`, `f().x` a selection from a call, and `general` after an
+operand's `:` the register class where its type belongs. These are the grammar's own constructs, recognised by
+their tokens, not a table of other languages' spellings.
 
 **The alternatives:** Exact whenever one repair alone mends the line. It was
 the first rule and was withdrawn: a repair found by parsing alone still guesses
@@ -15292,8 +15306,17 @@ requires its line to parse; `negative/misplaced-mut-is-moved-to-the-front`,
 whose recorded report offers the move first and the removal second;
 `negative/missing-colon-is-written`, `negative/stray-end-in-a-statement-is-removed`,
 `negative/doubled-operator-is-removed`, `negative/doubled-equal-is-removed`,
-`negative/doubled-colon-is-removed` and `negative/doubled-mut-is-removed`,
-whose every offered repair the `fixes` suite compiles clean; `server/repair-actions`, which holds the preference an
+`negative/doubled-colon-is-removed`, `negative/doubled-mut-is-removed`,
+`negative/measure-in-parentheses-is-written-bare`,
+`negative/concept-without-type-is-given-it`,
+`negative/unnamed-error-binding-is-removed` and
+`negative/missing-right-operand-is-reported-at-its-operator`, whose every
+offered repair the `fixes` suite compiles clean;
+`negative/statement-where-a-value-belongs-is-named`,
+`negative/names-assigned-as-a-list-are-refused-there`,
+`negative/selection-from-a-call` and
+`negative/register-class-as-operand-type-is-named`, whose one report is
+recorded; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 
 ### D255 — A build assumes a CPU feature level, and a level changes no layout

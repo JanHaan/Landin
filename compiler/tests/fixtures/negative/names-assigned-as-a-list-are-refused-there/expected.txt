@@ -1,0 +1,6 @@
+error[L0110]: a parenthesised list of names is destructured by `:=`, never assigned with `=`
+  --> ../tests/fixtures/negative/names-assigned-as-a-list-are-refused-there/program.ldn:2:17
+  |
+2 |     (low, high) = (1, 2)
+  |                 ^
+  = note: [0990]: `(a, b) :=` declares new names; assign names already declared one at a time

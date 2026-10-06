@@ -1,0 +1,4 @@
+step: () -> (b: u32) =
+    mut a: u32 = 1
+    b = inc a
+end step

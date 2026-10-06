@@ -1,0 +1,7 @@
+class: negative
+summary: [1230] declares a concept as a type, and `name: concept (...)` is reported once at `concept` with `type =` written before it, its members read as the concept's
+program: program.ldn
+codes: L0101
+fixed: program.fixed
+constructs: 1230, 1795
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -1,0 +1,9 @@
+class: negative
+summary: [0990] destructures a result into new names with `:=`, and a list of declared names assigned with `=` is reported at the `=` once, not as a parenthesised expression
+program: program.ldn
+codes: L0110
+constructs: 0990, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/names-assigned-as-a-list-are-refused-there/program.ldn
+status: 1

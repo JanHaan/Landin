@@ -110,6 +110,17 @@ package Landin.Diagnostics.Fixes is
       Name   : String) return Fix
      with Pre => Landin.Source.Length (Line) > 0;
 
+   --  [0370]'s measure written with a call's parentheses: Where runs
+   --  from after the word to the closer and becomes ` ` and Measured.
+   --  Likely: the type inside is what the parentheses held, but a person
+   --  may have meant a different measure.
+   function Measure_Bare
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Word     : String;
+      Measured : String) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
    --  The `=` at Where, written inside an expression, becomes `==`.
    --  Likely: [0390] says an expression never assigns, so the one thing a
    --  `=` there can mean is a comparison, but the author may instead

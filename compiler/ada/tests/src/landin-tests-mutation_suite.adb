@@ -153,7 +153,7 @@ package body Landin.Tests.Mutation_Suite is
    --  and LANDIN_MUTATION_KEEP=name:line to keep that mutant's text in
    --  the scratch directory as kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_495;
+   Floor_One_On_Line  : constant := 1_528;
    Ceiling_Off_Token  : constant := 59;
 
    function Image (Value : Natural) return String

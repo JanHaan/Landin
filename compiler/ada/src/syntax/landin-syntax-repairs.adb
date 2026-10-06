@@ -469,7 +469,7 @@ package body Landin.Syntax.Repairs is
                   return Before (Before'First .. Before'Last - 1)
                     & Spelling (One.Insert) & " " & Word & After;
                end if;
-               return Before & Spelling (One.Insert)
+               return Joined (Before, Spelling (One.Insert))
                  & (if Word in ")" | "]" | "," | ":" then "" else " ")
                  & Word & After;
             when Called =>
@@ -933,9 +933,24 @@ package body Landin.Syntax.Repairs is
          if Where.Last > Where.First
            and then Diag.Label_Count (Item) > 0
            and then Rows.Named (Diag.Code (Item)) = Rows.Expression_Expected
+           and then Natural (Where.First) + 1 >= Line_First
+           and then Natural (Where.Last) <= Line_Last
            and then not (for some One of Pieces =>
                            Natural (Where.First) + 1 = One.First
                            and then Natural (Where.Last) = One.Last)
+         then
+            Result.Append (Item);
+            return;
+         end if;
+
+         --  A statement written where a value belongs is the parser's to
+         --  say: removing its word changes what the line does.
+         if Rows.Named (Diag.Code (Item)) = Rows.Expression_Expected
+           and then (for some One of Pieces =>
+                       Natural (Where.First) + 1 = One.First
+                       and then One.Kind in Tok.Kw_Inc | Tok.Kw_Dec
+                         | Tok.Kw_Return | Tok.Kw_Fail | Tok.Kw_Loop
+                         | Tok.Kw_While | Tok.Kw_For)
          then
             Result.Append (Item);
             return;
@@ -1055,8 +1070,16 @@ package body Landin.Syntax.Repairs is
                Consider ((Inserted, Position, Asked));
             end loop;
             Consider ((Appended, Natural (Pieces.Length), Asked));
+            --  A word that says what a statement or an operand does is
+            --  never removed to mend it: the line would parse and mean
+            --  something else, which no repair may do quietly.
             for Position in 1 .. Natural (Pieces.Length) loop
-               Consider ((Deleted, Position, Asked));
+               if Pieces (Position).Kind not in Tok.Kw_In | Tok.Kw_Inout
+                 | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return
+                 | Tok.Kw_Fail | Tok.Kw_Defer | Tok.Kw_Undo
+               then
+                  Consider ((Deleted, Position, Asked));
+               end if;
             end loop;
          end;
 

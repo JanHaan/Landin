@@ -1,0 +1,7 @@
+class: negative
+summary: [0370] measures a type written bare, and `sizeof(t)` is reported at its parentheses and written `sizeof t`, rather than read as an inline struct
+program: program.ldn
+codes: L0101
+fixed: program.fixed
+constructs: 0370, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

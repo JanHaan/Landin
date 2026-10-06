@@ -1,0 +1,10 @@
+error[L0101]: `general` is a register class, not a type: an operand is typed, then placed `at general`
+  --> ../tests/fixtures/negative/register-class-as-operand-type-is-named/program.ldn:2:37
+  |
+2 |     assembler.block("nop", inout x: general)
+  |                                     ^^^^^^^
+  --> ../tests/fixtures/negative/register-class-as-operand-type-is-named/program.ldn:2:28
+  |
+2 |     assembler.block("nop", inout x: general)
+  |                            ^^^^^ this operand
+  = note: [1630]: an operand is written `in name: type at register = value`

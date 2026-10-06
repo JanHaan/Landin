@@ -110,7 +110,8 @@ package Landin.Diagnostics is
       Delete_Token,    --  one written token is removed
       Insert_Token,    --  one token is written where none was
       Swap_Tokens,     --  two neighbouring tokens change places
-      Move_Token);     --  one token moves to its statement's start
+      Move_Token,      --  one token moves to its statement's start
+      Measure_Bare);   --  `sizeof (t)` loses the parentheses
 
    type Fix is private;
 

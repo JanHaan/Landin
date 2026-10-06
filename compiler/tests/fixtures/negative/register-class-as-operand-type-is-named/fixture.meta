@@ -1,0 +1,9 @@
+class: negative
+summary: [1630] types an assembly operand and then places it, and the register class `general` written where the type goes is reported as a class, not as an operand missing `at` or a direction word to remove
+program: program.ldn
+codes: L0101
+constructs: 1630
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/register-class-as-operand-type-is-named/program.ldn
+status: 1

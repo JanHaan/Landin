@@ -179,6 +179,7 @@ negative/compound-assignment-immutable | linux-x86-64, linux-arm64, macos-arm64
 negative/compound-assignment-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/compound-assignment-zero-divisor | linux-x86-64, linux-arm64, macos-arm64
 negative/concept-composition-cycle | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/concept-without-type-is-given-it | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/condition-assignment-is-offered-comparison | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/condition-declaration-body-shadowing | linux-x86-64, linux-arm64, macos-arm64
 negative/condition-declaration-not-bool | linux-x86-64, linux-arm64, macos-arm64
@@ -484,10 +485,12 @@ negative/malformed-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-hex-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, linux-arm64, macos-arm64
+negative/measure-in-parentheses-is-written-bare | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/measuring-refused-types | linux-x86-64, linux-arm64, macos-arm64
 negative/misplaced-mut-is-moved-to-the-front | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/missing-colon-is-written | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/missing-end | linux-x86-64, linux-arm64, macos-arm64
+negative/missing-right-operand-is-reported-at-its-operator | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/missing-then | linux-x86-64, linux-arm64, macos-arm64
 negative/misspelt-argument-label-is-offered-its-parameter | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/misspelt-field-is-offered-its-neighbour | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -577,6 +580,7 @@ negative/named-call-missing | linux-x86-64, linux-arm64, macos-arm64, synthetic-
 negative/named-call-positional-after-named | linux-x86-64, linux-arm64, macos-arm64
 negative/named-call-unknown | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/named-return-not-assigned | linux-x86-64, linux-arm64, macos-arm64
+negative/names-assigned-as-a-list-are-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/nested-array-mixed-repetition-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/nested-scalar-zeroed-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/nested-storage-argument-unassigned | linux-x86-64, linux-arm64, macos-arm64
@@ -1046,6 +1050,7 @@ negative/refused-results-answered-by-control | linux-x86-64, linux-arm64, macos-
 negative/refused-struct-inline-argument | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/refused-width-conversion | linux-x86-64, linux-arm64, macos-arm64
 negative/refused-widths-name-their-owner | linux-x86-64, linux-arm64, macos-arm64
+negative/register-class-as-operand-type-is-named | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/remainder-by-zero | linux-x86-64, linux-arm64, macos-arm64
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/result-destructure-duplicate-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1077,6 +1082,7 @@ negative/sink-past-continue | linux-x86-64, linux-arm64, macos-arm64
 negative/sink-repeated-by-while | linux-x86-64, linux-arm64, macos-arm64
 negative/sink-through-dereference | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/slice-comparison-refused | linux-x86-64, linux-arm64, macos-arm64
+negative/statement-where-a-value-belongs-is-named | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/stray-end-in-a-statement-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/struct-argument-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-array-field-clear-keeps-fields-separate | linux-x86-64, linux-arm64, macos-arm64
@@ -1186,6 +1192,7 @@ negative/unhandled-declared-error | linux-x86-64, linux-arm64, synthetic-32
 negative/uninit-public-array-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/uninit-scalar-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/unknown-byte | linux-x86-64, linux-arm64, macos-arm64
+negative/unnamed-error-binding-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/unterminated-raw-literal | linux-x86-64, linux-arm64, macos-arm64
 negative/unterminated-text-literal | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/unused-pure-local | linux-x86-64, macos-arm64, synthetic-32

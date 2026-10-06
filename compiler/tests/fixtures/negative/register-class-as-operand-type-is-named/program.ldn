@@ -1,0 +1,3 @@
+spin: (x: u32) -> none =
+    assembler.block("nop", inout x: general)
+end spin

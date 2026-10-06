@@ -352,6 +352,11 @@ package body Landin.Syntax.Parser is
             At_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "at");
 
+            --  [1630]'s one register class, which a type position never
+            --  holds; the parser names it there and nowhere else.
+            General_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "general");
+
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
@@ -385,7 +390,8 @@ package body Landin.Syntax.Parser is
             function Ahead (Distance : Tok.Token_Index)
               return Tok.Token_Kind;
             function After_Selectors return Tok.Token_Kind;
-            function Starts_Destructuring return Boolean;
+            function Starts_Destructuring
+              (Closed_By : Tok.Token_Kind := Tok.Colon_Equal) return Boolean;
             function Here return Landin.Source.Span;
             function Point return Landin.Source.Span;
             function After_Previous return Landin.Source.Span;
@@ -883,7 +889,9 @@ package body Landin.Syntax.Parser is
             --  begins with `(`.  Its contents are labels and optional local
             --  names, never expressions, and the `:=` after the balanced
             --  list distinguishes it from every parenthesized value.
-            function Starts_Destructuring return Boolean is
+            function Starts_Destructuring
+              (Closed_By : Tok.Token_Kind := Tok.Colon_Equal) return Boolean
+            is
                Step : Tok.Token_Index := 1;
             begin
                if Peek /= Tok.Left_Paren then
@@ -910,7 +918,7 @@ package body Landin.Syntax.Parser is
                   if Ahead (Step) = Tok.Comma then
                      Step := Step + 1;
                   elsif Ahead (Step) = Tok.Right_Paren then
-                     return Ahead (Step + 1) = Tok.Colon_Equal;
+                     return Ahead (Step + 1) = Closed_By;
                   else
                      return False;
                   end if;
@@ -2855,6 +2863,60 @@ package body Landin.Syntax.Parser is
                   return Parse_Type_Declaration (Exported, Public_At);
                end if;
 
+               --  [1230]: a concept is a type, declared `name: type =
+               --  concept (...)`.  Written without `type =`, the head is
+               --  the one mistake: it is said once and the body is read
+               --  as the concept it plainly is, so its members do not
+               --  each look like a broken declaration.
+               if Peek = Tok.Identifier
+                 and then Ahead (1) = Tok.Colon
+                 and then Ahead (2) = Tok.Identifier
+                 and then Named_Ahead (2) = Concept_Id
+                 and then Ahead (3) = Tok.Left_Paren
+               then
+                  declare
+                     Start : constant Landin.Source.Span :=
+                       (if Exported then Public_At else Here);
+                     Named   : Landin.Source.Names.Name_Id;
+                     At_Name : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Named);
+                  begin
+                     Advance;
+                     Complain
+                       (Item    => Syn.Type_Expected,
+                        Where   => Here,
+                        Message => "a concept is declared `"
+                                   & Landin.Source.Names.Spelling
+                                       (Names, Named)
+                                   & ": type = concept (...)`",
+                        Note    => "[1230]: a concept is a type, so its"
+                                   & " declaration is a type declaration",
+                        Related => At_Name,
+                        Because => "declared here",
+                        Fixes   =>
+                          [1 => Landin.Diagnostics.Fixes.Insert_Token
+                                  (Origin_Of,
+                                   (First => Here.First,
+                                    Last  => Here.First),
+                                   "type = ", "type =",
+                                   Landin.Diagnostics.Likely,
+                                   Neighbour => "concept",
+                                   After     => False)]);
+                     declare
+                        Concept_Node : constant Node_Id :=
+                          Parse_Concept_Body (Named, At_Name);
+                     begin
+                        return Add
+                          (Of_Kind  => Concept_Declaration,
+                           At_Token => At_Name,
+                           Extent   => Join (Start, After_Previous),
+                           Children => [Concept_Node],
+                           Named    => Named,
+                           Exported => Exported);
+                     end;
+                  end;
+               end if;
+
                return Parse_Binding (Exported, Public_At);
             end Parse_Declaration;
 
@@ -3180,6 +3242,11 @@ package body Landin.Syntax.Parser is
             --  has to name itself rather than becoming a stray token.
             procedure Refuse_Any_Index;
 
+            --  [1820]: nothing selects from a call.  `get().x` is one
+            --  mistake, said at the `.`, and the selection is read so the
+            --  rest of the line parses as written.
+            procedure Refuse_Selection_Of_A_Call;
+
             procedure Refuse_Any_Index is
             begin
                if Peek = Tok.Left_Bracket then
@@ -3190,6 +3257,26 @@ package body Landin.Syntax.Parser is
                   Resync_Brackets;
                end if;
             end Refuse_Any_Index;
+
+            procedure Refuse_Selection_Of_A_Call is
+            begin
+               if Peek = Tok.Dot and then Ahead (1) = Tok.Identifier then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Here,
+                     Message => "a call's result is not selected from;"
+                                & " bind it, then select from the name",
+                     Note    => "[1820]: a selection names a place, and a"
+                                & " call is a value that is no place",
+                     Related => Previous,
+                     Because => "the call");
+                  while Peek = Tok.Dot and then Ahead (1) = Tok.Identifier
+                  loop
+                     Advance;
+                     Advance;
+                  end loop;
+               end if;
+            end Refuse_Selection_Of_A_Call;
 
             procedure Resync_Brackets is
                Depth : Natural := 0;
@@ -6231,6 +6318,7 @@ package body Landin.Syntax.Parser is
                   if Pre.Begins_Expression (Peek)
                     and then Peek not in Tok.Identifier | Tok.Kw_If
                     and then not Starts_Destructuring
+                    and then not Starts_Destructuring (Tok.Equal)
                   then
                      return Parse_Expression;
                   end if;
@@ -6736,7 +6824,9 @@ package body Landin.Syntax.Parser is
                --  value-bearing block.
                function Clearly_A_Statement return Boolean is
                begin
-                  if Starts_Destructuring then
+                  if Starts_Destructuring
+                    or else Starts_Destructuring (Tok.Equal)
+                  then
                      return True;
                   end if;
 
@@ -7131,6 +7221,26 @@ package body Landin.Syntax.Parser is
                   when Tok.Left_Paren =>
                      if Starts_Destructuring then
                         return Parse_Destructuring;
+                     end if;
+                     --  [0990]: a list is destructured by a binding, and a
+                     --  name already declared is assigned on its own.
+                     if Starts_Destructuring (Tok.Equal) then
+                        while Peek /= Tok.Equal loop
+                           Advance;
+                        end loop;
+                        Complain
+                          (Item    => Syn.Stray_Token,
+                           Where   => Here,
+                           Message => "a parenthesised list of names is"
+                                      & " destructured by `:=`, never"
+                                      & " assigned with `=`",
+                           Note    => "[0990]: `(a, b) :=` declares new"
+                                      & " names; assign names already"
+                                      & " declared one at a time");
+                        Skip_Rest_Of_Line;
+                        return Add
+                          (Error_Statement, Start,
+                           Join (Start, After_Previous));
                      end if;
                      Advance;
                      Resync_Statement;
@@ -9131,13 +9241,63 @@ package body Landin.Syntax.Parser is
                   declare
                      Measuring : constant Node_Kind :=
                        (if Peek = Tok.Kw_Sizeof then Size_Of else Align_Of);
+                     Word : constant String :=
+                       (if Peek = Tok.Kw_Sizeof then "sizeof" else "alignof");
+                     Measured : Node_Id;
                   begin
                      Advance;
+                     --  A call's parentheses around the type are the
+                     --  mistake, not the type inside them: the type is
+                     --  read and the closer taken, so the measure stands.
+                     --  A name with a colon after it is [0670]'s inline
+                     --  struct and keeps that refusal.
+                     if Peek = Tok.Left_Paren
+                       and then Ahead (2) /= Tok.Colon
+                       and then not Starts_Signature
+                     then
+                        declare
+                           Opened : constant Landin.Source.Span := Here;
+                           --  A one-name type can be written back by its
+                           --  name; any other is left to the person.
+                           Simple : constant Boolean :=
+                             Ahead (1) = Tok.Identifier
+                             and then Ahead (2) = Tok.Right_Paren;
+                           Spelled : constant Landin.Source.Names.Name_Id :=
+                             (if Simple then Named_Ahead (1)
+                              else Landin.Source.Names.No_Name);
+                        begin
+                           Advance;
+                           Measured := Parse_Type (False, At_Item);
+                           if Peek = Tok.Right_Paren then
+                              Advance;
+                           end if;
+                           Complain
+                             (Syn.Type_Expected, Opened,
+                              "`" & Word & "` takes a type without"
+                              & " parentheses",
+                              Note    => "[0370]: `" & Word & " t`"
+                                         & " measures the type `t`",
+                              Related => At_Item,
+                              Because => "this measures a type",
+                              Fixes   =>
+                                (if Simple
+                                 then [1 => Landin.Diagnostics.Fixes
+                                              .Measure_Bare
+                                                (Origin_Of,
+                                                 (First => At_Item.Last,
+                                                  Last  => Previous.Last),
+                                                 Word,
+                                                 Landin.Source.Names.Spelling
+                                                   (Names, Spelled))]
+                                 else Landin.Diagnostics.No_Fixes));
+                        end;
+                     else
+                        Measured := Parse_Type (False, At_Item);
+                     end if;
                      return Add
                        (Of_Kind  => Measuring,
                         At_Token => At_Item,
-                        Children =>
-                          [1 => Parse_Type (False, At_Item)]);
+                        Children => [1 => Measured]);
                   end;
                end if;
 
@@ -9289,6 +9449,7 @@ package body Landin.Syntax.Parser is
                              Parse_Call (At_Item, Named);
                         begin
                            Refuse_Any_Index;
+                           Refuse_Selection_Of_A_Call;
                            return Called;
                         end;
                      end if;
@@ -9330,15 +9491,36 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               Complain
-                 (Item    => Syn.Expression_Expected,
-                  Where   => (if Peek = Tok.End_Of_Input
-                              then After_Previous else At_Item),
-                  Message => "an expression belongs here",
-                  Note    => "[1820]: a literal, a name, a call or a"
-                             & " parenthesised expression",
-                  Related => Previous,
-                  Because => "required by this");
+               --  A word that begins only a statement is a statement
+               --  written where a value belongs, which says more than what
+               --  an expression may be.
+               if Peek in Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return
+                 | Tok.Kw_Fail | Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+               then
+                  Complain
+                    (Item    => Syn.Expression_Expected,
+                     Where   => At_Item,
+                     Message => "`" & Tok.Spelling (Peek)
+                                & "` begins a statement, and a statement"
+                                & " has no value",
+                     Note    =>
+                       (if Peek in Tok.Kw_Inc | Tok.Kw_Dec
+                        then "[0400]: `inc` and `dec` are statements; write"
+                             & " one on its own line, then use the name"
+                        else "[1810]: a statement stands on its own line"),
+                     Related => Previous,
+                     Because => "a value is required by this");
+               else
+                  Complain
+                    (Item    => Syn.Expression_Expected,
+                     Where   => (if Peek = Tok.End_Of_Input
+                                 then After_Previous else At_Item),
+                     Message => "an expression belongs here",
+                     Note    => "[1820]: a literal, a name, a call or a"
+                                & " parenthesised expression",
+                     Related => Previous,
+                     Because => "required by this");
+               end if;
 
                --  Consumed only when it cannot begin something the
                --  enclosing construct still wants, so a missing operand
@@ -9551,6 +9733,31 @@ package body Landin.Syntax.Parser is
                         Related => At_Operand,
                         Because => "this operand")
                   then
+                     --  The register class written where the type goes
+                     --  is a type and a placement run together: said once,
+                     --  and read as the placement it is.
+                     if Peek = Tok.Identifier
+                       and then Named_Here = General_Id
+                       and then Ahead (1) in Tok.Comma | Tok.Right_Paren
+                         | Tok.Equal
+                     then
+                        Complain
+                          (Item    => Syn.Type_Expected,
+                           Where   => Here,
+                           Message => "`general` is a register class,"
+                                      & " not a type: an operand is"
+                                      & " typed, then placed `at general`",
+                           Note    => "[1630]: an operand is written"
+                                      & " `in name: type at register"
+                                      & " = value`",
+                           Related => At_Operand,
+                           Because => "this operand");
+                        Declared := Add (Error_Type, Here);
+                        Register := Add
+                          (Register_Name, Here, Named => Named_Here);
+                        Advance;
+                        goto Placed;
+                     end if;
                      Declared := Parse_Type (False, At_Name);
                   else
                      Declared := Add (Error_Type, Point);
@@ -9593,6 +9800,7 @@ package body Landin.Syntax.Parser is
                   Register := Add (Error_Expression, Point);
                end if;
 
+               <<Placed>>
                if Direction = Output_Operand then
                   if Peek = Tok.Equal then
                      Complain
@@ -9920,6 +10128,35 @@ package body Landin.Syntax.Parser is
                      Recovery_Body : Node_Id;
                   begin
                      Advance;
+                     --  `(_)` would bind nothing: an error unused is the
+                     --  one-value form, so the binding is the mistake.
+                     if Peek = Tok.Left_Paren
+                       and then Ahead (1) = Tok.Underscore
+                       and then Ahead (2) = Tok.Right_Paren
+                     then
+                        declare
+                           Opened : constant Landin.Source.Span := Here;
+                        begin
+                           Advance;
+                           Advance;
+                           Advance;
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => Join (Opened, Previous),
+                              Message => "an error binding names the"
+                                         & " error, and `_` names none",
+                              Note    => "[1030]: `else value` recovers"
+                                         & " without the error, and"
+                                         & " `else (error)` binds it",
+                              Fixes   =>
+                                [1 => Landin.Diagnostics.Fixes.Delete_Token
+                                        (Origin_Of,
+                                         (First => Opened.First,
+                                          Last  => Here.First),
+                                         "", "(_)",
+                                         Landin.Diagnostics.Likely)]);
+                        end;
+                     end if;
                      if Peek = Tok.Left_Paren
                        and then Ahead (1) = Tok.Identifier
                        and then Ahead (2) = Tok.Right_Paren

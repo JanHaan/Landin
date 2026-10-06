@@ -1,0 +1,10 @@
+error[L0102]: `inc` begins a statement, and a statement has no value
+  --> ../tests/fixtures/negative/statement-where-a-value-belongs-is-named/program.ldn:3:9
+  |
+3 |     b = inc a
+  |         ^^^
+  --> ../tests/fixtures/negative/statement-where-a-value-belongs-is-named/program.ldn:3:7
+  |
+3 |     b = inc a
+  |       ^ a value is required by this
+  = note: [0400]: `inc` and `dec` are statements; write one on its own line, then use the name

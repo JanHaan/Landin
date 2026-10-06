@@ -1,0 +1,6 @@
+bad: atom
+attempt: () -> (v: u32) ! bad = fail bad end attempt
+
+value: () -> (r: u32) =
+    r = attempt() else 0
+end value
