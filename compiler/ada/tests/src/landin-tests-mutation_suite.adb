@@ -148,12 +148,14 @@ package body Landin.Tests.Mutation_Suite is
    --  closer of the function it is in took them to 1,495 and 59, and
    --  left none outside its function, leaving its body, or claiming that
    --  a closer it has is missing: those three are held at zero, as the
-   --  exit evidence requires.  Set LANDIN_MUTATION_TRACE to log each
-   --  repair that does not give back the program the mutant came from,
-   --  and LANDIN_MUTATION_KEEP=name:line to keep that mutant's text in
-   --  the scratch directory as kept-mutant.ldn.
+   --  exit evidence requires.  Naming the construct a misplaced form
+   --  belongs to took them to 1,537 and 59.  Set
+   --  LANDIN_MUTATION_TRACE to log each repair that does not give back
+   --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
+   --  to keep that mutant's text in the scratch directory as
+   --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_528;
+   Floor_One_On_Line  : constant := 1_537;
    Ceiling_Off_Token  : constant := 59;
 
    function Image (Value : Natural) return String

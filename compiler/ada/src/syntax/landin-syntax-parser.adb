@@ -8372,6 +8372,14 @@ package body Landin.Syntax.Parser is
                            and then Ahead (1) = Tok.Kw_Match)
                  and then Peek /= Tok.End_Of_Input
                loop
+                  --  `end end match`: the first `end` is a copy, and the
+                  --  match still closes where it was meant to.
+                  if Peek = Tok.Kw_End and then Ahead (1) = Tok.Kw_End
+                    and then not Begins_Line (Index + 1)
+                  then
+                     Refuse_Stray_Closer;
+                     goto Next_Arm;
+                  end if;
                   if Peek not in Tok.Identifier | Tok.Underscore
                                  | Tok.Kw_Ptr
                   then
@@ -8534,6 +8542,7 @@ package body Landin.Syntax.Parser is
                              Children => [Pattern, Runs]
                                          & To_List (Bindings)));
                   end;
+                  <<Next_Arm>>
                end loop;
 
                Pop;
