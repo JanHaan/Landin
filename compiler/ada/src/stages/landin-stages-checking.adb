@@ -23759,6 +23759,7 @@ package body Landin.Stages.Checking is
          type Node_List is array (Natural range <>) of Syn.Node_Id;
          First : Node_List (1 .. Count) := [others => Syn.No_Node];
          Failed : Boolean := False;
+         Unknown_Fields : Natural := 0;
 
          function Subtree_Was_Refused (Node : Syn.Node_Id) return Boolean;
 
@@ -24478,6 +24479,7 @@ package body Landin.Stages.Checking is
                         Construction_Field_Name (Of_Tree, Field),
                         Wrote => Wrote),
                      Into    => Found);
+                  Unknown_Fields := Unknown_Fields + 1;
                   Failed := True;
                elsif First (Which) /= Syn.No_Node then
                   Bad.Report
@@ -24607,7 +24609,9 @@ package body Landin.Stages.Checking is
                   end if;
                end loop;
 
-               if Missing_Count > 0 then
+               --  D263: a field label that names no field is the one
+               --  mistake, and the field it was meant for is left out by it.
+               if Missing_Count > 0 and then Unknown_Fields = 0 then
                   Bad.Report
                     (Item    => Bad.Field_Not_Given,
                      Source  => Syn.Source_Of (Of_Tree),

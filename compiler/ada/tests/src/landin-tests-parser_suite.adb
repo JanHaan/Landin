@@ -930,8 +930,8 @@ package body Landin.Tests.Parser_Suite is
            (Item, Held and then Nodes > 0,
             "an unclosed bare block still yields a sound tree");
          Landin.Testing.Check_Equal
-           (Item, Unbounded.To_String (Codes), "L0104, L0104",
-            "the bare block and function each retain their missing closer");
+           (Item, Unbounded.To_String (Codes), "L0104",
+            "the file ending inside a block and its function is one report");
       end;
    end Control_Expressions_Are_Parsed;
 
@@ -1484,14 +1484,14 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Check
         (Item, Held, "a long invalid assignment chain keeps tree invariants");
       Landin.Testing.Check
-        (Item, Total = Assignment_Length,
-         "every assignment in the long chain receives one diagnostic");
+        (Item, Total = 1,
+         "a long assignment chain is one mistake, reported once");
       Landin.Testing.Check
         (Item, Nodes < Assignment_Length * 2,
          "assignment recovery does not retain an unbounded error spine");
       Landin.Testing.Check
-        (Item, Contains (Unbounded.To_String (Codes), "L0111"),
-         "assignment recovery uses the nesting code past the limit");
+        (Item, Contains (Unbounded.To_String (Codes), "L0105"),
+         "a long assignment chain is reported as an assignment");
 
       declare
          Boundary_Length : constant Positive :=
@@ -1526,33 +1526,26 @@ package body Landin.Tests.Parser_Suite is
                   "the declaration after the chain survives recovery");
             end;
 
+            --  The chain is one mistake: the first `=` that cannot be
+            --  part of an expression is reported, and the rest of the
+            --  chain is what it left.
             Landin.Testing.Check_Equal
-              (Item, Landin.Diagnostics.Count (Found), Boundary_Length,
-               "each boundary assignment has exactly one report");
-            if Landin.Diagnostics.Count (Found) = Boundary_Length then
+              (Item, Landin.Diagnostics.Count (Found), 1,
+               "a boundary assignment chain has one report");
+            if Landin.Diagnostics.Count (Found) = 1 then
                declare
-                  Ordered : constant Landin.Diagnostics.Diagnostic_List :=
-                    Landin.Diagnostics.Sorted (Found);
+                  Report : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Found, 1);
                begin
-                  for Step in Offsets'Range loop
-                     declare
-                        Report : constant Landin.Diagnostics.Diagnostic :=
-                          Landin.Diagnostics.Get (Ordered, Step);
-                     begin
-                        Landin.Testing.Check_Equal
-                          (Item, Landin.Diagnostics.Code (Report),
-                           (if Step = Landin.Syntax.Parser.Nesting_Limit + 1
-                            then "L0111" else "L0105"),
-                           "assignment report code at" & Step'Image);
-                        Landin.Testing.Check
-                          (Item,
-                           Landin.Diagnostics.Span_Of
-                             (Landin.Diagnostics.Primary (Report)) =
-                             (First => Offsets (Step),
-                              Last => Offsets (Step) + 1),
-                           "assignment report span at" & Step'Image);
-                     end;
-                  end loop;
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Code (Report), "L0105",
+                     "the chain's report is the assignment refusal");
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Diagnostics.Span_Of
+                       (Landin.Diagnostics.Primary (Report)) =
+                       (First => Offsets (1), Last => Offsets (1) + 1),
+                     "the chain's report is at its first `=`");
                end;
             end if;
          end;

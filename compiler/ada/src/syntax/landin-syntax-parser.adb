@@ -1,5 +1,7 @@
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Suggestions;
@@ -12,6 +14,7 @@ package body Landin.Syntax.Parser is
    use type Landin.Machine.Convention;
 
    package Tok renames Landin.Tokens;
+   package Unbounded renames Ada.Strings.Unbounded;
    package Syn renames Landin.Diagnostics.Syntactic;
    package Pre renames Landin.Syntax.Precedence;
 
@@ -230,6 +233,10 @@ package body Landin.Syntax.Parser is
             Statement_Reported : Boolean := False;
             --  Whether anything was reported in the routine being read.
             Routine_Reported : Boolean := False;
+            --  Whether the module-level declaration just read reported.
+            Declaration_Reported : Boolean := False;
+            --  Whether the declaration being read reported outside a body.
+            Header_Reported : Boolean := False;
 
             --  The constructs open around the block being read, outermost
             --  first, and the `end name` index a function is fenced by.
@@ -1251,6 +1258,22 @@ package body Landin.Syntax.Parser is
               is (Message'Length > 0
                   and then Message (Message'Last) = '`');
 
+            --  The constructs the file ends inside, innermost first: each
+            --  closes at the end of input, and they are one mistake, the
+            --  text the file stops before.  Reported once, when the parse
+            --  ends, naming every one.
+            type Unclosed_At_End is record
+               Message : Unbounded.Unbounded_String;
+               Note    : Unbounded.Unbounded_String;
+               Opened  : Landin.Source.Span;
+               Where   : Landin.Source.Span;
+            end record;
+
+            package Unclosed_Vectors is new Ada.Containers.Vectors
+              (Index_Type => Positive, Element_Type => Unclosed_At_End);
+
+            Ending_Inside : Unclosed_Vectors.Vector;
+
             procedure Complain
               (Item    : Syn.Failure;
                Where   : Landin.Source.Span;
@@ -1296,8 +1319,9 @@ package body Landin.Syntax.Parser is
             begin
                --  Unclosed_Construct is the one exemption from P3: it is
                --  identified by the construct it could not close and not
-               --  by a position, so two constructs unclosed at the same
-               --  end of input are two reports.
+               --  by a position.  The constructs the file ends inside are
+               --  one mistake, the text it stops before, and are gathered
+               --  into one report when the parse ends.
                if Gate and then Natural (Index) <= Reported then
                   return;
                end if;
@@ -1309,7 +1333,31 @@ package body Landin.Syntax.Parser is
                   return;
                end if;
 
+               --  Outside a body, a declaration's header reports once,
+               --  as a statement does: the parse of a signature or a type
+               --  that went wrong says what it next fails to find.
+               if Body_Level = 0 and then Header_Reported
+                 and then Item /= Syn.Unclosed_Construct
+               then
+                  return;
+               end if;
+
+               if Item = Syn.Unclosed_Construct
+                 and then Tok.Kind (From, Index) = Tok.End_Of_Input
+               then
+                  Ending_Inside.Append
+                    (Unclosed_At_End'
+                       (Message => Unbounded.To_Unbounded_String (Message),
+                        Note    => Unbounded.To_Unbounded_String (Note),
+                        Opened  => Related,
+                        Where   => Where));
+                  return;
+               end if;
+
                Mark_Reported;
+               if Body_Level = 0 then
+                  Header_Reported := True;
+               end if;
 
                Syn.Report
                  (Item    => Item,
@@ -2270,8 +2318,42 @@ package body Landin.Syntax.Parser is
                Result.Import_Prefix_Length := Natural (Items.Length);
 
                while Peek /= Tok.End_Of_Input loop
+                  --  A declaration that reported says what is wrong with
+                  --  it once; what the mistake left of it, up to the next
+                  --  line a declaration begins, is that mistake too.
+                  if Declaration_Reported then
+                     if Begins_Line (Index) then
+                        Declaration_Reported := False;
+                     else
+                        --  No closer is owned here: the rest of the line
+                        --  up to another declaration's start, `end`
+                        --  included, is the declaration's.  A second
+                        --  declaration written on the same line keeps its
+                        --  own reports.
+                        while Peek /= Tok.End_Of_Input
+                          and then not Begins_Line (Index)
+                          and then not (Starts_Named_Declaration
+                                        and then Ahead (1) = Tok.Colon
+                                        and then Ahead (2) in Tok.Left_Paren
+                                                            | Tok.Kw_Type)
+                          --  A declaration after a construct's closing word
+                          --  begins anew: `end if tail: i32 = 4`.
+                          and then not (Index > 2
+                                        and then Tok.Kind (From, Index - 2)
+                                          = Tok.Kw_End
+                                        and then Starts_Named_Declaration)
+                        loop
+                           Advance;
+                        end loop;
+                        Reported := Natural'Max (Reported, Natural (Index));
+                        Declaration_Reported := False;
+                     end if;
+                  end if;
+                  exit when Peek = Tok.End_Of_Input;
+                  Header_Reported := False;
                   declare
                      Before : constant Tok.Token_Index := Index;
+                     Reports_Before : constant Natural := Reported;
                   begin
                      if Peek = Tok.Kw_Import then
                         Items.Append (Parse_Import (Late => True));
@@ -2297,11 +2379,17 @@ package body Landin.Syntax.Parser is
                         --  so.  One report per run, never one per token.
                         declare
                            Start : constant Landin.Source.Span := Here;
+                           First : constant Tok.Token_Index := Index;
                         begin
                            Resync_Declaration;
+                           --  A resync that could not move still covers
+                           --  the token it began at.
+                           if Index = First and then Index < Last then
+                              Advance;
+                           end if;
                            Complain
                              (Item    => Syn.Stray_Token,
-                              Where   => Join (Start, After_Previous),
+                              Where   => Join (Start, Previous),
                               Message => "this begins no declaration",
                               Note    => "[1740]: a file is declarations,"
                                          & " each a binding or a function",
@@ -2314,6 +2402,7 @@ package body Landin.Syntax.Parser is
                           with "the parser did not advance over a"
                                & " declaration";
                      end if;
+                     Declaration_Reported := Reported /= Reports_Before;
                   end;
                end loop;
 
@@ -9914,6 +10003,53 @@ package body Landin.Syntax.Parser is
             if Parse_Program /= Root (Result) then
                raise Compiler_Defect
                  with "the program is not the last node in the table";
+            end if;
+
+            --  The file ends inside these: one report, at the innermost,
+            --  naming the rest.
+            if not Ending_Inside.Is_Empty then
+               declare
+                  Inner : constant Unclosed_At_End :=
+                    Ending_Inside.First_Element;
+                  Around : Unbounded.Unbounded_String;
+               begin
+                  for Position in Ending_Inside.First_Index + 1
+                                  .. Ending_Inside.Last_Index
+                  loop
+                     declare
+                        Outer : constant String := Unbounded.To_String
+                          (Ending_Inside (Position).Message);
+                        --  "this function is never closed" -> "function"
+                        Word_First : constant Natural := Outer'First + 5;
+                        Word_Last : constant Natural :=
+                          Ada.Strings.Fixed.Index (Outer, " is never") - 1;
+                     begin
+                        Unbounded.Append
+                          (Around,
+                           (if Position = Ending_Inside.First_Index + 1
+                            then "" else ", ")
+                           & "the "
+                           & (if Word_Last >= Word_First
+                              then Outer (Word_First .. Word_Last)
+                              else "construct")
+                           & " around it");
+                     end;
+                  end loop;
+                  Syn.Report
+                    (Item    => Syn.Unclosed_Construct,
+                     Source  => Origin_Of,
+                     Where   => Inner.Where,
+                     Message =>
+                       Unbounded.To_String (Inner.Message)
+                       & (if Unbounded.Length (Around) > 0
+                          then ", and neither is "
+                               & Unbounded.To_String (Around)
+                          else ""),
+                     Note    => Unbounded.To_String (Inner.Note),
+                     Related => Inner.Opened,
+                     Because => "opened here",
+                     Into    => Report);
+               end;
             end if;
          end;
       end return;

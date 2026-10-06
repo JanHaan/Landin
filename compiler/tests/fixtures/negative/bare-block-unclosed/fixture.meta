@@ -1,6 +1,6 @@
 class: negative
-summary: a bare begin block and its function both report an omitted closer
+summary: a file that ends inside a bare begin block and its function reports once, at the block, naming the function around it
 program: program.ldn
-codes: L0104, L0104
+codes: L0104
 constructs: 1080, 1800, 1820
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -3698,7 +3698,8 @@ package body Landin.Tests.Driver_Suite is
               (Item, Contains (Report, "error[" & Code & "]")
                  and then Occurrences (Report, "error[") = Count
                  and then not Contains (Report, "internal compiler defect"),
-               "the source refusal retains its diagnostic contract");
+               "the source refusal retains its diagnostic contract: "
+               & Source & " => " & Report);
             Landin.Testing.Check_Equal
               (Item, Host.Write_Count, 0, "no output write is attempted");
             Landin.Testing.Check_Equal
@@ -4355,7 +4356,7 @@ package body Landin.Tests.Driver_Suite is
            ("f: () -> none = loop do continue with 1 end loop end f",
             "L0110", 1, Executable);
          Check
-           ("public import core/mem", "L0103", 2, Executable);
+           ("public import core/mem", "L0103", 1, Executable);
          Check
            ("public fixed if true then value: i32 = 42 end if",
             "L0103", 1, Executable);
@@ -4390,7 +4391,7 @@ package body Landin.Tests.Driver_Suite is
             "L0110", 1, Executable);
          Check
            ("public []: () -> (code: i32) = code = 42 end main",
-            "L0103", 7, Executable);
+            "L0103", 1, Executable);
          Check
            ("readable: type = concept (item: type)" & LF
             & "read: (self: item) -> (result: i32) end readable" & LF

@@ -1,7 +1,7 @@
 class: negative
 summary: malformed public conformance starts retain a source diagnostic
 program: main.ldn
-codes: L0103, L0101, L0103, L0110, L0101, L0103, L0110
+codes: L0103
 constructs: 1240, 1280, 1740, 1810
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
