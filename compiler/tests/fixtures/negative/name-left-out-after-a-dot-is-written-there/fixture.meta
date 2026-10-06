@@ -1,0 +1,9 @@
+class: negative
+summary: [0420] selects a field by name after `.`, and a selection left unfinished at its line's end is reported at the `.`, not as a discard written on the next line
+program: program.ldn
+codes: L0100
+constructs: 0420, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/name-left-out-after-a-dot-is-written-there/program.ldn
+status: 1

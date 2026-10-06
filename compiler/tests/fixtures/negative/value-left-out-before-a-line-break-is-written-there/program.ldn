@@ -1,0 +1,5 @@
+f: () -> (r: u32) =
+    mut local: u32 = 1
+    local =
+    r = local
+end f

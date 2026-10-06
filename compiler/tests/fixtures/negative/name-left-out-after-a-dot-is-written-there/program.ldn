@@ -1,0 +1,8 @@
+point: type = struct
+    x: u32
+end point
+
+read: (s: point) -> none =
+    _ = s.
+    _ = s.x
+end read

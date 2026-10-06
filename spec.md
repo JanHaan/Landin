@@ -15273,10 +15273,30 @@ that line removes one copy of a token written twice in a row: `x:: u32` and
 `1 + + 2` have one reading, and nothing is guessed. A stand-in for a name, a
 value or a type is never Exact.
 
-A line is not tried when it is a closer or a divider, a `match` arm, a
-continuation of the line above, the line a routine's signature is written on,
-longer than forty tokens, or when the report already carries a fix or spans a
-construct of its own. Nor is it tried when a value was asked for and a word
+A line is not tried when it is a closer or a divider, a `match` arm, the
+line a routine's signature is written on, longer than forty tokens, or when
+the report spans a construct of its own.
+
+A line the grammar read as continuing the one above, after an operator, an
+`=`, a `,`, an opener or a `.`, is tried differently, because a statement
+ends where its grammar does and a line break says nothing to the parser. If
+that line parses on its own as the statement it begins, the line break is the
+candidate: the line above is tried with the value it asked for written at its
+end, or a name after a `.`. The repair counts when the line above then
+parses, the following line is left unchanged, and the routine reports no more
+after it. The report is the missing value, L0102, or the missing name,
+L0100, at the token that asked for it; the report the parser made on the
+following line is not given. Only a program the parser has refused is tried,
+so a value the grammar accepts on the next line, at any indentation, keeps
+its meaning.
+
+A report that carries a fix of its own is not tried, except where the line
+break is the mistake, and there the structural repair replaces the report's
+fix. `local =` then `r = local` reads `local = r = local`, whose `=` the
+parser offers to make `==`; but `local == r = local` is still refused, so
+that fix mends nothing, and every fix offered must leave a program that
+compiles. Where no line break is involved, as in `if x = 1 then`, the
+report's own fix stands, and the structural search is not run. Nor is it tried when a value was asked for and a word
 that begins only a statement stands there: `b = inc a` is reported as a
 statement where a value belongs, because removing `inc` would mend the line
 by changing what it does. For the same reason no repair removes a word that
@@ -15314,13 +15334,16 @@ whose recorded report offers the move first and the removal second;
 `negative/concept-without-type-is-given-it`,
 `negative/unnamed-error-binding-is-removed` and
 `negative/missing-right-operand-is-reported-at-its-operator`,
-`negative/closing-word-written-twice-is-removed`, whose every
+`negative/closing-word-written-twice-is-removed`,
+`negative/value-left-out-before-a-line-break-is-written-there`, whose every
 offered repair the `fixes` suite compiles clean;
 `negative/statement-where-a-value-belongs-is-named`,
 `negative/names-assigned-as-a-list-are-refused-there`,
-`negative/selection-from-a-call` and
-`negative/register-class-as-operand-type-is-named`, whose one report is
-recorded; `server/repair-actions`, which holds the preference an
+`negative/selection-from-a-call`,
+`negative/register-class-as-operand-type-is-named` and
+`negative/name-left-out-after-a-dot-is-written-there`, whose one report is
+recorded; `positive/value-continued-at-any-indentation`, which holds a
+continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 
 ### D255 — A build assumes a CPU feature level, and a level changes no layout

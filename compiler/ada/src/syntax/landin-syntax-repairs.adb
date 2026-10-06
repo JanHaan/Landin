@@ -492,6 +492,7 @@ package body Landin.Syntax.Repairs is
                   return Kept
                     & (if One.Insert in Want_Colon | Want_Comma
                          | Want_Close_Paren | Want_Close_Bracket
+                         or else Pieces.Last_Element.Kind = Tok.Dot
                        then "" else " ")
                     & Spelling (One.Insert)
                     & Bytes (Pieces.Last_Element.Last + 1 .. Line_Last);
@@ -810,7 +811,8 @@ package body Landin.Syntax.Repairs is
          return Position >= 1
            and then Position >= Body_First
            and then Bytes (Position) in ',' | '(' | '[' | '+' | '-' | '*'
-                                         | '/' | '=' | '|' | '&' | '<' | '>';
+                                         | '/' | '=' | '|' | '&' | '<' | '>'
+                                         | '.';
       end Continues;
 
       --  Whether the next line that holds anything begins with a word that
@@ -881,6 +883,11 @@ package body Landin.Syntax.Repairs is
          Loops  : Boolean := False;
          Value  : Boolean;
          Asked  : constant Wanted := Asked_For (Item);
+         --  Whether the tried line is the one above the report, broken
+         --  before the value it asked for (Broken_At is the reported
+         --  line's first byte).
+         Broken    : Boolean := False;
+         Broken_At : Natural := 0;
       begin
          while Line_First > 1 and then Bytes (Line_First - 1) /= ASCII.LF
          loop
@@ -943,9 +950,47 @@ package body Landin.Syntax.Repairs is
             return;
          end if;
 
+         --  A line the grammar read as continuing the one above may be a
+         --  statement of its own, with the value the line above asked for
+         --  left out at its end: `local =` then `r = local`.  The line
+         --  above is tried instead, with a value written at its end; the
+         --  repair counts only if this line then parses unchanged as the
+         --  statement it begins.  A program that parses is never tried,
+         --  so a continuation the grammar accepts keeps its meaning.
+         if Clean and then not Pieces.Is_Empty
+           and then Continues (Line_First)
+           and then Line_First > 2
+           and then Pieces (1).Kind not in Tok.Kw_End | Tok.Kw_Else
+             | Tok.Kw_Elsif | Tok.Kw_Complete | Tok.Right_Paren
+             | Tok.Right_Bracket | Tok.Comma
+           and then Parses (Bytes (Line_First .. Line_Last), False, Value)
+         then
+            declare
+               Above_Last  : constant Natural := Line_First - 2;
+               Above_First : Natural := Above_Last;
+            begin
+               while Above_First > 1
+                 and then Bytes (Above_First - 1) /= ASCII.LF
+               loop
+                  Above_First := Above_First - 1;
+               end loop;
+               if Above_Last >= Body_First
+                 and then not Continues (Above_First)
+               then
+                  Broken := True;
+                  Broken_At := Line_First;
+                  Line_First := Above_First;
+                  Line_Last := Above_Last;
+                  Line_Tokens (Line_First, Line_Last, Pieces, Clean);
+                  Value := False;
+               end if;
+            end;
+         end if;
+
          --  A statement written where a value belongs is the parser's to
          --  say: removing its word changes what the line does.
-         if Rows.Named (Diag.Code (Item)) = Rows.Expression_Expected
+         if not Broken
+           and then Rows.Named (Diag.Code (Item)) = Rows.Expression_Expected
            and then (for some One of Pieces =>
                        Natural (Where.First) + 1 = One.First
                        and then One.Kind in Tok.Kw_Inc | Tok.Kw_Dec
@@ -956,10 +1001,27 @@ package body Landin.Syntax.Repairs is
             return;
          end if;
 
+         --  A report that carries its own fix keeps it unless the line
+         --  break was the mistake.  There its fix is for a statement that
+         --  was never written -- `==` in `local = r = local` leaves the
+         --  line refused -- so the repair replaces it; anywhere else the
+         --  fix's own rule stands.
+         if Diag.Fix_Count (Item) > 0 and then not Broken then
+            Result.Append (Item);
+            return;
+         end if;
+
          --  Only a line that is one whole statement is tried: not a
          --  closer or a divider, not a match arm, whose pattern is no
          --  statement, and not a line that continues the one above it.
-         if not Clean or else Pieces.Is_Empty
+         if Broken then
+            if not Clean or else Pieces.Is_Empty
+              or else Natural (Pieces.Length) > Token_Limit
+            then
+               Result.Append (Item);
+               return;
+            end if;
+         elsif not Clean or else Pieces.Is_Empty
            or else Natural (Pieces.Length) > Token_Limit
            or else Pieces (1).Kind in Tok.Kw_End | Tok.Kw_Else
              | Tok.Kw_Elsif | Tok.Kw_Complete | Tok.Right_Paren
@@ -1013,8 +1075,16 @@ package body Landin.Syntax.Repairs is
                   Found_Trials.Append (One);
                end if;
             end Consider;
-            Stopped : constant Natural := Stop_Token (Item, Pieces);
+            Stopped : constant Natural :=
+              (if Broken then 0 else Stop_Token (Item, Pieces));
          begin
+            if Broken then
+               Consider
+                 ((Appended, Natural (Pieces.Length),
+                   (if Pieces.Last_Element.Kind = Tok.Dot
+                    then Want_Name else Want_Value)));
+               goto Tried;
+            end if;
             --  The order is the order the repairs are offered in: those
             --  that keep every token written come first.  A word written
             --  twice in a row is the one removal that keeps what was meant,
@@ -1081,6 +1151,8 @@ package body Landin.Syntax.Repairs is
                   Consider ((Deleted, Position, Asked));
                end if;
             end loop;
+            <<Tried>>
+            null;
          end;
 
          if Found_Trials.Is_Empty then
@@ -1105,8 +1177,15 @@ package body Landin.Syntax.Repairs is
                then Diag.Exact
                else Diag.Likely);
             Here   : constant Piece := Pieces (Best.At_Token);
+            --  A value left out before a line break is a missing value,
+            --  whatever the parser made of the line it took for one.
             Restated_Report : Diag.Diagnostic := Diag.Make
-              (Code    => Diag.Code (Item),
+              (Code    =>
+                 (if Broken and then Best.Insert = Want_Name
+                  then Rows.Code (Rows.Name_Expected)
+                  elsif Broken
+                  then Rows.Code (Rows.Expression_Expected)
+                  else Diag.Code (Item)),
                Level   => Diag.Level (Item),
                Source  => Source,
                Where   =>
@@ -1116,8 +1195,36 @@ package body Landin.Syntax.Repairs is
          begin
             --  The code's row fixes how many labels it carries, so the
             --  parser's label stays, unless it is now the primary's span,
-            --  when it says what that token is for.
-            for Position in 1 .. Diag.Label_Count (Item) loop
+            --  when it says what that token is for.  A broken line's one
+            --  label is the statement the next line begins.
+            --  L0100's row takes no second place; the name is the
+            --  whole complaint.
+            if Broken and then Best.Insert /= Want_Name then
+               declare
+                  Next : Natural := Broken_At;
+                  Last_Byte : Natural;
+               begin
+                  while Bytes (Next) in ' ' | ASCII.HT loop
+                     Next := Next + 1;
+                  end loop;
+                  Last_Byte := Next;
+                  while Last_Byte < Bytes'Last
+                    and then Bytes (Last_Byte + 1)
+                      in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_'
+                  loop
+                     Last_Byte := Last_Byte + 1;
+                  end loop;
+                  Diag.Add_Label
+                    (Restated_Report,
+                     Diag.Make_Label
+                       (Source,
+                        (First => Landin.Source.Byte_Offset (Next - 1),
+                         Last  => Landin.Source.Byte_Offset (Last_Byte)),
+                        "this begins the next statement"));
+               end;
+            end if;
+            for Position in 1 .. (if Broken then 0
+                                  else Diag.Label_Count (Item)) loop
                declare
                   Other : constant Diag.Label :=
                     Diag.Nth_Label (Item, Position);
@@ -1140,7 +1247,8 @@ package body Landin.Syntax.Repairs is
             --  which is not the rule this mistake broke.  The statement as
             --  it parses is what a reader compares with what they wrote.
             --  The code's row fixes how many notes there are.
-            for Position in 1 .. Diag.Note_Count (Item) loop
+            for Position in 1 .. (if Broken then 1
+                                  else Diag.Note_Count (Item)) loop
                if Position = 1 then
                   Diag.Add_Note
                     (Restated_Report,
@@ -1188,11 +1296,13 @@ package body Landin.Syntax.Repairs is
             if Line = 0 or else Line = Last_Line
               or else not In_A_Body (Where)
               or else Diag.Level (Item) /= Diag.Error
-              or else Diag.Fix_Count (Item) > 0
+              or else (Diag.Fix_Count (Item) > 0
+                       and then Rows.Named (Diag.Code (Item))
+                         /= Rows.Assignment_In_Expression)
               or else Rows.Named (Diag.Code (Item))
                 not in Rows.Name_Expected | Rows.Type_Expected
                      | Rows.Expression_Expected | Rows.Token_Expected
-                     | Rows.Stray_Token
+                     | Rows.Stray_Token | Rows.Assignment_In_Expression
             then
                Result.Append (Item);
             else

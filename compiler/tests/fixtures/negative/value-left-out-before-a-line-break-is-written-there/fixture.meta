@@ -1,0 +1,7 @@
+class: negative
+summary: [1810] ends a statement where its grammar does, so `local =` with its value left out reads the next line as that value; the line break is tried as the repair position and the report is a value missing at the `=`, not an assignment used as an expression on the next line
+program: program.ldn
+codes: L0102
+fixed: program.fixed
+constructs: 0390, 1810, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

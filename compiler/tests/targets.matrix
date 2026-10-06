@@ -576,6 +576,7 @@ negative/mut-never-written | linux-x86-64, linux-arm64, macos-arm64, synthetic-3
 negative/name-after-the-branch-closes | linux-x86-64, linux-arm64, macos-arm64
 negative/name-declared-nowhere | linux-x86-64, linux-arm64, macos-arm64
 negative/name-from-another-arm | linux-x86-64, linux-arm64, macos-arm64
+negative/name-left-out-after-a-dot-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/named-call-duplicate | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/named-call-missing | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/named-call-positional-after-named | linux-x86-64, linux-arm64, macos-arm64
@@ -1207,6 +1208,7 @@ negative/utf8-index-needs-usize-or-position | linux-x86-64, macos-arm64
 negative/utf8-index-position-identity-is-exact | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64
+negative/value-left-out-before-a-line-break-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/variant-case-declaration-duplicate-payload | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-does-not-belong | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-duplicate | linux-x86-64, linux-arm64, macos-arm64

@@ -55039,6 +55039,38 @@ file negative/name-from-another-arm/program.ldn tokens 33
   101 103 if
   104 107 end
   108 109 f
+file negative/name-left-out-after-a-dot-is-written-there/program.ldn tokens 31
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 u32
+  32 35 end
+  36 41 point
+  43 47 read
+  47 48 :
+  49 50 (
+  50 51 s
+  51 52 :
+  53 58 point
+  58 59 )
+  60 62 ->
+  63 67 none
+  68 69 =
+  74 75 _
+  76 77 =
+  78 79 s
+  79 80 .
+  85 86 _
+  87 88 =
+  89 90 s
+  90 91 .
+  91 92 x
+  93 96 end
+  97 101 read
 file negative/named-call-duplicate/program.ldn tokens 46
   0 3 add
   3 4 :
@@ -86860,6 +86892,31 @@ file negative/utf8-index-result-is-not-a-place/program.ldn tokens 24
   72 74 65
   75 78 end
   79 82 bad
+file negative/value-left-out-before-a-line-break-is-written-there/program.ldn tokens 24
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 11 r
+  11 12 :
+  13 16 u32
+  16 17 )
+  18 19 =
+  24 27 mut
+  28 33 local
+  33 34 :
+  35 38 u32
+  39 40 =
+  41 42 1
+  47 52 local
+  53 54 =
+  59 60 r
+  61 62 =
+  63 68 local
+  69 72 end
+  73 74 f
 file negative/variant-case-declaration-duplicate-payload/program.ldn tokens 51
   0 6 choice
   6 7 :

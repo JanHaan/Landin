@@ -12,6 +12,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
 with Landin.Syntax.Parser;
+with Landin.Syntax.Repairs;
 with Landin.Syntax.Dump;
 with Landin.Syntax;
 with Landin.Testing.Fixtures;
@@ -135,6 +136,14 @@ package body Landin.Tests.Parser_Suite is
 
          if Landin.Syntax.Source_Of (Parsed) /= Id then
             Held := False;
+         end if;
+
+         --  D261 restates a refused statement within the syntax stage,
+         --  and may name a different code for it, so the codes are the
+         --  stage's: the ones a fixture pins.
+         if Landin.Diagnostics.Has_Errors (Found) then
+            Found := Landin.Syntax.Repairs.Restated
+              (Sources.Get (Id), Parsed, Found);
          end if;
       end;
 
