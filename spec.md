@@ -15319,7 +15319,10 @@ it were written right: `sizeof(t)` is a measure with a call's parentheses,
 `name: concept (...)` a concept missing its `type =`, `else (_)` an error
 binding that binds nothing, `(a, b) = value` a destructuring written with
 an assignment's `=`, `f().x` a selection from a call, and `general` after an
-operand's `:` the register class where its type belongs. A closing word
+operand's `:` the register class where its type belongs. A `:`
+or `:=` that begins a line belongs to that line, so the name at the end of
+the line above is a value, and an assignment operator beginning a line is a
+binding or an assignment whose name was left out. A closing word
 written again, as `end if if` or `end end match`, is one copy and is said
 once; the copy after `end if` opens nothing, because an `if` needs its
 condition on its line, so removing it is Exact. These are the grammar's own constructs, recognised by
@@ -15352,9 +15355,10 @@ offered repair the `fixes` suite compiles clean;
 `negative/selection-from-a-call`,
 `negative/register-class-as-operand-type-is-named`,
 `negative/name-left-out-after-a-dot-is-written-there`,
-`negative/match-subject-left-unfinished-is-reported-there` and
-`negative/value-left-out-before-a-multiline-statement-is-written-there`,
-whose one report is recorded; `positive/value-continued-at-any-indentation`, which holds a
+`negative/match-subject-left-unfinished-is-reported-there`,
+`negative/value-left-out-before-a-multiline-statement-is-written-there` and
+`negative/binding-missing-its-name-is-reported-on-its-line`, whose one
+report is recorded; `positive/value-continued-at-any-indentation`, which holds a
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 

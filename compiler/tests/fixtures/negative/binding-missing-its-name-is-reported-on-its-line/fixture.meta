@@ -1,0 +1,9 @@
+class: negative
+summary: [1790] writes a binding's name first, on its line, so a `:=` that begins a line is a binding whose name was left out, reported there, not the line above read as a name followed by an assignment used as an expression
+program: program.ldn
+codes: L0100
+constructs: 0390, 1790, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/binding-missing-its-name-is-reported-on-its-line/program.ldn
+status: 1

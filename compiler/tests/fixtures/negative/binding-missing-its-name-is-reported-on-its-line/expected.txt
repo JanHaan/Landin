@@ -1,0 +1,7 @@
+error[L0100]: a name belongs before `:=`
+  --> ../tests/fixtures/negative/binding-missing-its-name-is-reported-on-its-line/program.ldn:3:5
+  |
+3 |     := first + 1
+  |     ^^
+  = note: written as `name := first + 1` the line parses
+  = help: write a name before `:=`

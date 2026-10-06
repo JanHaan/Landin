@@ -8796,6 +8796,20 @@ package body Landin.Syntax.Parser is
                                       & " rule of the language",
                               Related => Anchor (Result, Seed),
                               Because => "the chain begins here");
+                        elsif Begins_Line (Index) then
+                           --  An assignment that begins its line is its
+                           --  own statement, whose name was left out: the
+                           --  line above is whole, and nothing is compared.
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => At_Op,
+                              Message => "a name belongs before this `"
+                                         & (if Peek = Tok.Colon_Equal
+                                            then ":=" else "=")
+                                         & "`",
+                              Note    => "[1790]: a binding or an assignment"
+                                         & " names its place first, on its"
+                                         & " line");
                         else
                            Complain
                              (Item    => Syn.Assignment_In_Expression,
@@ -9465,7 +9479,12 @@ package body Landin.Syntax.Parser is
                   --  begins a declaration and is not an operand, and
                   --  saying so here is what lets the rest of a file's
                   --  mistakes be reported instead of swallowed.
-                  if Ahead (1) in Tok.Colon | Tok.Colon_Equal then
+                  --  A `:` or `:=` that begins the next line is not this
+                  --  name's: the name ends a value, and the line below is a
+                  --  statement missing its own name.
+                  if Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                    and then not Begins_Line (Index + 1)
+                  then
                      --  [1180]'s labelled block is a statement.  Say so,
                      --  and leave it for the statement that follows.
                      if Ahead (1) = Tok.Colon

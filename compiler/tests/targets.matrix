@@ -145,6 +145,7 @@ negative/atom-match-not-exhaustive | linux-x86-64, linux-arm64, synthetic-32
 negative/atom-union-member-not-atom | linux-x86-64, linux-arm64, synthetic-32
 negative/bare-block-scope-does-not-leak | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/bare-block-unclosed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/binding-missing-its-name-is-reported-on-its-line | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/borrow-read-above-inout-in-loop | linux-x86-64, linux-arm64, macos-arm64
 negative/borrow-read-after-inout-loop | linux-x86-64, linux-arm64, macos-arm64
 negative/borrow-read-through-view-address | linux-x86-64, linux-arm64, macos-arm64

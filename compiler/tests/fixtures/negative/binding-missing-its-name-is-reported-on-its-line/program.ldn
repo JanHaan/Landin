@@ -1,0 +1,5 @@
+f: (value: u32) -> (r: u32) =
+    first: u32 = value
+    := first + 1
+    r = first
+end f
