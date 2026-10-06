@@ -488,6 +488,7 @@ negative/malformed-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-hex-float-exponent | linux-x86-64, linux-arm64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, linux-arm64, macos-arm64
+negative/match-subject-left-unfinished-is-reported-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/measure-in-parentheses-is-written-bare | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/measuring-refused-types | linux-x86-64, linux-arm64, macos-arm64
 negative/misplaced-mut-is-moved-to-the-front | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1211,6 +1212,7 @@ negative/utf8-index-position-identity-is-exact | linux-x86-64, linux-arm64, maco
 negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm64
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64
 negative/value-left-out-before-a-line-break-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/value-left-out-before-a-multiline-statement-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/variant-case-declaration-duplicate-payload | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-does-not-belong | linux-x86-64, linux-arm64, macos-arm64
 negative/variant-case-duplicate | linux-x86-64, linux-arm64, macos-arm64

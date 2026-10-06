@@ -808,11 +808,38 @@ package body Landin.Syntax.Repairs is
          end loop;
          --  The `=` that opens the routine's body ends a line too, and
          --  continues nothing.
-         return Position >= 1
-           and then Position >= Body_First
-           and then Bytes (Position) in ',' | '(' | '[' | '+' | '-' | '*'
-                                         | '/' | '=' | '|' | '&' | '<' | '>'
-                                         | '.';
+         if Position < 1 or else Position < Body_First then
+            return False;
+         end if;
+         if Bytes (Position) in ',' | '(' | '[' | '+' | '-' | '*' | '/'
+                                | '=' | '|' | '&' | '<' | '>' | '.'
+         then
+            return True;
+         end if;
+         --  A word that asks for the value after it: an exit's `when`,
+         --  `addr`, and the logical words.
+         declare
+            Word_First : Natural := Position;
+         begin
+            while Word_First > 1
+              and then Bytes (Word_First - 1) in 'a' .. 'z' | '_'
+            loop
+               Word_First := Word_First - 1;
+            end loop;
+            if Word_First > 1
+              and then Bytes (Word_First - 1)
+                in 'A' .. 'Z' | '0' .. '9'
+            then
+               return False;
+            end if;
+            declare
+               Word : constant String := Bytes (Word_First .. Position);
+            begin
+               return Word = "when" or else Word = "addr"
+                 or else Word = "not" or else Word = "and"
+                 or else Word = "or";
+            end;
+         end;
       end Continues;
 
       --  Whether the next line that holds anything begins with a word that
@@ -861,6 +888,42 @@ package body Landin.Syntax.Repairs is
         is (not Pieces.Is_Empty
             and then Natural (Diag.Span_Of (Diag.Primary (Item)).First)
               >= Pieces.Last_Element.Last);
+
+      --  Whether the line above the one beginning at First begins with
+      --  `match`.
+      function Above_Begins_Match (First : Natural) return Boolean;
+
+      function Above_Begins_Match (First : Natural) return Boolean is
+         Above : Natural := First - 1;
+      begin
+         if First <= 2 then
+            return False;
+         end if;
+         while Above > 1 and then Bytes (Above - 1) /= ASCII.LF loop
+            Above := Above - 1;
+         end loop;
+         while Above < First - 1 and then Bytes (Above) in ' ' | ASCII.HT
+         loop
+            Above := Above + 1;
+         end loop;
+         return Starts_With (Above, First - 2, "match");
+      end Above_Begins_Match;
+
+      --  Whether a line opens more brackets than it closes.
+      function Opens_More (Pieces : Piece_Vectors.Vector) return Boolean;
+
+      function Opens_More (Pieces : Piece_Vectors.Vector) return Boolean is
+         Depth : Integer := 0;
+      begin
+         for One of Pieces loop
+            if One.Kind in Tok.Left_Paren | Tok.Left_Bracket then
+               Depth := Depth + 1;
+            elsif One.Kind in Tok.Right_Paren | Tok.Right_Bracket then
+               Depth := Depth - 1;
+            end if;
+         end loop;
+         return Depth > 0;
+      end Opens_More;
 
       --  The first error on a line inside a routine body: try every change
       --  in order and keep those that make the line parse.
@@ -963,7 +1026,23 @@ package body Landin.Syntax.Repairs is
            and then Pieces (1).Kind not in Tok.Kw_End | Tok.Kw_Else
              | Tok.Kw_Elsif | Tok.Kw_Complete | Tok.Right_Paren
              | Tok.Right_Bracket | Tok.Comma
-           and then Parses (Bytes (Line_First .. Line_Last), False, Value)
+           and then
+             (Parses (Bytes (Line_First .. Line_Last), False, Value)
+              --  A statement that goes on past its line, such as a call
+              --  whose argument is a block, is left to the routine's
+              --  reparse below to judge.
+              or else (Pieces (1).Kind in Tok.Kw_Defer | Tok.Kw_Undo
+                         | Tok.Kw_Mut | Tok.Identifier | Tok.Underscore
+                         | Tok.Kw_Return | Tok.Kw_If | Tok.Kw_Match
+                         | Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                       and then Opens_More (Pieces))
+              --  The first arm under a `match` head is an arm, which no
+              --  statement parses as.
+              or else (Natural (Pieces.Length) >= 2
+                       and then Pieces (1).Kind
+                         in Tok.Identifier | Tok.Underscore
+                       and then Pieces (2).Kind = Tok.Colon
+                       and then Above_Begins_Match (Line_First)))
          then
             declare
                Above_Last  : constant Natural := Line_First - 2;
@@ -1065,8 +1144,10 @@ package body Landin.Syntax.Repairs is
                --  parse where it is written, which a line read alone cannot
                --  show for an arm of a `match`, a labelled block or a loop.
                --  The routine is as far as a trial reads.
+               --  A broken line may be the head of a construct whose body
+               --  follows, which only the routine's reparse can judge.
                if Squeezed (Written) /= ""
-                 and then Parses (Written, Loops, Value)
+                 and then (Broken or else Parses (Written, Loops, Value))
                  and then Mends_File
                    (Bytes (Routine_First .. Line_First - 1) & Written
                     & Bytes (Line_Last + 1 .. Routine_Last),
@@ -1081,7 +1162,7 @@ package body Landin.Syntax.Repairs is
             if Broken then
                Consider
                  ((Appended, Natural (Pieces.Length),
-                   (if Pieces.Last_Element.Kind = Tok.Dot
+                   (if Pieces.Last_Element.Kind in Tok.Dot | Tok.Kw_Addr
                     then Want_Name else Want_Value)));
                goto Tried;
             end if;
@@ -1181,7 +1262,7 @@ package body Landin.Syntax.Repairs is
             --  whatever the parser made of the line it took for one.
             Restated_Report : Diag.Diagnostic := Diag.Make
               (Code    =>
-                 (if Broken and then Best.Insert = Want_Name
+                 (if Broken and then Pieces.Last_Element.Kind = Tok.Dot
                   then Rows.Code (Rows.Name_Expected)
                   elsif Broken
                   then Rows.Code (Rows.Expression_Expected)
@@ -1199,7 +1280,7 @@ package body Landin.Syntax.Repairs is
             --  label is the statement the next line begins.
             --  L0100's row takes no second place; the name is the
             --  whole complaint.
-            if Broken and then Best.Insert /= Want_Name then
+            if Broken and then Pieces.Last_Element.Kind /= Tok.Dot then
                declare
                   Next : Natural := Broken_At;
                   Last_Byte : Natural;
@@ -1255,7 +1336,8 @@ package body Landin.Syntax.Repairs is
                      "written as `"
                      & Unindented
                          (Applied (Pieces, Line_First, Line_Last, Best))
-                     & "` the line parses");
+                     & (if Broken then "` the routine parses"
+                        else "` the line parses"));
                else
                   Diag.Add_Note
                     (Restated_Report, Diag.Nth_Note (Item, Position));

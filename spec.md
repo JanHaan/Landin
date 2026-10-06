@@ -15286,13 +15286,15 @@ line a routine's signature is written on, longer than forty tokens, or when
 the report spans a construct of its own.
 
 A line the grammar read as continuing the one above, after an operator, an
-`=`, a `,`, an opener or a `.`, is tried differently, because a statement
-ends where its grammar does and a line break says nothing to the parser. If
-that line parses on its own as the statement it begins, the line break is the
-candidate: the line above is tried with the value it asked for written at its
-end, or a name after a `.`. The repair counts when the line above then
-parses, the following line is left unchanged, and the routine reports no more
-after it. The report is the missing value, L0102, or the missing name,
+`=`, a `,`, an opener, a `.`, or a word that asks for a value after it
+(`when`, `addr`, `not`, `and`, `or`), is tried differently, because a
+statement ends where its grammar does and a line break says nothing to the
+parser. If that line parses on its own as the statement it begins, or begins
+one that goes on past it, or is the first arm under a `match`, the line break
+is the candidate: the line above is tried with the value it asked for written
+at its end, or a name after a `.` or `addr`. The repair counts when the
+routine, with only that line changed, parses to its end with no report before
+the changed line's end and no more after it than before. The report is the missing value, L0102, or the missing name,
 L0100, at the token that asked for it; the report the parser made on the
 following line is not given. Only a program the parser has refused is tried,
 so a value the grammar accepts on the next line, at any indentation, keeps
@@ -15348,9 +15350,11 @@ offered repair the `fixes` suite compiles clean;
 `negative/statement-where-a-value-belongs-is-named`,
 `negative/names-assigned-as-a-list-are-refused-there`,
 `negative/selection-from-a-call`,
-`negative/register-class-as-operand-type-is-named` and
-`negative/name-left-out-after-a-dot-is-written-there`, whose one report is
-recorded; `positive/value-continued-at-any-indentation`, which holds a
+`negative/register-class-as-operand-type-is-named`,
+`negative/name-left-out-after-a-dot-is-written-there`,
+`negative/match-subject-left-unfinished-is-reported-there` and
+`negative/value-left-out-before-a-multiline-statement-is-written-there`,
+whose one report is recorded; `positive/value-continued-at-any-indentation`, which holds a
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 

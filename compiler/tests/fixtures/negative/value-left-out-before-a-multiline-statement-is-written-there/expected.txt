@@ -1,0 +1,11 @@
+error[L0102]: a value belongs after `=`
+  --> ../tests/fixtures/negative/value-left-out-before-a-multiline-statement-is-written-there/program.ldn:4:7
+  |
+4 |     r =
+  |       ^
+  --> ../tests/fixtures/negative/value-left-out-before-a-multiline-statement-is-written-there/program.ldn:5:5
+  |
+5 |     defer release(begin
+  |     ^^^^^ this begins the next statement
+  = note: written as `r = 0` the routine parses
+  = help: write a value after `=`

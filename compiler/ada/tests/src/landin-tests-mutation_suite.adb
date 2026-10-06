@@ -154,13 +154,15 @@ package body Landin.Tests.Mutation_Suite is
    --  line break inside a refused statement as the place a value was
    --  left out took the first to 1,592, and keeping a refused
    --  statement's lines -- continued, or indented under it -- quiet took
-   --  them to 1,637 and 54.  Set
+   --  them to 1,637 and 54.  A line break after a word that asks for a
+   --  value, before a statement that goes on past its line, or before
+   --  a `match` arm took the first to 1,650, 90 per cent.  Set
    --  LANDIN_MUTATION_TRACE to log each repair that does not give back
    --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
    --  to keep that mutant's text in the scratch directory as
    --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_637;
+   Floor_One_On_Line  : constant := 1_650;
    Ceiling_Off_Token  : constant := 54;
 
    function Image (Value : Natural) return String

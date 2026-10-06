@@ -3,5 +3,5 @@ error[L0100]: a name belongs after `.`
   |
 6 |     _ = s.
   |          ^
-  = note: written as `_ = s.name` the line parses
+  = note: written as `_ = s.name` the routine parses
   = help: write a name after `.`

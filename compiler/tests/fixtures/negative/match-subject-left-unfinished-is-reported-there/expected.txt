@@ -1,0 +1,7 @@
+error[L0100]: a name belongs after `.`
+  --> ../tests/fixtures/negative/match-subject-left-unfinished-is-reported-there/program.ldn:9:16
+  |
+9 |     match local.
+  |                ^
+  = note: written as `match local.name` the routine parses
+  = help: write a name after `.`

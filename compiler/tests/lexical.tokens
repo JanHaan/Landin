@@ -51757,6 +51757,59 @@ file negative/match-scalar-not-enabled/program.ldn tokens 47
   188 193 match
   194 197 end
   198 199 f
+file negative/match-subject-left-unfinished-is-reported-there/program.ldn tokens 52
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 30 kind
+  30 31 :
+  32 39 variant
+  48 52 leaf
+  53 54 |
+  63 67 pair
+  67 68 :
+  69 70 (
+  70 75 value
+  75 76 :
+  77 79 u8
+  79 80 )
+  85 88 end
+  89 93 kind
+  94 97 end
+  98 104 choice
+  106 110 pick
+  110 111 :
+  112 113 (
+  113 118 local
+  118 119 :
+  120 126 choice
+  126 127 )
+  128 130 ->
+  131 132 (
+  132 138 answer
+  138 139 :
+  140 142 u8
+  142 143 )
+  144 145 =
+  150 155 match
+  156 161 local
+  161 162 .
+  171 175 leaf
+  175 176 :
+  177 183 answer
+  184 185 =
+  186 187 1
+  196 200 pair
+  200 201 :
+  202 208 answer
+  209 210 =
+  211 212 2
+  217 220 end
+  221 226 match
+  227 230 end
+  231 235 pick
 file negative/measure-in-parentheses-is-written-bare/program.ldn tokens 29
   0 6 choice
   6 7 :
@@ -87001,6 +87054,41 @@ file negative/value-left-out-before-a-line-break-is-written-there/program.ldn to
   63 68 local
   69 72 end
   73 74 f
+file negative/value-left-out-before-a-multiline-statement-is-written-there/program.ldn tokens 34
+  0 7 release
+  7 8 :
+  9 10 (
+  10 11 n
+  11 12 :
+  13 16 u32
+  16 17 )
+  18 20 ->
+  21 25 none
+  26 27 =
+  28 31 end
+  32 39 release
+  41 44 run
+  44 45 :
+  46 47 (
+  47 48 )
+  49 51 ->
+  52 53 (
+  53 54 r
+  54 55 :
+  56 59 u32
+  59 60 )
+  61 62 =
+  67 68 r
+  69 70 =
+  75 80 defer
+  81 88 release
+  88 89 (
+  89 94 begin
+  103 104 1
+  109 112 end
+  112 113 )
+  114 117 end
+  118 121 run
 file negative/variant-case-declaration-duplicate-payload/program.ldn tokens 51
   0 6 choice
   6 7 :

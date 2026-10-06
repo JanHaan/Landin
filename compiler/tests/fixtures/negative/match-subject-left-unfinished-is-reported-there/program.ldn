@@ -1,0 +1,13 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (value: u8)
+    end kind
+end choice
+
+pick: (local: choice) -> (answer: u8) =
+    match local.
+        leaf: answer = 1
+        pair: answer = 2
+    end match
+end pick

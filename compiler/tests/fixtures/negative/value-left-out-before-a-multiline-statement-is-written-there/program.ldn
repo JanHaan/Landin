@@ -1,0 +1,8 @@
+release: (n: u32) -> none = end release
+
+run: () -> (r: u32) =
+    r =
+    defer release(begin
+        1
+    end)
+end run
