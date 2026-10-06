@@ -2148,6 +2148,35 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Kw_End and then Closes (Own) then
                   Advance;
                   Advance;
+                  --  `end if if`: the closing word written again, with
+                  --  nothing after it on the line, opens nothing -- an
+                  --  `if`, `while` or `for` needs its condition there --
+                  --  so it is a copy, said once and passed over.
+                  if Index > 1
+                    and then Peek = Tok.Kind (From, Index - 1)
+                    and then Peek in Tok.Kw_If | Tok.Kw_Loop
+                      | Tok.Kw_While | Tok.Kw_For | Tok.Kw_Match
+                      | Tok.Kw_Unchecked
+                    and then not Begins_Line (Index)
+                    and then (Ahead (1) = Tok.End_Of_Input
+                              or else Begins_Line (Index + 1))
+                  then
+                     Complain
+                       (Item    => Syn.Stray_Token,
+                        Where   => Here,
+                        Message => "`" & Tok.Spelling (Peek)
+                                   & "` is written twice after `end`",
+                        Note    => "[1810]: each `end` closes the construct"
+                                   & " it names, once",
+                        Fixes   =>
+                          [1 => Landin.Diagnostics.Fixes.Delete_Token
+                                  (Origin_Of,
+                                   (First => Previous.Last,
+                                    Last  => Here.Last),
+                                   "", Tok.Spelling (Peek),
+                                   Landin.Diagnostics.Exact)]);
+                     Advance;
+                  end if;
                   return Read;
                elsif Misclosed (Own, Open_Closers.Last_Index) then
                   declare

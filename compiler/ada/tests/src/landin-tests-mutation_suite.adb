@@ -149,14 +149,15 @@ package body Landin.Tests.Mutation_Suite is
    --  left none outside its function, leaving its body, or claiming that
    --  a closer it has is missing: those three are held at zero, as the
    --  exit evidence requires.  Naming the construct a misplaced form
-   --  belongs to took them to 1,537 and 59.  Set
+   --  belongs to took them to 1,537 and 59, and a closing word written
+   --  twice read as one copy to 1,551 of 1,829 and 56.  Set
    --  LANDIN_MUTATION_TRACE to log each repair that does not give back
    --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
    --  to keep that mutant's text in the scratch directory as
    --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_537;
-   Ceiling_Off_Token  : constant := 59;
+   Floor_One_On_Line  : constant := 1_551;
+   Ceiling_Off_Token  : constant := 56;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));

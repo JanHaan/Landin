@@ -35573,6 +35573,35 @@ file negative/character-literal-needs-u32/program.ldn tokens 5
   5 7 u8
   8 9 =
   10 13 'a'
+file negative/closing-word-written-twice-is-removed/program.ldn tokens 28
+  0 4 pick
+  4 5 :
+  6 7 (
+  7 11 flag
+  11 12 :
+  13 17 bool
+  17 18 )
+  19 21 ->
+  22 23 (
+  23 24 r
+  24 25 :
+  26 29 u32
+  29 30 )
+  31 32 =
+  37 38 r
+  39 40 =
+  41 42 0
+  47 49 if
+  50 54 flag
+  55 59 then
+  68 69 r
+  70 71 =
+  72 73 1
+  78 81 end
+  82 84 if
+  85 87 if
+  88 91 end
+  92 96 pick
 file negative/compiler-concept-reserved/main.ldn tokens 12
   0 8 zeroable
   8 9 :

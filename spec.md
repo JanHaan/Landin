@@ -15289,7 +15289,10 @@ it were written right: `sizeof(t)` is a measure with a call's parentheses,
 `name: concept (...)` a concept missing its `type =`, `else (_)` an error
 binding that binds nothing, `(a, b) = value` a destructuring written with
 an assignment's `=`, `f().x` a selection from a call, and `general` after an
-operand's `:` the register class where its type belongs. These are the grammar's own constructs, recognised by
+operand's `:` the register class where its type belongs. A closing word
+written again, as `end if if` or `end end match`, is one copy and is said
+once; the copy after `end if` opens nothing, because an `if` needs its
+condition on its line, so removing it is Exact. These are the grammar's own constructs, recognised by
 their tokens, not a table of other languages' spellings.
 
 **The alternatives:** Exact whenever one repair alone mends the line. It was
@@ -15310,7 +15313,8 @@ whose recorded report offers the move first and the removal second;
 `negative/measure-in-parentheses-is-written-bare`,
 `negative/concept-without-type-is-given-it`,
 `negative/unnamed-error-binding-is-removed` and
-`negative/missing-right-operand-is-reported-at-its-operator`, whose every
+`negative/missing-right-operand-is-reported-at-its-operator`,
+`negative/closing-word-written-twice-is-removed`, whose every
 offered repair the `fixes` suite compiles clean;
 `negative/statement-where-a-value-belongs-is-named`,
 `negative/names-assigned-as-a-list-are-refused-there`,

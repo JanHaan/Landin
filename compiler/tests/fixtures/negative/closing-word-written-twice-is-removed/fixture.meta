@@ -1,0 +1,7 @@
+class: negative
+summary: [1810] closes a construct with its word once, and the word written again after `end if` is reported at the copy and removed, a repair a tool may apply unasked
+program: program.ldn
+codes: L0110
+fixed: program.fixed
+constructs: 1050, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
