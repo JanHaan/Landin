@@ -1279,8 +1279,7 @@ package body Landin.Tests.Driver_Suite is
             "repeated targets are misuse: " & First & ", " & Second);
          Landin.Testing.Check
            (Item, Contains (Unbounded.To_String (Result.Report),
-                            "error[L0002]: unknown option: "
-                            & "--target given more than once"),
+                            "error[L0002]: --target may be given once"),
             "the repeated target has an option diagnostic");
          Landin.Testing.Check
            (Item, not Contains (Unbounded.To_String (Result.Output),
@@ -1638,10 +1637,10 @@ package body Landin.Tests.Driver_Suite is
                    Landin.Driver.Status_Misuse, "requires --emit=exe");
             Check (Help, First, "--toolchain=missing",
                    Landin.Driver.Status_Misuse,
-                   "incompatible compilation action", "--emit=exe");
+                   "takes no compilation option", "--emit=exe");
             Check (Help, First, "--linker=missing",
                    Landin.Driver.Status_Misuse,
-                   "incompatible compilation action", "--emit=exe");
+                   "takes no compilation option", "--emit=exe");
             Check (Help, First, "--target=synthetic-32",
                    Landin.Driver.Status_Success);
             Check (Help, First, "--build-mode=release",
@@ -1925,9 +1924,9 @@ package body Landin.Tests.Driver_Suite is
             Refused (Name & "=missing", "--emit=asm",
                      Name & " requires --emit=exe");
             Refused (Name & "=", "--emit=exe",
-                     "unknown option: " & Name & "=");
+                     Name & " needs a value after `=`");
             Refused (Name & "=named", "--emit=exe",
-                     "unknown option: " & Name & "=named", Repeat => True);
+                     Name & " may be given once", Repeat => True);
          end;
       end loop;
    end Link_Selections_Require_Executable_Output;
@@ -1961,6 +1960,106 @@ package body Landin.Tests.Driver_Suite is
             "the default assembly path holds the routine");
       end;
    end Assembly_Is_Written_Without_A_Tool;
+
+   --  An assembler that refuses a line an `assembler.block` wrote is
+   --  reported at that block, in the assembler's words; one it refuses
+   --  outside every block keeps the tool's output as it was.  The tool is
+   --  the fake, scripted with GNU as's own message shape.
+   procedure Assembler_Refusals_Name_Their_Block
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assembler_Refusals_Name_Their_Block
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "public main: () -> (code: i32) =" & LF
+        & "    assembler.block(""nop"")" & LF
+        & "    code = 0" & LF
+        & "end main" & LF;
+
+      function Refused_Line (Assembly : String; Wanted : String)
+        return Natural;
+
+      --  The line of Assembly that is Wanted once its tab is gone.
+      function Refused_Line (Assembly : String; Wanted : String)
+        return Natural
+      is
+         Line  : Natural := 1;
+         Start : Natural := Assembly'First;
+      begin
+         for Index in Assembly'First .. Assembly'Last loop
+            if Assembly (Index) = LF then
+               if Ada.Strings.Fixed.Trim
+                    (Assembly (Start .. Index - 1), Ada.Strings.Both)
+                  = Character'Val (9) & Wanted
+                 or else Assembly (Start .. Index - 1)
+                   = Character'Val (9) & Wanted
+               then
+                  return Line;
+               end if;
+               Line := Line + 1;
+               Start := Index + 1;
+            end if;
+         end loop;
+         return 0;
+      end Refused_Line;
+   begin
+      for In_Block in Boolean loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            First : Landin.Testing.Fakes.Fake_Filesystem;
+            First_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         begin
+            --  Find where the block's line is written, by emitting once.
+            First.Add_File ("main.ldn", Program);
+            declare
+               Emitted : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (Both ("main.ldn", "--emit=asm"), First, First_Tools);
+               pragma Unreferenced (Emitted);
+               Line : constant Natural := Refused_Line
+                 (First.Written (Landin.Driver.Default_Assembly),
+                  (if In_Block then "nop" else "ret"));
+            begin
+               Landin.Testing.Check
+                 (Item, Line > 0, "the refused line is in the assembly");
+               Host.Add_File ("main.ldn", Program);
+               Tools.Set_Result
+                 (1, "a.out.s: Assembler messages:" & LF
+                     & "a.out.s:" & Ada.Strings.Fixed.Trim
+                       (Natural'Image (Line), Ada.Strings.Both)
+                     & ": Error: no such instruction" & LF);
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute
+                      (Both ("main.ldn", "--emit=exe"), Host, Tools);
+                  Report : constant String :=
+                    Unbounded.To_String (Result.Report);
+               begin
+                  if In_Block then
+                     Landin.Testing.Check
+                       (Item,
+                        Contains (Report,
+                                  "error[L0501]: the assembler refused this"
+                                  & " block's `nop`: Error: no such"
+                                  & " instruction")
+                        and then Contains (Report, "--> main.ldn:2:5"),
+                        "a refused block line is reported at its block: "
+                        & Report);
+                  else
+                     Landin.Testing.Check
+                       (Item,
+                        Contains (Report, "failed with status 1")
+                        and then not Contains (Report, "this block"),
+                        "a line no block wrote keeps the tool's output: "
+                        & Report);
+                  end if;
+               end;
+            end;
+         end;
+      end loop;
+   end Assembler_Refusals_Name_Their_Block;
 
    procedure Missing_Toolchain_Precedes_Compilation
      (Item : in out Landin.Testing.Context);
@@ -5087,6 +5186,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "assembler refusals name their block",
+         Assembler_Refusals_Name_Their_Block'Access);
       Landin.Testing.Register
         (Into, "driver", "explain is a subcommand",
          Explain_Is_A_Subcommand'Access);

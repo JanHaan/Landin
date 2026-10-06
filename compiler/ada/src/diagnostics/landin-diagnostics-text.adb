@@ -121,6 +121,10 @@ package body Landin.Diagnostics.Text is
    begin
       if Into.Full then
          return;
+      --  A report about the command line or the host has no source, and
+      --  a location line that says so tells a reader nothing.
+      elsif Source_Of (Item) = No_Source then
+         return;
       elsif not Sources.Contains (Source_Of (Item)) then
          Append (Into, "  --> <unknown source>" & LF);
          return;

@@ -338,21 +338,21 @@ package body Landin.Tests.Diagnostics_Suite is
       end;
    end Ties_Are_Broken_Deterministically;
 
-   --  What a user sees before any file is read.  The negative fixture
-   --  records these exact bytes, so the renderer and the golden cannot
-   --  drift apart unnoticed.
-   procedure A_Sourceless_Diagnostic_Says_So
+   --  What a user sees before any file is read: the report and no
+   --  location line, since there is no source to point into.  The
+   --  negative fixture records these exact bytes, so the renderer and the
+   --  golden cannot drift apart unnoticed.
+   procedure A_Sourceless_Diagnostic_Has_No_Location
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Sourceless_Diagnostic_Says_So
+   procedure A_Sourceless_Diagnostic_Has_No_Location
      (Item : in out Landin.Testing.Context)
    is
       Sources : Landin.Source.Sets.Source_Set;
       List    : Diagnostic_List;
 
       Expected : constant String :=
-        "error[L0002]: unknown option: --wat" & LF
-        & "  --> <unknown source>" & LF;
+        "error[L0002]: unknown option: --wat" & LF;
    begin
       List.Append
         (Make ("L0002", Error, Landin.Source.No_Source,
@@ -363,7 +363,7 @@ package body Landin.Tests.Diagnostics_Suite is
          Landin.Diagnostics.Text.Render (List, Sources),
          Expected,
          "a diagnostic with no source renders without a snippet");
-   end A_Sourceless_Diagnostic_Says_So;
+   end A_Sourceless_Diagnostic_Has_No_Location;
 
    --  A stage can be wrong about a byte.  Rendering must say so rather
    --  than raise while explaining somebody else's mistake.
@@ -550,11 +550,8 @@ package body Landin.Tests.Diagnostics_Suite is
 
       Expected : constant String :=
         "error[L0140]: an error" & LF
-        & "  --> <unknown source>" & LF
         & "warning[L0141]: a warning" & LF
-        & "  --> <unknown source>" & LF
-        & "note[L0142]: a note" & LF
-        & "  --> <unknown source>" & LF;
+        & "note[L0142]: a note" & LF;
    begin
       List.Append
         (Make ("L0142", Note, Landin.Source.No_Source,
@@ -977,8 +974,8 @@ package body Landin.Tests.Diagnostics_Suite is
         (Into, "diagnostics", "ties are broken deterministically",
          Ties_Are_Broken_Deterministically'Access);
       Landin.Testing.Register
-        (Into, "diagnostics", "a sourceless diagnostic says so",
-         A_Sourceless_Diagnostic_Says_So'Access);
+        (Into, "diagnostics", "a sourceless diagnostic has no location",
+         A_Sourceless_Diagnostic_Has_No_Location'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "an impossible span is reported",
          An_Impossible_Span_Is_Reported'Access);

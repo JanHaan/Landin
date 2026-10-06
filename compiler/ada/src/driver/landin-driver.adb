@@ -19,7 +19,9 @@ with Landin.Optimization;
 with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Explanations;
+with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Text;
+with Landin.Driver.Assembler_Sites;
 with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.Formatting;
@@ -848,6 +850,178 @@ package body Landin.Driver is
          procedure Note_Failure
            (Code : Landin.Diagnostics.Code_String; Text : String);
 
+         --  What is wrong with an argument the driver refused.  A known
+         --  option misused is said to be misused, and how; an unknown one
+         --  is named with the known option nearest it, when one is near.
+         function Option_Problem (Option : String) return String;
+
+         --  The options `refine` reads, each as it is spelled before any
+         --  `=`, and those that read a value after it.
+         function Is_Known_Option (Stem : String) return Boolean
+           is (Stem in "--help" | "--identify" | "--target" | "--level"
+                     | "--option" | "--build-mode" | "--optimize"
+                     | "--specialize" | "--panic-map" | "--debug"
+                     | "--build-report" | "--stage-report" | "--root"
+                     | "--emit" | "-o" | "--toolchain" | "--linker"
+                     | "--firmware-entry");
+
+         --  How many times an option with this stem was written.
+         function Times_Written (Stem : String) return Natural;
+
+         function Times_Written (Stem : String) return Natural is
+            Seen : Natural := 0;
+         begin
+            for Written of Arguments loop
+               if Written = Stem
+                 or else Starts_With (Written, Stem & "=")
+               then
+                  Seen := Seen + 1;
+               end if;
+            end loop;
+            return Seen;
+         end Times_Written;
+
+         --  The values an option takes, for a report that one was refused.
+         function Accepted_Values (Stem : String) return String
+           is (if Stem = "--optimize" then "; it takes none, size or speed"
+               elsif Stem = "--specialize" then
+                 "; it takes off, auto or all"
+               elsif Stem = "--debug" then
+                 "; it takes none, full or lines"
+               elsif Stem = "--emit" then "; it takes asm or exe"
+               else "");
+
+         type Spelling_Access is access constant String;
+         Target_Spellings : constant array (Positive range <>)
+           of Spelling_Access :=
+             [new String'("linux-x86-64"), new String'("linux-arm64"),
+              new String'("darwin-arm64"), new String'("cortex-m0"),
+              new String'("synthetic-32")];
+         Option_Spellings : constant array (Positive range <>)
+           of Spelling_Access :=
+             [new String'("--help"), new String'("--identify"),
+              new String'("--target"), new String'("--level"),
+              new String'("--option"), new String'("--build-mode"),
+              new String'("--optimize"), new String'("--specialize"),
+              new String'("--panic-map"), new String'("--debug"),
+              new String'("--build-report"), new String'("--stage-report"),
+              new String'("--root"), new String'("--emit"),
+              new String'("--toolchain"), new String'("--linker"),
+              new String'("--firmware-entry")];
+
+         --  Why the options given cannot be one request.
+         function Incompatible_Action return String
+           is (if (Optimize_Seen or Specialize_Seen or Report_Seen
+                   or Debug_Seen or Panic_Map or Stage_Report_Seen
+                   or Toolchain_Seen or Linker_Seen)
+                  and then (Wants_Usage or Wants_Identity)
+               then (if Wants_Usage then "--help" else "--identify")
+                    & " prints and compiles nothing, so it takes no"
+                    & " compilation option"
+               elsif (Report_Seen or Debug_Seen or Firmware_Seen
+                      or Panic_Map)
+                 and then Emit = Emit_Nothing
+               then "--build-report, --debug, --firmware-entry and"
+                    & " --panic-map describe what is emitted; add --emit"
+               elsif (Optimize_Seen or Specialize_Seen)
+                 and then Natural (Inputs.Length) = 0
+               then "--optimize and --specialize need a source to compile"
+               elsif Emit = Emit_Nothing
+               then "-o names what is emitted, and nothing is: add"
+                    & " --emit=asm or --emit=exe"
+               else "-o needs a path");
+
+         --  "; did you mean T?" for the described target nearest Name,
+         --  or "".  `macos` is what a reader calls `darwin`.
+         function Nearest_Target (Name : String) return String;
+
+         function Nearest_Target (Name : String) return String is
+            Offered : Landin.Diagnostics.Suggestions.Ranking;
+            Asked   : constant String :=
+              (if Starts_With (Name, "macos")
+               then "darwin" & Name (Name'First + 5 .. Name'Last)
+               else Name);
+         begin
+            for Known of Target_Spellings loop
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Asked, Known.all);
+            end loop;
+            if Asked /= Name
+              and then Landin.Targets.Selection.Is_Described (Asked)
+            then
+               return "; did you mean " & Asked & "?";
+            elsif Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
+               return "";
+            end if;
+            return "; did you mean "
+              & Landin.Diagnostics.Suggestions.Nth (Offered, 1) & "?";
+         end Nearest_Target;
+
+         --  The known option nearest an unknown one, or "".
+         function Nearest_Option (Stem : String) return String;
+
+         function Nearest_Option (Stem : String) return String is
+            Offered : Landin.Diagnostics.Suggestions.Ranking;
+         begin
+            --  What other compilers spell these, which no edit distance
+            --  reaches.
+            if Stem in "--version" | "-v" | "-V" then
+               return "--identify";
+            elsif Stem = "-g" then
+               return "--debug=full";
+            elsif Stem in "--check" | "--format" then
+               return "`refine fmt --check` (checking needs no option)";
+            elsif Stem = "-O" or else Starts_With (Stem, "-O") then
+               return "--optimize";
+            end if;
+            for Known of Option_Spellings loop
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Stem, Known.all);
+            end loop;
+            if Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
+               return "";
+            end if;
+            return Landin.Diagnostics.Suggestions.Nth (Offered, 1);
+         end Nearest_Option;
+
+         function Option_Problem (Option : String) return String is
+            Equals : constant Natural :=
+              Ada.Strings.Fixed.Index (Option, "=");
+            Stem : constant String :=
+              (if Equals = 0 then Option
+               else Option (Option'First .. Equals - 1));
+            Value : constant String :=
+              (if Equals = 0 then ""
+               else Option (Equals + 1 .. Option'Last));
+         begin
+            if Option = "incompatible compilation action" then
+               return Incompatible_Action;
+            elsif Option = "--target given more than once" then
+               return "--target may be given once";
+            elsif Option = "--level given more than once" then
+               return "--level may be given once";
+            elsif Is_Known_Option (Stem) then
+               if Times_Written (Stem) > 1 then
+                  return Stem & " may be given once";
+               elsif Equals /= 0 and then Value = "" then
+                  return Stem & " needs a value after `=`";
+               elsif Equals /= 0 then
+                  return Stem & " does not take `" & Value & "`"
+                    & Accepted_Values (Stem);
+               elsif Stem = "-o" then
+                  return "-o needs a path after it";
+               end if;
+               return Stem & " is not used this way";
+            end if;
+            declare
+               Near : constant String := Nearest_Option (Stem);
+            begin
+               return "unknown option: " & Option
+                 & (if Near /= "" then "; did you mean " & Near & "?"
+                    else "");
+            end;
+         end Option_Problem;
+
          procedure Note_Failure
            (Code : Landin.Diagnostics.Code_String; Text : String)
          is
@@ -867,6 +1041,9 @@ package body Landin.Driver is
          --  The peak is a high-water mark, so the stage that raised it is
          --  the one whose row first shows the new value.
          Stage_Rows : Unbounded.Unbounded_String;
+         --  The stage running now, for a defect to say where it arose.
+         Current_Stage : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String ("the driver");
          Stage_Start : Landin.Platform.Resource_Sample;
 
          procedure Stage_Began;
@@ -906,7 +1083,10 @@ package body Landin.Driver is
          begin
             if Finished then
                Stage_Ended (Name);
+               Current_Stage := Unbounded.To_Unbounded_String ("the driver");
             else
+               Current_Stage := Unbounded.To_Unbounded_String
+                 ("the " & Name & " stage");
                Stage_Began;
             end if;
          end Watch_Stage;
@@ -1767,11 +1947,38 @@ package body Landin.Driver is
                      & Unbounded.To_String (Ran.Output));
                elsif Ran.Exit_Code /= 0 then
                   Restore_Output;
-                  Note_Failure
-                    (Code_Toolchain_Failed,
-                     Driver & " failed with status"
-                     & Integer'Image (Ran.Exit_Code) & LF
-                     & Unbounded.To_String (Ran.Output));
+                  --  A line the assembler refused inside an assembly
+                  --  block is the program's, and is reported there.
+                  declare
+                     Written_Assembly : Unbounded.Unbounded_String;
+                     Read : Landin.Platform.Read_Status;
+                     Found : Landin.Diagnostics.Diagnostic_List;
+                     Placed : Boolean := False;
+                  begin
+                     Host.Read_File (Assembly_Path, Written_Assembly, Read);
+                     if Read = Landin.Platform.Read_Ok then
+                        Landin.Driver.Assembler_Sites.Place
+                          (Output  => Unbounded.To_String (Ran.Output),
+                           Emitted => Unbounded.To_String (Written_Assembly),
+                           Code    => Landin.Stages.Code (Context).all,
+                           Names   => Landin.Stages.Identities (Context).all,
+                           Facts   => Facts,
+                           Into    => Found,
+                           Placed  => Placed);
+                     end if;
+                     if Placed then
+                        for Index in 1 .. Landin.Diagnostics.Count (Found) loop
+                           Landin.Stages.Report
+                             (Context, Landin.Diagnostics.Get (Found, Index));
+                        end loop;
+                     else
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Driver & " failed with status"
+                           & Integer'Image (Ran.Exit_Code) & LF
+                           & Unbounded.To_String (Ran.Output));
+                     end if;
+                  end;
                elsif not Tools.Output_Produced (Host, Target_Path) then
                   Restore_Output;
                   Note_Failure
@@ -1861,7 +2068,9 @@ package body Landin.Driver is
          end loop;
 
          for Name of Rejected loop
-            Note_Failure (Code_Unknown_Target, "unknown target: " & Name);
+            Note_Failure
+              (Code_Unknown_Target,
+               "unknown target: " & Name & Nearest_Target (Name));
          end loop;
 
          --  Without a description of its own host the compiler has nothing
@@ -1882,7 +2091,7 @@ package body Landin.Driver is
          end if;
 
          for Option of Unknowns loop
-            Note_Failure (Code_Unknown_Option, "unknown option: " & Option);
+            Note_Failure (Code_Unknown_Option, Option_Problem (Option));
          end loop;
 
          if Emit /= Emit_Executable then
@@ -2062,6 +2271,7 @@ package body Landin.Driver is
          end if;
 
          if not Skip_Compilation then
+            Current_Stage := Unbounded.To_Unbounded_String ("loading");
             Stage_Began;
             if Natural (Roots.Length) > 0 then
                if Natural (Inputs.Length) = 1 then
@@ -2113,6 +2323,7 @@ package body Landin.Driver is
                  and then not Bad_Use
                  and then not Landin.Stages.Failed (Context)
                then
+                  Current_Stage := Unbounded.To_Unbounded_String ("emission");
                   Stage_Began;
                   Emit_Requested;
                   Stage_Ended ("emission");
@@ -2162,11 +2373,18 @@ package body Landin.Driver is
          --  only thing a refused field produced.  So the report is
          --  rendered from what the context holds, the defect is written
          --  under it, and the status says which of the two happened.
-         when others =>
+         --  It names the stage it arose in and what it said, so a reader
+         --  can say which construct broke it without a debugger.
+         when Defect : others =>
             Result.Report :=
               Unbounded.To_Unbounded_String
                 (Landin.Stages.Rendered_Report (Context)
-                 & "refine: internal compiler defect" & LF);
+                 & "refine: internal compiler defect in "
+                 & Unbounded.To_String (Current_Stage)
+                 & (if Ada.Exceptions.Exception_Message (Defect) = ""
+                    then ""
+                    else ": " & Ada.Exceptions.Exception_Message (Defect))
+                 & LF);
             Result.Status := Status_Defect;
       end;
 

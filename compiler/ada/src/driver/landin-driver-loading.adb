@@ -143,12 +143,23 @@ package body Landin.Driver.Loading is
 
                         when Landin.Platform.Not_Found =>
                            Note_Failure
-                             (Context, "source not found: " & Path);
+                             (Context,
+                              "source not found: " & Path
+                              & (if Path in "check" | "build" | "run"
+                                   | "test" | "version"
+                                 then "; `refine " & Path & "` is not a"
+                                      & " command: name the source to"
+                                      & " check it, as `refine FILE`"
+                                 else ""));
 
                         when Landin.Platform.Not_Readable =>
                            Note_Failure
                              (Context,
-                              "source not readable: " & Path);
+                              (if Host.Is_Directory (Path)
+                               then Path & " is a directory: name its"
+                                    & " source files, or compile it as a"
+                                    & " module with --root=DIR " & Path
+                               else "source not readable: " & Path));
                      end case;
                   end;
                end if;
