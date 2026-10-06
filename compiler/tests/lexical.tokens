@@ -26163,6 +26163,55 @@ file positive/undo-evaluates-on-failure/program.ldn tokens 155
   744 750 return
   751 754 end
   755 772 recovered_failure
+file positive/value-continued-at-any-indentation/program.ldn tokens 48
+  269 274 total
+  274 275 :
+  276 277 (
+  277 278 a
+  278 279 :
+  280 283 u32
+  283 284 ,
+  285 286 b
+  286 287 :
+  288 291 u32
+  291 292 ,
+  293 297 flag
+  297 298 :
+  299 303 bool
+  303 304 )
+  305 307 ->
+  308 309 (
+  309 310 r
+  310 311 :
+  312 315 u32
+  315 316 )
+  317 318 =
+  323 326 sum
+  326 327 :
+  328 331 u32
+  332 333 =
+  338 339 a
+  340 341 +
+  342 343 b
+  348 354 picked
+  354 355 :
+  356 359 u32
+  360 361 =
+  362 364 if
+  365 369 flag
+  370 374 then
+  375 376 a
+  377 381 else
+  382 383 b
+  384 387 end
+  388 390 if
+  395 396 r
+  397 398 =
+  399 402 sum
+  403 404 +
+  409 415 picked
+  416 419 end
+  420 425 total
 file positive/variant-case-construction/program.ldn tokens 215
   0 6 choice
   6 7 :

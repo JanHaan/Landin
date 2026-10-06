@@ -1502,6 +1502,7 @@ positive/unary-binds-tightest | linux-x86-64, linux-arm64, macos-arm64
 positive/unchecked-marks-only-the-edges-it-removes | linux-x86-64, linux-arm64, macos-arm64
 positive/unchecked-regions | linux-x86-64, linux-arm64, macos-arm64
 positive/undo-evaluates-on-failure | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+positive/value-continued-at-any-indentation | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 positive/variant-case-construction | linux-x86-64, linux-arm64, macos-arm64
 positive/variant-inside-an-element | linux-x86-64, linux-arm64, macos-arm64
 positive/variant-match-array-payload-bindings | linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -1,0 +1,12 @@
+--  [1810]: a statement ends where its grammar does, not where its line
+--  does, so a value that continues on the next line may stand at any
+--  indentation.  A recovery that read a shallower next line as the start
+--  of a new statement would refuse every line here.
+total: (a: u32, b: u32, flag: bool) -> (r: u32) =
+    sum: u32 =
+    a + b
+    picked: u32 =
+if flag then a else b end if
+    r = sum +
+    picked
+end total
