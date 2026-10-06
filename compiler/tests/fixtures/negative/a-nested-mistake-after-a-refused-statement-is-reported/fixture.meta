@@ -1,0 +1,9 @@
+class: negative
+summary: [1810] reports a refused statement once, and a mistake in a construct the next line opens is its own: the `if` after a refused line resets the quiet, so the mistake in its body is reported
+program: program.ldn
+codes: L0110, L0102
+constructs: 1050, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn
+status: 1

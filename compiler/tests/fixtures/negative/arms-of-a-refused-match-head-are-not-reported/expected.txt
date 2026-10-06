@@ -1,0 +1,6 @@
+error[L0110]: this begins no statement
+  --> ../tests/fixtures/negative/arms-of-a-refused-match-head-are-not-reported/program.ldn:9:11
+  |
+9 |     local match.kind
+  |           ^^^^^
+  = note: [1810]: a statement is a binding, an assignment, an `inc` or `dec`, a discard, a call, a `return` or a control expression

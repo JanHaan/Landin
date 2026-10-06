@@ -1,0 +1,6 @@
+pick: (flag: bool) -> (r: u32) =
+    r = 0 0
+    if flag then
+        r = := 1
+    end if
+end pick

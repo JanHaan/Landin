@@ -152,14 +152,16 @@ package body Landin.Tests.Mutation_Suite is
    --  belongs to took them to 1,537 and 59, and a closing word written
    --  twice read as one copy to 1,551 of 1,829 and 56.  Trying the
    --  line break inside a refused statement as the place a value was
-   --  left out took the first to 1,592.  Set
+   --  left out took the first to 1,592, and keeping a refused
+   --  statement's lines -- continued, or indented under it -- quiet took
+   --  them to 1,637 and 54.  Set
    --  LANDIN_MUTATION_TRACE to log each repair that does not give back
    --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
    --  to keep that mutant's text in the scratch directory as
    --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_592;
-   Ceiling_Off_Token  : constant := 56;
+   Floor_One_On_Line  : constant := 1_637;
+   Ceiling_Off_Token  : constant := 54;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));

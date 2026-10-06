@@ -15219,7 +15219,12 @@ whatever is open, and recovery that would skip further stops there, so a
 mistake is never reported in another routine. Inside the body, a statement
 reports at most once, and what follows on its line, including a construct
 opened there, is the rest of that mistake; lines inside a bracket it opened
-are part of it too. A header that lacks `then` or `do` where it belongs
+are part of it too, as are the lines after it that begin with an operator
+only a binary expression takes, and the lines after it indented deeper than
+its own, which are the body of the construct it failed to open, such as the
+arms of a `match` whose word is out of place. The first line no deeper
+begins anew, so a mistake inside a construct that line opens is its own. A
+header that lacks `then` or `do` where it belongs
 begins its body after one written later on its line. A transfer's label is
 written on its line, so a name on the next line begins the next statement. A value with more of its block after
 it is reported as not being a statement, and the block goes on. A closer that
@@ -15242,8 +15247,11 @@ only to choose between closers the grammar already accepts, and a program
 that parses is never read differently. Reporting every mistake a statement
 holds, which reports the first mistake's consequences as if they were others.
 
-**Pinned by** the `mutation` suite, `parser/calls respect the nesting limit`
-and `negative/misspelt-keyword-is-offered-the-keyword`.
+**Pinned by** the `mutation` suite, `parser/calls respect the nesting limit`,
+`negative/misspelt-keyword-is-offered-the-keyword`,
+`negative/arms-of-a-refused-match-head-are-not-reported`, and
+`negative/a-nested-mistake-after-a-refused-statement-is-reported`, whose
+second, independent report the indentation does not quiet.
 
 ### D261 — A refused statement is reported as the smallest change that mends it
 

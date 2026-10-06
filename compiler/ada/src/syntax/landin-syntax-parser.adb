@@ -231,6 +231,10 @@ package body Landin.Syntax.Parser is
             --  does a statement exist to be quiet in.
             Body_Level : Natural := 0;
             Statement_Reported : Boolean := False;
+            --  The indentation of the line the block item being read
+            --  began on: lines deeper than a refused statement's are the
+            --  body of the construct it failed to open.
+            Item_Indent : Natural := 0;
             --  Whether anything was reported in the routine being read.
             Routine_Reported : Boolean := False;
             --  Whether the module-level declaration just read reported.
@@ -6912,10 +6916,29 @@ package body Landin.Syntax.Parser is
                   --  A statement written on a line of its own is a new
                   --  one; one that shares the line of a report is what
                   --  that report's mistake left behind.
+                  --  A line that begins with an operator only a binary
+                  --  expression takes continues the statement above, and
+                  --  is that statement's to report.
+                  --  A line indented deeper than a refused statement's
+                  --  is the body of the construct the statement failed to
+                  --  open -- the arms of a `match` whose word is missing --
+                  --  and what the refusal left behind.  The indentation
+                  --  only quiets reports; it decides nothing that parses.
                   if Begins_Line (Index)
                     and then not Inside_Open_Bracket (Index)
+                    and then not (Statement_Reported
+                                  and then Pre.Is_Binary (Peek)
+                                  and then not Pre.Is_Prefix (Peek))
+                    and then not (Statement_Reported
+                                  and then Peek /= Tok.Kw_End
+                                  and then Indent_Of (Index)
+                                    > Integer (Item_Indent))
                   then
                      Statement_Reported := False;
+                  end if;
+                  if Begins_Line (Index) and then not Statement_Reported
+                  then
+                     Item_Indent := Natural'Max (0, Indent_Of (Index));
                   end if;
                   declare
                      Before : constant Tok.Token_Index := Index;

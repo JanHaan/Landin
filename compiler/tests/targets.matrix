@@ -57,6 +57,7 @@ end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, macos-arm64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, macos-arm64
+negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, linux-arm64, macos-arm64
 negative/aggregate-call-result-not-assigned-on-every-path | linux-x86-64, linux-arm64, macos-arm64
 negative/anonymous-function-captures-local | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -77,6 +78,7 @@ negative/arena-block-names-owner | linux-x86-64, linux-arm64, macos-arm64
 negative/arena-block-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/arena-type-names-owner | linux-x86-64, linux-arm64, macos-arm64
 negative/arena-type-not-enabled | linux-x86-64, linux-arm64, macos-arm64
+negative/arms-of-a-refused-match-head-are-not-reported | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/array-any-assignment-concept | linux-x86-64, linux-arm64, macos-arm64
 negative/array-any-copy-concept | linux-x86-64, linux-arm64, macos-arm64
 negative/array-any-deduction-concept | linux-x86-64, linux-arm64, macos-arm64

@@ -1,0 +1,17 @@
+error[L0110]: `0` does not belong here
+  --> ../tests/fixtures/negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn:2:11
+  |
+2 |     r = 0 0
+  |           ^
+  = note: written as `r = 0` the line parses
+  = help: remove `0`
+error[L0102]: an expression belongs here
+  --> ../tests/fixtures/negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn:4:13
+  |
+4 |         r = := 1
+  |             ^^
+  --> ../tests/fixtures/negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn:4:11
+  |
+4 |         r = := 1
+  |           ^ required by this
+  = note: [1820]: a literal, a name, a call or a parenthesised expression
