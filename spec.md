@@ -3641,6 +3641,10 @@ The element type must start on the bracket's line. A following declaration
 boundary, `name:` or `name :=` (including `mut name`), instead leaves the
 bracketed expression complete. Thus an array literal followed by another
 declaration on the same line retains its existing meaning.
+A complete following assignment destination, an indexed call head or a
+destructuring list followed by `:=` likewise starts the next statement.
+Recognizing those boundaries does not reinterpret an incomplete type prefix:
+for example, `[]u8[0]` without a following assignment or call remains malformed.
 
 `ptr(value)` retains [0470]'s contextual integer-to-pointer conversion and
 its untracked origin. `ptr T(value)` instead applies the written pointer type,

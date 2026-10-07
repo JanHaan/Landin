@@ -94103,6 +94103,18 @@ file negative/written-type-origin-escape/main.ldn tokens 95
   346 347 )
   348 351 end
   352 363 bad_pointer
+file negative/written-type-postfix-call/main.ldn tokens 11
+  0 3 bad
+  4 6 :=
+  7 8 (
+  8 9 )
+  10 12 ->
+  13 17 none
+  17 18 (
+  18 23 value
+  23 24 )
+  24 25 (
+  25 26 )
 file negative/written-type-postfix-index/main.ldn tokens 11
   0 3 bad
   4 6 :=
