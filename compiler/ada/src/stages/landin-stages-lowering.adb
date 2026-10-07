@@ -6697,12 +6697,19 @@ package body Landin.Stages.Lowering is
                         IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
                         Position, Ty.Usize, Site);
                   else
-                     Address := IR.Emit_Slice_Address
-                       (Unit.all, Filling,
-                        IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
-                        IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
-                        Position, Position, Slice_Shape (Of_Tree, Node), True,
-                        Site, Required => True);
+                     declare
+                        --  Ada does not order actual argument evaluation.
+                        --  Emit the loads in one stable IR order instead.
+                        Base : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Base_Slot, Site);
+                        Length : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Length_Slot, Site);
+                     begin
+                        Address := IR.Emit_Slice_Address
+                          (Unit.all, Filling, Base, Length,
+                           Position, Position, Slice_Shape (Of_Tree, Node),
+                           True, Site, Required => True);
+                     end;
                   end if;
                   return IR.Emit_Load_Indirect
                     (Unit.all, Filling, Address, Ty.U8, Site);
@@ -6810,16 +6817,18 @@ package body Landin.Stages.Lowering is
                if Conversion = Landin.Checking.C_String_To_Utf8 then
                   IR.Emit_Jump (Unit.all, Filling, Inspect, Site);
                else
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Equal_To,
-                        IR.Emit_Load
-                          (Unit.all, Filling, Cursor_Slot, Site),
-                        IR.Emit_Load
-                          (Unit.all, Filling, Length_Slot, Site),
-                        Ty.Bool, Site),
-                     Done, Inspect, Site);
+                  declare
+                     Cursor : constant IR.Value_Id := IR.Emit_Load
+                       (Unit.all, Filling, Cursor_Slot, Site);
+                     Length : constant IR.Value_Id := IR.Emit_Load
+                       (Unit.all, Filling, Length_Slot, Site);
+                     At_End : constant IR.Value_Id := IR.Emit_Binary
+                       (Unit.all, Filling, IR.Equal_To, Cursor, Length,
+                        Ty.Bool, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, At_End, Done, Inspect, Site);
+                  end;
                end if;
                IR.Leave_Block (Unit.all, Filling);
                Current := IR.No_Block;
