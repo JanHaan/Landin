@@ -217,10 +217,14 @@ the same verdicts.
 Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
 gate, or from a host you run yourself; the former exact-revision native
 acceptance runner is retired.
-A Darwin change is run on a Mac before it is pushed, and LLDB there must be
-started from a terminal session: a background session such as a remote
-agent's cannot launch a debugged process, however the debugger rights are
-set. The first native Mac run's retained
+A Darwin change is run on a Mac before it is pushed. For development, start
+LLDB from a terminal session: a background session such as a remote agent's
+cannot launch a debugged process, however the debugger rights are set.
+The GitHub runner's LaunchAgent instead inherits the logged-in Aqua security
+session: it omits `SessionCreate` and requires `LimitLoadToSessionType=Aqua`.
+Use its custom reinstall helper, recorded in
+[the runner setup](docs/environments.md#github-actions-runners), to preserve
+that service configuration. The first native Mac run's retained
 expected-refusal transcript, in which the unfiltered harness failed only for
 want of a Linux driver, is historical bootstrap evidence, never a current
 success rule.

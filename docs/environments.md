@@ -71,8 +71,28 @@ The FreeBSD VM controllers retain their existing SSH and guest setup.
 The Darwin runner uses its `xcode-select` developer directory. Its Command
 Line Tools match `environments/macos-arm64/policy.json`; a versioned Xcode
 application path is required only for the hosted `macos-26` fallback.
-The runner account needs Python 3, Git, curl, SHA256 and archive tools, and
-permission to launch LLDB targets from its runner session.
+The runner account needs Python 3, Git, curl, SHA256 and archive tools.
+Its LaunchAgent requires `LimitLoadToSessionType=Aqua` and omits
+`SessionCreate`, so it inherits the logged-in GUI security audit session.
+The default service template's `SessionCreate=true` created a separate
+session without graphical or terminal access and caused LLDB to refuse
+process launch, even with a pseudo-terminal. The fix changes only this
+runner's service; debugger authorization, DevToolsSecurity and group
+membership remain as configured.
+
+The service still starts at login and requires `jan` to remain logged into
+an Aqua GUI session. To reinstall it, use
+`/Users/jan/actions-runner-landin/install-service.sh`, which selects
+`service/actions.runner.aqua.plist.template` through
+`GITHUB_ACTIONS_RUNNER_SERVICE_TEMPLATE`; plain `svc.sh install` would
+restore the default session behavior. The host's before/after service
+files and diagnostic transcripts live under
+`/Users/jan/.local/state/landin/runner-debug/2026-10-07`.
+
+[The actual service inspection](https://github.com/JanHaan/Landin/actions/runs/37657619938/job/112923344689)
+passed after the restart: LLDB launched an arm64 program, stopped at its
+`main` breakpoint, continued and observed exit zero. This is a service
+smoke check, not the full debugger corpus verdict.
 
 [The runner inspection](https://github.com/JanHaan/Landin/actions/runs/37657040045)
 checked the three compiler hosts on 2026-10-07: both Linux hosts reported
