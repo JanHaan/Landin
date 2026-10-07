@@ -2,4 +2,4 @@ class: positive
 summary: native f64 parameters and results are accepted at the C ABI boundary
 constructs: 0170, 1580
 program: program.ldn
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

@@ -3,7 +3,7 @@ summary: D162 keeps [0290]'s remainder operator in the integer-only subset
 constructs: 0210, 0290, 1890
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/float-remainder-is-integer-only/program.ldn
 status: 1

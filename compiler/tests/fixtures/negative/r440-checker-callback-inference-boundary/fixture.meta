@@ -3,4 +3,4 @@ summary: D25 infers a callable literal element, while counted repetition refuses
 program: program.ldn
 codes: L0304
 constructs: 0520, 0530, 0560, 1580
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

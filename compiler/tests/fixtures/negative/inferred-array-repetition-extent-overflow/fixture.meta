@@ -3,4 +3,4 @@ summary: inferred repetition extent must fit the target usize
 constructs: 0040, 0050, 0530, 0560, 1740, 1810
 program: program.ldn
 codes: L0300, L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

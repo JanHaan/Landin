@@ -3,7 +3,7 @@ summary: [1790] writes a binding's name first, on its line, so a `:=` that begin
 program: program.ldn
 codes: L0100
 constructs: 0390, 1790, 1810
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/binding-missing-its-name-is-reported-on-its-line/program.ldn
 status: 1

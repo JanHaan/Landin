@@ -3,4 +3,4 @@ summary: every module mixed repetition prefix expression is static-known
 constructs: 0040, 0520, 0560, 1740, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

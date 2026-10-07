@@ -4,6 +4,7 @@ package body Landin.Targets.Selection is
 
    function Is_Described (Name : String) return Boolean
      is (Name in "linux-x86-64" | "linux-arm64" | "darwin-arm64"
+                | "freebsd-x86-64" | "freebsd-arm64"
                 | "cortex-m0" | "synthetic-32");
 
    function Described (Name : String) return Target_Facts is
@@ -12,6 +13,10 @@ package body Landin.Targets.Selection is
          return Linux_X86_64;
       elsif Name = "linux-arm64" then
          return Linux_Arm64;
+      elsif Name = "freebsd-x86-64" then
+         return FreeBSD_X86_64;
+      elsif Name = "freebsd-arm64" then
+         return FreeBSD_Arm64;
       elsif Name = "darwin-arm64" then
          return Darwin_Arm64;
       elsif Name = "cortex-m0" then

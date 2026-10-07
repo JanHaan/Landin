@@ -1191,3 +1191,11 @@ loop transfers. Firmware BSS has an explicit RAM LMA and no load payload.
 These repairs add no syntax, register metadata semantics, IR operation or
 general C support. Routine debugger-risk policy covers both native backends;
 Cortex has the explicit line/function source-debugging contract.
+
+The FreeBSD x86-64 and arm64 descriptions share the existing ELF backends and
+C ABI planners. Hosted libc spelling remains in `Hosted_ABI`, target identity
+and availability in `Targets` and `Targets.Capabilities`, and Clang/sysroot
+argument policy in `Backend.Toolchain`. `compiler.os` selects libc records
+without changing C transport facts. The FreeBSD supervisor emits on Linux;
+its VM effects belong to the external test environment. See the
+[FreeBSD lanes](../tests/freebsd/README.md).

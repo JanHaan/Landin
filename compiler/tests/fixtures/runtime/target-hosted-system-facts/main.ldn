@@ -1,0 +1,22 @@
+fixed if compiler.os == freebsd then
+    compiler.assert(compiler.word_size == 64)
+    fixed if compiler.arch == x86_64 then
+        compiler.assert(compiler.c_sysv_lp64)
+        compiler.assert(not compiler.c_aapcs64_lp64)
+    else
+        compiler.assert(compiler.arch == arm64)
+        compiler.assert(compiler.c_aapcs64_lp64)
+        compiler.assert(not compiler.c_darwin_lp64)
+    end if
+elsif compiler.os == linux then
+    compiler.assert(compiler.c_sysv_lp64 or compiler.c_aapcs64_lp64)
+elsif compiler.os == darwin then
+    compiler.assert(compiler.c_darwin_lp64)
+else
+    compiler.assert(compiler.os == freestanding)
+    compiler.assert(not compiler.c_sysv_lp64 and not compiler.c_aapcs64_lp64)
+end if
+
+public main: () -> (code: i32) =
+    code = 42
+end main

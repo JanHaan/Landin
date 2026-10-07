@@ -4,5 +4,5 @@ summary: named array aliases and uninitialized storage have nonreading lengths
 program: main.ldn
 constructs: 0120, 0300, 0370, 0520, 1900
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0326

@@ -5,4 +5,4 @@ root: root
 codes: L0006
 fixed: program.fixed
 constructs: 1410, 1420
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

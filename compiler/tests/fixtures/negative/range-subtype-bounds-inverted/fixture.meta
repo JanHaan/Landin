@@ -3,4 +3,4 @@ summary: D188 a range subtype whose lower bound is above its upper names no valu
 constructs: 0660, 1950
 program: program.ldn
 codes: L0306
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

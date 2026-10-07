@@ -3,4 +3,4 @@ summary: an origin that reaches a binding only on the second iteration is found 
 program: program.ldn
 codes: L0314
 constructs: 0430, 0770, 0790, 1140
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

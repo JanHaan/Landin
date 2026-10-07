@@ -3,7 +3,7 @@ summary: an ordinary Landin struct is refused at the native C boundary; layout(c
 program: program.ldn
 codes: L0346
 constructs: 0670, 1570, 1580, 1740, 1800, 1975
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/external-aggregate-boundary/program.ldn
 status: 1

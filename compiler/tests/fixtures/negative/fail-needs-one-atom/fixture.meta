@@ -3,7 +3,7 @@ summary: fail carries one payload-free atom even when its expression has several
 constructs: 0940, 0970, 0990
 program: program.ldn
 codes: L0329
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/fail-needs-one-atom/program.ldn
 status: 1

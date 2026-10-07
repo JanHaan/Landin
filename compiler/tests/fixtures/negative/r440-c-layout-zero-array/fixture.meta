@@ -3,4 +3,4 @@ summary: the C boundary requires positive fixed array extents in native C layout
 program: program.ldn
 codes: L0346
 constructs: 0520, 1580
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

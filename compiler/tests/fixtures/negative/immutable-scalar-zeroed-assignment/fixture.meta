@@ -3,4 +3,4 @@ summary: scalar zeroed context does not make a direct, field or element destinat
 constructs: 0040, 0420, 0520, 0540, 0570, 0670, 1770, 1900
 program: program.ldn
 codes: L0303, L0303, L0303
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

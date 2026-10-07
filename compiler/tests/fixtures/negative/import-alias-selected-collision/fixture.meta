@@ -5,4 +5,4 @@ args: --root=../tests/fixtures/negative/import-alias-selected-collision/root ../
 codes: L0200
 status: 1
 constructs: 1430, 1440, 1450, 1850
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

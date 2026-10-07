@@ -3,4 +3,4 @@ summary: [0750] gives a struct the fields it was declared with, so selecting ano
 constructs: 0420, 0750, 1820
 program: program.ldn
 codes: L0308
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

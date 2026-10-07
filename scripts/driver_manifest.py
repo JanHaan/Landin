@@ -80,7 +80,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
+TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
+           "freebsd-x86-64", "freebsd-arm64")
 CLASSES = ("positive", "negative", "runtime", "abi", "end-to-end")
 
 
@@ -384,7 +385,8 @@ def emit(refine, root, work, out, targets=TARGETS):
 
 #  Default levels for manifest compilations without an explicit level.
 DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "linux-arm64": "armv8-a",
-                 "darwin-arm64": "armv8-a", "cortex-m0": "armv6-m"}
+                 "darwin-arm64": "armv8-a", "cortex-m0": "armv6-m",
+                 "freebsd-x86-64": "x86-64-v1", "freebsd-arm64": "armv8-a"}
 
 #  What a change of space may move, per field; `layout` stands for them.
 MOVED_BY_LAYOUT = {"asm", "report"}

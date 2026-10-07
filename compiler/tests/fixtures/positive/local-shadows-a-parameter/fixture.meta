@@ -2,4 +2,4 @@ class: positive
 summary: [1840] a body is a scope inside the signature, so a local may shadow a parameter
 constructs: 1840
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

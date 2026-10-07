@@ -3,4 +3,4 @@ summary: [0150] leaves u128 and i128 to Language evolution and [1790]'s types st
 constructs: 0150, 1790, 1830
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

@@ -3,4 +3,4 @@ summary: a runtime formal cannot be filled by two written arguments
 constructs: 0980, 1920
 program: program.ldn
 codes: L0327, L0327
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

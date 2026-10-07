@@ -3,4 +3,4 @@ summary: [1795] a type position names a scalar type or a `type` declaration, and
 constructs: 1795
 program: program.ldn
 codes: L0338
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

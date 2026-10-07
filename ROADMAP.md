@@ -764,7 +764,7 @@ These measurements are local results. The full cross-host gate was green on
 
 ### R11.30 — FreeBSD x86-64 and arm64
 
-Status: planned
+Status: active
 Depends on: R11.20
 
 The hosted layer and platform driver for FreeBSD x86-64 and arm64, emitted

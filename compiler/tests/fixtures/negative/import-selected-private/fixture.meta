@@ -5,4 +5,4 @@ args: --root=../tests/fixtures/negative/import-selected-private/root ../tests/fi
 codes: L0202
 status: 1
 constructs: 1440, 1450, 1410
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

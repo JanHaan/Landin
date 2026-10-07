@@ -3,4 +3,4 @@ summary: a known finite f64 that cannot fit f32 is rejected at compile time
 constructs: 0170, 0210, 0310, 0700, 1880, 1940
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

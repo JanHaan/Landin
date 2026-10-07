@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.os
+  --> ../tests/fixtures/negative/system-outside-configuration/main.ldn:2:21
+  |
+2 |     code = compiler.os
+  |                     ^^
+  = note: D202: compiler.os is available only in fixed configuration expressions

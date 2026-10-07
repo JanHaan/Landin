@@ -3,7 +3,7 @@ summary: [0710] makes two same-shaped structs different types, so a copy between
 constructs: 0670, 0710, 1810
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/struct-copy-across-types/program.ldn
 status: 1

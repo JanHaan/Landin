@@ -3,4 +3,4 @@ summary: operator operands retain definite assignment checking in call recovery
 program: main.ldn
 codes: L0302
 constructs: 0940, 1030, 1910
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

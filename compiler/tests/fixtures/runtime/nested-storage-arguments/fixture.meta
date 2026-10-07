@@ -4,4 +4,4 @@ summary: ordinary children and fixed-array leaves cross register and stack calls
 constructs: 0080, 0410, 0520, 0670, 0750, 0930, 1920
 program: main.ldn
 status: 129
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

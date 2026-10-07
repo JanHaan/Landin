@@ -4,4 +4,4 @@ summary: inferred recovered bindings keep enclosing continue and break contexts 
 program: main.ldn
 status: 42
 constructs: 0940, 1030, 1100, 1130, 1150, 1190, 1200
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

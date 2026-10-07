@@ -2,4 +2,4 @@ class: positive
 summary: the same three-binding chain carrying a module address converges without a frame origin
 program: program.ldn
 constructs: 0430, 0770, 0790, 1140
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

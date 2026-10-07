@@ -7,4 +7,4 @@ c-args: -O2
 run_expect: expected.txt
 status: 42
 constructs: 1570, 1580, 1600
-targets: linux-arm64
+targets: linux-arm64, freebsd-arm64

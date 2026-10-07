@@ -3,7 +3,7 @@ summary: [0480]/[1870] comparing two unions of several atoms and a pointer would
 constructs: 0480, 1210, 1890
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-comparison/program.ldn
 status: 1

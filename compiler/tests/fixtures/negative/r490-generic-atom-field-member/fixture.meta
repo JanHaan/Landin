@@ -3,4 +3,4 @@ summary: a substituted atom field retains its exact set
 program: main.ldn
 codes: L0301
 constructs: 0630, 0640, 0670, 1350
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

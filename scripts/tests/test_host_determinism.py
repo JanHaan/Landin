@@ -137,7 +137,7 @@ class Emission(unittest.TestCase):
             'exit 2\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 18)
-        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 54)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 90)
 
     def test_every_profile_is_emitted_and_named(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,8 +164,8 @@ class Emission(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("unexpected emission result", result.stderr)
             manifest = json.loads(out.read_text())
-            self.assertEqual(len(manifest), 4 * 2 * 3 * 3)
-            for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0"):
+            self.assertEqual(len(manifest), 6 * 2 * 3 * 3)
+            for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0", "freebsd-x86-64", "freebsd-arm64"):
                 for mode in ("debug", "release"):
                     for optimize in ("none", "size", "speed"):
                         for specialize in ("off", "auto", "all"):

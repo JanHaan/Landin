@@ -20,6 +20,7 @@ package body Landin.Testing.Lanes is
      is (if Name = "linux-x86-64" then "linux-x86-64"
          elsif Name = "linux-arm64" then "linux-arm64"
          elsif Name = "darwin-arm64" then "macos-arm64"
+         elsif Name in "freebsd-x86-64" | "freebsd-arm64" then Name
          elsif Name = "cortex-m0" then "cortex-m"
          else "");
 

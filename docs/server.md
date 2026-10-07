@@ -54,7 +54,8 @@ Build settings choose what `--target=`, `--level=`, `--option=` and
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
-`darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one mapping, and
+`darwin-arm64`, `freebsd-x86-64`, `freebsd-arm64`, `cortex-m0` or
+`synthetic-32`. Both read one mapping, and
 both default to the compiler's own host (D257). A server built for a host no
 target describes checks for `synthetic-32` and says, through
 `window/showMessage`, that a target has to be named.

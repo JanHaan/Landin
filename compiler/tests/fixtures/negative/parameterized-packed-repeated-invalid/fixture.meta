@@ -2,5 +2,5 @@ class: negative
 summary: packed generic widths accept u8 and report each repeated invalid u64 application
 constructs: 0520, 0670, 0730, 1350, 1795
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, macos-arm64, freebsd-x86-64
 codes: L0336, L0336

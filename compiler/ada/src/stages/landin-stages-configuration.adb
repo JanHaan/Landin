@@ -1,3 +1,4 @@
+with Landin.Targets.Capabilities;
 with Ada.Containers.Vectors;
 
 with Landin.Configuration;
@@ -23,6 +24,7 @@ package body Landin.Stages.Configuration is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Architecture;
    use type Landin.Targets.C_ABI_Kind;
+   use type Landin.Targets.Capabilities.Hosted_System;
    use type Landin.Types.Folded;
    use type Landin.Types.Type_Kind;
    use type Landin.Source.Names.Name_Id;
@@ -54,7 +56,8 @@ package body Landin.Stages.Configuration is
       Found : Landin.Diagnostics.Diagnostic_List;
 
       type Fixed_Kind is
-        (Bad_Value, Truth, Number, Machine, Byte_Order, Build_Kind);
+        (Bad_Value, Truth, Number, Machine, Byte_Order, Build_Kind,
+         Operating_System);
       type Fixed_Value (Kind : Fixed_Kind := Bad_Value) is record
          case Kind is
             when Truth => Boolean_Value : Boolean;
@@ -62,6 +65,8 @@ package body Landin.Stages.Configuration is
             when Machine => Architecture_Value : Landin.Targets.Architecture;
             when Byte_Order => Order_Value : Landin.Targets.Endianness;
             when Build_Kind => Mode_Value : Landin.Configuration.Build_Mode;
+            when Operating_System =>
+               System_Value : Landin.Targets.Capabilities.Hosted_System;
             when Bad_Value => null;
          end case;
       end record;
@@ -293,6 +298,10 @@ package body Landin.Stages.Configuration is
                begin
                   if Index > 0 then
                      return Options.Element (Index).Value.Kind;
+                  elsif Word in "linux" | "darwin" | "freebsd"
+                              | "freestanding"
+                  then
+                     return Operating_System;
                   elsif Word in "little" | "big" then
                      return Byte_Order;
                   elsif Word in "debug" | "release" then
@@ -317,6 +326,8 @@ package body Landin.Stages.Configuration is
                               | "c_aapcs64_lp64"
                   then
                      return Truth;
+                  elsif Word = "os" then
+                     return Operating_System;
                   elsif Word = "word_size" then
                      return Number;
                   elsif Word = "byte_order" then
@@ -353,7 +364,8 @@ package body Landin.Stages.Configuration is
                begin
                   if Word not in "x86_64" | "arm64" | "cortex_m0"
                                | "synthetic_32" | "little" | "big"
-                               | "debug" | "release"
+                               | "debug" | "release" | "linux" | "darwin"
+                               | "freebsd" | "freestanding"
                     and then Option_Index (Syn.Name (Of_Tree, Node)) = 0
                   then
                      Report_Not_Fixed
@@ -385,7 +397,7 @@ package body Landin.Stages.Configuration is
                   end if;
                elsif not Is_Compiler_Member (Of_Tree, Node)
                  or else Spelled (Syn.Name (Of_Tree, Node))
-                   not in "arch" | "word_size" | "byte_order"
+                   not in "arch" | "os" | "word_size" | "byte_order"
                         | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
                         | "c_aapcs64_lp64"
                then
@@ -494,6 +506,17 @@ package body Landin.Stages.Configuration is
                   if Option_Index (Syn.Name (Of_Tree, Node)) > 0 then
                      return Evaluate_Option
                        (Option_Index (Syn.Name (Of_Tree, Node)));
+                  elsif Word in "linux" | "darwin" | "freebsd"
+                              | "freestanding"
+                  then
+                     return (Kind => Operating_System, System_Value =>
+                       (if Word = "linux"
+                        then Landin.Targets.Capabilities.Linux
+                        elsif Word = "darwin"
+                        then Landin.Targets.Capabilities.Darwin
+                        elsif Word = "freebsd"
+                        then Landin.Targets.Capabilities.FreeBSD
+                        else Landin.Targets.Capabilities.No_Hosted_System));
                   elsif Word in "little" | "big" then
                      return (Kind => Byte_Order,
                              Order_Value => (if Word = "little"
@@ -542,6 +565,10 @@ package body Landin.Stages.Configuration is
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.AAPCS64_LP64);
+                  elsif Word = "os" then
+                     return (Kind => Operating_System, System_Value =>
+                       Landin.Targets.Capabilities.Hosted_System_Of
+                         (Target (Context)));
                   elsif Word = "word_size" then
                      return (Kind => Number, Integer_Value => Ty.Folded
                        (Landin.Targets.Pointer_Width (Target (Context))));
@@ -640,6 +667,8 @@ package body Landin.Stages.Configuration is
                                = Right.Order_Value,
                              when Build_Kind => Left.Mode_Value
                                = Right.Mode_Value,
+                             when Operating_System => Left.System_Value
+                               = Right.System_Value,
                              when Bad_Value => False);
                      begin
                         return Boolean_Result

@@ -3,4 +3,4 @@ summary: trailing field fill preserves frame escape boundary
 program: main.ldn
 codes: L0314
 constructs: 0720, 0790, 0830
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

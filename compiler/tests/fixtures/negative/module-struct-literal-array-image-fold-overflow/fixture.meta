@@ -3,4 +3,4 @@ summary: D67/D68 refuse field-image folds beyond the compiler's widest kernel va
 constructs: 0040, 0190, 0290, 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
 codes: L0300, L0300, L0300, L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

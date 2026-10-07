@@ -2,5 +2,5 @@ class: negative
 summary: an unused parameterized alias cannot produce a function type in the scalar and fixed-array slice
 constructs: 1290, 1350, 1795, 1800
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0304

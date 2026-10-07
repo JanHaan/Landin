@@ -2,6 +2,6 @@ class: negative
 summary: [1750] UTF-8 belongs inside a comment or a literal and nowhere else
 constructs: 1750
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 lex: no rule spells '\xc3'
 codes: L0012

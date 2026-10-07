@@ -2,5 +2,5 @@ class: negative
 summary: D76 keeps root mutability first and alone before reading a case payload
 constructs: 0410, 0670, 0680, 0700, 1740, 1790, 1795, 1810, 1900
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0303

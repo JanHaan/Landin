@@ -3,4 +3,4 @@ summary: a concrete error clause names at least one atom
 constructs: 0940
 program: program.ldn
 codes: L0100
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

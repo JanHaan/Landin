@@ -3,4 +3,4 @@ summary: D34 and D35 refuse an array index as a module repetition element before
 constructs: 0050, 0520, 0560, 1740, 1940
 program: program.ldn
 codes: L0304, L0304
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

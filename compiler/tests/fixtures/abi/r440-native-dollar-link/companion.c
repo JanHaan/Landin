@@ -1,6 +1,9 @@
 #if defined(__APPLE__)
 #define OBJECT_NAME(name) "_" name
 #define QUOTED_NAME(name) OBJECT_NAME(name)
+#elif defined(__clang__)
+#define OBJECT_NAME(name) name
+#define QUOTED_NAME(name) name
 #else
 #define OBJECT_NAME(name) name
 #define QUOTED_NAME(name) "\"" name "\""

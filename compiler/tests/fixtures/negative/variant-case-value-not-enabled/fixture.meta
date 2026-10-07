@@ -2,5 +2,5 @@ class: negative
 summary: D74 resolves case identities but does not yet construct or carry them
 constructs: 0680, 0690, 0700, 1700, 1790
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0304, L0304

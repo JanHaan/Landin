@@ -1,7 +1,7 @@
 class: negative
 summary: D237 makes the three refused widths name their transfer to Language evolution, in the rendered report
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 args: ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn
 codes: L0304, L0304, L0304
 status: 1

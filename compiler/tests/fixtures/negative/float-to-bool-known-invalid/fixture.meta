@@ -3,4 +3,4 @@ summary: a known float other than signed zero or positive one cannot convert to 
 constructs: 0170, 0180, 0190, 0210, 0310, 0700, 1940, 1950
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

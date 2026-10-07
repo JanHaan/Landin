@@ -2,4 +2,4 @@ class: positive
 summary: nominal instances substitute every enabled concrete identity and fixed fields without changing templates
 constructs: 0520, 0640, 0670, 0680, 0710, 1350, 1795, 1800
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

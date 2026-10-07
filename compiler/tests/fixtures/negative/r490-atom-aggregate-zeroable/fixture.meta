@@ -3,4 +3,4 @@ summary: complete storage descriptors refuse missing zero images
 program: main.ldn
 codes: L0318
 constructs: 0520, 0540, 0670, 1790
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

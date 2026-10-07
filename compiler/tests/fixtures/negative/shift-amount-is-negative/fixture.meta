@@ -2,5 +2,5 @@ class: negative
 summary: [1950] a negative shift amount is an operand '<<' cannot take, and [0320] gives a shift one form only
 constructs: 1950, 0320
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0306

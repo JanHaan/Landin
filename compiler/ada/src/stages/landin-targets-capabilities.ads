@@ -37,7 +37,7 @@ package Landin.Targets.Capabilities is
    function Link_Symbol (Facts : Target_Facts; Name : String) return String;
 
    type Backend_Kind is
-     (No_Backend, Linux_X86_64_ELF, Darwin_Arm64_Mach_O, Linux_Arm64_ELF,
+     (No_Backend, X86_64_ELF, Darwin_Arm64_Mach_O, Arm64_ELF,
       Cortex_M0_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
@@ -47,7 +47,7 @@ package Landin.Targets.Capabilities is
    --  facts about.  Neither the object format nor the C ABI decides it:
    --  FreeBSD's objects are ELF and its errno function is Darwin's.  A
    --  target with no hosted runtime has none.
-   type Hosted_System is (No_Hosted_System, Linux, Darwin);
+   type Hosted_System is (No_Hosted_System, Linux, Darwin, FreeBSD);
 
    function Hosted_System_Of (Facts : Target_Facts) return Hosted_System;
 

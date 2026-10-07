@@ -3,4 +3,4 @@ summary: A nonreturning body must have no reachable successful fallthrough
 program: main.ldn
 codes: L0343
 constructs: 0890, 1930
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

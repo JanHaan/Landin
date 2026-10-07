@@ -2,7 +2,7 @@ class: negative
 summary: reference deduction retains the complete fixed-array referent extent
 program: program.ldn
 constructs: 0430, 0440, 0570, 0790, 1290, 1920
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0340
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-reference-array-extent/program.ldn

@@ -3612,6 +3612,10 @@ bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
 and `compiler.c_aapcs64_lp64`, bools identifying the selected C ABI rather
 than inferring it from pointer width or architecture: Linux and Apple
 arm64 share `compiler.arch == arm64` and answer differently here.
+`compiler.os` names the target's hosted system, `linux`, `darwin`, `freebsd`
+or `freestanding`, independently of its C calling convention. Linux and
+FreeBSD share a C transport on each architecture, but libc record layouts
+can differ, so a library binding can select those records by this fact.
 A build also assumes a CPU feature level of its target, selected with
 `--level=` and defaulting to the oldest processor of the architecture, and
 `compiler.feature.NAME` is a bool saying whether that level has the feature

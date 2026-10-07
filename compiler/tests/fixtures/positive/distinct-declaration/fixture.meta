@@ -2,4 +2,4 @@ class: positive
 summary: the original distinct declaration frontier now retains its own identity
 program: program.ldn
 constructs: 0650, 1795
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

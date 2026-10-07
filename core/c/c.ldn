@@ -5,7 +5,7 @@
 --
 --  c_char is the selected ABI's plain char, a numeric byte and never Landin's
 --  Unicode scalar u32: signed i8 under SysV and Apple's arm64 ABI, and
---  unsigned u8 under the standard AAPCS64, as on Linux arm64.
+--  unsigned u8 under the standard AAPCS64, as on Linux and FreeBSD arm64.
 
 --  landin/compiler is implicit. The ABI fact, not pointer width or
 --  architecture alone, keeps LP64 aliases from crossing data models.

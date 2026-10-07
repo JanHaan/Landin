@@ -4,5 +4,5 @@ summary: a fixed if on compiler.feature.lse selects an LSE assembly block at arm
 constructs: 1500, 1630
 program: main.ldn
 status: 42
-targets: linux-arm64, macos-arm64
+targets: linux-arm64, macos-arm64, freebsd-arm64
 levels: armv8.1-a

@@ -3,4 +3,4 @@ summary: D29 checks every array literal assignment read against the incoming ass
 constructs: 0080, 0410, 0520, 0570, 1810, 1910, 1950
 program: program.ldn
 codes: L0302, L0302
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

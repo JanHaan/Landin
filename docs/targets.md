@@ -145,13 +145,15 @@ ABI, is the same at every level of a family.
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
 | `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly, and `-Wa,-march=` with the level, at every level |
+| `freebsd-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 shifts from v3 | GNU as with `-Wa,-march=generic64` plus the selected extensions; no loader level note |
+| `freebsd-arm64` | `armv8-a` | `armv8.1-a` | LSE atomic read-modify-write | `.arch` and Clang `-march=` with the selected level |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
 plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
-instruction is refused by the assembler unless the build assumes v3. Both
+instruction is refused by the assembler unless the build assumes v3. All
 arm64 targets emit `.arch` at both levels, and Linux arm64 also passes the
 level to the assembler, so an `assembler.block` using an LSE instruction is
 refused unless the build assumes `armv8.1-a`. The test program holds each
@@ -184,6 +186,43 @@ Linux x86-64; on arm64 the LSE instructions and no `ldxr`/`stxr` loop at
 `armv8.1-a`, and no LSE instruction in the default's image of the same
 fixture; and hardware division and no 32-bit helper on Cortex-M, where
 `armv7-m` runs on QEMU's Cortex-M3.
+
+## FreeBSD hosted targets
+
+`freebsd-x86-64` and `freebsd-arm64` use the existing x86-64 and arm64 ELF
+emitters. Their LP64 C transports are SysV AMD64 and standard AAPCS64,
+respectively, with the existing C ABI configuration facts, plain-char
+signedness, alignment and arm64 register rules. The hosted system is selected
+separately: `__error` supplies thread-local errno and the create/truncate open
+flags are BSD values. `compiler.os == freebsd` selects the private 224-byte
+`stat` record in `core/io/hosted`; a C peer checks the actual headers, record
+extent, alignment and field offsets on each architecture.
+
+The cross driver is Clang against the checked FreeBSD 14.4 sysroot, using
+LLD and FreeBSD startup and libc. A caller can name its driver with
+`--toolchain=`. The default names are `x86_64-unknown-freebsd14.4-clang` and
+`aarch64-unknown-freebsd14.4-clang`, wrappers supplying that sysroot. Clang's
+integrated x86 assembler does not restrict every instruction by `-march`, so
+Landin's x86 driver requests GNU as and supplies the selected feature
+whitelist. Arm64 selects the architecture in both assembly and Clang's
+`-march=` and preserves public dot-prefixed foreign symbols with `-Wa,-L`.
+FreeBSD emits no CPU-level loader-refusal contract.
+
+[The FreeBSD lanes](../compiler/tests/freebsd/README.md) emit on Linux and
+execute in official, checksum-locked FreeBSD VMs. Each architecture has
+separate runtime, ABI and LLDB verdicts. The guest confirms x86-64 v3 using
+CPUID and enabled AVX state, or armv8.1-a using FreeBSD's auxiliary-vector
+LSE, CRC32 and RDM bits, before higher-level execution. The shift and atomic
+fixtures execute at both levels; disassembly checks the linked executables.
+A missing feature fails the lane. The ABI selection is nonempty and uses
+independently compiled C peers for imported/exported scalar, aggregate,
+callback and variadic transport.
+
+The native guest LLDB sessions run at four optimization/specialization
+profiles and inspect nested source stops, callee and caller local values,
+frame chains and return unwinding. ELF range/location references carry
+section relocations, so preceding DWARF contributions from FreeBSD startup
+objects cannot redirect a lexical scope to another object's range list.
 
 ## Native source debugging
 

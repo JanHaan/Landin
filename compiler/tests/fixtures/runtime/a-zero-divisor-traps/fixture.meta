@@ -4,5 +4,5 @@ summary: [1950] a divisor the compiler could not read is left to the trap, and [
 constructs: 1800, 1920, 1950, 1960
 program: main.ldn
 traps: yes
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 levels: armv7-m

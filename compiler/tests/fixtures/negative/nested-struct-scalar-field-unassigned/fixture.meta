@@ -3,4 +3,4 @@ summary: writing no part of a declaration-only nested child leaves its scalar le
 constructs: 0080, 0420, 0670, 0750, 1910
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

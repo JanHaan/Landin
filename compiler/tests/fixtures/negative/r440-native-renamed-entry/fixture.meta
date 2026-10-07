@@ -8,4 +8,4 @@ expect: expected.txt
 # availability on every host without permitting a successful native link.
 args: ../tests/fixtures/negative/r440-native-renamed-entry/main.ldn --emit=exe --toolchain=false
 status: 1
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

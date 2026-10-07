@@ -16,7 +16,11 @@ _Static_assert(_Alignof(struct stat) == 8, "stat alignment");
 _Static_assert(offsetof(struct stat, st_dev) == 0, "device offset");
 _Static_assert(offsetof(struct stat, st_ino) == 8, "inode offset");
 _Static_assert(sizeof(((struct stat *)0)->st_ino) == 8, "inode width");
-#if defined(__APPLE__)
+#if defined(__FreeBSD__)
+_Static_assert(sizeof(struct stat) == 224, "FreeBSD stat extent");
+_Static_assert(sizeof(((struct stat *)0)->st_dev) == 8, "FreeBSD device width");
+_Static_assert(offsetof(struct stat, st_size) == 112, "FreeBSD trailing fields");
+#elif defined(__APPLE__)
 _Static_assert(sizeof(struct stat) == 144, "Darwin stat extent");
 _Static_assert(sizeof(((struct stat *)0)->st_dev) == 4, "Darwin device width");
 _Static_assert(offsetof(struct stat, st_size) == 96, "Darwin trailing fields");

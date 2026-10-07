@@ -3,4 +3,4 @@ summary: mixed-prefix repetition is not a nested array value
 constructs: 0040, 0520, 0560, 1830
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

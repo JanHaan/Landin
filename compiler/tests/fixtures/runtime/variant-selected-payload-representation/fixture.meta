@@ -4,4 +4,4 @@ summary: selected omitted fields are zero, whole copies preserve unspecified ina
 constructs: 0410, 0540, 0670, 0720, 0750, 1920
 program: main.ldn
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

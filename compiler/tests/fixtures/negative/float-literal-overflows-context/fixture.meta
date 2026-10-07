@@ -2,5 +2,5 @@ class: negative
 summary: D162 refuses a finite decimal spelling that overflows its contextual IEEE type
 constructs: 0170, 0210, 0220, 1880
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0300

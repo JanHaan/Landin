@@ -3,7 +3,7 @@ summary: inferred repetitions report their element refusal once and retain the r
 program: main.ldn
 codes: L0304, L0304, L0331, L0301
 constructs: 0050, 0520, 0530, 0670, 1890
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r491-inferred-repetition-refusals/main.ldn
 status: 1

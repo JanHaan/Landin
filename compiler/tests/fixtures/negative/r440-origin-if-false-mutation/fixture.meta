@@ -3,4 +3,4 @@ summary: A false if condition keeps its frame-pointer write even when the true a
 constructs: 0480, 0770, 0790, 1050
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

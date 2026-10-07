@@ -678,8 +678,8 @@ about a construct no fixture can yet use.
 
 `targets` is required, and `check.py` holds each name to the targets
 [the target applicability register](registers.md#target-applicability-coverage)
-allows: the four product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`
-and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
+allows: the six product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`,
+`freebsd-x86-64`, `freebsd-arm64` and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
 Cortex-M backend. A name outside that list is refused, because that is how a
 fixture quietly stops applying to anything.
 
@@ -1129,3 +1129,10 @@ mapping paths and mandatory runner connection. Native Linux documents/tooling
 acceptance runs its QEMU evidence through compiler-owned firmware.
 The shared `runtime/r690-recovery-loop-context` fixture separately checks
 inferred recovery break/continue and cleanup on both hosted targets and Cortex.
+
+The [FreeBSD lanes](freebsd/README.md) execute their metadata-selected runtime
+and C ABI fixtures in separate x86-64 and arm64 VMs, after Linux emission.
+Their runtime lanes also check every applicable positive and negative source
+verdict with the FreeBSD target selected. Their LLDB sessions run natively in
+the guests; a local Mac-hosted VM is developer feedback, and the recurring
+Linux-runner VM jobs supply the gate evidence.

@@ -5,4 +5,4 @@ args: --root=../.. ../tests/fixtures/negative/core-io-argument-copy-frame
 status: 1
 codes: L0314
 constructs: 0430, 0570, 0790, 0940, 1660
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

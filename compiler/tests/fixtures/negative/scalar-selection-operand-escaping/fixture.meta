@@ -3,4 +3,4 @@ summary: scalar selection still checks escaping calls nested in its target and i
 program: program.ldn
 codes: L0314, L0314
 constructs: 0430, 0520, 0570, 0750, 0770, 0780, 1810
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

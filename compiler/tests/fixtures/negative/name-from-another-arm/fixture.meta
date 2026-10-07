@@ -2,5 +2,5 @@ class: negative
 summary: [1840] a name declared in one arm is not visible in another
 constructs: 1840
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0201

@@ -3,7 +3,7 @@ summary: D188 a range subtype constrains an enabled integer type and nothing els
 constructs: 0660, 0170
 program: program.ldn
 codes: L0338
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/range-subtype-base-is-not-an-integer/program.ldn
 status: 1

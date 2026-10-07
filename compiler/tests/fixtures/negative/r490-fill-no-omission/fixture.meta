@@ -3,4 +3,4 @@ summary: trailing field fill preserves no omission boundary
 program: main.ldn
 codes: L0334
 constructs: 0670, 0710, 0720
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

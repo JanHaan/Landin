@@ -114,7 +114,8 @@ package body Landin.Tests.Driver_Suite is
         (Item,
          Contains
            (Text,
-            "backends: linux-x86-64, linux-arm64, darwin-arm64 and cortex-m0"
+            "backends: linux-x86-64, linux-arm64, darwin-arm64, "
+            & "freebsd-x86-64, freebsd-arm64 and cortex-m0"
             & " assembly"),
          "identity names the assembly backend it has");
       Landin.Testing.Check

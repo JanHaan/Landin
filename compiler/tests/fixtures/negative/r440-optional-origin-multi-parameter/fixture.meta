@@ -3,4 +3,4 @@ summary: Destructuring a later optional result preserves its nonescaping paramet
 constructs: 0480, 0780, 0790, 0990, 1210
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

@@ -2,4 +2,4 @@ class: positive
 summary: D67/D68 carry finite, repeated, hybrid and zero field images through distinct storage
 constructs: 0040, 0080, 0190, 0410, 0520, 0540, 0560, 0670, 0710, 0750, 1460, 1740, 1810, 1940
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

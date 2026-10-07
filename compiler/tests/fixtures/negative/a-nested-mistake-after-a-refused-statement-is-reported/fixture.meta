@@ -3,7 +3,7 @@ summary: [1810] reports a refused statement once, and a mistake in a construct t
 program: program.ldn
 codes: L0110, L0102
 constructs: 1050, 1810
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn
 status: 1

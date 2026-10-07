@@ -2,4 +2,4 @@ class: positive
 summary: noreturn remains an ordinary identifier outside its signature introducer
 program: main.ldn
 constructs: 0120, 0140, 1760, 1830
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

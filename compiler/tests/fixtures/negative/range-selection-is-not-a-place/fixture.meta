@@ -3,7 +3,7 @@ summary: a range selection is a view, not a place an assignment may replace
 constructs: 0390, 0570, 1900
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/range-selection-is-not-a-place/program.ldn
 status: 1

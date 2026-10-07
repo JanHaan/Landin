@@ -3,4 +3,4 @@ summary: the text escape set is closed
 constructs: 0260, 0270
 program: program.ldn
 codes: L0320
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

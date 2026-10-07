@@ -3,4 +3,4 @@ summary: [0560] requires an explicit repetition count to match its array context
 constructs: 0160, 0520, 0560, 1800
 program: program.ldn
 codes: L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

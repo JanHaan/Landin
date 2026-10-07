@@ -3,7 +3,7 @@ summary: [0480]/[1870] erasing a union of several atoms and a pointer behind `an
 constructs: 0480, 1230, 1240, 1370, 1380
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-any-construction/program.ldn
 status: 1

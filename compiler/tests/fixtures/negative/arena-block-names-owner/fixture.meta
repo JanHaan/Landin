@@ -1,7 +1,7 @@
 class: negative
 summary: D212 names the withdrawn arena block and ordinary allocator migration
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 args: ../tests/fixtures/negative/arena-block-not-enabled/program.ldn
 codes: L0010
 status: 1

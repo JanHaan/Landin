@@ -2,4 +2,4 @@ class: positive
 summary: [1770] every base the kernel spells, in [0220]'s own spellings
 constructs: 0190, 0220, 1770
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

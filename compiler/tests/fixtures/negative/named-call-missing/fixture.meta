@@ -3,7 +3,7 @@ summary: an omitted named runtime formal has no default value
 constructs: 0980, 1920
 program: program.ldn
 codes: L0327
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/named-call-missing/program.ldn
 status: 1

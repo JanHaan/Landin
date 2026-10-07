@@ -2,5 +2,5 @@ class: negative
 summary: a substituted fixed array bound must fit target extent arithmetic
 constructs: 0520, 1350, 1790, 1795
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0300

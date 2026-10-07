@@ -6,4 +6,4 @@ args: ../tests/fixtures/negative/machine-entry-signature-is-machine-shaped/progr
 codes: L0345
 status: 1
 constructs: 1570
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, macos-arm64, synthetic-32, freebsd-x86-64

@@ -3,7 +3,7 @@ summary: [0480]/[1870] each atom case of the union is named at most once, the ru
 constructs: 0480, 1210
 program: program.ldn
 codes: L0311
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-case-named-twice/program.ldn
 status: 1

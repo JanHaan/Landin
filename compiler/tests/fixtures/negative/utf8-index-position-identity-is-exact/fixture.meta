@@ -3,7 +3,7 @@ summary: a structural lookalike is not the opaque core/text.position indexing ar
 constructs: 0600, 0610, 0710, 1050
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/utf8-index-position-identity-is-exact/program.ldn
 status: 1

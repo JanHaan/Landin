@@ -3,4 +3,4 @@ summary: repetition requires a nonzero contextual length even though D136 accept
 constructs: 0040, 0520, 0560, 1740, 1810
 program: program.ldn
 codes: L0304, L0304
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

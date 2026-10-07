@@ -3,4 +3,4 @@ summary: an opaque array does not become an admitted C by-value parameter
 program: main.ldn
 codes: L0346
 constructs: 0650, 1580, 1975
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

@@ -3804,9 +3804,11 @@ def construct_evidence():
 #  roadmap ends on; synthetic-32 is the model that preceded Cortex-M and
 #  applies to no construct.  A scope names the targets a construct must be accounted for
 #  on, and a state says what kind of evidence can account for it.
-PRODUCT_TARGETS = ("linux-x86-64", "linux-arm64", "macos-arm64", "cortex-m")
+PRODUCT_TARGETS = ("linux-x86-64", "linux-arm64", "macos-arm64",
+                   "freebsd-x86-64", "freebsd-arm64", "cortex-m")
 TARGET_SCOPES = {"all": PRODUCT_TARGETS,
-                 "hosted": ("linux-x86-64", "linux-arm64", "macos-arm64"),
+                 "hosted": ("linux-x86-64", "linux-arm64", "macos-arm64",
+                            "freebsd-x86-64", "freebsd-arm64"),
                  "cortex-m": ("cortex-m",),
                  "none": ()}
 INVENTORY_HEADING = "## Construct inventory"
@@ -4156,7 +4158,8 @@ def fixture_target_claims():
             #  The test program runs a hosted lane's runtime and ABI
             #  fixtures on its own host; linux-arm64 is the lane the
             #  ubuntu-24.04-arm jobs run.
-            for lane in ("linux-x86-64", "linux-arm64"):
+            for lane in ("linux-x86-64", "linux-arm64",
+                         "freebsd-x86-64", "freebsd-arm64"):
                 if lane in targets:
                     claim(name, lane, "executed")
             change = parity["differences"].get(name, {})
@@ -4176,7 +4179,8 @@ def fixture_target_claims():
             verdict = "refused" if refused else "compiled"
             #  The Linux lanes take a source verdict directly; which args
             #  may accompany linux-arm64 is arm64_linux_problems' concern.
-            for lane in ("linux-x86-64", "linux-arm64"):
+            for lane in ("linux-x86-64", "linux-arm64",
+                         "freebsd-x86-64", "freebsd-arm64"):
                 if lane in targets:
                     claim(name, lane, verdict)
             #  Darwin's source verdicts are its positive, negative and
@@ -4555,7 +4559,7 @@ def construct_matrix():
              "#  unless it names it.  Under-claiming is the expected state",
              "#  of a list seeded from prose, and correcting it is work.",
              "#",
-             "#  linux-x86-64, linux-arm64, macos-arm64 and cortex-m are the strongest",
+             "#  Product target columns name the strongest",
              "#  claim a target's own records make: executed, compiled or",
              "#  refused.  Refusals are boundary, withdrawn or",
              "#  transferred, as their [1830] note says.  State, targets,",
@@ -4569,8 +4573,8 @@ def construct_matrix():
              "#  %d rows name an open owner; %d have target gaps."
              % (owned, gapped),
              "#",
-             "#  id | in | evidence | linux-x86-64 | linux-arm64 | macos-arm64 | cortex-m |"
-             " refusals | state | targets | gaps | owner | title"]
+             "#  id | in | evidence | " + " | ".join(PRODUCT_TARGETS)
+             + " | refusals | state | targets | gaps | owner | title"]
     return "\n".join(lines + body) + "\n"
 
 
@@ -5315,7 +5319,8 @@ def check_coverage_registers(full_run):
             out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
-    known_targets = {"linux-x86-64", "linux-arm64", "macos-arm64", "cortex-m",
+    known_targets = {"linux-x86-64", "linux-arm64", "macos-arm64",
+                     "freebsd-x86-64", "freebsd-arm64", "cortex-m",
                      "synthetic-32"}
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))

@@ -2,6 +2,6 @@ class: runtime
 summary: private packed atom decoders with different maps retain distinct optimized bodies
 program: program.ldn
 constructs: 0540, 0730, 0750
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 status: 42
 profiles: specialization

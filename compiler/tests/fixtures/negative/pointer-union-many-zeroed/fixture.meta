@@ -3,7 +3,7 @@ summary: [0480]/[1870] no zero or default atom exists and code zero is the point
 constructs: 0480, 0540, 1870
 program: program.ldn
 codes: L0328
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-zeroed/program.ldn
 status: 1

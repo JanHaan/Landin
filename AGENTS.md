@@ -128,6 +128,9 @@ still succeed. The linked full run contains the target-test results.
 | `lldb` | macos-26 | the LLDB sessions |
 | `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
+| `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | ubuntu-24.04 | emit on Linux, check source verdicts and execute the applicable runtime corpus in FreeBSD VMs, including confirmed CPU levels and linked instruction checks |
+| `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | ubuntu-24.04 | native FreeBSD LLDB source stops, frames, local values and unwinding |
+| `freebsd-amd64-abi`, `freebsd-arm64-abi` | ubuntu-24.04 | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
 | `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-15 | the called workflow emits the fixture manifest on each host and compares them |
 
 A release compile error surfaces in its host's build job; debug compile

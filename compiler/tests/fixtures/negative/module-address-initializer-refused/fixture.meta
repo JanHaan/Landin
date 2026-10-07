@@ -3,4 +3,4 @@ summary: [1940] a module value is a number the compiler holds; the address of st
 program: program.ldn
 codes: L0305
 constructs: 0430, 1940
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

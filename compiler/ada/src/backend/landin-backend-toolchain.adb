@@ -150,6 +150,10 @@ package body Landin.Backend.Toolchain is
         = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
       then
          return "/usr/bin/clang";
+      elsif Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+        = Landin.Targets.Capabilities.FreeBSD
+      then
+         return Triplet & "-clang";
       elsif Triplet = "" then
          return "";
       else
@@ -364,7 +368,8 @@ package body Landin.Backend.Toolchain is
       for Library of Libraries loop
          Landin.Platform.Add
            (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
-                     = Landin.Targets.Capabilities.Linux
+                     in Landin.Targets.Capabilities.Linux
+                      | Landin.Targets.Capabilities.FreeBSD
                    then "-l:lib" & Library & ".a"
                    else File_Operand (Library)));
       end loop;
@@ -377,34 +382,52 @@ package body Landin.Backend.Toolchain is
 
       if Build_Id /= "" and then
         Landin.Targets.Capabilities.Hosted_System_Of (Facts)
-          = Landin.Targets.Capabilities.Linux
+          in Landin.Targets.Capabilities.Linux
+           | Landin.Targets.Capabilities.FreeBSD
       then
          Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
       end if;
 
       --  The assembler refuses what the level lacks, at every level, the
       --  baseline included, so an assembly block cannot use more than the
-      --  build assumed.  Above the baseline the linker also marks the
+      --  build assumed.  On Linux, above baseline the linker also marks the
       --  executable with the level in its GNU property note, which the
       --  dynamic loader checks against the processor it is started on; the
       --  baseline is what every x86-64 processor has, and needs no mark.
       if Landin.Targets.Capabilities.Backend_For (Facts)
-        = Landin.Targets.Capabilities.Linux_X86_64_ELF
+        = Landin.Targets.Capabilities.X86_64_ELF
       then
+         if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+           = Landin.Targets.Capabilities.FreeBSD
+         then
+            List.Append ("-fno-integrated-as");
+         end if;
          --  Hosted bridges occupy separate input text sections.  Drop an
          --  imported helper when no retained code or C object uses it.
          Landin.Platform.Add (List, "-Wl,--gc-sections");
          Landin.Platform.Add
            (List, "-Wa,-march=" & X86_Assembler_Architecture (Level));
-         if not Is_Default (Level, Facts) then
+         if not Is_Default (Level, Facts)
+           and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+             = Landin.Targets.Capabilities.Linux
+         then
             Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
          end if;
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
-        = Landin.Targets.Capabilities.Linux_Arm64_ELF
+        = Landin.Targets.Capabilities.Arm64_ELF
       then
          --  The GNU assembler takes Arm's own level names.  An arm64
          --  executable carries no level note for the loader to check.
-         Landin.Platform.Add (List, "-Wa,-march=" & Levels.Name (Level));
+         Landin.Platform.Add
+           (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                       = Landin.Targets.Capabilities.FreeBSD
+                   then "-march=" else "-Wa,-march=") & Levels.Name (Level));
+         if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+           = Landin.Targets.Capabilities.FreeBSD
+         then
+            --  Foreign .L names are public symbols, not disposable labels.
+            Landin.Platform.Add (List, "-Wa,-L");
+         end if;
       end if;
 
       return List;

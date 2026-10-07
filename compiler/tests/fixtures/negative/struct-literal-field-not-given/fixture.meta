@@ -3,4 +3,4 @@ summary: D64 requires every field to be named or covered by trailing of zeroed
 constructs: 0670, 0710, 0720, 0750, 1810
 program: program.ldn
 codes: L0310
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

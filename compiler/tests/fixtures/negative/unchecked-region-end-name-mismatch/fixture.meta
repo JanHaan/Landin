@@ -3,4 +3,4 @@ summary: D187 an unchecked region closes with `end unchecked`, and the parser re
 constructs: 1120, 1810
 program: program.ldn
 codes: L0103
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

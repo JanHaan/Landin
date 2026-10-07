@@ -1,7 +1,7 @@
 class: negative
 summary: empty text conversions preserve frame origin instead of canonicalizing the carrier
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 args: --root=../.. ../tests/fixtures/negative/text-empty-conversion-frame
 codes: L0314, L0314
 status: 1

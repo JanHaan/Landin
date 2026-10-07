@@ -3,4 +3,4 @@ summary: expression body returns read their scalar float and nonempty array name
 program: program.ldn
 codes: L0302, L0302, L0302, L0302
 constructs: 0590, 0880, 0930, 0970, 1080, 1910
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

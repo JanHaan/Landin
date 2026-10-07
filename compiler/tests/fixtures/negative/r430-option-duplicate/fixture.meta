@@ -3,7 +3,7 @@ summary: An option is globally declared exactly once
 program: main.ldn
 codes: L0200
 constructs: 1530
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r430-option-duplicate/main.ldn
 status: 1

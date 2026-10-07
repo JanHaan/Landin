@@ -3,7 +3,7 @@ summary: trailing of zeroed cannot supply a missing function-valued struct field
 constructs: 0540, 0670, 0710, 0720, 1000, 1790
 program: program.ldn
 codes: L0328
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/function-field-cannot-be-filled-with-zeroed/program.ldn
 status: 1

@@ -3,7 +3,7 @@ summary: replacing a function value requires the same parameter and result signa
 constructs: 0050, 0870, 1000, 1900
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/function-value-signature-mismatch/program.ldn
 status: 1

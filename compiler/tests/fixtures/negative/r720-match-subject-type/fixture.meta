@@ -3,7 +3,7 @@ summary: [1210] a match subject is an atom set, a variant part or a pointer unio
 program: main.ldn
 codes: L0333, L0333
 constructs: 0670, 1210, 1890
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r720-match-subject-type/main.ldn
 status: 1

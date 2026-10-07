@@ -2,5 +2,5 @@ class: negative
 summary: D72 still rejects scalar and bound callees while [0980] admits the named ordinary function calls
 constructs: 0190, 0670, 0700, 0980, 1810, 1820
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0334, L0305, L0301

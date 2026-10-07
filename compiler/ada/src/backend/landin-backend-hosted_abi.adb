@@ -5,7 +5,7 @@ package body Landin.Backend.Hosted_ABI is
       case System is
          when Linux =>
             return "__errno_location";
-         when Darwin =>
+         when Darwin | FreeBSD =>
             return "__error";
          when No_Hosted_System =>
             raise Compiler_Defect with "a freestanding target has no errno";
@@ -19,7 +19,7 @@ package body Landin.Backend.Hosted_ABI is
       case System is
          when Linux =>
             return 1 + 8#100# + 8#1000#;
-         when Darwin =>
+         when Darwin | FreeBSD =>
             return 1 + 16#200# + 16#400#;
          when No_Hosted_System =>
             raise Compiler_Defect

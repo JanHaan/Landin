@@ -2,5 +2,5 @@ class: negative
 summary: probe impossible zero atom supplied by omitted or zeroed image
 program: main.ldn
 constructs: 0630, 0540, 1940
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0328

@@ -3,4 +3,4 @@ summary: A recursive literal must meet the inner contextual array length
 program: program.ldn
 codes: L0301
 constructs: 0520
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

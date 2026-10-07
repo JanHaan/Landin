@@ -2,5 +2,5 @@ class: negative
 summary: D72 construction fills a discard or struct destination; as an operand or a scalar argument it is a type error
 constructs: 0700, 1810, 1930
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0334, L0334

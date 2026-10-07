@@ -3,4 +3,4 @@ summary: An explicit untracked conversion does not exempt an escaping call neste
 constructs: 0470, 0770, 0780
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

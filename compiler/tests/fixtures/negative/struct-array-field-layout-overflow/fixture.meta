@@ -3,4 +3,4 @@ summary: D45 refuses a struct whose valid array field overflows padded layout, a
 constructs: 0370, 0520, 0670, 0710, 0720, 0750, 1770, 1790, 1810
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

@@ -1,7 +1,7 @@
 class: negative
 summary: a counted wrapper retains the frame origin of its mutable inner fixed provider
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 args: --root=../.. ../tests/fixtures/negative/core-failing-frame-escape
 codes: L0314
 status: 1

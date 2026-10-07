@@ -3,4 +3,4 @@ summary: [1940] a direct-name module array initial-image chain must terminate in
 constructs: 0520, 1740, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

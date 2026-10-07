@@ -7974,6 +7974,11 @@ package body Landin.Tests.Backend_Suite is
                        (Code.all, Landin.Targets.Linux_X86_64).Kind
                          = IR.Verifier.Assembly_Register_Refused,
                      "the verifier refuses rbp, which x86-64 never names");
+                  Landin.Testing.Check
+                    (Item, IR.Verifier.Check
+                       (Code.all, Landin.Targets.FreeBSD_X86_64).Kind
+                         = IR.Verifier.Assembly_Register_Refused,
+                     "FreeBSD verifier refuses the frame register rbp");
                end;
             end if;
          end;
@@ -7998,8 +8003,9 @@ package body Landin.Tests.Backend_Suite is
       Ran  : Natural;
       Assembly : Ada.Strings.Unbounded.Unbounded_String;
       Report : Landin.Build_Reports.Report;
-      Arm64_Targets : constant array (1 .. 2) of Landin.Targets.Target_Facts
-        := [Landin.Targets.Darwin_Arm64, Landin.Targets.Linux_Arm64];
+      Arm64_Targets : constant array (1 .. 3) of Landin.Targets.Target_Facts
+        := [Landin.Targets.Darwin_Arm64, Landin.Targets.Linux_Arm64,
+            Landin.Targets.FreeBSD_Arm64];
       type Name_Access is access constant String;
       X18 : aliased constant String := "x18";
       X29 : aliased constant String := "x29";

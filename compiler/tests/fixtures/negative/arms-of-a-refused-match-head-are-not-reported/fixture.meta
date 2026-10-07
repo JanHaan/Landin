@@ -3,7 +3,7 @@ summary: [1810] reports a refused statement once, and the lines indented under i
 program: program.ldn
 codes: L0110
 constructs: 1210, 1810
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/arms-of-a-refused-match-head-are-not-reported/program.ldn
 status: 1

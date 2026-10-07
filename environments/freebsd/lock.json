@@ -1,0 +1,11 @@
+{
+  "release": "14.4-RELEASE",
+  "amd64": {
+    "image": "627937af554eb6522891875ddc8cf5b86b40e9a12143c1b951f830b3f691de49",
+    "base": "769f60a6eea2938ad6b7943cfbcc17dfaf7d1f7ba59a32b869a00349302df853"
+  },
+  "arm64": {
+    "image": "7654109696015cae14267eee4d04be904a3c17a3a2bedcb872ef015343eeda2b",
+    "base": "c456bf75ee3d0b4da0b0b527402b0a9e61497f02756b2cc5801b51e80b3f90c4"
+  }
+}

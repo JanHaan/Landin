@@ -5180,7 +5180,7 @@ package body Landin.Backend.Arm64 is
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
           not in Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
-               | Landin.Targets.Capabilities.Linux_Arm64_ELF
+               | Landin.Targets.Capabilities.Arm64_ELF
         or else not Landin.Targets.Levels.Belongs_To (Level, Facts)
       then
          raise Compiler_Defect with

@@ -3,4 +3,4 @@ summary: labels nested initializers and arguments require answers even for empty
 program: program.ldn
 codes: L0332, L0332, L0332, L0332
 constructs: 0590, 0710, 0900, 1080, 1880, 1910
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

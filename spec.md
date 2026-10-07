@@ -1684,9 +1684,10 @@ actuals, static images and indirect calls. Neither matching machine widths nor
 `layout(c)` makes a Landin function a C callback. Function values are code
 addresses; `ptr handler` instead addresses a stored function value.
 
-The selected hosted ABIs are Linux x86-64 SysV AMD64 LP64, Darwin arm64
-AAPCS64 with Apple's platform differences, both with signed plain C `char`,
-and Linux arm64's standard AAPCS64 LP64, whose plain `char` is unsigned.
+The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
+Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
+signed plain C `char`, and Linux and FreeBSD arm64's standard AAPCS64 LP64,
+whose plain `char` is unsigned.
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
 are their respective fixed bool configuration facts, each true for its own ABI
 alone, not guesses from pointer width or architecture spelling. The ordinary
@@ -14100,7 +14101,9 @@ request fact, default debug; it does not change runtime checks or optimization.
 D204, D226 and D256 add the C ABI bools `compiler.c_sysv_lp64`,
 `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`, and D255 adds
 `compiler.feature.NAME`, a bool for each feature of the selected CPU feature
-level. These facts are fixed configuration values. Word size is eight times
+level. D264 adds `compiler.os` in its own equality domain, with `linux`,
+`darwin`, `freebsd` and `freestanding` values. These facts are fixed
+configuration values. Word size is eight times
 `sizeof usize`, including on a synthetic 32-bit target hosted by a 64-bit
 compiler.
 
@@ -15386,6 +15389,49 @@ recorded; `negative/struct-closed-by-end-struct-is-given-its-name`, whose
 repair the `fixes` suite compiles clean; `positive/value-continued-at-any-indentation`, which holds a
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
+
+### D264 — Hosted system identity selects libc records, independently of C transport
+
+**From** [1500], [1550] and [1975].
+
+**The discrepancy:** FreeBSD shares Linux's SysV AMD64 and standard AAPCS64
+calling conventions, but its libc uses `__error`, BSD open flags and a
+224-byte `stat` record on both architectures. The C transport fact cannot
+select that record without changing the meaning D256 gave it.
+
+**Chosen:** `freebsd-x86-64` and `freebsd-arm64` are distinct LP64,
+little-endian target descriptions using the existing ELF backends, DWARF,
+16-byte stack alignment and frame pointers. They share the existing C ABI
+facts and feature levels of their architectures, including arm64's unsigned
+plain `char` and reserved x18. `compiler.os` is a fixed configuration value
+in its own equality domain, with `linux`, `darwin`, `freebsd` and
+`freestanding` as compiler-owned values. It names the target's hosted system,
+never the compiler host, and is available only in fixed configuration.
+`core/io/hosted` uses it to select FreeBSD's native libc record; calling
+conventions remain selected by C ABI facts. The hosted bridge uses `__error`
+and `O_WRONLY | O_CREAT | O_TRUNC = 0x601`. The selected FreeBSD driver is
+Clang with an explicit FreeBSD sysroot and ELF linker; x86-64 assembly uses
+GNU as so the selected level constrains user assembly too. FreeBSD executable
+feature levels make no loader-refusal promise: the execution lane confirms
+the selected features before running higher-level code.
+
+**The alternatives:** inferring libc record layout from the C calling
+convention, which reads and writes outside the actual record. Reusing the
+Darwin ABI fact because the errno spelling agrees, which misplaces variadic
+arguments. D256 declined an OS fact for C transport; the new fact serves the
+now demonstrated libc-record distinction and changes none of that transport.
+A backend copy would split instruction selection without changing the ABI.
+
+**Pinned by** `runtime/target-hosted-system-facts`,
+`negative/system-compared-with-architecture`, `negative/system-outside-configuration`,
+`abi/core-io-file-identity`, `targets/descriptions do not follow the host`,
+`targets/backends are stated per target`, `toolchain/a target names its toolchain`,
+`runtime/assembly-operands`, the two backend register-verifier cases and
+`compiler/tests/freebsd/check.py`'s recurring runtime, C peer and source-debugger
+sessions. FreeBSD's [errno header](https://github.com/freebsd/freebsd-src/blob/releng/14.4/sys/sys/errno.h),
+[open flags](https://github.com/freebsd/freebsd-src/blob/releng/14.4/sys/sys/fcntl.h)
+and [stat record](https://github.com/freebsd/freebsd-src/blob/releng/14.4/sys/sys/stat.h)
+state the libc contracts; the independent C peers check their selected headers.
 
 ### D255 — A build assumes a CPU feature level, and a level changes no layout
 

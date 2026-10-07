@@ -5,5 +5,5 @@ constructs: 0430, 0470, 0600, 1120, 1150, 1320, 1650, 1950, 1960
 program: main.ldn
 run_args: abcd
 traps: yes
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0326, L0326

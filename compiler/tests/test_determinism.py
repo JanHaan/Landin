@@ -7,7 +7,7 @@ weakest equivalence there is: `compiler/tests/quality/check.py` runs one
 command twice in one directory.  A property that only holds when nothing
 differs is not a determinism property, and a claim without a stated
 equivalence relation is not a claim.  This states the relation and checks it
-on linux-x86-64, darwin-arm64 and cortex-m0 alike, at each target's default
+on every described product target, at each target's default
 CPU feature level.
 
 Two compilations are EQUIVALENT CLOSURES when they agree on the source bytes,
@@ -103,10 +103,12 @@ HERE = Path(__file__).resolve().parent
 CORPUS = ("insertion-sort", "sieve-of-eratosthenes", "add-exits-with-its-sum",
           "array-of-structs", "atom-values-cross-the-abi",
           "array-arguments-cross-calls")
-TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
+TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
+           "freebsd-x86-64", "freebsd-arm64")
 PROFILES = (("none", "off"), ("size", "auto"), ("speed", "all"))
 DEBUG_FLAG = {"linux-x86-64": "full", "linux-arm64": "full",
-              "darwin-arm64": "full", "cortex-m0": "lines"}
+              "darwin-arm64": "full", "cortex-m0": "lines",
+              "freebsd-x86-64": "full", "freebsd-arm64": "full"}
 #  A module closure, so the contract covers import resolution and not only
 #  one file: the report's source order is what makes closure order irrelevant.
 CLOSURE_FIXTURE = "core-mem-allocators"

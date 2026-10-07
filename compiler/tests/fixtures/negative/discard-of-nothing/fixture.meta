@@ -2,7 +2,7 @@ class: negative
 summary: [1930] discarding is for a result, and a call of a function returning none has none
 constructs: 1020, 1930
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0331
 expect: expected.txt
 args: ../tests/fixtures/negative/discard-of-nothing/program.ldn

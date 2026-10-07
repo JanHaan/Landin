@@ -3,4 +3,4 @@ summary: D188 a range subtype writes two inclusive bounds, so an exclusive upper
 constructs: 0660, 1330, 1795
 program: program.ldn
 codes: L0101
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

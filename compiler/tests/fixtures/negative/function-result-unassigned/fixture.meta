@@ -3,4 +3,4 @@ summary: a function-valued named result must be assigned on every successful pat
 constructs: 0930, 1000, 1800, 1910
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

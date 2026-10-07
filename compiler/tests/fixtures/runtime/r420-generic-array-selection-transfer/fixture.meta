@@ -4,5 +4,5 @@ summary: generic slice element transfer copies zero and nonzero fixed arrays whi
 program: main.ldn
 status: 42
 constructs: 0410, 0520, 0570, 0670, 0790, 0940, 1030, 1810, 1900, 1920
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0326, L0326, L0326, L0326, L0326, L0326, L0326, L0326

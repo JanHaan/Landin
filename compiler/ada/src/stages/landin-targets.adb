@@ -47,6 +47,28 @@ package body Landin.Targets is
       Keeps_Frame      => True,
       Widest_Alignment => 16);
 
+   function FreeBSD_X86_64 return Target_Facts is
+     (Label            => Padded ("freebsd-x86-64"),
+      Machine          => X86_64,
+      C_ABI            => SysV_AMD64_LP64,
+      Pointer          => 64,
+      Pointer_Align    => 8,
+      Stack_Align      => 16,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 16);
+
+   function FreeBSD_Arm64 return Target_Facts is
+     (Label            => Padded ("freebsd-arm64"),
+      Machine          => Arm64,
+      C_ABI            => AAPCS64_LP64,
+      Pointer          => 64,
+      Pointer_Align    => 8,
+      Stack_Align      => 16,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 16);
+
    function Cortex_M return Target_Facts is
      (Label            => Padded ("cortex-m0"),
       Machine          => Cortex_M0,

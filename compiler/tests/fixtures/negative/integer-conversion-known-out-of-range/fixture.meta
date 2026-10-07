@@ -3,4 +3,4 @@ summary: an explicit integer conversion of a known literal must fit its destinat
 constructs: 0150, 0190, 0310, 0700, 1880
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

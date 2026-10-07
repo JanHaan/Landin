@@ -2,5 +2,5 @@ class: negative
 summary: D185 a condition binding is not visible after its guarded body
 constructs: 1070, 1840, 1860
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0201

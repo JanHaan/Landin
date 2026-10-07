@@ -2,5 +2,5 @@ class: negative
 summary: [1780] a block comment never closed is reported at the end of the file
 constructs: 1780
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0013

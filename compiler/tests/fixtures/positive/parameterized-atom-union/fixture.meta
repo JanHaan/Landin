@@ -2,4 +2,4 @@ class: positive
 summary: the unchanged originally refused parameterized union body normalizes declared repeated atom members
 constructs: 0630, 0640, 1350, 1795
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

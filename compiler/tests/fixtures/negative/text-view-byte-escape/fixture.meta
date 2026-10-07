@@ -3,7 +3,7 @@ summary: a byte escape cannot initialize a scalar-encoded hosted text view
 constructs: 0260, 0270, 0600
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/text-view-byte-escape/program.ldn
 status: 1

@@ -5,4 +5,4 @@ constructs: 0630, 0820, 0900, 0940, 0960, 0970, 1030, 1100, 1150, 1230, 1240, 12
 program: main.ldn
 root: ../../../../..
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

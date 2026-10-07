@@ -26,6 +26,10 @@ through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on each
 full gate run. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
 checks compiler behavior for Cortex; they do not execute embedded workloads.
 
+FreeBSD x86-64 and arm64 run in [system VMs](../environments/freebsd/README.md)
+on Linux. Each has separate recurring runtime, native guest LLDB and C ABI
+verdicts; Clang emits against a checksum-locked FreeBSD sysroot.
+
 ## Environments
 
 | environment | role | status |
@@ -35,6 +39,7 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
 | QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
+| FreeBSD amd64 and arm64 system VMs on Linux | independent runtime, native guest LLDB and C ABI gate lanes with checked CPU levels | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
 | GitHub Actions | `gate.yml` runs every target unless the verified explanatory-only reuse policy above applies: both compiler modes on Linux x86-64 and on Linux arm64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane and the called `determinism.yml` comparison; `links.yml`, `release.yml` and `pages.yml` run separately | working |

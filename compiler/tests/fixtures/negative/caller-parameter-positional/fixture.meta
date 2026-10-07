@@ -2,7 +2,7 @@ class: negative
 summary: D192 a caller position cannot be filled by an explicit positional argument
 constructs: 0260, 0670, 1040, 1920
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 codes: L0327
 expect: expected.txt
 args: ../tests/fixtures/negative/caller-parameter-positional/program.ldn

@@ -3,7 +3,7 @@ summary: [1810] ends a statement where its grammar does, and a value left out be
 program: program.ldn
 codes: L0102
 constructs: 1810, 1820
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/value-left-out-before-a-multiline-statement-is-written-there/program.ldn
 status: 1

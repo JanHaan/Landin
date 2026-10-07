@@ -3,7 +3,7 @@ summary: a leading default text literal conflicts with a repeated utf16 actual
 program: main.ldn
 codes: L0340
 constructs: 0260, 0270, 0570, 1290, 1920
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-text-literal-repeated-left-first/main.ldn
 status: 1

@@ -55,6 +55,9 @@ package Landin.Targets is
    --  unequal and select different C transport and object formats.
    function Linux_Arm64 return Target_Facts;
 
+   function FreeBSD_X86_64 return Target_Facts;
+   function FreeBSD_Arm64 return Target_Facts;
+
    --  ARMv6-M Thumb, base AAPCS soft-float. The Cortex-M0 backend emits
    --  assembly; C signatures, records and variadic calls remain disabled.
    function Cortex_M return Target_Facts;

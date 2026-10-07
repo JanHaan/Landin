@@ -3,4 +3,4 @@ summary: returned paths do not lend assignment facts to a surviving control edge
 program: program.ldn
 codes: L0302
 constructs: 0080, 0930, 1050, 1080, 1810, 1910
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

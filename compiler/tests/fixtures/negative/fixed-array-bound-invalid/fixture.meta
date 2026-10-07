@@ -3,4 +3,4 @@ summary: D136 distinguishes a negative count, impossible division and remainder 
 constructs: 0290, 0300, 0320, 0350, 0520, 1790, 1795, 1820, 1890, 1950
 program: program.ldn
 codes: L0300, L0306, L0306, L0300, L0338, L0305
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

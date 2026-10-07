@@ -3,7 +3,7 @@ summary: a direct fixed-array inout argument must match its complete parameter s
 constructs: 0520, 0570, 1810, 1920
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r470-array-inout-parameter-shape-mismatch/program.ldn
 status: 1

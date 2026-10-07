@@ -3,4 +3,4 @@ summary: nongeneric direct and indirect calls have no explicit static argument r
 constructs: 0980, 1000, 1920
 program: program.ldn
 codes: L0327, L0327
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

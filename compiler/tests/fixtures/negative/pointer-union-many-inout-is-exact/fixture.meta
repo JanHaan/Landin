@@ -3,7 +3,7 @@ summary: [0480]/[1870] an `inout` union parameter takes a place of exactly its o
 constructs: 0480, 0900, 1870
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-inout-is-exact/program.ldn
 status: 1

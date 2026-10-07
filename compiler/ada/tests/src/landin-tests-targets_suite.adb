@@ -25,6 +25,7 @@ package body Landin.Tests.Targets_Suite is
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Capabilities.Hosted_System;
 
    LF : constant Character := Character'Val (10);
 
@@ -112,6 +113,16 @@ package body Landin.Tests.Targets_Suite is
          and then Linux_Arm64 /= Darwin_Arm64,
          "Linux arm64 shares Darwin's architecture, not its C ABI");
       Check_Description
+        (Item, FreeBSD_X86_64, "freebsd-x86-64", 64, 8, 16, 16, 8);
+      Check_Description
+        (Item, FreeBSD_Arm64, "freebsd-arm64", 64, 8, 16, 16, 8);
+      Landin.Testing.Check
+        (Item, C_ABI_Of (FreeBSD_X86_64) = SysV_AMD64_LP64
+           and then C_ABI_Of (FreeBSD_Arm64) = AAPCS64_LP64
+           and then FreeBSD_X86_64 /= Linux_X86_64
+           and then FreeBSD_Arm64 /= Linux_Arm64,
+         "FreeBSD shares C transports, with distinct target identities");
+      Check_Description
         (Item, Synthetic_32, "synthetic-32",
          Pointer_Bits  => 32,
          Pointer_Align => 4,
@@ -154,8 +165,19 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check
         (Item,
          Capabilities.Backend_For (Linux_X86_64) =
-           Capabilities.Linux_X86_64_ELF,
+           Capabilities.X86_64_ELF,
          "linux-x86-64 has the ELF backend");
+      Landin.Testing.Check
+        (Item,
+         Capabilities.Backend_For (FreeBSD_X86_64) =
+           Capabilities.Backend_For (Linux_X86_64)
+         and then Capabilities.Backend_For (FreeBSD_Arm64) =
+           Capabilities.Backend_For (Linux_Arm64)
+         and then Capabilities.Hosted_System_Of (FreeBSD_X86_64) =
+           Capabilities.FreeBSD
+         and then Capabilities.Hosted_System_Of (FreeBSD_Arm64) =
+           Capabilities.FreeBSD,
+         "FreeBSD selects existing ELF backends and its own libc contracts");
       Landin.Testing.Check
         (Item,
          Capabilities.Backend_For (Synthetic_32) = Capabilities.No_Backend,
@@ -163,7 +185,7 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check
         (Item,
          Capabilities.Backend_For (Linux_Arm64) =
-           Capabilities.Linux_Arm64_ELF
+           Capabilities.Arm64_ELF
          and then Capabilities.Backend_For (Darwin_Arm64) =
            Capabilities.Darwin_Arm64_Mach_O
          and then Capabilities.Triplet (Linux_Arm64) = "aarch64-linux-gnu",
@@ -184,6 +206,8 @@ package body Landin.Tests.Targets_Suite is
         (Item,
          Selection.Described ("linux-x86-64") = Linux_X86_64
            and then Selection.Described ("linux-arm64") = Linux_Arm64
+           and then Selection.Described ("freebsd-x86-64") = FreeBSD_X86_64
+           and then Selection.Described ("freebsd-arm64") = FreeBSD_Arm64
            and then Selection.Described ("darwin-arm64") = Darwin_Arm64
            and then Selection.Described ("cortex-m0") = Cortex_M
            and then Selection.Described ("synthetic-32") = Synthetic_32,
@@ -1098,7 +1122,6 @@ package body Landin.Tests.Targets_Suite is
       use type C.Object_Format;
       use type C.Debug_Format;
       use type Landin.Hosted.Host_Helper;
-      use type C.Hosted_System;
       Unit : Landin.IR.Unit;
    begin
       Landin.Testing.Check

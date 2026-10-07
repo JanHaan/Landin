@@ -3,4 +3,4 @@ summary: D212 ordinary tracked callback state cannot return a reference to a fra
 program: program.ldn
 codes: L0314
 constructs: 0770, 0780, 0790, 0820, 1580
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

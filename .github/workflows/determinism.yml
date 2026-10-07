@@ -11,7 +11,7 @@
 #
 #  The cheap axis is the one that multiplies.  Emission needs no target
 #  assembler, linker or emulator, so a host job installs the pinned
-#  toolchain, builds the compiler and emits for all four targets -- which
+#  toolchain, builds the compiler and emits for all six targets -- which
 #  makes the matrix hosts + targets rather than hosts x targets.
 #  Called by gate.yml; also supports standalone manual dispatch.
 

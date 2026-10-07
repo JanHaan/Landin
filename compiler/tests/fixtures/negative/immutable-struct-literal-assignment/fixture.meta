@@ -3,4 +3,4 @@ summary: D64/D65 keep root mutability first for a whole struct literal assignmen
 constructs: 0080, 0520, 0670, 0710, 1810, 1900
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

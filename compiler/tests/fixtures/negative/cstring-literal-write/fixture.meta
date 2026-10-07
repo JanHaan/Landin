@@ -3,4 +3,4 @@ summary: a cstring literal has a read-only pointer permission
 constructs: 0070, 0260, 0430, 0600, 1810, 1900
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

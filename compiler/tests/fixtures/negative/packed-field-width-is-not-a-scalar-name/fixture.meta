@@ -1,7 +1,7 @@
 class: negative
 summary: packed-only unsigned widths are refused outside packed fields
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 args: ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn
 codes: L0336
 status: 1

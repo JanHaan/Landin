@@ -3,7 +3,7 @@ summary: D188 a range subtype is part of structural function-signature identity,
 constructs: 0660, 1000
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/range-subtype-signature-mismatch/program.ldn
 status: 1

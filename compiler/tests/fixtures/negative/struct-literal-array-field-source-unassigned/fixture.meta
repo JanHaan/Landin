@@ -3,4 +3,4 @@ summary: D65 reads a labelled array source as a whole against the state arriving
 constructs: 0080, 0190, 0520, 0670, 0710, 0750, 1810, 1910, 1950
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

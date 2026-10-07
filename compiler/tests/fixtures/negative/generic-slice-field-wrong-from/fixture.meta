@@ -3,4 +3,4 @@ summary: a generic slice field result retains the selected carrier origin
 program: program.ldn
 constructs: 0440, 0570, 0750, 0790, 1290
 codes: L0316
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

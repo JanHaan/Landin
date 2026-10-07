@@ -3,4 +3,4 @@ summary: D136 rejects runtime storage and a syntactically valid user call in a b
 constructs: 0290, 0520, 1350, 1790, 1795, 1800, 1820
 program: program.ldn
 codes: L0305, L0305
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

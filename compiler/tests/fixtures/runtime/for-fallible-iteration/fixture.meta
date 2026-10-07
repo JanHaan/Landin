@@ -4,4 +4,4 @@ summary: try for selects fallible evidence or ordinary fallback and propagates p
 program: main.ldn
 status: 42
 constructs: 0940, 0960, 1030, 1100, 1150, 1170, 1320
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

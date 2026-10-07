@@ -1,0 +1,10 @@
+error[L0301]: fixed expression operands have incompatible types
+  --> ../tests/fixtures/negative/system-compared-with-architecture/main.ldn:1:32
+  |
+1 | compiler.assert(compiler.os == compiler.arch)
+  |                                ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/system-compared-with-architecture/main.ldn:1:17
+  |
+1 | compiler.assert(compiler.os == compiler.arch)
+  |                 ^^^^^^^^^^^ the other operand of this fixed operator
+  = note: D202: fixed operands must have the types required by their operator or declaration

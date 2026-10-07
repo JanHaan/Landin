@@ -10,7 +10,31 @@ native_time: type = struct
     nanoseconds: i64
 end native_time
 
-fixed if compiler.c_sysv_lp64 then
+fixed if compiler.os == freebsd then
+    native_stat_size: usize = 224
+    native_stat: type = struct
+        device: u64
+        inode: u64
+        links: u64
+        mode: u16
+        bsdflags: i16
+        uid: u32
+        gid: u32
+        padding: i32
+        special_device: u64
+        accessed: native_time
+        modified: native_time
+        changed: native_time
+        born: native_time
+        bytes: i64
+        blocks: i64
+        block_size: i32
+        flags: u32
+        generation: u64
+        revision: u64
+        spare: [9]u64
+    end native_stat
+elsif compiler.c_sysv_lp64 then
     native_stat_size: usize = 144
     native_stat: type = struct
         device: u64

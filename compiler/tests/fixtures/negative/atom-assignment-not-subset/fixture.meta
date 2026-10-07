@@ -3,7 +3,7 @@ summary: a broader atom union cannot be assigned to a narrower set
 constructs: 0630, 0640
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/atom-assignment-not-subset/program.ldn
 status: 1

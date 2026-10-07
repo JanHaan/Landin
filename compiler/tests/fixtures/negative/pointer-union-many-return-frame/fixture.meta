@@ -3,7 +3,7 @@ summary: [0480]/[1870] a union built from a frame address cannot leave through a
 constructs: 0480, 0770, 0790, 1210
 program: program.ldn
 codes: L0314, L0314, L0314
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-return-frame/program.ldn
 status: 1

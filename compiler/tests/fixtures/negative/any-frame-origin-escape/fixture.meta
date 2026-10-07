@@ -3,4 +3,4 @@ summary: an erased pair retains the frame origin of its hidden pointee
 program: main.ldn
 codes: L0314
 constructs: 0770, 0840, 1230, 1240, 1370, 1380
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

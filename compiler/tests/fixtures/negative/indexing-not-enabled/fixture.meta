@@ -3,4 +3,4 @@ summary: [1820] indexes what a selection named, so a call and a parenthesis are 
 constructs: 0570, 1820, 1830
 program: program.ldn
 codes: L0010, L0010
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

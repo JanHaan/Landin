@@ -2,4 +2,4 @@ class: positive
 summary: identity-only ordinary signature recursion follows later multi-hop aliases
 constructs: 0670, 0710, 1000, 1795
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

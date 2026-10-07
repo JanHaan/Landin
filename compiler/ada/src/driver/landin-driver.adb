@@ -106,11 +106,13 @@ package body Landin.Driver is
       & "language frontend: scanner, parser, names, types, definite assignment"
       & LF
       & "target-neutral IR: lowered and verified" & LF
-      & "backends: linux-x86-64, linux-arm64, darwin-arm64 and cortex-m0"
+      & "backends: linux-x86-64, linux-arm64, darwin-arm64, "
+      & "freebsd-x86-64, freebsd-arm64 and cortex-m0"
       & " assembly" & LF
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF
       & "targets described: linux-x86-64, linux-arm64, darwin-arm64, "
+      & "freebsd-x86-64, freebsd-arm64, "
       & "cortex-m0, synthetic-32" & LF
       & "levels of linux-x86-64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_X86_64) & LF
@@ -118,6 +120,10 @@ package body Landin.Driver is
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_Arm64) & LF
       & "levels of darwin-arm64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Darwin_Arm64) & LF
+      & "levels of freebsd-x86-64: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.FreeBSD_X86_64) & LF
+      & "levels of freebsd-arm64: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.FreeBSD_Arm64) & LF
       & "levels of cortex-m0: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF);
 
@@ -180,7 +186,9 @@ package body Landin.Driver is
       & LF
       & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc and linux-arm64"
       & LF
-      & "aarch64-linux-gnu-gcc unless --toolchain names another." & LF);
+      & "aarch64-linux-gnu-gcc unless --toolchain names another." & LF
+      & "FreeBSD uses its target triplet with -clang; the driver wrapper"
+      & LF & "must supply its FreeBSD sysroot and linker." & LF);
 
    ---------------------------------------------------------------------
    --  Explain
@@ -895,7 +903,8 @@ package body Landin.Driver is
          Target_Spellings : constant array (Positive range <>)
            of Spelling_Access :=
              [new String'("linux-x86-64"), new String'("linux-arm64"),
-              new String'("darwin-arm64"), new String'("cortex-m0"),
+              new String'("darwin-arm64"), new String'("freebsd-x86-64"),
+              new String'("freebsd-arm64"), new String'("cortex-m0"),
               new String'("synthetic-32")];
          Option_Spellings : constant array (Positive range <>)
            of Spelling_Access :=

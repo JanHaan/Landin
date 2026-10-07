@@ -2,4 +2,4 @@ class: positive
 summary: [1950] an amount the compiler does not know is left to the trap; [0320] still fills with zeros beyond the width for a known one
 constructs: 1950, 0320
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

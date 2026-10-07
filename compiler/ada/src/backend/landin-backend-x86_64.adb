@@ -25,6 +25,7 @@ with Landin.Types;
 package body Landin.Backend.X86_64 is
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Layouts.Policy;
 
    package Unbounded renames Ada.Strings.Unbounded;
@@ -348,11 +349,12 @@ package body Landin.Backend.X86_64 is
       --  shift at 32 or 64 bits needs neither %cl nor its operand loaded.
       Has_BMI2 : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Bmi2);
-      --  This renderer always spells Linux ELF, synthetic-32's layout probe
-      --  included, so its libc is Linux's whatever width it lays out for.
+      --  Synthetic widths remain a Linux assembly-text layout probe.
+      Link_Facts : constant Landin.Targets.Target_Facts :=
+        (if Facts = Landin.Targets.Synthetic_32
+         then Landin.Targets.Linux_X86_64 else Facts);
       System : constant Hosted_ABI.Hosted_System :=
-        Landin.Targets.Capabilities.Hosted_System_Of
-          (Landin.Targets.Linux_X86_64);
+        Landin.Targets.Capabilities.Hosted_System_Of (Link_Facts);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -487,7 +489,7 @@ package body Landin.Backend.X86_64 is
 
       function Bridge_Symbol (Helper : Host_Helper) return String
         is (Landin.Targets.Capabilities.Link_Symbol
-              (Landin.Targets.Linux_X86_64, Helper_Name (Helper)));
+              (Link_Facts, Helper_Name (Helper)));
 
       procedure Begin_Bridge_Section (Helper : Host_Helper);
 
@@ -925,7 +927,7 @@ package body Landin.Backend.X86_64 is
       function Symbol (Item : Landin.IR.Item_Id) return String is
          Spelling : constant String :=
            Landin.Targets.Capabilities.Link_Symbol
-             (Landin.Targets.Linux_X86_64, Unbounded.To_String
+             (Link_Facts, Unbounded.To_String
                 (Allocated_Symbols (Positive (Item))));
       begin
          if Spelling'Length = 0 then
@@ -7041,10 +7043,11 @@ package body Landin.Backend.X86_64 is
       --  Synthetic widths remain an assembly-text layout probe. This
       --  renderer always spells ELF symbols; dispatch never emits that probe
       --  as a program, nor admits another real target through this seam.
-      if Facts /= Landin.Targets.Linux_X86_64
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        /= Landin.Targets.Capabilities.X86_64_ELF
         and then Facts /= Landin.Targets.Synthetic_32
       then
-         raise Compiler_Defect with "x86-64 emission needs Linux ELF facts";
+         raise Compiler_Defect with "x86-64 emission needs x86-64 ELF facts";
       end if;
       --  A C-owned main can drive Landin exports without asking refine to
       --  synthesize a hosted entry.  Those exports still need the library's

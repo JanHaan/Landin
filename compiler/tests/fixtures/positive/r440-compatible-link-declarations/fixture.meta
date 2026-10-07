@@ -2,4 +2,4 @@ class: positive
 summary: compatible C declarations and one definition share a link symbol without making source parameter names structural identity
 program: program.ldn
 constructs: 1000, 1580, 1610
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

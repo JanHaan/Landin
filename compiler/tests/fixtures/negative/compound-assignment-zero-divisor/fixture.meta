@@ -2,5 +2,5 @@ class: negative
 summary: a known zero compound divisor is the ordinary impossible operand
 constructs: 0390, 1880, 1950
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0306

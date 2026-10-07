@@ -2,7 +2,7 @@ class: negative
 summary: explicit memory boundary refusal optional
 program: program.ldn
 constructs: 0430, 0850, 1620
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 codes: L0344
 expect: expected.txt
 args: ../tests/fixtures/negative/r630-optional/program.ldn

@@ -3,7 +3,7 @@ summary: [0400] makes `inc` a statement, and `inc a` written where a value belon
 program: program.ldn
 codes: L0102
 constructs: 0400, 1810, 1820
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/statement-where-a-value-belongs-is-named/program.ldn
 status: 1

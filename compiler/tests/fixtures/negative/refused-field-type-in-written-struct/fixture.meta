@@ -3,7 +3,7 @@ summary: writing a field of a struct whose field type or packed width was refuse
 constructs: 0710, 0750, 0770
 program: program.ldn
 codes: L0201, L0336, L0201, L0336, L0339, L0303
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn
 status: 1

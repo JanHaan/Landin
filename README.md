@@ -102,7 +102,7 @@ configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
 x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for all
-four targets in both build modes, and compares emitted assembly digests
+six targets in both build modes, and compares emitted assembly digests
 across hosts; disagreement fails the aggregate gate. It does not assemble, link or run those programs.
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
@@ -230,7 +230,10 @@ This is the maintained inventory of what the compiler does today:
   and variadic calls, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are
   refused by name.
-- **Targets.** Linux x86-64, Linux arm64 and Darwin arm64 build and run hosted executables;
+- **Targets.** Linux x86-64, Linux arm64, Darwin arm64 and FreeBSD x86-64
+  and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
+  in [architecture-specific VMs](environments/freebsd/README.md) with separate
+  runtime, C ABI and debugger gate verdicts.
   Darwin keeps an explicit large-image loader limitation. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
   clearing, typed interrupt and naked functions, vector references, placement
@@ -245,16 +248,17 @@ This is the maintained inventory of what the compiler does today:
   defaulting to what the backend always emitted. A program reads a level as
   `compiler.feature.NAME` in `fixed if`. A level changes instructions and
   never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
-  `armv8.1-a` on Linux and macOS, and hardware division at `armv7-m`, each
+  `armv8.1-a` on Linux, macOS and FreeBSD, and hardware division at `armv7-m`, each
   executed at both levels, the last on QEMU's Cortex-M3. The assembler holds
   an assembly block to the level, and a level runs only on a processor that
   confirms it; an unconfirmed level fails as unverified.
 - **Code generation.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all four targets;
+  whatever the build directory, environment or order, on all six targets;
   the hosted linked image is not claimed. Compact numeric-array loops,
   explicit `layout(optimal)` placement and optional evidence-proved
   specialization are independent switches.
-- **Debugging.** DWARF and GDB on Linux, LLDB with dSYM and exact Mach-O
+- **Debugging.** DWARF and GDB on Linux, native LLDB in both FreeBSD VMs
+  for source-line stops, frames, local values and unwinding, LLDB with dSYM and exact Mach-O
   identity on Darwin, and line and function debugging on Cortex-M0. Debug
   provenance stays independent of DWARF for a possible future PDB emitter; PDB
   is not implemented.
@@ -265,7 +269,7 @@ This is the maintained inventory of what the compiler does today:
   emulators, each against a generated oracle.
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
-arm64 through 0.2.0; the gate runs the corpus on all four targets today,
+arm64 through 0.2.0; the gate runs the corpus on all six targets today,
 natively on all three hosted targets and under QEMU for Cortex-M, with GDB and
 LLDB. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
@@ -305,7 +309,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R11.30 — FreeBSD x86-64 and arm64 (planned).**
+**Current roadmap work: R11.30 — FreeBSD x86-64 and arm64.**
 
 ## License
 

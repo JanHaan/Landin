@@ -3,4 +3,4 @@ summary: the C boundary diagnoses a direct receiving variadic definition and req
 program: program.ldn
 codes: L0346
 constructs: 1580
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

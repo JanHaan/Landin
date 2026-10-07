@@ -620,3 +620,9 @@ optimization, volatile transaction and private call-status effects remain
 unchanged; executable LOAD-image comparisons verify that adding debug metadata
 does not change firmware execution or initialization. See the
 [target debugger contract](targets.md#cortex-source-debugging).
+
+ELF DWARF location and lexical-range references use section relocations.
+They remain correct when another linked object contributes DWARF before the
+compiler's object, as FreeBSD's startup objects do; a contribution-relative
+offset would select the other object's list. This changes debug serialization,
+not the IR's verification or optimization boundary.

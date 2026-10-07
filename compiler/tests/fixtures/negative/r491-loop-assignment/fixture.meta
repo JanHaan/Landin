@@ -3,4 +3,4 @@ summary: loop exits preserve the conservative assignment boundary and real consu
 program: main.ldn
 codes: L0302, L0302, L0302, L0302
 constructs: 0930, 1130, 1140, 1150, 1170, 1810, 1910
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

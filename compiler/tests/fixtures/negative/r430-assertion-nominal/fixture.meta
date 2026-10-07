@@ -3,7 +3,7 @@ summary: Fixed configuration measurements admit scalar names only
 program: main.ldn
 codes: L0305
 constructs: 0370, 1510
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r430-assertion-nominal/main.ldn
 status: 1

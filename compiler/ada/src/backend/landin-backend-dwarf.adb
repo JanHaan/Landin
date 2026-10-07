@@ -815,7 +815,8 @@ package body Landin.Backend.Dwarf is
                   Str (Decl_Name (Alias.Binding));
                   Ref (T (Shape_Type (Shape)));
                   Coordinates (Alias.Site);
-                  Put (HT & ".long " & Loc & "-" & Prefix & "debug_loc");
+                  Put (HT & ".long " & Loc
+                    & (if Mach_O then "-" & Prefix & "debug_loc" else ""));
                   Location_List
                     (Loc, Expr, Debug_Locations.Available_Alias
                        (Availability, Of_Unit, Meanings, Info, Item, Index));
@@ -860,7 +861,8 @@ package body Landin.Backend.Dwarf is
                   Str (Decl_Name (Binding));
                   Ref (T (Typ));
                   Coordinates (Origin_Of (Of_Unit, Item, Slot));
-                  Put (HT & ".long " & Loc & "-" & Prefix & "debug_loc");
+                  Put (HT & ".long " & Loc
+                    & (if Mach_O then "-" & Prefix & "debug_loc" else ""));
                   Expr := US.To_Unbounded_String
                     (Slot_Expression (Plan, Frame_Plan, Slot,
                        Is_Address (Of_Unit, Item, Slot), False));
@@ -882,7 +884,11 @@ package body Landin.Backend.Dwarf is
          begin
             if not Is_Root then
                U (11);
-               Put (HT & ".long " & Name & "-" & Prefix & "debug_ranges");
+               --  ELF startup objects may contribute to these sections before
+               --  us. A section relocation carries the final linked offset;
+               --  subtracting our own start would address another object.
+               Put (HT & ".long " & Name
+                 & (if Mach_O then "-" & Prefix & "debug_ranges" else ""));
                --  Entries below contain linked addresses, not offsets
                --  from a containing routine's low PC.  Select base zero
                --  explicitly. ELF has no single CU low PC; Darwin also

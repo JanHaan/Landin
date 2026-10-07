@@ -2,4 +2,4 @@ class: positive
 summary: the tour uses an unlabelled bare block with a separately named ordinary type
 constructs: 0110, 1090, 1760, 1810, 1840
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

@@ -93,6 +93,17 @@ package body Landin.Tests.Toolchain_Suite is
          "Linux arm64's driver is the name the pinned aarch64 GNAT has");
 
       Landin.Testing.Check_Equal
+        (Item, Landin.Backend.Toolchain.Driver_For
+           (Landin.Targets.FreeBSD_X86_64, ""),
+         "x86_64-unknown-freebsd14.4-clang",
+         "FreeBSD x86-64 selects a sysroot-aware Clang driver");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Backend.Toolchain.Driver_For
+           (Landin.Targets.FreeBSD_Arm64, ""),
+         "aarch64-unknown-freebsd14.4-clang",
+         "FreeBSD arm64 selects a sysroot-aware Clang driver");
+
+      Landin.Testing.Check_Equal
         (Item,
          Landin.Targets.Capabilities.Triplet (Landin.Targets.Synthetic_32),
          "",
@@ -314,6 +325,32 @@ package body Landin.Tests.Toolchain_Suite is
             & "-Wa,-march=armv8-a" & LF,
             "the arm64 baseline is named to the assembler too");
       end;
+      --  FreeBSD shares ELF transport, with its Clang assembler interface.
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", "a1b2", Libraries,
+               Landin.Targets.FreeBSD_X86_64,
+               Level => Landin.Targets.Levels.Level_Named
+                 (Landin.Targets.FreeBSD_X86_64, "x86-64-v3"))),
+         "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
+         & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
+         & "-fno-integrated-as" & LF & "-Wl,--gc-sections" & LF
+         & "-Wa,-march=generic64+cx16+lahf_sahf+popcnt+sse3+ssse3"
+         & "+sse4.1+sse4.2+avx+avx2+bmi+bmi2+f16c+fma+lzcnt+movbe"
+         & "+xsave" & LF,
+         "FreeBSD x86 uses GNU as without a Linux loader level promise");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", "a1b2", Libraries,
+               Landin.Targets.FreeBSD_Arm64,
+               Level => Landin.Targets.Levels.Level_Named
+                 (Landin.Targets.FreeBSD_Arm64, "armv8.1-a"))),
+         "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
+         & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
+         & "-march=armv8.1-a" & LF & "-Wa,-L" & LF,
+         "FreeBSD arm64 preserves public dot names and constrains Clang");
    end File_Operands_Keep_Their_Identity;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

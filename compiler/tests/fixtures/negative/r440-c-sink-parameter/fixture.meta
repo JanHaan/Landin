@@ -3,4 +3,4 @@ summary: the C boundary refuses Landin sink consumption convention in a C signat
 program: program.ldn
 codes: L0346
 constructs: 0910, 1580
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

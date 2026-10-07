@@ -3,4 +3,4 @@ summary: trailing field fill preserves unassigned boundary
 program: main.ldn
 codes: L0302
 constructs: 0720, 1910
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

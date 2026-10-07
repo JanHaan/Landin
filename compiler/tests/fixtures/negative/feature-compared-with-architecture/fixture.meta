@@ -3,7 +3,7 @@ summary: D255 makes a feature a bool, so it is not compared with an architecture
 program: main.ldn
 codes: L0301
 constructs: 1500, 1510
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/feature-compared-with-architecture/main.ldn
 status: 1

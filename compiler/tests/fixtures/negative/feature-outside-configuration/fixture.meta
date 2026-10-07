@@ -3,7 +3,7 @@ summary: D255 makes compiler.feature a fixed configuration fact, which a body ca
 program: main.ldn
 codes: L0203
 constructs: 1500, 1560
-targets: linux-x86-64, linux-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/feature-outside-configuration/main.ldn
 status: 1

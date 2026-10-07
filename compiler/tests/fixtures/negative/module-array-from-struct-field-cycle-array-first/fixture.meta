@@ -3,4 +3,4 @@ summary: D70 reports one static-image cycle when an inferred selected-field arra
 constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1820, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64

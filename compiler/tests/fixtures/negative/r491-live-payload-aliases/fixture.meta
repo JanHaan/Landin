@@ -3,7 +3,7 @@ summary: reads writes calls addresses cleanup and loop uses keep variant payload
 program: main.ldn
 codes: L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315
 constructs: 0420, 0430, 0800, 0830, 0900, 1130, 1220, 1910
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn
 status: 1

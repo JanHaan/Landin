@@ -3,7 +3,7 @@ summary: a struct containing a function-valued field has no all-bits-zero image
 constructs: 0060, 0540, 0670, 1000, 1790, 1810
 program: program.ldn
 codes: L0328
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/function-field-has-no-zero-image/program.ldn
 status: 1

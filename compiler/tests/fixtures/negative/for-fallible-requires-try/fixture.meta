@@ -3,7 +3,7 @@ summary: a fallible iterator requires explicit try at the loop site
 program: main.ldn
 codes: L0348
 constructs: 0940, 0960, 1150, 1320
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, macos-arm64, synthetic-32, freebsd-x86-64
 expect: expected.txt
 args: ../tests/fixtures/negative/for-fallible-requires-try/main.ldn
 status: 1

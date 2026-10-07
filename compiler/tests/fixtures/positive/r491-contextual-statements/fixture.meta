@@ -3,4 +3,4 @@ summary: longer control-word spellings and contextual arena remain legal names i
 program: main.ldn
 codes: L0349, L0349, L0349, L0349, L0349, L0349, L0349, L0349, L0349, L0349, L0349, L0349
 constructs: 0110, 0520, 1140, 1220, 1760, 1810
-targets: linux-x86-64, linux-arm64
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

@@ -874,7 +874,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
            and then Symbols.Exit_Code = 0
          then
             if Landin.Targets.Capabilities.Backend_For (Lanes.Target)
-              = Landin.Targets.Capabilities.Linux_X86_64_ELF
+              = Landin.Targets.Capabilities.X86_64_ELF
             then
                for Symbol of Absent loop
                   Landin.Testing.Check

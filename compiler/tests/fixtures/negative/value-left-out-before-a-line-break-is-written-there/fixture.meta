@@ -4,4 +4,4 @@ program: program.ldn
 codes: L0102
 fixed: program.fixed
 constructs: 0390, 1810, 1820
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

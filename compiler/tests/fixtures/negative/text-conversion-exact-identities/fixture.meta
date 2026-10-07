@@ -3,4 +3,4 @@ summary: text representation conversion retains exact view, permission and eleme
 constructs: 0310, 0430, 0600, 0660
 program: program.ldn
 codes: L0301, L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
