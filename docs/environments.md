@@ -45,7 +45,7 @@ execution retains the existing dedicated VM lanes.
 | runner name | required platform label | role |
 |---|---|---|
 | `landin-linux-amd64` | `linux-amd64` | Linux x86-64 compiler and execution, Cortex-M, FreeBSD emission, documents, scripts, links, Pages and release publication |
-| `landin-linux-arm64` | `linux-arm64` | native Linux arm64 compiler and execution |
+| `landin-linux-arm64` | `linux-arm64` | gate input classification; native Linux arm64 compiler and execution |
 | `landin-darwin-arm64` | `darwin-arm64` | native Darwin compiler, parity and LLDB |
 | `landin-freebsd-amd64` | `freebsd-amd64` | accelerated FreeBSD x86-64 VM execution, ABI and debugging |
 | `landin-freebsd-arm64` | `freebsd-arm64` | accelerated FreeBSD arm64 VM execution, ABI and debugging |
@@ -55,6 +55,11 @@ and architecture labels. Their three hosts supply determinism manifests and
 release builds. A missing or offline matching runner leaves a job queued;
 the workflows do not fall back to a hosted image for a trusted event.
 With one runner per platform, that platform's jobs run one at a time.
+The small gate input classifier uses arm64 so the compiler lanes can start
+while documents and scripts occupy the x86-64 runner. Explicit prebuilds
+limit GPRbuild to four Linux workers and three Darwin workers before the
+test wrappers check their manifests. A container CPU quota can leave the
+host's larger processor count visible to the project's default `-j0`.
 
 Both Linux compiler runners use Ubuntu 24.04 with glibc 2.39, Python 3,
 Git, curl, archive tools, binutils and the C development headers. They need

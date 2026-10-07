@@ -111,7 +111,7 @@ still succeed. The linked full run contains the target-test results.
 
 | job | runner | runs |
 |---|---|---|
-| `inputs` | self-hosted `linux-amd64` | verify whether a recent complete main run can cover a declared explanatory edit |
+| `inputs` | self-hosted `linux-arm64` | verify whether a recent complete main run can cover a declared explanatory edit |
 | `documents` | self-hosted `linux-amd64` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
 | `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |

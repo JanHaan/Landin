@@ -36,10 +36,12 @@ permissions:
 
 jobs:
   # Reuse requires the verified explanatory-only conditions in AGENTS.md.
+  #  The small classifier uses arm64 so it can release the compiler lanes
+  #  while documents and scripts occupy the x86-64 runner.
   inputs:
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
     permissions:
       actions: read
       contents: read
@@ -124,7 +126,8 @@ jobs:
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      #  Eight workers on four vCPUs, deliberately.  A work item is one
+      #  Eight workers; the measurements below used four hosted vCPUs.
+      #  A work item is one
       #  fixture with its profiles in order, a chain of compile, assemble,
       #  link and run, so the processes wait on each other and more workers
       #  than CPUs keeps them busy.  Measured on four CPUs, the fixture suite
@@ -135,6 +138,9 @@ jobs:
       #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
+      - name: Build debug executables with bounded parallelism
+        run: ./scripts/build.sh -j4
+
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
@@ -494,6 +500,9 @@ jobs:
         with:
           platform: aarch64-darwin
 
+      - name: Build debug executables with bounded parallelism
+        run: ./scripts/build.sh -j3
+
       #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
       #  compiler defaults to darwin-arm64 (D257), so the lane is named.
       - name: The compiler host suite
@@ -591,11 +600,12 @@ jobs:
   #  Darwin selected, end-to-end fixtures among them, and the regenerated
   #  bindings and archives, with the release compiler.
   #
-  #  Three workers, the runner's cores.  macOS vets each newly linked
+  #  Three workers, retaining the width measured on the hosted image.
+  #  macOS vets each newly linked
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
-  #  and at eight alike.  On this image the whole job takes fourteen
-  #  minutes.
+  #  and at eight alike.  On the hosted image the whole job took fourteen
+  #  minutes; no timing is assumed for the self-hosted Mac.
   darwin-parity:
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.reuse != 'true'
@@ -701,6 +711,9 @@ jobs:
         with:
           platform: aarch64-linux
 
+      - name: Build debug executables with bounded parallelism
+        run: ./scripts/build.sh -j4
+
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
@@ -751,6 +764,9 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
         with:
           platform: aarch64-linux
+
+      - name: Build release executables with bounded parallelism
+        run: ./scripts/build.sh -j4
 
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
