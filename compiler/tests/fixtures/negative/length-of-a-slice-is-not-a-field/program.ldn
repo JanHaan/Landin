@@ -1,0 +1,3 @@
+count: (items: []u8) -> (n: usize) =
+    n = items.len
+end count

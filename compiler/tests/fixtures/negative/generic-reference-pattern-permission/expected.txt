@@ -6,5 +6,5 @@ error[L0340]: this argument has a different reference permission or view from it
   --> ../tests/fixtures/negative/generic-reference-pattern-permission/program.ldn:1:24
   |
 1 | identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
-  |                        ^^^^^^^^^ the runtime parameter type pattern
-  = note: D138: deduction matches the written parameter pattern against the independently synthesized argument descriptor; only an outer mutable reference may relax to read-only
+  |                        ^^^^^^^^^ the parameter's type, as written
+  = note: D138: an argument to a generic routine is typed on its own, before the parameter is known, and must match the type written for it; only `mut` may relax to read-only

@@ -58,6 +58,8 @@ end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, macos-arm64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, macos-arm64
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/addr-of-a-call-result-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/addr-of-a-literal-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, linux-arm64, macos-arm64
 negative/aggregate-call-result-not-assigned-on-every-path | linux-x86-64, linux-arm64, macos-arm64
 negative/anonymous-function-captures-local | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -357,6 +359,7 @@ negative/generic-any-nominal-deduction-conflict | linux-x86-64, linux-arm64, mac
 negative/generic-computed-pattern-undeduced | linux-x86-64, linux-arm64, macos-arm64
 negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, linux-arm64, macos-arm64
 negative/generic-explicit-reference-frame | linux-x86-64, linux-arm64, macos-arm64
+negative/generic-formals-in-brackets-are-reported-once | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/generic-inferred-error-unhandled | linux-x86-64, linux-arm64, macos-arm64
 negative/generic-inferred-template-not-function-value | linux-x86-64, linux-arm64, macos-arm64
 negative/generic-pointer-result-live-view | linux-x86-64, linux-arm64, macos-arm64
@@ -422,6 +425,7 @@ negative/increment-unassigned-local-array-element | linux-x86-64, linux-arm64, m
 negative/index-a-scalar | linux-x86-64, linux-arm64, macos-arm64
 negative/index-is-not-a-number | linux-x86-64, linux-arm64, macos-arm64
 negative/index-is-not-usize | linux-x86-64, linux-arm64, macos-arm64
+negative/index-of-a-qualified-call-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/index-outside-the-length | linux-x86-64, linux-arm64, macos-arm64
 negative/index-past-the-default-type | linux-x86-64, linux-arm64, macos-arm64
 negative/indexing-not-enabled | linux-x86-64, linux-arm64, macos-arm64
@@ -451,6 +455,7 @@ negative/iterable-retained-item-source | linux-x86-64, linux-arm64, macos-arm64,
 negative/keyword-as-name | linux-x86-64, linux-arm64, macos-arm64
 negative/labelled-call-result-dropped-by-omission | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/latin1-byte-in-name | linux-x86-64, linux-arm64, macos-arm64
+negative/length-of-a-slice-is-not-a-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/lenof-array-literal-element-mismatch | linux-x86-64, linux-arm64, macos-arm64
 negative/lenof-array-literal-needs-scalar-elements | linux-x86-64, linux-arm64, macos-arm64
 negative/lenof-scalar | linux-x86-64, linux-arm64, macos-arm64
@@ -587,6 +592,7 @@ negative/named-call-positional-after-named | linux-x86-64, linux-arm64, macos-ar
 negative/named-call-unknown | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/named-return-not-assigned | linux-x86-64, linux-arm64, macos-arm64
 negative/names-assigned-as-a-list-are-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/negative-literal-is-reported-with-its-sign | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/nested-array-mixed-repetition-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/nested-scalar-zeroed-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/nested-storage-argument-unassigned | linux-x86-64, linux-arm64, macos-arm64
@@ -609,6 +615,7 @@ negative/none-is-not-a-value | linux-x86-64, linux-arm64, macos-arm64
 negative/nonzeroable-constraint | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/nonzeroable-zero-length-constraint | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/null-pointer-union-call-else-frame-escape | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/operand-with-no-block-text-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/operands-of-two-types | linux-x86-64, linux-arm64, macos-arm64
 negative/option-outside-configuration | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, linux-arm64, macos-arm64
@@ -1126,6 +1133,7 @@ negative/struct-array-field-whole-copy-source-unassigned | linux-x86-64, linux-a
 negative/struct-array-field-whole-self-copy-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-array-field-zeroed-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-array-fields-keep-assignment-separate | linux-x86-64, linux-arm64, macos-arm64
+negative/struct-closed-by-end-struct-is-given-its-name | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/struct-construction-all-of-not-enabled | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-construction-callee-not-struct | linux-x86-64, linux-arm64, macos-arm64
 negative/struct-construction-nominal-mismatch | linux-x86-64, linux-arm64, macos-arm64

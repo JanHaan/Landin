@@ -1,0 +1,9 @@
+class: negative
+summary: [0370] measures a slice with `lenof`, and `items.len` is reported as a slice having no fields, naming `lenof items`, not as a value that is not a struct
+program: program.ldn
+codes: L0301
+constructs: 0370, 0420
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/length-of-a-slice-is-not-a-field/program.ldn
+status: 1

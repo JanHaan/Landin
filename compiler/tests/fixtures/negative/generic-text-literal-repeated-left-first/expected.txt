@@ -1,4 +1,4 @@
-error[L0340]: this argument deduces a different type descriptor for repeated formal `item`
+error[L0340]: this makes `item` a different type from the one an earlier argument made it
   --> ../tests/fixtures/negative/generic-text-literal-repeated-left-first/main.ldn:8:22
   |
 8 |     bad := same("x", text)
@@ -6,5 +6,5 @@ error[L0340]: this argument deduces a different type descriptor for repeated for
   --> ../tests/fixtures/negative/generic-text-literal-repeated-left-first/main.ldn:8:17
   |
 8 |     bad := same("x", text)
-  |                 ^^^ the first argument relation for this formal
-  = note: D138: repeated exact structural deductions must agree; this call has no routine target
+  |                 ^^^ this decided it first
+  = note: D138: every argument that decides `item` must decide the same

@@ -15224,6 +15224,8 @@ only a binary expression takes, and the lines after it indented deeper than
 its own, which are the body of the construct it failed to open, such as the
 arms of a `match` whose word is out of place. The first line no deeper
 begins anew, so a mistake inside a construct that line opens is its own. A
+refused declaration at a file's top level is the same: the lines indented
+under its header and the `end` that closes them are passed over. A
 header that lacks `then` or `do` where it belongs
 begins its body after one written later on its line. A transfer's label is
 written on its line, so a name on the next line begins the next statement. A value with more of its block after
@@ -15319,7 +15321,13 @@ it were written right: `sizeof(t)` is a measure with a call's parentheses,
 `name: concept (...)` a concept missing its `type =`, `else (_)` an error
 binding that binds nothing, `(a, b) = value` a destructuring written with
 an assignment's `=`, `f().x` a selection from a call, and `general` after an
-operand's `:` the register class where its type belongs. A `:`
+operand's `:` the register class where its type belongs. `addr` takes a named place, so `addr 3` and `addr make()` are said at
+the value; `end struct` names the kind of thing closed rather than the
+struct; brackets written before a generic function's list,
+`id: [t: type] (x: t)`, are its formals out of place; an operand first in a
+call has no block text before it. No repair removes `addr`, `lenof` or the
+name a `lenof` measure is given, since each would change what the line
+measures or points at. A `:`
 or `:=` that begins a line belongs to that line, so the name at the end of
 the line above is a value, and an assignment operator beginning a line is a
 binding or an assignment whose name was left out. A closing word
@@ -15357,8 +15365,13 @@ offered repair the `fixes` suite compiles clean;
 `negative/name-left-out-after-a-dot-is-written-there`,
 `negative/match-subject-left-unfinished-is-reported-there`,
 `negative/value-left-out-before-a-multiline-statement-is-written-there` and
-`negative/binding-missing-its-name-is-reported-on-its-line`, whose one
-report is recorded; `positive/value-continued-at-any-indentation`, which holds a
+`negative/binding-missing-its-name-is-reported-on-its-line`,
+`negative/addr-of-a-call-result-is-refused-there`,
+`negative/addr-of-a-literal-is-refused-there`,
+`negative/generic-formals-in-brackets-are-reported-once` and
+`negative/operand-with-no-block-text-is-refused-there`, whose one report is
+recorded; `negative/struct-closed-by-end-struct-is-given-its-name`, whose
+repair the `fixes` suite compiles clean; `positive/value-continued-at-any-indentation`, which holds a
 continued value the grammar accepts to being accepted; `server/repair-actions`, which holds the preference an
 editor sees to the two levels; and `server/formatting`.
 

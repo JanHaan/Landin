@@ -1,0 +1,7 @@
+class: negative
+summary: [1795] closes a struct with `end` or its own name, so `end struct` is reported at the word and given the struct's name, not left as a stray declaration
+program: program.ldn
+codes: L0103
+fixed: program.fixed
+constructs: 0670, 1795
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

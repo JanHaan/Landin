@@ -4,7 +4,7 @@ error[L0344]: register mask must fit its carrier
 8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
   = note: [1620]/D227: explicit memory contract
-error[L0300]: no `u32` holds this value
+error[L0300]: `0x1_0000_0000` does not fit `u32`
   --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:79
   |
 8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)

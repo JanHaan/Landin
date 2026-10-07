@@ -1,0 +1,4 @@
+pair: type = struct
+    a: u32
+    b: u32
+end struct

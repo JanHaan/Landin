@@ -1,0 +1,8 @@
+make: () -> (r: u32) =
+    r = 1
+end make
+
+take: () -> none =
+    p := addr make()
+    _ = p
+end take

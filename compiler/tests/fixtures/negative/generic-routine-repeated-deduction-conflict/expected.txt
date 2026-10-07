@@ -1,4 +1,4 @@
-error[L0340]: this argument deduces a different type descriptor for repeated formal `t`
+error[L0340]: this makes `t` `i32`, but it is already `u8`
   --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:5:24
   |
 5 |     code = same(small, 9)
@@ -6,5 +6,5 @@ error[L0340]: this argument deduces a different type descriptor for repeated for
   --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:5:17
   |
 5 |     code = same(small, 9)
-  |                 ^^^^^ the first argument relation for this formal
-  = note: D138: repeated exact structural deductions must agree; this call has no routine target
+  |                 ^^^^^ this decided it first
+  = note: D138: every argument that decides `t` must decide the same; an untyped literal decides `i32`, so convert it to the type meant

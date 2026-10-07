@@ -1,4 +1,4 @@
-error[L0340]: this argument deduces a different fixed value for repeated formal `count`
+error[L0340]: this makes `count` `3`, but it is already `2`
   --> ../tests/fixtures/negative/generic-structural-repeated-conflict/program.ldn:13:16
    |
 13 |     same(left, right)
@@ -6,5 +6,5 @@ error[L0340]: this argument deduces a different fixed value for repeated formal 
   --> ../tests/fixtures/negative/generic-structural-repeated-conflict/program.ldn:13:10
    |
 13 |     same(left, right)
-   |          ^^^^ the first argument relation for this formal
-  = note: D138: repeated exact structural deductions must agree; this call has no routine target
+   |          ^^^^ this decided it first
+  = note: D138: every argument that decides `count` must decide the same

@@ -1,4 +1,4 @@
-error[L0340]: this argument deduces a different type descriptor for repeated formal `t`
+error[L0340]: this makes `t` a different type from the one an earlier argument made it
   --> ../tests/fixtures/negative/r491-generic-array-field-shape/main.ldn:7:37
   |
 7 |     values := copy(t: short, value: b.values)
@@ -6,5 +6,5 @@ error[L0340]: this argument deduces a different type descriptor for repeated for
   --> ../tests/fixtures/negative/r491-generic-array-field-shape/main.ldn:7:20
   |
 7 |     values := copy(t: short, value: b.values)
-  |                    ^^^^^^^^ the first argument relation for this formal
-  = note: D138: repeated exact structural deductions must agree; this call has no routine target
+  |                    ^^^^^^^^ this decided it first
+  = note: D138: every argument that decides `t` must decide the same

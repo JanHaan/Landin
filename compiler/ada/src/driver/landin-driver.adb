@@ -2067,10 +2067,14 @@ package body Landin.Driver is
             end;
          end loop;
 
+         --  An unknown target leaves nothing to compile for, so the
+         --  sources are not read: their reports would be about a
+         --  compilation that never runs.
          for Name of Rejected loop
             Note_Failure
               (Code_Unknown_Target,
                "unknown target: " & Name & Nearest_Target (Name));
+            Skip_Compilation := True;
          end loop;
 
          --  Without a description of its own host the compiler has nothing

@@ -1,0 +1,6 @@
+error[L0100]: `addr` takes a named place, and a value has no address
+  --> ../tests/fixtures/negative/addr-of-a-literal-is-refused-there/program.ldn:2:15
+  |
+2 |     p := addr 3
+  |               ^
+  = note: [0380]: `addr` names a binding, a field or an element; bind a value to a name first

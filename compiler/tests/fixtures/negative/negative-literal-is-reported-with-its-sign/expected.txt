@@ -1,0 +1,6 @@
+error[L0300]: `-1` does not fit `u8`, which holds no negative value
+  --> ../tests/fixtures/negative/negative-literal-is-reported-with-its-sign/program.ldn:2:9
+  |
+2 |     b = -1
+  |         ^^
+  = note: [1880]: a literal takes the type of its context and is checked there

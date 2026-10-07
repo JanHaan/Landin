@@ -1,0 +1,10 @@
+error[L0103]: an assembly operand follows the block's text, and only `assembler.block` takes one
+  --> ../tests/fixtures/negative/operand-with-no-block-text-is-refused-there/program.ldn:2:21
+  |
+2 |     compiler.assert(in x: u32 at r0 = 1)
+  |                     ^^
+  --> ../tests/fixtures/negative/operand-with-no-block-text-is-refused-there/program.ldn:2:5
+  |
+2 |     compiler.assert(in x: u32 at r0 = 1)
+  |     ^^^^^^^^ this call
+  = note: [1630]: `assembler.block("text", in name: type at register = value)`

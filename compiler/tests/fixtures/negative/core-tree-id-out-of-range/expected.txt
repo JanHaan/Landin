@@ -1,4 +1,4 @@
-error[L0300]: no `usize` holds this value
+error[L0300]: `4294967296` does not fit `usize`
   --> ../tests/fixtures/negative/core-tree-id-out-of-range/main.ldn:4:35
   |
 4 |     wrong: tree.node_id = tree.id(4294967296)

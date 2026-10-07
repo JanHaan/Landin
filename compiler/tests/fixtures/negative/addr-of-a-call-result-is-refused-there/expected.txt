@@ -1,0 +1,6 @@
+error[L0100]: `addr` takes a named place, and a call's result has no address
+  --> ../tests/fixtures/negative/addr-of-a-call-result-is-refused-there/program.ldn:6:19
+  |
+6 |     p := addr make()
+  |                   ^
+  = note: [0380]: bind the result to a name, then take `addr` of the name

@@ -1,2 +1,2 @@
-error[L0007]: entry module is not a directory: ../tests/fixtures/negative/module-directory-invalid/entry.ldn
+error[L0007]: entry module is not a directory: ../tests/fixtures/negative/module-directory-invalid/entry.ldn; with --root the entry is the module's directory, not one of its files
   = note: [1410]: a module is one directory

@@ -1,0 +1,4 @@
+take: () -> none =
+    p := addr 3
+    _ = p
+end take

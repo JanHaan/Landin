@@ -1,4 +1,4 @@
-error[L0340]: this argument deduces a different fixed value for repeated formal `n`
+error[L0340]: this makes `n` `3`, but it is already `2`
   --> ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn:6:24
   |
 6 |     code = first(left, right)
@@ -6,5 +6,5 @@ error[L0340]: this argument deduces a different fixed value for repeated formal 
   --> ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn:6:18
   |
 6 |     code = first(left, right)
-  |                  ^^^^ the first argument relation for this formal
-  = note: D138: repeated exact structural deductions must agree; this call has no routine target
+  |                  ^^^^ this decided it first
+  = note: D138: every argument that decides `n` must decide the same

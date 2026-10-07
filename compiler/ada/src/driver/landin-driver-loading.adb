@@ -82,6 +82,50 @@ package body Landin.Driver.Loading is
      (Name'Length > 4
       and then Name (Name'Last - 3 .. Name'Last) = ".ldn");
 
+   --  "; the directory holds a.ldn and b.ldn" when the directory a
+   --  missing source names holds sources, or nothing: a name written for
+   --  the wrong file of a module is the common mistake, and the listing
+   --  says which ones there are.
+   function Sources_Beside
+     (Host : Landin.Platform.Filesystem'Class; Path : String) return String;
+
+   function Sources_Beside
+     (Host : Landin.Platform.Filesystem'Class; Path : String) return String
+   is
+      Slash : Natural := 0;
+      Entries : Landin.Platform.Path_List;
+      Status  : Landin.Platform.List_Status;
+      Named   : Unbounded.Unbounded_String;
+      Count   : Natural := 0;
+   begin
+      for Index in reverse Path'Range loop
+         if Path (Index) = '/' then
+            Slash := Index;
+            exit;
+         end if;
+      end loop;
+      Host.List_Directory
+        ((if Slash = 0 then "." else Path (Path'First .. Slash - 1)),
+         Entries, Status);
+      if Status /= Landin.Platform.List_Ok then
+         return "";
+      end if;
+      for Name of Entries loop
+         if Is_Source_Name (Name) then
+            Count := Count + 1;
+            if Count <= 3 then
+               Unbounded.Append
+                 (Named, (if Count = 1 then "" else ", ") & Name);
+            end if;
+         end if;
+      end loop;
+      if Count = 0 then
+         return "";
+      end if;
+      return "; the directory holds " & Unbounded.To_String (Named)
+        & (if Count > 3 then " and more" else "");
+   end Sources_Beside;
+
    procedure Load_Files
      (Context : in out Landin.Stages.Compilation;
       Host    : Landin.Platform.Filesystem'Class;
@@ -150,6 +194,8 @@ package body Landin.Driver.Loading is
                                  then "; `refine " & Path & "` is not a"
                                       & " command: name the source to"
                                       & " check it, as `refine FILE`"
+                                 elsif Is_Source_Name (Path)
+                                 then Sources_Beside (Host, Path)
                                  else ""));
 
                         when Landin.Platform.Not_Readable =>
@@ -518,7 +564,11 @@ package body Landin.Driver.Loading is
                Source  => Landin.Source.No_Source,
                Where   => Landin.Source.Empty_Span,
                Message => "entry module is not a directory: "
-                          & Entry_Directory,
+                          & Entry_Directory
+                          & (if Is_Source_Name (Entry_Directory)
+                             then "; with --root the entry is the module's"
+                                  & " directory, not one of its files"
+                             else ""),
                Note    => "[1410]: a module is one directory",
                Into    => Found);
             Landin.Stages.Report

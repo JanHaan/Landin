@@ -1,0 +1,3 @@
+check: () -> none =
+    compiler.assert(in x: u32 at r0 = 1)
+end check

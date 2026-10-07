@@ -925,6 +925,12 @@ package body Landin.Syntax.Repairs is
          return Depth > 0;
       end Opens_More;
 
+      --  Whether a message begins with Part.
+      function Starts_Said (Message, Part : String) return Boolean
+        is (Message'Length >= Part'Length
+            and then Message (Message'First
+                              .. Message'First + Part'Length - 1) = Part);
+
       --  The first error on a line inside a routine body: try every change
       --  in order and keep those that make the line parse.
       procedure Try_Line (Item : Diag.Diagnostic);
@@ -1064,6 +1070,34 @@ package body Landin.Syntax.Repairs is
                   Value := False;
                end if;
             end;
+         end if;
+
+         --  A report the parser made at a measure or an address names
+         --  what `lenof` and `addr` take; mending the line by removing the
+         --  word would change what it does, so the report stands.
+         if (for some Position in 1 .. Natural (Pieces.Length) =>
+               Natural (Where.First) + 1 = Pieces (Position).First
+               and then (Pieces (Position).Kind = Tok.Kw_Addr
+                         or else Bytes (Pieces (Position).First
+                                        .. Pieces (Position).Last) = "lenof"
+                         --  A measure whose operand goes on past its
+                         --  name, `lenof p.val`: removing a token there
+                         --  turns `lenof` into a name and the line into
+                         --  something no one wrote.
+                         or else (Position > 2
+                                  and then Bytes
+                                    (Pieces (Position - 2).First
+                                     .. Pieces (Position - 2).Last)
+                                    = "lenof"
+                                  and then Pieces (Position - 1).Kind
+                                    = Tok.Identifier
+                                  and then Pieces (Position).Kind
+                                    in Tok.Dot | Tok.Left_Bracket)))
+           or else Starts_Said (Diag.Message (Diag.Primary (Item)),
+                                "`addr` takes")
+         then
+            Result.Append (Item);
+            return;
          end if;
 
          --  A statement written where a value belongs is the parser's to
@@ -1227,7 +1261,9 @@ package body Landin.Syntax.Repairs is
             for Position in 1 .. Natural (Pieces.Length) loop
                if Pieces (Position).Kind not in Tok.Kw_In | Tok.Kw_Inout
                  | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return
-                 | Tok.Kw_Fail | Tok.Kw_Defer | Tok.Kw_Undo
+                 | Tok.Kw_Fail | Tok.Kw_Defer | Tok.Kw_Undo | Tok.Kw_Addr
+                 and then Bytes (Pieces (Position).First
+                                 .. Pieces (Position).Last) /= "lenof"
                then
                   Consider ((Deleted, Position, Asked));
                end if;

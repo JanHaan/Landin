@@ -1,0 +1,7 @@
+error[L0010]: an index requires a named place
+  --> ../tests/fixtures/negative/index-of-a-qualified-call-is-refused-there/main.ldn:4:23
+  |
+4 |     b := text.bytes(s)[3..<6]
+  |                       ^
+  = note: the tour describes it at [0570]
+  = note: this is a recorded source-form boundary

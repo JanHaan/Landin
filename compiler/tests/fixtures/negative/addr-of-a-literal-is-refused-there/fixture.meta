@@ -1,0 +1,9 @@
+class: negative
+summary: [0380] takes the address of a named place, so `addr 3` is reported at the value, not as `addr` to remove
+program: program.ldn
+codes: L0100
+constructs: 0380
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/addr-of-a-literal-is-refused-there/program.ldn
+status: 1

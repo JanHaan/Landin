@@ -1,0 +1,10 @@
+error[L0103]: a generic function takes its type as a parameter in its list, not in brackets before it
+  --> ../tests/fixtures/negative/generic-formals-in-brackets-are-reported-once/program.ldn:1:5
+  |
+1 | id: [t: type] (x: t) -> (r: t) =
+  |     ^
+  --> ../tests/fixtures/negative/generic-formals-in-brackets-are-reported-once/program.ldn:1:1
+  |
+1 | id: [t: type] (x: t) -> (r: t) =
+  | ^^ declared here
+  = note: [1290]: write `name: (t: type, x: t) -> ...`

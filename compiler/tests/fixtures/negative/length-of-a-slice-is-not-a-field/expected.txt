@@ -1,0 +1,10 @@
+error[L0301]: this is a slice, which has no fields; its length is `lenof items`
+  --> ../tests/fixtures/negative/length-of-a-slice-is-not-a-field/program.ldn:2:9
+  |
+2 |     n = items.len
+  |         ^^^^^
+  --> ../tests/fixtures/negative/length-of-a-slice-is-not-a-field/program.ldn:1:9
+  |
+1 | count: (items: []u8) -> (n: usize) =
+  |         ^^^^^^^^^^^ what it names
+  = note: [0370]: `lenof` measures an array or a slice; neither has a `.len` or any other field

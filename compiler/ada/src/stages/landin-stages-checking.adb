@@ -9419,7 +9419,8 @@ package body Landin.Stages.Checking is
          procedure Report_Deduction_Conflict
            (Argument : Syn.Node_Id;
             Position : Positive;
-            What     : String);
+            First_Is : String;
+            This_Is  : String);
 
          procedure Collect_Evidence
            (Actual     : Type_Descriptor;
@@ -9996,7 +9997,8 @@ package body Landin.Stages.Checking is
          procedure Report_Deduction_Conflict
            (Argument : Syn.Node_Id;
             Position : Positive;
-            What     : String)
+            First_Is : String;
+            This_Is  : String)
          is
             Formal_Node : constant Syn.Node_Id := Syn.Nth_Generic_Formal
               (Template_Tree.all, Function_Node, Position);
@@ -10008,21 +10010,40 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Generic_Deduction,
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
-                  Message => "this argument deduces a different " & What
-                             & " for repeated formal `"
+                  --  Two kinds that differ are named; two of one kind,
+                  --  two arrays of different length, say, or two kinds
+                  --  the checker cannot spell, differ in what the kind
+                  --  leaves out, so the sentence says only that.
+                  Message =>
+                    (if This_Is /= First_Is
+                       and then This_Is /= "something unknown"
+                       and then First_Is /= "something unknown"
+                     then "this makes `"
+                          & Spelled
+                            (Syn.Name (Template_Tree.all, Formal_Node))
+                          & "` " & This_Is & ", but it is already "
+                          & First_Is
+                     else "this makes `"
+                          & Spelled
+                            (Syn.Name (Template_Tree.all, Formal_Node))
+                          & "` a different type from the one an earlier"
+                          & " argument made it"),
+                  Note    => "D138: every argument that decides `"
                              & Spelled
                                (Syn.Name (Template_Tree.all, Formal_Node))
-                             & "`",
-                  Note    => "D138: repeated exact structural deductions"
-                             & " must agree; this call has no routine target",
+                             & "` must decide the same"
+                             & (if This_Is = "`i32`"
+                                then "; an untyped literal decides `i32`,"
+                                     & " so convert it to the type meant"
+                                else ""),
                   Related =>
                     (if Landin.Provenance.Is_Known (First)
                      then First
                      else Syn.Origin (Template_Tree.all, Formal_Node)),
                   Because =>
                     (if Landin.Provenance.Is_Known (First)
-                     then "the first argument relation for this formal"
-                     else "the repeated formal pattern"),
+                     then "this decided it first"
+                     else "it is declared here"),
                   Into    => Found);
                Conflict_Reported (Position) := True;
             end if;
@@ -10175,13 +10196,12 @@ package body Landin.Stages.Checking is
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => Message,
-                  Note    => "D138: deduction matches the written parameter"
-                             & " pattern against the independently"
-                             & " synthesized argument descriptor; only an"
-                             & " outer mutable reference may relax to"
-                             & " read-only",
+                  Note    => "D138: an argument to a generic routine is"
+                             & " typed on its own, before the parameter is"
+                             & " known, and must match the type written"
+                             & " for it; only `mut` may relax to read-only",
                   Related => Syn.Origin (Pattern_Tree, Pattern),
-                  Because => "the runtime parameter type pattern",
+                  Because => "the parameter's type, as written",
                   Into    => Found);
                Pattern_Failure_Reported (Position) := True;
             end if;
@@ -10212,7 +10232,8 @@ package body Landin.Stages.Checking is
             end if;
 
             Report_Deduction_Conflict
-              (Argument, Positive (Position), "type descriptor");
+              (Argument, Positive (Position),
+               Shown (Bound (Position).Value.Kind), Shown (Actual.Kind));
             return False;
          end Bind_Type_Formal;
 
@@ -10240,7 +10261,13 @@ package body Landin.Stages.Checking is
             end if;
 
             Report_Deduction_Conflict
-              (Argument, Positive (Position), "fixed value");
+              (Argument, Positive (Position),
+               "`" & Ada.Strings.Fixed.Trim
+                       (Ty.Magnitude'Image (Bound (Position).Fixed),
+                        Ada.Strings.Both) & "`",
+               "`" & Ada.Strings.Fixed.Trim
+                       (Ty.Magnitude'Image (Actual), Ada.Strings.Both)
+               & "`");
             return False;
          end Bind_Fixed_Formal;
 
@@ -10577,8 +10604,11 @@ package body Landin.Stages.Checking is
                end if;
                Report_Pattern_Failure
                  (Argument, Position, Pattern_Tree, Pattern,
-                  "this argument does not match its exact constant type"
-                  & " pattern");
+                  "this is " & Shown (Actual.Kind) & " and "
+                  & Shown (Expected.Kind) & " belongs here"
+                  & (if Actual.Kind = Ty.I32
+                     then "; in a generic call an untyped literal is `i32`"
+                     else ""));
                return False;
             end Constant_Agrees;
          begin
@@ -12092,14 +12122,39 @@ package body Landin.Stages.Checking is
            or else not Ty.Fits (Value, Wanted, Facts, Negated)
          then
             Landin.Checking.Refuse (Types.all, Of_Tree, Node);
-            Bad.Report
-              (Item    => Bad.Literal_Out_Of_Range,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Node),
-               Message => "no " & Shown (Wanted) & " holds this value",
-               Note    => "[1880]: a literal takes the type of its context"
-                          & " and is checked there",
-               Into    => Found);
+            declare
+               At_Literal : constant Landin.Source.Span :=
+                 Syn.Where (Of_Tree, Node);
+               --  A negated literal's value is its sign and its digits,
+               --  so the report covers both: `-1`, not `1`, is what does
+               --  not fit.
+               Signed : constant Boolean :=
+                 Negated and then At_Literal.First > 0
+                 and then Landin.Source.Slice
+                   (Snap, (First => At_Literal.First - 1,
+                           Last  => At_Literal.First)) = "-";
+               Shown_Value : constant String :=
+                 Landin.Source.Slice (Snap, At_Literal);
+            begin
+               Bad.Report
+                 (Item    => Bad.Literal_Out_Of_Range,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   =>
+                    (if Signed
+                     then (First => At_Literal.First - 1,
+                           Last  => At_Literal.Last)
+                     else At_Literal),
+                  Message => "`" & (if Signed then "-" else "")
+                             & Shown_Value & "` does not fit "
+                             & Shown (Wanted)
+                             & (if Signed and then Wanted in Ty.Integer_Name
+                                  and then not Ty.Is_Signed (Wanted)
+                                then ", which holds no negative value"
+                                else ""),
+                  Note    => "[1880]: a literal takes the type of its"
+                             & " context and is checked there",
+                  Into    => Found);
+            end;
          end if;
       end Check_Literal;
 
@@ -20596,11 +20651,28 @@ package body Landin.Stages.Checking is
                           (Item    => Bad.Type_Mismatch,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, From),
-                           Message => "this is not a struct, so it has no"
-                                      & " field to select",
-                           Note    => "[1820]: the kernel selects a field"
-                                      & " of a struct [0670] and nothing"
-                                      & " else",
+                           Message =>
+                             (if Held in Ty.Slice_Value | Ty.Fixed_Array
+                              then "this is " & Shown (Held)
+                                   & ", which has no fields; its length is"
+                                   & (if Syn.Kind (Of_Tree, From)
+                                   = Syn.Name_Reference
+                              then " `lenof "
+                                   & Spelled (Syn.Name (Of_Tree, From))
+                                   & "`"
+                              else " what `lenof` measures, once it is"
+                                   & " bound to a name")
+                              else "this is " & Shown (Held)
+                                   & ", not a struct, so it has no field to"
+                                   & " select"),
+                           Note    =>
+                             (if Held in Ty.Slice_Value | Ty.Fixed_Array
+                              then "[0370]: `lenof` measures an array or a"
+                                   & " slice; neither has a `.len` or any"
+                                   & " other field"
+                              else "[1820]: the kernel selects a field"
+                                   & " of a struct [0670] and nothing"
+                                   & " else"),
                            Related =>
                              (if Means = Res.No_Declaration
                               then Syn.Origin (Of_Tree, From)

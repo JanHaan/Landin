@@ -1,4 +1,4 @@
-error[L0301]: this is not a struct, so it has no field to select
+error[L0301]: this is `u32`, not a struct, so it has no field to select
   --> ../tests/fixtures/negative/selection-from-a-scalar-element/program.ldn:7:9
   |
 7 |     r = words[0].x

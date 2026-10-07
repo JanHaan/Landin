@@ -1,0 +1,6 @@
+import core/text
+
+middle: (s: utf8) -> none =
+    b := text.bytes(s)[3..<6]
+    _ = b
+end middle

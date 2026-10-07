@@ -1,0 +1,9 @@
+class: negative
+summary: [1290] gives a generic function its type as an ordinary parameter, so formals written in brackets before the list are reported once at the `[`, the function's body quiet
+program: program.ldn
+codes: L0103
+constructs: 1290, 1800
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-formals-in-brackets-are-reported-once/program.ldn
+status: 1

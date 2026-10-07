@@ -239,6 +239,9 @@ package body Landin.Syntax.Parser is
             Routine_Reported : Boolean := False;
             --  Whether the module-level declaration just read reported.
             Declaration_Reported : Boolean := False;
+            --  The indentation of the line the declaration just read began
+            --  on: deeper lines after a refused header are its body.
+            Declaration_Indent : Integer := 0;
             --  Whether the declaration being read reported outside a body.
             Header_Reported : Boolean := False;
 
@@ -2569,7 +2572,32 @@ package body Landin.Syntax.Parser is
                   --  it once; what the mistake left of it, up to the next
                   --  line a declaration begins, is that mistake too.
                   if Declaration_Reported then
-                     if Begins_Line (Index) then
+                     --  The lines indented under a refused declaration's
+                     --  header, and the `end` that closes them, are the
+                     --  body its header failed to open: what the mistake
+                     --  left behind, passed over quietly.  The first line
+                     --  no deeper that is not that `end` begins anew.
+                     if Begins_Line (Index)
+                       and then (Indent_Of (Index) > Declaration_Indent
+                                 or else Peek = Tok.Kw_End)
+                     then
+                        declare
+                           Closing : constant Boolean :=
+                             Indent_Of (Index) <= Declaration_Indent;
+                        begin
+                           Advance;
+                           while Peek /= Tok.End_Of_Input
+                             and then not Begins_Line (Index)
+                           loop
+                              Advance;
+                           end loop;
+                           Reported :=
+                             Natural'Max (Reported, Natural (Index));
+                           if Closing then
+                              Declaration_Reported := False;
+                           end if;
+                        end;
+                     elsif Begins_Line (Index) then
                         Declaration_Reported := False;
                      else
                         --  No closer is owned here: the rest of the line
@@ -2593,11 +2621,22 @@ package body Landin.Syntax.Parser is
                            Advance;
                         end loop;
                         Reported := Natural'Max (Reported, Natural (Index));
-                        Declaration_Reported := False;
+                        --  Stopped at a line's start, the lines under the
+                        --  header are still to be passed over; stopped at
+                        --  a declaration on the same line, that one begins.
+                        Declaration_Reported :=
+                          Peek /= Tok.End_Of_Input
+                          and then Begins_Line (Index);
                      end if;
                   end if;
                   exit when Peek = Tok.End_Of_Input;
+                  --  A line just passed over leaves the loop at its next
+                  --  line, which is tried again before a declaration.
+                  if Declaration_Reported then
+                     goto Next_Declaration;
+                  end if;
                   Header_Reported := False;
+                  Declaration_Indent := Integer'Max (0, Indent_Of (Index));
                   declare
                      Before : constant Tok.Token_Index := Index;
                      Reports_Before : constant Natural := Reported;
@@ -2651,6 +2690,7 @@ package body Landin.Syntax.Parser is
                      end if;
                      Declaration_Reported := Reported /= Reports_Before;
                   end;
+                  <<Next_Declaration>>
                end loop;
 
                return Add
@@ -3100,6 +3140,47 @@ package body Landin.Syntax.Parser is
                  and then Ahead (2) = Tok.Kw_Type
                then
                   return Parse_Type_Declaration (Exported, Public_At);
+               end if;
+
+               --  [1290]: a generic function takes its type as an ordinary
+               --  parameter.  Formals written in brackets before the list,
+               --  `id: [t: type] (x: t) -> ...`, are one mistake: said at
+               --  the `[`, which is passed over with what it holds so the
+               --  function is read as written after it.
+               if Peek = Tok.Identifier
+                 and then Ahead (1) = Tok.Colon
+                 and then Ahead (2) = Tok.Left_Bracket
+                 and then Ahead (3) = Tok.Identifier
+                 and then Ahead (4) = Tok.Colon
+                 and then Ahead (5) = Tok.Kw_Type
+               then
+                  Advance;
+                  Advance;
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Here,
+                     Message => "a generic function takes its type as a"
+                                & " parameter in its list, not in brackets"
+                                & " before it",
+                     Note    => "[1290]: write `name: (t: type, x: t) ->"
+                                & " ...`",
+                     Related => Tok.Where (From, Index - 2),
+                     Because => "declared here");
+                  --  The rest of its line and the body under it are
+                  --  what the mistake left; Parse_Program passes over them.
+                  declare
+                     At_Decl : constant Landin.Source.Span :=
+                       Tok.Where (From, Index - 2);
+                  begin
+                     while Peek /= Tok.End_Of_Input
+                       and then not Begins_Line (Index)
+                     loop
+                        Advance;
+                     end loop;
+                     return Add
+                       (Error_Declaration, At_Decl,
+                        Join (At_Decl, After_Previous));
+                  end;
                end if;
 
                --  [1230]: a concept is a type, declared `name: type =
@@ -5645,6 +5726,24 @@ package body Landin.Syntax.Parser is
                            Because => "declared here",
                            Fixes   => End_Named (Named));
                      end if;
+                     Advance;
+                  --  `end struct`: the closer names the kind of thing it
+                  --  closes rather than the struct, which is one mistake.
+                  elsif Peek in Tok.Kw_Struct | Tok.Kw_Type
+                    and then not Begins_Line (Index)
+                    and then Named /= Landin.Source.Names.No_Name
+                  then
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => Here,
+                        Message => "a struct closes with `end` or with its"
+                                   & " own name, not the word `"
+                                   & Tok.Spelling (Peek) & "`",
+                        Note    => "[1795]: `end` may repeat the struct's"
+                                   & " name, and must name no other",
+                        Related => At_Name,
+                        Because => "declared here",
+                        Fixes   => End_Named (Named));
                      Advance;
                   end if;
                end if;
@@ -9469,9 +9568,45 @@ package body Landin.Syntax.Parser is
                --  is addressable; the reference checker owns that question.
                if Peek = Tok.Kw_Addr then
                   Advance;
+                  --  `addr` takes a place, which is named: a literal, a
+                  --  call or a parenthesised value has no storage to take
+                  --  the address of.  Said once, and the value is read.
+                  if Peek /= Tok.Identifier
+                    and then Pre.Begins_Expression (Peek)
+                    and then not Begins_Line (Index)
+                  then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => Here,
+                        Message => "`addr` takes a named place, and a"
+                                   & " value has no address",
+                        Note    => "[0380]: `addr` names a binding, a"
+                                   & " field or an element; bind a value"
+                                   & " to a name first");
+                     declare
+                        Ignored : constant Node_Id := Parse_Unary;
+                        pragma Unreferenced (Ignored);
+                     begin
+                        return Add (Error_Expression, At_Item,
+                                    Join (At_Item, After_Previous));
+                     end;
+                  end if;
                   declare
                      Place : constant Node_Id := Parse_Place;
                   begin
+                     if Peek = Tok.Left_Paren
+                       and then not Begins_Line (Index)
+                     then
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => Here,
+                           Message => "`addr` takes a named place, and a"
+                                      & " call's result has no address",
+                           Note    => "[0380]: bind the result to a name,"
+                                      & " then take `addr` of the name");
+                        Advance;
+                        Resync_Parentheses;
+                     end if;
                      return Add
                        (Address_Of, At_Item,
                         Extent   => Join (At_Item, After_Previous),
@@ -9769,7 +9904,17 @@ package body Landin.Syntax.Parser is
                              Parse_Selectors (Root);
                         begin
                            if Peek = Tok.Left_Paren then
-                              return Parse_Call (Selected, At_Item);
+                              declare
+                                 Called : constant Node_Id :=
+                                   Parse_Call (Selected, At_Item);
+                              begin
+                                 --  A qualified call is a call as much as
+                                 --  `g()` is: nothing indexes or selects
+                                 --  from its result.
+                                 Refuse_Any_Index;
+                                 Refuse_Selection_Of_A_Call;
+                                 return Called;
+                              end;
                            end if;
                            return Selected;
                         end;
@@ -10220,7 +10365,33 @@ package body Landin.Syntax.Parser is
                               Because => "this labelled application");
                            Fill_Complained := True;
                         end if;
+                        --  An operand first, with no text before it, is
+                        --  one only `assembler.block` takes, after its text.
+                        --  Said once; the operand is read so the call does
+                        --  not report again.
                         if Allow_Operands
+                          and then Args.Is_Empty
+                          and then
+                            (Peek in Tok.Kw_In | Tok.Kw_Inout
+                             or else (Peek = Tok.Identifier
+                                      and then Named_Here = Out_Id
+                                      and then Ahead (1)
+                                        in Tok.Identifier | Tok.Underscore))
+                        then
+                           Complain
+                             (Item    => Syn.Token_Expected,
+                              Where   => Here,
+                              Message => "an assembly operand follows the"
+                                         & " block's text, and only"
+                                         & " `assembler.block` takes one",
+                              Note    => "[1630]: `assembler.block(""text"","
+                                         & " in name: type at register ="
+                                         & " value)`",
+                              Related => Starts,
+                              Because => "this call");
+                           Args.Append (Parse_Assembly_Operand);
+                           Operand_Seen := True;
+                        elsif Allow_Operands
                           and then not Args.Is_Empty
                           and then not Named_Seen
                           and then
