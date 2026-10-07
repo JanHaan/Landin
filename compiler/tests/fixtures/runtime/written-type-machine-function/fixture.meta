@@ -1,6 +1,7 @@
 class: runtime
 summary: written machine-convention signatures extract exact distinct bases without ordinary calls
 program: main.ldn
-constructs: 0650, 0870, 1580, 1990
+constructs: 0310, 0650, 0870, 1580
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-exit: 42
+profiles: standard
+status: 42

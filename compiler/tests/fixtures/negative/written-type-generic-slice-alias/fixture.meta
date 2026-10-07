@@ -1,6 +1,6 @@
 class: negative
-summary: a written generic UTF-8 destination preserves the existing slice-alias normalization refusal
+summary: an ordinary generic UTF-8 alias remains refused before a written conversion can be admitted
 program: main.ldn
 codes: L0304
-constructs: 0310, 0430, 0600, 1350
+constructs: 0310, 0600, 1350
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
