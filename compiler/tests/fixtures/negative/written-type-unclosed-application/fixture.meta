@@ -1,6 +1,6 @@
 class: negative
 summary: an incomplete written conversion reports its missing operand and closer
 program: main.ldn
-codes: L0102, L0103
+codes: L0102
 constructs: 0310, 1790, 1820
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

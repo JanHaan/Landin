@@ -777,6 +777,28 @@ package body Landin.Syntax.Parser is
                   then
                      return False;
                   end if;
+                  --  A following declaration is a complete literal's
+                  --  boundary, even when it shares that literal's line.
+                  if Closing + 2 <= Natural (Last)
+                    and then Tok.Kind
+                      (From, Tok.Token_Index (Closing + 1)) = Tok.Identifier
+                    and then Tok.Kind
+                      (From, Tok.Token_Index (Closing + 2))
+                        in Tok.Colon | Tok.Colon_Equal
+                  then
+                     return False;
+                  end if;
+                  if Closing + 3 <= Natural (Last)
+                    and then Tok.Kind
+                      (From, Tok.Token_Index (Closing + 1)) = Tok.Kw_Mut
+                    and then Tok.Kind
+                      (From, Tok.Token_Index (Closing + 2)) = Tok.Identifier
+                    and then Tok.Kind
+                      (From, Tok.Token_Index (Closing + 3))
+                        in Tok.Colon | Tok.Colon_Equal
+                  then
+                     return False;
+                  end if;
                   Position := Index + 1;
                   while Natural (Position) < Closing loop
                      if Tok.Kind (From, Position) = Tok.Comma

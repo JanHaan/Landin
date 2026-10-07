@@ -15325,6 +15325,11 @@ package body Landin.Tests.Checking_Suite is
          Landin.Testing.Check
            (Item, Ran = 4 and then Landin.Stages.Failed (Work) /= Accepted,
             Label & " has the alias conversion verdict");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count_Of
+              (Landin.Stages.Report (Work), Landin.Diagnostics.Error),
+            (if Accepted then 0 else 1),
+            Label & " has no diagnostic cascade");
       end Check_Source;
    begin
       Check_Source
@@ -15353,6 +15358,11 @@ package body Landin.Tests.Checking_Suite is
         ("written pointer from integer stays refused",
          "f: () -> (answer: ptr i32) =" & LF
          & "    answer = ptr i32(1)" & LF & "end f" & LF, False);
+      Check_Source
+        ("invalid written bound",
+         "hidden: type = distinct [2]i32" & LF
+         & "f: (value: hidden) -> none =" & LF
+         & "    _ = [0 - 1]i32(value)" & LF & "end f" & LF, False);
    end Written_Conversions_Keep_Alias_Semantics;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

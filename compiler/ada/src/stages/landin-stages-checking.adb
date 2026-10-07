@@ -12255,6 +12255,9 @@ package body Landin.Stages.Checking is
          Held := Landin.Checking.Type_Of (Types.all, Of_Tree, Callee);
          if Held = Ty.Undecided then
             Held := Type_At (Of_Tree, Callee);
+            if Held = Ty.Ill_Typed then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Callee);
+            end if;
          end if;
          return Stored_Descriptor (Of_Tree, Callee, Held);
       end Written_Conversion_Type;
@@ -21485,6 +21488,9 @@ package body Landin.Stages.Checking is
                      then Landin.Checking.No_Signature
                      else Effective_Call_Signature (Of_Tree, Node));
                begin
+                  if Written and then Destination.Kind = Ty.Ill_Typed then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
                   if Syn.Kind (Of_Tree, Node) = Syn.Call
                     and then Syn.Argument_Count (Of_Tree, Node) = 1
                   then

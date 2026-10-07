@@ -1,5 +1,5 @@
 class: negative
-summary: numeric conversion inside a written bound preserves its known range refusal
+summary: a written array bound preserves the fixed-expression range refusal
 program: main.ldn
 codes: L0300
 constructs: 0310, 0520, 0650, 1880
