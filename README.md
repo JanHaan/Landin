@@ -251,7 +251,8 @@ This is the maintained inventory of what the compiler does today:
   `armv8.1-a`, and the M profile's `armv6-m`, `armv7-m` and `armv7e-m`, each
   defaulting to what the backend always emitted. RV64 selects ISA extension
   sets: `rv64gc` is the baseline, `rv64gc_zba` and `rv64gc_xtheadba` add
-  independent address-generation extensions. A program reads a level as
+  independent address-generation extensions, and `rv64gc_zba_xtheadba`
+  selects both. A program reads a level as
   `compiler.feature.NAME` in `fixed if`. A level changes instructions and
   never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
   `armv8.1-a` on Linux, macOS and FreeBSD, and hardware division at `armv7-m`, each
@@ -276,8 +277,10 @@ This is the maintained inventory of what the compiler does today:
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0. The recurring gate runs Linux and Darwin programs
-natively, FreeBSD programs in accelerated VMs and Cortex-M firmware under
-QEMU, with separate GDB and LLDB jobs. The recorded boundaries stand as measured: the 32 KiB capacity
+natively, cross-emitted RV64 Linux programs on physical RISE runners,
+FreeBSD programs in accelerated VMs and Cortex-M firmware under QEMU,
+with separate runtime, C ABI and debugger verdicts and RV64 ISA-level
+checks. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit.
 
@@ -315,7 +318,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R11.40 — RISC-V rv64 Linux (planned).**
+**Next roadmap item: R11.50 — Convert to a written type (planned).**
 
 ## License
 

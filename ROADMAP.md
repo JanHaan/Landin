@@ -813,7 +813,7 @@ All six execution verdicts and their Linux emission checks recur in the gate.
 
 ### R11.40 — RISC-V rv64 Linux
 
-Status: planned
+Status: complete
 Depends on: R11.10
 
 A RISC-V backend, RV64GC with the LP64D convention, whose instruction selection
@@ -841,6 +841,23 @@ set must execute against independently compiled C peers, covering calls in
 both directions, integer and floating-point values, aggregates, callbacks
 and variadic calls. Report its ABI verdict separately and refuse an empty
 selection.
+
+Done: the native RV64 Linux backend uses LP64D, shared ELF/DWARF and an
+XLEN-parametric instruction selector with independent ISA extension sets.
+`spec.md` records its C transport, layout and capability contracts; `core/c`
+exposes matching aliases. The
+[full gate](https://github.com/JanHaan/Landin/actions/runs/37673902236) passed on
+[`501996ec6bc872eb1f7680308c55708805ac61f8`](https://github.com/JanHaan/Landin/commit/501996ec6bc872eb1f7680308c55708805ac61f8),
+including four separate physical RISE verdicts: 537 runtime fixtures and
+2,460 executed images; four GDB profiles covering source lines, frames,
+local values and unwinding; 35 C ABI fixtures and 158 executed images
+against 158 independently compiled C peers; and 24 ISA-level images.
+Hardware execution confirmed XTheadBa support. The `rv64gc` and
+`rv64gc_xtheadba` feature verdicts, inspected and executed baseline shift/add
+and extended `th.addsl` sequences, extended assembly execution and baseline
+assembler refusal all passed. Integer assembly operands execute, and the IR
+verifier refuses invalid RV64 registers. All four execution verdicts and
+their compiler-host emission and verifier checks recur in the full gate.
 
 ### R11.50 — Convert to a written type
 

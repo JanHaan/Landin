@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R11.40 — RISC-V rv64 Linux (planned).**
+**Next roadmap item: R11.50 — Convert to a written type (planned).**
 
 ---
 
