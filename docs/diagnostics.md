@@ -205,6 +205,15 @@ unclosed_raw: []u8 = """"never closed"""
 
 ## The parser
 
+A parser report is about the first mistake on its line and is given once.
+When one change of a single token makes the line parse (D261), the report
+says what that change is, shows the line as it would read, and offers it as
+a fix: a token removed, written, swapped with its neighbour or moved to the
+statement's start, or a value written where a line break left one out. The
+fix is likely, a guess at what was meant, except removing one copy of a
+token written twice, which is exact. A report stands on a token: a missing
+one at a line's end stands on the token it belongs after.
+
 ### L0100
 
 A name belongs here and something else stands there [1760]. A keyword is never
@@ -428,7 +437,9 @@ end bad
 A place that may not be written [1900]: an immutable binding, an `in`
 parameter, an atom, a function, or storage reached through a read-only
 reference. When the place is a local or module binding of one name, the
-diagnostic offers `mut` on its declaration as a likely fix.
+diagnostic offers `mut` on its declaration as a likely fix. A binding written
+several times is reported once, at its first write, and a refused write still
+counts as assigning the place, so later reads are not reported (D263).
 
 ```landin
 f: (x: u32) -> none =
@@ -844,7 +855,9 @@ value-producing `if` or block produces a value; an early return need not.
 A labelled bare block and a statement loop take no value. Add `with` and a
 value to a break from an expression loop. Remove `with` from a break to a
 statement loop or labelled bare block. Supply a value on each fallthrough
-path, or use the construct as a statement.
+path, or use the construct as a statement. A value-producing construct
+missing its value on several paths is reported once, against the construct
+(D263).
 
 ```landin
 public main: () -> (code: i32) =

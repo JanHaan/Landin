@@ -241,7 +241,10 @@ package body Landin.Diagnostics.Explanations is
                & "ding, an `in` parameter, an atom, a function, or storage"
                & " reached through a read-only reference. When the place i"
                & "s a local or module binding of one name, the diagnostic "
-               & "offers `mut` on its declaration as a likely fix.",
+               & "offers `mut` on its declaration as a likely fix. A bindi"
+               & "ng written several times is reported once, at its first "
+               & "write, and a refused write still counts as assigning the"
+               & " place, so later reads are not reported (D263).",
             when Catalogue.Unsupported_Use =>
                "A known form used where the language does not permit it "
                & "[1830], found once the checker knows what the form means"
@@ -474,7 +477,9 @@ package body Landin.Diagnostics.Explanations is
                & " a value to a break from an expression loop. Remove `wit"
                & "h` from a break to a statement loop or labelled bare blo"
                & "ck. Supply a value on each fallthrough path, or use the "
-               & "construct as a statement.",
+               & "construct as a statement. A value-producing construct mi"
+               & "ssing its value on several paths is reported once, again"
+               & "st the construct (D263).",
             when Catalogue.Match_Arm_Form =>
                "A `match` arm does not fit its subject [1210]. A subject"
                & " is an atom set, a variant part or a pointer union. Each"

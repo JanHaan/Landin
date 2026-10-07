@@ -182,10 +182,12 @@ Without `--emit` an accepted program deliberately writes no output file;
 default; `--target=darwin-arm64` selects native Mac output), and `--emit=exe -o
 program` assembles and links a hosted executable when the target toolchain and
 [1970]'s entry point are present. A program it refuses gets a report with a
-span, a caret and a note. If what you wrote is a construct the tour describes
-and the kernel omits, the note names the paragraph that describes it and says
-whether the form is a recorded boundary, withdrawn or transferred to a
-successor.
+span, a caret and a note, one per mistake and on the token it is about: what
+a mistake leaves behind is not reported again, and where one change of a
+token mends a line the report says which change and offers it as a fix. If
+what you wrote is a construct the tour describes and the kernel omits, the
+note names the paragraph that describes it and says whether the form is a
+recorded boundary, withdrawn or transferred to a successor.
 
 `refine fmt source.ldn ...` rewrites each named source in the one layout
 [`docs/format.md`](docs/format.md) shows, changing its space and nothing
@@ -303,7 +305,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R11.26 — Make one mistake one diagnostic (planned).**
+**Next roadmap item: R11.30 — FreeBSD x86-64 and arm64 (planned).**
 
 ## License
 

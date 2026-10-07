@@ -677,7 +677,7 @@ confirmed `armv8.1-a` from the runner's own `/proc/cpuinfo`.
 
 ### R11.26 — Make one mistake one diagnostic
 
-Status: planned
+Status: complete
 Depends on: R10.30
 
 R10.30 gave diagnostics fixes; it did not make them find the mistake. One
@@ -731,6 +731,35 @@ enclosing function, none claims an existing closer is missing, and at least
 token. The accidental refusals the session audit found are negative fixtures,
 each pinning one report and, where the repair is mechanical, a fix the `fixes`
 suite compiles clean.
+
+Done: a mistake is reported once, inside the construct it is in, on the
+token it is about. Recovery keeps to the structure a program writes and never
+reads past the closer of the function it is in; a refused statement keeps its
+own line, the lines continuing it and the lines indented under it quiet, and
+at the top level a refused declaration's body and `end` too (D260). A
+refused line is reported as the smallest change that mends it — a token
+removed, written, swapped or moved, a line break where a value was left out —
+which the report shows and offers as a fix, likely except for removing one
+copy of a doubled token (D261). Where a form is another construct in the
+wrong place, `sizeof(t)`, `name: concept (...)`, `else (_)`, `(a, b) = value`,
+`f().x`, `addr 3` or `end struct`, the parser names that construct. A
+checker refusal poisons what it refuses: an unknown argument label hides the
+parameter it leaves unfilled, a refused write still assigns its place, a
+binding's refused writes report once and a control expression's missing value
+once (D263). An import with no root is refused at the import (D262), a local
+shadowing a named return is reported at the binding, and the driver names the
+near option, target or source, its defect's stage, and an assembler's refusal
+at its block. The `mutation` suite runs every body line of the positive corpus
+changed by one token with a fixed seed: of 1,829 refused mutants 1,659 give
+one report on the changed line, 90 per cent, and 1,758 exactly one; none
+reports outside its function, leaves its body, claims a written closer
+missing or has a primary span off a token, and those are held at zero. The
+session audit's accidental refusals are 36 negative fixtures pinning one
+report each, with the fix applied where it is mechanical; its eight foreign
+spellings are SR-13's. `driver_manifest.py` against `9d9f615c` differed at
+437 of 11,898 entries, every one in its report alone: no status, output,
+assembly, build report or map changed. The largest scaling ratio is 2.19.
+The gate was green on every job on `<commit>`.
 
 ### R11.30 — FreeBSD x86-64 and arm64
 
