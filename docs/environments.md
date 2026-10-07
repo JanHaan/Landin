@@ -71,7 +71,16 @@ Both Linux compiler runners use Ubuntu 24.04 with glibc 2.39, Python 3,
 Git, curl, archive tools, binutils and the C development headers. They need
 passwordless sudo for the existing pinned Clang and Emacs installs, the
 editor grammar's Node.js/npm install, and release publication's GitHub CLI
-install. Ada archives still come from the checksums in `environments/pins.sh`.
+install. Jobs first verify the requested packages, including Clang's exact
+version; apt runs only for missing or mismatched packages. Ada archives
+still come from the checksums in `environments/pins.sh`. The pinned-toolchain
+action records a complete installed file/path/mode inventory with those
+archive pins. Later jobs verify it before reusing the installed tools;
+missing records, changed pins or altered files trigger a fresh installation.
+These records describe installed tools and never stand for test results.
+The trusted gate also shares its checked debug compiler artifacts with
+same-host determinism jobs, avoiding another compiler build. Standalone
+determinism and fork fallback continue to build their own compilers.
 The FreeBSD VM controllers retain their existing SSH and guest setup.
 
 The x86-64 runner selects private Emacs 30.2 with tree-sitter 0.25.10

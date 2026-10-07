@@ -12,6 +12,7 @@ a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -69,6 +70,20 @@ class DocumentReachability(unittest.TestCase):
                                 "docs/orphan.md": "# Orphan\n"})
         self.assertEqual(len(said), 1)
         self.assertIn("nothing leads to it", said[0])
+
+    def test_local_ignored_guides_are_excluded_but_tracked_and_new_docs_are_checked(self):
+        from check_controls import tree
+        with tree(written={"README.md": "# Root\n", "AGENTS.md": "# Tracked\n",
+                           "draft.md": "# New document\n",
+                           "CLAUDE.local.md": "# Private\n",
+                           ".agents/skills/local/SKILL.md": "# Local skill\n"}) as root:
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "README.md", "AGENTS.md"], cwd=root, check=True)
+            (root / ".git/info/exclude").write_text(
+                "/AGENTS.md\n/CLAUDE.local.md\n/.agents/skills/local/\n")
+            said = checker.check_document_reachability(True)
+        self.assertEqual({path for path, unused_line, unused_reason in said},
+                         {"AGENTS.md", "draft.md"})
 
 
 class NamedFiles(unittest.TestCase):

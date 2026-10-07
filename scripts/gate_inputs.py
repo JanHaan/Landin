@@ -30,7 +30,10 @@ pass is reused only when all of these hold:
     or one with a semantic claim the author did not declare, runs
     everything.
 
-Anything else, an error included, runs every lane.
+An identical candidate tree may also reuse a recent full successful push
+run from a branch of this repository. This comparison includes ALL files,
+modes, workflow definitions and tool pins, without explanatory exclusions.
+Manual dispatch always runs the lanes. Anything uncertain runs every lane.
 
     key [REV]                       print the key of REV, HEAD by default
     same A B                        succeed only when A and B have one key
@@ -70,10 +73,10 @@ def entries(rev, cwd=None):
     return rows
 
 
-def key(rev="HEAD", cwd=None):
+def key(rev="HEAD", cwd=None, content_free=CONTENT_FREE):
     digest = hashlib.sha256()
     for mode, kind, name, path in entries(rev, cwd):
-        if path.decode("utf-8", "surrogateescape") in CONTENT_FREE:
+        if path.decode("utf-8", "surrogateescape") in content_free:
             name = b"-"
         digest.update(b"%s %s %s\t%s\0" % (mode, kind, name, path))
     return digest.hexdigest()
@@ -112,7 +115,7 @@ def tips_of(event_name, event, checked_out):
     return None, "a %s run is never reused" % event_name
 
 
-def full_run(run, listing, required, now):
+def full_run(run, listing, required, now, main_only=True):
     """Whether RUN, with its job LISTING, ran every REQUIRED job and passed.
 
     REQUIRED names jobs exactly, a matrix leg by its own name, so a leg
@@ -121,7 +124,9 @@ def full_run(run, listing, required, now):
     itself reused a pass skipped its lanes, so it is not one: a reuse
     always points at a run that did the work.
     """
-    if (run.get("event") != "push" or run.get("head_branch") != "main"
+    if (run.get("event") != "push"
+            or (main_only and run.get("head_branch") != "main")
+            or not run.get("head_branch")
             or run.get("conclusion") != "success"):
         return False
     started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
@@ -135,6 +140,44 @@ def full_run(run, listing, required, now):
         if len(found) != 1 or found[0].get("conclusion") != "success":
             return False
     return True
+
+
+def candidate_tips(event_name, event, checked_out):
+    """Trusted branch pushes and same-repository merge checkouts only."""
+    sha, unused_parents = checked_out
+    if event_name == "push":
+        if not event.get("ref", "").startswith("refs/heads/"):
+            return None, "candidate reuse requires a branch push"
+        if sha != event.get("after"):
+            return None, "the checkout is not the pushed commit"
+        return [sha], None
+    return tips_of(event_name, event, checked_out)
+
+
+def decide_candidate(event_name, event, api, key_of, checked_out,
+                     workflow, required, now):
+    """Reuse a full GitHub push run only when every tracked input is identical.
+
+    KEY_OF must include every file and mode, including the four documents.
+    Runs are obtained from this repository's workflow API, never from a
+    branch-provided artifact or a local test transcript. A PR's checked-out
+    merge tree must match; its head alone is insufficient.
+    """
+    tips, why = candidate_tips(event_name, event, checked_out)
+    if tips is None:
+        return False, why
+    here = key_of("HEAD")
+    runs = api("actions/workflows/%s/runs?event=push&status=success&per_page=30"
+               % workflow)
+    for run in runs.get("workflow_runs", []):
+        # Compare inputs before fetching every job of an unrelated run.
+        if key_of(run["head_sha"]) != here:
+            continue
+        listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
+        if full_run(run, listing, required, now, main_only=False):
+            return True, "identical candidate tree: reusing %s, which ran every lane on %s" % (
+                run["html_url"], run["head_sha"][:12])
+    return False, "no recent full push run has the identical candidate tree"
 
 
 def undeclared(compared):
@@ -205,11 +248,15 @@ def checkout():
     return sha, [line.split()[1] for line in header if line.startswith("parent ")]
 
 
-def fetched_key(rev):
+def fetched_key(rev, content_free=CONTENT_FREE):
     if rev != "HEAD":
         subprocess.run(["git", "fetch", "-q", "--no-tags", "--depth=1",
                         "origin", rev], check=True)
-    return key(rev)
+    return key(rev, content_free=content_free)
+
+
+def fetched_candidate_key(rev):
+    return fetched_key(rev, content_free=())
 
 
 def verdict(needs, always):
@@ -244,9 +291,16 @@ def main(argv):
         try:
             with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as stream:
                 event = json.load(stream)
-            reuse, why = decide(os.environ["GITHUB_EVENT_NAME"], event, github,
-                                fetched_key, checkout(), argv[1], argv[2:],
-                                datetime.now(timezone.utc))
+            checked_out = checkout()
+            now = datetime.now(timezone.utc)
+            reuse, why = decide_candidate(
+                os.environ["GITHUB_EVENT_NAME"], event, github,
+                fetched_candidate_key, checked_out, argv[1], argv[2:], now)
+            if not reuse:
+                reuse, explanatory_why = decide(
+                    os.environ["GITHUB_EVENT_NAME"], event, github,
+                    fetched_key, checked_out, argv[1], argv[2:], now)
+                why += "; " + explanatory_why
         except Exception as error:  # noqa: BLE001 -- any doubt runs everything
             reuse, why = False, "%s: %s" % (type(error).__name__, error)
         print("gate_inputs: " + why, file=sys.stderr)

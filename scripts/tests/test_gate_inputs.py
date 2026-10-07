@@ -77,6 +77,12 @@ class Key(unittest.TestCase):
                 self.assertFalse(self.same())
                 git(self.root, "reset", "-q", "--hard", self.first)
 
+    def test_candidate_key_includes_the_four_documents(self):
+        original = gate_inputs.key(self.first, self.root, content_free=())
+        self.write("README.md", "changed explanation\n")
+        self.assertNotEqual(original, gate_inputs.key(self.commit(), self.root,
+                                                    content_free=()))
+
     def test_a_new_file_counts(self):
         self.write("compiler/extra.adb", "")
         self.assertFalse(self.same())
@@ -318,6 +324,82 @@ class Decide(unittest.TestCase):
                 env=dict(os.environ, **environment), stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
         self.assertEqual((result.returncode, result.stdout), (0, "reuse=false\n"))
+
+
+class Candidate(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Decide()
+        self.fixture.setUp()
+        self.fixture.run["head_branch"] = "candidate"
+        self.fixture.event_name = "push"
+        self.fixture.event = {"ref": "refs/heads/main", "after": HEAD}
+        self.fixture.checked_out = (HEAD, [BASE])
+        # These keys represent complete trees, without document exclusions.
+        self.fixture.keys = {"HEAD": "exact", BASE: "exact"}
+
+    def decide(self):
+        f = self.fixture
+        return gate_inputs.decide_candidate(f.event_name, f.event, f.api,
+                                            f.keys.get, f.checked_out,
+                                            "gate.yml", LANES, NOW)[0]
+
+    def test_full_branch_candidate_can_cover_main_promotion(self):
+        self.assertTrue(self.decide())
+        self.assertIn("actions/workflows/gate.yml/runs?event=push&status=success&per_page=30",
+                      self.fixture.asked)
+
+    def test_identical_tree_can_cover_a_trusted_pr_merge(self):
+        f = self.fixture
+        f.event_name = "pull_request"
+        f.event = {"pull_request": {
+            "author_association": "MEMBER",
+            "head": {"sha": HEAD, "repo": {"full_name": "JanHaan/Landin"}},
+            "base": {"repo": {"full_name": "JanHaan/Landin"}}}}
+        f.checked_out = (MERGE, [MAIN, HEAD])
+        self.assertTrue(self.decide())
+        f.keys["HEAD"] = "changed merge tree"
+        self.assertFalse(self.decide())
+        f.event["pull_request"]["head"]["repo"]["full_name"] = "fork/Landin"
+        f.asked.clear()
+        self.assertFalse(self.decide())
+        self.assertEqual(f.asked, [])
+
+    def test_any_changed_tree_or_workflow_input_requires_a_full_run(self):
+        self.fixture.keys[BASE] = "different"
+        self.assertFalse(self.decide())
+        self.assertFalse(any(p.startswith("actions/runs/") for p in self.fixture.asked))
+
+    def test_reused_missing_failed_or_truncated_lanes_cannot_supply_a_pass(self):
+        for failure in ("skipped", "failure", "cancelled"):
+            with self.subTest(failure=failure):
+                self.fixture.jobs[0]["conclusion"] = failure
+                self.assertFalse(self.decide())
+        self.fixture.jobs[0]["conclusion"] = "success"
+        self.fixture.total = len(self.fixture.jobs) + 1
+        self.assertFalse(self.decide())
+        self.fixture.total = None
+        self.fixture.jobs.pop()
+        self.assertFalse(self.decide())
+
+    def test_manual_tag_fork_event_and_wrong_checkout_do_not_reuse(self):
+        f = self.fixture
+        for name, event, checkout in (
+                ("workflow_dispatch", {}, (HEAD, [BASE])),
+                ("push", {"ref": "refs/tags/v1", "after": HEAD}, (HEAD, [BASE])),
+                ("push", f.event, (MERGE, [HEAD]))):
+            with self.subTest(event=name, checkout=checkout):
+                f.event_name, f.event, f.checked_out = name, event, checkout
+                f.asked.clear()
+                self.assertFalse(self.decide())
+                self.assertEqual(f.asked, [])
+
+    def test_expired_future_and_non_push_records_are_rejected(self):
+        for started in (NOW - timedelta(days=8), NOW + timedelta(seconds=1)):
+            self.fixture.run["run_started_at"] = started.isoformat()
+            self.assertFalse(self.decide())
+        self.fixture.run["run_started_at"] = NOW.isoformat()
+        self.fixture.run["event"] = "pull_request"
+        self.assertFalse(self.decide())
 
 
 def job(result, **outputs):

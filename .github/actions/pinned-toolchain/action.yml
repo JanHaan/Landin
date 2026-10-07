@@ -37,7 +37,7 @@ runs:
       run: |
         set -eu
         . ./environments/pins.sh
-        landin_install_toolchain "$HOME/landin-toolchain" '${{ inputs.platform }}'
+        python3 scripts/toolchain_cache.py "$HOME/landin-toolchain" '${{ inputs.platform }}'
         {
           echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
           echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"

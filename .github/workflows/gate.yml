@@ -34,6 +34,12 @@ on:
 permissions:
   contents: read
 
+# Superseded candidates on one branch must not occupy the native hosts.
+# Manual dispatch gets a separate group so a requested fresh run is retained.
+concurrency:
+  group: gate-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Reuse requires the verified explanatory-only conditions in AGENTS.md.
   #  The small classifier uses arm64 so it can release the compiler lanes
@@ -49,7 +55,7 @@ jobs:
       reuse: ${{ steps.reuse.outputs.reuse }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Inspect a recent full pass for explanatory-only changes
+      - name: Inspect a full pass for an identical candidate or explanatory edit
         id: reuse
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,6 +149,16 @@ jobs:
       - name: Build debug executables with bounded parallelism
         run: ./scripts/build.sh -j4
 
+      - name: Package the checked debug compiler for determinism
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-amd64-debug.tar.gz"
+          -C compiler/ada/build/linux-amd64/debug bin/refine source-manifest.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-amd64-debug
+          path: ${{ runner.temp }}/linux-amd64-debug.tar.gz
+          retention-days: 1
+
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
@@ -150,9 +166,8 @@ jobs:
       #  Emacs and the executable, then waits for a live refine diagnostic.
       - name: Install the required Emacs client
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends emacs-nox
-          emacs --version | head -1
+          ./scripts/ci_packages.sh emacs-nox
+          emacs --version | sed -n '1p'
 
       - name: Emacs starts refine lsp
         run: >-
@@ -301,15 +316,13 @@ jobs:
         run: |
           set -eu
           . ./environments/pins.sh
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
+          ./scripts/ci_packages.sh "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
           installed=$(dpkg-query -W -f='${Version}' clang-19)
           if [ "$installed" != "$LANDIN_CLANG_UBUNTU" ]; then
             echo "clang-19 is $installed, not $LANDIN_CLANG_UBUNTU" >&2
             exit 1
           fi
-          clang-19 --version | head -1
+          clang-19 --version | sed -n '1p'
 
       - name: The binding generator
         run: CLANG=clang-19 python3 bindings/test.py
@@ -332,9 +345,7 @@ jobs:
 
       - name: Install Node.js and npm on the self-hosted runner
         if: runner.environment == 'self-hosted'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends nodejs npm
+        run: ./scripts/ci_packages.sh nodejs npm
 
       - name: Install the pinned tree-sitter CLI
         working-directory: highlight/tree-sitter
@@ -504,6 +515,16 @@ jobs:
 
       - name: Build debug executables with bounded parallelism
         run: ./scripts/build.sh -j3
+
+      - name: Package the checked debug compiler for determinism
+        run: >-
+          tar -czf "$RUNNER_TEMP/darwin-arm64-debug.tar.gz"
+          -C compiler/ada/build/darwin-arm64/debug bin/refine source-manifest.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: darwin-arm64-debug
+          path: ${{ runner.temp }}/darwin-arm64-debug.tar.gz
+          retention-days: 1
 
       #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
       #  compiler defaults to darwin-arm64 (D257), so the lane is named.
@@ -716,6 +737,16 @@ jobs:
       - name: Build debug executables with bounded parallelism
         run: ./scripts/build.sh -j4
 
+      - name: Package the checked debug compiler for determinism
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-arm64-debug.tar.gz"
+          -C compiler/ada/build/linux-arm64/debug bin/refine source-manifest.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-arm64-debug
+          path: ${{ runner.temp }}/linux-arm64-debug.tar.gz
+          retention-days: 1
+
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
@@ -806,15 +837,13 @@ jobs:
         run: |
           set -eu
           . ./environments/pins.sh
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
+          ./scripts/ci_packages.sh "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
           installed=$(dpkg-query -W -f='${Version}' clang-19)
           if [ "$installed" != "$LANDIN_CLANG_UBUNTU" ]; then
             echo "clang-19 is $installed, not $LANDIN_CLANG_UBUNTU" >&2
             exit 1
           fi
-          clang-19 --version | head -1
+          clang-19 --version | sed -n '1p'
 
       - name: The generated bindings for the standard AAPCS64
         run: |
@@ -858,8 +887,7 @@ jobs:
       - name: Install the cross driver and ELF tools
         run: |
           . ./environments/pins.sh
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          ./scripts/ci_packages.sh \
             "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 libarchive-tools
           test "$(dpkg-query -W -f='${Version}' clang-19)" = "$LANDIN_CLANG_UBUNTU"
           clang-19 --version
@@ -960,10 +988,7 @@ jobs:
       - name: Install LP64D cross toolchain
         timeout-minutes: 25
         run: |
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-            -o Acquire::Retries=3 update -qq
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-            -o Acquire::Retries=3 install -y --no-install-recommends \
+          ./scripts/ci_packages.sh \
             gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
           riscv64-linux-gnu-gcc --version
           riscv64-linux-gnu-as --version
@@ -1009,10 +1034,7 @@ jobs:
         timeout-minutes: 10
         run: |
           if ! command -v gdb; then
-            sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-              -o Acquire::Retries=3 update -qq
-            sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
-              -o Acquire::Retries=3 install -y --no-install-recommends gdb
+            ./scripts/ci_packages.sh gdb
           fi
           uname -a
           cat /proc/cpuinfo
@@ -1044,9 +1066,12 @@ jobs:
   #  Build and compare assembly manifests on Linux and macOS in the same
   #  workflow run, so a host disagreement also fails the aggregate status.
   determinism:
-    needs: inputs
+    needs: [inputs, compiler, arm64-compiler, darwin-host]
     if: needs.inputs.outputs.reuse != 'true'
     uses: ./.github/workflows/determinism.yml
+    with:
+      # Fork fallback uses different Mac images in the two workflows.
+      debug-artifacts: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   #  The one check a branch rule requires: every job above succeeded.
   gate:

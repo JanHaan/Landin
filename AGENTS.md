@@ -83,12 +83,26 @@ nix build .#refine-bin
 ```
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. Unless the verified explanatory-only exception below
-applies, it runs every target the compiler has, in jobs that report separate
-verdicts. A release build on each host supplies checked executables to its
-same-host lanes. The final `gate` job requires every build and verification
+push and pull request. A new candidate runs every target the compiler has,
+in jobs that report separate verdicts. A recent verified identical candidate
+or the explanatory-only exception below may reuse a full pass. Compiler
+builds supply checked executables to their same-host consumers, including
+the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
 job, including cross-host determinism, to succeed or be skipped under verified
 reuse; document and script checks must always succeed.
+
+A branch push or same-repository pull request by an author with write access
+may reuse a complete successful push run from this repository from the
+preceding seven days when the entire tracked tree is identical. This key
+includes every byte, path and mode, the workflows and tool pins, and all
+documents. A pull request compares its merge checkout, not just its head.
+The complete GitHub job listing must contain every required matrix leg with
+success; filtered local runs, cache entries, incomplete listings and runs
+that themselves reused evidence cannot supply this pass. Main promotion
+therefore does not repeat a candidate's full matrix when its tree is unchanged.
+Manual dispatch always runs the full matrix. Superseded pushes to a branch
+and updates to a pull request are cancelled; manual runs have independent
+concurrency groups, and unrelated forks' pull requests cannot cancel each other.
 
 A declared explanatory edit confined to the content of `README.md`,
 `ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a full successful `main`
@@ -111,7 +125,7 @@ still succeed. The linked full run contains the target-test results.
 
 | job | runner | runs |
 |---|---|---|
-| `inputs` | self-hosted `linux-arm64` | verify whether a recent complete main run can cover a declared explanatory edit |
+| `inputs` | self-hosted `linux-arm64` | verify a recent full pass for an identical candidate, or a full main pass for a declared explanatory edit |
 | `documents` | self-hosted `linux-amd64` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
 | `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
@@ -204,14 +218,17 @@ Use `scripts/dev-test.sh --host --target=linux-x86-64` on the Mac for
 compiler-host feedback, and expect every selected case to pass. The unfiltered harness includes Linux
 execution and fails without its target toolchain, so do not run Linux
 containers, Linux workload emission or repeated complete suites on the Mac as
-routine feedback. Run changed-component tests while editing and the complete
-suite before pushing changes that can affect compiler behavior, generated
-source or catalogues, fixtures or examples, language rules, or build inputs.
-For a push confined to explanatory prose, run the full `python3 check.py` and
-review the prose against what it describes; the complete compiler suite is
-not required locally. This exception does not cover changes to generated Ada
-or catalogues, executable examples or fixtures, or the grammar and semantic
-rules in `spec.md`. `LANDIN_TEST_JOBS` splits the corpus fixtures across
+routine feedback. Run changed-component tests while editing, then push the
+final candidate to a branch for one complete CI matrix. Do not repeat the
+complete local matrix merely before pushing and watching the same CI tests.
+Before promoting the candidate to main, verify its complete gate succeeded
+and that the promoted tree is the one tested; merge changes require new
+evidence. A full local run remains useful when an investigation requires it,
+and is not a substitute for the multi-host gate.
+After documentation changes run the full `python3 check.py` and review the
+prose against what it describes. The explanatory reuse exception does not
+cover generated Ada or catalogues, executable examples or fixtures, or the
+grammar and semantic rules in `spec.md`. `LANDIN_TEST_JOBS` splits the corpus fixtures across
 workers, which is most of what the suite costs. One worker is still the
 default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
 the same verdicts.
@@ -219,9 +236,10 @@ the same verdicts.
 Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
 gate, or from a host you run yourself; the former exact-revision native
 acceptance runner is retired.
-A Darwin change is run on a Mac before it is pushed. For development, start
-LLDB from a terminal session: a background session such as a remote agent's
-cannot launch a debugged process, however the debugger rights are set.
+A Darwin change receives focused checks on a Mac before it is pushed; the
+full Darwin suites run in the candidate's CI matrix. LLDB must inherit a
+graphical or terminal security audit session; an arbitrary background
+session may not launch a debugged process, regardless of debugger rights.
 The GitHub runner's LaunchAgent instead inherits the logged-in Aqua security
 session: it omits `SessionCreate` and requires `LimitLoadToSessionType=Aqua`.
 Use its custom reinstall helper, recorded in

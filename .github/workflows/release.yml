@@ -178,9 +178,7 @@ jobs:
           cd release-assets && ls -l && cat ./*.sha256
 
       - name: Install the GitHub CLI
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gh
+        run: ./scripts/ci_packages.sh gh
 
       - name: Publish
         env:

@@ -6460,6 +6460,24 @@ def check_document_reachability(full_run):
             if name.endswith(".md"):
                 docs.append(os.path.relpath(os.path.join(here, name), ROOT))
     docs = sorted(docs)
+    # Local agent instructions and other ignored notes are not published
+    # documents. Git's default check-ignore never excludes tracked files,
+    # even when a local ignore pattern would match them. Keep new, ordinary
+    # untracked documents in this check too, so pre-commit feedback works.
+    if os.path.exists(os.path.join(ROOT, ".git")):
+        import subprocess
+        try:
+            ignored = subprocess.run(
+                ["git", "check-ignore", "-z", "--stdin"], cwd=ROOT,
+                input=b"".join(os.fsencode(d) + b"\0" for d in docs),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return [("README.md", 1, "cannot determine local ignored documents: " + str(error))]
+        if ignored.returncode not in (0, 1):
+            return [("README.md", 1, "cannot determine local ignored documents: "
+                     + os.fsdecode(ignored.stderr).strip())]
+        local = {os.fsdecode(p) for p in ignored.stdout.split(b"\0") if p}
+        docs = [d for d in docs if d not in local]
     if "README.md" not in docs:
         return [("README.md", 1, "this file is needed by a check and is not here")]
     known = set(docs)

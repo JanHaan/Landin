@@ -14,11 +14,12 @@ what they cost.
 | edit/test loop | `./scripts/dev-test.sh` with one exact `--suite`, `--case` or `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
-| before pushing changes that can affect compiler behavior | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
+| before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes | focused feedback; the complete matrix runs once in CI |
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
-| before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
-| every push and pull request | `.github/workflows/gate.yml` | every target unless the verified explanatory-only reuse exception below applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; physical RV64 Linux runtime, GDB, C ABI and ISA-level verdicts on RISE runners; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
+| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; physical RV64 Linux runtime, GDB, C ABI and ISA-level verdicts on RISE runners; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| promotion to main | verify the candidate's complete successful gate and promote the unchanged tree | the gate reuses the full candidate pass; documents and script controls still run |
 
 Pushes and same-repository pull requests use the self-hosted Linux and
 Darwin platform runners; fork pull requests keep the hosted Linux and Darwin
@@ -26,34 +27,42 @@ images. The FreeBSD VM lanes already use dedicated runners.
 See [the runner requirements](environments.md#github-actions-runners) for
 labels, tools and scheduling.
 
-From the repository root on a Mac, with the default `darwin-arm64` build tag:
+From a modern checkout on a Mac, choose the affected exact case or suite.
+The host selector accepts a suite or case, not a fixture selector. With the
+default `darwin-arm64` build tag, an example is:
 
 ```sh
-./scripts/dev-test.sh --host --target=linux-x86-64
-darwin_output=$(mktemp -d)
-python3 compiler/tests/darwin/check.py --parity \
-  --refine "$PWD/compiler/ada/build/darwin-arm64/debug/bin/refine" \
-  --output "$darwin_output/parity"
-./scripts/debug.sh --target=darwin-arm64 --parity \
-  --output "$darwin_output/lldb"
+./scripts/dev-build.sh -j2
+LANDIN_TEST_JOBS=1 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
 
-The host suite builds the debug compiler. The two result directories must not
-exist before their runners create them; `mktemp -d` gives each run a fresh
-parent directory.
+For debugger changes, run an affected native workload/profile with
+`scripts/debug.sh` after building this checkout's compiler. Its output
+directory must be new. Full native parity and debugger matrices belong to
+the candidate CI run, rather than every local editing loop.
+
+Push the final candidate to a branch and let its complete gate finish. Use
+completion notifications and investigate failed logs instead of repeatedly
+watching or rerunning the matrix. Before promotion, verify the complete job
+listing and the tested tree; a changed merge tree needs its own full pass.
+The identical-candidate reuse policy in `AGENTS.md` compares all tracked
+bytes, paths and modes, including workflow definitions and tool pins, with
+a recent complete successful push run from this repository. It never uses
+local filtered transcripts or build caches as test evidence. Manual dispatch
+requests a fresh full matrix. Superseded runs on a branch are cancelled.
 
 The verified explanatory-only remote reuse policy in `AGENTS.md` permits
 qualifying edits to reuse a full successful main gate from the preceding
 seven days. Document and script checks always run.
 
 Choose the smallest test that can expose the changed behavior first, broaden
-only for another affected subsystem, and run the complete suite once before
-pushing changes that can affect compiler behavior, generated source or
-catalogues, fixtures or examples, language rules, or build inputs. The
+only for another affected subsystem, and let the full CI gate validate the
+final candidate once. Run a complete local suite when an investigation needs
+it, rather than as a duplicate mandatory pre-push step. The
 explanatory-only prose path does not cover generated Ada or catalogues,
 executable examples or fixtures, or grammar and semantic rules in `spec.md`.
 The gate is a safety net rather than a verdict: each push runs every target
-or meets the verified explanatory-only reuse conditions above. On a failed Cortex-M job, it is configured to upload
+or meets the verified candidate/explanatory reuse conditions above. On a failed Cortex-M job, it is configured to upload
 diagnostic output if present and retain it for 14 days. The called determinism workflow retains assembly manifests as short-lived
 artifacts. These are not a successful exact-revision acceptance record; green says the tree passed there, not that
 a revision is accepted. Documentation changes still receive the full
