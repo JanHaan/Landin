@@ -772,6 +772,11 @@ package body Landin.Tests.Mutation_Suite is
            (Item, Counted.One_On_Line >= Floor_One_On_Line,
             "no fewer mutants than before give one report on their line: "
             & Summary);
+         Landin.Testing.Check
+           (Item, Percent (Counted.One_On_Line, Counted.Refused)
+              >= Exit_Share_Percent,
+            "the required share gives one report on the changed line: "
+            & Summary);
          Landin.Testing.Check_Equal
            (Item, Counted.Outside, 0,
             "no mutant reports outside its function");
