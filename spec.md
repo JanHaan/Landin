@@ -3650,8 +3650,10 @@ immediately after `ptr` begins the contextual conversion unless its balanced
 list is followed by `->`, which identifies a function pointee type. `any(value)`
 likewise retains its contextual construction; `any C(value)` applies a written
 erased type. A leading balanced parameter list followed by `->` begins a
-function-type application; otherwise parentheses retain their expression,
-struct-literal and anonymous-function meanings.
+function signature. When the complete signature is followed by `=`, including
+on the next line, it retains the anonymous-function meaning; otherwise the
+signature is a written conversion prefix. Other parentheses retain their
+expression and struct-literal meanings.
 Written `extern(c)`, `extern(interrupt)` and `extern(naked)` signatures retain
 their convention and target restrictions; extracting a machine-convention
 function value does not permit an ordinary call to it.
@@ -3666,6 +3668,12 @@ bounds are parsed in their own delimited positions. Ordinary single-list
 calls, labelled constructors and generic applications retain their existing
 classification. A written conversion admits neither labels, multiple value
 arguments nor call-site recovery.
+A balanced second list followed by `:=` starts a destructuring binding,
+so an ordinary call immediately before that binding remains complete rather
+than becoming a generic type head.
+An application must first denote an enabled type: D135's existing alias-result
+restrictions still refuse a generic slice or function alias, in a declaration
+and in a written conversion alike.
 
 The application is a primary under [1820], and ordinary unary and binary
 precedence applies to its result. Its value is evaluated exactly once at the

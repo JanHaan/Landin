@@ -861,7 +861,7 @@ their compiler-host emission and verifier checks recur in the full gate.
 
 ### R11.50 — Convert to a written type
 
-Status: planned
+Status: active
 Depends on: none
 
 A conversion is a type applied to a value [0310], but only a name can stand
