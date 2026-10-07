@@ -236,7 +236,8 @@ class Lane:
                         result['label'] + ': incorrect exclusive-loop selection')
 
     def execute(self, guest, results):
-        script = ['#!/bin/sh', 'ulimit -c 0', 'cd ' + shlex.quote(str(ROOT / 'compiler/ada'))]
+        script = ['#!/bin/sh', 'ulimit -c 0', 'ulimit -d unlimited',
+                  'cd ' + shlex.quote(str(ROOT / 'compiler/ada'))]
         for result in results:
             label, meta = result['label'], result['meta']
             path = self.bundle / label
@@ -347,6 +348,11 @@ def main():
                     'wrong guest identity: ' + identity)
             (args.output / 'guest-identity.log').write_text(identity)
             summary['guest'] = identity
+            # The displacement-limit regression has a 2 GiB BSS object. FreeBSD
+            # arm64 defaults to a 1 GiB data limit; the test VM must admit it.
+            limits = guest.checked('sysctl kern.maxdsiz=4294967296; sysctl kern.maxdsiz')
+            require(b'kern.maxdsiz: 4294967296' in limits, 'guest data limit is below corpus needs')
+            (args.output / 'guest-limits.log').write_bytes(limits)
             if args.kind == 'debugger':
                 summary['results'] = lane.debugger(guest)
             else:
