@@ -86,7 +86,9 @@ class Lane:
         self.target = 'freebsd-x86-64' if args.arch == 'amd64' else 'freebsd-arm64'
         self.triplet = ('x86_64' if args.arch == 'amd64' else 'aarch64') + '-unknown-freebsd14.4'
         self.clang = str(Path(shutil.which(args.clang) or args.clang).resolve())
-        self.lld = str(Path(shutil.which(args.lld) or args.lld).resolve())
+        # LLD dispatches by argv[0]. Ubuntu's ld.lld-19 symlink points to the
+        # generic lld binary, so preserve the ELF driver's invocation name.
+        self.lld = str(Path(shutil.which(args.lld) or args.lld).absolute())
         self.cc = [self.clang, '--target=' + self.triplet, '--sysroot=' + str(sysroot),
                    '-fuse-ld=' + self.lld, '-Wa,-L', *shlex.split(os.environ.get('LANDIN_FREEBSD_CC_ARGS', ''))]
         # Clang's integrated x86 assembler does not constrain instructions by

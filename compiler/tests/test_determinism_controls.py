@@ -210,7 +210,7 @@ class ContractControls(unittest.TestCase):
     def test_the_contract_covers_every_target(self):
         self.assertEqual(CHECK.TARGETS,
                          ("linux-x86-64", "linux-arm64", "darwin-arm64",
-                          "cortex-m0"))
+                          "cortex-m0", "freebsd-x86-64", "freebsd-arm64"))
 
     def test_the_corpus_is_shared_by_every_target(self):
         fixtures = CHECK.repository_root() / "compiler/tests/fixtures/runtime"

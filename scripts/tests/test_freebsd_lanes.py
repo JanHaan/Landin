@@ -17,6 +17,21 @@ import vm
 
 
 class FreeBSDControls(unittest.TestCase):
+    def test_lld_symlink_keeps_the_elf_driver_invocation_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / 'output'
+            output.mkdir()
+            (root / 'lld').write_bytes(b'generic driver')
+            (root / 'ld.lld-19').symlink_to('lld')
+            refine = root / 'refine'
+            refine.write_bytes(b'compiler')
+            args = SimpleNamespace(output=output, refine=refine, arch='arm64', kind='runtime',
+                                   clang='/usr/bin/clang-19', lld=str(root / 'ld.lld-19'))
+            lane = LANE.Lane(args, root / 'sysroot')
+            self.assertEqual(lane.lld, str(root / 'ld.lld-19'))
+            self.assertIn('-fuse-ld=' + str(root / 'ld.lld-19'), lane.driver.read_text())
+
     def test_prepared_execution_refuses_missing_architecture_profiles(self):
         with tempfile.TemporaryDirectory() as tmp:
             prepared = Path(tmp)
