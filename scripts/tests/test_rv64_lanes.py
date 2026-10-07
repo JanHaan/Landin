@@ -3,11 +3,13 @@
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import tempfile
+import tarfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,8 +17,123 @@ SPEC = importlib.util.spec_from_file_location('rv64_lane', ROOT / 'compiler/test
 LANE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LANE)
 
+# Native GDB's successful observations from the physical RISE session in
+# https://github.com/JanHaan/Landin/actions/runs/37670349340 .
+# The shared DWARF does not make finish print a C return-value message.
+GDB_TRACE = '''Breakpoint 1, inner (argument=40) at debug.ldn:3
+#0  inner (argument=40) at debug.ldn:3
+argument = 40
+local = 41
+result = <optimized out>
+#0  inner (argument=40) at debug.ldn:3
+#1  0x0000000000010a1e in outer (argument=30) at debug.ldn:8
+#2  0x0000000000010b2c in main () at debug.ldn:14
+argument = 30
+local = 40
+ready = <optimized out>
+result = <optimized out>
+BEGIN_UNWIND
+0x0000000000010a1e in outer (argument=30) at debug.ldn:8
+#0  0x0000000000010a1e in outer (argument=30) at debug.ldn:8
+END_UNWIND
+Breakpoint 2, outer (argument=30) at debug.ldn:10
+local = 40
+ready = 42
+result = 42
+[Inferior 1 (process 858) exited with code 052]
+'''
+
 
 class RV64Controls(unittest.TestCase):
+    def test_packaged_failure_evidence_retains_sessions_outputs_and_identity(self):
+        workflow = (ROOT / '.github/workflows/gate.yml').read_text()
+        package = workflow.split('      - name: Package hardware identity', 1)[1]
+        body = package.split('        run: |\n', 1)[1].split('      - name:', 1)[0]
+        script = '\n'.join(line[10:] for line in body.splitlines())
+        script = script.replace('${{ matrix.kind }}', 'runtime')
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            evidence = base / 'rv64-evidence'
+            evidence.mkdir()
+            files = {'summary.json': '{"status":"failed"}', 'cpuinfo.log': 'physical CPU',
+                     'debug-session.gdb': 'finish\nframe\n', 'failure.stdout': 'opening output failed',
+                     'failure.stderr': '', 'failure.status': '1'}
+            for name, contents in files.items():
+                (evidence / name).write_text(contents)
+            (evidence / 'bundle').mkdir()
+            (evidence / 'bundle/payload').write_bytes(b'executable')
+            subprocess.run(['sh', '-eu', '-c', script], check=True,
+                           env={**os.environ, 'RUNNER_TEMP': tmp})
+            with tarfile.open(base / 'rv64-runtime.tar.gz') as archive:
+                names = {name.removeprefix('./') for name in archive.getnames()}
+                self.assertTrue(set(files) <= names)
+                self.assertFalse(any(name.startswith('bundle') for name in names))
+                for name, contents in files.items():
+                    self.assertEqual(archive.extractfile('./' + name).read(), contents.encode())
+
+    def test_native_fixtures_can_write_outputs_in_a_fresh_working_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / 'source'
+            (root / 'compiler/ada').mkdir(parents=True)
+            fixture = root / 'compiler/tests/fixtures/runtime/working-output'
+            fixture.mkdir(parents=True)
+            (fixture / 'expected.txt').write_bytes(b'')
+            output = base / 'evidence'
+            bundle = output / 'bundle'
+            bundle.mkdir(parents=True)
+            executable = bundle / 'working-output'
+            executable.write_text('#!' + sys.executable + '\nfrom pathlib import Path\n'
+                'Path("build/fixture-output.txt").write_text("actual output")\n'
+                'raise SystemExit(42)\n')
+            executable.chmod(0o755)
+            result = {'case': 'runtime/working-output', 'label': executable.name,
+                      'meta': {'status': '42', 'run_expect': 'expected.txt'}}
+            with patch.object(LANE, 'ROOT', root):
+                LANE.execute(SimpleNamespace(kind='runtime', output=output), {'results': [result]})
+            self.assertEqual((root / 'compiler/ada/build/fixture-output.txt').read_text(), 'actual output')
+            self.assertEqual(result['status'], 'passed')
+            preserved = root / 'compiler/ada/build/preserved.txt'
+            preserved.write_text('existing file')
+            with patch.object(LANE, 'ROOT', root):
+                LANE.execute(SimpleNamespace(kind='runtime', output=output), {'results': [result]})
+            self.assertEqual(preserved.read_text(), 'existing file')
+
+    def run_debugger_trace(self, trace):
+        with tempfile.TemporaryDirectory() as tmp:
+            args = SimpleNamespace(output=Path(tmp), gdb='gdb')
+            result = {'label': 'debug-control', 'lines': {
+                'result = local + 1': 3, 'result = inner(local)': 8,
+                'result = ready': 10}}
+            completed = SimpleNamespace(returncode=0, stdout=trace.encode(), stderr=b'')
+            with patch.object(LANE.subprocess, 'run', return_value=completed):
+                LANE.debugger(args, {'source_root': str(ROOT), 'results': [result]})
+            self.assertEqual(result['status'], 'passed')
+
+    def test_native_unwind_trace_does_not_require_a_c_return_type(self):
+        self.assertNotIn('Value returned is', GDB_TRACE)
+        self.run_debugger_trace(GDB_TRACE)
+
+    def test_unwind_requires_ordered_markers_caller_source_and_later_values(self):
+        caller = '#0  0x0000000000010a1e in outer (argument=30) at debug.ldn:8'
+        before, after = GDB_TRACE.split('END_UNWIND', 1)
+        before = before.replace('result = <optimized out>', 'result = 42')
+        corruptions = {
+            'missing begin': GDB_TRACE.replace('BEGIN_UNWIND\n', ''),
+            'missing end': GDB_TRACE.replace('END_UNWIND\n', ''),
+            'duplicate marker': GDB_TRACE.replace('BEGIN_UNWIND', 'BEGIN_UNWIND\nBEGIN_UNWIND'),
+            'reversed markers': GDB_TRACE.replace('BEGIN_UNWIND', 'TEMP_MARKER')
+                .replace('END_UNWIND', 'BEGIN_UNWIND').replace('TEMP_MARKER', 'END_UNWIND'),
+            'still inner': GDB_TRACE.replace(caller, '#0 inner (argument=40) at debug.ldn:3'),
+            'wrong caller line': GDB_TRACE.replace(caller, caller.replace(':8', ':9')),
+            'missing later stop': GDB_TRACE.replace('Breakpoint 2, outer (argument=30) at debug.ldn:10', ''),
+            'missing later ready': before + 'END_UNWIND' + after.replace('ready = 42', ''),
+            'missing later result': before + 'END_UNWIND' + after.replace('result = 42', ''),
+        }
+        for name, trace in corruptions.items():
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                self.run_debugger_trace(trace)
+
     def test_nonempty_coverage_in_each_fixture_lane(self):
         for kind in ('runtime', 'abi', 'isa'):
             self.assertTrue(LANE.select(kind))
@@ -177,6 +294,13 @@ class RV64Controls(unittest.TestCase):
         self.assertIn("sudo sed -i '\\|^http://azure\\.archive\\.ubuntu\\.com/ubuntu/|d'", action)
         self.assertIn('cat /etc/apt/apt-mirrors.txt', action)
         self.assertLess(action.index('apt-mirrors.txt'), action.index('landin_install_toolchain'))
+        package = rv64_setup.split('      - name: Package hardware identity', 1)[1]
+        self.assertIn('if: always()', package)
+        self.assertIn('if test -d "$RUNNER_TEMP/rv64-evidence";', package)
+        self.assertIn('--exclude=./bundle -C "$RUNNER_TEMP/rv64-evidence" .', package)
+        self.assertIn('path: ${{ runner.temp }}/rv64-${{ matrix.kind }}.tar.gz', package)
+        self.assertIn('compression-level: 0', package)
+        self.assertIn('retention-days: 14', package)
         aggregate = workflow.split('  gate:\n', 1)[1]
         self.assertIn('rv64-emit, rv64', aggregate)
 

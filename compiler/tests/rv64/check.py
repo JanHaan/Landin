@@ -236,6 +236,9 @@ def execute(args, manifest):
         probe = subprocess.run([str(bundle / 'processor')], capture_output=True, timeout=30)
         (args.output / 'processor.log').write_bytes(probe.stdout + probe.stderr)
         require(probe.returncode == 0, 'hardware does not execute xtheadba; no extended fixture may run')
+    # Shared hosted fixtures write temporary outputs relative to compiler/ada.
+    # Unlike the compiler hosts, this native checkout has no Ada build tree.
+    (ROOT / 'compiler/ada/build').mkdir(parents=True, exist_ok=True)
     for result in manifest['results']:
         meta, label = result['meta'], result['label']
         merged = meta.get('stream', 'merged') == 'merged'
@@ -281,9 +284,20 @@ def debugger(args, manifest):
             require(re.search(r'#' + str(index) + r'\s+.*\b' + name + r'\b', text), label + ': missing frame ' + name)
         for name, value in (('argument', 40), ('local', 41), ('argument', 30), ('local', 40), ('result', 42)):
             require(re.search(r'\b' + name + r'\s*=\s*' + str(value) + r'\b', text), label + ': missing value ' + name)
-        unwound = text.split('BEGIN_UNWIND', 1)[-1].split('END_UNWIND', 1)[0]
-        require('Value returned is' in unwound and re.search(r'#0\s+.*\bouter\b', unwound),
-                label + ': GDB finish did not unwind to caller')
+        markers = list(re.finditer(r'^(BEGIN_UNWIND|END_UNWIND)\r?$', text, re.M))
+        require([m.group(1) for m in markers] == ['BEGIN_UNWIND', 'END_UNWIND'],
+                label + ': GDB unwind markers missing or out of order')
+        unwound = text[markers[0].end():markers[1].start()]
+        require(re.search(r'^#0[ \t]+[^\r\n]*\bouter\b[^\r\n]*debug\.ldn:' +
+                          str(lines['result = inner(local)']) + r'\b', unwound, re.M),
+                label + ': GDB finish did not unwind to caller source line')
+        returned = text[markers[1].end():]
+        require(re.search(r'\bouter\b[^\r\n]*debug\.ldn:' +
+                          str(lines['result = ready']) + r'\b', returned),
+                label + ': post-finish caller source stop missing')
+        for name in ('ready', 'result'):
+            require(re.search(r'\b' + name + r'\s*=\s*42\b', returned),
+                    label + ': post-finish caller value missing ' + name)
         require(re.search(r'exited with code 0*52', text), label + ': missing final exit status')
         result['status'] = 'passed'
         print(TARGET + ': ' + label + ' source stops, frames, locals and unwinding passed', flush=True)

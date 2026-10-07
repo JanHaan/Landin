@@ -964,17 +964,20 @@ jobs:
           tar -xzf "$RUNNER_TEMP/rv64-input/rv64-payload.tar.gz" -C "$RUNNER_TEMP/rv64-prepared"
           python3 compiler/tests/rv64/check.py --kind=${{ matrix.kind }} \
             --prepared="$RUNNER_TEMP/rv64-prepared" --output="$RUNNER_TEMP/rv64-evidence"
+      - name: Package hardware identity and separate verdict transcripts
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/rv64-evidence"; then
+            tar -czf "$RUNNER_TEMP/rv64-${{ matrix.kind }}.tar.gz" \
+              --exclude=./bundle -C "$RUNNER_TEMP/rv64-evidence" .
+          fi
       - name: Retain hardware identity and separate verdict transcripts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rv64-${{ matrix.kind }}
-          path: |
-            ${{ runner.temp }}/rv64-evidence/*.json
-            ${{ runner.temp }}/rv64-evidence/*.log
-            ${{ runner.temp }}/rv64-evidence/*.stdout
-            ${{ runner.temp }}/rv64-evidence/*.stderr
-            ${{ runner.temp }}/rv64-evidence/*.status
+          path: ${{ runner.temp }}/rv64-${{ matrix.kind }}.tar.gz
+          compression-level: 0
           retention-days: 14
 
   #  Build and compare assembly manifests on Linux and macOS in the same

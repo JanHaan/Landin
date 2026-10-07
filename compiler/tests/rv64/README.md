@@ -14,7 +14,9 @@ revision, changed source bytes, changed binary or peer object bytes, missing
 profiles, changed fixture oracles and empty selections. Filtered development
 payloads cannot supply CI evidence. Native execution requires Linux riscv64
 and refuses explicitly identified emulation. Each execution job retains its
-CPU identity and verdict transcripts for fourteen days.
+CPU identity and verdict transcripts for fourteen days in one compressed
+tar archive, including the generated GDB session scripts. Binaries remain
+in their separately retained emission payloads.
 
 The runtime lane selects metadata-applicable fixtures at four ordinary
 optimization/specialization profiles, plus two specialization profiles where
@@ -45,8 +47,11 @@ wrapper, and check
 promoted unnamed floating arguments through integer registers and stack
 slots. A peer independently checks Linux `struct stat` using the native
 headers. GDB sessions at four profiles require source-line stops, three
-nested frames, callee and caller local values, return values and completed
-unwinding to the caller, followed by the expected final exit status.
+nested frames, callee and caller local values, completed unwinding to the
+caller at its call source line, and the caller's result value at a subsequent
+source stop, followed by the expected final exit status. The shared DWARF
+describes Landin's native result carriers through source locals; it does not
+declare a C return type that makes GDB's `finish` print a return value.
 
 For local cross-emission on a supported Linux compiler host:
 
