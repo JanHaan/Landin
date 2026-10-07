@@ -111,28 +111,37 @@ still succeed. The linked full run contains the target-test results.
 
 | job | runner | runs |
 |---|---|---|
-| `inputs` | ubuntu-24.04 | verify whether a recent complete main run can cover a declared explanatory edit |
-| `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | ubuntu-24.04 | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
-| `linux-release-build` | ubuntu-24.04 | build the release executables once for the Linux release, Cortex-M and scaling jobs |
-| `release` | ubuntu-24.04 | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
-| `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
-| `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `cortex-m` | ubuntu-24.04 | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
-| `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
-| `darwin-release-build` | macos-26 | build the release executables once for the Darwin host, parity and LLDB jobs |
-| `darwin-host` | macos-26 | the debug compiler host suite, determinism, report identity and the scripted server sessions |
-| `darwin-host-release` | macos-26 | the release compiler host suite and the same follow-on checks |
-| `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
-| `lldb` | macos-26 | the LLDB sessions |
-| `arm64-compiler` | ubuntu-24.04-arm | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
-| `arm64-release` | ubuntu-24.04-arm | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
-| `freebsd-emit` matrix | ubuntu-24.04 | emit both FreeBSD targets with the checked Linux release compiler and locked sysroot; check source verdicts, assembler boundaries and linked instructions; transfer hashed payloads |
+| `inputs` | self-hosted `linux-amd64` | verify whether a recent complete main run can cover a declared explanatory edit |
+| `documents` | self-hosted `linux-amd64` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
+| `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
+| `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `linux-release-build` | self-hosted `linux-amd64` | build the release executables once for the Linux release, Cortex-M and scaling jobs |
+| `release` | self-hosted `linux-amd64` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
+| `bindings` | self-hosted `linux-amd64` | the C binding generator against its pinned Clang |
+| `editor-grammar` | self-hosted `linux-amd64` | the structural grammar's integration pass with the pinned tree-sitter CLI |
+| `cortex-m` | self-hosted `linux-amd64` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
+| `scaling` | self-hosted `linux-amd64` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
+| `darwin-release-build` | self-hosted `darwin-arm64` | build the release executables once for the Darwin host, parity and LLDB jobs |
+| `darwin-host` | self-hosted `darwin-arm64` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
+| `darwin-host-release` | self-hosted `darwin-arm64` | the release compiler host suite and the same follow-on checks |
+| `darwin-parity` | self-hosted `darwin-arm64` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
+| `lldb` | self-hosted `darwin-arm64` | the LLDB sessions |
+| `arm64-compiler` | self-hosted `linux-arm64` | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
+| `arm64-release` | self-hosted `linux-arm64` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
+| `freebsd-emit` matrix | self-hosted `linux-amd64` | emit both FreeBSD targets with the checked Linux release compiler and locked sysroot; check source verdicts, assembler boundaries and linked instructions; transfer hashed payloads |
 | `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | self-hosted `freebsd-amd64`, `freebsd-arm64` | execute the applicable runtime corpus in accelerated FreeBSD VMs hosted on Linux, including guest CPU confirmation |
 | `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | self-hosted `freebsd-amd64`, `freebsd-arm64` | native FreeBSD LLDB source stops, frames, local values and unwinding |
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | self-hosted `freebsd-amd64`, `freebsd-arm64` | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
-| `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-15 | the called workflow emits the fixture manifest on each host and compares them |
+| `determinism` | self-hosted `linux-amd64`, `linux-arm64`, `darwin-arm64` | the called workflow emits the fixture manifest on each host and compares them |
+
+Linux and Darwin lanes use the registered `landin-linux-amd64`,
+`landin-linux-arm64` and `landin-darwin-arm64` runners for pushes, manual
+runs and same-repository pull requests. Fork pull requests keep the previous
+GitHub-hosted Linux and Darwin images. The FreeBSD execution lanes retain
+their dedicated self-hosted VM runners. The called determinism workflow
+uses the caller's event to choose the same Linux and Darwin hosts. Links,
+Pages and release workflows also use the self-hosted hosts.
+See [the runner environment requirements](docs/environments.md#github-actions-runners).
 
 A release compile error surfaces in its host's build job; debug compile
 errors surface in the debug verification jobs. In
@@ -206,7 +215,8 @@ default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
 the same verdicts.
 
 Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
-gate, or from a host you run yourself; the dedicated native runner is gone.
+gate, or from a host you run yourself; the former exact-revision native
+acceptance runner is retired.
 A Darwin change is run on a Mac before it is pushed, and LLDB there must be
 started from a terminal session: a background session such as a remote
 agent's cannot launch a debugged process, however the debugger rights are

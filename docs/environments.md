@@ -10,7 +10,8 @@ here are historical; `scripts/ci/` has been removed.
 
 Native macOS arm64 remains a development and gate environment. Use
 `./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
-`darwin-host`, `darwin-parity` and `lldb` on `macos-26`. The former Darwin
+`darwin-host`, `darwin-parity` and `lldb` on the self-hosted
+`darwin-arm64` runner, or `macos-26` for fork pull requests. The former Darwin
 acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
 verified bundle had to match the Linux bundle with compatible committed scope
 at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
@@ -32,6 +33,47 @@ verdicts. Linux x86-64 emits and inspects hashed payloads against a
 checksum-locked FreeBSD 14.4 sysroot. The self-hosted `freebsd-amd64` and
 `freebsd-arm64` Linux controllers execute them in their FreeBSD 15.1 KVM
 guests; the evidence records the actual guest version and CPU probes.
+
+## GitHub Actions runners
+
+The workflows select labels, not runner names. Pushes, manual runs and
+same-repository pull requests use the following registered runners. Linux
+and Darwin jobs for fork pull requests retain the previous GitHub-hosted
+images; this also applies inside the called determinism workflow. FreeBSD
+execution retains the existing dedicated VM lanes.
+
+| runner name | required platform label | role |
+|---|---|---|
+| `landin-linux-amd64` | `linux-amd64` | Linux x86-64 compiler and execution, Cortex-M, FreeBSD emission, documents, scripts, links, Pages and release publication |
+| `landin-linux-arm64` | `linux-arm64` | native Linux arm64 compiler and execution |
+| `landin-darwin-arm64` | `darwin-arm64` | native Darwin compiler, parity and LLDB |
+| `landin-freebsd-amd64` | `freebsd-amd64` | accelerated FreeBSD x86-64 VM execution, ABI and debugging |
+| `landin-freebsd-arm64` | `freebsd-arm64` | accelerated FreeBSD arm64 VM execution, ABI and debugging |
+
+Linux and Darwin selectors also require `self-hosted` and the matching OS
+and architecture labels. Their three hosts supply determinism manifests and
+release builds. A missing or offline matching runner leaves a job queued;
+the workflows do not fall back to a hosted image for a trusted event.
+With one runner per platform, that platform's jobs run one at a time.
+
+Both Linux compiler runners use Ubuntu 24.04 with glibc 2.39, Python 3,
+Git, curl, archive tools, binutils and the C development headers. They need
+passwordless sudo for the existing pinned Clang and Emacs installs, the
+editor grammar's Node.js/npm install, and release publication's GitHub CLI
+install. Ada archives still come from the checksums in `environments/pins.sh`.
+The FreeBSD VM controllers retain their existing SSH and guest setup.
+
+The Darwin runner uses its `xcode-select` developer directory. Its Command
+Line Tools match `environments/macos-arm64/policy.json`; a versioned Xcode
+application path is required only for the hosted `macos-26` fallback.
+The runner account needs Python 3, Git, curl, SHA256 and archive tools, and
+permission to launch LLDB targets from its runner session.
+
+[The runner inspection](https://github.com/JanHaan/Landin/actions/runs/37657040045)
+checked the three compiler hosts on 2026-10-07: both Linux hosts reported
+Ubuntu 24.04 and passwordless sudo, and the Mac's selected SDK, Clang,
+linker and LLDB matched the recorded policy. This checks host prerequisites;
+the gate supplies compiler and target verdicts.
 
 ## Environments
 
