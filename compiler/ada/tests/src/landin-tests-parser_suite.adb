@@ -4506,7 +4506,13 @@ package body Landin.Tests.Parser_Suite is
         & "closure := (x: i32) -> (y: i32) = x end" & LF
         & "one: [1]i32 = [1] next: u8 = 1" & LF
         & "routine: () -> none = divide(10, 3)" & LF
-        & "(rem: residue, quot, _) := divide(10, 3) end routine" & LF;
+        & "(rem: residue, quot, _) := divide(10, 3) end routine" & LF
+        & "boundaries: () -> none = a: [1]i32 = [7] r = 1" & LF
+        & "b: [1]i32 = [7] b[0] = 1" & LF
+        & "callbacks: [1]operation = [next] callbacks[0](value: 1)" & LF
+        & "tuple: [1]i32 = [1] (first, second) := pair()" & LF
+        & "labelled: [1]i32 = [1] (first: one, second: two) := pair()" & LF
+        & "end boundaries" & LF;
    begin
       Read_And_Parse (Text, Codes, Total, Nodes, Held);
       Landin.Testing.Check
@@ -4530,6 +4536,16 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Check
         (Item, Total > 0 and then Held,
          "a committed incomplete pointer is not a contextual address");
+      Read_And_Parse
+        ("view := []u8[0]" & LF, Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Total > 0 and then Held,
+         "an index without a following statement keeps its type commitment");
+      Read_And_Parse
+        ("view := () -> none(value)()" & LF, Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Total > 0 and then Held,
+         "a direct conversion call reports a complete diagnostic");
    end Written_Type_Prefixes_Keep_Their_Boundaries;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

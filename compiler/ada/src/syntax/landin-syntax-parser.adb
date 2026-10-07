@@ -777,27 +777,62 @@ package body Landin.Syntax.Parser is
                   then
                      return False;
                   end if;
-                  --  A following declaration is a complete literal's
-                  --  boundary, even when it shares that literal's line.
-                  if Closing + 2 <= Natural (Last)
-                    and then Tok.Kind
-                      (From, Tok.Token_Index (Closing + 1)) = Tok.Identifier
-                    and then Tok.Kind
-                      (From, Tok.Token_Index (Closing + 2))
-                        in Tok.Colon | Tok.Colon_Equal
+                  if Tok.Kind
+                    (From, Tok.Token_Index (Closing + 1)) = Tok.Left_Paren
                   then
-                     return False;
+                     declare
+                        Next_Close : constant Natural :=
+                          Lookahead (Tok.Token_Index (Closing + 1)).Closing;
+                     begin
+                        if Next_Close /= 0 and then Next_Close < Natural (Last)
+                          and then Tok.Kind
+                            (From, Tok.Token_Index (Next_Close + 1))
+                              = Tok.Colon_Equal
+                        then
+                           return False;
+                        end if;
+                     end;
                   end if;
-                  if Closing + 3 <= Natural (Last)
-                    and then Tok.Kind
-                      (From, Tok.Token_Index (Closing + 1)) = Tok.Kw_Mut
-                    and then Tok.Kind
-                      (From, Tok.Token_Index (Closing + 2)) = Tok.Identifier
-                    and then Tok.Kind
-                      (From, Tok.Token_Index (Closing + 3))
-                        in Tok.Colon | Tok.Colon_Equal
+                  --  A complete following binding, assignment or indexed
+                  --  call remains a statement boundary after a literal.
+                  --  Incomplete type prefixes still commit below.
+                  Position := Tok.Token_Index (Closing + 1);
+                  if Tok.Kind (From, Position) = Tok.Kw_Mut
+                    and then Position < Last
                   then
-                     return False;
+                     Position := Position + 1;
+                  end if;
+                  if Tok.Kind (From, Position) = Tok.Identifier then
+                     declare
+                        Indexed : Boolean := False;
+                     begin
+                        while Position < Last loop
+                           if Tok.Kind (From, Position + 1) = Tok.Dot
+                             and then Position + 2 <= Last
+                             and then Tok.Kind (From, Position + 2)
+                               = Tok.Identifier
+                           then
+                              Position := Position + 2;
+                           elsif Tok.Kind (From, Position + 1)
+                             = Tok.Left_Bracket
+                             and then Lookahead (Position + 1).Closing /= 0
+                           then
+                              Indexed := True;
+                              Position := Tok.Token_Index
+                                (Lookahead (Position + 1).Closing);
+                           else
+                              exit;
+                           end if;
+                        end loop;
+                        if Position < Last
+                          and then (Tok.Kind (From, Position + 1)
+                            in Tok.Colon | Tok.Colon_Equal | Tok.Equal
+                            or else (Indexed and then Tok.Kind
+                              (From, Position + 1) = Tok.Left_Paren))
+                        then
+                           return False;
+                        end if;
+                     end;
                   end if;
                   Position := Index + 1;
                   while Natural (Position) < Closing loop
@@ -9406,7 +9441,9 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Left_Paren then
                   Complain
                     (Syn.Token_Expected, Here,
-                     "a conversion result cannot be called directly");
+                     "a conversion result cannot be called directly",
+                     Note => "[0310]: a conversion is a call-result boundary",
+                     Related => Starts, Because => "the conversion type");
                   Advance;
                   Resync_Parentheses;
                end if;
