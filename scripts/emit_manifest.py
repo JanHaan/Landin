@@ -102,6 +102,7 @@ REFUSAL_PAIRS = {
     ("r491-symbolic-c-layout", "cortex-m0"),
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
+    ("written-type-c-function", "cortex-m0"),
 }
 BASE_EXPECTED_REFUSALS = {
     "%s|%s|%s" % (fixture, target, mode)

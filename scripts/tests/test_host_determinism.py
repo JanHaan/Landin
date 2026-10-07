@@ -97,6 +97,18 @@ class Comparison(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
 
+    def test_written_c_function_refusal_is_confined_to_cortex(self):
+        for target in ("cortex-m0", "linux-x86-64", "linux-arm64",
+                       "darwin-arm64", "freebsd-x86-64", "freebsd-arm64",
+                       "linux-rv64"):
+            other = dict(BASE)
+            key = (f"written-type-c-function|{target}|debug"
+                   "|optimize=size|specialize=auto")
+            other[key] = "refused:1"
+            result = compare(other, dict(other))
+            self.assertEqual(result.returncode, 0 if target == "cortex-m0" else 1,
+                             result.stderr)
+
     def test_all_expected_refusals_still_fail(self):
         refused = {"external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1"}
         result = compare(refused, dict(refused))
