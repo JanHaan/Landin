@@ -1,5 +1,5 @@
 class: positive
-summary: written scalar conversion families retain numeric, bool, pointer, distinct and static-fold behavior
+summary: written generic scalar types retain numeric, bool, pointer, distinct and static-fold conversion behavior
 program: main.ldn
-constructs: 0310, 0470, 0650, 0700, 1880, 1950
+constructs: 0310, 0470, 0650, 0700, 1280, 1880, 1950
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

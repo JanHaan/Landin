@@ -1,0 +1,7 @@
+scalar: type (item: type) = item
+narrow: (source: u16) -> (result: u8) =
+    result = scalar(u8)(source)
+end narrow
+public main: () -> (code: i32) =
+    code = i32(narrow(300))
+end main

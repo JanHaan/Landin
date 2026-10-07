@@ -1,0 +1,2 @@
+scalar: type (item: type) = item
+too_large: u8 = scalar(u8)(u16(300))

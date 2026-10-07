@@ -2082,6 +2082,9 @@
     "runtime/written-type-composite-extraction": {
       "mode": "execute"
     },
+    "runtime/written-type-generic-range-traps": {
+      "mode": "execute"
+    },
     "runtime/written-type-literal-pointer-controls": {
       "mode": "execute"
     },
