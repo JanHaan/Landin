@@ -18,6 +18,13 @@ elsif compiler.arch == arm64 then
             out _ at x23, out _ at x24, out _ at x25, out _ at x26,
             out _ at x27, out _ at x28)
     end clobber
+elsif compiler.arch == rv64 then
+    clobber: (seed: u64) -> (r: u64) =
+        r = assembler.block(
+            "mv x9, {s}\nmv x18, {s}\nmv x19, {s}\nmv x20, {s}\nmv x21, {s}\nmv x22, {s}\nmv x23, {s}\nmv x24, {s}\nmv x25, {s}\nmv x26, {s}\nmv x27, {s}\naddi {r}, x27, 1",
+            in s: u64 at general = seed, out r: u64 at general,
+            out _ at x9, out _ at x18, out _ at x19, out _ at x20, out _ at x21, out _ at x22, out _ at x23, out _ at x24, out _ at x25, out _ at x26, out _ at x27)
+    end clobber
 else
     clobber: (seed: u64) -> (r: u64) =
         r = u64(assembler.block(

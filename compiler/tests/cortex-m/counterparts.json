@@ -9,14 +9,14 @@
     ],
     "fixed-conditional-generic-runtime": [
       [
-        "compiler.arch == arm64)",
-        "compiler.arch == arm64 or compiler.arch == cortex_m0)"
+        "compiler.arch == rv64)",
+        "compiler.arch == rv64 or compiler.arch == cortex_m0)"
       ]
     ],
     "r430-fixed-tools": [
       [
-        "compiler.arch == arm64)",
-        "compiler.arch == arm64 or compiler.arch == cortex_m0)"
+        "compiler.arch == rv64)",
+        "compiler.arch == rv64 or compiler.arch == cortex_m0)"
       ]
     ],
     "pointer-unions": [

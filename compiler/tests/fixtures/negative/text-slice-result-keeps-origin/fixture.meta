@@ -3,4 +3,4 @@ summary: a text subslice derives from its source and cannot escape without a dec
 constructs: 0430, 0570, 0600, 0790, 1050
 program: program.ldn
 codes: L0316
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,5 +2,5 @@ class: negative
 summary: D76 keeps labels complete unique and typed while D84 owns array shape
 constructs: 0410, 0520, 0530, 0670, 0680, 0690, 0700, 0710, 1790, 1795, 1810, 1900
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0310, L0309, L0308, L0301, L0301, L0301, L0334

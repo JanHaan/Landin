@@ -1,18 +1,18 @@
---  The selected SysV, Darwin arm64 or standard AAPCS64 LP64 C scalar
+--  The selected SysV, Darwin, standard AAPCS64 or RISC-V LP64D C scalar
 --  spelling layer. These are ordinary aliases, not distinct scalar kinds: an
 --  extern(c) signature keeps the same Landin scalar identity that its C
 --  spelling names.
 --
 --  c_char is the selected ABI's plain char, a numeric byte and never Landin's
 --  Unicode scalar u32: signed i8 under SysV and Apple's arm64 ABI, and
---  unsigned u8 under the standard AAPCS64, as on Linux and FreeBSD arm64.
+--  unsigned u8 under standard AAPCS64 and RISC-V LP64D.
 
 --  landin/compiler is implicit. The ABI fact, not pointer width or
 --  architecture alone, keeps LP64 aliases from crossing data models.
 compiler.assert(compiler.c_sysv_lp64 or compiler.c_darwin_lp64
-                or compiler.c_aapcs64_lp64)
+                or compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d)
 
-fixed if compiler.c_aapcs64_lp64 then
+fixed if compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d then
     public c_char: type = u8
 else
     public c_char: type = i8

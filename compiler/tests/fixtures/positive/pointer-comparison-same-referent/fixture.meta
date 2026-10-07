@@ -2,4 +2,4 @@ class: positive
 summary: [1890] two pointers of one referent type compare by address, whatever their permission
 program: program.ldn
 constructs: 0350, 0430, 1890
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

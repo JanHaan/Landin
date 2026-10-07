@@ -2,12 +2,13 @@ refine - the Landin bootstrap compiler
 no release version is assigned
 language frontend: scanner, parser, names, types, definite assignment
 target-neutral IR: lowered and verified
-backends: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64 and cortex-m0 assembly
+backends: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64 and cortex-m0 assembly
 executable output: assembled and linked by a target-selected native toolchain
-targets described: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, synthetic-32
+targets described: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0, synthetic-32
 levels of linux-x86-64: x86-64-v1, x86-64-v2, x86-64-v3, x86-64-v4
 levels of linux-arm64: armv8-a, armv8.1-a
 levels of darwin-arm64: armv8-a, armv8.1-a
 levels of freebsd-x86-64: x86-64-v1, x86-64-v2, x86-64-v3, x86-64-v4
 levels of freebsd-arm64: armv8-a, armv8.1-a
+levels of linux-rv64: rv64gc, rv64gc_zba, rv64gc_xtheadba, rv64gc_zba_xtheadba
 levels of cortex-m0: armv6-m, armv7-m, armv7e-m

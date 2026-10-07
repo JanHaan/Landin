@@ -3,4 +3,4 @@ summary: [1950] refuses a known local array index outside its length
 constructs: 0080, 0520, 1810, 1950
 program: program.ldn
 codes: L0306
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

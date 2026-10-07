@@ -3,4 +3,4 @@ summary: a trailing inline field separator requires another named field without 
 program: main.ldn
 codes: L0100
 constructs: 0670, 1795
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: LP64D unsigned word arguments fill register and overflow-stack slots canonically, and high-bit values survive both native call directions
+program: program.ldn
+c-sources: peer.c
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580
+targets: linux-rv64

@@ -3,7 +3,7 @@ summary: D51 requires a typed local initializer to match its source field shape
 constructs: 0520, 0670, 0750, 1740, 1810, 1820
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/struct-array-field-initializer-shape-mismatch/program.ldn
 status: 1

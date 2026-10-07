@@ -10,6 +10,8 @@ explains the package boundaries, not a second work list.
 | object format, symbol prefix, available backend/debug format, hosted system and triplet | `Landin.Targets.Capabilities` |
 | source-level C subset eligibility | checking, using capability queries |
 | physical C transport | backend ABI planner; separate SysV, AAPCS64 (the standard and Apple's variant) and Cortex-M planners |
+| RV64 C carrier placement | `Landin.Backend.RiscV_ABI` |
+| RV32/RV64 instruction selection primitives | `Landin.Backend.RiscV_Instructions` |
 | arm64 object-format spelling | `Landin.Backend.Arm64.Platform` |
 | ELF directive spelling shared by ELF backends | `Landin.Backend.ELF` |
 | each hosted system's libc spelling under the runtime bridge | `Landin.Backend.Hosted_ABI` |
@@ -121,7 +123,8 @@ write-open bridge passes its mode in w2 rather than on Apple's variadic stack.
 ## C aliases and generated bindings
 
 `core/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or
-compiler.c_aapcs64_lp64`, and its `c_char` is `u8` under the standard AAPCS64
+compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d`, and its `c_char` is `u8`
+under standard AAPCS64 and RISC-V LP64D
 and `i8` otherwise. Each fact identifies its own implemented ABI, not LP64
 generally. Generated bindings
 assert the selected fact. The generator supports `x86_64-pc-linux-gnu`, the
@@ -147,6 +150,7 @@ ABI, is the same at every level of a family.
 | `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly, and `-Wa,-march=` with the level, at every level |
 | `freebsd-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 shifts from v3 | GNU as with `-Wa,-march=generic64` plus the selected extensions; no loader level note |
 | `freebsd-arm64` | `armv8-a` | `armv8.1-a` | LSE atomic read-modify-write | `.arch` and Clang `-march=` with the selected level |
+| `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
@@ -488,7 +492,9 @@ L0502. C signatures, records, varargs and standalone object output remain
 disabled; the explicit `lines` source-debug contract is described above.
 The independent external startup/linker harness remains distinct
 from the compiler-owned firmware path.
-`core/c` and the header generator still accept only their two hosted ABIs.
+`core/c` accepts the explicitly implemented hosted C ABIs; the separate
+header generator supports its declared target set, and Cortex C remains
+disabled.
 
 D231's infallible `noreturn` is shared across target descriptions. Its signature
 identity survives ordinary function values, generics and erased evidence. An
@@ -838,3 +844,46 @@ flash address. QEMU checks poisoned reset and vector/frame state; a separately
 named synthetic model executes the complete program's GPIO/timer/UART/DMA path.
 Its finite count and drain acknowledgment are synthetic premises, not RP2040
 or microbit peripheral behavior. No target layout, MMIO width or ABI changes.
+
+## RV64 Linux
+
+`linux-rv64` selects the native RISC-V ELF backend and the LP64D C convention.
+The RV64 instruction selector is separate from the emitter so its baseline
+and extension decisions can be reused with another integer width. ISA
+strings select sets of extensions; `zba` and `xtheadba` are independent facts,
+with no ordering that makes one imply the other. The baseline is `rv64gc`.
+The default external driver is `riscv64-linux-gnu-gcc`; a caller can select
+another driver with `--toolchain=`. GNU tools receive the selected `-march`
+and `-mabi=lp64d` when linking Landin's own assembly.
+
+[The RV64 lanes](../compiler/tests/rv64/README.md) cross-emit on a supported
+Linux compiler host and execute source-matching, checksum-verified payloads
+on physical RISE runners. Runtime, GDB, C ABI and ISA-level execution each
+have their own verdict. The selected vendor extension is confirmed by an
+isolated instruction probe before extended programs run. The baseline and
+extended operation are both inspected in the linked routine and executed;
+a separate assembly block establishes baseline refusal. This supplies no
+claim of native RV64 Ada compiler-host support.
+
+The RV64 C planner flattens eligible floating and mixed records at actual
+field offsets, assigns independent a0–a7 and fa0–fa7 banks, and falls back to
+the integer convention when either required bank cannot hold a whole value.
+Two integer chunks may split between a7 and the stack; records above sixteen
+bytes use a pointer to a caller-owned copy. The hidden indirect result
+consumes a0. Every unnamed variadic argument uses integer transport,
+including floating bit patterns. This placement remains outside the
+verified target-neutral IR.
+
+The target fact `compiler.c_riscv_lp64d` selects `core/c`'s LP64 aliases,
+including unsigned plain `c_char`. Linux libc record selection stays separate;
+the generic 128-byte `stat` is checked against independently compiled headers.
+
+Integer assembly operands name x5–x7 or x9–x31. x0, return address x1, stack
+pointer x2, global pointer x3, thread pointer x4 and frame pointer x8 remain
+reserved. `general` allocates caller-clobbered registers; declared saved
+registers acquire routine saves. Ordinary blocks cannot transfer control or
+change assembly directives. ELF DWARF and CFI use x8 as the entry CFA, with
+saved return address at CFA−8 and caller frame at CFA−16. The GNU target
+driver receives both `-march=ISA` and `-mabi=lp64d`, keeping user assembly
+within the selected extension set. Modern vector support and Zbb are not
+assumed; the native execution lane confirms XTheadBa before executing it.

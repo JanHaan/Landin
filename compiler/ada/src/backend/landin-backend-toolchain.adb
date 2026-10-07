@@ -414,6 +414,13 @@ package body Landin.Backend.Toolchain is
             Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
          end if;
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.RV64_ELF
+      then
+         Landin.Platform.Add (List, "-march=" & Levels.Name (Level));
+         Landin.Platform.Add (List, "-mabi=lp64d");
+         Landin.Platform.Add (List, "-Wa,--fatal-warnings");
+         Landin.Platform.Add (List, "-Wl,--gc-sections");
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Arm64_ELF
       then
          --  The GNU assembler takes Arm's own level names.  An arm64

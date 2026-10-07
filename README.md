@@ -14,7 +14,8 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.2.5. The compiler can build and run Landin programs
-for Linux x86-64, Linux arm64 and native macOS arm64, and builds firmware for
+for Linux x86-64, Linux arm64, Linux RV64, FreeBSD x86-64 and arm64, and
+native macOS arm64, and builds firmware for
 Cortex-M0. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
 `any`. Hosted containers, allocators, text and I/O in `core`, a complete
@@ -95,14 +96,15 @@ The exact-revision native acceptance that approved every revision through
 every push it runs every target unless the verified explanatory-only reuse
 exception below applies. Full runs cover Linux x86-64, Linux arm64 and macOS
 arm64 natively with GDB
-and LLDB and Cortex-M under QEMU, both compiler modes, and the
+and LLDB, FreeBSD x86-64 and arm64 in accelerated VMs, physical RV64 Linux
+on RISE runners, and Cortex-M under QEMU, both compiler modes, and the
 document, binding and editor-grammar checks. Same-run release build artifacts
 avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
 configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
 x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for all
-six targets in both build modes, and compares emitted assembly digests
+seven targets in both build modes, and compares emitted assembly digests
 across hosts; disagreement fails the aggregate gate. It does not assemble, link or run those programs.
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
@@ -230,10 +232,12 @@ This is the maintained inventory of what the compiler does today:
   and variadic calls, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are
   refused by name.
-- **Targets.** Linux x86-64, Linux arm64, Darwin arm64 and FreeBSD x86-64
-  and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
+- **Targets.** Linux x86-64, Linux arm64, Linux RV64, Darwin arm64 and
+  FreeBSD x86-64 and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
   in [architecture-specific VMs](environments/freebsd/README.md) with separate
-  runtime, C ABI and debugger gate verdicts.
+  runtime, C ABI and debugger gate verdicts. RV64 uses LP64D and cross-emitted
+  payloads on [physical RISE runners](compiler/tests/rv64/README.md), with
+  separate runtime, native GDB, C ABI and ISA-level verdicts.
   Darwin keeps an explicit large-image loader limitation. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
   clearing, typed interrupt and naked functions, vector references, placement
@@ -245,7 +249,9 @@ This is the maintained inventory of what the compiler does today:
 - **CPU feature levels.** A build assumes a level of its target's family,
   selected with `--level=`: x86-64 v1 to v4, arm64's `armv8-a` and
   `armv8.1-a`, and the M profile's `armv6-m`, `armv7-m` and `armv7e-m`, each
-  defaulting to what the backend always emitted. A program reads a level as
+  defaulting to what the backend always emitted. RV64 selects ISA extension
+  sets: `rv64gc` is the baseline, `rv64gc_zba` and `rv64gc_xtheadba` add
+  independent address-generation extensions. A program reads a level as
   `compiler.feature.NAME` in `fixed if`. A level changes instructions and
   never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
   `armv8.1-a` on Linux, macOS and FreeBSD, and hardware division at `armv7-m`, each
@@ -253,7 +259,7 @@ This is the maintained inventory of what the compiler does today:
   an assembly block to the level, and a level runs only on a processor that
   confirms it; an unconfirmed level fails as unverified.
 - **Code generation.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all six targets;
+  whatever the build directory, environment or order, on all seven targets;
   the hosted linked image is not claimed. Compact numeric-array loops,
   explicit `layout(optimal)` placement and optional evidence-proved
   specialization are independent switches.
@@ -269,9 +275,9 @@ This is the maintained inventory of what the compiler does today:
   emulators, each against a generated oracle.
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
-arm64 through 0.2.0; the gate runs the corpus on all six targets today,
-natively on all three hosted targets and under QEMU for Cortex-M, with GDB and
-LLDB. The recorded boundaries stand as measured: the 32 KiB capacity
+arm64 through 0.2.0. The recurring gate runs Linux and Darwin programs
+natively, FreeBSD programs in accelerated VMs and Cortex-M firmware under
+QEMU, with separate GDB and LLDB jobs. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit.
 

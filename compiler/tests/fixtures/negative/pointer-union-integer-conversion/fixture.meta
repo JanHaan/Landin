@@ -3,7 +3,7 @@ summary: D189 a pointer union has no address to convert, because its empty case 
 constructs: 0470, 0480
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-integer-conversion/program.ldn
 status: 1

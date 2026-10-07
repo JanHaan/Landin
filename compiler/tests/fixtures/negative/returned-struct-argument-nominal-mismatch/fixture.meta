@@ -3,7 +3,7 @@ summary: a returned struct argument preserves its nominal result identity
 constructs: 0670, 0710, 1800, 1920
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/returned-struct-argument-nominal-mismatch/program.ldn
 status: 1

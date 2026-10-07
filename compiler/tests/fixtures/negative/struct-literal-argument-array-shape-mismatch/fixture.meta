@@ -3,7 +3,7 @@ summary: an array field in a struct literal argument must match its declared sha
 constructs: 0520, 0670, 0700, 1920
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/struct-literal-argument-array-shape-mismatch/program.ldn
 status: 1

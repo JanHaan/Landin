@@ -26,7 +26,8 @@ package Landin.Targets is
 
    --  Compiler-owned target identity for fixed configuration.  This is not
    --  parsed from the target label: a future constructor must choose it.
-   type Architecture is (X86_64, Arm64, Cortex_M0, Synthetic_32_Architecture);
+   type Architecture is
+     (X86_64, Arm64, RV64, Cortex_M0, Synthetic_32_Architecture);
 
    --  The scalar sizes a backend has to lay out.  Sizes, not types: a
    --  four-byte scalar aligns the same way whether a program called it an
@@ -55,6 +56,9 @@ package Landin.Targets is
    --  unequal and select different C transport and object formats.
    function Linux_Arm64 return Target_Facts;
 
+   --  RV64GC Linux, little-endian LP64D with a 16-byte stack alignment.
+   function Linux_RV64 return Target_Facts;
+
    function FreeBSD_X86_64 return Target_Facts;
    function FreeBSD_Arm64 return Target_Facts;
 
@@ -74,7 +78,7 @@ package Landin.Targets is
    --  AAPCS64 is Linux's and FreeBSD's alike, and Apple's is a variant.
    type C_ABI_Kind is
      (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, AAPCS64_LP64,
-      Arm_AAPCS32_Soft);
+      RiscV_LP64D, Arm_AAPCS32_Soft);
 
    function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
 

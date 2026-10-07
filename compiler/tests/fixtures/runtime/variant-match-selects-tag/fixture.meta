@@ -4,5 +4,5 @@ summary: D77 branches on the selected unfolded variant tag without reading paylo
 constructs: 0080, 0190, 0540, 0670, 0680, 0690, 1210, 1740, 1790, 1795, 1810, 1900
 program: main.ldn
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0326

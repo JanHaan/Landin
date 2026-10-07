@@ -2,7 +2,7 @@ class: negative
 summary: explicit register access refusal no-read
 program: program.ldn
 constructs: 0730, 0740, 0850
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0344
 args: ../tests/fixtures/negative/r640-register-no-read/program.ldn
 expect: expected.txt

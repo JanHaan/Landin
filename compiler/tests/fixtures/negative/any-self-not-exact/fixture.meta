@@ -3,7 +3,7 @@ summary: erased self points directly to the represented type rather than a neste
 program: main.ldn
 codes: L0342
 constructs: 0430, 1230, 1240, 1370, 1380, 1390
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/any-self-not-exact/main.ldn
 status: 1

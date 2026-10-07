@@ -5,4 +5,4 @@ args: --root=../.. ../tests/fixtures/negative/core-map-key-frame-escape
 status: 1
 codes: L0314
 constructs: 0430, 0770, 0780, 0790, 1230, 1240, 1340, 1350, 1360
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

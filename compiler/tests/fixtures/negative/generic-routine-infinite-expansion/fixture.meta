@@ -2,7 +2,7 @@ class: negative
 summary: recursion into one generic template at a different active tuple is not a finite instance graph
 constructs: 1290, 1920
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0340
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-routine-infinite-expansion/program.ldn

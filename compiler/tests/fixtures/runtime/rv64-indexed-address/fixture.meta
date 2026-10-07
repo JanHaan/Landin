@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: rv64 indexed address
+constructs: 1500, 1630
+program: main.ldn
+status: 42
+targets: linux-rv64
+levels: rv64gc, rv64gc_xtheadba

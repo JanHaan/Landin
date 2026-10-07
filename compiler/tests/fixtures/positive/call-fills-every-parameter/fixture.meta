@@ -2,4 +2,4 @@ class: positive
 summary: [1920] a call names every parameter exactly once and in order, and has the type of the named return
 constructs: 1920
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -4,5 +4,5 @@ summary: recovered pointer and slice array places preserve exits before address 
 program: main.ldn
 status: 42
 constructs: 0410, 0430, 0520, 0570, 0670, 0940, 1030, 1050, 1810, 1820, 1920
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0326

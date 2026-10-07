@@ -1,7 +1,7 @@
 class: negative
 summary: D240 withdraws the compiler vector intrinsics; the tool reference names [0590]'s element-wise operators instead of a pending item
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 args: ../tests/fixtures/negative/r720-vector-intrinsic-withdrawn/main.ldn
 codes: L0203
 status: 1

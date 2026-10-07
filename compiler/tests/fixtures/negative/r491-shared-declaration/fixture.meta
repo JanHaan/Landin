@@ -3,4 +3,4 @@ summary: shared names in an inferred binding keep a named boundary refusal at mo
 program: program.ldn
 codes: L0010, L0010
 constructs: 0100, 1790, 1830
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

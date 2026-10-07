@@ -3,7 +3,7 @@ summary: frame escape notes prefer copied payloads and value parameters over joi
 program: main.ldn
 codes: L0314, L0314, L0314, L0314
 constructs: 0770, 0780, 1210
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/r491-escape-related-source/main.ldn
 status: 1

@@ -1,7 +1,7 @@
 class: negative
 summary: D236 records a fixed-array element of a range subtype as [0660]'s permanent source-form boundary, named in the report
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 args: ../tests/fixtures/negative/r720-range-subtype-array-element/main.ldn
 codes: L0304
 status: 1

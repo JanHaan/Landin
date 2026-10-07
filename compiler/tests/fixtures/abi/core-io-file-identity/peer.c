@@ -24,10 +24,10 @@ _Static_assert(offsetof(struct stat, st_size) == 112, "FreeBSD trailing fields")
 _Static_assert(sizeof(struct stat) == 144, "Darwin stat extent");
 _Static_assert(sizeof(((struct stat *)0)->st_dev) == 4, "Darwin device width");
 _Static_assert(offsetof(struct stat, st_size) == 96, "Darwin trailing fields");
-#elif defined(__aarch64__)
-_Static_assert(sizeof(struct stat) == 128, "AAPCS64 stat extent");
+#elif defined(__aarch64__) || (defined(__riscv) && __riscv_xlen == 64)
+_Static_assert(sizeof(struct stat) == 128, "asm-generic Linux stat extent");
 _Static_assert(sizeof(((struct stat *)0)->st_dev) == 8, "Linux device width");
-_Static_assert(offsetof(struct stat, st_size) == 48, "AAPCS64 trailing fields");
+_Static_assert(offsetof(struct stat, st_size) == 48, "asm-generic Linux trailing fields");
 #elif defined(__x86_64__)
 _Static_assert(sizeof(struct stat) == 144, "SysV stat extent");
 _Static_assert(sizeof(((struct stat *)0)->st_dev) == 8, "Linux device width");

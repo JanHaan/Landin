@@ -3,4 +3,4 @@ summary: a text range result stays immutable through its converted byte view
 constructs: 0310, 0430, 0570, 0600, 1900
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

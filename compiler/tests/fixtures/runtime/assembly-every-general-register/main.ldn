@@ -36,6 +36,18 @@ elsif compiler.arch == arm64 then
         --  18 * 10 + 153
         code = if spread(10) == 333 then 42 else 1 end if
     end main
+elsif compiler.arch == rv64 then
+    spread: (base: u64) -> (total: u64) =
+        (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) := assembler.block(
+            "addi {b}, {a}, 1\naddi {c}, {a}, 2\naddi {d}, {a}, 3\naddi {e}, {a}, 4\naddi {f}, {a}, 5\naddi {g}, {a}, 6\naddi {h}, {a}, 7\naddi {i}, {a}, 8\naddi {j}, {a}, 9\naddi {k}, {a}, 10\naddi {l}, {a}, 11\naddi {m}, {a}, 12\naddi {n}, {a}, 13\naddi {o}, {a}, 14",
+            inout a: u64 at general = base,
+            out b: u64 at general, out c: u64 at general, out d: u64 at general, out e: u64 at general, out f: u64 at general, out g: u64 at general, out h: u64 at general, out i: u64 at general, out j: u64 at general, out k: u64 at general, out l: u64 at general, out m: u64 at general, out n: u64 at general, out o: u64 at general)
+        total = a + b + c + d + e + f + g + h + i + j + k + l + m + n + o
+    end spread
+    public main: () -> (code: i32) =
+        --  15 * 10 + 105
+        code = if spread(10) == 255 then 42 else 1 end if
+    end main
 else
     spread: (base: u32) -> (total: u32) =
         (a, b, c, d, e, f, g, h) := assembler.block(

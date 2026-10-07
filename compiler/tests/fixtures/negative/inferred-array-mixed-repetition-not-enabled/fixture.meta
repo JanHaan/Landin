@@ -3,4 +3,4 @@ summary: an inferred local does not admit mixed-prefix repetition
 constructs: 0040, 0050, 0520, 0560, 1830
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

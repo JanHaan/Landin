@@ -3,7 +3,7 @@ summary: D189 the empty case is written as the atom the union reserves zero for,
 constructs: 0470, 0480
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-from-an-integer/program.ldn
 status: 1

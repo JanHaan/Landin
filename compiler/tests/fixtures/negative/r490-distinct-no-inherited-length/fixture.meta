@@ -3,4 +3,4 @@ summary: a distinct array representation does not inherit an ordinary array leng
 program: main.ldn
 codes: L0301
 constructs: 0370, 0520, 0650, 1795
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

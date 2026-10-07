@@ -3,7 +3,7 @@ summary: a text range takes exact usize code-unit offsets without implicit integ
 constructs: 0310, 0570, 0600, 1820
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/text-slice-needs-usize-bounds/program.ldn
 status: 1

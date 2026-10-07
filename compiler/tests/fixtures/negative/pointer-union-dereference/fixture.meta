@@ -3,7 +3,7 @@ summary: D189 a pointer union is matched before it is read, so `.val` cannot nam
 constructs: 0430, 0480, 1210
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-dereference/program.ldn
 status: 1

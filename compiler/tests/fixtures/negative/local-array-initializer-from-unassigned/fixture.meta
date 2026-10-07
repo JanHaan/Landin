@@ -3,4 +3,4 @@ summary: D21 requires every element of an inferred initializer source before cop
 constructs: 0080, 0110, 0520, 1810, 1910
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

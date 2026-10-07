@@ -3,4 +3,4 @@ summary: D50 lets an immutable destination own the report before an unassigned f
 constructs: 0520, 0670, 0750, 1740, 1820
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

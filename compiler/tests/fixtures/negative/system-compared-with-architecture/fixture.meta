@@ -3,7 +3,7 @@ summary: The operating system and architecture occupy distinct fixed equality do
 program: main.ldn
 codes: L0301
 constructs: 1500, 1560
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/system-compared-with-architecture/main.ldn
 status: 1

@@ -3,4 +3,4 @@ summary: D245 a letter directly after a float belongs to it, so a C-style width 
 program: main.ldn
 codes: L0321
 constructs: 0210, 1770
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

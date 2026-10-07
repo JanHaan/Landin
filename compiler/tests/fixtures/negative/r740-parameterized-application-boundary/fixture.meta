@@ -6,4 +6,4 @@ args: ../tests/fixtures/negative/r740-parameterized-application-boundary/program
 codes: L0304
 status: 1
 constructs: 0520, 1350, 1790, 1795
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -3,4 +3,4 @@ summary: a raw literal's byte view remains read-only after binding
 constructs: 0070, 0280, 0390, 0570, 1900
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

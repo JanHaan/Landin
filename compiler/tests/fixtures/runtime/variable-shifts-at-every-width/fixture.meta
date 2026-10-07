@@ -4,5 +4,5 @@ summary: shifts by an amount known only at run time fill with zeros at and beyon
 constructs: 0320, 1800, 1890, 1920
 program: main.ldn
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 levels: x86-64-v3

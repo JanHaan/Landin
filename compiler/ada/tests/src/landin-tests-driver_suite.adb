@@ -115,7 +115,7 @@ package body Landin.Tests.Driver_Suite is
          Contains
            (Text,
             "backends: linux-x86-64, linux-arm64, darwin-arm64, "
-            & "freebsd-x86-64, freebsd-arm64 and cortex-m0"
+            & "freebsd-x86-64, freebsd-arm64, linux-rv64 and cortex-m0"
             & " assembly"),
          "identity names the assembly backend it has");
       Landin.Testing.Check
@@ -3137,6 +3137,8 @@ package body Landin.Tests.Driver_Suite is
          & " and compiler.c_aapcs64_lp64))" & LF
          & "compiler.assert((compiler.c_darwin_lp64"
          & " or compiler.c_aapcs64_lp64) == (compiler.arch == arm64))" & LF
+         & "compiler.assert(compiler.c_riscv_lp64d"
+         & " == (compiler.arch == rv64))" & LF
          & "compiler.assert(true or (1 / 0 == 0))" & LF
          & "compiler.assert(not (false and (1 / 0 == 0)))" & LF
          & "compiler.assert(compiler.build_mode == debug)" & LF
@@ -3147,12 +3149,13 @@ package body Landin.Tests.Driver_Suite is
          & "compiler.assert(sizeof usize == 8)" & LF
          & "compiler.assert(alignof usize == 8)" & LF
          & "end if" & LF);
-      for Target in 1 .. 4 loop
+      for Target in 1 .. 5 loop
          declare
             Args : constant Landin.Platform.Path_List := Both
               ((if Target = 1 then "--target=linux-x86-64"
                 elsif Target = 2 then "--target=darwin-arm64"
                 elsif Target = 3 then "--target=linux-arm64"
+                elsif Target = 4 then "--target=linux-rv64"
                 else "--target=synthetic-32"), "facts.ldn");
             Result : constant Landin.Driver.Outcome :=
               Landin.Driver.Execute (Args, Host, Tools);

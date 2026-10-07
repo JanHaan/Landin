@@ -5,4 +5,4 @@ args: --root=../.. ../tests/fixtures/negative/core-io-world-readonly-receiver
 codes: L0342
 status: 1
 constructs: 0430, 1230, 1240, 1370, 1380, 1660, 1680, 1975
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

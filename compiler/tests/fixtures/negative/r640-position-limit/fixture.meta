@@ -2,7 +2,7 @@ class: negative
 summary: packed representation refusal position-limit
 program: program.ldn
 constructs: 0730, 0750
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0336
 args: ../tests/fixtures/negative/r640-position-limit/program.ldn
 expect: expected.txt

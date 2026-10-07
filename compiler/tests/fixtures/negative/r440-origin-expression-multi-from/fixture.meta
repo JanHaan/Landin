@@ -3,4 +3,4 @@ summary: Expression-body multi-result forwarding must validate every returned or
 constructs: 0480, 0790, 0930
 program: program.ldn
 codes: L0316
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

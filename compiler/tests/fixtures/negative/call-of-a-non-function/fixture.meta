@@ -3,7 +3,7 @@ summary: [1920] requires a function-valued callee rather than deferring calls th
 constructs: 1000, 1920
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/call-of-a-non-function/program.ldn
 status: 1

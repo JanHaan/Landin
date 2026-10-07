@@ -3,4 +3,4 @@ summary: a hosted text iterable Item is an immutable copied Unicode scalar
 codes: L0303
 constructs: 0260, 0600, 1150, 1160, 1320
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

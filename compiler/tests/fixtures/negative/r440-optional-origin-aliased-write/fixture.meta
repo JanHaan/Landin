@@ -3,4 +3,4 @@ summary: Writing a present static pointer through an alias cannot leave a reusab
 constructs: 0430, 0480, 0790
 program: program.ldn
 codes: L0316
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

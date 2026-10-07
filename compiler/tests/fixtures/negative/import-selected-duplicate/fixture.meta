@@ -5,4 +5,4 @@ args: --root=../tests/fixtures/negative/import-selected-duplicate/root ../tests/
 codes: L0200
 status: 1
 constructs: 1440, 1450, 1850
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

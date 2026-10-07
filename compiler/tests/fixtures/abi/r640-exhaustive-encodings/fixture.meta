@@ -5,5 +5,5 @@ c-sources: peer.c
 c-args: -O2
 status: 42
 constructs: 0630, 0730, 1120, 1975
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 profiles: specialization

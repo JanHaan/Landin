@@ -3606,10 +3606,11 @@ end if
 ```
 
 The compiler exposes `compiler.arch`, whose compiler-owned values are
-`x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
+`x86_64`, `arm64`, `rv64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
 (`debug` or `release`), plus `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`
-and `compiler.c_aapcs64_lp64`, bools identifying the selected C ABI rather
+`compiler.c_aapcs64_lp64` and `compiler.c_riscv_lp64d`, bools identifying
+the selected C ABI rather
 than inferring it from pointer width or architecture: Linux and Apple
 arm64 share `compiler.arch == arm64` and answer differently here.
 `compiler.os` names the target's hosted system, `linux`, `darwin`, `freebsd`
@@ -3619,7 +3620,9 @@ can differ, so a library binding can select those records by this fact.
 A build also assumes a CPU feature level of its target, selected with
 `--level=` and defaulting to the oldest processor of the architecture, and
 `compiler.feature.NAME` is a bool saying whether that level has the feature
-NAME, such as `bmi2` on x86-64, `lse` on arm64 or `idiv` on the M profile.
+NAME, such as `bmi2` on x86-64, `lse` on arm64, `idiv` on the M profile or
+`xtheadba` on RV64. RV64 levels are ISA strings, default `rv64gc`; optional
+`zba` and `xtheadba` extensions combine independently, keeping LP64D.
 A feature of another architecture is false, so the test needs no
 `compiler.arch` before it:
 
@@ -3820,7 +3823,8 @@ adapters, with policy for facts a header does not say: nullability, ownership,
 `from`, retention and incoming-varargs extraction. That policy is not a
 handwritten replacement signature. [1975] defines the selected boundaries,
 Linux x86-64 SysV AMD64 LP64, Apple's arm64 variant of AAPCS64 and Linux
-arm64's standard AAPCS64; the normative rules alone are not treated as
+arm64's standard AAPCS64, shared with FreeBSD, and RV64 Linux LP64D; the
+normative rules alone are not treated as
 evidence that a boundary or its code generation is complete.
 
 A C pointer may be null and a Landin pointer may not. A foreign declaration
@@ -3842,11 +3846,11 @@ allocator backing uses a named union, not a fake `ptr(1)` allocation.
 
 The ordinary `core/c` aliases name C's signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
-`compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64`
-admits the three explicitly supported hosted ABIs. Equal pointer widths alone
+`compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
+or compiler.c_riscv_lp64d` admits the four explicitly supported hosted ABIs. Equal pointer widths alone
 do not admit another ABI. Plain `c_char` is the ABI's plain `char`, a numeric
 byte and not a Unicode scalar: `i8` under SysV and Apple's ABI, `u8` under
-the standard AAPCS64 that Linux arm64 uses.
+standard AAPCS64 and RISC-V LP64D.
 
 C-compatible values include integers, bool, pointers, f32/f64, C function
 values and recursive nonempty `layout(c)` structs, including nested struct,

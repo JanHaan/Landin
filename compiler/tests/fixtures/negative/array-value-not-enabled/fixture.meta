@@ -3,4 +3,4 @@ summary: [1930] discarding a whole local array still reads it, so an unassigned 
 constructs: 0520, 1810, 1910, 1930
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

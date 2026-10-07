@@ -7,6 +7,7 @@ with Landin.Hosted;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Hosted_ABI;
 with Landin.Backend.AAPCS64_ABI;
+with Landin.Backend.RiscV_ABI;
 with Landin.Backend.Toolchain;
 with Landin.IR;
 with Landin.Platform.Native;
@@ -123,6 +124,12 @@ package body Landin.Tests.Targets_Suite is
            and then FreeBSD_Arm64 /= Linux_Arm64,
          "FreeBSD shares C transports, with distinct target identities");
       Check_Description
+        (Item, Linux_RV64, "linux-rv64", 64, 8, 16, 16, 8);
+      Landin.Testing.Check
+        (Item, Architecture_Of (Linux_RV64) = RV64
+           and then C_ABI_Of (Linux_RV64) = RiscV_LP64D,
+         "RV64 LP64D is explicit, not inherited from equal LP64 widths");
+      Check_Description
         (Item, Synthetic_32, "synthetic-32",
          Pointer_Bits  => 32,
          Pointer_Align => 4,
@@ -190,6 +197,12 @@ package body Landin.Tests.Targets_Suite is
            Capabilities.Darwin_Arm64_Mach_O
          and then Capabilities.Triplet (Linux_Arm64) = "aarch64-linux-gnu",
          "each arm64 description has its own backend kind and triplet");
+      Landin.Testing.Check
+        (Item, Capabilities.Backend_For (Linux_RV64) = Capabilities.RV64_ELF
+           and then Capabilities.Triplet (Linux_RV64) = "riscv64-linux-gnu"
+           and then Capabilities.Hosted_System_Of (Linux_RV64)
+             = Capabilities.Linux,
+         "RV64 selects its own ELF backend, Linux runtime and GNU driver");
    end Backends_Are_Stated_Per_Target;
 
    --  The driver and the server select through one mapping, so each
@@ -206,6 +219,7 @@ package body Landin.Tests.Targets_Suite is
         (Item,
          Selection.Described ("linux-x86-64") = Linux_X86_64
            and then Selection.Described ("linux-arm64") = Linux_Arm64
+           and then Selection.Described ("linux-rv64") = Linux_RV64
            and then Selection.Described ("freebsd-x86-64") = FreeBSD_X86_64
            and then Selection.Described ("freebsd-arm64") = FreeBSD_Arm64
            and then Selection.Described ("darwin-arm64") = Darwin_Arm64
@@ -346,6 +360,30 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, Holds (Darwin_Arm64, "armv8.1-a"), "lse crc32 rdm",
          "Armv8.1-A makes LSE, CRC32 and RDM mandatory");
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (Linux_RV64)), "rv64gc",
+         "RV64 defaults to GC under LP64D");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_RV64, "rv64gc"), "i m a f d c zicsr zifencei",
+         "G expands into its actual independent extensions");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_RV64, "rv64gc_zba"),
+         "i m a f d c zicsr zifencei zba", "Zba is selected independently");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_RV64, "rv64gc_xtheadba"),
+         "i m a f d c zicsr zifencei xtheadba",
+         "XTheadBa does not imply standard Zba");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_RV64, "rv64gc_zba_xtheadba"),
+         "i m a f d c zicsr zifencei zba xtheadba",
+         "standard and vendor address extensions combine freely");
+      Landin.Testing.Check
+        (Item, not L.Is_Level_Of (Linux_RV64, "rv64g")
+           and then not L.Is_Level_Of (Linux_RV64, "rv64gc_zbb")
+           and then not L.Is_Level_Of (Linux_RV64, "rv32gc")
+           and then not L.Has
+             (L.Default_Level (Linux_X86_64), L.Xtheadba),
+         "unknown ISA strings and foreign extension facts are refused");
       --  A family is the architecture's, so both arm64 descriptions select
       --  the same levels with the same features and default.
       Landin.Testing.Check
@@ -1227,6 +1265,42 @@ package body Landin.Tests.Targets_Suite is
            (Item, Landin.Backend.Toolchain.Driver_For (Darwin_Arm64, ""),
             "/usr/bin/clang", "Darwin selects the native Apple driver");
       end;
+      declare
+         Ignored : Landin.Backend.RiscV_ABI.Classification;
+      begin
+         Ignored := Landin.Backend.RiscV_ABI.Classify
+           (Unit, (Kind => Landin.Types.I32, others => <>), Linux_Arm64);
+         Landin.Testing.Fail (Item, "LP64D classification accepted AAPCS64");
+         pragma Unreferenced (Ignored);
+      exception
+         when Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "LP64D rejects another target's equal LP64 layout");
+      end;
+      Landin.Testing.Check
+        (Item, C.C_Signatures (Linux_RV64) and then C.C_Records (Linux_RV64)
+           and then C.C_Variadic_Calls (Linux_RV64)
+           and then C.Object_Format_Of (Linux_RV64) = C.ELF
+           and then C.Debug_Format_Of (Linux_RV64) = C.ELF_DWARF,
+         "RV64 enables explicit C contracts and source debugging");
+      declare
+         Arguments : constant Landin.Platform.Path_List :=
+           Landin.Backend.Toolchain.Link_Arguments
+             ("a.s", "a", "", Facts => Linux_RV64,
+              Level => Landin.Targets.Levels.Level_Named
+                (Linux_RV64, "rv64gc_xtheadba"));
+      begin
+         Landin.Testing.Check
+           (Item, (for some Arg of Arguments => Arg = "-mabi=lp64d")
+              and then (for some Arg of Arguments =>
+                Arg = "-march=rv64gc_xtheadba")
+              and then (for some Arg of Arguments =>
+                Arg = "-Wa,--fatal-warnings"),
+            "RV64 tools hold every assembly block to its ISA and LP64D");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Backend.Toolchain.Driver_For (Linux_RV64, ""),
+            "riscv64-linux-gnu-gcc", "RV64 selects a GNU target driver");
+      end;
    end Target_Contracts;
 
    procedure Darwin_Transport (Item : in out Landin.Testing.Context);
@@ -1463,6 +1537,7 @@ package body Landin.Tests.Targets_Suite is
    is
       package Asm renames Landin.Targets.Assembly;
       use Ada.Strings.Unbounded;
+      use type Asm.Register_Kind;
 
       function Operand (Name, Register : String; Bits : Bit_Width)
         return Asm.Operand_Register_Choice
@@ -1554,6 +1629,82 @@ package body Landin.Tests.Targets_Suite is
               (Linux_X86_64, Asm.General_Register (Linux_X86_64, Index)),
             "every register general chooses is in the class");
       end loop;
+      Landin.Testing.Check
+        (Item, Asm.Classify (Linux_RV64, "x9") = Asm.Operand_Register
+           and then Asm.Classify (Linux_RV64, "x31") = Asm.Operand_Register
+           and then Asm.Classify (Linux_RV64, "x8") = Asm.Never_Named
+           and then Asm.Classify (Linux_RV64, "x0") = Asm.Never_Named
+           and then Asm.Classify (Linux_RV64, "x32") = Asm.Not_A_Register
+           and then Asm.Classify (Linux_RV64, "x05") = Asm.Not_A_Register,
+         "RV64 declares xN operands without zero, frame or platform aliases");
+      Landin.Testing.Check
+        (Item, Asm.Canonical (Linux_RV64, "t0") = "x5"
+           and then Asm.Canonical (Linux_RV64, "t2") = "x7"
+           and then Asm.Canonical (Linux_RV64, "t3") = "x28"
+           and then Asm.Canonical (Linux_RV64, "t6") = "x31"
+           and then Asm.Canonical (Linux_RV64, "a0") = "x10"
+           and then Asm.Canonical (Linux_RV64, "a7") = "x17"
+           and then Asm.Canonical (Linux_RV64, "s1") = "x9"
+           and then Asm.Canonical (Linux_RV64, "s2") = "x18"
+           and then Asm.Canonical (Linux_RV64, "s11") = "x27"
+           and then Asm.Classify (Linux_RV64, "a0") = Asm.Not_A_Register
+           and then not Asm.Overwritten
+             (Linux_RV64, Asm.Canonical (Linux_RV64, "s1"))
+           and then not Asm.Names_Reserved (Linux_RV64, "s1")
+           and then Asm.Names_Reserved (Linux_RV64, "s0")
+           and then Asm.Names_Reserved (Linux_RV64, "fp")
+           and then Asm.Names_Reserved (Linux_RV64, "zero"),
+         "ABI aliases keep canonical operands and saved-register checks");
+      for Index in 0 .. 31 loop
+         declare
+            Image : constant String := Natural'Image (Index);
+            Register : constant String :=
+              "f" & Image (Image'First + 1 .. Image'Last);
+         begin
+            Landin.Testing.Check
+              (Item, Asm.Names_Reserved (Linux_RV64, Register)
+                 = (Index in 8 .. 9 | 18 .. 27),
+               "only preserved FP registers need undeclarable float operands");
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, not Asm.Names_Reserved (Linux_RV64, "fa0")
+           and then not Asm.Names_Reserved (Linux_RV64, "fa7")
+           and then not Asm.Names_Reserved (Linux_RV64, "ft0")
+           and then not Asm.Names_Reserved (Linux_RV64, "ft11")
+           and then Asm.Names_Reserved (Linux_RV64, "fs0")
+           and then Asm.Names_Reserved (Linux_RV64, "fs11"),
+         "FP ABI aliases preserve the caller and callee register distinction");
+      declare
+         Block : Asm.Operand_Register_Array := [Operand ("r", "", 32)];
+         Text : constant String := "add {r}, t0, a0";
+      begin
+         Asm.Choose (Linux_RV64, Text, Block);
+         Landin.Testing.Check
+           (Item, To_String (Block (1).Register) = "x6"
+              and then Asm.Text_Names (Linux_RV64, Text, "x5")
+              and then Asm.Text_Names (Linux_RV64, Text, "x10")
+              and then Asm.Text_Names
+                (Linux_RV64, "add s1,s1,a0", "x9"),
+            "raw ABI aliases exclude the same registers from general");
+      end;
+      for Index in 1 .. Asm.General_Count (Linux_RV64) loop
+         Landin.Testing.Check
+           (Item, Asm.In_General_Class
+              (Linux_RV64, Asm.General_Register (Linux_RV64, Index)),
+            "RV64 general contains precisely allocatable caller registers");
+      end loop;
+      Landin.Testing.Check
+        (Item, Asm.General_Register (Linux_RV64, 1) = "x5"
+           and then Asm.General_Register (Linux_RV64, 4) = "x10"
+           and then Asm.General_Register (Linux_RV64, 12) = "x28"
+           and then Asm.General_Register (Linux_RV64, 15) = "x31"
+           and then Asm.Spelled (Linux_RV64, "x5", 8) = "x5"
+           and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1") = ""
+           and then Asm.Text_Error (Linux_RV64, "jalr x5") /= ""
+           and then Asm.Text_Error (Linux_RV64, "c.beqz x5,label") /= ""
+           and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1 #comment") /= "",
+         "RV64 width spelling and straight-line admission are stated");
    end Assembly_Registers;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

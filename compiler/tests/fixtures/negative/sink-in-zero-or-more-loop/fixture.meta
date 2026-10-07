@@ -3,4 +3,4 @@ summary: a while that may run zero times still leaves the place dead on the path
 program: program.ldn
 codes: L0302, L0302
 constructs: 0430, 0900, 0910, 1140
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

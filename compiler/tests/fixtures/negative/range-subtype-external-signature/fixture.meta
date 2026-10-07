@@ -3,7 +3,7 @@ summary: D188 an external signature refuses a range subtype, whose named return 
 constructs: 0660, 1580
 program: program.ldn
 codes: L0346
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/range-subtype-external-signature/program.ldn
 status: 1

@@ -115,6 +115,6 @@ package Landin.Targets.Assembly is
    --  comment, statement separator or label, and straight-line control.
    --  Which instructions exist is the platform assembler's to say.
    function Text_Error (Facts : Target_Facts; Text : String) return String
-     with Pre => Architecture_Of (Facts) in X86_64 | Arm64;
+     with Pre => Architecture_Of (Facts) in X86_64 | Arm64 | RV64;
 
 end Landin.Targets.Assembly;

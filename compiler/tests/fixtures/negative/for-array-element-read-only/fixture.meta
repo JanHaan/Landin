@@ -3,4 +3,4 @@ summary: a fixed-array element traversed through a read-only slice is not writab
 program: program.ldn
 codes: L0303
 constructs: 0520, 0570, 1150, 1160
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

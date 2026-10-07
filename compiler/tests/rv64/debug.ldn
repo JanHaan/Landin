@@ -1,0 +1,15 @@
+inner: (argument: i32) -> (result: i32) =
+    local: i32 = argument + 1
+    result = local + 1
+end inner
+
+outer: (argument: i32) -> (result: i32) =
+    local: i32 = argument + 10
+    result = inner(local)
+    ready: i32 = result
+    result = ready
+end outer
+
+public main: () -> (code: i32) =
+    code = outer(30)
+end main

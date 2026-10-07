@@ -30,6 +30,16 @@ elsif compiler.arch == arm64 then
                             in x: u32 at general = a,
                             in y: u32 at general = b)
     end pair
+elsif compiler.arch == rv64 then
+    bump: (at: usize) -> none =
+        assembler.block("lw x17, 0({p})\naddiw x17, x17, 1\nsw x17, 0({p})",
+                        in p: usize at general = at, out _ at x17)
+    end bump
+    pair: (a: u32, b: u32) -> (r: u32) =
+        r = assembler.block("addw {r}, {x}, {y}", out r: u32 at general,
+                            in x: u32 at general = a,
+                            in y: u32 at general = b)
+    end pair
 else
     bump: (at: usize) -> none =
         assembler.block("ldr r3, [{p}]\nadds r3, r3, #1\nstr r3, [{p}]",

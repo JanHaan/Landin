@@ -1687,9 +1687,10 @@ addresses; `ptr handler` instead addresses a stored function value.
 The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
 signed plain C `char`, and Linux and FreeBSD arm64's standard AAPCS64 LP64,
-whose plain `char` is unsigned.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
-are their respective fixed bool configuration facts, each true for its own ABI
+whose plain `char` is unsigned, and RV64 Linux LP64D, also with unsigned
+plain `char`.
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
+and `compiler.c_riscv_lp64d` are their respective fixed bool configuration facts, each true for its own ABI
 alone, not guesses from pointer width or architecture spelling. The ordinary
 `core/c` aliases assert one supported fact before exposing `c_char`, `c_schar`,
 `c_uchar`, `c_short`, `c_ushort`,
@@ -1698,8 +1699,9 @@ alone, not guesses from pointer width or architecture spelling. The ordinary
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
 `usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
 C `char` is the selected ABI's plain `char`, a numeric byte and not a Unicode
-scalar: `i8` under SysV and Darwin, `u8` under the standard AAPCS64; `c_schar`
-and `c_uchar` keep their signedness everywhere. A described target's ABI identity
+scalar: `i8` under SysV and Darwin, `u8` under standard AAPCS64 and RISC-V
+LP64D; `c_schar` and `c_uchar` keep their signedness everywhere. A described
+target's ABI identity
 and widths do not imply that its C boundary is implemented. C signature,
 record-layout and variadic-call capabilities are selected explicitly; neither
 `core/c` nor generated bindings may infer them from LP64 alone.
@@ -1756,6 +1758,35 @@ one of its promoted type would be, to the next register of its bank and to
 the stack only when that bank is exhausted. x18 stays reserved there too, so
 one register rule holds wherever `compiler.arch == arm64`.
 
+RV64 Linux uses the RISC-V LP64D psABI: little-endian, 64-bit pointers,
+64-bit `long`, 32-bit `int`, 64-bit ABI floating registers and a stack kept
+16-byte aligned. Scalar alignment is natural, through sixteen bytes; C
+records keep natural field placement and trailing padding. Integer and
+pointer arguments use a0–a7; floating scalars use fa0–fa7 while available.
+A named C record flattening to one or two floating leaves, or one floating
+leaf and one integer or pointer leaf, uses the corresponding independent
+banks if the whole flattened value fits. Flattening includes nested C records
+and arrays at their actual byte offsets. When either required bank cannot
+fit, the whole value falls back to integer transport without consuming the
+floating bank. Other values through sixteen bytes use one or two integer
+chunks. An integer value needing two carriers can split between a7 and the
+stack. Larger C records pass a pointer to a caller-owned copy. Integer
+scalars narrower than 64 bits extend according to their signedness to
+32 bits and then sign-extend to 64 bits, including unsigned 32-bit values.
+Floating register values narrower than 64 bits are NaN-boxed. Stack
+arguments occupy whole eight-byte slots, naturally aligned to at least eight
+and at most sixteen. Results use the same classification in a0–a1 or
+fa0–fa1. An indirect result consumes a0 as an implicit first argument; its
+address need not be returned. Copies stay within the actual object extent.
+Every Landin frame keeps x8 as the entry CFA, the saved return address at
+CFA−8 and previous frame pointer at CFA−16. x0, x1, x2, x3, x4 and x8 are
+unavailable to ordinary assembly operands; integer operands use canonical
+xN names, with `general` selecting caller-clobbered registers. Named
+callee-saved registers are preserved; their raw ABI aliases identify those
+same registers, and only caller-clobbered floating registers may be named
+without float operands. C signature, C record and outgoing
+variadic-call capabilities are enabled explicitly for this ABI.
+
 
 A final `, ...` after at least one fixed parameter marks a variadic C
 signature. It is not [0960]'s `! ...`. Variadic calls use only positional
@@ -1766,8 +1797,11 @@ Outgoing direct and indirect calls promote unnamed f32 to f64 and bool/narrow
 integers to C int; untyped integer and floating literals take i32 and f64
 respectively. Other admitted tail identities remain unchanged. SysV calls
 supply the ABI's SSE-register count; Darwin places every promoted unnamed
-argument in an eight-byte stack slot; the standard AAPCS64 assigns them as
-named arguments. Fixed arguments retain their declared
+argument in an eight-byte stack slot; standard AAPCS64 assigns them as
+named arguments. RISC-V LP64D assigns the promoted unnamed tail by the integer
+convention, including floating-point bit patterns; after one unnamed argument
+goes to the stack, all subsequent unnamed arguments go to the stack.
+Fixed arguments retain their declared
 types. Variadic C function values may be stored and called in Landin, but a C
 callback parameter, result or record field must have a fixed signature.
 A native Landin definition that
@@ -1972,14 +2006,14 @@ discard [1020] and D244 treat that value as they treat a call's.
 
 A register is a name the selected target's table answers for, never text:
 
-| | Cortex-M0 | Linux x86-64 | Darwin arm64 |
-| --- | --- | --- | --- |
-| instruction text | ARMv6-M unified | AT&T | Apple arm64 |
-| operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` |
-| `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` |
-| every ordinary block overwrites | `r0`–`r7`, flags | those, `xmm0`–`xmm15`, flags | those, `v0`–`v7`, `v16`–`v31`, flags |
-| saved by the routine when a block names one | none | `rbx`, `r12`–`r15` | `x19`–`x28` |
-| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30`, and `v8`–`v15` at every width |
+| | Cortex-M0 | Hosted x86-64 | Hosted arm64 | RV64 Linux |
+| --- | --- | --- | --- | --- |
+| instruction text | ARMv6-M unified | AT&T | GNU or Apple arm64 | GNU RISC-V |
+| operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` | `x5`–`x7`, `x9`–`x31` |
+| `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` | `x5`–`x7`, `x10`–`x17`, `x28`–`x31` |
+| every ordinary block overwrites | `r0`–`r7`, flags | those, `xmm0`–`xmm15`, flags | those, `v0`–`v7`, `v16`–`v31`, flags | the `general` row, `f0`–`f7`, `f10`–`f17`, `f28`–`f31` |
+| saved by the routine when a block names one | none | `rbx`, `r12`–`r15` | `x19`–`x28` | `x9`, `x18`–`x27` |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30`, and `v8`–`v15` at every width | `x0`–`x4`, `x8` and their aliases, and `f8`, `f9`, `f18`–`f27` and their aliases |
 
 A fixed register is its full-width name; `general` is the one class and asks
 the compiler to choose a register it does not otherwise name in the block.
@@ -1990,7 +2024,8 @@ block may overwrite the overwritten row; a register the routine saves must be
 declared, as an operand or as `out _ at register`, which is what makes the
 routine save and restore it. A discarded output names one fixed register.
 The text writes `{name}` where an operand's register belongs, spelled at the
-width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`); `{{` and `}}`
+width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses
+its full-width `xN` name for every enabled integer width); `{{` and `}}`
 are literal braces. Every `{name}` must name an operand, every `general`
 operand must be written in the text, and every register the text names at
 any width must be declared or overwritten and never be one no block names.
@@ -1998,7 +2033,13 @@ Frame pointers, stack pointers, link registers, the platform register and
 Cortex-M0's reserved r9 are therefore never named, and no register is
 reserved by the language beyond them. arm64's `v8`–`v15` are callee-saved and
 no operand can declare a float register, so an ordinary block cannot name
-them until float operands exist. The private failure registers are
+them until float operands exist. The same restriction applies to RV64's
+callee-saved floating registers `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`);
+its caller-clobbered floating registers may be named in text without an
+operand. RV64 integer operands use canonical `xN` names, while raw text may
+use the ABI's `a`, `t` and `s` aliases. An alias identifies the same register
+for declaration checks and exclusion from `general`, so naming `s1` requires
+declaring `x9`. The private failure registers are
 overwritten: a failure outcome is copied out as its call returns and is never
 live across a block.
 
@@ -2029,7 +2070,8 @@ MSP/PSP/CONTROL system registers, and take no operands. CPS changes
 PRIMASK at every level and may change FAULTMASK at `armv7-m` or `armv7e-m`;
 barrier operands are `sy` or omitted. BASEPRI and FAULTMASK system registers
 are available at those higher levels. Unsupported system registers remain
-refused. On x86-64 and arm64 the checker refuses control transfer by mnemonic
+refused. On hosted x86-64, arm64 and RV64 the checker refuses control transfer
+by mnemonic
 and leaves which instructions exist to the platform
 assembler. Unencodable operands and instructions remain explicit assembler
 failures under the pinned flags, never a target upgrade. Assembly must not
@@ -2039,8 +2081,9 @@ or on x86-64 leave the direction flag set; an instruction's implicit register
 effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
 Arbitrary machine text cannot prove those obligations.
 
-This compiler lowers every form of assembly on all three targets. The
-synthetic target has no registers and refuses assembly outright.
+This compiler lowers ordinary assembly on every implemented architecture.
+The machine-only naked and shorthand forms retain their Cortex-M contracts.
+The synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
 `link(section: text, align: integer, vector: integer, keep, symbol: text)`.
@@ -13881,7 +13924,7 @@ unresolved normally. Nested conditionals in an inactive arm are parsed but
 not evaluated.
 
 The original fixed expression is closed. It admits bool and mathematical D136 integers,
-the compiler-owned architecture values `x86_64`, `arm64`, `cortex_m0` and
+the compiler-owned architecture values `x86_64`, `arm64`, `rv64`, `cortex_m0` and
 `synthetic_32`, literals, parentheses, unary `-`, D136 arithmetic, integer
 comparisons, bool or architecture equality, and `not`, `and`, `or`.
 `compiler.arch` is the only intrinsic and is recognized only by this stage;
@@ -14065,7 +14108,8 @@ Within a closed configuration expression, integer option values participate
 as D139's mathematical integers; the declared scalar bounds apply when an
 option's value is established, rather than at each arithmetic intermediate.
 An option cannot reuse a compiler-owned configuration atom name: `x86_64`,
-`arm64`, `cortex_m0`, `synthetic_32`, `little`, `big`, `debug` or `release`.
+`arm64`, `rv64`, `cortex_m0`, `synthetic_32`, `little`, `big`, `debug` or
+`release`.
 That collision is L0390; a reserved tool namespace name is L0203. An option
 inside any fixed arm or with a type other than `bool` or an enabled integer
 scalar is likewise L0390, even when its default is a fixed value. An invalid
@@ -14099,7 +14143,8 @@ request fact, default debug; it does not change runtime checks or optimization.
 `compiler.arch` retains D139's constructor-selected architecture;
 `compiler.word_size` counts bits and `compiler.byte_order` is `little` or `big`.
 D204, D226 and D256 add the C ABI bools `compiler.c_sysv_lp64`,
-`compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`, and D255 adds
+`compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`; D265 adds
+`compiler.c_riscv_lp64d`, and D255 adds
 `compiler.feature.NAME`, a bool for each feature of the selected CPU feature
 level. D264 adds `compiler.os` in its own equality domain, with `linux`,
 `darwin`, `freebsd` and `freestanding` values. These facts are fixed
@@ -14387,7 +14432,8 @@ model, recursive aggregate classes or target guard on C scalar aliases.
 **Chosen:** [1975]'s Linux SysV AMD64 LP64 matrix, signed C char, recursive
 nonempty C structs and separate INTEGER/SSE banks define this boundary.
 `compiler.c_sysv_lp64` (and D226’s `compiler.c_darwin_lp64` and D256's
-`compiler.c_aapcs64_lp64`) is a fixed bool supplied by the selected ABI;
+`compiler.c_aapcs64_lp64`, and D265's `compiler.c_riscv_lp64d`) is a fixed
+bool supplied by the selected ABI;
 `core/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
 Register exhaustion rolls an aggregate wholly onto the stack; MEMORY results
 use the C hidden destination. The internal Landin convention is unchanged.
@@ -15459,12 +15505,19 @@ A level is a set of features; the levels and what each holds are:
 | M profile | `armv6-m`, the default | none |
 | | `armv7-m` | `thumb2`, `idiv` |
 | | `armv7e-m` | `thumb2`, `idiv`, `dsp` |
+| RV64 | `rv64gc`, the default | `i`, `m`, `a`, `f`, `d`, `c`, `zicsr`, `zifencei` |
+| | `rv64gc_zba` | those, and `zba` |
+| | `rv64gc_xtheadba` | baseline, and `xtheadba` |
+| | `rv64gc_zba_xtheadba` | baseline, `zba` and `xtheadba` |
 
 The x86-64 levels are the [x86-64 psABI](https://gitlab.com/x86-psABIs/x86-64-ABI)'s
 microarchitecture levels; the Arm ones are the architecture versions of the
 [A-profile](https://developer.arm.com/documentation/ddi0487/mc/) and
 [M-profile](https://developer.arm.com/documentation/ddi0403/ee/) manuals, in
-GCC's spelling. Synthetic-32 describes no processor and has no level. Each
+GCC's spelling. RV64 levels are the supported ISA strings of D265; `g`
+expands to I, M, A, F, D, Zicsr and Zifencei, and `c` adds compressed
+instructions. Zba and XTheadBa are independent sets, not successive ranks.
+Synthetic-32 describes no processor and has no level. Each
 default is the level every backend emitted for before levels existed, so a
 build that selects none is the build it was. `cortex_m0` names the M-profile
 backend's family, not its core: a build at `armv7-m` is still `cortex-m0`'s
@@ -15498,15 +15551,18 @@ acquire-release form inside the same full fences strengthens every ordering
 exactly as much as the loop does. At `armv7-m` a 32-bit quotient is `sdiv` or
 `udiv` and its remainder `mls`, after the same zero-divisor and
 minimum-over-minus-one guards, rather than a call to the runtime's
-`__aeabi_idivmod`; a 64-bit one still calls the runtime. Beyond that: every level of a family shares one
+`__aeabi_idivmod`; a 64-bit one still calls the runtime. RV64 indexed address
+calculation uses Zba's `sh1add`, `sh2add` or `sh3add` when its scale fits,
+XTheadBa's `th.addsl` when selected without Zba, and the same shift/add
+sequence at baseline; bounds and overflow checks are unchanged. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and type checking and
 the target-neutral IR do not depend on a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
 detected by the program; on Linux x86-64 the executable carries the level
-in its ISA note and the loader refuses it. Linux arm64 emits no ISA-level
-note and has no such loader-refusal protection. Selecting a supported level
+in its ISA note and the loader refuses it. Linux arm64 and RV64 Linux emit no loader-enforced ISA-level
+note and have no such loader-refusal protection. Selecting a supported level
 for its execution environment remains the caller's responsibility.
 
 **The alternatives:** a target per level, `--target=x86-64-v3`, which
@@ -15585,6 +15641,64 @@ assembly block's register rules depend on the operating system.
 `targets/levels are stated per family`, `toolchain/file operands keep their
 identity`, `driver/fixed facts come from the target`, and
 `end-to-end/refine-identity`.
+
+### D265 — RV64 Linux uses LP64D and ISA extension sets
+
+**From** [0750], [1500], [1550], [1580], [1975], D248 and D255.
+
+**The discrepancy:** equal LP64 widths establish no C transport. RISC-V's
+floating aggregates, integer splits and variadic calls differ from both
+SysV and AAPCS64; an assumed extension cannot be inferred from an ISA rank
+or from the compiler host. A C910 implements vendor address instructions
+without implying standard Zba or modern vector support.
+
+**Chosen:** `linux-rv64` is RV64GC Linux, little-endian LP64D, with the
+explicit fixed fact `compiler.c_riscv_lp64d` and `compiler.arch == rv64`.
+[1975] states its calling, layout and register contracts. D248's ordinary
+assembly boundary uses canonical integer operands and recognizes raw ABI
+aliases as those same registers, without reserving caller floating registers;
+[1990] lists the saved floating registers that integer operands cannot declare.
+`core/c` exposes
+the LP64 aliases and unsigned plain `c_char`; [1975]'s existing C subset,
+including callbacks and outgoing variadic calls, is enabled. The Linux
+hosted bridge uses libc's `__errno_location`, Linux open flags, and the
+128-byte generic `stat` layout, separately checked against C headers.
+D255's supported ISA strings are exactly `rv64gc`, `rv64gc_zba`,
+`rv64gc_xtheadba` and `rv64gc_zba_xtheadba`. They all keep LP64D and the same
+layout. Unknown, foreign, incompatible or unimplemented strings are L0009;
+no arbitrary parser acceptance promises backend support. The tools receive
+both the selected `-march` and `-mabi=lp64d`. The ISA set appears in ELF
+attributes and constrains user assembly; it promises no loader refusal.
+Instruction selection uses target XLEN and independent extension sets so a
+future RV32 emitter can share it without inheriting RV64's data model.
+The RISC-V [psABI](https://riscv-non-isa.github.io/riscv-elf-psabi-doc/)
+and [GCC target options](https://gcc.gnu.org/onlinedocs/gcc/RISC-V-Options.html)
+state the ABI and ISA selection. The standard
+[Zba ISA](https://docs.riscv.org/reference/isa/unpriv/b-st-ext.html) and
+[XTheadBa specification](https://github.com/XUANTIE-RV/thead-extension-spec/blob/master/xtheadba.adoc)
+state the address instructions. Linux's
+[generic stat](https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/stat.h)
+and [glibc record](https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/bits/struct_stat.h)
+state the hosted record layout.
+
+**The alternatives:** reusing an LP64 C fact, which silently changes
+aggregate and variadic transport. Ranking extension strings, which would
+invent implications between standard and vendor extensions. Requiring Zbb
+or RVV on a C910 without confirming execution, which assumes instructions
+the chosen hardware need not support. Emitting C or LLVM would replace the
+native backend boundary rather than implement it.
+
+**Pinned by** `targets/descriptions do not follow the host`,
+`targets/levels are stated per family`, `targets/ABI and symbol contracts are explicit`,
+`targets/assembly registers are spelled and chosen`,
+`backend plans/RISC-V instruction selection`,
+`backend plans/RISC-V LP64D carriers`,
+`runtime/rv64-feature-fact`, `runtime/rv64-indexed-address`,
+`runtime/rv64-assembly-level`, `runtime/c-aliases-unsigned-char`,
+`abi/lp64d-integer-extension`,
+`abi/lp64d-varargs` and `abi/core-io-file-identity`. The recurring RV64 lane
+reports runtime, C ABI, source-debugger and ISA-level verdicts separately;
+none is supplied by an empty selection or an unconfirmed execution level.
 
 ### D257 — A build targets the compiler's own host, and another target is named
 

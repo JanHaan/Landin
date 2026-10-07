@@ -3,4 +3,4 @@ summary: addresses and ranges through scalar storage retain exact written source
 program: program.ldn
 codes: L0316, L0316
 constructs: 0430, 0520, 0570, 0750, 0790
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -9,7 +9,12 @@ fixed if compiler.os == freebsd then
         compiler.assert(not compiler.c_darwin_lp64)
     end if
 elsif compiler.os == linux then
-    compiler.assert(compiler.c_sysv_lp64 or compiler.c_aapcs64_lp64)
+    compiler.assert(compiler.c_sysv_lp64 or compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d)
+    fixed if compiler.arch == rv64 then
+        compiler.assert(compiler.c_riscv_lp64d)
+        compiler.assert(not compiler.c_sysv_lp64 and not compiler.c_aapcs64_lp64)
+        compiler.assert(compiler.word_size == 64)
+    end if
 elsif compiler.os == darwin then
     compiler.assert(compiler.c_darwin_lp64)
 else

@@ -29,7 +29,7 @@ int main(void) {
             assert(waitpid(child, &status, 0) == child);
             assert(WIFSIGNALED(status));
 /* The arm64 backend traps with brk, SIGTRAP on Darwin and Linux alike;
-   x86-64 traps with ud2, SIGILL. */
+   x86-64 traps with ud2 and RV64 with unimp, both SIGILL. */
 #if defined(__aarch64__)
             assert(WTERMSIG(status) == SIGTRAP);
 #else

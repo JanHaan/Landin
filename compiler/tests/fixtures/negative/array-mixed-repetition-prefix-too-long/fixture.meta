@@ -3,7 +3,7 @@ summary: a mixed repetition prefix must leave a nonempty suffix
 constructs: 0040, 0520, 0560, 1830
 program: program.ldn
 codes: L0334
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/array-mixed-repetition-prefix-too-long/program.ldn
 status: 1

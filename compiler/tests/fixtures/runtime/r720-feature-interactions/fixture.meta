@@ -4,4 +4,4 @@ profiles: standard
 program: main.ldn
 status: 42
 constructs: 0100, 0480, 0530, 1090, 1180
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

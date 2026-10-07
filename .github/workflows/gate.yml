@@ -57,6 +57,8 @@ jobs:
             freebsd-emit-arm64-runtime freebsd-emit-arm64-debugger freebsd-emit-arm64-abi \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime freebsd-arm64-debugger freebsd-arm64-abi \
+            rv64-emit-runtime rv64-emit-debugger rv64-emit-abi rv64-emit-isa \
+            rv64-runtime rv64-debugger rv64-abi rv64-isa \
             'determinism / manifest (x86_64-linux)' \
             'determinism / manifest (aarch64-linux)' \
             'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate \
@@ -862,6 +864,109 @@ jobs:
             ${{ runner.temp }}/freebsd-evidence/bundle/*.status
           retention-days: 14
 
+  # Checked Linux compiler cross-emits; RISE runs the transferred payloads on
+  # physical RV64. ISA execution probes hardware before extended code runs.
+  rv64-emit:
+    name: rv64-emit-${{ matrix.kind }}
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [runtime, debugger, abi, isa]
+    env:
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+      LANDIN_RV64_JOBS: '4'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the pinned compiler toolchain
+        uses: ./.github/actions/pinned-toolchain
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+      - name: Restore and verify checked release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C compiler/ada/build/linux-amd64/release
+          ./scripts/build.sh -q
+      - name: Require the checked RV64 IR register verifier regression
+        run: |
+          ./scripts/test.sh --host --target=linux-x86-64 --case='backend/RV64 assembly registers are verified'
+      - name: Install LP64D cross toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
+          riscv64-linux-gnu-gcc --version
+          riscv64-linux-gnu-as --version
+          test -f "$(riscv64-linux-gnu-gcc -print-file-name=libm.a)"
+      - name: Cross-emit and inspect RV64 ${{ matrix.kind }}
+        run: |
+          python3 compiler/tests/rv64/check.py --prepare-only --kind=${{ matrix.kind }} \
+            --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" --output="$RUNNER_TEMP/rv64-payload"
+          tar -czf "$RUNNER_TEMP/rv64-payload.tar.gz" -C "$RUNNER_TEMP/rv64-payload" .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rv64-payload-${{ matrix.kind }}
+          path: ${{ runner.temp }}/rv64-payload.tar.gz
+          retention-days: 1
+      - name: Retain cross-emission, instruction and refusal diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rv64-emit-${{ matrix.kind }}
+          path: |
+            ${{ runner.temp }}/rv64-payload/*.json
+            ${{ runner.temp }}/rv64-payload/*.log
+          retention-days: 14
+
+  rv64:
+    name: rv64-${{ matrix.kind }}
+    needs: [inputs, rv64-emit]
+    if: needs.inputs.outputs.reuse != 'true'
+    # RISE requires this exact label set; jobs are ephemeral physical machines.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [runtime, debugger, abi, isa]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rv64-payload-${{ matrix.kind }}
+          path: ${{ runner.temp }}/rv64-input
+      - name: Confirm native tool availability
+        run: |
+          uname -a
+          cat /proc/cpuinfo
+          command -v python3
+          command -v gdb
+          gdb --version
+      - name: Verify source-matching payload and execute RV64 ${{ matrix.kind }}
+        run: |
+          mkdir "$RUNNER_TEMP/rv64-prepared"
+          tar -xzf "$RUNNER_TEMP/rv64-input/rv64-payload.tar.gz" -C "$RUNNER_TEMP/rv64-prepared"
+          python3 compiler/tests/rv64/check.py --kind=${{ matrix.kind }} \
+            --prepared="$RUNNER_TEMP/rv64-prepared" --output="$RUNNER_TEMP/rv64-evidence"
+      - name: Retain hardware identity and separate verdict transcripts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rv64-${{ matrix.kind }}
+          path: |
+            ${{ runner.temp }}/rv64-evidence/*.json
+            ${{ runner.temp }}/rv64-evidence/*.log
+            ${{ runner.temp }}/rv64-evidence/*.stdout
+            ${{ runner.temp }}/rv64-evidence/*.stderr
+            ${{ runner.temp }}/rv64-evidence/*.status
+          retention-days: 14
+
   #  Build and compare assembly manifests on Linux and macOS in the same
   #  workflow run, so a host disagreement also fails the aggregate status.
   determinism:
@@ -875,7 +980,7 @@ jobs:
     needs: [inputs, documents, scripts, compiler, linux-release-build, release,
             bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
             darwin-host, darwin-host-release, darwin-parity, lldb,
-            arm64-compiler, arm64-release, freebsd-emit, freebsd, determinism]
+            arm64-compiler, arm64-release, freebsd-emit, freebsd, rv64-emit, rv64, determinism]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

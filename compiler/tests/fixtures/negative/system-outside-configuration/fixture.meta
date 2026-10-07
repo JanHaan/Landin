@@ -3,7 +3,7 @@ summary: The operating system fact is available only in fixed configuration
 program: main.ldn
 codes: L0203
 constructs: 1500, 1560
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/system-outside-configuration/main.ldn
 status: 1

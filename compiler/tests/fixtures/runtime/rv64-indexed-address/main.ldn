@@ -1,0 +1,9 @@
+values: [5]u64 = [11, 21, 31, 41, 42]
+
+public extern(c) indexed: (index: usize) -> (value: u64) =
+    value = values[index]
+end indexed
+
+public main: () -> (code: i32) =
+    code = i32(indexed(4))
+end main

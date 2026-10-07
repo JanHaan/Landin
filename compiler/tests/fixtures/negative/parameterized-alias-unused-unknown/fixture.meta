@@ -2,5 +2,5 @@ class: negative
 summary: an unused parameterized alias still requires every free type name to resolve
 constructs: 1350, 1795, 1860
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0304

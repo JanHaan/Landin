@@ -2,7 +2,7 @@ class: negative
 summary: [0210] keeps integer and floating-point literal classes distinct in a float context
 constructs: 0210, 1880, 1890
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0301
 expect: expected.txt
 args: ../tests/fixtures/negative/integer-literal-not-a-float/program.ldn

@@ -3,4 +3,4 @@ summary: [0320] a negative shift amount is refused, and a module binding of a ra
 program: program.ldn
 codes: L0305
 constructs: 0320, 0660, 1940
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

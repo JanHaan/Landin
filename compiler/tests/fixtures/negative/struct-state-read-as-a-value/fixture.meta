@@ -3,4 +3,4 @@ summary: [1740]'s module state may have a struct type and [1930] discards the wh
 constructs: 0670, 1740, 1930
 program: program.ldn
 codes: L0334
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

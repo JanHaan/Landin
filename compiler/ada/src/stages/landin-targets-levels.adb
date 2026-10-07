@@ -1,10 +1,12 @@
 with Ada.Strings.Unbounded;
+with Landin.Targets.RiscV_ISA;
 
 package body Landin.Targets.Levels is
 
    subtype X86_64_Level is Level_Id range X86_64_V1 .. X86_64_V4;
    subtype Arm64_Level is Level_Id range Armv8_A .. Armv8_1_A;
    subtype M_Profile_Level is Level_Id range Armv6_M .. Armv7E_M;
+   subtype RV64_Level is Level_Id range RV64GC .. RV64GC_Zba_Xtheadba;
 
    function Spelling (Of_Feature : Feature) return String
      is (case Of_Feature is
@@ -34,7 +36,17 @@ package body Landin.Targets.Levels is
             when Rdm        => "rdm",
             when Thumb2     => "thumb2",
             when Idiv       => "idiv",
-            when Dsp        => "dsp");
+            when Dsp        => "dsp",
+            when I          => "i",
+            when M          => "m",
+            when A          => "a",
+            when F          => "f",
+            when D          => "d",
+            when C          => "c",
+            when Zicsr      => "zicsr",
+            when Zifencei   => "zifencei",
+            when Zba        => "zba",
+            when Xtheadba   => "xtheadba");
 
    function Is_Feature_Name (Name : String) return Boolean
      is (for some Each in Feature => Spelling (Each) = Name);
@@ -53,6 +65,7 @@ package body Landin.Targets.Levels is
      is ((Id => (case Architecture_Of (Facts) is
                     when X86_64 => X86_64_V1,
                     when Arm64 => Armv8_A,
+                    when RV64 => RV64GC,
                     when Cortex_M0 => Armv6_M,
                     when Synthetic_32_Architecture => No_Level)));
 
@@ -67,12 +80,17 @@ package body Landin.Targets.Levels is
             when Armv8_1_A => "armv8.1-a",
             when Armv6_M   => "armv6-m",
             when Armv7_M   => "armv7-m",
-            when Armv7E_M  => "armv7e-m");
+            when Armv7E_M  => "armv7e-m",
+            when RV64GC => "rv64gc",
+            when RV64GC_Zba => "rv64gc_zba",
+            when RV64GC_Xtheadba => "rv64gc_xtheadba",
+            when RV64GC_Zba_Xtheadba => "rv64gc_zba_xtheadba");
 
    function In_Family (Id : Level_Id; Facts : Target_Facts) return Boolean
      is (case Architecture_Of (Facts) is
             when X86_64 => Id in X86_64_Level,
             when Arm64 => Id in Arm64_Level,
+            when RV64 => Id in RV64_Level,
             when Cortex_M0 => Id in M_Profile_Level,
             when Synthetic_32_Architecture => False);
 
@@ -124,6 +142,12 @@ package body Landin.Targets.Levels is
             return Level.Id in Armv7_M .. Armv7E_M;
          when Dsp =>
             return Level.Id = Armv7E_M;
+         when I | M | A | F | D | C | Zicsr | Zifencei | Zba | Xtheadba =>
+            return Level.Id in RV64_Level
+              and then RiscV_ISA.Has
+                (RiscV_ISA.Named (Name (Level)),
+                 RiscV_ISA.Extension'Val
+                   (Feature'Pos (Wanted) - Feature'Pos (I)));
       end case;
    end Has;
 

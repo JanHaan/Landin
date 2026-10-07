@@ -1,7 +1,7 @@
 class: end-to-end
-summary: refine reports a version-neutral identity naming its three backends, its native-toolchain executable output, the targets it describes and each one's CPU feature levels
+summary: refine reports a version-neutral identity naming its implemented backends, its native-toolchain executable output, the targets it describes and each one's CPU feature levels
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, linux-rv64
 args: --identify
 status: 0
 stream: output

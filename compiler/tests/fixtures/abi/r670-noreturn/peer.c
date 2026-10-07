@@ -33,7 +33,7 @@ int main(void)
             if (!WIFEXITED(status) || WEXITSTATUS(status) != 42) return 6;
         } else {
 /* The arm64 backend traps with brk, SIGTRAP on Darwin and Linux alike;
-   x86-64 traps with ud2, SIGILL. */
+   x86-64 traps with ud2 and RV64 with unimp, both SIGILL. */
 #if defined(__aarch64__)
             const int expected = SIGTRAP;
 #else

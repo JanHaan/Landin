@@ -3,4 +3,4 @@ summary: a field assigned in one arm of a nonliteral if is not assigned after it
 constructs: 0670, 0750, 1810, 1910
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

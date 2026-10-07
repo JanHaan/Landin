@@ -3,7 +3,7 @@ summary: a value-producing if must cover its untaken edge
 program: program.ldn
 codes: L0332
 constructs: 1050, 1080, 1800, 1810, 1910
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/if-expression-missing-else/program.ldn
 status: 1

@@ -2,7 +2,7 @@ class: negative
 summary: [1920] a call names every parameter exactly once, and [0980] gives none a default value
 constructs: 1920, 0980
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0327
 expect: expected.txt
 args: ../tests/fixtures/negative/call-with-too-few-arguments/program.ldn

@@ -15,7 +15,7 @@ the same conservative effects and ordinary register/frame restrictions.
 `core/cpu` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
 Linux freestanding lane executes the generated firmware. D231/D232 implement
-nonreturning control and selected panic handlers on all three backends.
+nonreturning control and selected panic handlers on every implemented backend.
 
 ## Layout
 
@@ -136,6 +136,9 @@ different responsibilities.
 | `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
 | `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations, ELF assembly and line/function CFI from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or promise full variable/type debugging |
 | `Landin.Backend.AAPCS64_ABI` | arm64 C classification and argument/result placement from neutral shapes and target facts, under the standard AAPCS64 or Apple's variant of it as the description's C ABI says | infer layout from the host, choose a convention by architecture, reuse SysV transport or change source semantics |
+| `Landin.Backend.RiscV_ABI` | explicit LP64D C carrier classification and register/stack placement from neutral shapes and target layout, including mixed FP/integer aggregates, split carriers and variadic integer transport | infer the selected ABI from LP64 widths, put transport in IR or access the host |
+| `Landin.Backend.RiscV` | RV64 instruction selection, stack homes, frame records, native and LP64D calls, hosted runtime and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
+| `Landin.Backend.RiscV_Instructions` | native XLEN-parametric integer immediate, memory and indexed-address instruction selection, with independent Zba and XTheadBa capabilities | infer a width from the host, rank extension sets, choose an ABI, access files or invoke tools |
 | `Landin.Backend.Arm64` | arm64 instruction selection, stack homes, frame records, native/C calls, the hosted runtime and data images, for every arm64 description | parse/check source, put physical transport in IR, spell an object format's directives, write files or run tools |
 | `Landin.Backend.Arm64.Platform` | what arm64 assembly spells per object format: page relocations, read-only sections, bridge visibility, symbol types and sizes, the local-label seed and the unit's trailer | select instructions, choose a C convention or name a libc function |
 | `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, hidden visibility, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
@@ -170,6 +173,7 @@ different responsibilities.
 | `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, and hosted assembly text admission | decide an operand's type or read the host's registers |
 | `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
+| `Landin.Targets.RiscV_ISA` | supported RV64GC ISA strings and independent standard/vendor extension sets | rank levels, select an ABI, ask the host what executes or admit unimplemented ISA strings |
 | `Landin.Targets.Levels` | CPU feature levels per family, each level's feature set, each target's default level, and the spelling of every level and feature | change layout, a calling convention or a C ABI, or be read by checking or the IR |
 | `Landin.Targets.Selection` | the one mapping from a target name to the description it selects, shared by the driver and the server | accept a triplet, a fixture label or a second spelling |
 | `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability, the hosted system a runtime bridge runs on, and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
@@ -254,7 +258,8 @@ D203's C convention and variadic flags follow the complete recursive signature,
 not the bodyless import flag or a concrete callee item. Checking admits only
 [1975]'s selected C subset and lowering promotes unnamed outgoing C arguments;
 verification checks the same signature facts for direct and indirect calls.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
+and `compiler.c_riscv_lp64d`
 are early fixed configuration bools, with no runtime storage. Ordinary `core/c`
 accepts any supported LP64 contract; generated bindings assert their selected
 contract. Header

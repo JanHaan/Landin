@@ -6,6 +6,9 @@ fixed if compiler.arch == x86_64 then
 elsif compiler.arch == arm64 then
     idle: () -> none = assembler.block("nop\nyield") end idle
     through: (value: u32) -> (r: u32) = r = value + 7 end through
+elsif compiler.arch == rv64 then
+    idle: () -> none = assembler.block("nop") end idle
+    through: (value: u32) -> (r: u32) = r = value + 7 end through
 else
     idle: () -> none = assembler.block("nop\nyield") end idle
     through: (value: u32) -> (r: u32) =

@@ -3,7 +3,7 @@ summary: D189 `addr` of a `.val` reached through a union would hand out the rese
 constructs: 0380, 0430, 0480
 program: program.ldn
 codes: L0335
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-address-of-referent/program.ldn
 status: 1

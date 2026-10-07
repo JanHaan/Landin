@@ -2,7 +2,7 @@ class: negative
 summary: an unhandled inferred generic failure is diagnosed once at its concrete source call and related signature
 constructs: 0940, 0960, 1290, 1920
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0329
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-inferred-error-unhandled/program.ldn

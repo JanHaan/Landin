@@ -2,5 +2,5 @@ class: negative
 summary: an unused nominal template rejects duplicate variant case declarations
 constructs: 0680, 1350, 1795, 1850
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0200

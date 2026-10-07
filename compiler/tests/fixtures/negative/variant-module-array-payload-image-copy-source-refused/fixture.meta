@@ -3,4 +3,4 @@ summary: D83 adds no second report when a direct or selected module array payloa
 constructs: 0190, 0520, 0670, 0680, 0700, 0710, 1740, 1790, 1795, 1810, 1940
 program: program.ldn
 codes: L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

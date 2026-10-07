@@ -678,8 +678,8 @@ about a construct no fixture can yet use.
 
 `targets` is required, and `check.py` holds each name to the targets
 [the target applicability register](registers.md#target-applicability-coverage)
-allows: the six product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`,
-`freebsd-x86-64`, `freebsd-arm64` and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
+allows: the seven product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`,
+`freebsd-x86-64`, `freebsd-arm64`, `linux-rv64` and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
 Cortex-M backend. A name outside that list is refused, because that is how a
 fixture quietly stops applying to anything.
 
@@ -1136,3 +1136,10 @@ Their runtime lanes also check every applicable positive and negative source
 verdict with the FreeBSD target selected. Their LLDB sessions run natively in
 the guests; a local Mac-hosted VM is developer feedback, and the recurring
 Linux-runner VM jobs supply the gate evidence.
+
+The [physical RV64 lanes](rv64/README.md) cross-emit checked payloads on Linux
+and report native runtime, GDB, independent nonempty C ABI and ISA-extension
+verdicts separately. The payload is tied to the source revision, complete
+fixture/profile selection and source and binary checksums. ISA execution
+confirms the actual instruction on hardware before running extended code;
+source checks and emission alone do not establish any execution verdict.

@@ -330,7 +330,7 @@ class Inventory(unittest.TestCase):
         #  runner, and exits 0 on both hosts.
         self.assertEqual(claims["end-to-end/refine-identity"],
                          {"linux-x86-64": "compiled", "linux-arm64": "compiled",
-                          "macos-arm64": "compiled"})
+                          "linux-rv64": "compiled", "macos-arm64": "compiled"})
         altered = {name: dict(held) for name, held in claims.items()}
         del altered["end-to-end/refine-identity"]["macos-arm64"]
         del altered["runtime/derived-parser"]["linux-x86-64"]

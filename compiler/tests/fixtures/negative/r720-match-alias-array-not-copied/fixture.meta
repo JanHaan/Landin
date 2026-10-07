@@ -3,7 +3,7 @@ summary: D85 discards and indexes a fixed-array payload alias in place; copying 
 program: main.ldn
 codes: L0304
 constructs: 0520, 0680, 1210, 1220, 1830, 1930
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/r720-match-alias-array-not-copied/main.ldn
 status: 1

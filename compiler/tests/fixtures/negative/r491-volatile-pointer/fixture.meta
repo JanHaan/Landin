@@ -6,4 +6,4 @@ args: ../tests/fixtures/negative/r491-volatile-pointer/program.ldn
 codes: L0010
 status: 1
 constructs: 0850, 1790, 1830
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

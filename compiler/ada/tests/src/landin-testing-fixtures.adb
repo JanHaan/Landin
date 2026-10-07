@@ -15,7 +15,8 @@ package body Landin.Testing.Fixtures is
    --  A fixture may name only these, because naming a target nothing
    --  describes is how a fixture quietly stops applying to anything.
    function Is_Named_Target (Name : String) return Boolean is
-     (Name in "linux-x86-64" | "linux-arm64" | "macos-arm64" | "cortex-m"
+     (Name in "linux-x86-64" | "linux-arm64" | "linux-rv64"
+            | "macos-arm64" | "cortex-m"
             | "freebsd-x86-64" | "freebsd-arm64" | "synthetic-32");
 
    --  Whether a `targets:` list names LABEL.
@@ -81,6 +82,8 @@ package body Landin.Testing.Fixtures is
      is (Landin.Targets.Levels.Is_Level_Of (Landin.Targets.Linux_X86_64, Level)
          or else Landin.Targets.Levels.Is_Level_Of
            (Landin.Targets.Darwin_Arm64, Level)
+         or else Landin.Targets.Levels.Is_Level_Of
+           (Landin.Targets.Linux_RV64, Level)
          or else Landin.Targets.Levels.Is_Level_Of
            (Landin.Targets.Cortex_M, Level));
 

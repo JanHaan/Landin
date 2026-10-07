@@ -3,4 +3,4 @@ summary: [0370] leaves an unresolved lenof operand for [1860] resolution to diag
 constructs: 0370, 1860
 program: program.ldn
 codes: L0201
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

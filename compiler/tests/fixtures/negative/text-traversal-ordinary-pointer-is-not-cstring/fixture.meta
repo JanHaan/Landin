@@ -3,7 +3,7 @@ summary: ordinary pointers do not inherit the exact cstring iterable contract
 codes: L0348
 constructs: 0430, 0600, 1150, 1320
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/text-traversal-ordinary-pointer-is-not-cstring/program.ldn
 status: 1

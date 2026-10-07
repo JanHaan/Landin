@@ -3,4 +3,4 @@ summary: A narrowed optional still derives from its nonescaping parameter and ca
 constructs: 0480, 0780, 1210
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

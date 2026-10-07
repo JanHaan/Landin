@@ -3,7 +3,7 @@ summary: [1890] one type on both sides: two pointers share a kind but not a type
 program: program.ldn
 codes: L0301
 constructs: 0350, 0430, 1890
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-comparison-referent-mismatch/program.ldn
 status: 1

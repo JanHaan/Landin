@@ -104,11 +104,11 @@ CORPUS = ("insertion-sort", "sieve-of-eratosthenes", "add-exits-with-its-sum",
           "array-of-structs", "atom-values-cross-the-abi",
           "array-arguments-cross-calls")
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
-           "freebsd-x86-64", "freebsd-arm64")
+           "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
 PROFILES = (("none", "off"), ("size", "auto"), ("speed", "all"))
 DEBUG_FLAG = {"linux-x86-64": "full", "linux-arm64": "full",
               "darwin-arm64": "full", "cortex-m0": "lines",
-              "freebsd-x86-64": "full", "freebsd-arm64": "full"}
+              "freebsd-x86-64": "full", "freebsd-arm64": "full", "linux-rv64": "full"}
 #  A module closure, so the contract covers import resolution and not only
 #  one file: the report's source order is what makes closure order irrelevant.
 CLOSURE_FIXTURE = "core-mem-allocators"

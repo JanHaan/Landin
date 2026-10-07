@@ -7985,6 +7985,70 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end Assembly_Blocks_Keep_Their_Registers;
 
+   procedure RV64_Assembly_Registers_Are_Verified
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Assembly_Registers_Are_Verified
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+      type Name_Access is access constant String;
+      X0  : aliased constant String := "x0";
+      X1  : aliased constant String := "x1";
+      X2  : aliased constant String := "x2";
+      X3  : aliased constant String := "x3";
+      X4  : aliased constant String := "x4";
+      X8  : aliased constant String := "x8";
+      X32 : aliased constant String := "x32";
+      SP  : aliased constant String := "sp";
+      Refused_Names : constant array (1 .. 8) of Name_Access :=
+        [X0'Access, X1'Access, X2'Access, X3'Access, X4'Access,
+         X8'Access, X32'Access, SP'Access];
+   begin
+      Lower
+        (Work,
+         "f: (v: u64) -> (r: u64) =" & LF
+         & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+         & "        inout r: u64 at general = v, out _ at x9)" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : constant not null access IR.Unit :=
+           Landin.Stages.Code (Work);
+         Block : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+               Block := IR.Value_Id (V);
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check
+              (Code.all, Landin.Targets.Linux_RV64).Kind
+                 = IR.Verifier.Nothing_Wrong,
+            "a block naming the callee-saved x9 verifies");
+         for Name of Refused_Names loop
+            IR.Testing_Support.Overwrite_Assembly_Operand
+              (Code.all, 1, Block, 2,
+               IR.Operand_At
+                 (IR.Discarded, Landin.Source.Names.No_Name, Name.all,
+                  Landin.Types.Not_Typed));
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Code.all, Landin.Targets.Linux_RV64).Kind
+                    = IR.Verifier.Assembly_Register_Refused,
+               "RV64 verifier refuses " & Name.all);
+         end loop;
+      end;
+   end RV64_Assembly_Registers_Are_Verified;
+
    --  [1630] on arm64: a declared x19 saved in its frame home and restored
    --  with CFI, the text filled at each operand's width, and the verifier's
    --  refusal, under Darwin's description and Linux's alike, of x18, the
@@ -8666,6 +8730,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "assembly blocks keep their registers",
          Assembly_Blocks_Keep_Their_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RV64 assembly registers are verified",
+         RV64_Assembly_Registers_Are_Verified'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

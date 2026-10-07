@@ -2,4 +2,4 @@ class: positive
 summary: saturated aliases substitute type and fixed formals, including later type formals and a nested fixed argument
 constructs: 0520, 1350, 1790, 1795
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

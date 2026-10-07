@@ -3,4 +3,4 @@ summary: D69 follows a direct module array source chain without adding a second 
 constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

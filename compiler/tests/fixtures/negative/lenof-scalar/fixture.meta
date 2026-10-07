@@ -3,7 +3,7 @@ summary: [0370] refuses a scalar operand with the ordinary type mismatch
 constructs: 0370
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/lenof-scalar/program.ldn
 status: 1

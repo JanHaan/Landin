@@ -1,0 +1,23 @@
+extern(c) unsigned_value: () -> (value: u32)
+extern(c) unsigned_identity: (value: u32) -> (same: u32)
+extern(c) observe_unsigned_argument: (value: u32) -> (code: i32)
+extern(c) observe_stacked_unsigned: (a: u64, b: u64, c: u64, d: u64,
+    e: u64, f: u64, g: u64, h: u64, value: u32) -> (code: i32)
+public extern(c) landin_stacked_unsigned: (a: u64, b: u64, c: u64, d: u64,
+    e: u64, f: u64, g: u64, h: u64, value: u32) -> (same: u32) =
+    same = value
+end landin_stacked_unsigned
+public extern(c) landin_unsigned: (value: u32) -> (same: u32) =
+    same = value
+end landin_unsigned
+public extern(c) landin_check: () -> (code: i32) =
+    code = 1
+    return when unsigned_value() <> 0xf1234567
+    code = 2
+    return when unsigned_identity(0xf1234567) <> 0xf1234567
+    code = 3
+    return when observe_unsigned_argument(0xf1234567) <> 42
+    code = 4
+    return when observe_stacked_unsigned(0, 0, 0, 0, 0, 0, 0, 0, 0xf1234567) <> 42
+    code = 42
+end landin_check

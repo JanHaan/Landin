@@ -1,5 +1,6 @@
 with Landin.Backend.X86_64;
 with Landin.Backend.Arm64;
+with Landin.Backend.RiscV;
 with Landin.Backend.Cortex_M;
 with Landin.Targets.Capabilities;
 
@@ -12,6 +13,8 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
            | Landin.Targets.Capabilities.Arm64_ELF =>
             "signed 32-bit frame budget of the arm64 backend",
+         when Landin.Targets.Capabilities.RV64_ELF =>
+            "signed 32-bit frame budget of the RV64 backend",
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             "32-bit address budget of the Cortex-M backend",
          when Landin.Targets.Capabilities.No_Backend =>
@@ -30,6 +33,9 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
            | Landin.Targets.Capabilities.Arm64_ELF =>
             return Landin.Backend.Arm64.Frame_Is_Addressable
+              (Of_Unit, Item, Facts, Options);
+         when Landin.Targets.Capabilities.RV64_ELF =>
+            return Landin.Backend.RiscV.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return Landin.Backend.Cortex_M.Frame_Is_Addressable
@@ -72,6 +78,10 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
            | Landin.Targets.Capabilities.Arm64_ELF =>
             Landin.Backend.Arm64.Emit
+              (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
+               Hosted_Entry, Debug, Panic, Level);
+         when Landin.Targets.Capabilities.RV64_ELF =>
+            Landin.Backend.RiscV.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug, Panic, Level);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>

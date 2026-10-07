@@ -3,4 +3,4 @@ summary: a deferred call runs at the end of its block and its escaping argument 
 program: program.ldn
 codes: L0314
 constructs: 0430, 0770, 0780, 1100
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

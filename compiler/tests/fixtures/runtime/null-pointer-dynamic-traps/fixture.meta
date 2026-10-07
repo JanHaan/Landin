@@ -4,4 +4,4 @@ summary: a dynamically zero integer cannot mint a bare pointer even when no dere
 program: main.ldn
 constructs: 0470, 1580, 1960
 traps: yes
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -306,7 +306,7 @@ package body Landin.Stages.Configuration is
                      return Byte_Order;
                   elsif Word in "debug" | "release" then
                      return Build_Kind;
-                  elsif Word in "x86_64" | "arm64" | "cortex_m0"
+                  elsif Word in "x86_64" | "arm64" | "rv64" | "cortex_m0"
                               | "synthetic_32"
                   then
                      return Machine;
@@ -323,7 +323,7 @@ package body Landin.Stages.Configuration is
                   if Is_Feature_Fact (Of_Tree, Node) then
                      return Truth;
                   elsif Word in "c_sysv_lp64" | "c_darwin_lp64"
-                              | "c_aapcs64_lp64"
+                              | "c_aapcs64_lp64" | "c_riscv_lp64d"
                   then
                      return Truth;
                   elsif Word = "os" then
@@ -362,7 +362,7 @@ package body Landin.Stages.Configuration is
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word not in "x86_64" | "arm64" | "cortex_m0"
+                  if Word not in "x86_64" | "arm64" | "rv64" | "cortex_m0"
                                | "synthetic_32" | "little" | "big"
                                | "debug" | "release" | "linux" | "darwin"
                                | "freebsd" | "freestanding"
@@ -399,7 +399,7 @@ package body Landin.Stages.Configuration is
                  or else Spelled (Syn.Name (Of_Tree, Node))
                    not in "arch" | "os" | "word_size" | "byte_order"
                         | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
-                        | "c_aapcs64_lp64"
+                        | "c_aapcs64_lp64" | "c_riscv_lp64d"
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
@@ -534,6 +534,9 @@ package body Landin.Stages.Configuration is
                   elsif Word = "arm64" then
                      return (Kind => Machine,
                              Architecture_Value => Landin.Targets.Arm64);
+                  elsif Word = "rv64" then
+                     return (Kind => Machine,
+                             Architecture_Value => Landin.Targets.RV64);
                   elsif Word = "cortex_m0" then
                      return (Kind => Machine,
                              Architecture_Value => Landin.Targets.Cortex_M0);
@@ -565,6 +568,10 @@ package body Landin.Stages.Configuration is
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.AAPCS64_LP64);
+                  elsif Word = "c_riscv_lp64d" then
+                     return Boolean_Result
+                       (Landin.Targets.C_ABI_Of (Target (Context))
+                          = Landin.Targets.RiscV_LP64D);
                   elsif Word = "os" then
                      return (Kind => Operating_System, System_Value =>
                        Landin.Targets.Capabilities.Hosted_System_Of
@@ -803,7 +810,7 @@ package body Landin.Stages.Configuration is
                     & " are implicitly available builtin modules",
                   Into => Found);
             elsif Spelled (Syn.Name (Of_Tree, Node))
-              in "x86_64" | "arm64" | "cortex_m0" | "synthetic_32"
+              in "x86_64" | "arm64" | "rv64" | "cortex_m0" | "synthetic_32"
                  | "little" | "big" | "debug" | "release"
             then
                Report_Configuration_Rule

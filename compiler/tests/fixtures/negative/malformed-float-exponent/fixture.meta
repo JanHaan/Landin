@@ -3,4 +3,4 @@ summary: D162 requires a decimal float exponent to contain a decimal digit run
 constructs: 0210, 0220, 1770
 program: program.ldn
 codes: L0321
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

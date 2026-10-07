@@ -3,7 +3,7 @@ summary: integer arguments preserve the actual non-scalar context without invent
 program: main.ldn
 codes: L0301, L0301, L0301
 constructs: 0190, 0520, 0710, 1000, 1880
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/r491-integer-argument-context/main.ldn
 status: 1

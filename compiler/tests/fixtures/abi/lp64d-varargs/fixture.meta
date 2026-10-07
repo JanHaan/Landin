@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: LP64D promoted varargs exhaust the integer argument registers and stack in direct and indirect calls
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600
+targets: linux-rv64

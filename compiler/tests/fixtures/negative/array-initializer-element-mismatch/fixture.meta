@@ -3,7 +3,7 @@ summary: D17 makes the element type part of a D21 initializer's type identity
 constructs: 0080, 0110, 0520, 1810
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/array-initializer-element-mismatch/program.ldn
 status: 1

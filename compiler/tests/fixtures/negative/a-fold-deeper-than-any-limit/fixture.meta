@@ -3,4 +3,4 @@ summary: [1940] a fold follows a chain however long it is; the answer no u8 hold
 constructs: 1940
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

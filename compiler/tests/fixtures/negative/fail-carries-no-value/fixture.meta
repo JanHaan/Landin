@@ -3,7 +3,7 @@ summary: fail refuses a block with no answer and a call returning none, since ne
 constructs: 0940, 1920
 program: program.ldn
 codes: L0329, L0329, L0329
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/fail-carries-no-value/program.ldn
 status: 1

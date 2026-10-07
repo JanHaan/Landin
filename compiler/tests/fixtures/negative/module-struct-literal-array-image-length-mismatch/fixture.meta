@@ -3,4 +3,4 @@ summary: D67/D68 require finite and repetition field images to fit the declared 
 constructs: 0040, 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
 codes: L0301, L0301, L0334
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

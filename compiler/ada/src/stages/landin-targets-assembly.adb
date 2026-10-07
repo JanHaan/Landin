@@ -9,6 +9,19 @@ package body Landin.Targets.Assembly is
      [new String'("v"), new String'("q"), new String'("d"),
       new String'("s"), new String'("h"), new String'("b")];
 
+   RV64_Aliases : constant array (0 .. 31) of View_Name :=
+     [new String'("zero"), new String'("ra"), new String'("sp"),
+      new String'("gp"), new String'("tp"), new String'("t0"),
+      new String'("t1"), new String'("t2"), new String'("s0"),
+      new String'("s1"), new String'("a0"), new String'("a1"),
+      new String'("a2"), new String'("a3"), new String'("a4"),
+      new String'("a5"), new String'("a6"), new String'("a7"),
+      new String'("s2"), new String'("s3"), new String'("s4"),
+      new String'("s5"), new String'("s6"), new String'("s7"),
+      new String'("s8"), new String'("s9"), new String'("s10"),
+      new String'("s11"), new String'("t3"), new String'("t4"),
+      new String'("t5"), new String'("t6")];
+
    function Number_In
      (Name : String; Prefix : String; First, Last : Natural) return Boolean;
 
@@ -65,6 +78,14 @@ package body Landin.Targets.Assembly is
             elsif Name in "sp" | "fp" | "lr" | "x18" | "x29" | "x30" then
                return Never_Named;
             end if;
+         when RV64 =>
+            if Number_In (Name, "x", 5, 7)
+              or else Number_In (Name, "x", 9, 31)
+            then
+               return Operand_Register;
+            elsif Names_Reserved (Facts, Name) then
+               return Never_Named;
+            end if;
          when Synthetic_32_Architecture =>
             null;
       end case;
@@ -76,6 +97,9 @@ package body Landin.Targets.Assembly is
             when Cortex_M0 => True,
             when X86_64 => Name not in "rbx" | "r12" | "r13" | "r14" | "r15",
             when Arm64 => Number_In (Name, "x", 0, 17),
+            when RV64 => Number_In (Name, "x", 5, 7)
+              or else Number_In (Name, "x", 10, 17)
+              or else Number_In (Name, "x", 28, 31),
             when Synthetic_32_Architecture => False);
 
    function In_General_Class (Facts : Target_Facts; Name : String)
@@ -87,6 +111,7 @@ package body Landin.Targets.Assembly is
             when Cortex_M0 => 8,
             when X86_64 => 9,
             when Arm64 => 18,
+            when RV64 => 15,
             when Synthetic_32_Architecture => 0);
 
    function General_Register (Facts : Target_Facts; Index : Positive)
@@ -114,6 +139,15 @@ package body Landin.Targets.Assembly is
             end case;
          when Arm64 =>
             return "x" & Number;
+         when RV64 =>
+            declare
+               Value : constant Natural :=
+                 (if Index <= 3 then Index + 4
+                  elsif Index <= 11 then Index + 6 else Index + 16);
+               Wide : constant String := Natural'Image (Value);
+            begin
+               return "x" & Wide (Wide'First + 1 .. Wide'Last);
+            end;
          when Synthetic_32_Architecture =>
             raise Program_Error with "the synthetic model has no registers";
       end case;
@@ -122,7 +156,7 @@ package body Landin.Targets.Assembly is
    function Register_Width (Facts : Target_Facts) return Bit_Width
      is (case Architecture_Of (Facts) is
             when Cortex_M0 | Synthetic_32_Architecture => 32,
-            when X86_64 | Arm64 => 64);
+            when X86_64 | Arm64 | RV64 => 64);
 
    function Has_Registers (Facts : Target_Facts) return Boolean
      is (Architecture_Of (Facts) /= Synthetic_32_Architecture);
@@ -173,6 +207,24 @@ package body Landin.Targets.Assembly is
             then
                return "x" & Word (Word'First + 1 .. Word'Last);
             end if;
+         when RV64 =>
+            if Number_In (Word, "x", 5, 7)
+              or else Number_In (Word, "x", 9, 31)
+            then
+               return Word;
+            end if;
+            --  Operand names remain xN. Raw text may use ABI aliases, which
+            --  must identify the same register for declaration and general
+            --  exclusion checks, especially for saved s1-s11.
+            for Index in 5 .. 31 loop
+               if Index /= 8 and then Word = RV64_Aliases (Index).all then
+                  declare
+                     Image : constant String := Natural'Image (Index);
+                  begin
+                     return "x" & Image (Image'First + 1 .. Image'Last);
+                  end;
+               end if;
+            end loop;
          when Synthetic_32_Architecture =>
             null;
       end case;
@@ -198,6 +250,15 @@ package body Landin.Targets.Assembly is
                  | "w29" | "x30" | "w30"
                or else (for some Prefix of Float_Views =>
                           Number_In (Word, Prefix.all, 8, 15)),
+            when RV64 =>
+               Number_In (Word, "x", 0, 4) or else Word in "x8"
+                 | "zero" | "ra" | "sp" | "gp" | "tp" | "fp" | "s0"
+               --  LP64D preserves these FP registers, and integer-only
+               --  operands cannot declare them. Caller FP registers remain
+               --  ordinary block clobbers, at numeric or ABI spellings.
+               or else Number_In (Word, "f", 8, 9)
+               or else Number_In (Word, "f", 18, 27)
+               or else Number_In (Word, "fs", 0, 11),
             when Synthetic_32_Architecture => False);
 
    function Lowered (Word : String) return String
@@ -281,7 +342,7 @@ package body Landin.Targets.Assembly is
       return String is
    begin
       case Architecture_Of (Facts) is
-         when Cortex_M0 =>
+         when Cortex_M0 | RV64 =>
             return Register;
          when Arm64 =>
             return (if Bits > 32 then Register
@@ -422,7 +483,7 @@ package body Landin.Targets.Assembly is
            or else Ada.Strings.Fixed.Index (Clean, ";") /= 0
            or else Ada.Strings.Fixed.Index (Clean, "/*") /= 0
            or else Ada.Strings.Fixed.Index (Clean, "//") /= 0
-           or else (Architecture_Of (Facts) = X86_64
+           or else (Architecture_Of (Facts) in X86_64 | RV64
                     and then Ada.Strings.Fixed.Index (Clean, "#") /= 0)
            --  Apple's arm64 assembler separates statements with `%%`.
            or else (Architecture_Of (Facts) = Arm64
@@ -460,6 +521,12 @@ package body Landin.Targets.Assembly is
                        | "braaz" | "brabz" | "blraa" | "blrab" | "blraaz"
                        | "blrabz" | "retaa" | "retab" | "eretaa" | "eretab"
                      or else Starts ("b."),
+                  when RV64 =>
+                     Starts ("b") or else Starts ("j")
+                     or else Starts ("c.b") or else Starts ("c.j")
+                     or else Mnemonic in "call" | "tail" | "ret" | "ecall"
+                       | "ebreak" | "sret" | "mret" | "uret" | "dret"
+                       | "wfi" | "c.ebreak",
                   when others => False)
             then
                return "ordinary assembly is straight-line and transfers no"

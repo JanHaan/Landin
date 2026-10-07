@@ -31,7 +31,9 @@ package Landin.Targets.Levels is
       --  Armv8.1-A
       Lse, Crc32, Rdm,
       --  Armv7-M and Armv7E-M
-      Thumb2, Idiv, Dsp);
+      Thumb2, Idiv, Dsp,
+      --  RV64GC and independent address-generation extensions
+      I, M, A, F, D, C, Zicsr, Zifencei, Zba, Xtheadba);
 
    --  The word a program writes after `compiler.feature.`.
    function Spelling (Of_Feature : Feature) return String;
@@ -55,7 +57,7 @@ package Landin.Targets.Levels is
      (Facts : Target_Facts; Name : String) return Feature_Level
      with Pre => Is_Level_Of (Facts, Name);
 
-   --  Every level FACTS can select, in ascending order, comma separated.
+   --  Every level FACTS can select, in declaration order, comma separated.
    function Levels_Of (Facts : Target_Facts) return String;
 
    function Name (Level : Feature_Level) return String;
@@ -71,7 +73,8 @@ private
      (No_Level,
       X86_64_V1, X86_64_V2, X86_64_V3, X86_64_V4,
       Armv8_A, Armv8_1_A,
-      Armv6_M, Armv7_M, Armv7E_M);
+      Armv6_M, Armv7_M, Armv7E_M,
+      RV64GC, RV64GC_Zba, RV64GC_Xtheadba, RV64GC_Zba_Xtheadba);
 
    type Feature_Level is record
       Id : Level_Id;

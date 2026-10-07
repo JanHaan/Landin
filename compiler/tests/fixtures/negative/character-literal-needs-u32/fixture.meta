@@ -3,7 +3,7 @@ summary: [0250] fixes a character literal as u32 rather than borrowing an intege
 constructs: 0250, 1880, 1890
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/character-literal-needs-u32/program.ldn
 status: 1

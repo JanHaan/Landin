@@ -3,4 +3,4 @@ summary: [1820] selects from a name and a call is its own production, so a selec
 constructs: 1820
 program: program.ldn
 codes: L0103
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

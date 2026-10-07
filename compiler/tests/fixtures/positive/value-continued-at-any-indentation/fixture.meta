@@ -2,4 +2,4 @@ class: positive
 summary: [1810] ends a statement where its grammar does, so a value continued on the next line is read at the same or a shallower indentation
 program: program.ldn
 constructs: 1810, 1820
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

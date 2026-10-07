@@ -1,0 +1,11 @@
+fixed if compiler.feature.xtheadba then
+    public main: () -> (code: i32) =
+        code = i32(assembler.block("th.addsl {r}, {b}, {i}, 3",
+            out r: u64 at general, in b: u64 at general = 10,
+            in i: u64 at general = 4))
+    end main
+else
+    public main: () -> (code: i32) =
+        code = 42
+    end main
+end if

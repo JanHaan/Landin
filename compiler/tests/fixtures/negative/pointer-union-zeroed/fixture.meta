@@ -3,4 +3,4 @@ summary: D189 no zero or default atom exists, so `zeroed` does not name a pointe
 constructs: 0480, 0540, 1870
 program: program.ldn
 codes: L0328
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,4 +2,4 @@ class: positive
 summary: Optional results with from clauses admit proven-empty early, fallthrough, local, control, recovery, loop and narrowed edges while present and multi-result edges keep their source
 constructs: 0480, 0770, 0790, 0990, 1050, 1130, 1140, 1210
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

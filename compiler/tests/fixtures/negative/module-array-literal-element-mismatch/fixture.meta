@@ -3,4 +3,4 @@ summary: D24 gives every module array literal element the scalar type written fo
 constructs: 0040, 0190, 0520, 1740
 program: program.ldn
 codes: L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

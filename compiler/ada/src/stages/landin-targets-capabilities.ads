@@ -37,7 +37,7 @@ package Landin.Targets.Capabilities is
    function Link_Symbol (Facts : Target_Facts; Name : String) return String;
 
    type Backend_Kind is
-     (No_Backend, X86_64_ELF, Darwin_Arm64_Mach_O, Arm64_ELF,
+     (No_Backend, X86_64_ELF, Darwin_Arm64_Mach_O, Arm64_ELF, RV64_ELF,
       Cortex_M0_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;

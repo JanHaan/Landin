@@ -52,7 +52,7 @@ import tempfile
 from pathlib import Path
 
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
-           "freebsd-x86-64", "freebsd-arm64")
+           "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
 MODES = ("debug", "release")
 OPTIMIZATIONS = ("none", "size", "speed")
 SPECIALIZATIONS = ("off", "auto", "all")
@@ -69,23 +69,28 @@ REFUSAL_PAIRS = {
     ("fixed-conditional-cross-file-forward", "darwin-arm64"),
     ("fixed-conditional-cross-file-forward", "linux-arm64"),
     ("fixed-conditional-cross-file-forward", "freebsd-arm64"),
+    ("fixed-conditional-cross-file-forward", "linux-rv64"),
     ("fixed-conditional-generic-activity", "cortex-m0"),
     ("fixed-conditional-generic-activity", "darwin-arm64"),
     ("fixed-conditional-generic-activity", "linux-arm64"),
     ("fixed-conditional-generic-activity", "freebsd-arm64"),
+    ("fixed-conditional-generic-activity", "linux-rv64"),
     ("fixed-conditional-nested-inactive", "cortex-m0"),
     ("fixed-conditional-nested-inactive", "darwin-arm64"),
     ("fixed-conditional-nested-inactive", "linux-arm64"),
     ("fixed-conditional-nested-inactive", "freebsd-arm64"),
+    ("fixed-conditional-nested-inactive", "linux-rv64"),
     ("fixed-conditional-selects-declarations", "cortex-m0"),
     ("fixed-conditional-selects-declarations", "darwin-arm64"),
     ("fixed-conditional-selects-declarations", "linux-arm64"),
     ("fixed-conditional-selects-declarations", "freebsd-arm64"),
+    ("fixed-conditional-selects-declarations", "linux-rv64"),
     ("r440-array-callback-type-argument", "cortex-m0"),
     ("r440-c-aliases", "cortex-m0"),
     ("r440-c-aliases", "darwin-arm64"),
     ("r440-c-aliases", "linux-arm64"),
     ("r440-c-aliases", "freebsd-arm64"),
+    ("r440-c-aliases", "linux-rv64"),
     ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
     ("r440-checker-helper-normalized-imports", "cortex-m0"),

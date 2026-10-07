@@ -2,6 +2,6 @@ class: runtime
 summary: sorted packed atom lookup traps on an unnamed full-width encoding
 program: program.ldn
 constructs: 0630, 0730
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 traps: yes
 profiles: specialization

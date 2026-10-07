@@ -1,0 +1,9 @@
+fixed if compiler.feature.xtheadba then
+    public main: () -> (code: i32) =
+        code = 43
+    end main
+else
+    public main: () -> (code: i32) =
+        code = 42
+    end main
+end if

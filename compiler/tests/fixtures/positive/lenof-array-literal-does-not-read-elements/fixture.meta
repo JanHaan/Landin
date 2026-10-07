@@ -2,5 +2,5 @@ class: positive
 summary: [0370] measures a nonempty array literal without reading its elements
 constructs: 0160, 0370, 0520, 1800, 1950
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0326, L0326

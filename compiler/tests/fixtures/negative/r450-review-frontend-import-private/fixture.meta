@@ -4,4 +4,4 @@ program: program.ldn
 root: root
 codes: L0202
 constructs: 0300, 0590, 1430, 1440, 1450, 1850
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

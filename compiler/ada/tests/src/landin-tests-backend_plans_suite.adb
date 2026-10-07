@@ -2,6 +2,8 @@ with Ada.Assertions;
 
 with Landin.Backend;
 with Landin.Backend.C_ABI;
+with Landin.Backend.RiscV_Instructions;
+with Landin.Backend.RiscV_ABI;
 with Landin.Backend.X86_64;
 with Landin.IR;
 with Landin.IR.Shape_Measurement;
@@ -14,6 +16,7 @@ with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Targets.Layouts;
+with Landin.Targets.RiscV_ISA;
 with Landin.Types;
 
 package body Landin.Tests.Backend_Plans_Suite is
@@ -713,8 +716,329 @@ package body Landin.Tests.Backend_Plans_Suite is
       end;
    end Native_Argument_Counts_Stay_Encodable;
 
+   procedure RiscV_Carriers (Item : in out Landin.Testing.Context);
+
+   procedure RiscV_Carriers (Item : in out Landin.Testing.Context) is
+      package ABI renames Backend.RiscV_ABI;
+      use type ABI.Carrier_Class;
+      use type Landin.Types.Type_Kind;
+      Unit : IR.Unit;
+      Site : Landin.Provenance.Origin;
+      Mixed, Big, Pair, Float_Array, Nested, Triple : IR.Nominal_Type_Id;
+      Facts : constant Targets.Target_Facts := Targets.Linux_RV64;
+      Integer : constant IR.Signature_Part :=
+        (Kind => Landin.Types.U64, others => <>);
+      Floating : constant IR.Signature_Part :=
+        (Kind => Landin.Types.F64, others => <>);
+   begin
+      Prepare (Item, Unit, Site);
+      Mixed := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Mixed,
+         [(Element => Landin.Types.F32, others => <>),
+          (Element => Landin.Types.U64, others => <>)], Landin.Layouts.C);
+      Big := IR.Add_Nominal_Type (Unit, 2);
+      IR.Set_Nominal_Shape
+        (Unit, Big, [1 .. 3 => (Element => Landin.Types.U64, others => <>)],
+         Landin.Layouts.C);
+      Pair := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Pair, [1 .. 2 => (Element => Landin.Types.U64, others => <>)],
+         Landin.Layouts.C);
+      Float_Array := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Float_Array,
+         [1 => (Kind => IR.Array_Field_Shape, Element => Landin.Types.F32,
+                Length => 2, others => <>)], Landin.Layouts.C);
+      Nested := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Nested,
+         [1 => (Kind => IR.Aggregate_Field_Shape, Nominal => Float_Array,
+                others => <>)], Landin.Layouts.C);
+      Triple := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Triple,
+         [1 => (Kind => IR.Array_Field_Shape, Element => Landin.Types.F32,
+                Length => 3, others => <>)], Landin.Layouts.C);
+      declare
+         Shape : constant ABI.Classification := ABI.Classify
+           (Unit, (Kind => Landin.Types.Aggregate, Nominal => Mixed,
+                   others => <>), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Shape.Size = 16 and then Shape.Count = 2
+            and then Shape.Parts (1).Class = ABI.Float_Class
+            and then Shape.Parts (1).Offset = 0
+            and then Shape.Parts (1).Bytes = 4
+            and then Shape.Parts (2).Class = ABI.Integer_Class
+            and then Shape.Parts (2).Offset = 8,
+            "mixed aggregates keep exact field offsets and carrier widths");
+      end;
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [1 .. 8 => Integer],
+            (Kind => Landin.Types.Aggregate, Nominal => Big, others => <>),
+            Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Result.Shape.Indirect
+            and then Plan.Result.Parts (1).Register = 1
+            and then Plan.Arguments (1).Parts (1).Register = 2
+            and then Plan.Arguments (8).Parts (1).Register = 0
+            and then Plan.Arguments (8).Parts (1).Stack_At = 0
+            and then Plan.Stack_Bytes = 16,
+            "indirect results consume a0 before explicit arguments");
+      end;
+      declare
+         Arguments : IR.Signature_Part_Array (1 .. 8) := [others => Integer];
+      begin
+         Arguments (8) := (Kind => Landin.Types.Aggregate, Nominal => Pair,
+                           others => <>);
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.Arguments (8).Parts (1).Register = 8
+               and then Plan.Arguments (8).Parts (2).Register = 0
+               and then Plan.Arguments (8).Parts (2).Stack_At = 0
+               and then Plan.Stack_Bytes = 16,
+               "a two-word aggregate splits between a7 and the stack");
+         end;
+      end;
+      declare
+         Arguments : IR.Signature_Part_Array (1 .. 10) :=
+           [others => Floating];
+      begin
+         Arguments (8) := (Kind => Landin.Types.Aggregate, Nominal => Mixed,
+                           others => <>);
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.Arguments (8).Parts (1).Register = 8
+               and then Plan.Arguments (8).Parts (2).Register = 1
+               and then Plan.Arguments (9).Shape.Parts (1).Class
+                 = ABI.Integer_Class
+               and then Plan.Arguments (9).Parts (1).Register = 2,
+               "mixed fields consume independent FP and integer banks");
+         end;
+      end;
+      declare
+         Arguments : IR.Signature_Part_Array (1 .. 11) := [others => Integer];
+      begin
+         Arguments (9) := (Kind => Landin.Types.Aggregate, Nominal => Mixed,
+                           others => <>);
+         Arguments (10) := Floating;
+         Arguments (11) := Floating;
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.Arguments (9).Shape.Parts (1).Class
+                 = ABI.Integer_Class
+               and then Plan.Arguments (9).Parts (1).Register = 0
+               and then Plan.Arguments (10).Parts (1).Register = 1
+               and then Plan.Arguments (11).Parts (1).Register = 2,
+               "mixed rollback leaves available FP registers for later args");
+         end;
+      end;
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [1 .. 10 => Floating], (others => <>), Facts,
+            Fixed_Count => 1);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.FP_Used = 1 and then Plan.GP_Used = 8
+            and then Plan.Arguments (1).Shape.Parts (1).Class = ABI.Float_Class
+            and then Plan.Arguments (2).Shape.Parts (1).Class
+              = ABI.Integer_Class
+            and then Plan.Arguments (2).Parts (1).Register = 1
+            and then Plan.Arguments (10).Parts (1).Register = 0,
+            "unnamed floats use the integer convention after promotion");
+      end;
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [1 => (Kind => Landin.Types.Aggregate, Nominal => Nested,
+                         others => <>)],
+            (Kind => Landin.Types.Aggregate, Nominal => Nested, others => <>),
+            Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Arguments (1).Shape.Size = 8
+            and then Plan.Arguments (1).Shape.Count = 2
+            and then Plan.Arguments (1).Shape.Parts (1).Class = ABI.Float_Class
+            and then Plan.Arguments (1).Shape.Parts (2).Class = ABI.Float_Class
+            and then Plan.Arguments (1).Shape.Parts (2).Offset = 4
+            and then Plan.Arguments (1).Shape.Parts (2).Bytes = 4
+            and then Plan.Arguments (1).Parts (1).Register = 1
+            and then Plan.Arguments (1).Parts (2).Register = 2
+            and then Plan.Result.Parts (1).Register = 1
+            and then Plan.Result.Parts (2).Register = 2,
+            "nested array leaves flatten into two actual FP carriers");
+      end;
+      declare
+         Shape : constant ABI.Classification := ABI.Classify
+           (Unit, (Kind => Landin.Types.Aggregate, Nominal => Triple,
+                   others => <>), Facts);
+         Word : constant ABI.Classification := ABI.Classify
+           (Unit, (Kind => Landin.Types.U32, others => <>), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Shape.Size = 12 and then Shape.Count = 2
+            and then Shape.Parts (1).Class = ABI.Integer_Class
+            and then Shape.Parts (1).Bytes = 8
+            and then Shape.Parts (2).Offset = 8
+            and then Shape.Parts (2).Bytes = 4
+            and then Word.Parts (1).Scalar = Landin.Types.U32
+            and then Word.Parts (1).Bytes = 4,
+            "three floats fall back without reading past a partial word");
+      end;
+      declare
+         Arguments : IR.Signature_Part_Array (1 .. 9) :=
+           [others => Floating];
+      begin
+         Arguments (9) := (Kind => Landin.Types.F32, others => <>);
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.FP_Used = 8 and then Plan.GP_Used = 1
+               and then Plan.Arguments (9).Shape.Parts (1).Class
+                 = ABI.Integer_Class
+               and then Plan.Arguments (9).Shape.Parts (1).Scalar
+                 = Landin.Types.F32
+               and then Plan.Arguments (9).Shape.Parts (1).Bytes = 4
+               and then Plan.Arguments (9).Parts (1).Register = 1,
+               "FP exhaustion transports a single float's bits through a0");
+         end;
+         Arguments := [others => Integer];
+         Arguments (9) := Floating;
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.GP_Used = 8 and then Plan.FP_Used = 1
+               and then Plan.Arguments (9).Shape.Parts (1).Class
+                 = ABI.Float_Class
+               and then Plan.Arguments (9).Parts (1).Register = 1
+               and then Plan.Stack_Bytes = 0,
+               "exhausted integer registers leave fa0 independently usable");
+         end;
+      end;
+      declare
+         Arguments : IR.Signature_Part_Array (1 .. 9) :=
+           [others => Floating];
+      begin
+         Arguments (8) := (Kind => Landin.Types.Aggregate, Nominal => Nested,
+                           others => <>);
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, Arguments, (others => <>), Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Plan.Arguments (8).Shape.Count = 1
+               and then Plan.Arguments (8).Shape.Parts (1).Class
+                 = ABI.Integer_Class
+               and then Plan.Arguments (8).Parts (1).Register = 1
+               and then Plan.Arguments (9).Parts (1).Register = 8
+               and then Plan.FP_Used = 8,
+               "two-float rollback keeps fa7 for the next scalar");
+         end;
+      end;
+      begin
+         declare
+            Plan : constant ABI.Plan := ABI.Assign
+              (Unit, [1 .. 9 => Integer], (others => <>), Facts,
+               Maximum => 15);
+         begin
+            Landin.Testing.Fail
+              (Item, "LP64D ignored stack padding limit:"
+               & Targets.Byte_Count'Image (Plan.Stack_Bytes));
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check
+              (Item, True, "LP64D final stack padding obeys its budget");
+      end;
+   end RiscV_Carriers;
+
+   procedure RiscV_Selection (Item : in out Landin.Testing.Context);
+
+   procedure RiscV_Selection (Item : in out Landin.Testing.Context) is
+      package R renames Landin.Backend.RiscV_Instructions;
+      package ISA renames Targets.RiscV_ISA;
+      LF : constant Character := Character'Val (10);
+      use type R.Pattern;
+   begin
+      for Zba in Boolean loop
+         for Xtheadba in Boolean loop
+            declare
+               Written : constant String := "rv64gc"
+                 & (if Zba then "_zba" else "")
+                 & (if Xtheadba then "_xtheadba" else "");
+               Selected : constant ISA.Instruction_Set := ISA.Named (Written);
+            begin
+               Landin.Testing.Check
+                 (Item, ISA.Name (Selected) = Written
+                  and then ISA.Has (Selected, ISA.Zba) = Zba
+                  and then ISA.Has (Selected, ISA.Xtheadba) = Xtheadba
+                  and then (for all Feature in ISA.I .. ISA.Zifencei =>
+                              ISA.Has (Selected, Feature)),
+                  "ISA strings retain each independent extension set");
+            end;
+         end loop;
+      end loop;
+      Landin.Testing.Check
+        (Item, not ISA.Is_Supported ("rv32gc")
+         and then not ISA.Is_Supported ("rv64g")
+         and then not ISA.Is_Supported ("rv64gc_zbb")
+         and then not ISA.Is_Supported ("rv64gc_xtheadba_zba")
+         and then not ISA.Is_Supported ("rv64gc_zba_zba"),
+         "unimplemented and noncanonical strings are refused");
+      Landin.Testing.Check
+        (Item, R.Immediate (5, 2 ** 63, 64)
+           = "li x5, -9223372036854775808"
+         and then R.Immediate (5, R.Pattern'Last, 64) = "li x5, -1"
+         and then R.Immediate (5, 2 ** 32 + 42, 32) = "li x5, 42"
+         and then R.Immediate (5, 2 ** 31, 32) = "li x5, -2147483648",
+         "immediates preserve the target pattern at both machine widths");
+      Landin.Testing.Check
+        (Item, R.Memory (False, Targets.Byte_4, 5, 6, 64)
+           = "lwu x5, 0(x6)"
+         and then R.Memory (False, Targets.Byte_4, 5, 6, 32)
+           = "lw x5, 0(x6)"
+         and then R.Memory (False, Targets.Byte_1, 5, 6, 64,
+                            -2048, True) = "lb x5, -2048(x6)"
+         and then R.Memory (True, Targets.Byte_8, 5, 6, 64, 2047)
+           = "sd x5, 2047(x6)",
+         "memory selection respects XLEN, signedness and immediate limits");
+      Landin.Testing.Check
+        (Item, R.Indexed_Address (5, 5, 6, 7, 3, 64, False, False)
+           = "slli x7, x6, 3" & LF & "add x5, x5, x7"
+         and then R.Indexed_Address (5, 5, 6, 7, 3, 64, False, True)
+           = "th.addsl x5, x5, x6, 3"
+         and then R.Indexed_Address (5, 5, 6, 7, 3, 32, True, False)
+           = "sh3add x5, x6, x5"
+         and then R.Indexed_Address (5, 5, 6, 7, 3, 64, True, True)
+           = "sh3add x5, x6, x5"
+         and then R.Indexed_Address (5, 5, 6, 7, 4, 64, True, True)
+           = "slli x7, x6, 4" & LF & "add x5, x5, x7",
+         "independent extensions select equivalent address arithmetic");
+   end RiscV_Selection;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend plans", "RISC-V LP64D carriers",
+         RiscV_Carriers'Access);
+      Landin.Testing.Register
+        (Into, "backend plans", "RISC-V instruction selection",
+         RiscV_Selection'Access);
       Landin.Testing.Register
         (Into, "backend plans", "native argument counts stay encodable",
          Native_Argument_Counts_Stay_Encodable'Access);

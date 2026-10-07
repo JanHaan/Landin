@@ -3,7 +3,7 @@ summary: D188 an inout argument for a range-subtype parameter is a place of that
 constructs: 0660, 0900
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/range-subtype-inout-must-match/program.ldn
 status: 1

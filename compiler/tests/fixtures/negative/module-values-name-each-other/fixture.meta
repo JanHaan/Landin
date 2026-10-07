@@ -3,4 +3,4 @@ summary: [1940] a chain of module values that comes back to where it began names
 constructs: 1940
 program: program.ldn
 codes: L0305, L0305
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,4 +2,4 @@ class: positive
 summary: [1810] inc and dec are statements, not operators
 constructs: 0400, 1810
 program: program.ldn
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

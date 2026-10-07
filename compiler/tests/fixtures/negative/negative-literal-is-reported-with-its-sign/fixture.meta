@@ -3,7 +3,7 @@ summary: [1880] checks a literal against its context, and `-1` for a `u8` is rep
 program: program.ldn
 codes: L0300
 constructs: 0200, 1880
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/negative-literal-is-reported-with-its-sign/program.ldn
 status: 1

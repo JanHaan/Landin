@@ -3,4 +3,4 @@ summary: module scalar checking agrees with target-aware folding before the back
 constructs: 0290, 0300, 0320, 0330, 1740, 1940, 1950
 program: program.ldn
 codes: L0300, L0306, L0306, L0300, L0306, L0300
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

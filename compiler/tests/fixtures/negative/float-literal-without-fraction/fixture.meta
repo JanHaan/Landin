@@ -3,4 +3,4 @@ summary: [0210] a float has digits on both sides of its dot; an exponent on a ba
 program: program.ldn
 codes: L0321
 constructs: 0210, 1770
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

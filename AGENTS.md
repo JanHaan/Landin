@@ -132,6 +132,8 @@ still succeed. The linked full run contains the target-test results.
 | `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | self-hosted `freebsd-amd64`, `freebsd-arm64` | execute the applicable runtime corpus in accelerated FreeBSD VMs hosted on Linux, including guest CPU confirmation |
 | `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | self-hosted `freebsd-amd64`, `freebsd-arm64` | native FreeBSD LLDB source stops, frames, local values and unwinding |
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | self-hosted `freebsd-amd64`, `freebsd-arm64` | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
+| `rv64-emit` matrix | ubuntu-24.04 | cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
+| `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
 | `determinism` | ubuntu-24.04, ubuntu-24.04-arm and macos-15 | the called workflow emits the fixture manifest on each host and compares them |
 
 A release compile error surfaces in its host's build job; debug compile

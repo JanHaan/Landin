@@ -3,4 +3,4 @@ summary: D24 refuses a module array literal whose element run does not equal the
 constructs: 0040, 0520, 1740
 program: program.ldn
 codes: L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

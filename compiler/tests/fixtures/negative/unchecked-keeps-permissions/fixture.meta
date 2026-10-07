@@ -3,4 +3,4 @@ summary: D187 a region removes no static refusal, so [0430]'s reference permissi
 constructs: 0430, 0570, 1120
 program: program.ldn
 codes: L0303
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -6,5 +6,5 @@ c-sources: peer.c
 run_expect: expected.txt
 status: 0
 constructs: 1570, 1580, 1600
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0326, L0326, L0326, L0326, L0326

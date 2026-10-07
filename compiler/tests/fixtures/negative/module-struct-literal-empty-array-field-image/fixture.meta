@@ -3,7 +3,7 @@ summary: D67 gives an accepted zero-length array field a zero image but no nonem
 constructs: 0040, 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/module-struct-literal-empty-array-field-image/program.ldn
 status: 1

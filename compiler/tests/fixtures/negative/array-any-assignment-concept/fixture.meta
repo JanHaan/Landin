@@ -2,7 +2,7 @@ class: negative
 summary: array any assignment concept preserves complete array element rules
 program: main.ldn
 constructs: 0430, 0440, 0520, 0540, 0770, 1290, 1370, 1920
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 codes: L0301
 expect: expected.txt
 args: ../tests/fixtures/negative/array-any-assignment-concept/main.ldn

@@ -37,6 +37,19 @@ __asm__(".text\n"
         ".size r440_call_renamed, .-r440_call_renamed\n"
 #endif
         );
+#elif defined(__riscv) && __riscv_xlen == 64
+__asm__(".text\n"
+        ".type r440_call_renamed, @function\n"
+        "r440_call_renamed:\n"
+        "addi sp, sp, -16\n"
+        "sd ra, 8(sp)\n"
+        "li a0, -1\n"
+        "li a1, 0\n"
+        "call r440_renamed_main\n"
+        "ld ra, 8(sp)\n"
+        "addi sp, sp, 16\n"
+        "ret\n"
+        ".size r440_call_renamed, .-r440_call_renamed\n");
 #else
 __asm__(".text\n"
         ".type r440_call_renamed, @function\n"
