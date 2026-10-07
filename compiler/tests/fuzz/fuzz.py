@@ -259,7 +259,10 @@ class Server:
                     problem = "shutdown timed out after %d seconds" % self.seconds
                 except Exception as error:
                     problem = "shutdown: %s: %s" % (type(error).__name__, error)
-                if problem and "closed its output" in problem and \
+                # Either pipe can close before waitpid exposes the child's
+                # status. Preserve that status instead of racing it with kill.
+                if problem and any("closed its " + pipe in problem
+                                   for pipe in ("input", "output")) and \
                         self.process.poll() is None:
                     try:
                         self.process.wait(timeout=self.seconds)

@@ -159,6 +159,38 @@ class CloseOracleTest(unittest.TestCase):
     def test_rollover_close_crash(self):
         self.assertIn("70", self.assert_hit(3, 3, 2, 500001))
 
+    def test_closed_pipe_before_exit_status_is_reaped(self):
+        for pipe in ("input", "output"):
+            with self.subTest(pipe=pipe):
+                server = fuzz.Server.__new__(fuzz.Server)
+                server.seconds = 1
+                server.process = mock.Mock(returncode=None)
+                server.process.poll.side_effect = lambda: server.process.returncode
+                server.process.wait.side_effect = lambda **_: setattr(
+                    server.process, "returncode", 70)
+                server.request = mock.Mock(side_effect=fuzz.Broken(
+                    "the server closed its " + pipe))
+                self.assertEqual(server.stop(),
+                                 "shutdown: the server closed its %s, exit status 70" % pipe)
+                server.process.wait.assert_called_once_with(timeout=1)
+                server.process.kill.assert_not_called()
+
+    def test_closed_input_without_exit_keeps_bounded_failure(self):
+        server = fuzz.Server.__new__(fuzz.Server)
+        server.seconds = 1
+        server.process = mock.Mock(returncode=None)
+        server.process.poll.side_effect = lambda: server.process.returncode
+        server.process.wait.side_effect = [
+            fuzz.subprocess.TimeoutExpired("stub", 1), None]
+        server.process.kill.side_effect = lambda: setattr(
+            server.process, "returncode", -9)
+        server.request = mock.Mock(side_effect=fuzz.Broken(
+            "the server closed its input"))
+        self.assertEqual(server.stop(), "shutdown: the server closed its input")
+        self.assertEqual(server.process.wait.call_args_list,
+                         [mock.call(timeout=1), mock.call()])
+        server.process.kill.assert_called_once_with()
+
     def test_healthy_shutdown_and_rollover(self):
         status, output, artifacts, _ = self.run_driver(3, 2)
         self.assertEqual(status, 0, output)
