@@ -25,6 +25,7 @@ with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.RiscV;
 with Landin.Backend.X86_64;
 with Landin.Debugging;
 with Landin.IR;
@@ -8049,6 +8050,96 @@ package body Landin.Tests.Backend_Suite is
       end;
    end RV64_Assembly_Registers_Are_Verified;
 
+   --  The A extension only guarantees eventual success for constrained
+   --  reservation loops: at most 16 instructions and no JALR, including
+   --  the retry. General far-branch relaxation must never enter this region.
+   procedure RV64_Reservation_Loops_Are_Constrained
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Reservation_Loops_Are_Constrained
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "public rmw: (a: ptr mut u8, b: ptr mut u16, c: ptr mut u32,"
+         & " d: ptr mut u64) -> (r: u64) =" & LF
+         & "    v := compiler.atomic_add(a, 1, compiler.relaxed)" & LF
+         & "    w := compiler.atomic_exchange(b, 2, compiler.acq_rel)" & LF
+         & "    x := compiler.atomic_compare_exchange(a, 3, 4,"
+         & " compiler.seq_cst, compiler.acquire)" & LF
+         & "    y := compiler.atomic_compare_exchange(b, 3, 4,"
+         & " compiler.seq_cst, compiler.acquire)" & LF
+         & "    z := compiler.atomic_compare_exchange(c, 3, 4,"
+         & " compiler.seq_cst, compiler.acquire)" & LF
+         & "    q := compiler.atomic_compare_exchange(d, 3, 4,"
+         & " compiler.seq_cst, compiler.acquire)" & LF
+         & "    r = u64(v) + u64(w) + u64(x) + u64(y) + u64(z) + q" & LF
+         & "end rmw" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the RMW program is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.RiscV.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
+         Landin.Optimization.Reference_Options, Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         From : Positive := Text'First;
+         Loops : Natural := 0;
+      begin
+         loop
+            declare
+               Load_At : constant Natural :=
+                 Index (Text (From .. Text'Last), HT & "lr.");
+            begin
+               exit when Load_At = 0;
+               Loops := Loops + 1;
+               declare
+                  Label_At : constant Positive := Ada.Strings.Fixed.Index
+                    (Text (Text'First .. Load_At - 3), "" & LF,
+                     Ada.Strings.Backward) + 1;
+                  Retry : constant String :=
+                    Text (Label_At .. Load_At - 3);
+                  Store_At : constant Natural :=
+                    Index (Text (Load_At .. Text'Last), HT & "sc.");
+                  Store_End : constant Natural :=
+                    Index (Text (Store_At .. Text'Last), "" & LF);
+                  Retry_End : constant Natural :=
+                    Index (Text (Store_End + 1 .. Text'Last), "" & LF);
+                  Region : constant String := Text (Load_At .. Retry_End);
+               begin
+                  Landin.Testing.Check
+                    (Item, Occurrences (Region, "" & HT) <= 16,
+                     "the reservation sequence and retry fit 16 instructions");
+                  Landin.Testing.Check
+                    (Item, not Contains (Region, "lla ")
+                       and then not Contains (Region, "jr ")
+                       and then not Contains (Region, "jalr "),
+                     "the constrained loop contains no indirect jump");
+                  Landin.Testing.Check
+                    (Item, Text (Store_End + 1 .. Retry_End)
+                       = HT & "bnez x30, " & Retry & LF,
+                     "the SC failure directly retries the matching LR");
+                  From := Retry_End + 1;
+               end;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Loops, 6,
+            "subword RMW and compare exchange at every width are nonempty");
+      end;
+   end RV64_Reservation_Loops_Are_Constrained;
+
    --  [1630] on arm64: a declared x19 saved in its frame home and restored
    --  with CFI, the text filled at each operand's width, and the verifier's
    --  refusal, under Darwin's description and Linux's alike, of x18, the
@@ -8733,6 +8824,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RV64 assembly registers are verified",
          RV64_Assembly_Registers_Are_Verified'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RV64 reservation loops are constrained",
+         RV64_Reservation_Loops_Are_Constrained'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

@@ -691,8 +691,7 @@ package body Landin.Backend.RiscV is
             elsif Condition = "ne" then
                Test := Unbounded.To_Unbounded_String ("beqz x20, ");
             elsif Condition in "mi" | "lt" then
-               Emit ("or x25, x21, x24");
-               Test := Unbounded.To_Unbounded_String ("bnez x25, ");
+               Test := Unbounded.To_Unbounded_String ("bnez x21, ");
             elsif Condition = "ls" then
                Test := Unbounded.To_Unbounded_String ("bnez x23, ");
             elsif Condition = "ge" then
@@ -2523,7 +2522,13 @@ package body Landin.Backend.RiscV is
                                  Emit ("mv x5, x20");
                               end if;
                               if M = Atomic_Compare_Exchange then
-                                 Emit ("bne x5, x7, " & Done);
+                                 --  This forward escape and the retry below
+                                 --  are adjacent local branches. Keep the
+                                 --  A extension's constrained LR/SC loop
+                                 --  within 16 base-I instructions: far-branch
+                                 --  relaxation would introduce JALR.
+                                 Put (Character'Val (9)
+                                   & "bne x5, x7, " & Done);
                                  Emit ("mv x21, x28");
                               elsif M = Atomic_Add then
                                  Emit ("add x21, x5, x7");
@@ -2539,7 +2544,7 @@ package body Landin.Backend.RiscV is
                                  Emit ("or x21, x25, x21");
                               end if;
                               Emit ("sc." & Width & ".rl x30, x21, (x18)");
-                              Emit ("bnez x30, " & Retry);
+                              Put (Character'Val (9) & "bnez x30, " & Retry);
                               Put (Done & ":");
                            end if;
                         end if;
@@ -3342,14 +3347,23 @@ package body Landin.Backend.RiscV is
          then
             declare
                Retry : constant String := Fresh;
+               Busy : constant String := Fresh;
+               Claimed : constant String := Fresh;
             begin
                Address ("x18", Local_Prefix & "landin_panic_active");
                Put (Retry & ":");
                Emit ("lr.w.aq x19, (x18)");
-               Emit ("bnez x19, " & Hard_Trap);
+               --  The five-instruction reservation loop uses only direct
+               --  local branches. Its busy escape leaves the loop before
+               --  the possibly distant hard-trap jump.
+               Put (Character'Val (9) & "bnez x19, " & Busy);
                Emit ("li x19, 1");
                Emit ("sc.w.rl x9, x19, (x18)");
-               Emit ("bnez x9, " & Retry);
+               Put (Character'Val (9) & "bnez x9, " & Retry);
+               Emit ("j " & Claimed);
+               Put (Busy & ":");
+               Emit ("j " & Hard_Trap);
+               Put (Claimed & ":");
             end;
          end if;
          if Is_C_Item (Item) then
