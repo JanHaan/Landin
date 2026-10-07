@@ -5,5 +5,5 @@ expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/written-type-machine-ordinary-call/main.ldn
 status: 1
 codes: L0345
-constructs: 0310, 0650, 0870, 1580
+constructs: 0310, 0650, 0870, 1990
 targets: cortex-m
