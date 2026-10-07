@@ -3,6 +3,10 @@ sample: type = struct
     wide: f64
 end sample
 
+omitted32: f32
+omitted64: f64
+zeroed32: f32 = zeroed
+zeroed64: f64 = zeroed
 halfway: f32 = 1.0 + 0x1.0p-24
 third32: f32 = 1.0 / 3.0
 third64: f64 = 1.0 / 3.0
@@ -18,7 +22,11 @@ module_sample: sample = sample(
     wide: (3.0 + 5.0) * 0.5)
 
 public main: () -> (code: i32) =
-    if halfway == 1.0
+    if 1.0 / omitted32 == f32.infinity
+      and 1.0 / omitted64 == f64.infinity
+      and 1.0 / zeroed32 == f32.infinity
+      and 1.0 / zeroed64 == f64.infinity
+      and halfway == 1.0
       and third32 == 0x1.555556p-2
       and third64 == 0x1.5555555555555p-2
       and subnormal == 0x1.0p-1023

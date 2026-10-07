@@ -14987,8 +14987,12 @@ package body Landin.Stages.Lowering is
          then
             --  D10/D39: omitted and explicit scalar zero initializers use
             --  the same value. Booleans already took the static-image path.
-            Answer :=
-              IR.Emit_Number (Unit.all, Filling, Held, 0, False, Site);
+            if Held in Ty.Float_Name then
+               Answer := IR.Emit_Float (Unit.all, Filling, Held, 0, Site);
+            else
+               Answer :=
+                 IR.Emit_Number (Unit.all, Filling, Held, 0, False, Site);
+            end if;
          else
             Answer := Lower_Expression (Of_Tree, Value, Res.Program_Scope);
          end if;
