@@ -7,7 +7,7 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.4 — more hosts. 0.1.0 was the first version
+Version 0.2.5 — diagnostics and repairs. 0.1.0 was the first version
 of the specification proper, arrived at over seventeen pre-release
 revisions, four prototype programs and two outside reviews; 0.2.0
 sealed the first implementation roadmap that followed, over which a
@@ -25,13 +25,18 @@ has one layout, which `refine fmt` gives it, D252; an editor is answered
 by `refine lsp`, past a broken routine body, D253; and a doc comment is
 about the declaration directly below it, [2000] and D254. A UTF-8 index
 decodes the codepoint it selects, D249, and a range selection is a view
-and not a place, D250. 0.2.4 adds Linux arm64, the standard AAPCS64 with
+and not a place, D250. 0.2.4 added Linux arm64, the standard AAPCS64 with
 an unsigned plain char, D256; a build assumes a CPU feature level that
 changes no layout, D255, and targets the compiler's own host unless
 another is named, D257. A traversal that can fail is written `try for`,
 [0960] and [1320]; a capability parameter selects a provider without
 excluding new roots, D258; and a UTF-8 ordinal index spans the whole
-text view, D259. That history is kept in a separate archive; the part of it with
+text view, D259. 0.2.5 keeps a parse's mistake inside its construct and
+suppresses the reports caused by it, D260; reports a refused statement as
+the smallest change that mends it and offers that repair to tools, D261;
+refuses an import without a root at the import, D262; and lets a checker
+refusal poison what it refused, D263. That history is kept in a separate
+archive; the part of it with
 lasting value is at the end of this file, under WHAT WAS TRIED AND
 DROPPED.
 
