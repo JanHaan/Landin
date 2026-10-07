@@ -338,7 +338,8 @@ package body Landin.Backend.RiscV is
    --  The shared encoder uses RV64's DWARF frame-register number.
    function ELF_Debug_Sections is new Landin.Backend.Dwarf.Sections
      (Frame, Debug_Frame_Access, Debug_Frame_Access,
-      Debug_Plan, Debug_Frame, Debug_Slot, 8, False);
+      Debug_Plan, Debug_Frame, Debug_Slot, 8, False,
+      Single_LEB_Operand => True);
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
@@ -3262,6 +3263,12 @@ package body Landin.Backend.RiscV is
                      C_Result (Value);
                   elsif Result in Landin.Types.Scalar_Name then
                      Load_Value (Operand (1), "x10");
+                     if Item = Hosted_Entry then
+                        --  The no-argument language entry returns libc's
+                        --  C int, whose LP64D carrier is sign-extended to
+                        --  XLEN even when the language bit carrier is not.
+                        Emit ("sext.w x10, x10");
+                     end if;
                   elsif Result in Landin.Types.Aggregate |
                     Landin.Types.Fixed_Array
                   then

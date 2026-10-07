@@ -22,6 +22,17 @@ inputs:
 runs:
   using: composite
   steps:
+    - if: runner.os == 'Linux' && runner.arch == 'X64'
+      shell: bash
+      run: |
+        # configure-apt-sources.sh prioritizes Azure in this mirror list.
+        # Observed package downloads took 42 seconds or over 15 minutes;
+        # retain the image's canonical archive/security routes and signing.
+        # https://github.com/actions/runner-images/blob/main/images/ubuntu/scripts/build/configure-apt-sources.sh
+        if test -f /etc/apt/apt-mirrors.txt; then
+          sudo sed -i '\|^http://azure\.archive\.ubuntu\.com/ubuntu/|d' /etc/apt/apt-mirrors.txt
+          cat /etc/apt/apt-mirrors.txt
+        fi
     - shell: bash
       run: |
         set -eu

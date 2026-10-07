@@ -48,6 +48,8 @@ package Landin.Backend.Dwarf is
          Indirect, Address_Only : Boolean) return String;
       Frame_Register : Natural;
       Mach_O : Boolean;
+      --  Older GNU RISC-V assemblers accept one ULEB operand per directive.
+      Single_LEB_Operand : Boolean := False;
    function Sections
      (Of_Unit : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

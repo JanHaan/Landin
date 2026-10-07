@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: LP64D native main returns a negative i32 sign-extended through the complete XLEN register
+program: program.ldn
+c-sources: peer.c
+c-args: -Wl,--wrap=main
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580
+targets: linux-rv64

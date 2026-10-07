@@ -18,7 +18,7 @@ what they cost.
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
-| every push and pull request | `.github/workflows/gate.yml` | every target unless the verified explanatory-only reuse exception below applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| every push and pull request | `.github/workflows/gate.yml` | every target unless the verified explanatory-only reuse exception below applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; physical RV64 Linux runtime, GDB, C ABI and ISA-level verdicts on RISE runners; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 
 From the repository root on a Mac, with the default `darwin-arm64` build tag:
 

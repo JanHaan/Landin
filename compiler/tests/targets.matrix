@@ -11,6 +11,7 @@ abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/core-io-file-identity | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
+abi/lp64d-main-return | linux-rv64
 abi/lp64d-varargs | linux-rv64
 abi/r440-bindings-generated | linux-x86-64, freebsd-x86-64
 abi/r440-errno-interposition | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

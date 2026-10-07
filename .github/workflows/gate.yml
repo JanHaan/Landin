@@ -897,9 +897,12 @@ jobs:
         run: |
           ./scripts/test.sh --host --target=linux-x86-64 --case='backend/RV64 assembly registers are verified'
       - name: Install LP64D cross toolchain
+        timeout-minutes: 25
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            -o Acquire::Retries=3 update -qq
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            -o Acquire::Retries=3 install -y --no-install-recommends \
             gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
           riscv64-linux-gnu-gcc --version
           riscv64-linux-gnu-as --version
@@ -942,10 +945,13 @@ jobs:
           name: rv64-payload-${{ matrix.kind }}
           path: ${{ runner.temp }}/rv64-input
       - name: Confirm native tool availability
+        timeout-minutes: 10
         run: |
           if ! command -v gdb; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends gdb
+            sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+              -o Acquire::Retries=3 update -qq
+            sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+              -o Acquire::Retries=3 install -y --no-install-recommends gdb
           fi
           uname -a
           cat /proc/cpuinfo

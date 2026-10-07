@@ -8140,6 +8140,134 @@ package body Landin.Tests.Backend_Suite is
       end;
    end RV64_Reservation_Loops_Are_Constrained;
 
+   --  GNU RISC-V as 2.42 requires one ULEB128 operand per directive, even
+   --  for abbreviation attribute/form pairs. Keep all entries and forms
+   --  while serializing their operands separately for this target.
+   procedure RV64_Dwarf_Uses_Single_LEB_Operands
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Dwarf_Uses_Single_LEB_Operands
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Info : aliased Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+   begin
+      Lower
+        (Work,
+         "public f: (a: u64) -> (r: u64) =" & LF
+         & "    local := a + 1" & LF
+         & "    r = local" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the source with a parameter and local is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+      Landin.Backend.RiscV.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
+         Landin.Optimization.Reference_Options, Assembly, Report,
+         Debug => Info'Access);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         From : Positive := Text'First;
+         Operands : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, ".Ldebug_abbrev:" & LF)
+              and then Contains (Text, ".Ldebug_info:" & LF)
+              and then Contains (Text, ".Ldebug_loc:" & LF),
+            "abbreviations, types and local locations are emitted");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".uleb128 0x25" & LF
+              & HT & ".uleb128 0x08" & LF),
+            "the attribute and form retain their order as separate operands");
+         loop
+            declare
+               Operand_At : constant Natural :=
+                 Index (Text (From .. Text'Last), HT & ".uleb128 ");
+            begin
+               exit when Operand_At = 0;
+               declare
+                  Line_End : constant Positive :=
+                    Index (Text (Operand_At .. Text'Last), "" & LF);
+               begin
+                  Operands := Operands + 1;
+                  Landin.Testing.Check
+                    (Item, not Contains
+                       (Text (Operand_At .. Line_End), ","),
+                     "each RV64 ULEB128 directive has exactly one operand");
+                  From := Line_End + 1;
+               end;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Operands > 100,
+            "the full abbreviation and type selection is nonempty");
+      end;
+   end RV64_Dwarf_Uses_Single_LEB_Operands;
+
+   procedure RV64_Hosted_Main_Returns_A_Signed_C_Int
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Hosted_Main_Returns_A_Signed_C_Int
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Native_Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "public main: () -> (code: i32) =" & LF
+         & "    code = -1" & LF
+         & "end main" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the negative status entry is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.RiscV.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
+         Landin.Optimization.Reference_Options, Assembly, Report,
+         Hosted_Entry => 1);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         Extend_At : constant Natural := Index (Text, "sext.w x10, x10");
+         Load_At : constant Natural := Index (Text, "lwu x10, ");
+      begin
+         Landin.Testing.Check
+           (Item, Load_At > 0 and then Extend_At > Load_At
+              and then Extend_At < Index (Text, HT & "ret" & LF),
+            "the hosted i32 status is sign-extended after load before return");
+      end;
+      Landin.Backend.RiscV.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
+         Landin.Optimization.Reference_Options, Assembly, Native_Report);
+      Landin.Testing.Check
+        (Item, not Contains (Ada.Strings.Unbounded.To_String (Assembly),
+           "sext.w x10, x10"),
+         "the ordinary language return keeps its native bit carrier");
+   end RV64_Hosted_Main_Returns_A_Signed_C_Int;
+
    --  [1630] on arm64: a declared x19 saved in its frame home and restored
    --  with CFI, the text filled at each operand's width, and the verifier's
    --  refusal, under Darwin's description and Linux's alike, of x18, the
@@ -8827,6 +8955,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RV64 reservation loops are constrained",
          RV64_Reservation_Loops_Are_Constrained'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RV64 DWARF uses single LEB operands",
+         RV64_Dwarf_Uses_Single_LEB_Operands'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RV64 hosted main returns a signed C int",
+         RV64_Hosted_Main_Returns_A_Signed_C_Int'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

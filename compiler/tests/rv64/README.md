@@ -39,7 +39,9 @@ assumed from the CPU name.
 The ABI lane refuses fixtures without separately compiled C peers and
 requires a nonempty coverage set for imported and exported scalar and
 floating calls, `layout(c)` aggregates, callbacks and variadic calls. LP64D
-specific fixtures stress high-bit unsigned word arguments/results and
+specific fixtures stress high-bit unsigned word arguments/results, observe
+native main's complete XLEN return register through an independent linker
+wrapper, and check
 promoted unnamed floating arguments through integer registers and stack
 slots. A peer independently checks Linux `struct stat` using the native
 headers. GDB sessions at four profiles require source-line stops, three

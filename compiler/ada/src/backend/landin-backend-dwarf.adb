@@ -1035,11 +1035,23 @@ package body Landin.Backend.Dwarf is
       procedure Abbreviation
         (Code, Tag : Natural; Children : Boolean; Attributes : String)
       is
+         Fields : constant String := Attributes & ",0,0";
+         First : Positive := Fields'First;
       begin
          U (Code);
          U (Tag);
          Put (HT & ".byte " & (if Children then "1" else "0"));
-         Put (HT & ".uleb128 " & Attributes & ",0,0");
+         if Single_LEB_Operand then
+            for Index in Fields'Range loop
+               if Fields (Index) = ',' then
+                  Put (HT & ".uleb128 " & Fields (First .. Index - 1));
+                  First := Index + 1;
+               end if;
+            end loop;
+            Put (HT & ".uleb128 " & Fields (First .. Fields'Last));
+         else
+            Put (HT & ".uleb128 " & Fields);
+         end if;
       end Abbreviation;
    begin
       Put (Section ("abbrev", Mach_O));

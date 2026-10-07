@@ -163,6 +163,20 @@ class RV64Controls(unittest.TestCase):
         self.assertIn('runs-on: ubuntu-24.04-riscv\n', workflow)
         self.assertIn('libc6-dev-riscv64-cross', workflow)
         self.assertIn('-print-file-name=libm.a', workflow)
+        rv64_setup = workflow.split('  rv64-emit:\n', 1)[1].split(
+            '  #  Build and compare assembly manifests', 1)[0]
+        self.assertEqual(rv64_setup.count('timeout-minutes: 25'), 1)
+        self.assertEqual(rv64_setup.count('timeout-minutes: 10'), 1)
+        self.assertEqual(rv64_setup.count('Acquire::http::Timeout=30'), 4)
+        self.assertEqual(rv64_setup.count('Acquire::https::Timeout=30'), 4)
+        self.assertEqual(rv64_setup.count('Acquire::Retries=3'), 4)
+        self.assertNotIn('apt-mirrors.txt', rv64_setup)
+        action = (ROOT / '.github/actions/pinned-toolchain/action.yml').read_text()
+        self.assertIn("if: runner.os == 'Linux' && runner.arch == 'X64'", action)
+        self.assertIn('if test -f /etc/apt/apt-mirrors.txt;', action)
+        self.assertIn("sudo sed -i '\\|^http://azure\\.archive\\.ubuntu\\.com/ubuntu/|d'", action)
+        self.assertIn('cat /etc/apt/apt-mirrors.txt', action)
+        self.assertLess(action.index('apt-mirrors.txt'), action.index('landin_install_toolchain'))
         aggregate = workflow.split('  gate:\n', 1)[1]
         self.assertIn('rv64-emit, rv64', aggregate)
 

@@ -20,6 +20,11 @@
       "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
       "witness": "compiler/tests/fixtures/abi/lp64d-integer-extension/fixture.meta"
     },
+    "abi/lp64d-main-return": {
+      "mode": "restriction",
+      "reason": "LP64D native entry fixture requires an independently compiled RV64 hosted C peer and libc startup; Cortex-M0 retains its separate reset and entry contracts.",
+      "witness": "compiler/tests/fixtures/abi/lp64d-main-return/fixture.meta"
+    },
     "abi/lp64d-varargs": {
       "mode": "restriction",
       "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",

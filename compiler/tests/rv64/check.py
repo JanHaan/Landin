@@ -22,7 +22,8 @@ SHARED = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SHARED)
 metadata, fixture_code = SHARED.metadata, SHARED.fixture_code
 PROFILES, SPECIALIZED = SHARED.PROFILES, SHARED.SPECIALIZED
-ABI_REQUIRED = SHARED.ABI_REQUIRED | {'lp64d-varargs', 'lp64d-integer-extension'}
+ABI_REQUIRED = SHARED.ABI_REQUIRED | {'lp64d-varargs', 'lp64d-integer-extension',
+                                   'lp64d-main-return'}
 TARGET = 'linux-rv64'
 LEVELS = ('rv64gc', 'rv64gc_xtheadba')
 ISA_REQUIRED = {'rv64-feature-fact', 'rv64-indexed-address', 'rv64-assembly-level'}

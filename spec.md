@@ -15695,7 +15695,7 @@ native backend boundary rather than implement it.
 `backend plans/RISC-V LP64D carriers`,
 `runtime/rv64-feature-fact`, `runtime/rv64-indexed-address`,
 `runtime/rv64-assembly-level`, `runtime/c-aliases-unsigned-char`,
-`abi/lp64d-integer-extension`,
+`abi/lp64d-integer-extension`, `abi/lp64d-main-return`,
 `abi/lp64d-varargs` and `abi/core-io-file-identity`. The recurring RV64 lane
 reports runtime, C ABI, source-debugger and ISA-level verdicts separately;
 none is supplied by an empty selection or an unconfirmed execution level.
