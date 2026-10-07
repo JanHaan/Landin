@@ -4480,8 +4480,60 @@ package body Landin.Tests.Parser_Suite is
          False, True, 1);
    end Inequality_Typos_Name_The_Operator;
 
+   procedure Written_Type_Prefixes_Keep_Their_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Written_Type_Prefixes_Keep_Their_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Codes : Unbounded.Unbounded_String;
+      Total, Nodes : Natural;
+      Held : Boolean;
+      Text : constant String :=
+        "view := []u8(text)" & LF
+        & "pointer := ptr mut i32(hidden)" & LF
+        & "array := [1 + 1]i32(hidden)" & LF
+        & "nested := []ptr box(u8)(hidden)" & LF
+        & "callback := (x: i32) -> (y: i32)(hidden)" & LF
+        & "fallible := () -> none ! problem(hidden)" & LF
+        & "generic := box(u8)(hidden)" & LF
+        & "erased := any C(hidden)" & LF
+        & "empty: []u8 = []" & LF
+        & "literal := [4, 5]" & LF
+        & "repeated := [2 of 4]" & LF
+        & "address: ptr u8 = ptr(1)" & LF
+        & "closure := (x: i32) -> (y: i32) = x end" & LF;
+   begin
+      Read_And_Parse (Text, Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Total = 0 and then Held,
+         "written prefixes preserve literals, addresses and functions: "
+         & Unbounded.To_String (Codes));
+      for Last in 0 .. Text'Length loop
+         Read_And_Parse (Text (1 .. Last), Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held, "every truncation retains tree invariants");
+      end loop;
+      Read_And_Parse
+        ("view := []u8(text, text)" & LF,
+         Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Total > 0 and then Held,
+         "a written application takes exactly one expression");
+      Read_And_Parse
+        ("view := ptr mut (hidden)" & LF,
+         Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Total > 0 and then Held,
+         "a committed incomplete pointer is not a contextual address");
+   end Written_Type_Prefixes_Keep_Their_Boundaries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "written type prefixes keep their boundaries",
+         Written_Type_Prefixes_Keep_Their_Boundaries'Access);
       Landin.Testing.Register
         (Into, "parser", "shared declarations have a named refusal",
          Shared_Declarations_Have_A_Named_Refusal'Access);

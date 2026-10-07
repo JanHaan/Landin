@@ -1507,6 +1507,20 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
       begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Call
+           and then Syn.Argument_Count (Of_Tree, Node) = 1
+           and then Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+             in Syn.Type_Reference_Kind
+         then
+            declare
+               Target : constant Ty.Type_Kind := Landin.Checking.Type_Of
+                 (Types.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node));
+            begin
+               return (if Target in Ty.Scalar_Name then Target
+                       else Ty.Ill_Typed);
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) /= Syn.Call
            or else Syn.Argument_Count (Of_Tree, Node) /= 1
            or else Syn.Kind

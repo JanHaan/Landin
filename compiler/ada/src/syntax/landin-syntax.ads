@@ -174,7 +174,9 @@ package Landin.Syntax is
       Labeled_Application,
       --  A purely positional call is the existing node unchanged [1810].
       --  Its first fixed slot is the callee; arguments follow it, and its
-      --  optional Recovery_Clause is carried beside those slots.
+      --  optional Recovery_Clause is carried beside those slots. A written
+      --  conversion retains a type-syntax callee and one expression, with
+      --  no recovery clause.
       Call,
       --  [0960]'s explicit propagation expression.
       Try_Expression,

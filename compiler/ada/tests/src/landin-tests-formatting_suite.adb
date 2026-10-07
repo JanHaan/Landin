@@ -650,8 +650,37 @@ package body Landin.Tests.Formatting_Suite is
          & Listings'Image & " were");
    end Core_And_Examples_Are_Formatted;
 
+   procedure Written_Types_Touch_Their_Values
+     (Item : in out Landin.Testing.Context);
+
+   procedure Written_Types_Touch_Their_Values
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Expect (Item, "a byte view conversion",
+              "view: []u8 = [] u8 (text)" & LF,
+              "view: []u8 = []u8(text)" & LF);
+      Expect (Item, "a pointer representation extraction",
+              "view: ptr u8 = ptr u8 (hidden)" & LF,
+              "view: ptr u8 = ptr u8(hidden)" & LF);
+      Expect (Item, "a callable representation extraction",
+              "view := (x:i32)->(y:i32) (wrapped)" & LF,
+              "view := (x: i32) -> (y: i32)(wrapped)" & LF);
+      Expect (Item, "a terminal generic type",
+              "view := tag (u32,7) (value)" & LF,
+              "view := tag(u32, 7)(value)" & LF);
+      Expect (Item, "an infallible signature without results",
+              "view := () -> none (wrapped)" & LF,
+              "view := () -> none(wrapped)" & LF);
+      Expect (Item, "a signature with a declared error set",
+              "view := () -> none ! problem (wrapped)" & LF,
+              "view := () -> none ! problem(wrapped)" & LF);
+   end Written_Types_Touch_Their_Values;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "formatting", "written types touch their values",
+         Written_Types_Touch_Their_Values'Access);
       Landin.Testing.Register
         (Into, "formatting", "the page is the layout",
          The_Page_Is_The_Layout'Access);

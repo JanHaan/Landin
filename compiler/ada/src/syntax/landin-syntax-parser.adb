@@ -560,10 +560,12 @@ package body Landin.Syntax.Parser is
                Starts : Landin.Source.Span) return Node_Id;
             function Parse_Type
               (In_Parameter : Boolean;
-               Declared_At  : Landin.Source.Span) return Node_Id;
+               Declared_At  : Landin.Source.Span;
+               Terminal    : Boolean := False) return Node_Id;
             function Parse_Type_Inner
               (In_Parameter : Boolean;
-               Declared_At  : Landin.Source.Span) return Node_Id;
+               Declared_At  : Landin.Source.Span;
+               Terminal    : Boolean := False) return Node_Id;
             function Parse_Declared_Name
               (Named : out Landin.Source.Names.Name_Id)
               return Landin.Source.Span;
@@ -711,6 +713,9 @@ package body Landin.Syntax.Parser is
 
             function Starts_Signature return Boolean;
             function Starts_Conformance return Boolean;
+            function Has_Type_Arguments return Boolean;
+            function Starts_Written_Conversion return Boolean;
+            function Parse_Written_Conversion return Node_Id;
 
             --  A parenthesized expression, a struct literal and a function
             --  signature share `(`.  The arrow after the balanced list is
@@ -729,6 +734,107 @@ package body Landin.Syntax.Parser is
                       = Tok.Minus_Greater;
                end;
             end Starts_Signature;
+
+            --  D266: the last parentheses contain the value.  A preceding
+            --  balanced list is the terminal type's static argument list.
+            function Has_Type_Arguments return Boolean is
+            begin
+               Prepare_Lookahead;
+               declare
+                  Closing : constant Natural := Lookahead (Index).Closing;
+               begin
+                  return Peek = Tok.Left_Paren
+                    and then Closing /= 0
+                    and then Closing < Natural (Last)
+                    and then Tok.Kind (From, Tok.Token_Index (Closing + 1))
+                      = Tok.Left_Paren;
+               end;
+            end Has_Type_Arguments;
+
+            function Starts_Written_Conversion return Boolean is
+               Position : Tok.Token_Index := Index;
+               Closing  : Natural;
+            begin
+               Prepare_Lookahead;
+               if Peek = Tok.Kw_Any then
+                  return Ahead (1) /= Tok.Left_Paren;
+               elsif Peek = Tok.Kw_Ptr then
+                  if Ahead (1) /= Tok.Left_Paren then
+                     return True;
+                  end if;
+                  Closing := Lookahead (Index + 1).Closing;
+                  return Closing /= 0 and then Closing < Natural (Last)
+                    and then Tok.Kind (From, Tok.Token_Index (Closing + 1))
+                      = Tok.Minus_Greater;
+               elsif Peek = Tok.Left_Bracket then
+                  Closing := Lookahead (Index).Closing;
+                  if Closing = 0 or else Closing >= Natural (Last)
+                    or else Begins_Line (Tok.Token_Index (Closing + 1))
+                    or else Tok.Kind (From, Tok.Token_Index (Closing + 1))
+                      not in Tok.Identifier | Tok.Kw_Ptr | Tok.Kw_Mut
+                        | Tok.Kw_Any | Tok.Kw_Extern | Tok.Left_Bracket
+                        | Tok.Left_Paren
+                  then
+                     return False;
+                  end if;
+                  Position := Index + 1;
+                  while Natural (Position) < Closing loop
+                     if Tok.Kind (From, Position) = Tok.Comma
+                       or else (Tok.Kind (From, Position) = Tok.Identifier
+                         and then Tok.Name (Tok.Token_At (From, Position))
+                           = Of_Id)
+                     then
+                        return False;
+                     elsif Tok.Kind (From, Position)
+                             in Tok.Left_Paren | Tok.Left_Bracket
+                       and then Lookahead (Position).Closing /= 0
+                     then
+                        Position := Tok.Token_Index
+                          (Lookahead (Position).Closing);
+                     end if;
+                     Position := Position + 1;
+                  end loop;
+                  return True;
+               elsif Peek = Tok.Left_Paren and then Starts_Signature then
+                  --  An anonymous function has a body introduced by `=`.
+                  --  Skip complete signature lists, never their interiors.
+                  Position := Tok.Token_Index
+                    (Lookahead (Index).Closing + 2);
+                  while Position < Last loop
+                     case Tok.Kind (From, Position) is
+                        when Tok.Equal => return False;
+                        when Tok.Left_Paren | Tok.Left_Bracket =>
+                           Closing := Lookahead (Position).Closing;
+                           if Closing = 0 then
+                              return True;
+                           end if;
+                           Position := Tok.Token_Index (Closing);
+                        when Tok.Kw_End => return True;
+                        when others => null;
+                     end case;
+                     Position := Position + 1;
+                     exit when Begins_Line (Position);
+                  end loop;
+                  return True;
+               elsif Peek = Tok.Identifier then
+                  while Position + 2 < Last
+                    and then Tok.Kind (From, Position + 1) = Tok.Dot
+                    and then Tok.Kind (From, Position + 2) = Tok.Identifier
+                  loop
+                     Position := Position + 2;
+                  end loop;
+                  if Position < Last
+                    and then Tok.Kind (From, Position + 1) = Tok.Left_Paren
+                  then
+                     Closing := Lookahead (Position + 1).Closing;
+                     return Closing /= 0 and then Closing < Natural (Last)
+                       and then Tok.Kind
+                         (From, Tok.Token_Index (Closing + 1))
+                           = Tok.Left_Paren;
+                  end if;
+               end if;
+               return Peek = Tok.Kw_Extern;
+            end Starts_Written_Conversion;
 
             --  A module-level parenthesized prefix is a conformance binder
             --  only when a direct contextual `is` follows its target type.
@@ -3873,7 +3979,8 @@ package body Landin.Syntax.Parser is
             --  compares interned identities and not token kinds.
             function Parse_Type
               (In_Parameter : Boolean;
-               Declared_At  : Landin.Source.Span) return Node_Id
+               Declared_At  : Landin.Source.Span;
+               Terminal    : Boolean := False) return Node_Id
             is
                At_Type : constant Landin.Source.Span := Here;
                Result  : Node_Id;
@@ -3887,7 +3994,8 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
                Depth := Depth + 1;
-               Result := Parse_Type_Inner (In_Parameter, Declared_At);
+               Result := Parse_Type_Inner
+                  (In_Parameter, Declared_At, Terminal);
                Depth := Depth - 1;
                return Result;
             end Parse_Type;
@@ -4088,7 +4196,8 @@ package body Landin.Syntax.Parser is
 
             function Parse_Type_Inner
               (In_Parameter : Boolean;
-               Declared_At  : Landin.Source.Span) return Node_Id
+               Declared_At  : Landin.Source.Span;
+               Terminal    : Boolean := False) return Node_Id
             is
                At_Type : constant Landin.Source.Span := Here;
                C_ABI   : Boolean := Peek = Tok.Kw_Extern;
@@ -4117,7 +4226,7 @@ package body Landin.Syntax.Parser is
                      --  Consume the pointer for recovery; Error_Type has
                      --  no children and does not retain a usable type.
                      Target : constant Node_Id :=
-                       Parse_Type (In_Parameter, Declared_At);
+                       Parse_Type (In_Parameter, Declared_At, Terminal);
                      pragma Unreferenced (Target);
                   begin
                      --  Keep the target's recovery state. The qualifier is
@@ -4282,7 +4391,8 @@ package body Landin.Syntax.Parser is
                         Writable := True;
                         Advance;
                      end if;
-                     Target := Parse_Type (In_Parameter, Declared_At);
+                     Target := Parse_Type
+                        (In_Parameter, Declared_At, Terminal);
                      return Add
                        (Pointer_Type, At_Type,
                         Extent   => Join (At_Type, After_Previous),
@@ -4317,7 +4427,8 @@ package body Landin.Syntax.Parser is
                            Writable := True;
                            Advance;
                         end if;
-                        Element := Parse_Type (In_Parameter, Declared_At);
+                        Element := Parse_Type
+                        (In_Parameter, Declared_At, Terminal);
                         return Add
                           (Slice_Type, At_Type,
                            Extent   => Join (At_Type, After_Previous),
@@ -4363,7 +4474,8 @@ package body Landin.Syntax.Parser is
                            Children => [Bound, Add (Error_Type, Point)]);
                      end if;
 
-                     Element := Parse_Type (In_Parameter, Declared_At);
+                     Element := Parse_Type
+                        (In_Parameter, Declared_At, Terminal);
                      return Add
                        (Array_Type, At_Type,
                         Extent   => Join (At_Type, After_Previous),
@@ -4385,6 +4497,8 @@ package body Landin.Syntax.Parser is
                            begin
                               return
                                 (if Peek = Tok.Left_Paren
+                                   and then (not Terminal
+                                     or else Has_Type_Arguments)
                                  then Parse_Type_Application (Base, At_Type)
                                  else Base);
                            end;
@@ -4416,6 +4530,8 @@ package body Landin.Syntax.Parser is
                      begin
                         return
                           (if Peek = Tok.Left_Paren
+                             and then (not Terminal
+                               or else Has_Type_Arguments)
                            then Parse_Type_Application (Base, At_Type)
                            else Base);
                      end;
@@ -7441,6 +7557,9 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
                Start := Here;
+               if Starts_Written_Conversion then
+                  return Parse_Written_Conversion;
+               end if;
 
                --  P1, one level up: a token no kernel rule spells stands
                --  in for the statement it broke, and says nothing.
@@ -7646,7 +7765,9 @@ package body Landin.Syntax.Parser is
                         begin
                            Advance;
 
-                           if Peek = Tok.Identifier then
+                           if Peek = Tok.Identifier
+                             or else Starts_Written_Conversion
+                           then
                               --  A cleanup delays the complete callee
                               --  expression, not only a direct name.  Reuse
                               --  the ordinary primary walk so a selected
@@ -9206,9 +9327,55 @@ package body Landin.Syntax.Parser is
 
             --  [1810]'s primary expression forms, including literals,
             --  names, calls, measurements and parenthesized expressions.
+            function Parse_Written_Conversion return Node_Id is
+               Starts : constant Landin.Source.Span := Here;
+               Target : constant Node_Id := Parse_Type
+                 (False, Starts, Terminal => True);
+               Value  : Node_Id;
+               Kept   : Boolean;
+            begin
+               Kept := Expect
+                 (Wanted => Tok.Left_Paren,
+                  Message => "a written conversion opens its value with `(`",
+                  Note => "[0310]: the type is applied to one expression",
+                  Related => Starts, Because => "the conversion type");
+               if not Kept then
+                  return Add (Error_Expression, Starts, Children => [Target]);
+               end if;
+               Value := Parse_Delimited_Expression;
+               Kept := Expect
+                 (Wanted => Tok.Right_Paren,
+                  Message => "a written conversion takes exactly one value"
+                             & " and closes with `)`",
+                  Note => "[0310]: the type is applied to one expression",
+                  Related => Starts, Because => "the conversion type");
+               if not Kept then
+                  Resync (List_Anchor);
+                  if Peek = Tok.Right_Paren then
+                     Advance;
+                  end if;
+               end if;
+               Refuse_Any_Index;
+               Refuse_Selection_Of_A_Call;
+               if Peek = Tok.Left_Paren then
+                  Complain
+                    (Syn.Token_Expected, Here,
+                     "a conversion result cannot be called directly");
+                  Advance;
+                  Resync_Parentheses;
+               end if;
+               return Add
+                 (Call, Starts, Extent => Join (Starts, After_Previous),
+                  Children => [Target, Value]);
+            end Parse_Written_Conversion;
+
             function Parse_Primary return Node_Id is
                At_Item : constant Landin.Source.Span := Here;
             begin
+               if Starts_Written_Conversion then
+                  return Parse_Written_Conversion;
+               end if;
+
                if Peek not in Tok.Kernel_Kind then
                   Mark_Reported;
                   Advance;

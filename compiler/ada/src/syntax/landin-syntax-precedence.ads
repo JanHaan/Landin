@@ -144,6 +144,7 @@ package Landin.Syntax.Precedence is
                             | Landin.Tokens.Kw_Addr
                             | Landin.Tokens.Kw_Any
                             | Landin.Tokens.Kw_Ptr
+                            | Landin.Tokens.Kw_Extern
                             | Landin.Tokens.Kw_If
                             | Landin.Tokens.Kw_Begin
                             | Landin.Tokens.Kw_Match
@@ -173,7 +174,9 @@ package Landin.Syntax.Precedence is
                     | Landin.Tokens.Kw_Continue
                     | Landin.Tokens.Kw_Defer
                     | Landin.Tokens.Kw_Undo
-                    | Landin.Tokens.Kw_Unchecked);
+                    | Landin.Tokens.Kw_Unchecked
+                    | Landin.Tokens.Left_Bracket | Landin.Tokens.Kw_Ptr
+                    | Landin.Tokens.Kw_Any | Landin.Tokens.Kw_Extern);
 
    --  A parameterized conformance may begin with `(`; every other module
    --  declaration keeps [1740]'s existing first token.

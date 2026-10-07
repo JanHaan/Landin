@@ -12236,12 +12236,41 @@ package body Landin.Stages.Checking is
          return Ty.Undecided;
       end Float_Special_Type;
 
+      --  D266: a written destination retains the same normalized descriptor
+      --  as a type position.  Generic facts belong to the active view.
+      function Written_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Type_Descriptor;
+
+      function Written_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Type_Descriptor
+      is
+         Held : Ty.Type_Kind;
+      begin
+         if Syn.Kind (Of_Tree, Callee) not in Syn.Type_Reference_Kind then
+            return (Kind => Ty.Ill_Typed, others => <>);
+         end if;
+         Held := Landin.Checking.Type_Of (Types.all, Of_Tree, Callee);
+         if Held = Ty.Undecided then
+            Held := Type_At (Of_Tree, Callee);
+         end if;
+         return Stored_Descriptor (Of_Tree, Callee, Held);
+      end Written_Conversion_Type;
+
       function Scalar_Conversion_Type
         (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Ty.Type_Kind;
 
       function Scalar_Conversion_Type
         (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Ty.Type_Kind is
       begin
+         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+            declare
+               Held : constant Ty.Type_Kind :=
+                 Written_Conversion_Type (Of_Tree, Callee).Kind;
+            begin
+               return (if Held in Ty.Scalar_Name then Held else Ty.Ill_Typed);
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Callee)
               not in Syn.Name_Reference | Syn.Member_Selection
          then
@@ -12296,6 +12325,18 @@ package body Landin.Stages.Checking is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
       begin
+         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+            declare
+               Target : constant Type_Descriptor :=
+                 Written_Conversion_Type (Of_Tree, Callee);
+            begin
+               if Target.Kind in Ty.Pointer_Value | Ty.Slice_Value then
+                  return Target;
+               end if;
+               return Invalid;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Callee)
               not in Syn.Name_Reference | Syn.Member_Selection
          then
@@ -21383,6 +21424,12 @@ package body Landin.Stages.Checking is
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
+                  Written : constant Boolean :=
+                    Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind;
+                  Destination : constant Type_Descriptor :=
+                    (if Written
+                     then Written_Conversion_Type (Of_Tree, Callee)
+                     else (Kind => Ty.Ill_Typed, others => <>));
                   Named : constant Boolean :=
                     Syn.Kind (Of_Tree, Callee)
                       in Syn.Name_Reference | Syn.Member_Selection
@@ -21417,6 +21464,7 @@ package body Landin.Stages.Checking is
                     (if Is_Scalar_Conversion or else Is_Text_Conversion
                        or else Is_Generic
                      then Ty.Function_Value
+                     elsif Written then Destination.Kind
                      elsif Named then Settled_Type (Means)
                      else Synthesise (Of_Tree, Callee));
                   Selected : constant Landin.Checking.Signature_Id :=
@@ -21424,7 +21472,8 @@ package body Landin.Stages.Checking is
                      then Instantiate_Generic_Call (Of_Tree, Node, Means)
                      else Landin.Checking.No_Signature);
                   Signature : constant Landin.Checking.Signature_Id :=
-                    (if Is_Generic
+                    (if Written then Landin.Checking.No_Signature
+                     elsif Is_Generic
                        and then Selected = Landin.Checking.No_Signature
                      then Landin.Checking.No_Signature
                      else Effective_Call_Signature (Of_Tree, Node));
@@ -21436,11 +21485,14 @@ package body Landin.Stages.Checking is
                         Value : constant Syn.Node_Id :=
                           Syn.Nth_Argument (Of_Tree, Node, 1);
                         Nominal : constant Landin.Checking.Nominal_Type_Id :=
-                          (if Named and then Held = Ty.Aggregate
+                          (if Written and then Held = Ty.Aggregate
+                           then Destination.Nominal
+                           elsif Named and then Held = Ty.Aggregate
                            then Landin.Checking.Nominal_Of (Types.all, Means)
                            else Landin.Checking.No_Nominal_Type);
                      begin
-                        if (Is_Scalar_Conversion or else Is_Text_Conversion
+                        if (Written or else Is_Scalar_Conversion
+                            or else Is_Text_Conversion
                             or else (Named and then Res.Sort_Of
                               (Meanings.all, Means) = Res.Module_Type))
                           and then Syn.Kind (Of_Tree, Value)
@@ -21475,7 +21527,8 @@ package body Landin.Stages.Checking is
                                   Landin.Checking.Nominal_Of
                                     (Types.all, Of_Tree, Value);
                               Target : constant Type_Descriptor :=
-                                (if Is_Scalar_Conversion
+                                (if Written then Destination
+                                 elsif Is_Scalar_Conversion
                                  then (Kind => Conversion, others => <>)
                                  elsif Is_Text_Conversion then Text_Target
                                  else Stored_Descriptor
@@ -21497,9 +21550,9 @@ package body Landin.Stages.Checking is
                               end if;
                            end;
                         end if;
-                        if Named
+                        if (Written or else (Named
                           and then Res.Sort_Of (Meanings.all, Means)
-                            = Res.Module_Type
+                            = Res.Module_Type))
                           and then Nominal /= Landin.Checking.No_Nominal_Type
                           and then Landin.Checking.Is_Distinct
                             (Types.all, Nominal)
@@ -21962,6 +22015,20 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Node, Text_Conversion);
                         return Kept (Text_Target.Kind);
                      end;
+                  end if;
+
+                  if Written then
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Node),
+                        Message => "this written type has no conversion"
+                                   & " from the supplied value",
+                        Note => "[0310]: writing a type admits only the"
+                                & " conversions available through an alias",
+                        Related => Syn.Origin (Of_Tree, Callee),
+                        Because => "the destination type", Into => Found);
+                     return Kept (Ty.Ill_Typed);
                   end if;
 
                   if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application

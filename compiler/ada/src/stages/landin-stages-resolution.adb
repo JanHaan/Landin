@@ -899,7 +899,9 @@ package body Landin.Stages.Resolution is
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
                begin
-                  if Is_Builtin_Conversion (Of_Tree, Callee) then
+                  if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind
+                    or else Is_Builtin_Conversion (Of_Tree, Callee)
+                  then
                      Resolve_Type_View (Of_Tree, Callee, Inside);
                   else
                      Resolve (Of_Tree, Callee, Inside);

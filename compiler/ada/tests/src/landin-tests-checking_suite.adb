@@ -15300,8 +15300,66 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
    end Nonreturning_Control_And_Identity;
 
+   procedure Written_Conversions_Keep_Alias_Semantics
+     (Item : in out Landin.Testing.Context);
+
+   procedure Written_Conversions_Keep_Alias_Semantics
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source (Label, Text : String; Accepted : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         Ran : Natural;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "written-types.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check
+           (Item, Ran = 4 and then Landin.Stages.Failed (Work) /= Accepted,
+            Label & " has the alias conversion verdict");
+      end Check_Source;
+   begin
+      Check_Source
+        ("generic scalar conversion",
+         "scalar: type (t: type) = t" & LF
+         & "answer: u8 = scalar(u8)(true)" & LF, True);
+      Check_Source
+        ("distinct array extraction",
+         "hidden: type = distinct [2]i32" & LF
+         & "f: (value: hidden) -> (answer: [2]i32) =" & LF
+         & "    answer = [2]i32(value)" & LF & "end f" & LF, True);
+      Check_Source
+        ("distinct pointer extraction",
+         "hidden: type = distinct ptr mut i32" & LF
+         & "f: (value: hidden) -> (answer: ptr mut i32 from value) =" & LF
+         & "    answer = ptr mut i32(value)" & LF & "end f" & LF, True);
+      Check_Source
+        ("text byte view",
+         "f: (value: utf8) -> (answer: []u8 from value) =" & LF
+         & "    answer = []u8(value)" & LF & "end f" & LF, True);
+      Check_Source
+        ("ordinary array identity stays refused",
+         "f: (value: [2]i32) -> (answer: [2]i32) =" & LF
+         & "    answer = [2]i32(value)" & LF & "end f" & LF, False);
+      Check_Source
+        ("written pointer from integer stays refused",
+         "f: () -> (answer: ptr i32) =" & LF
+         & "    answer = ptr i32(1)" & LF & "end f" & LF, False);
+   end Written_Conversions_Keep_Alias_Semantics;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "written conversions keep alias semantics",
+         Written_Conversions_Keep_Alias_Semantics'Access);
       Landin.Testing.Register
         (Into, "checking", "size bounds refuse past their limit",
          Size_Bounds_Refuse_Past_Their_Limit'Access);
