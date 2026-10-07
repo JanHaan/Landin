@@ -541,20 +541,33 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 self.assertEqual(self.calls(), calls)
 
 
-class ReleaseArchives(unittest.TestCase):
-    def test_workflow_archives_preserve_both_stamps_and_executables(self):
+class BuildArchives(unittest.TestCase):
+    def test_workflow_archives_preserve_their_stamps_and_executables(self):
         workflow = (ROOT / ".github/workflows/gate.yml").read_text()
         commands = [" ".join(block.split()) for block in re.findall(
             r"run: >-\n((?: {10}.+\n)+)", workflow)]
         packages = [command for command in commands
                     if command.startswith("tar -czf ")]
-        self.assertEqual(len(packages), 2)
+        release = ("bin", "bin/refine", "bin/landin_tests",
+                   "source-manifest.txt", "tests-manifest.txt")
+        debug = ("bin/refine", "source-manifest.txt")
+        expected = {
+            "compiler/ada/build/linux-amd64/release": release,
+            "compiler/ada/build/darwin-arm64/release": release,
+            "compiler/ada/build/linux-amd64/debug": debug,
+            "compiler/ada/build/linux-arm64/debug": debug,
+            "compiler/ada/build/darwin-arm64/debug": debug,
+        }
+        self.assertEqual(len(packages), len(expected))
+        self.assertEqual({shlex.split(command)[shlex.split(command).index("-C") + 1]
+                          for command in packages}, set(expected))
         for command in packages:
             with self.subTest(command=command):
                 with tempfile.TemporaryDirectory(prefix="landin-archive-") as tmp:
                     root = Path(tmp)
                     words = shlex.split(command)
-                    build = root / words[words.index("-C") + 1]
+                    build_path = words[words.index("-C") + 1]
+                    build = root / build_path
                     (build / "bin").mkdir(parents=True)
                     for name in ("refine", "landin_tests"):
                         executable = build / "bin" / name
@@ -570,11 +583,15 @@ class ReleaseArchives(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     archive_path = Path(words[2].replace("$RUNNER_TEMP", tmp))
                     with tarfile.open(archive_path) as archive:
-                        for name in ("source-manifest.txt", "tests-manifest.txt"):
-                            self.assertEqual(archive.extractfile(name).read(),
-                                             manifest.encode())
-                        for name in ("bin/refine", "bin/landin_tests"):
-                            self.assertTrue(archive.getmember(name).mode & 0o111)
+                        self.assertEqual(set(archive.getnames()), set(expected[build_path]))
+                        for name in expected[build_path]:
+                            if name == "bin":
+                                self.assertTrue(archive.getmember(name).isdir())
+                            elif name.endswith("manifest.txt"):
+                                self.assertEqual(archive.extractfile(name).read(),
+                                                 manifest.encode())
+                            else:
+                                self.assertTrue(archive.getmember(name).mode & 0o111)
 
 
 class RecipeChecksum(unittest.TestCase):
