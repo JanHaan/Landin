@@ -1,7 +1,7 @@
 class: runtime
 profiles: standard
-summary: four text conversion edges preserve bytes, shared backing and empty lengths
+summary: written generic type aliases extract exact distinct atom-set and nominal struct bases
 program: main.ldn
-constructs: 0310, 0470, 0520, 0570, 0600, 0610, 1280, 1950
+constructs: 0310, 0630, 0640, 0650, 0700, 1280
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 status: 42

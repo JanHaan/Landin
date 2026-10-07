@@ -1,0 +1,32 @@
+base: type (item: type) = item
+north, south: atom
+problems: type = north | south
+hidden_problems: type = distinct problems
+point: type = struct
+    x: i32
+end point
+hidden_point: type = distinct point
+choice: type = struct
+    kind: variant
+        empty |
+        number: (value: i32)
+    end kind
+end choice
+hidden_choice: type = distinct choice
+stored_error: hidden_problems = hidden_problems(north)
+recovered_error: problems = base(problems)(stored_error)
+stored_point: hidden_point = hidden_point((x: 40))
+recovered_point: point = base(point)(stored_point)
+public main: () -> (code: i32) =
+    original: choice = (kind: number(value: 2))
+    hidden: hidden_choice = hidden_choice(original)
+    recovered: choice = base(choice)(hidden)
+    code = 1
+    match recovered.kind
+        empty: code = 2
+        number(value):
+            if recovered_error == north and recovered_point.x == 40 then
+                code = recovered_point.x + value
+            end if
+    end match
+end main

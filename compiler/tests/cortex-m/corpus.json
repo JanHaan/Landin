@@ -2095,6 +2095,9 @@
     "runtime/written-type-literal-pointer-controls": {
       "mode": "execute"
     },
+    "runtime/written-type-nominal-extraction": {
+      "mode": "execute"
+    },
     "runtime/written-type-operand-order": {
       "mode": "execute"
     },

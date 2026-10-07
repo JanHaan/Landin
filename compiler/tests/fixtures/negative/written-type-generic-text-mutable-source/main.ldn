@@ -1,0 +1,4 @@
+textual: type (item: type) = item
+bad: (source: []mut u8) -> none =
+    _ = textual(utf8)(source)
+end bad

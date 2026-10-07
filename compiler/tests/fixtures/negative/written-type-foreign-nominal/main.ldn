@@ -1,0 +1,11 @@
+base: type (item: type) = item
+point: type = struct
+    x: i32
+end point
+other: type = struct
+    x: i32
+end other
+hidden_other: type = distinct other
+bad: (value: hidden_other) -> none =
+    _ = base(point)(value)
+end bad

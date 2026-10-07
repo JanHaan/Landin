@@ -3637,6 +3637,11 @@ outer bracket prevents a type prefix. Once an element type starts, an absent
 value list or an incomplete nested type is a malformed written application,
 not an empty slice or an array followed by another expression.
 
+The element type must start on the bracket's line. A following declaration
+boundary, `name:` or `name :=` (including `mut name`), instead leaves the
+bracketed expression complete. Thus an array literal followed by another
+declaration on the same line retains its existing meaning.
+
 `ptr(value)` retains [0470]'s contextual integer-to-pointer conversion and
 its untracked origin. `ptr T(value)` instead applies the written pointer type,
 so it can extract D213's exact distinct representation but cannot convert an

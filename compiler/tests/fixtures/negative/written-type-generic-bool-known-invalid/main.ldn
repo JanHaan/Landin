@@ -1,0 +1,2 @@
+scalar: type (item: type) = item
+bad: bool = scalar(bool)(u8(2))
