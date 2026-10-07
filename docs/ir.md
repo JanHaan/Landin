@@ -33,10 +33,11 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-The same IR feeds three emitters: x86-64 emits Linux hosted executables,
-shared arm64 emits Linux and Darwin hosted executables, and Cortex-M0 emits
-firmware. The IR is expressed without
-machine registers, stack offsets or instruction encodings. Each backend
+The same IR feeds four native emitters across seven assembly targets:
+x86-64 emits Linux and FreeBSD hosted executables, shared arm64 emits Linux,
+Darwin and FreeBSD hosted executables, RV64 emits Linux hosted executables,
+and Cortex-M0 emits firmware. The IR is expressed without machine registers,
+stack offsets or instruction encodings. Each backend
 translates its operations into machine instructions and supplies the calling
 convention and object-format details.
 
@@ -424,15 +425,27 @@ specialization and simplification run before all native emitters. arm64 body
 folding remains separate from scalar home reuse. Reports record frame, spill,
 save and register use, while source debugging consumes the same placement
 plan for the fixed source slots.
+The RV64 backend keeps source slots and scalar spills in fixed frame homes
+at every optimization profile, with x8 holding the entry CFA and the saved
+caller frame and return address immediately below it. It does not promote
+SSA values into persistent registers or reuse scalar homes. Neutral
+specialization and simplification still run before emission. The explicit
+LP64D planner assigns C carriers without putting register banks or stack
+positions into the IR. XLEN-specific instruction helpers select baseline
+and address-generation operations from independent Zba and XTheadBa sets,
+so those helpers can serve a future RV32 backend without importing RV64's
+layout or ABI.
+
 The shared `Backend.Dwarf` encoder uses neutral source identities and
-`Backend.Debug_Locations` availability; Mach-O sections, x29 CFI and dSYM
-packaging stay at the backend/toolchain boundary.
+`Backend.Debug_Locations` availability. Each backend owns its section policy
+and CFI, including ELF and x8 CFA on RV64; Darwin's Mach-O sections, x29 CFI
+and dSYM packaging stay at the backend/toolchain boundary.
 
 The full hosted parity audit preserved these boundaries. Scalar part addressing
 on Darwin carries wide IR element positions through target-byte placement,
 rather than narrowing them through the Ada host index type. Complete derived
 programs share the same source/provenance and location facts across GDB and
-LLDB acceptance; physical encodings and packaging remain backend-owned.
+LLDB sessions; physical encodings and packaging remain backend-owned.
 
 A real Cortex-M0 description and `Backend.Arm32_ABI` planning leave this
 neutral representation unchanged. Eight existing source controls
@@ -481,7 +494,7 @@ a direct or indirect call's failure edge. D235's pointer union has a second
 reserved-zero cell: its first field holds the atom's own code, and zero marks
 the pointer case. `Is_Union_Code_Load` recognizes a load of that field from a
 union held in a frame slot, and `Admits_Reserved_Zero` is the union of the two
-predicates. All three backends ask it, and permit zero only for such a load
+predicates. Every implemented backend asks it, and permits zero only for such a load
 before `Failure_Test`; ordinary source atom storage does not gain a zero value.
 Recovery still observes a named error on the failing branch. The union itself
 is an ordinary two-cell aggregate nominal with no source body — code, then one
@@ -512,7 +525,7 @@ placer still owns target-byte offsets and limits. Cortex performs no body
 sharing; specialization and IR optimization retain their existing proofs.
 The [target guide](targets.md#cortex-m0-assembly-implementation) records physical
 choices. The complete profile corpus, explicit 32-bit counterparts and memory/
-packed peripheral execution are retained by the embedded acceptance path.
+packed peripheral execution are retained by the embedded gate lane.
 
 ## Firmware and opaque assembly
 
@@ -555,7 +568,9 @@ D248's named operands are checked against `Landin.Targets.Assembly`'s
 register tables on every target. A backend chooses each `general` register
 through the same table, in its written order, passing over every register the
 block holds or its text names, and fills `{name}` at the operand's width.
-All three backends emit every form. x86-64's allocator hands out only rbx and r12-r15, and
+Every implemented backend emits ordinary assembly. The naked and positional
+shorthand forms retain their Cortex-only contracts. x86-64's allocator hands
+out only rbx and r12-r15, and
 never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.
 
@@ -600,7 +615,7 @@ a concrete call's recovery `continue` before its enclosing loop existed.
 Recovery bindings settle during inference, but body checking waits for the
 routine walk and replays cached calls in their source/routine view. The shared
 `r690-recovery-loop-context` execution fixture checks break/continue cleanup
-edges through lowering, verification, optimization and both native backends.
+edges through lowering, verification, optimization and every hosted backend.
 The full Cortex application executes the same recovered-continue path on
 overrun. Volatile transactions, opaque barriers, frame records, private r12
 status and retained data keep their existing effects and sharing rules.

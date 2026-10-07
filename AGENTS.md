@@ -15,7 +15,7 @@ file describes the repository and the commands used to work on it.
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
 stage seams, the scanner, parser, syntax table, name resolver, type checker,
-verified IR, the three backends, the toolchain adapter and the
+verified IR, the native backends, the toolchain adapter and the
 repository-owned test harness; shared fixtures live under `compiler/tests/`.
 The four prototype files remain specification stress tests written as code
 sketches; they contain omissions such as `...` and are not standalone

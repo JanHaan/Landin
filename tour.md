@@ -4271,7 +4271,7 @@ Two scalars, no strings: 'site' is a number the compiler
 assigns to the source operation and check family. The file
 and line live in an optional off-target table; constrained
 builds need no filenames or reporting storage. D232 fixes
-selection and numbering for all three emitting targets.
+selection and numbering for every implemented target.
 
 ```landin
 import core/panic

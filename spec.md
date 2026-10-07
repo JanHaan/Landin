@@ -3096,8 +3096,8 @@ every freestanding target must supply.
 **The deferred obligation:** [1670] promised the fixed two-scalar,
 never-returning handler when the original kernel could not express its atom
 set or return form. D231 supplies `noreturn`; D232 now supplies source handler
-selection, check dispatch and optional site mapping on all three emitting
-targets. The original default trap remains the constrained default. The
+selection, check dispatch and optional site mapping on every implemented
+target. The original default trap remains the constrained default. The
 alternative declined above was a mandatory reporting runtime instead of that
 contract, not [1670] itself.
 
@@ -3878,8 +3878,8 @@ ordinary natural placement: 16 bytes aligned 8 on Linux x86-64 and Darwin
 arm64, 8 bytes aligned 4 on Cortex-M0. Every case is built in a cleared
 temporary and copied whole, so an atom case leaves its pointer cell zero, and
 a module image does the same. The union is passed, returned and copied as an
-ordinary aggregate, by address in the internal convention on all three
-targets.
+ordinary aggregate, by address in the internal convention on every
+implemented target.
 
 Widening never reverses. An atom singleton or an atom set contained in the
 union's set widens by copying its code. A pointer of the member type, or one
@@ -3909,7 +3909,7 @@ cell is typed with the union's atom set, and every backend already traps an
 atom-typed load that finds a non-member; the call-failure status channel was
 the one load allowed to find the zero sentinel. `Landin.IR.Admits_Reserved_Zero`
 now names both — that channel and a union's code cell in a frame slot — and the
-three backends ask it instead, reaching the zero-skipping selection they
+implemented backends ask it instead, reaching the zero-skipping selection they
 already had. The verifier holds a union nominal to exactly its code and pointer
 cells. DWARF describes the union as a structure named by its canonical
 spelling — atoms by spelling, ties by declaration identity, then the pointer
@@ -6057,7 +6057,7 @@ reference keeps its L0203, and its note now says it is withdrawn and points
 at element-wise operators. The wrapper type is transferred to the Broader
 standard library successor, which [1620] now names. Cortex-M0
 refuses every read-modify-write atomic (D227), so a wrapper portable across
-the three targets would offer only loads, stores and fences there, and which
+every implemented target would offer only loads, stores and fences there, and which
 operations a wrapper exposes is a design question for the program that needs
 one. No derived program or `core` module needed one: the driver uses
 `core/cpu`'s interrupt masking and D227's barriers.
@@ -12001,8 +12001,8 @@ Inferring a promise from arbitrary loops or assembly would make source
 compatibility depend on optimization or programmer-written instruction text.
 These alternatives are declined.
 
-**Pinned by:** `checking/nonreturning control and identity` checks all three target
-descriptions through verified IR; `positive/r491-noreturn-signatures` retains
+**Pinned by:** `checking/nonreturning control and identity` checks Linux
+x86-64, Darwin arm64 and Cortex-M0 descriptions through verified IR; `positive/r491-noreturn-signatures` retains
 the former refusal's exact source as accepted syntax; D232 supplies panic
 dispatch.
 
@@ -14994,7 +14994,7 @@ the compiler-generated `core-cpu.ldn` and ordinary-slice DMA execution in
 
 ### D232 — Compiler-check panic dispatch and optional site identity
 
-**Chosen:** [1670] is a source-level hook on all three emitting targets.
+**Chosen:** [1670] is a source-level hook on every implemented target.
 `core/panic` declares public atoms `out_of_range`, `overflow`,
 `bad_conversion`, `unreachable`, and their union `panic_kind`. They use the
 ordinary nonzero u32 atom ABI, in declaration-identity order across the final
