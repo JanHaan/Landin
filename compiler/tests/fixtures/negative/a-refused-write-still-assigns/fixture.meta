@@ -1,0 +1,7 @@
+class: negative
+summary: [1910] reports a place read before it is assigned, and a write refused because its binding is not `mut` still assigns it, so the reads after it are not reported again
+program: program.ldn
+codes: L0303
+fixed: program.fixed
+constructs: 0060, 1900, 1910
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -159,13 +159,15 @@ package body Landin.Tests.Mutation_Suite is
    --  a `match` arm took the first to 1,650, 90 per cent, and reading a
    --  `:=` that begins a line as that line's to 1,658.  Standing a report
    --  at a line's end, or the file's, on the token before its gap took
-   --  the second to 0, and it is held there with the other three.  Set
+   --  the second to 0, and it is held there with the other three.  A
+   --  checker refusal poisoning what it refuses took exactly one report to
+   --  1,758 and the first to 1,659.  Set
    --  LANDIN_MUTATION_TRACE to log each repair that does not give back
    --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
    --  to keep that mutant's text in the scratch directory as
    --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
-   Floor_One_On_Line  : constant := 1_658;
+   Floor_One_On_Line  : constant := 1_659;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));

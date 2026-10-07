@@ -1,0 +1,9 @@
+pick: (x: i32) -> (r: i32) =
+    r = if x > 0 then
+        r = 1
+    elsif x < 0 then
+        r = 2
+    else
+        0
+    end if
+end pick

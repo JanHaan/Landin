@@ -1,0 +1,10 @@
+error[L0332]: this control block can fall through without producing a value
+  --> ../tests/fixtures/negative/a-control-value-missing-twice-reports-once/program.ldn:3:9
+  |
+3 |         r = 1
+  |         ^^^^^
+  --> ../tests/fixtures/negative/a-control-value-missing-twice-reports-once/program.ldn:2:9
+  |
+2 |     r = if x > 0 then
+  |         ^^^^^^^^^^^^^ this control expression needs a value
+  = note: D124: an early return needs no joined value, but every fallthrough edge does

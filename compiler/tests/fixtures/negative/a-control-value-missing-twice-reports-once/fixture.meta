@@ -1,0 +1,9 @@
+class: negative
+summary: D124 gives a value-producing `if` one joined value, and arms that each end without one are one missing value, reported once against the `if`
+program: program.ldn
+codes: L0332
+constructs: 1050, 1080
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/a-control-value-missing-twice-reports-once/program.ldn
+status: 1

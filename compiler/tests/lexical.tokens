@@ -29160,6 +29160,45 @@ file positive/written-function-values/program.ldn tokens 56
   186 187 )
   188 191 end
   192 195 use
+file negative/a-control-value-missing-twice-reports-once/program.ldn tokens 38
+  0 4 pick
+  4 5 :
+  6 7 (
+  7 8 x
+  8 9 :
+  10 13 i32
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 20 r
+  20 21 :
+  22 25 i32
+  25 26 )
+  27 28 =
+  33 34 r
+  35 36 =
+  37 39 if
+  40 41 x
+  42 43 >
+  44 45 0
+  46 50 then
+  59 60 r
+  61 62 =
+  63 64 1
+  69 74 elsif
+  75 76 x
+  77 78 <
+  79 80 0
+  81 85 then
+  94 95 r
+  96 97 =
+  98 99 2
+  104 108 else
+  117 118 0
+  123 126 end
+  127 129 if
+  130 133 end
+  134 138 pick
 file negative/a-fold-deeper-than-any-limit/program.ldn tokens 495
   256 258 a0
   258 259 :
@@ -29686,6 +29725,48 @@ file negative/a-nested-mistake-after-a-refused-statement-is-reported/program.ldn
   87 89 if
   90 93 end
   94 98 pick
+file negative/a-refused-write-still-assigns/program.ldn tokens 41
+  0 4 pair
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 25 a
+  25 26 :
+  27 30 u32
+  35 36 b
+  36 37 :
+  38 41 u32
+  42 45 end
+  46 50 pair
+  52 56 read
+  56 57 :
+  58 59 (
+  59 60 )
+  61 63 ->
+  64 65 (
+  65 66 r
+  66 67 :
+  68 71 u32
+  71 72 )
+  73 74 =
+  79 84 local
+  84 85 :
+  86 90 pair
+  95 100 local
+  101 102 =
+  103 109 zeroed
+  114 115 r
+  116 117 =
+  118 123 local
+  123 124 .
+  124 125 a
+  126 127 +
+  128 133 local
+  133 134 .
+  134 135 b
+  136 139 end
+  140 144 read
 file negative/addr-of-a-call-result-is-refused-there/program.ldn tokens 34
   0 4 make
   4 5 :
@@ -89959,6 +90040,37 @@ file negative/wide-integer-not-enabled/program.ldn tokens 5
   6 10 u128
   11 12 =
   13 14 1
+file negative/writes-to-an-immutable-binding-report-once/program.ldn tokens 30
+  0 5 count
+  5 6 :
+  7 8 (
+  8 9 )
+  10 12 ->
+  13 14 (
+  14 15 r
+  15 16 :
+  17 20 u32
+  20 21 )
+  22 23 =
+  28 33 total
+  33 34 :
+  35 38 u32
+  39 40 =
+  41 42 0
+  47 52 total
+  53 54 =
+  55 56 1
+  61 66 total
+  67 68 =
+  69 70 2
+  75 80 total
+  81 82 =
+  83 84 3
+  89 90 r
+  91 92 =
+  93 98 total
+  99 102 end
+  103 108 count
 file negative/written-binding-is-offered-mut/program.ldn tokens 44
   0 5 limit
   5 6 :

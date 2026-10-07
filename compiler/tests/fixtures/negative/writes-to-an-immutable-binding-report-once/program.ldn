@@ -1,0 +1,7 @@
+count: () -> (r: u32) =
+    total: u32 = 0
+    total = 1
+    total = 2
+    total = 3
+    r = total
+end count

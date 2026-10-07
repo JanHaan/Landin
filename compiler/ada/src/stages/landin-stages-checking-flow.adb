@@ -3490,6 +3490,12 @@ package body Landin.Stages.Checking.Flow is
                               Revive_Place (Of_Tree, Place, State);
                            end if;
                         end;
+                     else
+                        --  A refused write is still where the place was
+                        --  assigned: its refusal was reported, and reading
+                        --  the place afterwards is not a second mistake.
+                        --  Nothing it refused is evaluated again.
+                        Mark (Syn.Target_Of (Of_Tree, Item));
                      end if;
 
                   when Syn.Increment | Syn.Decrement =>

@@ -11981,12 +11981,24 @@ not reported for the same return. A scalar type name written where a value
 belongs is reported as a type, with [0700]'s conversion, rather than as a
 name that is not declared.
 
+A refusal poisons what it refuses. A write the checker refused, to a binding
+declared without `mut` say, is still where the place was assigned, so reading
+the place afterwards is not reported as unassigned. A binding whose write is
+refused for its mutability is reported once, at the first write, with the
+fix that declares it `mut`; the later writes are the same mistake. A
+value-producing control expression whose value is missing on more than one
+path is reported once: its arms and blocks report against the construct, and
+the construct's value is the one fact D124 decides.
+
 **The alternatives:** refusing every body binding that shares a return's
 name, which also refuses a deliberate inner name in a nested block whose
 return is assigned elsewhere; keeping both reports and ordering the cause
 first, which still reports one mistake twice.
 
-**Pinned by** `negative/misspelt-argument-label-is-offered-its-parameter`,
+**Pinned by** `negative/writes-to-an-immutable-binding-report-once`,
+`negative/a-refused-write-still-assigns` and
+`negative/a-control-value-missing-twice-reports-once`, for the poisoning;
+`negative/misspelt-argument-label-is-offered-its-parameter`,
 `negative/named-call-unknown`,
 `negative/local-shadowing-a-named-return-is-reported-there` and
 `negative/scalar-type-is-not-a-value`.

@@ -1,0 +1,10 @@
+pair: type = struct
+    a: u32
+    b: u32
+end pair
+
+read: () -> (r: u32) =
+    local: pair
+    local = zeroed
+    r = local.a + local.b
+end read

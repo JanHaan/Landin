@@ -56,8 +56,10 @@ end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, macos-arm64
+negative/a-control-value-missing-twice-reports-once | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, macos-arm64
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/a-refused-write-still-assigns | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/addr-of-a-call-result-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/addr-of-a-literal-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, linux-arm64, macos-arm64
@@ -1262,6 +1264,7 @@ negative/variant-struct-argument-unassigned | linux-x86-64, linux-arm64, macos-a
 negative/variant-struct-payload-mismatch | linux-x86-64, linux-arm64, synthetic-32
 negative/variant-whole-copy-source-unassigned | linux-x86-64, linux-arm64, macos-arm64
 negative/wide-integer-not-enabled | linux-x86-64, linux-arm64, macos-arm64
+negative/writes-to-an-immutable-binding-report-once | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/written-binding-is-offered-mut | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/written-function-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64
 positive/alias-conversion | linux-x86-64, linux-arm64, macos-arm64

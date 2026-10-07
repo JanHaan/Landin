@@ -13,11 +13,13 @@ with Ada.Finalization;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
+with Ada.Strings.Unbounded.Hash;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
 with Landin.Checking.Spelling;
 with Landin.Configuration;
+with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Resolution;
@@ -1594,6 +1596,9 @@ package body Landin.Stages.Checking is
          Equivalent_Keys => Landin.Provenance."=");
 
       Mutability_Needed : Declaration_Sets.Set;
+      --  A declaration a write was refused for: the refusal is its, and
+      --  every later write to it is the same mistake, so it reports once.
+      Immutable_Reported : Declaration_Sets.Set;
 
       --  The extents of the routine bodies this stage checked.  A generic
       --  routine's body is checked once per instance and never as its
@@ -22647,7 +22652,17 @@ package body Landin.Stages.Checking is
                Mutability_Needed.Include (Means);
             end if;
 
+            if not Writable and then Immutable_Reported.Contains (Means)
+            then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Base);
+               if Base /= Node then
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               end if;
+               return;
+            end if;
+
             if not Writable then
+               Immutable_Reported.Include (Means);
                Bad.Report
                  (Item    => Bad.Immutable_Target,
                   Source  => Syn.Source_Of (Of_Tree),
@@ -36160,9 +36175,72 @@ package body Landin.Stages.Checking is
                Ordered := Landin.Diagnostics.Sorted (Kept);
             end;
          end if;
-         for Position in 1 .. Landin.Diagnostics.Count (Ordered) loop
-            Report (Context, Landin.Diagnostics.Get (Ordered, Position));
-         end loop;
+         --  A report whose second place is what an earlier report of the
+         --  same code stands on is about that construct's part, and the
+         --  construct's report already says it: a value-producing `if`
+         --  without a value, then its block without one.  One cause is
+         --  one report.  The places stood on are kept as keys, so this
+         --  stays linear in the number of reports.
+         declare
+            use type Ada.Strings.Unbounded.Unbounded_String;
+            package Place_Sets is new Ada.Containers.Hashed_Sets
+              (Element_Type        =>
+                 Ada.Strings.Unbounded.Unbounded_String,
+               Hash                => Ada.Strings.Unbounded.Hash,
+               Equivalent_Elements => "=");
+            Stood_On : Place_Sets.Set;
+            Second_Place : Place_Sets.Set;
+
+            function Key
+              (Code : String; Place : Landin.Diagnostics.Label)
+               return Ada.Strings.Unbounded.Unbounded_String
+              is (Ada.Strings.Unbounded.To_Unbounded_String
+                    (Code
+                     & Landin.Source.Source_Id'Image
+                         (Landin.Diagnostics.Source_Of (Place))
+                     & Landin.Source.Byte_Offset'Image
+                         (Landin.Diagnostics.Span_Of (Place).First)
+                     & Landin.Source.Byte_Offset'Image
+                         (Landin.Diagnostics.Span_Of (Place).Last)));
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Ordered) loop
+               declare
+                  Item : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Ordered, Position);
+                  Code : constant String := Landin.Diagnostics.Code (Item);
+                  --  Only a control value's report is about a part of
+                  --  a construct another report stands on: D124 makes the
+                  --  construct's value the one fact, and its arms and
+                  --  blocks report against that construct.  Two such
+                  --  reports with one construct are one missing value.
+                  --  Elsewhere a shared second place is a requirement two
+                  --  independent mistakes can both fail, and each reports.
+                  Folds : constant Boolean :=
+                    Code = Landin.Diagnostics.Catalogue.Code
+                             (Landin.Diagnostics.Catalogue.Control_Value);
+               begin
+                  if not Folds
+                    or else Landin.Diagnostics.Label_Count (Item) = 0
+                    or else
+                      (not Stood_On.Contains
+                         (Key (Code, Landin.Diagnostics.Nth_Label (Item, 1)))
+                       and then not Second_Place.Contains
+                         (Key (Code, Landin.Diagnostics.Nth_Label (Item, 1))))
+                  then
+                     Report (Context, Item);
+                  end if;
+                  if Folds then
+                     Stood_On.Include
+                       (Key (Code, Landin.Diagnostics.Primary (Item)));
+                     if Landin.Diagnostics.Label_Count (Item) > 0 then
+                        Second_Place.Include
+                          (Key (Code,
+                                Landin.Diagnostics.Nth_Label (Item, 1)));
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end;
       end;
 
       Outcome := (if Failed (Context) then Stop else Continue);
