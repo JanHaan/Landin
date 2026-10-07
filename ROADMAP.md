@@ -764,7 +764,7 @@ These measurements are local results. The full cross-host gate was green on
 
 ### R11.30 — FreeBSD x86-64 and arm64
 
-Status: active
+Status: complete
 Depends on: R11.20
 
 The hosted layer and platform driver for FreeBSD x86-64 and arm64, emitted
@@ -799,6 +799,17 @@ Cover imported and exported calls, integer and floating-point values,
 `layout(c)` aggregates, callbacks and variadic calls. Report each architecture's
 ABI verdict separately from its runtime and debugger verdicts, and fail if
 its ABI fixture selection is empty.
+
+Done: Linux emits both targets through the existing ELF backends and locked
+FreeBSD 14.4 sysroots; Linux-hosted FreeBSD 15.1 KVM guests execute them.
+The [full gate on `efeb38fe`](https://github.com/JanHaan/Landin/actions/runs/37638872998)
+passed all 34 jobs, including separate architecture runtime, LLDB and ABI
+verdicts: 2,468/2,472 runtime outcomes, four debugger profiles each, and
+158/150 ABI outcomes against 162/150 independently compiled C objects.
+Both lanes execute integer assembly operands and refuse invalid IR registers.
+Guest probes confirmed x86-64-v3 and LSE; linked v1/v3 shifts, baseline/LSE
+atomics, baseline assembler refusals and higher-level execution passed.
+All six execution verdicts and their Linux emission checks recur in the gate.
 
 ### R11.40 — RISC-V rv64 Linux
 

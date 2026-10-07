@@ -309,7 +309,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Current roadmap work: R11.30 — FreeBSD x86-64 and arm64.**
+**Next roadmap item: R11.40 — RISC-V rv64 Linux (planned).**
 
 ## License
 

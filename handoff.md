@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R11.30 — FreeBSD x86-64 and arm64.**
+**Next roadmap item: R11.40 — RISC-V rv64 Linux (planned).**
 
 ---
 
