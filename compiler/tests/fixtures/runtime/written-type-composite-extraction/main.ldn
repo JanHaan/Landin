@@ -37,7 +37,7 @@ add: (input: i32) -> (output: i32) = input + 1 end add
 module_hidden: array_id = array_id([40, 42])
 module_values: [2]i32 = [1 + 1]i32(module_hidden)
 module_callback_hidden: callback_id = callback_id(add)
-module_callback: (input: i32) -> (output: i32) =
+module_callback: callback_base =
     (input: i32) -> (output: i32)(module_callback_hidden)
 
 public main: () -> (code: i32) =

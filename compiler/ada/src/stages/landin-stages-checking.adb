@@ -560,13 +560,16 @@ package body Landin.Stages.Checking is
         is (Node /= Syn.No_Node
             and then Syn.Kind (Of_Tree, Node) = Syn.Call
             and then Syn.Argument_Count (Of_Tree, Node) = 1
-            and then Res.Verdict_Of
+            and then (Syn.Kind
+              (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                in Syn.Type_Reference_Kind
+              or else (Res.Verdict_Of
               (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
                 = Res.Bound
             and then Res.Sort_Of
               (Meanings.all, Res.Bound_To
                  (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                   = Res.Module_Type);
+                   = Res.Module_Type)));
 
       --  [0690]: a bare case name or a labelled case construction.  Either
       --  is written where its variant part is the destination, so a whole
@@ -14414,6 +14417,10 @@ package body Landin.Stages.Checking is
            Landin.Checking.Routine_Target_Of (Types.all, Of_Tree, Call);
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Call);
       begin
+         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+            --  A callable destination is a type, not an executed callee.
+            return Landin.Checking.No_Signature;
+         end if;
          if Target /= Landin.Checking.No_Routine_Instance then
             return Landin.Checking.Routine_Signature_Of
               (Types.all, Target);

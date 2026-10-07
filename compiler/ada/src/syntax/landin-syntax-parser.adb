@@ -796,26 +796,35 @@ package body Landin.Syntax.Parser is
                   end loop;
                   return True;
                elsif Peek = Tok.Left_Paren and then Starts_Signature then
-                  --  An anonymous function has a body introduced by `=`.
-                  --  Skip complete signature lists, never their interiors.
+                  --  Only the token after the complete signature decides
+                  --  whether it introduces a body or applies a type.
                   Position := Tok.Token_Index
                     (Lookahead (Index).Closing + 2);
-                  while Position < Last loop
-                     case Tok.Kind (From, Position) is
-                        when Tok.Equal => return False;
-                        when Tok.Left_Paren | Tok.Left_Bracket =>
-                           Closing := Lookahead (Position).Closing;
-                           if Closing = 0 then
-                              return True;
-                           end if;
-                           Position := Tok.Token_Index (Closing);
-                        when Tok.Kw_End => return True;
-                        when others => null;
-                     end case;
+                  if Position >= Last then
+                     return True;
+                  end if;
+                  if Tok.Kind (From, Position) = Tok.Left_Paren then
+                     Closing := Lookahead (Position).Closing;
+                     if Closing = 0 then
+                        return True;
+                     end if;
+                     Position := Tok.Token_Index (Closing + 1);
+                  else
                      Position := Position + 1;
-                     exit when Begins_Line (Position);
-                  end loop;
-                  return True;
+                  end if;
+                  if Position < Last
+                    and then Tok.Kind (From, Position) = Tok.Bang
+                  then
+                     Position := Position + 1;
+                     while Position < Last loop
+                        exit when Tok.Kind (From, Position)
+                          not in Tok.Identifier | Tok.Dot | Tok.Bar
+                            | Tok.Dot_Dot_Dot;
+                        Position := Position + 1;
+                     end loop;
+                  end if;
+                  return Position > Last
+                    or else Tok.Kind (From, Position) /= Tok.Equal;
                elsif Peek = Tok.Identifier then
                   while Position + 2 < Last
                     and then Tok.Kind (From, Position + 1) = Tok.Dot
