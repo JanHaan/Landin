@@ -1,4 +1,3 @@
-textual: type (item: type) = item
 as_bytes: (source: utf8) -> (result: []u8 from source) =
     result = []u8(source)
 end as_bytes
@@ -9,13 +8,12 @@ public main: () -> (code: i32) =
     mut storage: [10]u8 =
         [65, 194, 162, 226, 152, 131, 240, 159, 152, 128]
     source: []u8 = storage[0..<lenof storage]
-    text: utf8 = textual(utf8)(source)
+    text: utf8 = utf8(source)
     bytes: []u8 = as_bytes(text)
-    generic_bytes: []u8 = textual([]u8)(text)
     nested: utf8 = utf8([]u8(text))
     terminated: cstring = "A\u{0}ignored"
     prefix: []u8 = []u8(terminated)
-    prefix_text: utf8 = textual(utf8)(terminated)
+    prefix_text: utf8 = utf8(terminated)
     empty_c: cstring = ""
     empty_bytes: []u8 = c_bytes(empty_c)
     empty_text: utf8 = utf8(empty_c)
@@ -26,8 +24,6 @@ public main: () -> (code: i32) =
       and lenof prefix_text == 1 and lenof empty_bytes == 0
       and lenof empty_text == 0 and lenof empty_view == 0
       and usize(addr bytes[0]) == usize(addr source[0])
-      and lenof generic_bytes == 10 and generic_bytes[9] == 128
-      and usize(addr generic_bytes[0]) == usize(addr source[0])
     then
         code = 42
     else

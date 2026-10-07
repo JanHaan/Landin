@@ -2101,7 +2101,7 @@
     "runtime/written-type-generic-unchecked-integer-truncates": {
       "mode": "execute"
     },
-    "runtime/written-type-generic-unchecked-text-traps": {
+    "runtime/written-type-unchecked-text-traps": {
       "mode": "execute"
     },
     "runtime/written-type-literal-pointer-controls": {

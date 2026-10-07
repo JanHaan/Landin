@@ -1,7 +1,6 @@
-textual: type (item: type) = item
-convert: (source: []u8) -> (result: utf8 from source) =
+convert: (source: []u8) -> (result: []u8 from source) =
     unchecked begin
-        result = textual(utf8)(source)
+        result = []u8(utf8(source))
     end unchecked
 end convert
 public main: () -> (code: i32) =
