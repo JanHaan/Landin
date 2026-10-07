@@ -2,6 +2,6 @@ class: runtime
 profiles: standard
 summary: written generic float-to-integer conversion retains its range trap inside unchecked
 program: main.ldn
-constructs: 0310, 1280, 1730, 1950
+constructs: 0310, 1120, 1350, 1950, 1960
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 traps: yes

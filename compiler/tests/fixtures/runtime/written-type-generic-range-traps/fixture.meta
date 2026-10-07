@@ -3,5 +3,5 @@ profiles: standard
 summary: a written generic scalar type retains the checked runtime conversion range trap
 program: main.ldn
 traps: yes
-constructs: 0310, 1280, 1880, 1950
+constructs: 0310, 1350, 1880, 1950
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

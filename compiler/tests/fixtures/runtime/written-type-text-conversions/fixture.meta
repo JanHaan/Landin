@@ -2,6 +2,6 @@ class: runtime
 profiles: standard
 summary: four text conversion edges preserve bytes, shared backing and empty lengths
 program: main.ldn
-constructs: 0310, 0470, 0520, 0570, 0600, 0610, 1280, 1950
+constructs: 0310, 0470, 0520, 0570, 0600, 0610, 1350, 1950
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 status: 42

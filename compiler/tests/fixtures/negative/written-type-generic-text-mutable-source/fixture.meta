@@ -2,5 +2,5 @@ class: negative
 summary: a written generic UTF-8 type preserves refusal of a mutable byte-view source
 program: main.ldn
 codes: L0301
-constructs: 0310, 0430, 0600, 1280
+constructs: 0310, 0430, 0600, 1350
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
