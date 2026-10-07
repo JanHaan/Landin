@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: written conversion evaluates its operand once in source order and performs no work after an exit
+program: main.ldn
+constructs: 0310, 1840, 1950
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 42

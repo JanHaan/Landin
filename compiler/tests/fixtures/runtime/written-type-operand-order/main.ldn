@@ -1,0 +1,27 @@
+mut calls: u32 = 0
+mut continued: u32 = 0
+pass: (source: cstring) -> (result: cstring from source) =
+    calls = calls * 10 + 1
+    result = source
+end pass
+measure: (source: []u8) -> (result: usize) =
+    calls = calls * 10 + 2
+    result = lenof source
+end measure
+exit_conversion: () -> none =
+    ignored: []u8 = []u8(pass(begin
+        calls = calls * 10 + 3
+        return
+    end))
+    _ = ignored
+    inc continued
+end exit_conversion
+public main: () -> (code: i32) =
+    size: usize = measure([]u8(pass("OK")))
+    exit_conversion()
+    if calls == 123 and continued == 0 and size == 2 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

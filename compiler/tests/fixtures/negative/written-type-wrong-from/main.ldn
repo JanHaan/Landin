@@ -1,0 +1,3 @@
+bad: (source: utf8, other: utf8) -> (result: []u8 from other) =
+    result = []u8(source)
+end bad

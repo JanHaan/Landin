@@ -208,7 +208,8 @@ This is the maintained inventory of what the compiler does today:
 
 - **The language.** Functions, aggregates and variants, block-valued control
   flow, lexical `defer` and failure-only `undo`, declared errors, every loop
-  and literal family, the enabled scalar conversions, range subtypes and
+  and literal family, explicit conversion to a written type such as
+  `[]u8(text)`, the enabled scalar conversions, range subtypes and
   `unchecked` regions. Generics take fixed parameters by compile-time
   substitution; concepts carry a whole-program conformance register. Generic
   calls pass only the evidence their checked bodies use; direct and `any C`

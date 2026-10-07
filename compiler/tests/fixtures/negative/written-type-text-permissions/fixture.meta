@@ -1,0 +1,6 @@
+class: negative
+summary: written byte-view conversion grants neither mutable permission nor a different element identity
+program: main.ldn
+constructs: 0310, 0430, 0570, 0600
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0301, L0301, L0303

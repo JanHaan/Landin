@@ -1,0 +1,8 @@
+public main: () -> (code: i32) =
+    mut storage: [3]u8 = [237, 160, 128]
+    source: []u8 = storage[0..<lenof storage]
+    unchecked begin
+        invalid: []u8 = []u8(utf8(source))
+        code = i32(lenof invalid)
+    end unchecked
+end main

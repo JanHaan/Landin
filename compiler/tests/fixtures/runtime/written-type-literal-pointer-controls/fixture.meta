@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: bracket literals, repetition and empty slices keep their meaning beside written types and contextual ptr conversion
+program: main.ldn
+constructs: 0310, 0470, 0570, 0640, 0700, 1770, 1820, 1950
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 42

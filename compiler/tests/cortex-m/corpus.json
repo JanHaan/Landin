@@ -2079,6 +2079,24 @@
     "runtime/written-function-values": {
       "mode": "execute"
     },
+    "runtime/written-type-composite-extraction": {
+      "mode": "execute"
+    },
+    "runtime/written-type-literal-pointer-controls": {
+      "mode": "execute"
+    },
+    "runtime/written-type-operand-order": {
+      "mode": "execute"
+    },
+    "runtime/written-type-scalar-families": {
+      "mode": "execute"
+    },
+    "runtime/written-type-text-conversions": {
+      "mode": "execute"
+    },
+    "runtime/written-type-text-invalid-traps": {
+      "mode": "execute"
+    },
     "runtime/zeroed-aggregate-carrier-order": {
       "mode": "execute"
     }

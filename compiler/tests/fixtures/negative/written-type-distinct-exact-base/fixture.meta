@@ -1,0 +1,6 @@
+class: negative
+summary: written conversions preserve exact array, permission and generic-instance distinct identity
+program: main.ldn
+codes: L0301, L0301, L0301, L0301
+constructs: 0310, 0430, 0650, 1280, 1300
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

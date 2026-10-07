@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: written array, slice, pointer, function, nested and generic types unwrap their exact distinct base
+program: main.ldn
+constructs: 0310, 0430, 0520, 0570, 0640, 0650, 0700, 0870, 1280, 1300, 1370
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 42

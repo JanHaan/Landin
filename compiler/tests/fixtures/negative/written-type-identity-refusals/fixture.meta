@@ -1,0 +1,6 @@
+class: negative
+summary: written structural types preserve alias refusals for identity and integer-to-written-pointer conversion
+program: main.ldn
+constructs: 0310, 0430, 0470, 0570, 0640, 0870, 1370
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0301, L0301, L0301, L0301, L0301, L0301

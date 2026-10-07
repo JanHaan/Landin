@@ -1,0 +1,93 @@
+array_base: type = [2]i32
+array_id: type = distinct array_base
+slice_base: type = []i32
+slice_id: type = distinct slice_base
+pointer_base: type = ptr mut i32
+pointer_id: type = distinct pointer_base
+callback_base: type = (input: i32) -> (output: i32)
+callback_id: type = distinct callback_base
+nested_base: type = [2][2]i32
+nested_id: type = distinct nested_base
+byte_base: type = []u8
+byte_id: type = distinct byte_base
+tag: type (item: type, fixed label: u32) = distinct item
+handle: type = tag(u32, 7)
+outer: type = distinct handle
+handles_base: type = [2]handle
+handles_id: type = distinct handles_base
+readable: type = concept (item: type)
+    read: (self: ptr item) -> (result: i32)
+end readable
+read_i32: (self: ptr i32) -> (result: i32) = self.val end read_i32
+i32 is readable (read: read_i32)
+view_base: type = any readable
+view_id: type = distinct view_base
+mutable_slice_base: type = []mut i32
+mutable_slice_id: type = distinct mutable_slice_base
+pointer_slice_base: type = []ptr i32
+pointer_slice_id: type = distinct pointer_slice_base
+callback_pointer_base: type = ptr (input: i32) -> (output: i32)
+callback_pointer_id: type = distinct callback_pointer_base
+failed: atom
+fallible_base: type = (input: i32) -> (output: i32) ! failed
+fallible_id: type = distinct fallible_base
+fallible_add: (input: i32) -> (output: i32) ! failed = input + 1 end fallible_add
+add: (input: i32) -> (output: i32) = input + 1 end add
+
+module_hidden: array_id = array_id([40, 42])
+module_values: [2]i32 = [1 + 1]i32(module_hidden)
+module_callback_hidden: callback_id = callback_id(add)
+module_callback: (input: i32) -> (output: i32) =
+    (input: i32) -> (output: i32)(module_callback_hidden)
+
+public main: () -> (code: i32) =
+    hidden_array: array_id = array_id([10, 20])
+    values: [2]i32 = [2]i32(hidden_array)
+    hidden_slice: slice_id = slice_id(values[0..<2])
+    view: []i32 = []i32(hidden_slice)
+    mut number: i32 = 40
+    hidden_pointer: pointer_id = pointer_id(addr number)
+    pointer: ptr mut i32 = ptr mut i32(hidden_pointer)
+    pointer.val = 41
+    hidden_callback: callback_id = callback_id(add)
+    callback: (input: i32) -> (output: i32) =
+        (input: i32) -> (output: i32)(hidden_callback)
+    hidden_fallible: fallible_id = fallible_id(fallible_add)
+    fallible: (input: i32) -> (output: i32) ! failed =
+        (input: i32) -> (output: i32) ! failed(hidden_fallible)
+    fallible_result: i32 = fallible(number) else -1
+    mut editable: [2]i32 = [3, 4]
+    hidden_mutable: mutable_slice_id = mutable_slice_id(editable[0..<2])
+    mutable_view: []mut i32 = []mut i32(hidden_mutable)
+    mutable_view[0] = 5
+    readonly_pointer: ptr i32 = addr number
+    pointers: [1]ptr i32 = [readonly_pointer]
+    hidden_pointer_slice: pointer_slice_id = pointer_slice_id(pointers[0..<1])
+    pointer_view: []ptr i32 = []ptr i32(hidden_pointer_slice)
+    hidden_callback_pointer: callback_pointer_id = callback_pointer_id(addr callback)
+    callback_pointer: ptr (input: i32) -> (output: i32) =
+        ptr (input: i32) -> (output: i32)(hidden_callback_pointer)
+    hidden_nested: nested_id = nested_id([[1, 2], [3, 4]])
+    nested: [2][2]i32 = [2][2]i32(hidden_nested)
+    hidden_bytes: byte_id = byte_id("OK")
+    bytes: []u8 = []u8(hidden_bytes)
+    tagged: tag(u32, 7) = tag(u32, 7)(u32(7))
+    hidden_tag: outer = outer(tagged)
+    recovered_tag: handle = tag(u32, 7)(hidden_tag)
+    hidden_handles: handles_id = handles_id([tagged, recovered_tag])
+    handles: [2]handle = [2]tag(u32, 7)(hidden_handles)
+    erased: any readable = any(addr number)
+    hidden_erased: view_id = view_id(erased)
+    recovered_erased: any readable = any readable(hidden_erased)
+    if values[1] == 20 and view[0] == 10 and nested[1][0] == 3
+      and bytes[1] == 75 and u32(handles[1]) == 7
+      and recovered_erased.read() == 41 and fallible_result == 42
+      and editable[0] == 5 and pointer_view[0].val == 41
+      and callback_pointer.val(number) == 42
+      and module_values[1] == 42 and module_callback(41) == 42
+    then
+        code = callback(number)
+    else
+        code = 1
+    end if
+end main

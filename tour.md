@@ -421,9 +421,26 @@ No implicit conversion. Conversion is a type applied to a
 value. If the value is known at compile time, an impossible
 conversion is a compile error; otherwise it traps.
 
+The type may be written directly, so `[]u8(text)` gives a `utf8` value's
+immutable byte view without first declaring an alias for `[]u8`. The same
+conversions, identity checks and source origins apply with either spelling.
+A written type introduces no implicit conversion or additional conversion
+between representations.
+Type prefixes nest as they do in declarations: `[][2]u8(value)` applies a
+slice of two-byte arrays, and `tag(u32, 7)(value)` applies a fully specified
+parameterized type. The final parentheses hold one value. Bind the result
+before indexing, selecting a field or calling an extracted function, as with
+an ordinary call result.
+
+`ptr(address)` still takes its complete pointer type from context [0470].
+`ptr u8(value)` instead applies the written type `ptr u8`, as an alias for
+that type would; it can extract the exact pointer base of a distinct value
+[0650], but does not convert an integer to a pointer.
+
 ```landin
 -- bad: u8 = u8(300)        compile error
 runtime_narrow := u8(measured)   -- traps if out of range
+text_bytes: []u8 = []u8(text)    -- keeps text's storage and origin
 
 ```
 

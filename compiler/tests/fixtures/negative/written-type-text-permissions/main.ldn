@@ -1,0 +1,10 @@
+bad_mutable: (source: utf8) -> none =
+    _ = []mut u8(source)
+end bad_mutable
+bad_wide: (source: utf8) -> none =
+    _ = []u16(source)
+end bad_wide
+bad_store: (source: utf8) -> none =
+    mut view: []u8 = []u8(source)
+    view[0] = 0
+end bad_store

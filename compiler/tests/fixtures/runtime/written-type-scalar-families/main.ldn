@@ -1,0 +1,36 @@
+folded_integer: i8 = i8(i64(-128))
+folded_float: f32 = f32(f64(1.5))
+folded_integer_float: f64 = f64(u64(42))
+folded_float_integer: u8 = u8(f64(42.75))
+folded_bool_integer: u16 = u16(true)
+folded_integer_bool: bool = bool(u32(1))
+folded_float_bool: bool = bool(f64(-0.0))
+folded_bool_float: f32 = f32(true)
+int_int: (source: i64) -> (result: i8) = i8(source) end int_int
+float_float: (source: f64) -> (result: f32) = f32(source) end float_float
+int_float: (source: u64) -> (result: f64) = f64(source) end int_float
+float_int: (source: f64) -> (result: u8) = u8(source) end float_int
+bool_int: (source: bool) -> (result: u16) = u16(source) end bool_int
+int_bool: (source: u32) -> (result: bool) = bool(source) end int_bool
+float_bool: (source: f64) -> (result: bool) = bool(source) end float_bool
+bool_float: (source: bool) -> (result: f32) = f32(source) end bool_float
+pointer_integer: (source: ptr i32) -> (result: usize) = usize(source) end pointer_integer
+handle: type = distinct u32
+public main: () -> (code: i32) =
+    address: ptr i32 = ptr(usize(42))
+    wrapped: handle = handle(u32(42))
+    if folded_integer == -128 and int_int(-128) == -128
+      and folded_float == 1.5 and float_float(1.5) == 1.5
+      and folded_integer_float == 42.0 and int_float(42) == 42.0
+      and folded_float_integer == 42 and float_int(42.75) == 42
+      and folded_bool_integer == 1 and bool_int(true) == 1
+      and folded_integer_bool and int_bool(1)
+      and not folded_float_bool and not float_bool(-0.0)
+      and folded_bool_float == 1.0 and bool_float(true) == 1.0
+      and pointer_integer(address) == 42 and u32(wrapped) == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

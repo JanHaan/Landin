@@ -1,0 +1,4 @@
+hidden: type = distinct [2]i32
+bad: (value: hidden) -> none =
+    _ = [u8(300)]i32(value)
+end bad

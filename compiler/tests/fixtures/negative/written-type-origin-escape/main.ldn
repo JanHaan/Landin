@@ -1,0 +1,12 @@
+address: type = ptr i32
+hidden_address: type = distinct address
+bad_bytes: () -> (result: []u8) =
+    storage: [1]u8 = [65]
+    source: []u8 = storage[0..<0]
+    result = []u8(utf8(source))
+end bad_bytes
+bad_pointer: () -> (result: ptr i32) =
+    local: i32 = 42
+    hidden: hidden_address = hidden_address(addr local)
+    result = ptr i32(hidden)
+end bad_pointer

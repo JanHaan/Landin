@@ -1,0 +1,21 @@
+array_base: type = [2]i32
+array_id: type = distinct array_base
+identity: (value: i32) -> (result: i32) = value end identity
+public main: () -> (code: i32) =
+    singleton: [1]i32 = [identity(4)]
+    literal: [2]i32 = [4, 5]
+    repeated: [2]i32 = [2 of 4]
+    empty: []i32 = []
+    address: ptr i32 = ptr(usize(42))
+    wrapped: array_id = array_id(literal)
+    bytes: []u8 = []u8("OK")
+    recovered: [2]i32 = [2]i32(wrapped)
+    if singleton[0] == 4 and recovered[1] == 5 and repeated[1] == 4
+      and lenof empty == 0 and usize(address) == 42
+      and 2 * i32(lenof bytes) + identity(1) == 5
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

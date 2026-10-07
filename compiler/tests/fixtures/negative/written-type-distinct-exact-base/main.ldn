@@ -1,0 +1,19 @@
+array_base: type = [2]i32
+array_id: type = distinct array_base
+slice_base: type = []mut i32
+slice_id: type = distinct slice_base
+pointer_base: type = ptr mut i32
+pointer_id: type = distinct pointer_base
+tag: type (item: type, fixed label: u32) = distinct item
+bad_array: (value: array_id) -> none =
+    _ = [3]i32(value)
+end bad_array
+bad_slice: (value: slice_id) -> none =
+    _ = []i32(value)
+end bad_slice
+bad_pointer: (value: pointer_id) -> none =
+    _ = ptr i32(value)
+end bad_pointer
+bad_generic: (value: tag(u32, 7)) -> none =
+    _ = tag(u32, 8)(value)
+end bad_generic

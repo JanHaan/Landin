@@ -735,6 +735,12 @@ an address is formed. Neither form derives from a call, because nothing
 selects from one and nothing indexes one either. A call may consume that
 complete selection as its callee, which is how a function-valued field is
 called; the call itself still cannot be selected or indexed.
+D266 extends a conversion's callee from a name to a written type. It remains
+one primary, so its result has that same restriction on selection, indexing
+and another call. Named conversions still use the ordinary call production.
+A written conversion's type is [1790]'s type syntax, with its final argument
+list supplying exactly one value rather than type arguments. D266 fixes the
+split between those lists and between type prefixes and literal syntax.
 D183 extends range selection to the exact `utf8` and `utf16` identities. Both
 bounds are exact `usize` code-unit offsets. They must name scalar boundaries;
 the half-open upper bound may equal the code-unit length, while the inclusive
@@ -790,10 +796,13 @@ indexed     ::= selection (index | slice_selection | ("." identifier))*
 index       ::= "[" expression "]"
 slice_selection ::= "[" expression (".." | "..<") expression "]"
 selection   ::= identifier ("." identifier)*
-call        ::= indexed "(" arguments? ")" recovery?
+call        ::= indexed "(" arguments? ")" recovery? | written_conversion
 recovery    ::= "else" expression
               | "else" "(" identifier ")" block "end"
 address     ::= "addr" place
+written_conversion ::= conversion_type "(" expression ")"
+conversion_type ::= function_type | array_type | pointer_type | slice_type
+                  | any_type | type_application
 pointer_conversion ::= "ptr" "(" expression ")"
 any_construction ::= "any" "(" expression ")"
 empty_slice ::= "[" "]"
@@ -3598,6 +3607,80 @@ program, or leave the claimed scalar matrix incomplete. All were declined.
 
 **Pinned by** `runtime/bool-to-float-conversions` and the
 `conversion.bool-to-float` guarantee row.
+
+### D266 — A conversion may apply the type as written
+
+**The tour said** that conversion is a type applied to a value [0310].
+D15 makes an alias another name for the same type; D168--D176, D188,
+D199 and D213 decide which values a type may convert. Requiring a name
+before the value's opening parenthesis nevertheless made an immutable byte
+view require an alias, even though `[]u8` already writes that type.
+
+**Chosen:** a conversion may write any enabled type expression as its head.
+`[]u8(text)` and `byte_view(text)`, where `byte_view: type = []u8`, apply
+the same exact type. This changes spelling only. The scalar conversion matrix,
+range constraints, distinct identity and exact-base extraction, text validation,
+reference permission and origins, known-value folding, runtime traps and
+`unchecked` behavior remain the existing rules. No implicit conversion,
+ordinary composite identity conversion or pointer permission change follows.
+Nominal bodies, atom unions, `distinct` and range constraints still require
+their declarations; this adds no anonymous type or identity.
+
+A written application has one expression inside its final parentheses.
+Starting with a bracket, a single bound followed by `]` and an element type
+begins an array-type application, and empty brackets followed by an element
+type begin a slice-type application. Thus `[2]i32(hidden)` extracts the
+array representation of an appropriate distinct value, while `[4, 5]`,
+`[4 of 5]`, `[of 5]`, `[4, of 5]` and bare `[]` retain their literal,
+repetition and empty-slice meanings. A comma or contextual `of` within that
+outer bracket prevents a type prefix. Once an element type starts, an absent
+value list or an incomplete nested type is a malformed written application,
+not an empty slice or an array followed by another expression.
+
+`ptr(value)` retains [0470]'s contextual integer-to-pointer conversion and
+its untracked origin. `ptr T(value)` instead applies the written pointer type,
+so it can extract D213's exact distinct representation but cannot convert an
+integer to a pointer. `ptr mut T` retains its written permission. A parenthesis
+immediately after `ptr` begins the contextual conversion unless its balanced
+list is followed by `->`, which identifies a function pointee type. `any(value)`
+likewise retains its contextual construction; `any C(value)` applies a written
+erased type. A leading balanced parameter list followed by `->` begins a
+function-type application; otherwise parentheses retain their expression,
+struct-literal and anonymous-function meanings.
+
+Type prefixes nest as in declarations, for example `[][2]u8(hidden)` and
+`ptr []u8(hidden)`. At the terminal name the last parenthesized list supplies
+the value. A preceding positional type-argument list remains part of the
+head: `tag(u32, 7)(value)` applies that concrete type, and
+`[]array(u8, 2)(hidden)` applies the slice of that concrete element type.
+Names inside type arguments, function parameter and return lists, and array
+bounds are parsed in their own delimited positions. Ordinary single-list
+calls, labelled constructors and generic applications retain their existing
+classification. A written conversion admits neither labels, multiple value
+arguments nor call-site recovery.
+
+The application is a primary under [1820], and ordinary unary and binary
+precedence applies to its result. Its value is evaluated exactly once at the
+same point as an alias conversion [0410]. Its result cannot be indexed,
+selected or called directly, including through parentheses; bind it first,
+as for an ordinary call result. Type checking refuses an otherwise grammatical
+application when that exact destination and source lack an existing conversion.
+
+**The alternatives:** admit only slice heads, infer a type from every literal
+followed by parentheses, reinterpret `ptr T(n)` as `ptr(n)`, allow arbitrary
+postfix operations on conversion results, or add identity conversions while
+extending the spelling. Those choices leave other alias-reachable types without
+a written form, change existing literal or origin rules, change expression
+precedence and the call-result boundary, or grant conversions this extension
+was not asked to decide. Requiring an extra separator between the type and its
+value was declined because the balanced type-argument lists already distinguish
+the head from its one final value list.
+
+**Pinned by** `positive/written-type-composite-extraction`,
+`positive/written-type-text-conversions`, their runtime counterparts,
+`runtime/written-type-literal-pointer-controls`,
+`runtime/written-type-operand-order` and the `written-type-` prefix
+boundary, refusal and origin fixtures.
 
 ### D177 — A module bool is a static image, not routine control flow
 

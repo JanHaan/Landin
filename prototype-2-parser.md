@@ -42,6 +42,12 @@ traversal over the hosted identities; D249 makes indexing decode a `u32`,
 and D259 makes the ordinal argument `usize`; none changes that byte API. The
 derived parser may classify its ASCII grammar from bytes while preserving
 unknown input as recoverable tokens.
+The direct spelling `[]u8(text)` [0310] also supplies a validated `utf8`
+value's immutable byte view. It retains the same source origin as the
+`core/text.bytes` adapter, so the byte-oriented lexer and prototype 4's
+retained text still depend on their backing storage.
+`runtime/written-type-text-conversions` and
+`negative/written-type-origin-escape` pin that view and its retained origin.
 
 ```landin
 utf8       distinct []u8

@@ -720,6 +720,16 @@ allocation or truncation. `diag.streaming` retains a pointer to the erased
 world and a borrowed stream rather than naming the system provider. The
 historical sketches and findings below retain their original spelling.
 
+The byte view may also be written `[]u8(path)` [0310] instead of applying an
+alias or calling `core/text.bytes`. A `cstring` source gives its immutable
+pre-NUL byte view with the same spelling. Both views retain the source's
+origin, including when empty; neither creates mutable permission or removes
+the checked UTF-8 validation needed when arbitrary input becomes text.
+`runtime/written-type-text-conversions` and
+`runtime/written-type-text-invalid-traps` pin those boundaries;
+`runtime/written-type-operand-order` preserves one source evaluation and an
+early exit before conversion work.
+
 The ordinary block supplies cleanup scope, not a new allocation origin.
 `defer region.release_region` runs on normal, failure and control-transfer
 exits [0820]. Its provider determines capacity: the hosted root explicitly

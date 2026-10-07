@@ -1,0 +1,21 @@
+readable: type = concept (item: type)
+    read: (self: ptr item) -> (result: i32)
+end readable
+bad_array: (value: [2]i32) -> none =
+    _ = [2]i32(value)
+end bad_array
+bad_slice: (value: []u8) -> none =
+    _ = []u8(value)
+end bad_slice
+bad_pointer: (value: ptr i32) -> none =
+    _ = ptr i32(value)
+end bad_pointer
+bad_function: (value: (input: i32) -> (output: i32)) -> none =
+    _ = (input: i32) -> (output: i32)(value)
+end bad_function
+bad_erased: (value: any readable) -> none =
+    _ = any readable(value)
+end bad_erased
+bad_integer_pointer: (value: usize) -> none =
+    _ = ptr i32(value)
+end bad_integer_pointer

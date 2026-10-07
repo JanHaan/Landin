@@ -178,6 +178,16 @@ results borrow the allocator or claim to detect helper-side-effect escapes.
 The later checked constructors require retainable backing, with explicitly
 named unchecked constructors for the local-buffer use shown in this sketch.
 
+[0310]'s written-type application can extract an exact distinct representation
+as `[]mut t(value)`, `[n]t(value)` or `ptr mut t(value)` without a structural
+alias. These spellings preserve the representation's permission and origin;
+they supply neither initialized backing nor a pointer-to-slice operation.
+The allocator's integer-created pointer still uses `ptr(address)` [0470],
+whose type comes from context and whose result is untracked.
+`runtime/written-type-composite-extraction` pins the exact represented
+types, and `runtime/written-type-literal-pointer-controls` retains that
+separate pointer construction.
+
 ## core/mem  —  a bump allocator over borrowed storage
 
 The library names this allocator `mem.arena` and builds it with

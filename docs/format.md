@@ -127,7 +127,7 @@ below says none. A comma or a colon takes one space after it and none before.
 | no space | example |
 |---|---|
 | inside `(`, `)`, `[` and `]` | `f(a, b)`, `[1, 2]` |
-| before a call's, an application's or a pattern's `(` | `f(a)`, `vec.list(u8)`, `some(value):` |
+| before a call's, an application's or a pattern's `(` | `f(a)`, `vec.list(u8)`, `[]u8(text)`, `ptr u8(value)`, `some(value):` |
 | before an index's or a slice's `[` | `values[0]`, `values[0..<2]` |
 | either side of `.`, `..` and `..<` | `a.b`, `0..<n` |
 | after a prefix `-` or `~` | `-1`, `~mask` |
@@ -140,12 +140,22 @@ side. A type's or concept's formals, a conformance's entries, a recovery's
 name and a pointer arm's binding stand one space from what precedes them:
 `type (item: type)`, `is log (note: n)`, `else (problem)`, `ptr (p):`. A
 prefix `-` keeps a space before another `-`, because `--` begins a comment.
+An applied written type keeps its ordinary type spacing and puts no space
+before the value argument's `(`: `[]mut u8(value)`, `[4]u8(value)` and
+`ptr mut u8(value)`. A function type retains spaces around `->` and joins
+the value list to its final return list, as in
+`(x: i32) -> (y: i32)(value)`. A parameterized head joins both argument
+lists: `tag(u32, 7)(value)`.
 
 ```landin
 f:(a:i32,b :i32)->(r :i32)=
     r=a*( b+ -1 )-  -a
     x :=values [0 ..< 2]
     y := g (a)
+    bytes := [ ] u8 ( text )
+    pointer := ptr  u8 (hidden)
+    callback := (x:i32)->(y:i32) (wrapped)
+    tagged := tag (u32,7) (value)
 end f
 ```
 
@@ -154,6 +164,10 @@ f: (a: i32, b: i32) -> (r: i32) =
     r = a * (b + -1) - -a
     x := values[0..<2]
     y := g(a)
+    bytes := []u8(text)
+    pointer := ptr u8(hidden)
+    callback := (x: i32) -> (y: i32)(wrapped)
+    tagged := tag(u32, 7)(value)
 end f
 ```
 

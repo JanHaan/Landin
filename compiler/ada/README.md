@@ -641,6 +641,14 @@ retain their selected-target C classification. A scalar atom image keeps its dec
 identity, checked against the field's atom set before the backend assigns a
 runtime code.
 
+D266 written-type applications keep the existing stage boundaries. Syntax
+retains the complete written type and its one value operand; resolution
+looks up names inside that type as type uses. Checking supplies the same
+complete descriptor an alias supplies and authorizes only the existing scalar,
+text and distinct-representation conversions. Lowering, folding and origin
+analysis preserve the corresponding existing behavior. A written pointer
+type application remains separate from the contextual `ptr(value)` operation.
+
 **`Landin.Checking`** owns what type every runtime node and declaration has,
 including concrete parameterized-alias application shapes and D136's canonical
 folded array counts but no template/formal syntax metadata; D142's closed

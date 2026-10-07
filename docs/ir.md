@@ -203,6 +203,11 @@ does not require putting a register or an offset into the IR, or consulting
 the host's pointer size.
 
 The operation vocabulary preserves distinctions that affect behavior.
+An application of a written type, such as `[]u8(text)`, lowers through the
+same checked conversion as an application of an alias for that type. Its
+source spelling adds no IR operation; exact representation extraction, text
+validation and numeric conversion retain their existing operations and
+origin facts.
 Ordinary integer addition and wrapping addition are different operations.
 A checked conversion and a range-subtype check are different too: conversion
 can change the integer type, while a range check passes a value of the same
