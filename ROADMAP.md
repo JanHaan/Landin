@@ -759,7 +759,7 @@ report each, with the fix applied where it is mechanical; its eight foreign
 spellings are SR-13's. `driver_manifest.py` against `9d9f615c` differed at
 437 of 11,898 entries, every one in its report alone: no status, output,
 assembly, build report or map changed. The largest scaling ratio is 2.19.
-The gate was green on every job on `<commit>`.
+The cross-host gate is pending; these are local results.
 
 ### R11.30 — FreeBSD x86-64 and arm64
 
