@@ -74,6 +74,9 @@ module.exports = grammar({
     [$._type, $.encoded_union],
     [$.distinct_body, $.declaration_reference],
     [$.type_application, $._union_member],
+    [$.slice_type, $.empty_slice],
+    [$.array_type, $.array_literal],
+    [$.indexed_expression, $.declaration_reference, $.measurement_expression, $.of_keyword],
     [$.field, $.parameter],
     [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement],
     [$.routine_formals],
@@ -85,7 +88,6 @@ module.exports = grammar({
     [$.concept_body],
     [$.destructured_field, $.indexed_expression],
     [$.indexed_expression, $.declaration_reference, $.measurement_expression],
-    [$.indexed_expression, $.measurement_expression, $.of_keyword],
     [$.measurement_expression, $.of_keyword],
     [$.indexed_expression, $.of_keyword],
     [$.indexed_expression, $.recovery_clause],
@@ -236,9 +238,9 @@ module.exports = grammar({
       $.signature,
       seq($.c_convention, $.c_signature),
     ),
-    array_type: $ => seq('[', field('length', $._expression), ']', field('element', $._type)),
+    array_type: $ => prec.dynamic(10, seq('[', field('length', $._expression), ']', field('element', $._type))),
     pointer_type: $ => seq('ptr', optional('mut'), field('target', $._type)),
-    slice_type: $ => seq('[', ']', optional('mut'), field('element', $._type)),
+    slice_type: $ => prec.dynamic(10, seq('[', ']', optional('mut'), field('element', $._type))),
     any_type: $ => seq('any', field('concept', $.declaration_reference)),
     type_application: $ => seq(
       field('function', $.declaration_reference),
@@ -435,6 +437,7 @@ module.exports = grammar({
       $.increment_statement,
       $.discard_statement,
       $.call_expression,
+      $.written_conversion,
       $.labeled_application,
       $.try_expression,
       $.defer_statement,
@@ -585,6 +588,7 @@ module.exports = grammar({
       $.labeled_application,
       $.anonymous_function,
       $.call_expression,
+      $.written_conversion,
       $.indexed_expression,
       $.address_expression,
       $.pointer_conversion,
@@ -677,7 +681,7 @@ module.exports = grammar({
     // itself carries the precedence, so a `[` or `.` after a selector
     // extends the chain instead of closing the statement around it.
     indexed_expression: $ => choice(
-      prec.dynamic(1, choice($.identifier, $.scalar_type)),
+      prec.dynamic(1, choice($.identifier, $.scalar_type, alias('distinct', $.identifier))),
       prec.dynamic(2, prec.left(PREC.selection, seq(
         $.indexed_expression,
         choice($.member_selection, $.index_selection),
@@ -721,6 +725,15 @@ module.exports = grammar({
     ),
     address_expression: $ => seq('addr', $.place),
     pointer_conversion: $ => seq('ptr', '(', $._expression, ')'),
+    // D266: the final list supplies a value; positional type arguments,
+    // when present, belong to the complete type before that list.
+    written_conversion: $ => prec.dynamic(30, prec(PREC.call, seq(
+      field('type', choice(
+        $.function_type, $.array_type, $.pointer_type, $.slice_type,
+        $.any_type, $.type_application,
+      )),
+      '(', field('value', $._expression), ')',
+    ))),
     any_construction: $ => seq('any', '(', $._expression, ')'),
     empty_slice: _ => seq('[', ']'),
     measurement_expression: $ => choice(

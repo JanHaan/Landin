@@ -57,3 +57,13 @@ packed_image: type = layout(packed, u32) struct
     mode: packed_mode at 1..4
     pins: [4]u2 at 8..15
 end packed_image
+
+-- D266 written conversion heads retain type structure and one source operand.
+written_views: (text: utf8, array: opaque_array, pointer: opaque_pointer,
+                view: opaque_view, callback: opaque_callback) -> none =
+    bytes: []u8 = []u8(text)
+    numbers: [2]i32 = [2]i32(array)
+    address: ptr mut i32 = ptr mut i32(pointer)
+    pointers: []ptr i32 = []ptr i32(view)
+    function: (x: i32) -> (y: i32) = (x: i32) -> (y: i32)(callback)
+end written_views

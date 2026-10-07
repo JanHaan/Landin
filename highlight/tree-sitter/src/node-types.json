@@ -126,6 +126,10 @@
       {
         "type": "while_statement",
         "named": true
+      },
+      {
+        "type": "written_conversion",
+        "named": true
       }
     ]
   },
@@ -3239,6 +3243,10 @@
         {
           "type": "while_statement",
           "named": true
+        },
+        {
+          "type": "written_conversion",
+          "named": true
         }
       ]
     }
@@ -3392,6 +3400,52 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "written_conversion",
+    "named": true,
+    "fields": {
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "any_type",
+            "named": true
+          },
+          {
+            "type": "array_type",
+            "named": true
+          },
+          {
+            "type": "function_type",
+            "named": true
+          },
+          {
+            "type": "pointer_type",
+            "named": true
+          },
+          {
+            "type": "slice_type",
+            "named": true
+          },
+          {
+            "type": "type_application",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
