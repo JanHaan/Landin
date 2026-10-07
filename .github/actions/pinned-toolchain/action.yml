@@ -44,5 +44,7 @@ runs:
         } >> "$GITHUB_ENV"
     - shell: bash
       run: |
-        "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
-        "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
+        # Drain version output: an early reader exit can make GNAT report
+        # "disk full" for a broken pipe when SIGPIPE is ignored by its host.
+        "$LANDIN_GNAT_HOME/bin/gnat" --version | sed -n '1p'
+        "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | sed -n '1p'
