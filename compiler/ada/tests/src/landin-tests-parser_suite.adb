@@ -4498,7 +4498,7 @@ package body Landin.Tests.Parser_Suite is
         & "callback := (x: i32) -> (y: i32)(hidden)" & LF
         & "fallible := () -> none ! problem(hidden)" & LF
         & "generic := box(u8)(hidden)" & LF
-        & "erased := any C(hidden)" & LF
+        & "erased := any c(hidden)" & LF
         & "empty: []u8 = []" & LF
         & "literal := [4, 5]" & LF
         & "repeated := [2 of 4]" & LF

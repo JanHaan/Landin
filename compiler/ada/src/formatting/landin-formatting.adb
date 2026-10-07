@@ -491,6 +491,7 @@ package body Landin.Formatting is
          --  a parenthesized operand stand apart from what precedes them.
          elsif R = Tok.Left_Paren then
             if L in Tok.Identifier | Tok.Right_Paren | Tok.Right_Bracket
+              | Tok.Kw_None
               and then Node_Kind (Arm_Or_Owner (Right))
                          in Syn.Call | Syn.Labeled_Application
                           | Syn.Type_Application | Syn.Tool_Directive
