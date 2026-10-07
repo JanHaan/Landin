@@ -13,7 +13,12 @@ for x86-64-v3, and `elf_aux_info(AT_HWCAP)` for LSE, CRC32 and RDM. Lack of
 support fails, with no skipped higher-level verdict. The recurring VM's
 confirmed LSE supplies the capable execution lane.
 
-Runtime and ABI selection reads fixture metadata and fails when empty. Runtime
+Runtime and ABI selection reads fixture metadata and fails when empty.
+The two I/O fixtures that use Linux `/sys` and `/dev/full` reuse the existing
+portable C fault-endpoint adapter with ELF interposition names; ordinary paths
+reach FreeBSD libc through its documented
+[`RTLD_NEXT` search](https://man.freebsd.org/cgi/man.cgi?query=dlsym&sektion=3),
+and source, errno, status and output oracles stay intact. Runtime
 runs four ordinary profiles and two additional specialization profiles where
 requested; it also checks applicable positive and negative source verdicts.
 Fixtures naming the architecture's higher level run at default, explicit

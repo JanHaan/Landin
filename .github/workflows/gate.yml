@@ -794,9 +794,12 @@ jobs:
           ./scripts/build.sh -q
       - name: Install the cross driver, ELF tools and VM supervisor
         run: |
+          . ./environments/pins.sh
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang-19 lld-19 llvm-19 \
+          sudo apt-get install -y --no-install-recommends \
+            "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 \
             libarchive-tools qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64
+          test "$(dpkg-query -W -f='${Version}' clang-19)" = "$LANDIN_CLANG_UBUNTU"
           clang-19 --version
           qemu-system-aarch64 --version
           if [ '${{ matrix.arch }}' = amd64 ]; then

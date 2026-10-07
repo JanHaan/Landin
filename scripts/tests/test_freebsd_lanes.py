@@ -22,6 +22,12 @@ class FreeBSDControls(unittest.TestCase):
             self.assertTrue(LANE.ABI_REQUIRED <= selected)
             self.assertGreater(len(selected), len(LANE.ABI_REQUIRED))
 
+    def test_linux_fault_paths_have_explicit_bsd_endpoint_peers(self):
+        for arch in ('amd64', 'arm64'):
+            selected = {p.name: m for p, m in LANE.select(arch, 'runtime')}
+            for name in ('core-io-erased-system', 'r440-errno-detail'):
+                self.assertEqual(selected[name]['c-sources'], '../../../freebsd/io_endpoints.c')
+
     def test_empty_selection_cannot_pass(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(LANE, 'ROOT', Path(tmp)):
             for arch in ('amd64', 'arm64'):
@@ -33,11 +39,19 @@ class FreeBSDControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(LANE, 'ROOT', Path(tmp)):
             fixture = Path(tmp) / 'compiler/tests/fixtures/abi/only-one'
             fixture.mkdir(parents=True)
-            (fixture / 'fixture.meta').write_text('targets: freebsd-x86-64, freebsd-arm64\n')
+            (fixture / 'fixture.meta').write_text('targets: freebsd-x86-64, freebsd-arm64\nc-sources: peer.c\n')
             with self.assertRaisesRegex(ValueError, 'ABI coverage missing'):
                 LANE.select('amd64', 'abi')
             with self.assertRaisesRegex(ValueError, 'ABI coverage missing'):
                 LANE.select('arm64', 'abi')
+
+    def test_an_abi_fixture_without_a_c_peer_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(LANE, 'ROOT', Path(tmp)):
+            fixture = Path(tmp) / 'compiler/tests/fixtures/abi/only-one'
+            fixture.mkdir(parents=True)
+            (fixture / 'fixture.meta').write_text('targets: freebsd-x86-64, freebsd-arm64\n')
+            with self.assertRaisesRegex(ValueError, 'independently compiled C peer'):
+                LANE.select('amd64', 'abi')
 
     def test_linked_checks_use_function_extents_past_local_labels(self):
         symbols = '1000 g F .text 0020 main\n2000 g F .text 0020 _start\n'

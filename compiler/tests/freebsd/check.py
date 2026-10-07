@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import time
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -34,9 +33,17 @@ def select(arch, kind):
     fixtures = [(p.parent, metadata(p)) for p in
                 sorted((ROOT / 'compiler/tests/fixtures' / kind).glob('*/fixture.meta'))]
     selected = [(p, m) for p, m in fixtures if target in m['targets'].split(', ')]
+    # BSD guests lack the two Linux fault paths used by these I/O fixtures.
+    # The shared C endpoint adapter preserves all source/status/output oracles.
+    if kind == 'runtime':
+        for path, meta in selected:
+            if path.name in ('core-io-erased-system', 'r440-errno-detail'):
+                meta['c-sources'] = '../../../freebsd/io_endpoints.c'
     require(selected, f'{target} {kind}: empty fixture selection')
     names = {p.name for p, _ in selected}
     if kind == 'abi':
+        require(all(m.get('c-sources', '').strip() for _, m in selected),
+                'ABI fixture lacks an independently compiled C peer')
         require(ABI_REQUIRED <= names, 'ABI coverage missing: ' + str(ABI_REQUIRED - names))
         require(('r440-native-varargs' if arch == 'amd64' else 'aapcs64-varargs-both-banks')
                 in names, 'ABI lane lacks bank-exhausting variadic peer')
@@ -144,6 +151,7 @@ class Lane:
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []),
                 *shlex.split(meta.get('args', '')), *sources]
+        peers = []
         if not meta.get('c-sources'):
             self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '-o', executable],
                          label + '-build')
@@ -160,10 +168,14 @@ class Lane:
                               *compile_args, '-c', base / name.strip(), '-o', obj],
                              label + f'-peer-{index}')
                 objects.append(obj)
-            self.command([self.driver, assembly, *objects, *cargs, '-o', executable], label + '-link')
+                peers.append({'source': name.strip(), 'source_sha256': sha(base / name.strip()),
+                              'object_sha256': sha(obj)})
+            assembler = ['-fno-integrated-as', '-Wa,-march=generic64'] if self.args.arch == 'amd64' else ['-march=' + (level or 'armv8-a')]
+            self.command([self.driver, *assembler, assembly, *objects, *cargs, '-o', executable], label + '-link')
         return {'case': str(base.relative_to(ROOT / 'compiler/tests/fixtures')),
                 'label': label, 'optimize': optimize, 'specialize': specialize, 'level': level,
-                'executable_sha256': sha(executable), 'meta': meta, 'base': str(base)}
+                'executable_sha256': sha(executable), 'c_peers': peers,
+                'meta': meta, 'base': str(base)}
 
     def transfer(self, guest):
         archive = self.output / 'payload.tar.gz'
@@ -175,7 +187,7 @@ class Lane:
         remote = self.remote_prefix + '-payload.tar.gz'
         guest.put(archive, remote)
         guest.checked('tar -xzf ' + shlex.quote(remote) + ' -C /; mkdir -p '
-                      + shlex.quote(str(ROOT / 'compiler/ada')))
+                      + shlex.quote(str(ROOT / 'compiler/ada/build')))
 
     def processor(self, guest):
         probe = self.bundle / 'processor'
@@ -299,7 +311,8 @@ class Lane:
             for name, value in (('argument', 40), ('local', 41), ('argument', 30), ('local', 40), ('result', 42)):
                 require(re.search(r'\b' + name + r' = ' + str(value) + r'\b', text),
                         label + ': local/caller/return value missing: ' + str((name, value)))
-            unwound = text.split('(lldb) thread step-out', 1)[-1]
+            unwound = text.split('(lldb) thread step-out', 1)[-1].split('(lldb) breakpoint set', 1)[0]
+            require('stop reason = step out' in unwound, label + ': no completed step-out stop')
             require(re.search(r'frame #0:.*\bouter\b', unwound),
                     label + ': step-out failed to unwind to caller')
             require(re.search(r'exited with status = 42', text), label + ': final execution status missing')
@@ -362,6 +375,7 @@ def main():
                     return result
                 with ThreadPoolExecutor(max_workers=int(os.environ.get('LANDIN_FREEBSD_JOBS', '4'))) as pool:
                     results = list(pool.map(build, work))
+                summary['results'] = results
                 if args.kind == 'runtime':
                     lane.instructions(results)
                 lane.transfer(guest)
