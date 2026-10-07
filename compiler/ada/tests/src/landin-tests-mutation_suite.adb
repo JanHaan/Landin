@@ -134,7 +134,7 @@ package body Landin.Tests.Mutation_Suite is
    end record;
 
    --  The bounds the suite holds the compiler to.  The share is what the
-   --  work this suite measures must reach; the floor and ceilings are what
+   --  work this suite measures must reach; the floor is what
    --  the compiler measured when it was last improved, so a change can only
    --  move them towards that share and never back.  The first measurement,
    --  of 1,829 refused mutants, gave 596 one report on the changed line,
@@ -157,14 +157,15 @@ package body Landin.Tests.Mutation_Suite is
    --  them to 1,637 and 54.  A line break after a word that asks for a
    --  value, before a statement that goes on past its line, or before
    --  a `match` arm took the first to 1,650, 90 per cent, and reading a
-   --  `:=` that begins a line as that line's to 1,658.  Set
+   --  `:=` that begins a line as that line's to 1,658.  Standing a report
+   --  at a line's end, or the file's, on the token before its gap took
+   --  the second to 0, and it is held there with the other three.  Set
    --  LANDIN_MUTATION_TRACE to log each repair that does not give back
    --  the program the mutant came from, and LANDIN_MUTATION_KEEP=name:line
    --  to keep that mutant's text in the scratch directory as
    --  kept-mutant.ldn.
    Exit_Share_Percent : constant := 90;
    Floor_One_On_Line  : constant := 1_658;
-   Ceiling_Off_Token  : constant := 54;
 
    function Image (Value : Natural) return String
      is (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
@@ -778,9 +779,9 @@ package body Landin.Tests.Mutation_Suite is
          Landin.Testing.Check_Equal
            (Item, Counted.False_Unclosed, 0,
             "no mutant claims that a closer it has is missing");
-         Landin.Testing.Check
-           (Item, Counted.Off_Token <= Ceiling_Off_Token,
-            "no more primary spans than before miss a token: " & Summary);
+         Landin.Testing.Check_Equal
+           (Item, Counted.Off_Token, 0,
+            "every primary span is on a token");
          Landin.Testing.Check_Equal
            (Item, Counted.Repeated_Secondary, 0,
             "no secondary label repeats its primary span");

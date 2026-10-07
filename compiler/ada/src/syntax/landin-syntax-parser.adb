@@ -1224,6 +1224,154 @@ package body Landin.Syntax.Parser is
                return Low;
             end Gap_Token;
 
+            --  A gap at a line's end or the file's has no token of its
+            --  own, so a report there stands on the token the missing one
+            --  belonged after: the last one written, on the same line, at
+            --  whose end a person types the fix.  Any other span is kept.
+            function Before_Gap
+              (Where : Landin.Source.Span) return Landin.Source.Span;
+
+            function Before_Gap
+              (Where : Landin.Source.Span) return Landin.Source.Span
+            is
+               Low  : Tok.Token_Index := 1;
+               High : Tok.Token_Index := Last;
+            begin
+               if Landin.Source.Length (Where) /= 0 then
+                  return Where;
+               end if;
+               --  The first token at or after the gap; the one before it
+               --  is the last written ahead of the gap.
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.First then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low > 1
+                 and then Tok.Where (From, Low - 1).Last <= Where.First
+                 and then Tok.Kind (From, Low - 1) in Tok.Kernel_Kind
+               then
+                  return Tok.Where (From, Low - 1);
+               end if;
+               return Where;
+            end Before_Gap;
+
+            --  The token written just before the one at Where, on the same
+            --  line, or nothing.
+            function Before_On_Line
+              (Where : Landin.Source.Span) return Landin.Source.Span;
+
+            function Before_On_Line
+              (Where : Landin.Source.Span) return Landin.Source.Span
+            is
+               Low  : Tok.Token_Index := 1;
+               High : Tok.Token_Index := Last;
+            begin
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.First then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low > 1 and then not Begins_Line (Low)
+                 and then Tok.Kind (From, Low - 1) in Tok.Kernel_Kind
+               then
+                  return Tok.Where (From, Low - 1);
+               end if;
+               return Landin.Source.Empty_Span;
+            end Before_On_Line;
+
+            --  The first token after an empty gap, when one follows it on
+            --  a later line, or nothing.
+            function After_Gap
+              (Where : Landin.Source.Span) return Landin.Source.Span;
+
+            function After_Gap
+              (Where : Landin.Source.Span) return Landin.Source.Span
+            is
+               Low  : Tok.Token_Index := 1;
+               High : Tok.Token_Index := Last;
+            begin
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.First then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low < Last and then Begins_Line (Low)
+                 and then Tok.Kind (From, Low) in Tok.Kernel_Kind
+               then
+                  return Tok.Where (From, Low);
+               end if;
+               return Landin.Source.Empty_Span;
+            end After_Gap;
+
+            --  Where a never-closed report stands: the token before its
+            --  gap, or after it on the same line when the one before is
+            --  the opener its label names, or the file's last token when
+            --  the gap is the file's end.
+            function Standing_For_Unclosed
+              (Where, Opened : Landin.Source.Span)
+               return Landin.Source.Span;
+
+            function Standing_For_Unclosed
+              (Where, Opened : Landin.Source.Span)
+               return Landin.Source.Span
+            is
+               Before : constant Landin.Source.Span := Before_Gap (Where);
+               Low    : Tok.Token_Index := 1;
+               High   : Tok.Token_Index := Last;
+            begin
+               if Landin.Source.Length (Where) /= 0 then
+                  return Where;
+               end if;
+               if Before /= Opened and then Before /= Where then
+                  return Before;
+               end if;
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.First then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low < Last and then not Begins_Line (Low)
+                 and then Tok.Kind (From, Low) in Tok.Kernel_Kind
+               then
+                  return Tok.Where (From, Low);
+               end if;
+               --  The opener is the line's last token: the report stands
+               --  on it, and its label moves to the next line.
+               if Before = Opened then
+                  return Opened;
+               end if;
+               return Where;
+            end Standing_For_Unclosed;
+
             function On_A_Token
               (Where : Landin.Source.Span; Item : Syn.Failure)
                return Landin.Source.Span;
@@ -1231,10 +1379,19 @@ package body Landin.Syntax.Parser is
             function On_A_Token
               (Where : Landin.Source.Span; Item : Syn.Failure)
                return Landin.Source.Span
-            is (if Item = Syn.Unclosed_Construct
-                  or else Gap_Token (Where) = Last
-                then Where
-                else Tok.Where (From, Gap_Token (Where)));
+            is (if Item /= Syn.Unclosed_Construct
+                  and then Gap_Token (Where) /= Last
+                then Tok.Where (From, Gap_Token (Where))
+                else Before_Gap (Where));
+
+            --  A never-closed report's standing, which also has its opener
+            --  to keep clear of.
+            function On_A_Token_For
+              (Where : Landin.Source.Span; Item : Syn.Failure;
+               Related : Landin.Source.Span) return Landin.Source.Span
+              is (if Item = Syn.Unclosed_Construct
+                  then Standing_For_Unclosed (Where, Related)
+                  else On_A_Token (Where, Item));
 
             function Found_Instead
               (Where : Landin.Source.Span; Item : Syn.Failure) return String;
@@ -1371,15 +1528,64 @@ package body Landin.Syntax.Parser is
                   Header_Reported := True;
                end if;
 
+               --  A report that would stand on the token its label
+               --  already names, as a missing operand at a line's end does
+               --  on its operator, stands there, and its label moves to
+               --  the token that begins the next line instead.
+               declare
+                  Standing : constant Landin.Source.Span :=
+                    On_A_Token_For (Where, Item, Related);
+                  --  In a body the next line is the statement the missing
+                  --  token's absence ran into; in a declaration it is the
+                  --  next field or the closer, and the word written before
+                  --  the label's token says more.
+                  Second : constant Landin.Source.Span :=
+                    (if Body_Level = 0 and then Item /= Syn.Unclosed_Construct
+                     then Before_On_Line (Related)
+                     else After_Gap (Where));
+                  Collides : constant Boolean :=
+                    Standing = Related
+                    and then Landin.Source.Length (Where) = 0
+                    and then Second /= Landin.Source.Empty_Span;
+               begin
+                  if Standing = Related and then not Collides then
+                     Syn.Report
+                       (Item    => Item,
+                        Source  => Origin_Of,
+                        Where   => Where,
+                        Message => Message,
+                        Note    => Note,
+                        Related => Related,
+                        Because => Because,
+                        Refused => Refused,
+                        Fixes   => Fixes,
+                        Into    => Report);
+                     return;
+                  elsif Collides then
+                     Syn.Report
+                       (Item    => Item,
+                        Source  => Origin_Of,
+                        Where   => Standing,
+                        Message => Message,
+                        Note    => Note,
+                        Related => Second,
+                        Because =>
+                          (if Item = Syn.Unclosed_Construct
+                           then "the next line does not close it"
+                           elsif Body_Level = 0 then "written before it"
+                           else "this begins the next line"),
+                        Refused => Refused,
+                        Fixes   => Fixes,
+                        Into    => Report);
+                     return;
+                  end if;
+               end;
                Syn.Report
                  (Item    => Item,
                   Source  => Origin_Of,
-                  Where   =>
-                    (if On_A_Token (Where, Item) = Related
-                     then Where else On_A_Token (Where, Item)),
+                  Where   => On_A_Token_For (Where, Item, Related),
                   Message =>
-                    (if On_A_Token (Where, Item) = Related
-                       or else not Asks_For_A_Token (Message)
+                    (if not Asks_For_A_Token (Message)
                      then Message
                      else Message & Found_Instead (Where, Item)),
                   Note    =>
@@ -10355,7 +10561,12 @@ package body Landin.Syntax.Parser is
                   Syn.Report
                     (Item    => Syn.Unclosed_Construct,
                      Source  => Origin_Of,
-                     Where   => Inner.Where,
+                     --  The file ends at a gap, which no token holds: the
+                     --  report stands on the last token written, after
+                     --  which the closers belong, unless that is the
+                     --  opener its label already names.
+                     Where   => Standing_For_Unclosed
+                                  (Inner.Where, Inner.Opened),
                      Message =>
                        Unbounded.To_String (Inner.Message)
                        & (if Unbounded.Length (Around) > 0

@@ -3725,17 +3725,43 @@ package body Landin.Stages.Checking.Flow is
                (Types.all, Of_Tree, Syn.Block_Value (Of_Tree, Block))
                  = Ty.No_Value)
          then
-            Bad.Report
-              (Item    => Bad.Control_Value,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Block),
-               Message => "this control block can fall through without"
-                          & " producing a value",
-               Note    => "D124: an early return needs no joined value, but"
-                          & " every fallthrough edge does",
-               Related => Owner,
-               Because => "this control expression needs a value",
-               Into    => Sink.all);
+            declare
+               --  An empty block holds no token: its extent is the gap
+               --  between its delimiters.  The report then stands on the
+               --  control expression, and the gap is its second place.
+               Empty : constant Boolean :=
+                 Natural (Landin.Source.Length (Owner.Where)) > 0
+                 and then
+                   (for all Position in 1 .. Syn.Slot_Count (Of_Tree, Block)
+                      => Syn.Slot (Of_Tree, Block, Position) = Syn.No_Node);
+            begin
+               if Empty then
+                  Bad.Report
+                    (Item    => Bad.Control_Value,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Owner.Where,
+                     Message => "this control expression can fall through"
+                                & " an empty block without producing a"
+                                & " value",
+                     Note    => "D124: an early return needs no joined"
+                                & " value, but every fallthrough edge does",
+                     Related => Syn.Origin (Of_Tree, Block),
+                     Because => "this block is empty",
+                     Into    => Sink.all);
+               else
+                  Bad.Report
+                    (Item    => Bad.Control_Value,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Block),
+                     Message => "this control block can fall through"
+                                & " without producing a value",
+                     Note    => "D124: an early return needs no joined"
+                                & " value, but every fallthrough edge does",
+                     Related => Owner,
+                     Because => "this control expression needs a value",
+                     Into    => Sink.all);
+               end if;
+            end;
          end if;
 
          --  The optional final value has already been evaluated and, in
