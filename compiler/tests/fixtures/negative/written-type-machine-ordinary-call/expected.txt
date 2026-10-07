@@ -1,0 +1,10 @@
+error[L0345]: a machine entry cannot be called as a routine
+  --> ../tests/fixtures/negative/written-type-machine-ordinary-call/main.ldn:19:9
+   |
+19 |         alias_interrupt()
+   |         ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/written-type-machine-ordinary-call/main.ldn:8:28
+  |
+8 |     interrupt_base: type = extern(interrupt) () -> none
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this machine entry
+  = note: [1570]: vectors enter handlers; naked transfers belong to explicit assembly

@@ -1,0 +1,30 @@
+fixed if compiler.arch == cortex_m0 then
+    extern(interrupt) handler: () -> none =
+        assembler.block("nop")
+    end handler
+    extern(naked) raw_handler: () -> none =
+        assembler.block("bx lr")
+    end raw_handler
+    interrupt_base: type = extern(interrupt) () -> none
+    interrupt_hidden: type = distinct interrupt_base
+    naked_base: type = extern(naked) () -> none
+    naked_hidden: type = distinct naked_base
+    public main: () -> (code: i32) =
+        hidden_interrupt: interrupt_hidden = interrupt_hidden(handler)
+        hidden_naked: naked_hidden = naked_hidden(raw_handler)
+        alias_interrupt: interrupt_base = interrupt_base(hidden_interrupt)
+        alias_naked: naked_base = naked_base(hidden_naked)
+        written_interrupt: interrupt_base = extern(interrupt) () -> none(hidden_interrupt)
+        written_naked: naked_base = extern(naked) () -> none(hidden_naked)
+        alias_interrupt()
+        alias_interrupt_bits: ptr usize = ptr(usize(addr alias_interrupt))
+        written_interrupt_bits: ptr usize = ptr(usize(addr written_interrupt))
+        alias_naked_bits: ptr usize = ptr(usize(addr alias_naked))
+        written_naked_bits: ptr usize = ptr(usize(addr written_naked))
+        if alias_interrupt_bits.val == written_interrupt_bits.val
+          and alias_naked_bits.val == written_naked_bits.val
+        then code = 42 else code = 1 end if
+    end main
+else
+    public main: () -> (code: i32) = code = 42 end main
+end if

@@ -1,0 +1,10 @@
+error[L0301]: this written type has no conversion from the supplied value
+  --> ../tests/fixtures/negative/written-type-machine-convention/main.ldn:18:37
+   |
+18 |         written_naked: naked_base = extern(interrupt) () -> none(hidden_naked)
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/written-type-machine-convention/main.ldn:18:37
+   |
+18 |         written_naked: naked_base = extern(interrupt) () -> none(hidden_naked)
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the destination type
+  = note: [0310]: writing a type admits only the conversions available through an alias

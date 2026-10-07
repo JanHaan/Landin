@@ -1,0 +1,9 @@
+class: negative
+summary: an extracted machine-convention value remains refused as an ordinary call
+program: main.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/written-type-machine-ordinary-call/main.ldn
+status: 1
+codes: L0345
+constructs: 0310, 0650, 0870, 1580
+targets: cortex-m

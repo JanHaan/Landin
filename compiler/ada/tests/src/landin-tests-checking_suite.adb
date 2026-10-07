@@ -15306,11 +15306,17 @@ package body Landin.Tests.Checking_Suite is
    procedure Written_Conversions_Keep_Alias_Semantics
      (Item : in out Landin.Testing.Context)
    is
-      procedure Check_Source (Label, Text : String; Accepted : Boolean);
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Target : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+         Code : String := "");
 
-      procedure Check_Source (Label, Text : String; Accepted : Boolean) is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Target : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+         Code : String := "") is
          Work : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+           Landin.Stages.Create (Target);
          Order : Landin.Stages.Pipeline;
          Src : Landin.Source.Source_Id;
          Ran : Natural;
@@ -15330,6 +15336,12 @@ package body Landin.Tests.Checking_Suite is
               (Landin.Stages.Report (Work), Landin.Diagnostics.Error),
             (if Accepted then 0 else 1),
             Label & " has no diagnostic cascade");
+         if Code /= "" then
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Landin.Stages.Rendered_Report (Work), "error[" & Code & "]")
+                   > 0, Label & " preserves its diagnostic code");
+         end if;
       end Check_Source;
    begin
       Check_Source
@@ -15363,6 +15375,28 @@ package body Landin.Tests.Checking_Suite is
          "hidden: type = distinct [2]i32" & LF
          & "f: (value: hidden) -> none =" & LF
          & "    _ = [0 - 1]i32(value)" & LF & "end f" & LF, False);
+      Check_Source
+        ("written interrupt extraction",
+         "base: type = extern(interrupt) () -> none" & LF
+         & "hidden: type = distinct base" & LF
+         & "f: (value: hidden) -> (result: base) =" & LF
+         & "result = extern(interrupt) () -> none(value) end f" & LF,
+         True, Landin.Targets.Cortex_M);
+      Check_Source
+        ("machine convention stays exact",
+         "base: type = extern(naked) () -> none" & LF
+         & "hidden: type = distinct base" & LF
+         & "f: (value: hidden) -> none =" & LF
+         & "_ = extern(interrupt) () -> none(value) end f" & LF,
+         False, Landin.Targets.Cortex_M, "L0301");
+      Check_Source
+        ("extracted machine entry stays uncallable",
+         "base: type = extern(interrupt) () -> none" & LF
+         & "hidden: type = distinct base" & LF
+         & "f: (value: hidden) -> none =" & LF
+         & "entry: base = extern(interrupt) () -> none(value)" & LF
+         & "entry() end f" & LF,
+         False, Landin.Targets.Cortex_M, "L0345");
    end Written_Conversions_Keep_Alias_Semantics;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

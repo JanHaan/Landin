@@ -858,10 +858,25 @@ package body Landin.Syntax.Parser is
                     and then Tok.Kind (From, Position + 1) = Tok.Left_Paren
                   then
                      Closing := Lookahead (Position + 1).Closing;
-                     return Closing /= 0 and then Closing < Natural (Last)
+                     if Closing /= 0 and then Closing < Natural (Last)
                        and then Tok.Kind
                          (From, Tok.Token_Index (Closing + 1))
-                           = Tok.Left_Paren;
+                           = Tok.Left_Paren
+                     then
+                        --  A following destructured binding belongs to the
+                        --  statement stream, not this call's type prefix.
+                        declare
+                           Next_Close : constant Natural :=
+                             Lookahead (Tok.Token_Index (Closing + 1)).Closing;
+                        begin
+                           return Next_Close = 0
+                             or else Next_Close >= Natural (Last)
+                             or else Tok.Kind
+                               (From, Tok.Token_Index (Next_Close + 1))
+                                 /= Tok.Colon_Equal;
+                        end;
+                     end if;
+                     return False;
                   end if;
                end if;
                return Peek = Tok.Kw_Extern;

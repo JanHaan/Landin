@@ -1,0 +1,9 @@
+class: negative
+summary: a written interrupt destination cannot extract a naked distinct base
+program: main.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/written-type-machine-convention/main.ldn
+status: 1
+codes: L0301
+constructs: 0310, 0650, 0870, 1580
+targets: cortex-m

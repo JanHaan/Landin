@@ -17375,3 +17375,3417 @@ item 2 ROUTINE use result i32 signature 2 params 0 slots 3 blocks 1 values 10
     8 STORE slot 1 <- 7
     9 LOAD i32 slot 1
     10 LEAVE <- 9
+file positive/written-type-c-function/main.ldn
+unit signatures 5 items 2
+nominal 1 callback_id layout(c) struct (usize signature 1)
+signature 1 extern(c) (in i32) -> i32
+signature 2 extern(c) (in i32) -> i32
+signature 3 () -> i32
+signature 4 extern(c) (in i32) -> i32
+signature 5 extern(c) (in i32) -> i32
+item 1 ROUTINE increment result i32 signature 2 params 1 slots 3 blocks 1 values 8
+  slot 1 input i32 param 1
+  slot 2 output i32 return
+  slot 3 - i32
+  block 1 scope 5 BLOCK length 8
+    1 LOAD i32 slot 1
+    2 STORE slot 3 <- 1
+    3 NUMBER i32 1
+    4 LOAD i32 slot 3
+    5 ADD i32 <- 4 3
+    6 STORE slot 2 <- 5
+    7 LOAD i32 slot 2
+    8 LEAVE <- 7
+item 2 ROUTINE main result i32 signature 3 params 0 slots 7 blocks 1 values 17
+  slot 1 code i32 return
+  slot 2 hidden aggregate fields usize signature 1
+  slot 3 callback usize signature 4
+  slot 4 - aggregate fields usize signature 1
+  slot 5 - address of struct (usize signature 1)
+  slot 6 - address of struct (usize signature 1)
+  slot 7 - usize signature 4
+  block 1 scope 7 BLOCK length 17
+    1 FUNCTION_ADDRESS usize target 1 increment signature 2
+    2 STORE_FIELD slot 2 field 1 <- 1
+    3 STORAGE_ADDRESS usize storage slot 2
+    4 STORE slot 5 <- 3
+    5 STORAGE_ADDRESS usize storage slot 4
+    6 STORE slot 6 <- 5
+    7 COPY_ARRAY from address slot 5 to address slot 6
+    8 LOAD_FIELD usize slot 4 field 1
+    9 STORE slot 3 <- 8
+    10 LOAD usize slot 3
+    11 STORE slot 7 <- 10
+    12 NUMBER i32 41
+    13 LOAD usize slot 7
+    14 INDIRECT_CALL i32 signature 4 <- 13 12
+    15 STORE slot 1 <- 14
+    16 LOAD i32 slot 1
+    17 LEAVE <- 16
+file positive/written-type-composite-extraction/main.ldn
+unit signatures 18 items 11
+atom set 1 atoms {failed}
+atom set 2 atoms {failed}
+atom set 3 atoms {failed}
+atom set 4 atoms {failed}
+nominal 3 pointer_id layout(c) struct (usize)
+nominal 7 outer layout(c) struct (struct (u32))
+nominal 12 callback_pointer_id layout(c) struct (usize)
+nominal 14 tag layout(c) struct (u32)
+signature 1 (in i32) -> i32
+signature 2 (in i32) -> i32
+signature 3 (in i32) -> i32 errors atoms {failed}
+signature 4 (in usize) -> i32
+signature 5 (in i32) -> i32 errors atoms {failed}
+signature 6 (in i32) -> i32
+signature 7 () -> i32
+signature 8 (in struct tag) -> [2]i32
+signature 9 (in struct tag) -> [2]i32
+signature 10 (in struct tag) -> [3]u8
+signature 11 (in struct tag) -> [3]u8
+signature 12 erased-self (in usize) -> i32
+signature 13 (in i32) -> i32
+signature 14 (in i32) -> i32
+signature 15 (in i32) -> i32 errors atoms {failed}
+signature 16 (in i32) -> i32 errors atoms {failed}
+signature 17 (in i32) -> i32
+signature 18 (in i32) -> i32
+evidence 1 concrete represents i32
+  entry 1 target 1 provider 4 dispatch 4
+evidence 2 erased represents i32
+  entry 1 target 1 provider 4 dispatch 12
+item 1 ROUTINE read_i32 result i32 signature 4 params 1 slots 3 blocks 1 values 8
+  slot 1 self usize param 1
+  slot 2 result i32 return
+  slot 3 - address of i32
+  block 1 scope 8 SIGNATURE length 8
+    1 LOAD usize slot 1
+    2 POINTER_ADDRESS usize <- 1
+    3 STORE slot 3 <- 2
+    4 LOAD usize slot 3
+    5 LOAD_INDIRECT i32 address slot 3 <- 4
+    6 STORE slot 2 <- 5
+    7 LOAD i32 slot 2
+    8 LEAVE <- 7
+item 2 ROUTINE fallible_add result i32 signature 5 params 1 slots 3 blocks 1 values 8
+  slot 1 input i32 param 1
+  slot 2 output i32 return
+  slot 3 - i32
+  block 1 scope 10 SIGNATURE length 8
+    1 LOAD i32 slot 1
+    2 STORE slot 3 <- 1
+    3 NUMBER i32 1
+    4 LOAD i32 slot 3
+    5 ADD i32 <- 4 3
+    6 STORE slot 2 <- 5
+    7 LOAD i32 slot 2
+    8 LEAVE <- 7
+item 3 ROUTINE add result i32 signature 6 params 1 slots 3 blocks 1 values 8
+  slot 1 input i32 param 1
+  slot 2 output i32 return
+  slot 3 - i32
+  block 1 scope 11 SIGNATURE length 8
+    1 LOAD i32 slot 1
+    2 STORE slot 3 <- 1
+    3 NUMBER i32 1
+    4 LOAD i32 slot 3
+    5 ADD i32 <- 4 3
+    6 STORE slot 2 <- 5
+    7 LOAD i32 slot 2
+    8 LEAVE <- 7
+item 4 DATUM module_hidden result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]i32
+  image 0
+  field 1 image 40 42
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM module_values result array params 0 slots 0 blocks 1 values 1
+  elements 2 of i32
+  image image 40 42
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 DATUM module_callback_hidden result struct params 0 slots 0 blocks 1 values 1
+  field 1 usize signature 1
+  image 0
+  field 1 function target 3
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 7 DATUM module_callback result usize signature 1 function target 3 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 FUNCTION_ADDRESS usize target 3 add signature 6
+    2 LEAVE <- 1
+item 8 ROUTINE main result i32 signature 7 params 0 slots 156 blocks 34 values 464
+  slot 1 code i32 return
+  slot 2 generic_i32 aggregate fields [2]i32
+  slot 3 generic_u8 aggregate fields [3]u8
+  slot 4 extracted_i32 elements 2 of i32
+  slot 5 extracted_u8 elements 3 of u8
+  slot 6 hidden_array aggregate fields [2]i32
+  slot 7 values elements 2 of i32
+  slot 8 - aggregate fields [2]i32
+  slot 9 - address of struct ([2]i32)
+  slot 10 - address of struct ([2]i32)
+  slot 11 hidden_slice aggregate fields [2]usize
+  slot 12 - elements 2 of usize
+  slot 13 - usize
+  slot 14 - usize
+  slot 15 - usize
+  slot 16 - usize
+  slot 17 - usize
+  slot 18 view elements 2 of usize
+  slot 19 - aggregate fields [2]usize
+  slot 20 - address of struct ([2]usize)
+  slot 21 - address of struct ([2]usize)
+  slot 22 number i32
+  slot 23 hidden_pointer aggregate fields usize
+  slot 24 pointer usize
+  slot 25 - aggregate fields usize
+  slot 26 - address of struct (usize)
+  slot 27 - address of struct (usize)
+  slot 28 - address of i32
+  slot 29 hidden_callback aggregate fields usize signature 1
+  slot 30 callback usize signature 13
+  slot 31 - aggregate fields usize signature 1
+  slot 32 - address of struct (usize signature 1)
+  slot 33 - address of struct (usize signature 1)
+  slot 34 hidden_fallible aggregate fields usize signature 3
+  slot 35 fallible usize signature 15
+  slot 36 - aggregate fields usize signature 3
+  slot 37 - address of struct (usize signature 3)
+  slot 38 - address of struct (usize signature 3)
+  slot 39 fallible_result i32
+  slot 40 - u32 atoms {failed}
+  slot 41 - i32
+  slot 42 - usize signature 15
+  slot 43 editable elements 2 of i32
+  slot 44 hidden_mutable aggregate fields [2]usize
+  slot 45 - elements 2 of usize
+  slot 46 - usize
+  slot 47 - usize
+  slot 48 - usize
+  slot 49 - usize
+  slot 50 - usize
+  slot 51 mutable_view elements 2 of usize
+  slot 52 - aggregate fields [2]usize
+  slot 53 - address of struct ([2]usize)
+  slot 54 - address of struct ([2]usize)
+  slot 55 - usize
+  slot 56 - usize
+  slot 57 - address of i32
+  slot 58 readonly_pointer usize
+  slot 59 pointers elements 1 of usize
+  slot 60 hidden_pointer_slice aggregate fields [2]usize
+  slot 61 - elements 2 of usize
+  slot 62 - usize
+  slot 63 - usize
+  slot 64 - usize
+  slot 65 - usize
+  slot 66 - usize
+  slot 67 pointer_view elements 2 of usize
+  slot 68 - aggregate fields [2]usize
+  slot 69 - address of struct ([2]usize)
+  slot 70 - address of struct ([2]usize)
+  slot 71 hidden_callback_pointer aggregate fields usize
+  slot 72 callback_pointer usize
+  slot 73 - aggregate fields usize
+  slot 74 - address of struct (usize)
+  slot 75 - address of struct (usize)
+  slot 76 hidden_nested aggregate fields [2][2]i32
+  slot 77 nested elements 2 of [2]i32
+  slot 78 - aggregate fields [2][2]i32
+  slot 79 - address of struct ([2][2]i32)
+  slot 80 - address of struct ([2][2]i32)
+  slot 81 hidden_bytes aggregate fields [2]usize
+  slot 82 - elements 2 of usize
+  slot 83 bytes elements 2 of usize
+  slot 84 - aggregate fields [2]usize
+  slot 85 - address of struct ([2]usize)
+  slot 86 - address of struct ([2]usize)
+  slot 87 tagged aggregate fields u32
+  slot 88 hidden_tag aggregate fields struct (u32)
+  slot 89 - address of struct (u32)
+  slot 90 - address of struct (u32)
+  slot 91 recovered_tag aggregate fields u32
+  slot 92 - aggregate fields struct (u32)
+  slot 93 - address of struct (struct (u32))
+  slot 94 - address of struct (struct (u32))
+  slot 95 - address of struct (u32)
+  slot 96 - address of struct (u32)
+  slot 97 hidden_handles aggregate fields [2]struct (u32)
+  slot 98 - address of struct (u32)
+  slot 99 - address of struct (u32)
+  slot 100 - address of struct (u32)
+  slot 101 - address of struct (u32)
+  slot 102 handles elements 2 of struct (u32)
+  slot 103 - aggregate fields [2]struct (u32)
+  slot 104 - address of struct ([2]struct (u32))
+  slot 105 - address of struct ([2]struct (u32))
+  slot 106 erased elements 2 of usize
+  slot 107 hidden_erased aggregate fields [2]usize
+  slot 108 recovered_erased elements 2 of usize
+  slot 109 - aggregate fields [2]usize
+  slot 110 - address of struct ([2]usize)
+  slot 111 - address of struct ([2]usize)
+  slot 112 - bool
+  slot 113 - bool
+  slot 114 - bool
+  slot 115 - bool
+  slot 116 - bool
+  slot 117 - bool
+  slot 118 - bool
+  slot 119 - bool
+  slot 120 - bool
+  slot 121 - bool
+  slot 122 - bool
+  slot 123 - bool
+  slot 124 - bool
+  slot 125 - i32
+  slot 126 - u8
+  slot 127 - i32
+  slot 128 - usize
+  slot 129 - usize
+  slot 130 - address of i32
+  slot 131 - i32
+  slot 132 - i32
+  slot 133 - usize
+  slot 134 - usize
+  slot 135 - address of u8
+  slot 136 - u8
+  slot 137 - aggregate fields u32
+  slot 138 - address of struct (u32)
+  slot 139 - address of struct (u32)
+  slot 140 - u32
+  slot 141 - elements 2 of usize
+  slot 142 - i32
+  slot 143 - i32
+  slot 144 - i32
+  slot 145 - usize
+  slot 146 - usize
+  slot 147 - address of usize
+  slot 148 - address of i32
+  slot 149 - i32
+  slot 150 - usize signature 17
+  slot 151 - address of usize signature 17
+  slot 152 - i32
+  slot 153 - i32
+  slot 154 - usize signature 1
+  slot 155 - i32
+  slot 156 - usize signature 13
+  block 1 scope 13 BLOCK length 100
+    1 NUMBER i32 10
+    2 STORE_FIELD slot 2 field 1 nested 1 <- 1
+    3 NUMBER i32 20
+    4 STORE_FIELD slot 2 field 1 nested 2 <- 3
+    5 NUMBER u8 1
+    6 CONVERSION u8 <- 5
+    7 STORE_FIELD slot 3 field 1 nested 1 <- 6
+    8 NUMBER u8 2
+    9 CONVERSION u8 <- 8
+    10 STORE_FIELD slot 3 field 1 nested 2 <- 9
+    11 NUMBER u8 3
+    12 CONVERSION u8 <- 11
+    13 STORE_FIELD slot 3 field 1 nested 3 <- 12
+    14 STORAGE_ADDRESS usize storage slot 2
+    15 STORAGE_ADDRESS usize storage slot 4
+    16 CALL none callee 9 - signature 9 <- 15 14
+    17 STORAGE_ADDRESS usize storage slot 3
+    18 STORAGE_ADDRESS usize storage slot 5
+    19 CALL none callee 10 - signature 11 <- 18 17
+    20 NUMBER i32 10
+    21 STORE_FIELD slot 6 field 1 nested 1 <- 20
+    22 NUMBER i32 20
+    23 STORE_FIELD slot 6 field 1 nested 2 <- 22
+    24 STORAGE_ADDRESS usize storage slot 6
+    25 STORE slot 9 <- 24
+    26 STORAGE_ADDRESS usize storage slot 8
+    27 STORE slot 10 <- 26
+    28 COPY_ARRAY from address slot 9 to address slot 10
+    29 COPY_ARRAY from slot 8 field 1 to slot 7
+    30 STORAGE_ADDRESS usize storage slot 7
+    31 NUMBER usize 2
+    32 STORE slot 13 <- 30
+    33 STORE slot 14 <- 31
+    34 NUMBER usize 0
+    35 STORE slot 15 <- 34
+    36 NUMBER usize 2
+    37 STORE slot 16 <- 36
+    38 LOAD usize slot 15
+    39 LOAD usize slot 16
+    40 LOAD usize slot 13
+    41 LOAD usize slot 14
+    42 SLICE_ADDRESS usize <- 40 41 38 39
+    43 STORE slot 17 <- 42
+    44 LOAD usize slot 16
+    45 LOAD usize slot 15
+    46 SUBTRACT usize <- 44 45
+    47 LOAD usize slot 17
+    48 STORE_FIELD slot 12 field 1 <- 47
+    49 STORE_FIELD slot 12 field 2 <- 46
+    50 COPY_ARRAY from slot 12 to slot 11 field 1
+    51 STORAGE_ADDRESS usize storage slot 11
+    52 STORE slot 20 <- 51
+    53 STORAGE_ADDRESS usize storage slot 19
+    54 STORE slot 21 <- 53
+    55 COPY_ARRAY from address slot 20 to address slot 21
+    56 COPY_ARRAY from slot 19 field 1 to slot 18
+    57 NUMBER i32 40
+    58 STORE slot 22 <- 57
+    59 PLACE_ADDRESS usize
+    60 STORE_FIELD slot 23 field 1 <- 59
+    61 STORAGE_ADDRESS usize storage slot 23
+    62 STORE slot 26 <- 61
+    63 STORAGE_ADDRESS usize storage slot 25
+    64 STORE slot 27 <- 63
+    65 COPY_ARRAY from address slot 26 to address slot 27
+    66 LOAD_FIELD usize slot 25 field 1
+    67 STORE slot 24 <- 66
+    68 LOAD usize slot 24
+    69 POINTER_ADDRESS usize <- 68
+    70 STORE slot 28 <- 69
+    71 NUMBER i32 41
+    72 LOAD usize slot 28
+    73 STORE_INDIRECT address slot 28 <- 72 71
+    74 FUNCTION_ADDRESS usize target 3 add signature 6
+    75 STORE_FIELD slot 29 field 1 <- 74
+    76 STORAGE_ADDRESS usize storage slot 29
+    77 STORE slot 32 <- 76
+    78 STORAGE_ADDRESS usize storage slot 31
+    79 STORE slot 33 <- 78
+    80 COPY_ARRAY from address slot 32 to address slot 33
+    81 LOAD_FIELD usize slot 31 field 1
+    82 STORE slot 30 <- 81
+    83 FUNCTION_ADDRESS usize target 2 fallible_add signature 5
+    84 STORE_FIELD slot 34 field 1 <- 83
+    85 STORAGE_ADDRESS usize storage slot 34
+    86 STORE slot 37 <- 85
+    87 STORAGE_ADDRESS usize storage slot 36
+    88 STORE slot 38 <- 87
+    89 COPY_ARRAY from address slot 37 to address slot 38
+    90 LOAD_FIELD usize slot 36 field 1
+    91 STORE slot 35 <- 90
+    92 LOAD usize slot 35
+    93 STORE slot 42 <- 92
+    94 LOAD i32 slot 22
+    95 LOAD usize slot 42
+    96 INDIRECT_CALL i32 signature 15 failure slot 40 <- 95 94
+    97 STORE slot 41 <- 96
+    98 LOAD u32 slot 40
+    99 FAILURE_TEST bool <- 98
+    100 BRANCH target 2 alternative 3 <- 99
+  block 2 scope 13 BLOCK length 3
+    101 NUMBER i32 1 negated
+    102 STORE slot 41 <- 101
+    103 JUMP target 4
+  block 3 scope 13 BLOCK length 1
+    104 JUMP target 4
+  block 4 scope 13 BLOCK length 162
+    105 LOAD i32 slot 41
+    106 STORE slot 39 <- 105
+    107 NUMBER i32 3
+    108 STORE_FIELD slot 43 field 1 <- 107
+    109 NUMBER i32 4
+    110 STORE_FIELD slot 43 field 2 <- 109
+    111 STORAGE_ADDRESS usize storage slot 43
+    112 NUMBER usize 2
+    113 STORE slot 46 <- 111
+    114 STORE slot 47 <- 112
+    115 NUMBER usize 0
+    116 STORE slot 48 <- 115
+    117 NUMBER usize 2
+    118 STORE slot 49 <- 117
+    119 LOAD usize slot 48
+    120 LOAD usize slot 49
+    121 LOAD usize slot 46
+    122 LOAD usize slot 47
+    123 SLICE_ADDRESS usize <- 121 122 119 120
+    124 STORE slot 50 <- 123
+    125 LOAD usize slot 49
+    126 LOAD usize slot 48
+    127 SUBTRACT usize <- 125 126
+    128 LOAD usize slot 50
+    129 STORE_FIELD slot 45 field 1 <- 128
+    130 STORE_FIELD slot 45 field 2 <- 127
+    131 COPY_ARRAY from slot 45 to slot 44 field 1
+    132 STORAGE_ADDRESS usize storage slot 44
+    133 STORE slot 53 <- 132
+    134 STORAGE_ADDRESS usize storage slot 52
+    135 STORE slot 54 <- 134
+    136 COPY_ARRAY from address slot 53 to address slot 54
+    137 COPY_ARRAY from slot 52 field 1 to slot 51
+    138 LOAD_FIELD usize slot 51 field 1
+    139 LOAD_FIELD usize slot 51 field 2
+    140 STORE slot 55 <- 138
+    141 STORE slot 56 <- 139
+    142 NUMBER usize 0
+    143 LOAD usize slot 55
+    144 LOAD usize slot 56
+    145 SLICE_ADDRESS usize <- 143 144 142 142
+    146 STORE slot 57 <- 145
+    147 NUMBER i32 5
+    148 LOAD usize slot 57
+    149 STORE_INDIRECT address slot 57 <- 148 147
+    150 PLACE_ADDRESS usize
+    151 STORE slot 58 <- 150
+    152 LOAD usize slot 58
+    153 STORE_FIELD slot 59 field 1 <- 152
+    154 STORAGE_ADDRESS usize storage slot 59
+    155 NUMBER usize 1
+    156 STORE slot 62 <- 154
+    157 STORE slot 63 <- 155
+    158 NUMBER usize 0
+    159 STORE slot 64 <- 158
+    160 NUMBER usize 1
+    161 STORE slot 65 <- 160
+    162 LOAD usize slot 64
+    163 LOAD usize slot 65
+    164 LOAD usize slot 62
+    165 LOAD usize slot 63
+    166 SLICE_ADDRESS usize <- 164 165 162 163
+    167 STORE slot 66 <- 166
+    168 LOAD usize slot 65
+    169 LOAD usize slot 64
+    170 SUBTRACT usize <- 168 169
+    171 LOAD usize slot 66
+    172 STORE_FIELD slot 61 field 1 <- 171
+    173 STORE_FIELD slot 61 field 2 <- 170
+    174 COPY_ARRAY from slot 61 to slot 60 field 1
+    175 STORAGE_ADDRESS usize storage slot 60
+    176 STORE slot 69 <- 175
+    177 STORAGE_ADDRESS usize storage slot 68
+    178 STORE slot 70 <- 177
+    179 COPY_ARRAY from address slot 69 to address slot 70
+    180 COPY_ARRAY from slot 68 field 1 to slot 67
+    181 PLACE_ADDRESS usize
+    182 STORE_FIELD slot 71 field 1 <- 181
+    183 STORAGE_ADDRESS usize storage slot 71
+    184 STORE slot 74 <- 183
+    185 STORAGE_ADDRESS usize storage slot 73
+    186 STORE slot 75 <- 185
+    187 COPY_ARRAY from address slot 74 to address slot 75
+    188 LOAD_FIELD usize slot 73 field 1
+    189 STORE slot 72 <- 188
+    190 NUMBER i32 1
+    191 STORE_FIELD slot 76 field 1 nested 1 nested 1 <- 190
+    192 NUMBER i32 2
+    193 STORE_FIELD slot 76 field 1 nested 1 nested 2 <- 192
+    194 NUMBER i32 3
+    195 STORE_FIELD slot 76 field 1 nested 2 nested 1 <- 194
+    196 NUMBER i32 4
+    197 STORE_FIELD slot 76 field 1 nested 2 nested 2 <- 196
+    198 STORAGE_ADDRESS usize storage slot 76
+    199 STORE slot 79 <- 198
+    200 STORAGE_ADDRESS usize storage slot 78
+    201 STORE slot 80 <- 200
+    202 COPY_ARRAY from address slot 79 to address slot 80
+    203 COPY_ARRAY from slot 78 field 1 to slot 77
+    204 STORAGE_ADDRESS usize storage datum 11 -
+    205 NUMBER usize 2
+    206 STORE_FIELD slot 82 field 1 <- 204
+    207 STORE_FIELD slot 82 field 2 <- 205
+    208 COPY_ARRAY from slot 82 to slot 81 field 1
+    209 STORAGE_ADDRESS usize storage slot 81
+    210 STORE slot 85 <- 209
+    211 STORAGE_ADDRESS usize storage slot 84
+    212 STORE slot 86 <- 211
+    213 COPY_ARRAY from address slot 85 to address slot 86
+    214 COPY_ARRAY from slot 84 field 1 to slot 83
+    215 NUMBER u32 7
+    216 CONVERSION u32 <- 215
+    217 STORE_FIELD slot 87 field 1 <- 216
+    218 STORAGE_ADDRESS usize storage slot 87
+    219 STORE slot 89 <- 218
+    220 STORAGE_ADDRESS usize storage slot 88 field 1
+    221 STORE slot 90 <- 220
+    222 COPY_ARRAY from address slot 89 to address slot 90
+    223 STORAGE_ADDRESS usize storage slot 88
+    224 STORE slot 93 <- 223
+    225 STORAGE_ADDRESS usize storage slot 92
+    226 STORE slot 94 <- 225
+    227 COPY_ARRAY from address slot 93 to address slot 94
+    228 STORAGE_ADDRESS usize storage slot 92 field 1
+    229 STORE slot 95 <- 228
+    230 STORAGE_ADDRESS usize storage slot 91
+    231 STORE slot 96 <- 230
+    232 COPY_ARRAY from address slot 95 to address slot 96
+    233 STORAGE_ADDRESS usize storage slot 87
+    234 STORE slot 98 <- 233
+    235 STORAGE_ADDRESS usize storage slot 97 field 1 nested 1
+    236 STORE slot 99 <- 235
+    237 COPY_ARRAY from address slot 98 to address slot 99
+    238 STORAGE_ADDRESS usize storage slot 91
+    239 STORE slot 100 <- 238
+    240 STORAGE_ADDRESS usize storage slot 97 field 1 nested 2
+    241 STORE slot 101 <- 240
+    242 COPY_ARRAY from address slot 100 to address slot 101
+    243 STORAGE_ADDRESS usize storage slot 97
+    244 STORE slot 104 <- 243
+    245 STORAGE_ADDRESS usize storage slot 103
+    246 STORE slot 105 <- 245
+    247 COPY_ARRAY from address slot 104 to address slot 105
+    248 COPY_ARRAY from slot 103 field 1 to slot 102
+    249 PLACE_ADDRESS usize
+    250 EVIDENCE_ADDRESS usize evidence 2
+    251 STORE_FIELD slot 106 field 1 <- 249
+    252 STORE_FIELD slot 106 field 2 <- 250
+    253 COPY_ARRAY from slot 106 to slot 107 field 1
+    254 STORAGE_ADDRESS usize storage slot 107
+    255 STORE slot 110 <- 254
+    256 STORAGE_ADDRESS usize storage slot 109
+    257 STORE slot 111 <- 256
+    258 COPY_ARRAY from address slot 110 to address slot 111
+    259 COPY_ARRAY from slot 109 field 1 to slot 108
+    260 LOAD_FIELD i32 slot 4 field 2
+    261 STORE slot 125 <- 260
+    262 NUMBER i32 20
+    263 LOAD i32 slot 125
+    264 EQUAL_TO bool <- 263 262
+    265 STORE slot 124 <- 264
+    266 BRANCH target 5 alternative 6 <- 264
+  block 5 scope 13 BLOCK length 7
+    267 LOAD_FIELD u8 slot 5 field 3
+    268 STORE slot 126 <- 267
+    269 NUMBER u8 3
+    270 LOAD u8 slot 126
+    271 EQUAL_TO bool <- 270 269
+    272 STORE slot 124 <- 271
+    273 JUMP target 6
+  block 6 scope 13 BLOCK length 3
+    274 LOAD bool slot 124
+    275 STORE slot 123 <- 274
+    276 BRANCH target 7 alternative 8 <- 274
+  block 7 scope 13 BLOCK length 7
+    277 LOAD_FIELD i32 slot 7 field 2
+    278 STORE slot 127 <- 277
+    279 NUMBER i32 20
+    280 LOAD i32 slot 127
+    281 EQUAL_TO bool <- 280 279
+    282 STORE slot 123 <- 281
+    283 JUMP target 8
+  block 8 scope 13 BLOCK length 3
+    284 LOAD bool slot 123
+    285 STORE slot 122 <- 284
+    286 BRANCH target 9 alternative 10 <- 284
+  block 9 scope 13 BLOCK length 17
+    287 LOAD_FIELD usize slot 18 field 1
+    288 LOAD_FIELD usize slot 18 field 2
+    289 STORE slot 128 <- 287
+    290 STORE slot 129 <- 288
+    291 NUMBER usize 0
+    292 LOAD usize slot 128
+    293 LOAD usize slot 129
+    294 SLICE_ADDRESS usize <- 292 293 291 291
+    295 STORE slot 130 <- 294
+    296 LOAD usize slot 130
+    297 LOAD_INDIRECT i32 address slot 130 <- 296
+    298 STORE slot 131 <- 297
+    299 NUMBER i32 10
+    300 LOAD i32 slot 131
+    301 EQUAL_TO bool <- 300 299
+    302 STORE slot 122 <- 301
+    303 JUMP target 10
+  block 10 scope 13 BLOCK length 3
+    304 LOAD bool slot 122
+    305 STORE slot 121 <- 304
+    306 BRANCH target 11 alternative 12 <- 304
+  block 11 scope 13 BLOCK length 8
+    307 NUMBER usize 0
+    308 LOAD_ELEMENT i32 slot 77 nested 2 <- 307
+    309 STORE slot 132 <- 308
+    310 NUMBER i32 3
+    311 LOAD i32 slot 132
+    312 EQUAL_TO bool <- 311 310
+    313 STORE slot 121 <- 312
+    314 JUMP target 12
+  block 12 scope 13 BLOCK length 3
+    315 LOAD bool slot 121
+    316 STORE slot 120 <- 315
+    317 BRANCH target 13 alternative 14 <- 315
+  block 13 scope 13 BLOCK length 17
+    318 LOAD_FIELD usize slot 83 field 1
+    319 LOAD_FIELD usize slot 83 field 2
+    320 STORE slot 133 <- 318
+    321 STORE slot 134 <- 319
+    322 NUMBER usize 1
+    323 LOAD usize slot 133
+    324 LOAD usize slot 134
+    325 SLICE_ADDRESS usize <- 323 324 322 322
+    326 STORE slot 135 <- 325
+    327 LOAD usize slot 135
+    328 LOAD_INDIRECT u8 address slot 135 <- 327
+    329 STORE slot 136 <- 328
+    330 NUMBER u8 75
+    331 LOAD u8 slot 136
+    332 EQUAL_TO bool <- 331 330
+    333 STORE slot 120 <- 332
+    334 JUMP target 14
+  block 14 scope 13 BLOCK length 3
+    335 LOAD bool slot 120
+    336 STORE slot 119 <- 335
+    337 BRANCH target 15 alternative 16 <- 335
+  block 15 scope 13 BLOCK length 12
+    338 STORAGE_ADDRESS usize storage slot 102 nested 2
+    339 STORE slot 138 <- 338
+    340 STORAGE_ADDRESS usize storage slot 137
+    341 STORE slot 139 <- 340
+    342 COPY_ARRAY from address slot 138 to address slot 139
+    343 LOAD_FIELD u32 slot 137 field 1
+    344 STORE slot 140 <- 343
+    345 NUMBER u32 7
+    346 LOAD u32 slot 140
+    347 EQUAL_TO bool <- 346 345
+    348 STORE slot 119 <- 347
+    349 JUMP target 16
+  block 16 scope 13 BLOCK length 3
+    350 LOAD bool slot 119
+    351 STORE slot 118 <- 350
+    352 BRANCH target 17 alternative 18 <- 350
+  block 17 scope 13 BLOCK length 11
+    353 COPY_ARRAY from slot 108 to slot 141
+    354 STORAGE_ADDRESS usize storage slot 141
+    355 EVIDENCE_FUNCTION usize erased receiver evidence 2 entry 1 signature 12 <- 354
+    356 EVIDENCE_SELF usize bound function <- 355
+    357 INDIRECT_CALL i32 signature 12 <- 355 356
+    358 STORE slot 142 <- 357
+    359 NUMBER i32 41
+    360 LOAD i32 slot 142
+    361 EQUAL_TO bool <- 360 359
+    362 STORE slot 118 <- 361
+    363 JUMP target 18
+  block 18 scope 13 BLOCK length 3
+    364 LOAD bool slot 118
+    365 STORE slot 117 <- 364
+    366 BRANCH target 19 alternative 20 <- 364
+  block 19 scope 13 BLOCK length 7
+    367 LOAD i32 slot 39
+    368 STORE slot 143 <- 367
+    369 NUMBER i32 42
+    370 LOAD i32 slot 143
+    371 EQUAL_TO bool <- 370 369
+    372 STORE slot 117 <- 371
+    373 JUMP target 20
+  block 20 scope 13 BLOCK length 3
+    374 LOAD bool slot 117
+    375 STORE slot 116 <- 374
+    376 BRANCH target 21 alternative 22 <- 374
+  block 21 scope 13 BLOCK length 7
+    377 LOAD_FIELD i32 slot 43 field 1
+    378 STORE slot 144 <- 377
+    379 NUMBER i32 5
+    380 LOAD i32 slot 144
+    381 EQUAL_TO bool <- 380 379
+    382 STORE slot 116 <- 381
+    383 JUMP target 22
+  block 22 scope 13 BLOCK length 3
+    384 LOAD bool slot 116
+    385 STORE slot 115 <- 384
+    386 BRANCH target 23 alternative 24 <- 384
+  block 23 scope 13 BLOCK length 21
+    387 LOAD_FIELD usize slot 67 field 1
+    388 LOAD_FIELD usize slot 67 field 2
+    389 STORE slot 145 <- 387
+    390 STORE slot 146 <- 388
+    391 NUMBER usize 0
+    392 LOAD usize slot 145
+    393 LOAD usize slot 146
+    394 SLICE_ADDRESS usize <- 392 393 391 391
+    395 STORE slot 147 <- 394
+    396 LOAD usize slot 147
+    397 LOAD_INDIRECT usize address slot 147 <- 396
+    398 POINTER_ADDRESS usize <- 397
+    399 STORE slot 148 <- 398
+    400 LOAD usize slot 148
+    401 LOAD_INDIRECT i32 address slot 148 <- 400
+    402 STORE slot 149 <- 401
+    403 NUMBER i32 41
+    404 LOAD i32 slot 149
+    405 EQUAL_TO bool <- 404 403
+    406 STORE slot 115 <- 405
+    407 JUMP target 24
+  block 24 scope 13 BLOCK length 3
+    408 LOAD bool slot 115
+    409 STORE slot 114 <- 408
+    410 BRANCH target 25 alternative 26 <- 408
+  block 25 scope 13 BLOCK length 15
+    411 LOAD usize slot 72
+    412 POINTER_ADDRESS usize <- 411
+    413 STORE slot 151 <- 412
+    414 LOAD usize slot 151
+    415 LOAD_INDIRECT usize address slot 151 <- 414
+    416 STORE slot 150 <- 415
+    417 LOAD i32 slot 22
+    418 LOAD usize slot 150
+    419 INDIRECT_CALL i32 signature 17 <- 418 417
+    420 STORE slot 152 <- 419
+    421 NUMBER i32 42
+    422 LOAD i32 slot 152
+    423 EQUAL_TO bool <- 422 421
+    424 STORE slot 114 <- 423
+    425 JUMP target 26
+  block 26 scope 13 BLOCK length 3
+    426 LOAD bool slot 114
+    427 STORE slot 113 <- 426
+    428 BRANCH target 27 alternative 28 <- 426
+  block 27 scope 13 BLOCK length 7
+    429 LOAD_FIELD i32 datum 5 module_values field 2
+    430 STORE slot 153 <- 429
+    431 NUMBER i32 42
+    432 LOAD i32 slot 153
+    433 EQUAL_TO bool <- 432 431
+    434 STORE slot 113 <- 433
+    435 JUMP target 28
+  block 28 scope 13 BLOCK length 3
+    436 LOAD bool slot 113
+    437 STORE slot 112 <- 436
+    438 BRANCH target 29 alternative 30 <- 436
+  block 29 scope 13 BLOCK length 11
+    439 LOAD_DATUM usize datum 7 module_callback
+    440 STORE slot 154 <- 439
+    441 NUMBER i32 41
+    442 LOAD usize slot 154
+    443 INDIRECT_CALL i32 signature 1 <- 442 441
+    444 STORE slot 155 <- 443
+    445 NUMBER i32 42
+    446 LOAD i32 slot 155
+    447 EQUAL_TO bool <- 446 445
+    448 STORE slot 112 <- 447
+    449 JUMP target 30
+  block 30 scope 13 BLOCK length 2
+    450 LOAD bool slot 112
+    451 BRANCH target 31 alternative 32 <- 450
+  block 31 scope 15 BLOCK length 7
+    452 LOAD usize slot 30
+    453 STORE slot 156 <- 452
+    454 LOAD i32 slot 22
+    455 LOAD usize slot 156
+    456 INDIRECT_CALL i32 signature 13 <- 455 454
+    457 STORE slot 1 <- 456
+    458 JUMP target 33
+  block 32 scope 13 BLOCK length 1
+    459 JUMP target 34
+  block 33 scope 13 BLOCK length 2
+    463 LOAD i32 slot 1
+    464 LEAVE <- 463
+  block 34 scope 16 BLOCK length 3
+    460 NUMBER i32 1
+    461 STORE slot 1 <- 460
+    462 JUMP target 33
+item 9 ROUTINE - result array signature 9 params 2 slots 6 blocks 1 values 7
+  elements 2 of i32
+  slot 1 extract usize param 1
+  slot 2 value aggregate fields [2]i32 param 2
+  slot 3 result elements 2 of i32 return
+  slot 4 - aggregate fields [2]i32
+  slot 5 - address of struct ([2]i32)
+  slot 6 - address of struct ([2]i32)
+  block 1 scope 6 BLOCK length 7
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 COPY_ARRAY from slot 4 field 1 to slot 3
+    7 LEAVE
+item 10 ROUTINE - result array signature 11 params 2 slots 6 blocks 1 values 7
+  elements 3 of u8
+  slot 1 extract usize param 1
+  slot 2 value aggregate fields [3]u8 param 2
+  slot 3 result elements 3 of u8 return
+  slot 4 - aggregate fields [3]u8
+  slot 5 - address of struct ([3]u8)
+  slot 6 - address of struct ([3]u8)
+  block 1 scope 6 BLOCK length 7
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 COPY_ARRAY from slot 4 field 1 to slot 3
+    7 LEAVE
+item 11 DATUM - result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u8
+  image 79 75 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/written-type-literal-pointer-controls/main.ldn
+unit signatures 2 items 3
+signature 1 (in i32) -> i32
+signature 2 () -> i32
+item 1 ROUTINE identity result i32 signature 1 params 1 slots 2 blocks 1 values 4
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  block 1 scope 4 SIGNATURE length 4
+    1 LOAD i32 slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 2
+    4 LEAVE <- 3
+item 2 ROUTINE main result i32 signature 2 params 0 slots 28 blocks 15 values 115
+  slot 1 code i32 return
+  slot 2 singleton elements 1 of i32
+  slot 3 literal elements 2 of i32
+  slot 4 repeated elements 2 of i32
+  slot 5 empty elements 2 of usize
+  slot 6 address usize
+  slot 7 wrapped aggregate fields [2]i32
+  slot 8 bytes elements 2 of usize
+  slot 9 - usize
+  slot 10 - usize
+  slot 11 - elements 2 of usize
+  slot 12 recovered elements 2 of i32
+  slot 13 - aggregate fields [2]i32
+  slot 14 - address of struct ([2]i32)
+  slot 15 - address of struct ([2]i32)
+  slot 16 - bool
+  slot 17 - bool
+  slot 18 - bool
+  slot 19 - bool
+  slot 20 - bool
+  slot 21 - i32
+  slot 22 - i32
+  slot 23 - i32
+  slot 24 - usize
+  slot 25 - usize
+  slot 26 - i32
+  slot 27 - i32
+  slot 28 - i32
+  block 1 scope 6 BLOCK length 44
+    1 NUMBER i32 4
+    2 CALL i32 callee 1 identity signature 1 <- 1
+    3 STORE_FIELD slot 2 field 1 <- 2
+    4 NUMBER i32 4
+    5 STORE_FIELD slot 3 field 1 <- 4
+    6 NUMBER i32 5
+    7 STORE_FIELD slot 3 field 2 <- 6
+    8 NUMBER i32 4
+    9 FILL_ARRAY destination slot 4 first 1 <- 8
+    10 EMPTY_SLICE_BASE usize
+    11 NUMBER usize 0
+    12 STORE_FIELD slot 5 field 1 <- 10
+    13 STORE_FIELD slot 5 field 2 <- 11
+    14 NUMBER usize 42
+    15 CONVERSION usize <- 14
+    16 CONVERSION usize <- 15
+    17 RANGE_CHECK usize <- 16 range 1 .. 18446744073709551615 representation
+    18 STORE slot 6 <- 17
+    19 COPY_ARRAY from slot 3 to slot 7 field 1
+    20 STORAGE_ADDRESS usize storage datum 3 -
+    21 NUMBER usize 2
+    22 STORE_FIELD slot 11 field 1 <- 20
+    23 STORE_FIELD slot 11 field 2 <- 21
+    24 LOAD_FIELD usize slot 11 field 1
+    25 LOAD_FIELD usize slot 11 field 2
+    26 STORE slot 9 <- 24
+    27 STORE slot 10 <- 25
+    28 LOAD usize slot 9
+    29 STORE_FIELD slot 8 field 1 <- 28
+    30 LOAD usize slot 10
+    31 STORE_FIELD slot 8 field 2 <- 30
+    32 STORAGE_ADDRESS usize storage slot 7
+    33 STORE slot 14 <- 32
+    34 STORAGE_ADDRESS usize storage slot 13
+    35 STORE slot 15 <- 34
+    36 COPY_ARRAY from address slot 14 to address slot 15
+    37 COPY_ARRAY from slot 13 field 1 to slot 12
+    38 LOAD_FIELD i32 slot 2 field 1
+    39 STORE slot 21 <- 38
+    40 NUMBER i32 4
+    41 LOAD i32 slot 21
+    42 EQUAL_TO bool <- 41 40
+    43 STORE slot 20 <- 42
+    44 BRANCH target 2 alternative 3 <- 42
+  block 2 scope 6 BLOCK length 7
+    45 LOAD_FIELD i32 slot 12 field 2
+    46 STORE slot 22 <- 45
+    47 NUMBER i32 5
+    48 LOAD i32 slot 22
+    49 EQUAL_TO bool <- 48 47
+    50 STORE slot 20 <- 49
+    51 JUMP target 3
+  block 3 scope 6 BLOCK length 3
+    52 LOAD bool slot 20
+    53 STORE slot 19 <- 52
+    54 BRANCH target 4 alternative 5 <- 52
+  block 4 scope 6 BLOCK length 7
+    55 LOAD_FIELD i32 slot 4 field 2
+    56 STORE slot 23 <- 55
+    57 NUMBER i32 4
+    58 LOAD i32 slot 23
+    59 EQUAL_TO bool <- 58 57
+    60 STORE slot 19 <- 59
+    61 JUMP target 5
+  block 5 scope 6 BLOCK length 3
+    62 LOAD bool slot 19
+    63 STORE slot 18 <- 62
+    64 BRANCH target 6 alternative 7 <- 62
+  block 6 scope 6 BLOCK length 8
+    65 LOAD_FIELD usize slot 5 field 1
+    66 LOAD_FIELD usize slot 5 field 2
+    67 STORE slot 24 <- 66
+    68 NUMBER usize 0
+    69 LOAD usize slot 24
+    70 EQUAL_TO bool <- 69 68
+    71 STORE slot 18 <- 70
+    72 JUMP target 7
+  block 7 scope 6 BLOCK length 3
+    73 LOAD bool slot 18
+    74 STORE slot 17 <- 73
+    75 BRANCH target 8 alternative 9 <- 73
+  block 8 scope 6 BLOCK length 8
+    76 LOAD usize slot 6
+    77 CONVERSION usize <- 76
+    78 STORE slot 25 <- 77
+    79 NUMBER usize 42
+    80 LOAD usize slot 25
+    81 EQUAL_TO bool <- 80 79
+    82 STORE slot 17 <- 81
+    83 JUMP target 9
+  block 9 scope 6 BLOCK length 3
+    84 LOAD bool slot 17
+    85 STORE slot 16 <- 84
+    86 BRANCH target 10 alternative 11 <- 84
+  block 10 scope 6 BLOCK length 18
+    87 NUMBER i32 2
+    88 STORE slot 26 <- 87
+    89 LOAD_FIELD usize slot 8 field 1
+    90 LOAD_FIELD usize slot 8 field 2
+    91 CONVERSION i32 <- 90
+    92 LOAD i32 slot 26
+    93 MULTIPLY i32 <- 92 91
+    94 STORE slot 27 <- 93
+    95 NUMBER i32 1
+    96 CALL i32 callee 1 identity signature 1 <- 95
+    97 LOAD i32 slot 27
+    98 ADD i32 <- 97 96
+    99 STORE slot 28 <- 98
+    100 NUMBER i32 5
+    101 LOAD i32 slot 28
+    102 EQUAL_TO bool <- 101 100
+    103 STORE slot 16 <- 102
+    104 JUMP target 11
+  block 11 scope 6 BLOCK length 2
+    105 LOAD bool slot 16
+    106 BRANCH target 12 alternative 13 <- 105
+  block 12 scope 7 BLOCK length 3
+    107 NUMBER i32 42
+    108 STORE slot 1 <- 107
+    109 JUMP target 14
+  block 13 scope 6 BLOCK length 1
+    110 JUMP target 15
+  block 14 scope 6 BLOCK length 2
+    114 LOAD i32 slot 1
+    115 LEAVE <- 114
+  block 15 scope 8 BLOCK length 3
+    111 NUMBER i32 1
+    112 STORE slot 1 <- 111
+    113 JUMP target 14
+item 3 DATUM - result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u8
+  image 79 75 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/written-type-machine-function/main.ldn
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE main result i32 signature 1 params 0 slots 1 blocks 1 values 4
+  slot 1 code i32 return
+  block 1 scope 5 BLOCK length 4
+    1 NUMBER i32 42
+    2 STORE slot 1 <- 1
+    3 LOAD i32 slot 1
+    4 LEAVE <- 3
+file positive/written-type-nominal-extraction/main.ldn
+unit signatures 1 items 5
+atom set 1 atoms {north, south}
+atom set 2 atoms {north}
+signature 1 () -> i32
+item 1 DATUM stored_error result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32 atoms {north, south}
+  image 2
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM recovered_error result u32 atoms {north, south} params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 ATOM u32 identity north atoms {north, south}
+    2 LEAVE <- 1
+item 3 DATUM stored_point result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (i32)
+  image 0
+  field 1 nested
+  field 1.1 image 40
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM recovered_point result struct params 0 slots 0 blocks 1 values 1
+  field 1 i32
+  image 40
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 ROUTINE main result i32 signature 1 params 0 slots 16 blocks 10 values 57
+  slot 1 code i32 return
+  slot 2 original aggregate fields variant u8 cases2 () (i32)
+  slot 3 hidden aggregate fields struct (variant u8 cases2 () (i32))
+  slot 4 - address of struct (variant u8 cases2 () (i32))
+  slot 5 - address of struct (variant u8 cases2 () (i32))
+  slot 6 recovered aggregate fields variant u8 cases2 () (i32)
+  slot 7 - aggregate fields struct (variant u8 cases2 () (i32))
+  slot 8 - address of struct (struct (variant u8 cases2 () (i32)))
+  slot 9 - address of struct (struct (variant u8 cases2 () (i32)))
+  slot 10 - address of struct (variant u8 cases2 () (i32))
+  slot 11 - address of struct (variant u8 cases2 () (i32))
+  slot 12 - u8
+  slot 13 - bool
+  slot 14 - u32 atoms {north, south}
+  slot 15 - i32
+  slot 16 - i32
+  block 1 scope 6 BLOCK length 26
+    1 SELECT_VARIANT destination slot 2 field 1 case 2
+    2 NUMBER i32 2
+    3 STORE_FIELD slot 2 field 1 case 2 nested 1 <- 2
+    4 STORAGE_ADDRESS usize storage slot 2
+    5 STORE slot 4 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3 field 1
+    7 STORE slot 5 <- 6
+    8 COPY_ARRAY from address slot 4 to address slot 5
+    9 STORAGE_ADDRESS usize storage slot 3
+    10 STORE slot 8 <- 9
+    11 STORAGE_ADDRESS usize storage slot 7
+    12 STORE slot 9 <- 11
+    13 COPY_ARRAY from address slot 8 to address slot 9
+    14 STORAGE_ADDRESS usize storage slot 7 field 1
+    15 STORE slot 10 <- 14
+    16 STORAGE_ADDRESS usize storage slot 6
+    17 STORE slot 11 <- 16
+    18 COPY_ARRAY from address slot 10 to address slot 11
+    19 NUMBER i32 1
+    20 STORE slot 1 <- 19
+    21 LOAD_VARIANT_TAG u8 from slot 6 field 1
+    22 STORE slot 12 <- 21
+    23 LOAD u8 slot 12
+    24 NUMBER u8 0
+    25 EQUAL_TO bool <- 23 24
+    26 BRANCH target 2 alternative 3 <- 25
+  block 2 scope 7 BLOCK length 3
+    27 NUMBER i32 2
+    28 STORE slot 1 <- 27
+    29 JUMP target 4
+  block 3 scope 6 BLOCK length 1
+    30 JUMP target 5
+  block 4 scope 6 BLOCK length 2
+    56 LOAD i32 slot 1
+    57 LEAVE <- 56
+  block 5 scope 8 BLOCK length 7
+    31 LOAD_DATUM u32 datum 2 recovered_error
+    32 STORE slot 14 <- 31
+    33 ATOM u32 identity north atoms {north}
+    34 LOAD u32 slot 14
+    35 EQUAL_TO bool <- 34 33
+    36 STORE slot 13 <- 35
+    37 BRANCH target 6 alternative 7 <- 35
+  block 6 scope 8 BLOCK length 7
+    38 LOAD_FIELD i32 datum 4 recovered_point field 1
+    39 STORE slot 15 <- 38
+    40 NUMBER i32 40
+    41 LOAD i32 slot 15
+    42 EQUAL_TO bool <- 41 40
+    43 STORE slot 13 <- 42
+    44 JUMP target 7
+  block 7 scope 8 BLOCK length 2
+    45 LOAD bool slot 13
+    46 BRANCH target 8 alternative 9 <- 45
+  block 8 scope 9 BLOCK length 7
+    47 LOAD_FIELD i32 datum 4 recovered_point field 1
+    48 STORE slot 16 <- 47
+    49 LOAD_VARIANT_FIELD i32 from slot 6 field 1 case 2 payload field 1
+    50 LOAD i32 slot 16
+    51 ADD i32 <- 50 49
+    52 STORE slot 1 <- 51
+    53 JUMP target 10
+  block 9 scope 8 BLOCK length 1
+    54 JUMP target 10
+  block 10 scope 8 BLOCK length 1
+    55 JUMP target 4
+file positive/written-type-scalar-families/main.ldn
+unit signatures 10 items 18
+nominal 1 handle layout(c) struct (u32)
+signature 1 (in i64) -> i8
+signature 2 (in f64) -> f32
+signature 3 (in u64) -> f64
+signature 4 (in f64) -> u8
+signature 5 (in bool) -> u16
+signature 6 (in u32) -> bool
+signature 7 (in f64) -> bool
+signature 8 (in bool) -> f32
+signature 9 (in usize) -> usize
+signature 10 () -> i32
+item 1 DATUM folded_integer result i8 params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 NUMBER i64 128 negated
+    2 CONVERSION i64 <- 1
+    3 CONVERSION i8 <- 2
+    4 LEAVE <- 3
+item 2 DATUM folded_float result f32 params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 NUMBER f64 4609434218613702656
+    2 CONVERSION f64 <- 1
+    3 CONVERSION f32 <- 2
+    4 LEAVE <- 3
+item 3 DATUM folded_integer_float result f64 params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 NUMBER u64 42
+    2 CONVERSION u64 <- 1
+    3 CONVERSION f64 <- 2
+    4 LEAVE <- 3
+item 4 DATUM folded_float_integer result u8 params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 NUMBER f64 4631213344936689664
+    2 CONVERSION f64 <- 1
+    3 CONVERSION u8 <- 2
+    4 LEAVE <- 3
+item 5 DATUM folded_bool_integer result u16 params 0 slots 0 blocks 1 values 3
+  block 1 scope 1 PROGRAM length 3
+    1 TRUTH bool true
+    2 CONVERSION u16 <- 1
+    3 LEAVE <- 2
+item 6 DATUM folded_integer_bool result bool params 0 slots 0 blocks 1 values 1
+  bool image true
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 7 DATUM folded_float_bool result bool params 0 slots 0 blocks 1 values 1
+  bool image false
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 8 DATUM folded_bool_float result f32 params 0 slots 0 blocks 1 values 3
+  block 1 scope 1 PROGRAM length 3
+    1 TRUTH bool true
+    2 CONVERSION f32 <- 1
+    3 LEAVE <- 2
+item 9 ROUTINE int_int result i8 signature 1 params 1 slots 2 blocks 1 values 5
+  slot 1 source i64 param 1
+  slot 2 result i8 return
+  block 1 scope 5 SIGNATURE length 5
+    1 LOAD i64 slot 1
+    2 CONVERSION i8 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD i8 slot 2
+    5 LEAVE <- 4
+item 10 ROUTINE float_float result f32 signature 2 params 1 slots 2 blocks 1 values 5
+  slot 1 source f64 param 1
+  slot 2 result f32 return
+  block 1 scope 6 SIGNATURE length 5
+    1 LOAD f64 slot 1
+    2 CONVERSION f32 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD f32 slot 2
+    5 LEAVE <- 4
+item 11 ROUTINE int_float result f64 signature 3 params 1 slots 2 blocks 1 values 5
+  slot 1 source u64 param 1
+  slot 2 result f64 return
+  block 1 scope 7 SIGNATURE length 5
+    1 LOAD u64 slot 1
+    2 CONVERSION f64 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD f64 slot 2
+    5 LEAVE <- 4
+item 12 ROUTINE float_int result u8 signature 4 params 1 slots 2 blocks 1 values 5
+  slot 1 source f64 param 1
+  slot 2 result u8 return
+  block 1 scope 8 SIGNATURE length 5
+    1 LOAD f64 slot 1
+    2 CONVERSION u8 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD u8 slot 2
+    5 LEAVE <- 4
+item 13 ROUTINE bool_int result u16 signature 5 params 1 slots 2 blocks 1 values 5
+  slot 1 source bool param 1
+  slot 2 result u16 return
+  block 1 scope 9 SIGNATURE length 5
+    1 LOAD bool slot 1
+    2 CONVERSION u16 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD u16 slot 2
+    5 LEAVE <- 4
+item 14 ROUTINE int_bool result bool signature 6 params 1 slots 2 blocks 1 values 5
+  slot 1 source u32 param 1
+  slot 2 result bool return
+  block 1 scope 10 SIGNATURE length 5
+    1 LOAD u32 slot 1
+    2 CONVERSION bool <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD bool slot 2
+    5 LEAVE <- 4
+item 15 ROUTINE float_bool result bool signature 7 params 1 slots 2 blocks 1 values 5
+  slot 1 source f64 param 1
+  slot 2 result bool return
+  block 1 scope 11 SIGNATURE length 5
+    1 LOAD f64 slot 1
+    2 CONVERSION bool <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD bool slot 2
+    5 LEAVE <- 4
+item 16 ROUTINE bool_float result f32 signature 8 params 1 slots 2 blocks 1 values 5
+  slot 1 source bool param 1
+  slot 2 result f32 return
+  block 1 scope 12 SIGNATURE length 5
+    1 LOAD bool slot 1
+    2 CONVERSION f32 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD f32 slot 2
+    5 LEAVE <- 4
+item 17 ROUTINE pointer_integer result usize signature 9 params 1 slots 2 blocks 1 values 5
+  slot 1 source usize param 1
+  slot 2 result usize return
+  block 1 scope 13 SIGNATURE length 5
+    1 LOAD usize slot 1
+    2 CONVERSION usize <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD usize slot 2
+    5 LEAVE <- 4
+item 18 ROUTINE main result i32 signature 10 params 0 slots 37 blocks 39 values 193
+  slot 1 code i32 return
+  slot 2 address usize
+  slot 3 wrapped aggregate fields u32
+  slot 4 - bool
+  slot 5 - bool
+  slot 6 - bool
+  slot 7 - bool
+  slot 8 - bool
+  slot 9 - bool
+  slot 10 - bool
+  slot 11 - bool
+  slot 12 - bool
+  slot 13 - bool
+  slot 14 - bool
+  slot 15 - bool
+  slot 16 - bool
+  slot 17 - bool
+  slot 18 - bool
+  slot 19 - bool
+  slot 20 - bool
+  slot 21 - i8
+  slot 22 - i8
+  slot 23 - f32
+  slot 24 - f32
+  slot 25 - f64
+  slot 26 - f64
+  slot 27 - u8
+  slot 28 - u8
+  slot 29 - u16
+  slot 30 - u16
+  slot 31 - f32
+  slot 32 - f32
+  slot 33 - usize
+  slot 34 - aggregate fields u32
+  slot 35 - address of struct (u32)
+  slot 36 - address of struct (u32)
+  slot 37 - u32
+  block 1 scope 15 BLOCK length 15
+    1 NUMBER usize 42
+    2 CONVERSION usize <- 1
+    3 CONVERSION usize <- 2
+    4 RANGE_CHECK usize <- 3 range 1 .. 18446744073709551615 representation
+    5 STORE slot 2 <- 4
+    6 NUMBER u32 42
+    7 CONVERSION u32 <- 6
+    8 STORE_FIELD slot 3 field 1 <- 7
+    9 LOAD_DATUM i8 datum 1 folded_integer
+    10 STORE slot 21 <- 9
+    11 NUMBER i8 128 negated
+    12 LOAD i8 slot 21
+    13 EQUAL_TO bool <- 12 11
+    14 STORE slot 20 <- 13
+    15 BRANCH target 2 alternative 3 <- 13
+  block 2 scope 15 BLOCK length 8
+    16 NUMBER i64 128 negated
+    17 CALL i8 callee 9 int_int signature 1 <- 16
+    18 STORE slot 22 <- 17
+    19 NUMBER i8 128 negated
+    20 LOAD i8 slot 22
+    21 EQUAL_TO bool <- 20 19
+    22 STORE slot 20 <- 21
+    23 JUMP target 3
+  block 3 scope 15 BLOCK length 3
+    24 LOAD bool slot 20
+    25 STORE slot 19 <- 24
+    26 BRANCH target 4 alternative 5 <- 24
+  block 4 scope 15 BLOCK length 7
+    27 LOAD_DATUM f32 datum 2 folded_float
+    28 STORE slot 23 <- 27
+    29 NUMBER f32 1069547520
+    30 LOAD f32 slot 23
+    31 EQUAL_TO bool <- 30 29
+    32 STORE slot 19 <- 31
+    33 JUMP target 5
+  block 5 scope 15 BLOCK length 3
+    34 LOAD bool slot 19
+    35 STORE slot 18 <- 34
+    36 BRANCH target 6 alternative 7 <- 34
+  block 6 scope 15 BLOCK length 8
+    37 NUMBER f64 4609434218613702656
+    38 CALL f32 callee 10 float_float signature 2 <- 37
+    39 STORE slot 24 <- 38
+    40 NUMBER f32 1069547520
+    41 LOAD f32 slot 24
+    42 EQUAL_TO bool <- 41 40
+    43 STORE slot 18 <- 42
+    44 JUMP target 7
+  block 7 scope 15 BLOCK length 3
+    45 LOAD bool slot 18
+    46 STORE slot 17 <- 45
+    47 BRANCH target 8 alternative 9 <- 45
+  block 8 scope 15 BLOCK length 7
+    48 LOAD_DATUM f64 datum 3 folded_integer_float
+    49 STORE slot 25 <- 48
+    50 NUMBER f64 4631107791820423168
+    51 LOAD f64 slot 25
+    52 EQUAL_TO bool <- 51 50
+    53 STORE slot 17 <- 52
+    54 JUMP target 9
+  block 9 scope 15 BLOCK length 3
+    55 LOAD bool slot 17
+    56 STORE slot 16 <- 55
+    57 BRANCH target 10 alternative 11 <- 55
+  block 10 scope 15 BLOCK length 8
+    58 NUMBER u64 42
+    59 CALL f64 callee 11 int_float signature 3 <- 58
+    60 STORE slot 26 <- 59
+    61 NUMBER f64 4631107791820423168
+    62 LOAD f64 slot 26
+    63 EQUAL_TO bool <- 62 61
+    64 STORE slot 16 <- 63
+    65 JUMP target 11
+  block 11 scope 15 BLOCK length 3
+    66 LOAD bool slot 16
+    67 STORE slot 15 <- 66
+    68 BRANCH target 12 alternative 13 <- 66
+  block 12 scope 15 BLOCK length 7
+    69 LOAD_DATUM u8 datum 4 folded_float_integer
+    70 STORE slot 27 <- 69
+    71 NUMBER u8 42
+    72 LOAD u8 slot 27
+    73 EQUAL_TO bool <- 72 71
+    74 STORE slot 15 <- 73
+    75 JUMP target 13
+  block 13 scope 15 BLOCK length 3
+    76 LOAD bool slot 15
+    77 STORE slot 14 <- 76
+    78 BRANCH target 14 alternative 15 <- 76
+  block 14 scope 15 BLOCK length 8
+    79 NUMBER f64 4631213344936689664
+    80 CALL u8 callee 12 float_int signature 4 <- 79
+    81 STORE slot 28 <- 80
+    82 NUMBER u8 42
+    83 LOAD u8 slot 28
+    84 EQUAL_TO bool <- 83 82
+    85 STORE slot 14 <- 84
+    86 JUMP target 15
+  block 15 scope 15 BLOCK length 3
+    87 LOAD bool slot 14
+    88 STORE slot 13 <- 87
+    89 BRANCH target 16 alternative 17 <- 87
+  block 16 scope 15 BLOCK length 7
+    90 LOAD_DATUM u16 datum 5 folded_bool_integer
+    91 STORE slot 29 <- 90
+    92 NUMBER u16 1
+    93 LOAD u16 slot 29
+    94 EQUAL_TO bool <- 93 92
+    95 STORE slot 13 <- 94
+    96 JUMP target 17
+  block 17 scope 15 BLOCK length 3
+    97 LOAD bool slot 13
+    98 STORE slot 12 <- 97
+    99 BRANCH target 18 alternative 19 <- 97
+  block 18 scope 15 BLOCK length 8
+    100 TRUTH bool true
+    101 CALL u16 callee 13 bool_int signature 5 <- 100
+    102 STORE slot 30 <- 101
+    103 NUMBER u16 1
+    104 LOAD u16 slot 30
+    105 EQUAL_TO bool <- 104 103
+    106 STORE slot 12 <- 105
+    107 JUMP target 19
+  block 19 scope 15 BLOCK length 3
+    108 LOAD bool slot 12
+    109 STORE slot 11 <- 108
+    110 BRANCH target 20 alternative 21 <- 108
+  block 20 scope 15 BLOCK length 3
+    111 LOAD_DATUM bool datum 6 folded_integer_bool
+    112 STORE slot 11 <- 111
+    113 JUMP target 21
+  block 21 scope 15 BLOCK length 3
+    114 LOAD bool slot 11
+    115 STORE slot 10 <- 114
+    116 BRANCH target 22 alternative 23 <- 114
+  block 22 scope 15 BLOCK length 4
+    117 NUMBER u32 1
+    118 CALL bool callee 14 int_bool signature 6 <- 117
+    119 STORE slot 10 <- 118
+    120 JUMP target 23
+  block 23 scope 15 BLOCK length 3
+    121 LOAD bool slot 10
+    122 STORE slot 9 <- 121
+    123 BRANCH target 24 alternative 25 <- 121
+  block 24 scope 15 BLOCK length 4
+    124 LOAD_DATUM bool datum 7 folded_float_bool
+    125 LOGICAL_NOT bool <- 124
+    126 STORE slot 9 <- 125
+    127 JUMP target 25
+  block 25 scope 15 BLOCK length 3
+    128 LOAD bool slot 9
+    129 STORE slot 8 <- 128
+    130 BRANCH target 26 alternative 27 <- 128
+  block 26 scope 15 BLOCK length 5
+    131 NUMBER f64 9223372036854775808
+    132 CALL bool callee 15 float_bool signature 7 <- 131
+    133 LOGICAL_NOT bool <- 132
+    134 STORE slot 8 <- 133
+    135 JUMP target 27
+  block 27 scope 15 BLOCK length 3
+    136 LOAD bool slot 8
+    137 STORE slot 7 <- 136
+    138 BRANCH target 28 alternative 29 <- 136
+  block 28 scope 15 BLOCK length 7
+    139 LOAD_DATUM f32 datum 8 folded_bool_float
+    140 STORE slot 31 <- 139
+    141 NUMBER f32 1065353216
+    142 LOAD f32 slot 31
+    143 EQUAL_TO bool <- 142 141
+    144 STORE slot 7 <- 143
+    145 JUMP target 29
+  block 29 scope 15 BLOCK length 3
+    146 LOAD bool slot 7
+    147 STORE slot 6 <- 146
+    148 BRANCH target 30 alternative 31 <- 146
+  block 30 scope 15 BLOCK length 8
+    149 TRUTH bool true
+    150 CALL f32 callee 16 bool_float signature 8 <- 149
+    151 STORE slot 32 <- 150
+    152 NUMBER f32 1065353216
+    153 LOAD f32 slot 32
+    154 EQUAL_TO bool <- 153 152
+    155 STORE slot 6 <- 154
+    156 JUMP target 31
+  block 31 scope 15 BLOCK length 3
+    157 LOAD bool slot 6
+    158 STORE slot 5 <- 157
+    159 BRANCH target 32 alternative 33 <- 157
+  block 32 scope 15 BLOCK length 8
+    160 LOAD usize slot 2
+    161 CALL usize callee 17 pointer_integer signature 9 <- 160
+    162 STORE slot 33 <- 161
+    163 NUMBER usize 42
+    164 LOAD usize slot 33
+    165 EQUAL_TO bool <- 164 163
+    166 STORE slot 5 <- 165
+    167 JUMP target 33
+  block 33 scope 15 BLOCK length 3
+    168 LOAD bool slot 5
+    169 STORE slot 4 <- 168
+    170 BRANCH target 34 alternative 35 <- 168
+  block 34 scope 15 BLOCK length 12
+    171 STORAGE_ADDRESS usize storage slot 3
+    172 STORE slot 35 <- 171
+    173 STORAGE_ADDRESS usize storage slot 34
+    174 STORE slot 36 <- 173
+    175 COPY_ARRAY from address slot 35 to address slot 36
+    176 LOAD_FIELD u32 slot 34 field 1
+    177 STORE slot 37 <- 176
+    178 NUMBER u32 42
+    179 LOAD u32 slot 37
+    180 EQUAL_TO bool <- 179 178
+    181 STORE slot 4 <- 180
+    182 JUMP target 35
+  block 35 scope 15 BLOCK length 2
+    183 LOAD bool slot 4
+    184 BRANCH target 36 alternative 37 <- 183
+  block 36 scope 16 BLOCK length 3
+    185 NUMBER i32 42
+    186 STORE slot 1 <- 185
+    187 JUMP target 38
+  block 37 scope 15 BLOCK length 1
+    188 JUMP target 39
+  block 38 scope 15 BLOCK length 2
+    192 LOAD i32 slot 1
+    193 LEAVE <- 192
+  block 39 scope 17 BLOCK length 3
+    189 NUMBER i32 1
+    190 STORE slot 1 <- 189
+    191 JUMP target 38
+file positive/written-type-text-conversions/main.ldn
+unit signatures 3 items 5
+signature 1 (in [2]usize) -> [2]usize from 1
+signature 2 (in usize) -> [2]usize from 1
+signature 3 () -> i32
+item 1 ROUTINE as_bytes result array signature 1 params 2 slots 5 blocks 1 values 9
+  elements 2 of usize
+  slot 1 as_bytes usize param 1
+  slot 2 source elements 2 of usize param 2
+  slot 3 result elements 2 of usize return
+  slot 4 - usize
+  slot 5 - usize
+  block 1 scope 5 BLOCK length 9
+    1 LOAD_FIELD usize slot 2 field 1
+    2 LOAD_FIELD usize slot 2 field 2
+    3 STORE slot 4 <- 1
+    4 STORE slot 5 <- 2
+    5 LOAD usize slot 4
+    6 STORE_FIELD slot 3 field 1 <- 5
+    7 LOAD usize slot 5
+    8 STORE_FIELD slot 3 field 2 <- 7
+    9 LEAVE
+item 2 ROUTINE c_bytes result array signature 2 params 2 slots 6 blocks 4 values 24
+  elements 2 of usize
+  slot 1 c_bytes usize param 1
+  slot 2 source usize param 2
+  slot 3 result elements 2 of usize return
+  slot 4 - usize
+  slot 5 - usize
+  slot 6 - usize
+  block 1 scope 7 BLOCK length 5
+    1 LOAD usize slot 2
+    2 STORE slot 4 <- 1
+    3 NUMBER usize 0
+    4 STORE slot 6 <- 3
+    5 JUMP target 2
+  block 2 scope 7 BLOCK length 7
+    6 LOAD usize slot 6
+    7 LOAD usize slot 4
+    8 ADD usize <- 7 6
+    9 LOAD_INDIRECT u8 <- 8
+    10 NUMBER u8 0
+    11 EQUAL_TO bool <- 9 10
+    12 BRANCH target 4 alternative 3 <- 11
+  block 3 scope 7 BLOCK length 5
+    13 LOAD usize slot 6
+    14 NUMBER usize 1
+    15 ADD usize <- 13 14
+    16 STORE slot 6 <- 15
+    17 JUMP target 2
+  block 4 scope 7 BLOCK length 7
+    18 LOAD usize slot 6
+    19 STORE slot 5 <- 18
+    20 LOAD usize slot 4
+    21 STORE_FIELD slot 3 field 1 <- 20
+    22 LOAD usize slot 5
+    23 STORE_FIELD slot 3 field 2 <- 22
+    24 LEAVE
+item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 1462
+  slot 1 code i32 return
+  slot 2 storage elements 10 of u8
+  slot 3 source elements 2 of usize
+  slot 4 - usize
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 - usize
+  slot 8 - usize
+  slot 9 text elements 2 of usize
+  slot 10 - usize
+  slot 11 - usize
+  slot 12 - usize
+  slot 13 - u8
+  slot 14 - u8
+  slot 15 - u8
+  slot 16 - u8
+  slot 17 - u8
+  slot 18 - u8
+  slot 19 - u8
+  slot 20 - u8
+  slot 21 - u8
+  slot 22 - u8
+  slot 23 - u8
+  slot 24 bytes elements 2 of usize
+  slot 25 - elements 2 of usize
+  slot 26 nested elements 2 of usize
+  slot 27 - usize
+  slot 28 - usize
+  slot 29 - elements 2 of usize
+  slot 30 - usize
+  slot 31 - usize
+  slot 32 - usize
+  slot 33 - u8
+  slot 34 - u8
+  slot 35 - u8
+  slot 36 - u8
+  slot 37 - u8
+  slot 38 - u8
+  slot 39 - u8
+  slot 40 - u8
+  slot 41 - u8
+  slot 42 - u8
+  slot 43 - u8
+  slot 44 terminated usize
+  slot 45 prefix elements 2 of usize
+  slot 46 - usize
+  slot 47 - usize
+  slot 48 - usize
+  slot 49 prefix_text elements 2 of usize
+  slot 50 - usize
+  slot 51 - usize
+  slot 52 - usize
+  slot 53 - u8
+  slot 54 - u8
+  slot 55 - u8
+  slot 56 - u8
+  slot 57 - u8
+  slot 58 - u8
+  slot 59 - u8
+  slot 60 - u8
+  slot 61 - u8
+  slot 62 - u8
+  slot 63 - u8
+  slot 64 empty_c usize
+  slot 65 empty_bytes elements 2 of usize
+  slot 66 empty_text elements 2 of usize
+  slot 67 - usize
+  slot 68 - usize
+  slot 69 - usize
+  slot 70 - u8
+  slot 71 - u8
+  slot 72 - u8
+  slot 73 - u8
+  slot 74 - u8
+  slot 75 - u8
+  slot 76 - u8
+  slot 77 - u8
+  slot 78 - u8
+  slot 79 - u8
+  slot 80 - u8
+  slot 81 empty_source elements 2 of usize
+  slot 82 - usize
+  slot 83 - usize
+  slot 84 - usize
+  slot 85 - usize
+  slot 86 - usize
+  slot 87 empty_view elements 2 of usize
+  slot 88 - usize
+  slot 89 - usize
+  slot 90 - elements 2 of usize
+  slot 91 - usize
+  slot 92 - usize
+  slot 93 - usize
+  slot 94 - u8
+  slot 95 - u8
+  slot 96 - u8
+  slot 97 - u8
+  slot 98 - u8
+  slot 99 - u8
+  slot 100 - u8
+  slot 101 - u8
+  slot 102 - u8
+  slot 103 - u8
+  slot 104 - u8
+  slot 105 - bool
+  slot 106 - bool
+  slot 107 - bool
+  slot 108 - bool
+  slot 109 - bool
+  slot 110 - bool
+  slot 111 - bool
+  slot 112 - bool
+  slot 113 - bool
+  slot 114 - bool
+  slot 115 - usize
+  slot 116 - usize
+  slot 117 - usize
+  slot 118 - address of u8
+  slot 119 - u8
+  slot 120 - usize
+  slot 121 - usize
+  slot 122 - address of u8
+  slot 123 - u8
+  slot 124 - usize
+  slot 125 - usize
+  slot 126 - usize
+  slot 127 - usize
+  slot 128 - address of u8
+  slot 129 - u8
+  slot 130 - usize
+  slot 131 - usize
+  slot 132 - usize
+  slot 133 - usize
+  slot 134 - usize
+  slot 135 - usize
+  slot 136 - address of u8
+  slot 137 - usize
+  slot 138 - usize
+  slot 139 - usize
+  slot 140 - address of u8
+  block 1 scope 9 BLOCK length 47
+    1 NUMBER u8 65
+    2 STORE_FIELD slot 2 field 1 <- 1
+    3 NUMBER u8 194
+    4 STORE_FIELD slot 2 field 2 <- 3
+    5 NUMBER u8 162
+    6 STORE_FIELD slot 2 field 3 <- 5
+    7 NUMBER u8 226
+    8 STORE_FIELD slot 2 field 4 <- 7
+    9 NUMBER u8 152
+    10 STORE_FIELD slot 2 field 5 <- 9
+    11 NUMBER u8 131
+    12 STORE_FIELD slot 2 field 6 <- 11
+    13 NUMBER u8 240
+    14 STORE_FIELD slot 2 field 7 <- 13
+    15 NUMBER u8 159
+    16 STORE_FIELD slot 2 field 8 <- 15
+    17 NUMBER u8 152
+    18 STORE_FIELD slot 2 field 9 <- 17
+    19 NUMBER u8 128
+    20 STORE_FIELD slot 2 field 10 <- 19
+    21 STORAGE_ADDRESS usize storage slot 2
+    22 NUMBER usize 10
+    23 STORE slot 4 <- 21
+    24 STORE slot 5 <- 22
+    25 NUMBER usize 0
+    26 STORE slot 6 <- 25
+    27 NUMBER usize 10
+    28 STORE slot 7 <- 27
+    29 LOAD usize slot 6
+    30 LOAD usize slot 7
+    31 LOAD usize slot 4
+    32 LOAD usize slot 5
+    33 SLICE_ADDRESS usize <- 31 32 29 30
+    34 STORE slot 8 <- 33
+    35 LOAD usize slot 7
+    36 LOAD usize slot 6
+    37 SUBTRACT usize <- 35 36
+    38 LOAD usize slot 8
+    39 STORE_FIELD slot 3 field 1 <- 38
+    40 STORE_FIELD slot 3 field 2 <- 37
+    41 LOAD_FIELD usize slot 3 field 1
+    42 LOAD_FIELD usize slot 3 field 2
+    43 STORE slot 10 <- 41
+    44 STORE slot 11 <- 42
+    45 NUMBER usize 0
+    46 STORE slot 12 <- 45
+    47 JUMP target 2
+  block 2 scope 9 BLOCK length 4
+    48 LOAD usize slot 12
+    49 LOAD usize slot 11
+    50 EQUAL_TO bool <- 48 49
+    51 BRANCH target 27 alternative 3 <- 50
+  block 3 scope 9 BLOCK length 10
+    52 LOAD usize slot 12
+    53 LOAD usize slot 10
+    54 LOAD usize slot 11
+    55 SLICE_ADDRESS usize <- 53 54 52 52
+    56 LOAD_INDIRECT u8 <- 55
+    57 STORE slot 13 <- 56
+    58 LOAD u8 slot 13
+    59 NUMBER u8 128
+    60 LESS_THAN bool <- 58 59
+    61 BRANCH target 4 alternative 5 <- 60
+  block 4 scope 9 BLOCK length 5
+    62 LOAD usize slot 12
+    63 NUMBER usize 1
+    64 ADD usize <- 62 63
+    65 STORE slot 12 <- 64
+    66 JUMP target 2
+  block 5 scope 9 BLOCK length 4
+    67 LOAD u8 slot 13
+    68 NUMBER u8 194
+    69 LESS_THAN bool <- 67 68
+    70 BRANCH target 26 alternative 6 <- 69
+  block 6 scope 9 BLOCK length 4
+    71 LOAD u8 slot 13
+    72 NUMBER u8 224
+    73 LESS_THAN bool <- 71 72
+    74 BRANCH target 7 alternative 9 <- 73
+  block 7 scope 9 BLOCK length 12
+    75 LOAD usize slot 12
+    76 NUMBER usize 1
+    77 ADD usize <- 75 76
+    78 LOAD usize slot 10
+    79 LOAD usize slot 11
+    80 SLICE_ADDRESS usize <- 78 79 77 77
+    81 LOAD_INDIRECT u8 <- 80
+    82 STORE slot 14 <- 81
+    83 LOAD u8 slot 14
+    84 NUMBER u8 128
+    85 GREATER_OR_EQUAL bool <- 83 84
+    86 BRANCH target 28 alternative 26 <- 85
+  block 8 scope 9 BLOCK length 5
+    91 LOAD usize slot 12
+    92 NUMBER usize 2
+    93 ADD usize <- 91 92
+    94 STORE slot 12 <- 93
+    95 JUMP target 2
+  block 9 scope 9 BLOCK length 4
+    96 LOAD u8 slot 13
+    97 NUMBER u8 240
+    98 LESS_THAN bool <- 96 97
+    99 BRANCH target 10 alternative 17 <- 98
+  block 10 scope 9 BLOCK length 4
+    100 LOAD u8 slot 13
+    101 NUMBER u8 224
+    102 EQUAL_TO bool <- 100 101
+    103 BRANCH target 12 alternative 11 <- 102
+  block 11 scope 9 BLOCK length 4
+    120 LOAD u8 slot 13
+    121 NUMBER u8 237
+    122 EQUAL_TO bool <- 120 121
+    123 BRANCH target 13 alternative 14 <- 122
+  block 12 scope 9 BLOCK length 12
+    104 LOAD usize slot 12
+    105 NUMBER usize 1
+    106 ADD usize <- 104 105
+    107 LOAD usize slot 10
+    108 LOAD usize slot 11
+    109 SLICE_ADDRESS usize <- 107 108 106 106
+    110 LOAD_INDIRECT u8 <- 109
+    111 STORE slot 15 <- 110
+    112 LOAD u8 slot 15
+    113 NUMBER u8 160
+    114 GREATER_OR_EQUAL bool <- 112 113
+    115 BRANCH target 29 alternative 26 <- 114
+  block 13 scope 9 BLOCK length 12
+    124 LOAD usize slot 12
+    125 NUMBER usize 1
+    126 ADD usize <- 124 125
+    127 LOAD usize slot 10
+    128 LOAD usize slot 11
+    129 SLICE_ADDRESS usize <- 127 128 126 126
+    130 LOAD_INDIRECT u8 <- 129
+    131 STORE slot 16 <- 130
+    132 LOAD u8 slot 16
+    133 NUMBER u8 128
+    134 GREATER_OR_EQUAL bool <- 132 133
+    135 BRANCH target 30 alternative 26 <- 134
+  block 14 scope 9 BLOCK length 12
+    140 LOAD usize slot 12
+    141 NUMBER usize 1
+    142 ADD usize <- 140 141
+    143 LOAD usize slot 10
+    144 LOAD usize slot 11
+    145 SLICE_ADDRESS usize <- 143 144 142 142
+    146 LOAD_INDIRECT u8 <- 145
+    147 STORE slot 17 <- 146
+    148 LOAD u8 slot 17
+    149 NUMBER u8 128
+    150 GREATER_OR_EQUAL bool <- 148 149
+    151 BRANCH target 31 alternative 26 <- 150
+  block 15 scope 9 BLOCK length 12
+    156 LOAD usize slot 12
+    157 NUMBER usize 2
+    158 ADD usize <- 156 157
+    159 LOAD usize slot 10
+    160 LOAD usize slot 11
+    161 SLICE_ADDRESS usize <- 159 160 158 158
+    162 LOAD_INDIRECT u8 <- 161
+    163 STORE slot 18 <- 162
+    164 LOAD u8 slot 18
+    165 NUMBER u8 128
+    166 GREATER_OR_EQUAL bool <- 164 165
+    167 BRANCH target 32 alternative 26 <- 166
+  block 16 scope 9 BLOCK length 5
+    172 LOAD usize slot 12
+    173 NUMBER usize 3
+    174 ADD usize <- 172 173
+    175 STORE slot 12 <- 174
+    176 JUMP target 2
+  block 17 scope 9 BLOCK length 4
+    177 LOAD u8 slot 13
+    178 NUMBER u8 244
+    179 LESS_OR_EQUAL bool <- 177 178
+    180 BRANCH target 18 alternative 26 <- 179
+  block 18 scope 9 BLOCK length 4
+    181 LOAD u8 slot 13
+    182 NUMBER u8 240
+    183 EQUAL_TO bool <- 181 182
+    184 BRANCH target 19 alternative 22 <- 183
+  block 19 scope 9 BLOCK length 12
+    189 LOAD usize slot 12
+    190 NUMBER usize 1
+    191 ADD usize <- 189 190
+    192 LOAD usize slot 10
+    193 LOAD usize slot 11
+    194 SLICE_ADDRESS usize <- 192 193 191 191
+    195 LOAD_INDIRECT u8 <- 194
+    196 STORE slot 19 <- 195
+    197 LOAD u8 slot 19
+    198 NUMBER u8 144
+    199 GREATER_OR_EQUAL bool <- 197 198
+    200 BRANCH target 33 alternative 26 <- 199
+  block 20 scope 9 BLOCK length 12
+    205 LOAD usize slot 12
+    206 NUMBER usize 1
+    207 ADD usize <- 205 206
+    208 LOAD usize slot 10
+    209 LOAD usize slot 11
+    210 SLICE_ADDRESS usize <- 208 209 207 207
+    211 LOAD_INDIRECT u8 <- 210
+    212 STORE slot 20 <- 211
+    213 LOAD u8 slot 20
+    214 NUMBER u8 128
+    215 GREATER_OR_EQUAL bool <- 213 214
+    216 BRANCH target 34 alternative 26 <- 215
+  block 21 scope 9 BLOCK length 12
+    221 LOAD usize slot 12
+    222 NUMBER usize 1
+    223 ADD usize <- 221 222
+    224 LOAD usize slot 10
+    225 LOAD usize slot 11
+    226 SLICE_ADDRESS usize <- 224 225 223 223
+    227 LOAD_INDIRECT u8 <- 226
+    228 STORE slot 21 <- 227
+    229 LOAD u8 slot 21
+    230 NUMBER u8 128
+    231 GREATER_OR_EQUAL bool <- 229 230
+    232 BRANCH target 35 alternative 26 <- 231
+  block 22 scope 9 BLOCK length 4
+    185 LOAD u8 slot 13
+    186 NUMBER u8 244
+    187 EQUAL_TO bool <- 185 186
+    188 BRANCH target 20 alternative 21 <- 187
+  block 23 scope 9 BLOCK length 12
+    237 LOAD usize slot 12
+    238 NUMBER usize 2
+    239 ADD usize <- 237 238
+    240 LOAD usize slot 10
+    241 LOAD usize slot 11
+    242 SLICE_ADDRESS usize <- 240 241 239 239
+    243 LOAD_INDIRECT u8 <- 242
+    244 STORE slot 22 <- 243
+    245 LOAD u8 slot 22
+    246 NUMBER u8 128
+    247 GREATER_OR_EQUAL bool <- 245 246
+    248 BRANCH target 36 alternative 26 <- 247
+  block 24 scope 9 BLOCK length 12
+    253 LOAD usize slot 12
+    254 NUMBER usize 3
+    255 ADD usize <- 253 254
+    256 LOAD usize slot 10
+    257 LOAD usize slot 11
+    258 SLICE_ADDRESS usize <- 256 257 255 255
+    259 LOAD_INDIRECT u8 <- 258
+    260 STORE slot 23 <- 259
+    261 LOAD u8 slot 23
+    262 NUMBER u8 128
+    263 GREATER_OR_EQUAL bool <- 261 262
+    264 BRANCH target 37 alternative 26 <- 263
+  block 25 scope 9 BLOCK length 5
+    269 LOAD usize slot 12
+    270 NUMBER usize 4
+    271 ADD usize <- 269 270
+    272 STORE slot 12 <- 271
+    273 JUMP target 2
+  block 26 scope 9 BLOCK length 3
+    274 NUMBER u8 1
+    275 RANGE_CHECK u8 <- 274 range 0 .. 0 representation
+    276 JUMP target 27
+  block 27 scope 9 BLOCK length 23
+    277 LOAD usize slot 10
+    278 STORE_FIELD slot 9 field 1 <- 277
+    279 LOAD usize slot 11
+    280 STORE_FIELD slot 9 field 2 <- 279
+    281 COPY_ARRAY from slot 9 to slot 25
+    282 STORAGE_ADDRESS usize storage slot 25
+    283 STORAGE_ADDRESS usize storage slot 24
+    284 CALL none callee 1 as_bytes signature 1 <- 283 282
+    285 LOAD_FIELD usize slot 9 field 1
+    286 LOAD_FIELD usize slot 9 field 2
+    287 STORE slot 30 <- 285
+    288 STORE slot 31 <- 286
+    289 LOAD usize slot 30
+    290 STORE_FIELD slot 29 field 1 <- 289
+    291 LOAD usize slot 31
+    292 STORE_FIELD slot 29 field 2 <- 291
+    293 LOAD_FIELD usize slot 29 field 1
+    294 LOAD_FIELD usize slot 29 field 2
+    295 STORE slot 27 <- 293
+    296 STORE slot 28 <- 294
+    297 NUMBER usize 0
+    298 STORE slot 32 <- 297
+    299 JUMP target 38
+  block 28 scope 9 BLOCK length 4
+    87 LOAD u8 slot 14
+    88 NUMBER u8 191
+    89 LESS_OR_EQUAL bool <- 87 88
+    90 BRANCH target 8 alternative 26 <- 89
+  block 29 scope 9 BLOCK length 4
+    116 LOAD u8 slot 15
+    117 NUMBER u8 191
+    118 LESS_OR_EQUAL bool <- 116 117
+    119 BRANCH target 15 alternative 26 <- 118
+  block 30 scope 9 BLOCK length 4
+    136 LOAD u8 slot 16
+    137 NUMBER u8 159
+    138 LESS_OR_EQUAL bool <- 136 137
+    139 BRANCH target 15 alternative 26 <- 138
+  block 31 scope 9 BLOCK length 4
+    152 LOAD u8 slot 17
+    153 NUMBER u8 191
+    154 LESS_OR_EQUAL bool <- 152 153
+    155 BRANCH target 15 alternative 26 <- 154
+  block 32 scope 9 BLOCK length 4
+    168 LOAD u8 slot 18
+    169 NUMBER u8 191
+    170 LESS_OR_EQUAL bool <- 168 169
+    171 BRANCH target 16 alternative 26 <- 170
+  block 33 scope 9 BLOCK length 4
+    201 LOAD u8 slot 19
+    202 NUMBER u8 191
+    203 LESS_OR_EQUAL bool <- 201 202
+    204 BRANCH target 23 alternative 26 <- 203
+  block 34 scope 9 BLOCK length 4
+    217 LOAD u8 slot 20
+    218 NUMBER u8 143
+    219 LESS_OR_EQUAL bool <- 217 218
+    220 BRANCH target 23 alternative 26 <- 219
+  block 35 scope 9 BLOCK length 4
+    233 LOAD u8 slot 21
+    234 NUMBER u8 191
+    235 LESS_OR_EQUAL bool <- 233 234
+    236 BRANCH target 23 alternative 26 <- 235
+  block 36 scope 9 BLOCK length 4
+    249 LOAD u8 slot 22
+    250 NUMBER u8 191
+    251 LESS_OR_EQUAL bool <- 249 250
+    252 BRANCH target 24 alternative 26 <- 251
+  block 37 scope 9 BLOCK length 4
+    265 LOAD u8 slot 23
+    266 NUMBER u8 191
+    267 LESS_OR_EQUAL bool <- 265 266
+    268 BRANCH target 25 alternative 26 <- 267
+  block 38 scope 9 BLOCK length 4
+    300 LOAD usize slot 32
+    301 LOAD usize slot 28
+    302 EQUAL_TO bool <- 300 301
+    303 BRANCH target 63 alternative 39 <- 302
+  block 39 scope 9 BLOCK length 10
+    304 LOAD usize slot 32
+    305 LOAD usize slot 27
+    306 LOAD usize slot 28
+    307 SLICE_ADDRESS usize <- 305 306 304 304
+    308 LOAD_INDIRECT u8 <- 307
+    309 STORE slot 33 <- 308
+    310 LOAD u8 slot 33
+    311 NUMBER u8 128
+    312 LESS_THAN bool <- 310 311
+    313 BRANCH target 40 alternative 41 <- 312
+  block 40 scope 9 BLOCK length 5
+    314 LOAD usize slot 32
+    315 NUMBER usize 1
+    316 ADD usize <- 314 315
+    317 STORE slot 32 <- 316
+    318 JUMP target 38
+  block 41 scope 9 BLOCK length 4
+    319 LOAD u8 slot 33
+    320 NUMBER u8 194
+    321 LESS_THAN bool <- 319 320
+    322 BRANCH target 62 alternative 42 <- 321
+  block 42 scope 9 BLOCK length 4
+    323 LOAD u8 slot 33
+    324 NUMBER u8 224
+    325 LESS_THAN bool <- 323 324
+    326 BRANCH target 43 alternative 45 <- 325
+  block 43 scope 9 BLOCK length 12
+    327 LOAD usize slot 32
+    328 NUMBER usize 1
+    329 ADD usize <- 327 328
+    330 LOAD usize slot 27
+    331 LOAD usize slot 28
+    332 SLICE_ADDRESS usize <- 330 331 329 329
+    333 LOAD_INDIRECT u8 <- 332
+    334 STORE slot 34 <- 333
+    335 LOAD u8 slot 34
+    336 NUMBER u8 128
+    337 GREATER_OR_EQUAL bool <- 335 336
+    338 BRANCH target 64 alternative 62 <- 337
+  block 44 scope 9 BLOCK length 5
+    343 LOAD usize slot 32
+    344 NUMBER usize 2
+    345 ADD usize <- 343 344
+    346 STORE slot 32 <- 345
+    347 JUMP target 38
+  block 45 scope 9 BLOCK length 4
+    348 LOAD u8 slot 33
+    349 NUMBER u8 240
+    350 LESS_THAN bool <- 348 349
+    351 BRANCH target 46 alternative 53 <- 350
+  block 46 scope 9 BLOCK length 4
+    352 LOAD u8 slot 33
+    353 NUMBER u8 224
+    354 EQUAL_TO bool <- 352 353
+    355 BRANCH target 48 alternative 47 <- 354
+  block 47 scope 9 BLOCK length 4
+    372 LOAD u8 slot 33
+    373 NUMBER u8 237
+    374 EQUAL_TO bool <- 372 373
+    375 BRANCH target 49 alternative 50 <- 374
+  block 48 scope 9 BLOCK length 12
+    356 LOAD usize slot 32
+    357 NUMBER usize 1
+    358 ADD usize <- 356 357
+    359 LOAD usize slot 27
+    360 LOAD usize slot 28
+    361 SLICE_ADDRESS usize <- 359 360 358 358
+    362 LOAD_INDIRECT u8 <- 361
+    363 STORE slot 35 <- 362
+    364 LOAD u8 slot 35
+    365 NUMBER u8 160
+    366 GREATER_OR_EQUAL bool <- 364 365
+    367 BRANCH target 65 alternative 62 <- 366
+  block 49 scope 9 BLOCK length 12
+    376 LOAD usize slot 32
+    377 NUMBER usize 1
+    378 ADD usize <- 376 377
+    379 LOAD usize slot 27
+    380 LOAD usize slot 28
+    381 SLICE_ADDRESS usize <- 379 380 378 378
+    382 LOAD_INDIRECT u8 <- 381
+    383 STORE slot 36 <- 382
+    384 LOAD u8 slot 36
+    385 NUMBER u8 128
+    386 GREATER_OR_EQUAL bool <- 384 385
+    387 BRANCH target 66 alternative 62 <- 386
+  block 50 scope 9 BLOCK length 12
+    392 LOAD usize slot 32
+    393 NUMBER usize 1
+    394 ADD usize <- 392 393
+    395 LOAD usize slot 27
+    396 LOAD usize slot 28
+    397 SLICE_ADDRESS usize <- 395 396 394 394
+    398 LOAD_INDIRECT u8 <- 397
+    399 STORE slot 37 <- 398
+    400 LOAD u8 slot 37
+    401 NUMBER u8 128
+    402 GREATER_OR_EQUAL bool <- 400 401
+    403 BRANCH target 67 alternative 62 <- 402
+  block 51 scope 9 BLOCK length 12
+    408 LOAD usize slot 32
+    409 NUMBER usize 2
+    410 ADD usize <- 408 409
+    411 LOAD usize slot 27
+    412 LOAD usize slot 28
+    413 SLICE_ADDRESS usize <- 411 412 410 410
+    414 LOAD_INDIRECT u8 <- 413
+    415 STORE slot 38 <- 414
+    416 LOAD u8 slot 38
+    417 NUMBER u8 128
+    418 GREATER_OR_EQUAL bool <- 416 417
+    419 BRANCH target 68 alternative 62 <- 418
+  block 52 scope 9 BLOCK length 5
+    424 LOAD usize slot 32
+    425 NUMBER usize 3
+    426 ADD usize <- 424 425
+    427 STORE slot 32 <- 426
+    428 JUMP target 38
+  block 53 scope 9 BLOCK length 4
+    429 LOAD u8 slot 33
+    430 NUMBER u8 244
+    431 LESS_OR_EQUAL bool <- 429 430
+    432 BRANCH target 54 alternative 62 <- 431
+  block 54 scope 9 BLOCK length 4
+    433 LOAD u8 slot 33
+    434 NUMBER u8 240
+    435 EQUAL_TO bool <- 433 434
+    436 BRANCH target 55 alternative 58 <- 435
+  block 55 scope 9 BLOCK length 12
+    441 LOAD usize slot 32
+    442 NUMBER usize 1
+    443 ADD usize <- 441 442
+    444 LOAD usize slot 27
+    445 LOAD usize slot 28
+    446 SLICE_ADDRESS usize <- 444 445 443 443
+    447 LOAD_INDIRECT u8 <- 446
+    448 STORE slot 39 <- 447
+    449 LOAD u8 slot 39
+    450 NUMBER u8 144
+    451 GREATER_OR_EQUAL bool <- 449 450
+    452 BRANCH target 69 alternative 62 <- 451
+  block 56 scope 9 BLOCK length 12
+    457 LOAD usize slot 32
+    458 NUMBER usize 1
+    459 ADD usize <- 457 458
+    460 LOAD usize slot 27
+    461 LOAD usize slot 28
+    462 SLICE_ADDRESS usize <- 460 461 459 459
+    463 LOAD_INDIRECT u8 <- 462
+    464 STORE slot 40 <- 463
+    465 LOAD u8 slot 40
+    466 NUMBER u8 128
+    467 GREATER_OR_EQUAL bool <- 465 466
+    468 BRANCH target 70 alternative 62 <- 467
+  block 57 scope 9 BLOCK length 12
+    473 LOAD usize slot 32
+    474 NUMBER usize 1
+    475 ADD usize <- 473 474
+    476 LOAD usize slot 27
+    477 LOAD usize slot 28
+    478 SLICE_ADDRESS usize <- 476 477 475 475
+    479 LOAD_INDIRECT u8 <- 478
+    480 STORE slot 41 <- 479
+    481 LOAD u8 slot 41
+    482 NUMBER u8 128
+    483 GREATER_OR_EQUAL bool <- 481 482
+    484 BRANCH target 71 alternative 62 <- 483
+  block 58 scope 9 BLOCK length 4
+    437 LOAD u8 slot 33
+    438 NUMBER u8 244
+    439 EQUAL_TO bool <- 437 438
+    440 BRANCH target 56 alternative 57 <- 439
+  block 59 scope 9 BLOCK length 12
+    489 LOAD usize slot 32
+    490 NUMBER usize 2
+    491 ADD usize <- 489 490
+    492 LOAD usize slot 27
+    493 LOAD usize slot 28
+    494 SLICE_ADDRESS usize <- 492 493 491 491
+    495 LOAD_INDIRECT u8 <- 494
+    496 STORE slot 42 <- 495
+    497 LOAD u8 slot 42
+    498 NUMBER u8 128
+    499 GREATER_OR_EQUAL bool <- 497 498
+    500 BRANCH target 72 alternative 62 <- 499
+  block 60 scope 9 BLOCK length 12
+    505 LOAD usize slot 32
+    506 NUMBER usize 3
+    507 ADD usize <- 505 506
+    508 LOAD usize slot 27
+    509 LOAD usize slot 28
+    510 SLICE_ADDRESS usize <- 508 509 507 507
+    511 LOAD_INDIRECT u8 <- 510
+    512 STORE slot 43 <- 511
+    513 LOAD u8 slot 43
+    514 NUMBER u8 128
+    515 GREATER_OR_EQUAL bool <- 513 514
+    516 BRANCH target 73 alternative 62 <- 515
+  block 61 scope 9 BLOCK length 5
+    521 LOAD usize slot 32
+    522 NUMBER usize 4
+    523 ADD usize <- 521 522
+    524 STORE slot 32 <- 523
+    525 JUMP target 38
+  block 62 scope 9 BLOCK length 3
+    526 NUMBER u8 1
+    527 RANGE_CHECK u8 <- 526 range 0 .. 0 representation
+    528 JUMP target 63
+  block 63 scope 9 BLOCK length 11
+    529 LOAD usize slot 27
+    530 STORE_FIELD slot 26 field 1 <- 529
+    531 LOAD usize slot 28
+    532 STORE_FIELD slot 26 field 2 <- 531
+    533 PLACE_ADDRESS usize
+    534 STORE slot 44 <- 533
+    535 LOAD usize slot 44
+    536 STORE slot 46 <- 535
+    537 NUMBER usize 0
+    538 STORE slot 48 <- 537
+    539 JUMP target 74
+  block 64 scope 9 BLOCK length 4
+    339 LOAD u8 slot 34
+    340 NUMBER u8 191
+    341 LESS_OR_EQUAL bool <- 339 340
+    342 BRANCH target 44 alternative 62 <- 341
+  block 65 scope 9 BLOCK length 4
+    368 LOAD u8 slot 35
+    369 NUMBER u8 191
+    370 LESS_OR_EQUAL bool <- 368 369
+    371 BRANCH target 51 alternative 62 <- 370
+  block 66 scope 9 BLOCK length 4
+    388 LOAD u8 slot 36
+    389 NUMBER u8 159
+    390 LESS_OR_EQUAL bool <- 388 389
+    391 BRANCH target 51 alternative 62 <- 390
+  block 67 scope 9 BLOCK length 4
+    404 LOAD u8 slot 37
+    405 NUMBER u8 191
+    406 LESS_OR_EQUAL bool <- 404 405
+    407 BRANCH target 51 alternative 62 <- 406
+  block 68 scope 9 BLOCK length 4
+    420 LOAD u8 slot 38
+    421 NUMBER u8 191
+    422 LESS_OR_EQUAL bool <- 420 421
+    423 BRANCH target 52 alternative 62 <- 422
+  block 69 scope 9 BLOCK length 4
+    453 LOAD u8 slot 39
+    454 NUMBER u8 191
+    455 LESS_OR_EQUAL bool <- 453 454
+    456 BRANCH target 59 alternative 62 <- 455
+  block 70 scope 9 BLOCK length 4
+    469 LOAD u8 slot 40
+    470 NUMBER u8 143
+    471 LESS_OR_EQUAL bool <- 469 470
+    472 BRANCH target 59 alternative 62 <- 471
+  block 71 scope 9 BLOCK length 4
+    485 LOAD u8 slot 41
+    486 NUMBER u8 191
+    487 LESS_OR_EQUAL bool <- 485 486
+    488 BRANCH target 59 alternative 62 <- 487
+  block 72 scope 9 BLOCK length 4
+    501 LOAD u8 slot 42
+    502 NUMBER u8 191
+    503 LESS_OR_EQUAL bool <- 501 502
+    504 BRANCH target 60 alternative 62 <- 503
+  block 73 scope 9 BLOCK length 4
+    517 LOAD u8 slot 43
+    518 NUMBER u8 191
+    519 LESS_OR_EQUAL bool <- 517 518
+    520 BRANCH target 61 alternative 62 <- 519
+  block 74 scope 9 BLOCK length 7
+    540 LOAD usize slot 48
+    541 LOAD usize slot 46
+    542 ADD usize <- 541 540
+    543 LOAD_INDIRECT u8 <- 542
+    544 NUMBER u8 0
+    545 EQUAL_TO bool <- 543 544
+    546 BRANCH target 76 alternative 75 <- 545
+  block 75 scope 9 BLOCK length 5
+    547 LOAD usize slot 48
+    548 NUMBER usize 1
+    549 ADD usize <- 547 548
+    550 STORE slot 48 <- 549
+    551 JUMP target 74
+  block 76 scope 9 BLOCK length 11
+    552 LOAD usize slot 48
+    553 STORE slot 47 <- 552
+    554 LOAD usize slot 46
+    555 STORE_FIELD slot 45 field 1 <- 554
+    556 LOAD usize slot 47
+    557 STORE_FIELD slot 45 field 2 <- 556
+    558 LOAD usize slot 44
+    559 STORE slot 50 <- 558
+    560 NUMBER usize 0
+    561 STORE slot 52 <- 560
+    562 JUMP target 77
+  block 77 scope 9 BLOCK length 1
+    563 JUMP target 78
+  block 78 scope 9 BLOCK length 9
+    564 LOAD usize slot 52
+    565 LOAD usize slot 50
+    566 ADD usize <- 565 564
+    567 LOAD_INDIRECT u8 <- 566
+    568 STORE slot 53 <- 567
+    569 LOAD u8 slot 53
+    570 NUMBER u8 0
+    571 EQUAL_TO bool <- 569 570
+    572 BRANCH target 102 alternative 103 <- 571
+  block 79 scope 9 BLOCK length 5
+    577 LOAD usize slot 52
+    578 NUMBER usize 1
+    579 ADD usize <- 577 578
+    580 STORE slot 52 <- 579
+    581 JUMP target 77
+  block 80 scope 9 BLOCK length 4
+    582 LOAD u8 slot 53
+    583 NUMBER u8 194
+    584 LESS_THAN bool <- 582 583
+    585 BRANCH target 101 alternative 81 <- 584
+  block 81 scope 9 BLOCK length 4
+    586 LOAD u8 slot 53
+    587 NUMBER u8 224
+    588 LESS_THAN bool <- 586 587
+    589 BRANCH target 82 alternative 84 <- 588
+  block 82 scope 9 BLOCK length 11
+    590 LOAD usize slot 52
+    591 NUMBER usize 1
+    592 ADD usize <- 590 591
+    593 LOAD usize slot 50
+    594 ADD usize <- 593 592
+    595 LOAD_INDIRECT u8 <- 594
+    596 STORE slot 54 <- 595
+    597 LOAD u8 slot 54
+    598 NUMBER u8 128
+    599 GREATER_OR_EQUAL bool <- 597 598
+    600 BRANCH target 104 alternative 101 <- 599
+  block 83 scope 9 BLOCK length 5
+    605 LOAD usize slot 52
+    606 NUMBER usize 2
+    607 ADD usize <- 605 606
+    608 STORE slot 52 <- 607
+    609 JUMP target 77
+  block 84 scope 9 BLOCK length 4
+    610 LOAD u8 slot 53
+    611 NUMBER u8 240
+    612 LESS_THAN bool <- 610 611
+    613 BRANCH target 85 alternative 92 <- 612
+  block 85 scope 9 BLOCK length 4
+    614 LOAD u8 slot 53
+    615 NUMBER u8 224
+    616 EQUAL_TO bool <- 614 615
+    617 BRANCH target 87 alternative 86 <- 616
+  block 86 scope 9 BLOCK length 4
+    633 LOAD u8 slot 53
+    634 NUMBER u8 237
+    635 EQUAL_TO bool <- 633 634
+    636 BRANCH target 88 alternative 89 <- 635
+  block 87 scope 9 BLOCK length 11
+    618 LOAD usize slot 52
+    619 NUMBER usize 1
+    620 ADD usize <- 618 619
+    621 LOAD usize slot 50
+    622 ADD usize <- 621 620
+    623 LOAD_INDIRECT u8 <- 622
+    624 STORE slot 55 <- 623
+    625 LOAD u8 slot 55
+    626 NUMBER u8 160
+    627 GREATER_OR_EQUAL bool <- 625 626
+    628 BRANCH target 105 alternative 101 <- 627
+  block 88 scope 9 BLOCK length 11
+    637 LOAD usize slot 52
+    638 NUMBER usize 1
+    639 ADD usize <- 637 638
+    640 LOAD usize slot 50
+    641 ADD usize <- 640 639
+    642 LOAD_INDIRECT u8 <- 641
+    643 STORE slot 56 <- 642
+    644 LOAD u8 slot 56
+    645 NUMBER u8 128
+    646 GREATER_OR_EQUAL bool <- 644 645
+    647 BRANCH target 106 alternative 101 <- 646
+  block 89 scope 9 BLOCK length 11
+    652 LOAD usize slot 52
+    653 NUMBER usize 1
+    654 ADD usize <- 652 653
+    655 LOAD usize slot 50
+    656 ADD usize <- 655 654
+    657 LOAD_INDIRECT u8 <- 656
+    658 STORE slot 57 <- 657
+    659 LOAD u8 slot 57
+    660 NUMBER u8 128
+    661 GREATER_OR_EQUAL bool <- 659 660
+    662 BRANCH target 107 alternative 101 <- 661
+  block 90 scope 9 BLOCK length 11
+    667 LOAD usize slot 52
+    668 NUMBER usize 2
+    669 ADD usize <- 667 668
+    670 LOAD usize slot 50
+    671 ADD usize <- 670 669
+    672 LOAD_INDIRECT u8 <- 671
+    673 STORE slot 58 <- 672
+    674 LOAD u8 slot 58
+    675 NUMBER u8 128
+    676 GREATER_OR_EQUAL bool <- 674 675
+    677 BRANCH target 108 alternative 101 <- 676
+  block 91 scope 9 BLOCK length 5
+    682 LOAD usize slot 52
+    683 NUMBER usize 3
+    684 ADD usize <- 682 683
+    685 STORE slot 52 <- 684
+    686 JUMP target 77
+  block 92 scope 9 BLOCK length 4
+    687 LOAD u8 slot 53
+    688 NUMBER u8 244
+    689 LESS_OR_EQUAL bool <- 687 688
+    690 BRANCH target 93 alternative 101 <- 689
+  block 93 scope 9 BLOCK length 4
+    691 LOAD u8 slot 53
+    692 NUMBER u8 240
+    693 EQUAL_TO bool <- 691 692
+    694 BRANCH target 94 alternative 97 <- 693
+  block 94 scope 9 BLOCK length 11
+    699 LOAD usize slot 52
+    700 NUMBER usize 1
+    701 ADD usize <- 699 700
+    702 LOAD usize slot 50
+    703 ADD usize <- 702 701
+    704 LOAD_INDIRECT u8 <- 703
+    705 STORE slot 59 <- 704
+    706 LOAD u8 slot 59
+    707 NUMBER u8 144
+    708 GREATER_OR_EQUAL bool <- 706 707
+    709 BRANCH target 109 alternative 101 <- 708
+  block 95 scope 9 BLOCK length 11
+    714 LOAD usize slot 52
+    715 NUMBER usize 1
+    716 ADD usize <- 714 715
+    717 LOAD usize slot 50
+    718 ADD usize <- 717 716
+    719 LOAD_INDIRECT u8 <- 718
+    720 STORE slot 60 <- 719
+    721 LOAD u8 slot 60
+    722 NUMBER u8 128
+    723 GREATER_OR_EQUAL bool <- 721 722
+    724 BRANCH target 110 alternative 101 <- 723
+  block 96 scope 9 BLOCK length 11
+    729 LOAD usize slot 52
+    730 NUMBER usize 1
+    731 ADD usize <- 729 730
+    732 LOAD usize slot 50
+    733 ADD usize <- 732 731
+    734 LOAD_INDIRECT u8 <- 733
+    735 STORE slot 61 <- 734
+    736 LOAD u8 slot 61
+    737 NUMBER u8 128
+    738 GREATER_OR_EQUAL bool <- 736 737
+    739 BRANCH target 111 alternative 101 <- 738
+  block 97 scope 9 BLOCK length 4
+    695 LOAD u8 slot 53
+    696 NUMBER u8 244
+    697 EQUAL_TO bool <- 695 696
+    698 BRANCH target 95 alternative 96 <- 697
+  block 98 scope 9 BLOCK length 11
+    744 LOAD usize slot 52
+    745 NUMBER usize 2
+    746 ADD usize <- 744 745
+    747 LOAD usize slot 50
+    748 ADD usize <- 747 746
+    749 LOAD_INDIRECT u8 <- 748
+    750 STORE slot 62 <- 749
+    751 LOAD u8 slot 62
+    752 NUMBER u8 128
+    753 GREATER_OR_EQUAL bool <- 751 752
+    754 BRANCH target 112 alternative 101 <- 753
+  block 99 scope 9 BLOCK length 11
+    759 LOAD usize slot 52
+    760 NUMBER usize 3
+    761 ADD usize <- 759 760
+    762 LOAD usize slot 50
+    763 ADD usize <- 762 761
+    764 LOAD_INDIRECT u8 <- 763
+    765 STORE slot 63 <- 764
+    766 LOAD u8 slot 63
+    767 NUMBER u8 128
+    768 GREATER_OR_EQUAL bool <- 766 767
+    769 BRANCH target 113 alternative 101 <- 768
+  block 100 scope 9 BLOCK length 5
+    774 LOAD usize slot 52
+    775 NUMBER usize 4
+    776 ADD usize <- 774 775
+    777 STORE slot 52 <- 776
+    778 JUMP target 77
+  block 101 scope 9 BLOCK length 3
+    779 NUMBER u8 1
+    780 RANGE_CHECK u8 <- 779 range 0 .. 0 representation
+    781 JUMP target 102
+  block 102 scope 9 BLOCK length 16
+    782 LOAD usize slot 52
+    783 STORE slot 51 <- 782
+    784 LOAD usize slot 50
+    785 STORE_FIELD slot 49 field 1 <- 784
+    786 LOAD usize slot 51
+    787 STORE_FIELD slot 49 field 2 <- 786
+    788 PLACE_ADDRESS usize
+    789 STORE slot 64 <- 788
+    790 LOAD usize slot 64
+    791 STORAGE_ADDRESS usize storage slot 65
+    792 CALL none callee 2 c_bytes signature 2 <- 791 790
+    793 LOAD usize slot 64
+    794 STORE slot 67 <- 793
+    795 NUMBER usize 0
+    796 STORE slot 69 <- 795
+    797 JUMP target 114
+  block 103 scope 9 BLOCK length 4
+    573 LOAD u8 slot 53
+    574 NUMBER u8 128
+    575 LESS_THAN bool <- 573 574
+    576 BRANCH target 79 alternative 80 <- 575
+  block 104 scope 9 BLOCK length 4
+    601 LOAD u8 slot 54
+    602 NUMBER u8 191
+    603 LESS_OR_EQUAL bool <- 601 602
+    604 BRANCH target 83 alternative 101 <- 603
+  block 105 scope 9 BLOCK length 4
+    629 LOAD u8 slot 55
+    630 NUMBER u8 191
+    631 LESS_OR_EQUAL bool <- 629 630
+    632 BRANCH target 90 alternative 101 <- 631
+  block 106 scope 9 BLOCK length 4
+    648 LOAD u8 slot 56
+    649 NUMBER u8 159
+    650 LESS_OR_EQUAL bool <- 648 649
+    651 BRANCH target 90 alternative 101 <- 650
+  block 107 scope 9 BLOCK length 4
+    663 LOAD u8 slot 57
+    664 NUMBER u8 191
+    665 LESS_OR_EQUAL bool <- 663 664
+    666 BRANCH target 90 alternative 101 <- 665
+  block 108 scope 9 BLOCK length 4
+    678 LOAD u8 slot 58
+    679 NUMBER u8 191
+    680 LESS_OR_EQUAL bool <- 678 679
+    681 BRANCH target 91 alternative 101 <- 680
+  block 109 scope 9 BLOCK length 4
+    710 LOAD u8 slot 59
+    711 NUMBER u8 191
+    712 LESS_OR_EQUAL bool <- 710 711
+    713 BRANCH target 98 alternative 101 <- 712
+  block 110 scope 9 BLOCK length 4
+    725 LOAD u8 slot 60
+    726 NUMBER u8 143
+    727 LESS_OR_EQUAL bool <- 725 726
+    728 BRANCH target 98 alternative 101 <- 727
+  block 111 scope 9 BLOCK length 4
+    740 LOAD u8 slot 61
+    741 NUMBER u8 191
+    742 LESS_OR_EQUAL bool <- 740 741
+    743 BRANCH target 98 alternative 101 <- 742
+  block 112 scope 9 BLOCK length 4
+    755 LOAD u8 slot 62
+    756 NUMBER u8 191
+    757 LESS_OR_EQUAL bool <- 755 756
+    758 BRANCH target 99 alternative 101 <- 757
+  block 113 scope 9 BLOCK length 4
+    770 LOAD u8 slot 63
+    771 NUMBER u8 191
+    772 LESS_OR_EQUAL bool <- 770 771
+    773 BRANCH target 100 alternative 101 <- 772
+  block 114 scope 9 BLOCK length 1
+    798 JUMP target 115
+  block 115 scope 9 BLOCK length 9
+    799 LOAD usize slot 69
+    800 LOAD usize slot 67
+    801 ADD usize <- 800 799
+    802 LOAD_INDIRECT u8 <- 801
+    803 STORE slot 70 <- 802
+    804 LOAD u8 slot 70
+    805 NUMBER u8 0
+    806 EQUAL_TO bool <- 804 805
+    807 BRANCH target 139 alternative 140 <- 806
+  block 116 scope 9 BLOCK length 5
+    812 LOAD usize slot 69
+    813 NUMBER usize 1
+    814 ADD usize <- 812 813
+    815 STORE slot 69 <- 814
+    816 JUMP target 114
+  block 117 scope 9 BLOCK length 4
+    817 LOAD u8 slot 70
+    818 NUMBER u8 194
+    819 LESS_THAN bool <- 817 818
+    820 BRANCH target 138 alternative 118 <- 819
+  block 118 scope 9 BLOCK length 4
+    821 LOAD u8 slot 70
+    822 NUMBER u8 224
+    823 LESS_THAN bool <- 821 822
+    824 BRANCH target 119 alternative 121 <- 823
+  block 119 scope 9 BLOCK length 11
+    825 LOAD usize slot 69
+    826 NUMBER usize 1
+    827 ADD usize <- 825 826
+    828 LOAD usize slot 67
+    829 ADD usize <- 828 827
+    830 LOAD_INDIRECT u8 <- 829
+    831 STORE slot 71 <- 830
+    832 LOAD u8 slot 71
+    833 NUMBER u8 128
+    834 GREATER_OR_EQUAL bool <- 832 833
+    835 BRANCH target 141 alternative 138 <- 834
+  block 120 scope 9 BLOCK length 5
+    840 LOAD usize slot 69
+    841 NUMBER usize 2
+    842 ADD usize <- 840 841
+    843 STORE slot 69 <- 842
+    844 JUMP target 114
+  block 121 scope 9 BLOCK length 4
+    845 LOAD u8 slot 70
+    846 NUMBER u8 240
+    847 LESS_THAN bool <- 845 846
+    848 BRANCH target 122 alternative 129 <- 847
+  block 122 scope 9 BLOCK length 4
+    849 LOAD u8 slot 70
+    850 NUMBER u8 224
+    851 EQUAL_TO bool <- 849 850
+    852 BRANCH target 124 alternative 123 <- 851
+  block 123 scope 9 BLOCK length 4
+    868 LOAD u8 slot 70
+    869 NUMBER u8 237
+    870 EQUAL_TO bool <- 868 869
+    871 BRANCH target 125 alternative 126 <- 870
+  block 124 scope 9 BLOCK length 11
+    853 LOAD usize slot 69
+    854 NUMBER usize 1
+    855 ADD usize <- 853 854
+    856 LOAD usize slot 67
+    857 ADD usize <- 856 855
+    858 LOAD_INDIRECT u8 <- 857
+    859 STORE slot 72 <- 858
+    860 LOAD u8 slot 72
+    861 NUMBER u8 160
+    862 GREATER_OR_EQUAL bool <- 860 861
+    863 BRANCH target 142 alternative 138 <- 862
+  block 125 scope 9 BLOCK length 11
+    872 LOAD usize slot 69
+    873 NUMBER usize 1
+    874 ADD usize <- 872 873
+    875 LOAD usize slot 67
+    876 ADD usize <- 875 874
+    877 LOAD_INDIRECT u8 <- 876
+    878 STORE slot 73 <- 877
+    879 LOAD u8 slot 73
+    880 NUMBER u8 128
+    881 GREATER_OR_EQUAL bool <- 879 880
+    882 BRANCH target 143 alternative 138 <- 881
+  block 126 scope 9 BLOCK length 11
+    887 LOAD usize slot 69
+    888 NUMBER usize 1
+    889 ADD usize <- 887 888
+    890 LOAD usize slot 67
+    891 ADD usize <- 890 889
+    892 LOAD_INDIRECT u8 <- 891
+    893 STORE slot 74 <- 892
+    894 LOAD u8 slot 74
+    895 NUMBER u8 128
+    896 GREATER_OR_EQUAL bool <- 894 895
+    897 BRANCH target 144 alternative 138 <- 896
+  block 127 scope 9 BLOCK length 11
+    902 LOAD usize slot 69
+    903 NUMBER usize 2
+    904 ADD usize <- 902 903
+    905 LOAD usize slot 67
+    906 ADD usize <- 905 904
+    907 LOAD_INDIRECT u8 <- 906
+    908 STORE slot 75 <- 907
+    909 LOAD u8 slot 75
+    910 NUMBER u8 128
+    911 GREATER_OR_EQUAL bool <- 909 910
+    912 BRANCH target 145 alternative 138 <- 911
+  block 128 scope 9 BLOCK length 5
+    917 LOAD usize slot 69
+    918 NUMBER usize 3
+    919 ADD usize <- 917 918
+    920 STORE slot 69 <- 919
+    921 JUMP target 114
+  block 129 scope 9 BLOCK length 4
+    922 LOAD u8 slot 70
+    923 NUMBER u8 244
+    924 LESS_OR_EQUAL bool <- 922 923
+    925 BRANCH target 130 alternative 138 <- 924
+  block 130 scope 9 BLOCK length 4
+    926 LOAD u8 slot 70
+    927 NUMBER u8 240
+    928 EQUAL_TO bool <- 926 927
+    929 BRANCH target 131 alternative 134 <- 928
+  block 131 scope 9 BLOCK length 11
+    934 LOAD usize slot 69
+    935 NUMBER usize 1
+    936 ADD usize <- 934 935
+    937 LOAD usize slot 67
+    938 ADD usize <- 937 936
+    939 LOAD_INDIRECT u8 <- 938
+    940 STORE slot 76 <- 939
+    941 LOAD u8 slot 76
+    942 NUMBER u8 144
+    943 GREATER_OR_EQUAL bool <- 941 942
+    944 BRANCH target 146 alternative 138 <- 943
+  block 132 scope 9 BLOCK length 11
+    949 LOAD usize slot 69
+    950 NUMBER usize 1
+    951 ADD usize <- 949 950
+    952 LOAD usize slot 67
+    953 ADD usize <- 952 951
+    954 LOAD_INDIRECT u8 <- 953
+    955 STORE slot 77 <- 954
+    956 LOAD u8 slot 77
+    957 NUMBER u8 128
+    958 GREATER_OR_EQUAL bool <- 956 957
+    959 BRANCH target 147 alternative 138 <- 958
+  block 133 scope 9 BLOCK length 11
+    964 LOAD usize slot 69
+    965 NUMBER usize 1
+    966 ADD usize <- 964 965
+    967 LOAD usize slot 67
+    968 ADD usize <- 967 966
+    969 LOAD_INDIRECT u8 <- 968
+    970 STORE slot 78 <- 969
+    971 LOAD u8 slot 78
+    972 NUMBER u8 128
+    973 GREATER_OR_EQUAL bool <- 971 972
+    974 BRANCH target 148 alternative 138 <- 973
+  block 134 scope 9 BLOCK length 4
+    930 LOAD u8 slot 70
+    931 NUMBER u8 244
+    932 EQUAL_TO bool <- 930 931
+    933 BRANCH target 132 alternative 133 <- 932
+  block 135 scope 9 BLOCK length 11
+    979 LOAD usize slot 69
+    980 NUMBER usize 2
+    981 ADD usize <- 979 980
+    982 LOAD usize slot 67
+    983 ADD usize <- 982 981
+    984 LOAD_INDIRECT u8 <- 983
+    985 STORE slot 79 <- 984
+    986 LOAD u8 slot 79
+    987 NUMBER u8 128
+    988 GREATER_OR_EQUAL bool <- 986 987
+    989 BRANCH target 149 alternative 138 <- 988
+  block 136 scope 9 BLOCK length 11
+    994 LOAD usize slot 69
+    995 NUMBER usize 3
+    996 ADD usize <- 994 995
+    997 LOAD usize slot 67
+    998 ADD usize <- 997 996
+    999 LOAD_INDIRECT u8 <- 998
+    1000 STORE slot 80 <- 999
+    1001 LOAD u8 slot 80
+    1002 NUMBER u8 128
+    1003 GREATER_OR_EQUAL bool <- 1001 1002
+    1004 BRANCH target 150 alternative 138 <- 1003
+  block 137 scope 9 BLOCK length 5
+    1009 LOAD usize slot 69
+    1010 NUMBER usize 4
+    1011 ADD usize <- 1009 1010
+    1012 STORE slot 69 <- 1011
+    1013 JUMP target 114
+  block 138 scope 9 BLOCK length 3
+    1014 NUMBER u8 1
+    1015 RANGE_CHECK u8 <- 1014 range 0 .. 0 representation
+    1016 JUMP target 139
+  block 139 scope 9 BLOCK length 33
+    1017 LOAD usize slot 69
+    1018 STORE slot 68 <- 1017
+    1019 LOAD usize slot 67
+    1020 STORE_FIELD slot 66 field 1 <- 1019
+    1021 LOAD usize slot 68
+    1022 STORE_FIELD slot 66 field 2 <- 1021
+    1023 LOAD_FIELD usize slot 3 field 1
+    1024 LOAD_FIELD usize slot 3 field 2
+    1025 STORE slot 82 <- 1023
+    1026 STORE slot 83 <- 1024
+    1027 NUMBER usize 1
+    1028 STORE slot 84 <- 1027
+    1029 NUMBER usize 1
+    1030 STORE slot 85 <- 1029
+    1031 LOAD usize slot 84
+    1032 LOAD usize slot 85
+    1033 LOAD usize slot 82
+    1034 LOAD usize slot 83
+    1035 SLICE_ADDRESS usize <- 1033 1034 1031 1032
+    1036 STORE slot 86 <- 1035
+    1037 LOAD usize slot 85
+    1038 LOAD usize slot 84
+    1039 SUBTRACT usize <- 1037 1038
+    1040 LOAD usize slot 86
+    1041 STORE_FIELD slot 81 field 1 <- 1040
+    1042 STORE_FIELD slot 81 field 2 <- 1039
+    1043 LOAD_FIELD usize slot 81 field 1
+    1044 LOAD_FIELD usize slot 81 field 2
+    1045 STORE slot 91 <- 1043
+    1046 STORE slot 92 <- 1044
+    1047 NUMBER usize 0
+    1048 STORE slot 93 <- 1047
+    1049 JUMP target 151
+  block 140 scope 9 BLOCK length 4
+    808 LOAD u8 slot 70
+    809 NUMBER u8 128
+    810 LESS_THAN bool <- 808 809
+    811 BRANCH target 116 alternative 117 <- 810
+  block 141 scope 9 BLOCK length 4
+    836 LOAD u8 slot 71
+    837 NUMBER u8 191
+    838 LESS_OR_EQUAL bool <- 836 837
+    839 BRANCH target 120 alternative 138 <- 838
+  block 142 scope 9 BLOCK length 4
+    864 LOAD u8 slot 72
+    865 NUMBER u8 191
+    866 LESS_OR_EQUAL bool <- 864 865
+    867 BRANCH target 127 alternative 138 <- 866
+  block 143 scope 9 BLOCK length 4
+    883 LOAD u8 slot 73
+    884 NUMBER u8 159
+    885 LESS_OR_EQUAL bool <- 883 884
+    886 BRANCH target 127 alternative 138 <- 885
+  block 144 scope 9 BLOCK length 4
+    898 LOAD u8 slot 74
+    899 NUMBER u8 191
+    900 LESS_OR_EQUAL bool <- 898 899
+    901 BRANCH target 127 alternative 138 <- 900
+  block 145 scope 9 BLOCK length 4
+    913 LOAD u8 slot 75
+    914 NUMBER u8 191
+    915 LESS_OR_EQUAL bool <- 913 914
+    916 BRANCH target 128 alternative 138 <- 915
+  block 146 scope 9 BLOCK length 4
+    945 LOAD u8 slot 76
+    946 NUMBER u8 191
+    947 LESS_OR_EQUAL bool <- 945 946
+    948 BRANCH target 135 alternative 138 <- 947
+  block 147 scope 9 BLOCK length 4
+    960 LOAD u8 slot 77
+    961 NUMBER u8 143
+    962 LESS_OR_EQUAL bool <- 960 961
+    963 BRANCH target 135 alternative 138 <- 962
+  block 148 scope 9 BLOCK length 4
+    975 LOAD u8 slot 78
+    976 NUMBER u8 191
+    977 LESS_OR_EQUAL bool <- 975 976
+    978 BRANCH target 135 alternative 138 <- 977
+  block 149 scope 9 BLOCK length 4
+    990 LOAD u8 slot 79
+    991 NUMBER u8 191
+    992 LESS_OR_EQUAL bool <- 990 991
+    993 BRANCH target 136 alternative 138 <- 992
+  block 150 scope 9 BLOCK length 4
+    1005 LOAD u8 slot 80
+    1006 NUMBER u8 191
+    1007 LESS_OR_EQUAL bool <- 1005 1006
+    1008 BRANCH target 137 alternative 138 <- 1007
+  block 151 scope 9 BLOCK length 4
+    1050 LOAD usize slot 93
+    1051 LOAD usize slot 92
+    1052 EQUAL_TO bool <- 1050 1051
+    1053 BRANCH target 176 alternative 152 <- 1052
+  block 152 scope 9 BLOCK length 10
+    1054 LOAD usize slot 93
+    1055 LOAD usize slot 91
+    1056 LOAD usize slot 92
+    1057 SLICE_ADDRESS usize <- 1055 1056 1054 1054
+    1058 LOAD_INDIRECT u8 <- 1057
+    1059 STORE slot 94 <- 1058
+    1060 LOAD u8 slot 94
+    1061 NUMBER u8 128
+    1062 LESS_THAN bool <- 1060 1061
+    1063 BRANCH target 153 alternative 154 <- 1062
+  block 153 scope 9 BLOCK length 5
+    1064 LOAD usize slot 93
+    1065 NUMBER usize 1
+    1066 ADD usize <- 1064 1065
+    1067 STORE slot 93 <- 1066
+    1068 JUMP target 151
+  block 154 scope 9 BLOCK length 4
+    1069 LOAD u8 slot 94
+    1070 NUMBER u8 194
+    1071 LESS_THAN bool <- 1069 1070
+    1072 BRANCH target 175 alternative 155 <- 1071
+  block 155 scope 9 BLOCK length 4
+    1073 LOAD u8 slot 94
+    1074 NUMBER u8 224
+    1075 LESS_THAN bool <- 1073 1074
+    1076 BRANCH target 156 alternative 158 <- 1075
+  block 156 scope 9 BLOCK length 12
+    1077 LOAD usize slot 93
+    1078 NUMBER usize 1
+    1079 ADD usize <- 1077 1078
+    1080 LOAD usize slot 91
+    1081 LOAD usize slot 92
+    1082 SLICE_ADDRESS usize <- 1080 1081 1079 1079
+    1083 LOAD_INDIRECT u8 <- 1082
+    1084 STORE slot 95 <- 1083
+    1085 LOAD u8 slot 95
+    1086 NUMBER u8 128
+    1087 GREATER_OR_EQUAL bool <- 1085 1086
+    1088 BRANCH target 177 alternative 175 <- 1087
+  block 157 scope 9 BLOCK length 5
+    1093 LOAD usize slot 93
+    1094 NUMBER usize 2
+    1095 ADD usize <- 1093 1094
+    1096 STORE slot 93 <- 1095
+    1097 JUMP target 151
+  block 158 scope 9 BLOCK length 4
+    1098 LOAD u8 slot 94
+    1099 NUMBER u8 240
+    1100 LESS_THAN bool <- 1098 1099
+    1101 BRANCH target 159 alternative 166 <- 1100
+  block 159 scope 9 BLOCK length 4
+    1102 LOAD u8 slot 94
+    1103 NUMBER u8 224
+    1104 EQUAL_TO bool <- 1102 1103
+    1105 BRANCH target 161 alternative 160 <- 1104
+  block 160 scope 9 BLOCK length 4
+    1122 LOAD u8 slot 94
+    1123 NUMBER u8 237
+    1124 EQUAL_TO bool <- 1122 1123
+    1125 BRANCH target 162 alternative 163 <- 1124
+  block 161 scope 9 BLOCK length 12
+    1106 LOAD usize slot 93
+    1107 NUMBER usize 1
+    1108 ADD usize <- 1106 1107
+    1109 LOAD usize slot 91
+    1110 LOAD usize slot 92
+    1111 SLICE_ADDRESS usize <- 1109 1110 1108 1108
+    1112 LOAD_INDIRECT u8 <- 1111
+    1113 STORE slot 96 <- 1112
+    1114 LOAD u8 slot 96
+    1115 NUMBER u8 160
+    1116 GREATER_OR_EQUAL bool <- 1114 1115
+    1117 BRANCH target 178 alternative 175 <- 1116
+  block 162 scope 9 BLOCK length 12
+    1126 LOAD usize slot 93
+    1127 NUMBER usize 1
+    1128 ADD usize <- 1126 1127
+    1129 LOAD usize slot 91
+    1130 LOAD usize slot 92
+    1131 SLICE_ADDRESS usize <- 1129 1130 1128 1128
+    1132 LOAD_INDIRECT u8 <- 1131
+    1133 STORE slot 97 <- 1132
+    1134 LOAD u8 slot 97
+    1135 NUMBER u8 128
+    1136 GREATER_OR_EQUAL bool <- 1134 1135
+    1137 BRANCH target 179 alternative 175 <- 1136
+  block 163 scope 9 BLOCK length 12
+    1142 LOAD usize slot 93
+    1143 NUMBER usize 1
+    1144 ADD usize <- 1142 1143
+    1145 LOAD usize slot 91
+    1146 LOAD usize slot 92
+    1147 SLICE_ADDRESS usize <- 1145 1146 1144 1144
+    1148 LOAD_INDIRECT u8 <- 1147
+    1149 STORE slot 98 <- 1148
+    1150 LOAD u8 slot 98
+    1151 NUMBER u8 128
+    1152 GREATER_OR_EQUAL bool <- 1150 1151
+    1153 BRANCH target 180 alternative 175 <- 1152
+  block 164 scope 9 BLOCK length 12
+    1158 LOAD usize slot 93
+    1159 NUMBER usize 2
+    1160 ADD usize <- 1158 1159
+    1161 LOAD usize slot 91
+    1162 LOAD usize slot 92
+    1163 SLICE_ADDRESS usize <- 1161 1162 1160 1160
+    1164 LOAD_INDIRECT u8 <- 1163
+    1165 STORE slot 99 <- 1164
+    1166 LOAD u8 slot 99
+    1167 NUMBER u8 128
+    1168 GREATER_OR_EQUAL bool <- 1166 1167
+    1169 BRANCH target 181 alternative 175 <- 1168
+  block 165 scope 9 BLOCK length 5
+    1174 LOAD usize slot 93
+    1175 NUMBER usize 3
+    1176 ADD usize <- 1174 1175
+    1177 STORE slot 93 <- 1176
+    1178 JUMP target 151
+  block 166 scope 9 BLOCK length 4
+    1179 LOAD u8 slot 94
+    1180 NUMBER u8 244
+    1181 LESS_OR_EQUAL bool <- 1179 1180
+    1182 BRANCH target 167 alternative 175 <- 1181
+  block 167 scope 9 BLOCK length 4
+    1183 LOAD u8 slot 94
+    1184 NUMBER u8 240
+    1185 EQUAL_TO bool <- 1183 1184
+    1186 BRANCH target 168 alternative 171 <- 1185
+  block 168 scope 9 BLOCK length 12
+    1191 LOAD usize slot 93
+    1192 NUMBER usize 1
+    1193 ADD usize <- 1191 1192
+    1194 LOAD usize slot 91
+    1195 LOAD usize slot 92
+    1196 SLICE_ADDRESS usize <- 1194 1195 1193 1193
+    1197 LOAD_INDIRECT u8 <- 1196
+    1198 STORE slot 100 <- 1197
+    1199 LOAD u8 slot 100
+    1200 NUMBER u8 144
+    1201 GREATER_OR_EQUAL bool <- 1199 1200
+    1202 BRANCH target 182 alternative 175 <- 1201
+  block 169 scope 9 BLOCK length 12
+    1207 LOAD usize slot 93
+    1208 NUMBER usize 1
+    1209 ADD usize <- 1207 1208
+    1210 LOAD usize slot 91
+    1211 LOAD usize slot 92
+    1212 SLICE_ADDRESS usize <- 1210 1211 1209 1209
+    1213 LOAD_INDIRECT u8 <- 1212
+    1214 STORE slot 101 <- 1213
+    1215 LOAD u8 slot 101
+    1216 NUMBER u8 128
+    1217 GREATER_OR_EQUAL bool <- 1215 1216
+    1218 BRANCH target 183 alternative 175 <- 1217
+  block 170 scope 9 BLOCK length 12
+    1223 LOAD usize slot 93
+    1224 NUMBER usize 1
+    1225 ADD usize <- 1223 1224
+    1226 LOAD usize slot 91
+    1227 LOAD usize slot 92
+    1228 SLICE_ADDRESS usize <- 1226 1227 1225 1225
+    1229 LOAD_INDIRECT u8 <- 1228
+    1230 STORE slot 102 <- 1229
+    1231 LOAD u8 slot 102
+    1232 NUMBER u8 128
+    1233 GREATER_OR_EQUAL bool <- 1231 1232
+    1234 BRANCH target 184 alternative 175 <- 1233
+  block 171 scope 9 BLOCK length 4
+    1187 LOAD u8 slot 94
+    1188 NUMBER u8 244
+    1189 EQUAL_TO bool <- 1187 1188
+    1190 BRANCH target 169 alternative 170 <- 1189
+  block 172 scope 9 BLOCK length 12
+    1239 LOAD usize slot 93
+    1240 NUMBER usize 2
+    1241 ADD usize <- 1239 1240
+    1242 LOAD usize slot 91
+    1243 LOAD usize slot 92
+    1244 SLICE_ADDRESS usize <- 1242 1243 1241 1241
+    1245 LOAD_INDIRECT u8 <- 1244
+    1246 STORE slot 103 <- 1245
+    1247 LOAD u8 slot 103
+    1248 NUMBER u8 128
+    1249 GREATER_OR_EQUAL bool <- 1247 1248
+    1250 BRANCH target 185 alternative 175 <- 1249
+  block 173 scope 9 BLOCK length 12
+    1255 LOAD usize slot 93
+    1256 NUMBER usize 3
+    1257 ADD usize <- 1255 1256
+    1258 LOAD usize slot 91
+    1259 LOAD usize slot 92
+    1260 SLICE_ADDRESS usize <- 1258 1259 1257 1257
+    1261 LOAD_INDIRECT u8 <- 1260
+    1262 STORE slot 104 <- 1261
+    1263 LOAD u8 slot 104
+    1264 NUMBER u8 128
+    1265 GREATER_OR_EQUAL bool <- 1263 1264
+    1266 BRANCH target 186 alternative 175 <- 1265
+  block 174 scope 9 BLOCK length 5
+    1271 LOAD usize slot 93
+    1272 NUMBER usize 4
+    1273 ADD usize <- 1271 1272
+    1274 STORE slot 93 <- 1273
+    1275 JUMP target 151
+  block 175 scope 9 BLOCK length 3
+    1276 NUMBER u8 1
+    1277 RANGE_CHECK u8 <- 1276 range 0 .. 0 representation
+    1278 JUMP target 176
+  block 176 scope 9 BLOCK length 20
+    1279 LOAD usize slot 91
+    1280 STORE_FIELD slot 90 field 1 <- 1279
+    1281 LOAD usize slot 92
+    1282 STORE_FIELD slot 90 field 2 <- 1281
+    1283 LOAD_FIELD usize slot 90 field 1
+    1284 LOAD_FIELD usize slot 90 field 2
+    1285 STORE slot 88 <- 1283
+    1286 STORE slot 89 <- 1284
+    1287 LOAD usize slot 88
+    1288 STORE_FIELD slot 87 field 1 <- 1287
+    1289 LOAD usize slot 89
+    1290 STORE_FIELD slot 87 field 2 <- 1289
+    1291 LOAD_FIELD usize slot 24 field 1
+    1292 LOAD_FIELD usize slot 24 field 2
+    1293 STORE slot 115 <- 1292
+    1294 NUMBER usize 10
+    1295 LOAD usize slot 115
+    1296 EQUAL_TO bool <- 1295 1294
+    1297 STORE slot 114 <- 1296
+    1298 BRANCH target 187 alternative 188 <- 1296
+  block 177 scope 9 BLOCK length 4
+    1089 LOAD u8 slot 95
+    1090 NUMBER u8 191
+    1091 LESS_OR_EQUAL bool <- 1089 1090
+    1092 BRANCH target 157 alternative 175 <- 1091
+  block 178 scope 9 BLOCK length 4
+    1118 LOAD u8 slot 96
+    1119 NUMBER u8 191
+    1120 LESS_OR_EQUAL bool <- 1118 1119
+    1121 BRANCH target 164 alternative 175 <- 1120
+  block 179 scope 9 BLOCK length 4
+    1138 LOAD u8 slot 97
+    1139 NUMBER u8 159
+    1140 LESS_OR_EQUAL bool <- 1138 1139
+    1141 BRANCH target 164 alternative 175 <- 1140
+  block 180 scope 9 BLOCK length 4
+    1154 LOAD u8 slot 98
+    1155 NUMBER u8 191
+    1156 LESS_OR_EQUAL bool <- 1154 1155
+    1157 BRANCH target 164 alternative 175 <- 1156
+  block 181 scope 9 BLOCK length 4
+    1170 LOAD u8 slot 99
+    1171 NUMBER u8 191
+    1172 LESS_OR_EQUAL bool <- 1170 1171
+    1173 BRANCH target 165 alternative 175 <- 1172
+  block 182 scope 9 BLOCK length 4
+    1203 LOAD u8 slot 100
+    1204 NUMBER u8 191
+    1205 LESS_OR_EQUAL bool <- 1203 1204
+    1206 BRANCH target 172 alternative 175 <- 1205
+  block 183 scope 9 BLOCK length 4
+    1219 LOAD u8 slot 101
+    1220 NUMBER u8 143
+    1221 LESS_OR_EQUAL bool <- 1219 1220
+    1222 BRANCH target 172 alternative 175 <- 1221
+  block 184 scope 9 BLOCK length 4
+    1235 LOAD u8 slot 102
+    1236 NUMBER u8 191
+    1237 LESS_OR_EQUAL bool <- 1235 1236
+    1238 BRANCH target 172 alternative 175 <- 1237
+  block 185 scope 9 BLOCK length 4
+    1251 LOAD u8 slot 103
+    1252 NUMBER u8 191
+    1253 LESS_OR_EQUAL bool <- 1251 1252
+    1254 BRANCH target 173 alternative 175 <- 1253
+  block 186 scope 9 BLOCK length 4
+    1267 LOAD u8 slot 104
+    1268 NUMBER u8 191
+    1269 LESS_OR_EQUAL bool <- 1267 1268
+    1270 BRANCH target 174 alternative 175 <- 1269
+  block 187 scope 9 BLOCK length 17
+    1299 LOAD_FIELD usize slot 24 field 1
+    1300 LOAD_FIELD usize slot 24 field 2
+    1301 STORE slot 116 <- 1299
+    1302 STORE slot 117 <- 1300
+    1303 NUMBER usize 1
+    1304 LOAD usize slot 116
+    1305 LOAD usize slot 117
+    1306 SLICE_ADDRESS usize <- 1304 1305 1303 1303
+    1307 STORE slot 118 <- 1306
+    1308 LOAD usize slot 118
+    1309 LOAD_INDIRECT u8 address slot 118 <- 1308
+    1310 STORE slot 119 <- 1309
+    1311 NUMBER u8 194
+    1312 LOAD u8 slot 119
+    1313 EQUAL_TO bool <- 1312 1311
+    1314 STORE slot 114 <- 1313
+    1315 JUMP target 188
+  block 188 scope 9 BLOCK length 3
+    1316 LOAD bool slot 114
+    1317 STORE slot 113 <- 1316
+    1318 BRANCH target 189 alternative 190 <- 1316
+  block 189 scope 9 BLOCK length 17
+    1319 LOAD_FIELD usize slot 24 field 1
+    1320 LOAD_FIELD usize slot 24 field 2
+    1321 STORE slot 120 <- 1319
+    1322 STORE slot 121 <- 1320
+    1323 NUMBER usize 9
+    1324 LOAD usize slot 120
+    1325 LOAD usize slot 121
+    1326 SLICE_ADDRESS usize <- 1324 1325 1323 1323
+    1327 STORE slot 122 <- 1326
+    1328 LOAD usize slot 122
+    1329 LOAD_INDIRECT u8 address slot 122 <- 1328
+    1330 STORE slot 123 <- 1329
+    1331 NUMBER u8 128
+    1332 LOAD u8 slot 123
+    1333 EQUAL_TO bool <- 1332 1331
+    1334 STORE slot 113 <- 1333
+    1335 JUMP target 190
+  block 190 scope 9 BLOCK length 3
+    1336 LOAD bool slot 113
+    1337 STORE slot 112 <- 1336
+    1338 BRANCH target 191 alternative 192 <- 1336
+  block 191 scope 9 BLOCK length 8
+    1339 LOAD_FIELD usize slot 26 field 1
+    1340 LOAD_FIELD usize slot 26 field 2
+    1341 STORE slot 124 <- 1340
+    1342 NUMBER usize 10
+    1343 LOAD usize slot 124
+    1344 EQUAL_TO bool <- 1343 1342
+    1345 STORE slot 112 <- 1344
+    1346 JUMP target 192
+  block 192 scope 9 BLOCK length 3
+    1347 LOAD bool slot 112
+    1348 STORE slot 111 <- 1347
+    1349 BRANCH target 193 alternative 194 <- 1347
+  block 193 scope 9 BLOCK length 8
+    1350 LOAD_FIELD usize slot 45 field 1
+    1351 LOAD_FIELD usize slot 45 field 2
+    1352 STORE slot 125 <- 1351
+    1353 NUMBER usize 1
+    1354 LOAD usize slot 125
+    1355 EQUAL_TO bool <- 1354 1353
+    1356 STORE slot 111 <- 1355
+    1357 JUMP target 194
+  block 194 scope 9 BLOCK length 3
+    1358 LOAD bool slot 111
+    1359 STORE slot 110 <- 1358
+    1360 BRANCH target 195 alternative 196 <- 1358
+  block 195 scope 9 BLOCK length 17
+    1361 LOAD_FIELD usize slot 45 field 1
+    1362 LOAD_FIELD usize slot 45 field 2
+    1363 STORE slot 126 <- 1361
+    1364 STORE slot 127 <- 1362
+    1365 NUMBER usize 0
+    1366 LOAD usize slot 126
+    1367 LOAD usize slot 127
+    1368 SLICE_ADDRESS usize <- 1366 1367 1365 1365
+    1369 STORE slot 128 <- 1368
+    1370 LOAD usize slot 128
+    1371 LOAD_INDIRECT u8 address slot 128 <- 1370
+    1372 STORE slot 129 <- 1371
+    1373 NUMBER u8 65
+    1374 LOAD u8 slot 129
+    1375 EQUAL_TO bool <- 1374 1373
+    1376 STORE slot 110 <- 1375
+    1377 JUMP target 196
+  block 196 scope 9 BLOCK length 3
+    1378 LOAD bool slot 110
+    1379 STORE slot 109 <- 1378
+    1380 BRANCH target 197 alternative 198 <- 1378
+  block 197 scope 9 BLOCK length 8
+    1381 LOAD_FIELD usize slot 49 field 1
+    1382 LOAD_FIELD usize slot 49 field 2
+    1383 STORE slot 130 <- 1382
+    1384 NUMBER usize 1
+    1385 LOAD usize slot 130
+    1386 EQUAL_TO bool <- 1385 1384
+    1387 STORE slot 109 <- 1386
+    1388 JUMP target 198
+  block 198 scope 9 BLOCK length 3
+    1389 LOAD bool slot 109
+    1390 STORE slot 108 <- 1389
+    1391 BRANCH target 199 alternative 200 <- 1389
+  block 199 scope 9 BLOCK length 8
+    1392 LOAD_FIELD usize slot 65 field 1
+    1393 LOAD_FIELD usize slot 65 field 2
+    1394 STORE slot 131 <- 1393
+    1395 NUMBER usize 0
+    1396 LOAD usize slot 131
+    1397 EQUAL_TO bool <- 1396 1395
+    1398 STORE slot 108 <- 1397
+    1399 JUMP target 200
+  block 200 scope 9 BLOCK length 3
+    1400 LOAD bool slot 108
+    1401 STORE slot 107 <- 1400
+    1402 BRANCH target 201 alternative 202 <- 1400
+  block 201 scope 9 BLOCK length 8
+    1403 LOAD_FIELD usize slot 66 field 1
+    1404 LOAD_FIELD usize slot 66 field 2
+    1405 STORE slot 132 <- 1404
+    1406 NUMBER usize 0
+    1407 LOAD usize slot 132
+    1408 EQUAL_TO bool <- 1407 1406
+    1409 STORE slot 107 <- 1408
+    1410 JUMP target 202
+  block 202 scope 9 BLOCK length 3
+    1411 LOAD bool slot 107
+    1412 STORE slot 106 <- 1411
+    1413 BRANCH target 203 alternative 204 <- 1411
+  block 203 scope 9 BLOCK length 8
+    1414 LOAD_FIELD usize slot 87 field 1
+    1415 LOAD_FIELD usize slot 87 field 2
+    1416 STORE slot 133 <- 1415
+    1417 NUMBER usize 0
+    1418 LOAD usize slot 133
+    1419 EQUAL_TO bool <- 1418 1417
+    1420 STORE slot 106 <- 1419
+    1421 JUMP target 204
+  block 204 scope 9 BLOCK length 3
+    1422 LOAD bool slot 106
+    1423 STORE slot 105 <- 1422
+    1424 BRANCH target 205 alternative 206 <- 1422
+  block 205 scope 9 BLOCK length 27
+    1425 LOAD_FIELD usize slot 24 field 1
+    1426 LOAD_FIELD usize slot 24 field 2
+    1427 STORE slot 134 <- 1425
+    1428 STORE slot 135 <- 1426
+    1429 NUMBER usize 0
+    1430 LOAD usize slot 134
+    1431 LOAD usize slot 135
+    1432 SLICE_ADDRESS usize <- 1430 1431 1429 1429
+    1433 STORE slot 136 <- 1432
+    1434 PLACE_ADDRESS usize
+    1435 CONVERSION usize <- 1434
+    1436 STORE slot 137 <- 1435
+    1437 LOAD_FIELD usize slot 3 field 1
+    1438 LOAD_FIELD usize slot 3 field 2
+    1439 STORE slot 138 <- 1437
+    1440 STORE slot 139 <- 1438
+    1441 NUMBER usize 0
+    1442 LOAD usize slot 138
+    1443 LOAD usize slot 139
+    1444 SLICE_ADDRESS usize <- 1442 1443 1441 1441
+    1445 STORE slot 140 <- 1444
+    1446 PLACE_ADDRESS usize
+    1447 CONVERSION usize <- 1446
+    1448 LOAD usize slot 137
+    1449 EQUAL_TO bool <- 1448 1447
+    1450 STORE slot 105 <- 1449
+    1451 JUMP target 206
+  block 206 scope 9 BLOCK length 2
+    1452 LOAD bool slot 105
+    1453 BRANCH target 207 alternative 208 <- 1452
+  block 207 scope 10 BLOCK length 3
+    1454 NUMBER i32 42
+    1455 STORE slot 1 <- 1454
+    1456 JUMP target 209
+  block 208 scope 9 BLOCK length 1
+    1457 JUMP target 210
+  block 209 scope 9 BLOCK length 2
+    1461 LOAD i32 slot 1
+    1462 LEAVE <- 1461
+  block 210 scope 11 BLOCK length 3
+    1458 NUMBER i32 1
+    1459 STORE slot 1 <- 1458
+    1460 JUMP target 209
+item 4 DATUM - result array params 0 slots 0 blocks 1 values 1
+  elements 10 of u8
+  image 65 0 105 103 110 111 114 101 100 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM - result array params 0 slots 0 blocks 1 values 1
+  elements 1 of u8
+  image 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE

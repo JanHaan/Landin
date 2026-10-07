@@ -4504,7 +4504,9 @@ package body Landin.Tests.Parser_Suite is
         & "repeated := [2 of 4]" & LF
         & "address: ptr u8 = ptr(1)" & LF
         & "closure := (x: i32) -> (y: i32) = x end" & LF
-        & "one: [1]i32 = [1] next: u8 = 1" & LF;
+        & "one: [1]i32 = [1] next: u8 = 1" & LF
+        & "routine: () -> none = divide(10, 3)" & LF
+        & "(rem: residue, quot, _) := divide(10, 3) end routine" & LF;
    begin
       Read_And_Parse (Text, Codes, Total, Nodes, Held);
       Landin.Testing.Check
