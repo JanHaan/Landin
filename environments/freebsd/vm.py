@@ -36,18 +36,19 @@ def download(url, destination, digest):
     require(sha(destination) == digest, 'cached checksum: ' + str(destination))
 
 
-def prepare(arch, cache):
+def prepare(arch, cache, *, image=True):
     cache.mkdir(parents=True, exist_ok=True)
     release = LOCK['release']
     directory = 'amd64' if arch == 'amd64' else 'aarch64'
     machine = 'amd64' if arch == 'amd64' else 'arm64-aarch64'
-    image = cache / (arch + '.raw.xz')
-    download(f'https://download.freebsd.org/releases/CI-IMAGES/{release}/{directory}/Latest/'
-             f'FreeBSD-{release}-{machine}-BASIC-CI.raw.xz', image, LOCK[arch]['image'])
+    compressed = cache / (arch + '.raw.xz')
+    if image:
+        download(f'https://download.freebsd.org/releases/CI-IMAGES/{release}/{directory}/Latest/'
+                 f'FreeBSD-{release}-{machine}-BASIC-CI.raw.xz', compressed, LOCK[arch]['image'])
     raw = cache / (arch + '.raw')
-    if not raw.exists():
+    if image and not raw.exists():
         temporary = raw.with_suffix('.part')
-        with lzma.open(image, 'rb') as src, temporary.open('wb') as dst:
+        with lzma.open(compressed, 'rb') as src, temporary.open('wb') as dst:
             # Preserve the disk image's holes rather than allocating six GB.
             while block := src.read(1024 * 1024):
                 if not any(block):
@@ -77,13 +78,16 @@ def prepare(arch, cache):
 
 
 class Guest:
-    def __init__(self, port):
+    def __init__(self, port=None, *, ssh=None, sudo=False):
         self.port = port
-        self.ssh = ['ssh', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
+        self.sudo = sudo
+        self.ssh = shlex.split(ssh) if ssh else ['ssh', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
                     '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
                     '-o', 'ConnectTimeout=5', '-p', str(port), 'root@127.0.0.1']
 
     def run(self, command, *, input=None, timeout=900):
+        if self.sudo:
+            command = 'sudo -n /bin/sh -c ' + shlex.quote(command)
         return subprocess.run([*self.ssh, command], input=input, capture_output=True,
                               timeout=timeout, check=False)
 

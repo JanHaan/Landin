@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Controls for FreeBSD corpus selection and checked release inputs."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('freebsd_lane', ROOT / 'compiler/tests/freebsd/check.py')
@@ -15,6 +17,69 @@ import vm
 
 
 class FreeBSDControls(unittest.TestCase):
+    def test_prepared_execution_refuses_missing_architecture_profiles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prepared = Path(tmp)
+            manifest = {'arch': 'amd64', 'kind': 'runtime', 'scope': 'complete',
+                        'results': [{'case': 'runtime/assembly-operands', 'optimize': 'none',
+                                     'specialize': 'off', 'level': None}]}
+            (prepared / 'prepared.json').write_text(json.dumps(manifest))
+            args = SimpleNamespace(prepared=prepared, arch='amd64', kind='runtime', case=None)
+            with self.assertRaisesRegex(ValueError, 'prepared corpus incomplete'):
+                LANE.load_prepared(args)
+            manifest['results'] = []
+            (prepared / 'prepared.json').write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'empty prepared fixture selection'):
+                LANE.load_prepared(args)
+
+    def test_prepared_payload_mutation_cannot_execute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prepared = Path(tmp)
+            (prepared / 'payload.tar.gz').write_bytes(b'changed')
+            manifest = {'arch': 'amd64', 'kind': 'runtime', 'scope': 'filtered',
+                        'results': [{}], 'payload_sha256': '0' * 64}
+            (prepared / 'prepared.json').write_text(json.dumps(manifest))
+            args = SimpleNamespace(prepared=prepared, arch='amd64', kind='runtime', case=None)
+            with patch.dict('os.environ', {}, clear=True):
+                with self.assertRaisesRegex(ValueError, 'prepared payload checksum'):
+                    LANE.load_prepared(args)
+
+    def test_existing_checkout_is_refused_and_not_cleaned_up(self):
+        lane = LANE.Lane.__new__(LANE.Lane)
+        lane.output = Path('/tmp/output')
+        lane.source_root = Path('/real/checkout/Landin')
+        lane.remote_prefix = '/tmp/landin-owned'
+        lane.transferred = False
+        guest = Mock()
+        guest.checked.side_effect = ValueError('existing checkout')
+        with self.assertRaisesRegex(ValueError, 'existing checkout'):
+            lane.transfer(guest)
+        self.assertFalse(lane.transferred)
+        guest.put.assert_not_called()
+        command = guest.checked.call_args.args[0]
+        self.assertIn('set -e; test ! -e', command)
+        self.assertNotIn('rm', command)
+
+    def test_persistent_guest_limit_is_restored_after_a_failed_lane(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lane = SimpleNamespace(args=SimpleNamespace(runner_ssh='ssh ci@freebsd-vm',
+                                   output=Path(tmp)), cleanup=Mock())
+            guest = Mock()
+            guest.checked.side_effect = [b'1073741824', b'', b'kern.maxdsiz: 4294967296', b'']
+            with patch.object(LANE, 'Guest', return_value=guest):
+                with self.assertRaisesRegex(ValueError, 'execution failed'):
+                    with LANE.configured_guest(lane, None):
+                        raise ValueError('execution failed')
+            self.assertEqual(guest.checked.call_args.args[0], 'sysctl kern.maxdsiz=1073741824')
+
+    def test_runner_transport_preserves_binary_input_and_sudo_quoting(self):
+        guest = vm.Guest(ssh='ssh -T ci@freebsd-vm', sudo=True)
+        with patch.object(vm.subprocess, 'run') as run:
+            guest.run("printf '%s' '$literal'", input=b'\0\xff')
+        self.assertEqual(run.call_args.kwargs['input'], b'\0\xff')
+        self.assertEqual(run.call_args.args[0][:3], ['ssh', '-T', 'ci@freebsd-vm'])
+        self.assertIn('sudo -n /bin/sh -c', run.call_args.args[0][-1])
+
     def test_each_architecture_has_runtime_operands_and_required_c_peers(self):
         for arch in ('amd64', 'arm64'):
             self.assertIn('assembly-operands', {p.name for p, _ in LANE.select(arch, 'runtime')})

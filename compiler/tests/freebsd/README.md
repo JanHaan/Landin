@@ -1,13 +1,16 @@
 # FreeBSD hosted execution
 
 `check.py` emits with Linux `refine`, Clang and a checksum-locked FreeBSD
-sysroot, then executes in a fresh FreeBSD VM. The gate reports six independent
-jobs: runtime, native LLDB and C ABI, each on amd64 and arm64. The VM base and
-sysroot come from official 14.4 release files; hashes are in
+sysroot, then executes in a FreeBSD VM. The gate reports six independent
+jobs: runtime, native LLDB and C ABI, each on amd64 and arm64. Six Linux
+emission jobs prepare hashed payloads; an emitted result is not an execution
+verdict. The sysroot and optional local VM base come from official 14.4 release files; hashes are in
 [`environments/freebsd/lock.json`](../../../environments/freebsd/lock.json).
 
-The amd64 VM uses KVM and the host CPU. The arm64 VM uses QEMU's `max` CPU
-under system emulation. A guest C probe confirms every additional selected
+The recurring `freebsd-amd64` and `freebsd-arm64` Linux runners control
+FreeBSD 15.1 KVM guests with host CPU passthrough. A fresh local amd64 VM
+uses KVM; a fresh local arm64 VM uses QEMU's `max` CPU under system emulation.
+A guest C probe confirms every additional selected
 feature before any higher-level Landin program executes: CPUID plus XCR0
 for x86-64-v3, and `elf_aux_info(AT_HWCAP)` for LSE, CRC32 and RDM. Lack of
 support fails, with no skipped higher-level verdict. The recurring VM's
@@ -48,8 +51,11 @@ python3 compiler/tests/freebsd/check.py --arch=amd64 --kind=runtime \
 
 Select `arm64`, `abi` or `debugger` for the other lanes. `--case=NAME` is exact
 and visibly filtered. `--ssh-port=PORT` uses an existing development VM;
-recurring jobs always provision their own fresh overlay. The VM SSH endpoint
-is bound only to loopback. Guest identity, feature probes, source verdicts,
+`--prepare-only` emits and inspects a payload without executing it.
+`--prepared=DIR --runner-ssh='ssh ... ci@freebsd-vm'` consumes it through the
+supplied VM transport, verifies payload and executable hashes and the CI
+revision, and uses guest sudo. Exact emission source paths resolve through a
+temporary alias to the isolated payload. Guest identity, feature probes, source verdicts,
 build/disassembly logs, debugger transcripts, output/status files and summary
 hashes are retained by the gate for fourteen days. They are gate evidence,
 not revision acceptance.

@@ -11,11 +11,12 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'environments/freebsd'))
-from vm import boot, prepare, require, sha
+from vm import Guest, LOCK, boot, prepare, require, sha
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
 SPECIALIZED = [('none', 'all'), ('speed', 'all')]
@@ -79,7 +80,9 @@ class Lane:
         self.output = args.output.resolve()
         self.bundle = self.output / 'bundle'
         self.bundle.mkdir()
-        self.remote_prefix = '/tmp/landin-' + sha(args.refine)[:12] + '-' + self.output.name
+        self.remote_prefix = '/tmp/landin-' + sha(args.refine)[:12] + '-' + args.arch + '-' + args.kind + '-' + self.output.name
+        self.remote_bundle = Path(self.remote_prefix) / 'bundle'
+        self.source_root = ROOT
         self.target = 'freebsd-x86-64' if args.arch == 'amd64' else 'freebsd-arm64'
         self.triplet = ('x86_64' if args.arch == 'amd64' else 'aarch64') + '-unknown-freebsd14.4'
         self.clang = str(Path(shutil.which(args.clang) or args.clang).resolve())
@@ -177,21 +180,41 @@ class Lane:
                 'executable_sha256': sha(executable), 'c_peers': peers,
                 'meta': meta, 'base': str(base)}
 
-    def transfer(self, guest):
+    def payload(self):
         archive = self.output / 'payload.tar.gz'
         with tarfile.open(archive, 'w:gz') as tar:
             for relative in ('compiler/tests', 'core', 'examples'):
-                tar.add(ROOT / relative, arcname=str(ROOT / relative).lstrip('/'),
+                tar.add(ROOT / relative, arcname='source/' + relative,
                         filter=lambda info: None if '__pycache__' in info.name else info)
-            tar.add(self.bundle, arcname=str(self.bundle).lstrip('/'))
+            tar.add(self.bundle, arcname='bundle')
+        return archive
+
+    def transfer(self, guest):
+        archive = self.output / 'payload.tar.gz'
         remote = self.remote_prefix + '-payload.tar.gz'
+        # Preserve exact DWARF paths through an owned alias. Refuse to replace
+        # any existing checkout or symlink in the persistent guest.
+        root = shlex.quote(str(self.source_root))
+        prefix = shlex.quote(self.remote_prefix)
+        guest.checked(f'set -e; test ! -e {root}; test ! -L {root}; '
+                      f'test ! -e {prefix}; mkdir -p {prefix}')
+        self.transferred = True
         guest.put(archive, remote)
-        guest.checked('tar -xzf ' + shlex.quote(remote) + ' -C /; mkdir -p '
-                      + shlex.quote(str(ROOT / 'compiler/ada/build')))
+        guest.checked('set -e; tar -xzf ' + shlex.quote(remote) + ' -C ' + prefix
+                      + '; mkdir -p ' + shlex.quote(str(self.source_root.parent))
+                      + '; ln -s ' + shlex.quote(self.remote_prefix + '/source') + ' ' + root
+                      + '; mkdir -p ' + shlex.quote(str(self.source_root / 'compiler/ada/build')))
+
+    def cleanup(self, guest):
+        root = shlex.quote(str(self.source_root))
+        destination = shlex.quote(self.remote_prefix + '/source')
+        guest.checked(f'if [ "$(readlink {root})" = {destination} ]; then rm {root}; fi; '
+                      + 'rm -rf ' + shlex.quote(self.remote_prefix) + '; rm -f '
+                      + shlex.join([self.remote_prefix + suffix for suffix in
+                                    ('-payload.tar.gz', '-processor', '-results.tar.gz', '-execute.sh')]))
 
     def processor(self, guest):
         probe = self.bundle / 'processor'
-        self.command([*self.cc, HERE / 'processor.c', '-O2', '-o', probe], 'processor-build')
         remote = self.remote_prefix + '-processor'
         guest.put(probe, remote)
         guest.checked('chmod +x ' + shlex.quote(remote))
@@ -237,10 +260,10 @@ class Lane:
 
     def execute(self, guest, results):
         script = ['#!/bin/sh', 'ulimit -c 0', 'ulimit -d unlimited',
-                  'cd ' + shlex.quote(str(ROOT / 'compiler/ada'))]
+                  'cd ' + shlex.quote(str(self.source_root / 'compiler/ada'))]
         for result in results:
             label, meta = result['label'], result['meta']
-            path = self.bundle / label
+            path = self.remote_bundle / label
             command = shlex.join([str(path), *shlex.split(meta.get('run_args', ''))])
             out, err, status = (str(path) + suffix for suffix in ('.stdout', '.stderr', '.status'))
             redirection = '2>&1' if meta.get('stream', 'merged') == 'merged' else '2>' + shlex.quote(err)
@@ -248,7 +271,7 @@ class Lane:
                        f'echo $? >{shlex.quote(status)}']
         remote_results = self.remote_prefix + '-results.tar.gz'
         remote_script = self.remote_prefix + '-execute.sh'
-        script += ['tar -czf ' + shlex.quote(remote_results) + ' -C ' + shlex.quote(str(self.bundle))
+        script += ['tar -czf ' + shlex.quote(remote_results) + ' -C ' + shlex.quote(str(self.remote_bundle))
                    + ' ' + shlex.join([r['label'] + ext for r in results for ext in
                                      (('.stdout', '.status') if r['meta'].get('stream', 'merged') == 'merged'
                                       else ('.stdout', '.stderr', '.status'))])]
@@ -273,7 +296,7 @@ class Lane:
             result['status'] = 'passed'
             del result['meta'], result['base']
 
-    def debugger(self, guest):
+    def build_debugger(self):
         source = HERE / 'debug.ldn'
         lines = {needle: next(i for i, line in enumerate(source.read_text().splitlines(), 1)
                               if needle in line) for needle in ('result = local + 1', 'result = inner(local)', 'result = ready')}
@@ -295,12 +318,15 @@ class Lane:
                         'continue', 'frame info', 'frame variable result',
                         'breakpoint delete --force', 'continue']
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
-            results.append((label, lines))
-        self.transfer(guest)
-        for label, lines in results:
-            completed = guest.run('cd ' + shlex.quote(str(ROOT)) + '; lldb --batch -s '
-                                  + shlex.quote(str(self.bundle / (label + '.lldb'))) + ' '
-                                  + shlex.quote(str(self.bundle / label)), timeout=300)
+            results.append({'label': label, 'lines': lines, 'executable_sha256': sha(executable)})
+        return results
+
+    def debugger(self, guest, results):
+        for result in results:
+            label, lines = result['label'], result['lines']
+            completed = guest.run('cd ' + shlex.quote(str(self.source_root)) + '; lldb --batch -s '
+                                  + shlex.quote(str(self.remote_bundle / (label + '.lldb'))) + ' '
+                                  + shlex.quote(str(self.remote_bundle / label)), timeout=300)
             text = (completed.stdout + completed.stderr).decode(errors='replace')
             (self.output / (label + '-session.log')).write_text(text)
             require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
@@ -318,14 +344,133 @@ class Lane:
                     label + ': step-out failed to unwind to caller')
             require(re.search(r'exited with status = 42', text), label + ': final execution status missing')
             print(self.target + ': ' + label + ' source stops, frames, locals and unwinding passed', flush=True)
-        return [{'profile': label, 'status': 'passed'} for label, _ in results]
+            result['status'] = 'passed'
+        return results
+
+
+
+def work_items(args):
+    candidates = select(args.arch, args.kind)
+    if args.case:
+        require(set(args.case) <= {p.name for p, _ in candidates}, 'unknown exact case')
+        candidates = [(p, m) for p, m in candidates if p.name in args.case]
+    work = []
+    for base, meta in candidates:
+        levels = [None]
+        if args.kind == 'runtime':
+            default = 'x86-64-v1' if args.arch == 'amd64' else 'armv8-a'
+            higher = 'x86-64-v3' if args.arch == 'amd64' else 'armv8.1-a'
+            if higher in meta.get('levels', '').split(', '):
+                levels += [default, higher]
+        for level in levels:
+            for optimize, specialize in PROFILES + (SPECIALIZED if meta.get('profiles') == 'specialization' else []):
+                work.append((base, meta, optimize, specialize, level))
+    return work
+
+
+def build_payload(lane):
+    args = lane.args
+    if args.kind == 'debugger':
+        return lane.build_debugger()
+    lane.command([*lane.cc, HERE / 'processor.c', '-O2', '-o', lane.bundle / 'processor'], 'processor-build')
+    lane.assembler_control()
+    if args.kind == 'runtime' and not args.case:
+        lane.sources()
+    work = work_items(args)
+    def build(item):
+        result = lane.build(*item)
+        print(lane.target + ': built ' + result['label'], flush=True)
+        return result
+    with ThreadPoolExecutor(max_workers=int(os.environ.get('LANDIN_FREEBSD_JOBS', '4'))) as pool:
+        results = list(pool.map(build, work))
+    if args.kind == 'runtime':
+        lane.instructions(results)
+    return results
+
+
+def load_prepared(args):
+    prepared = args.prepared.resolve()
+    manifest = json.loads((prepared / 'prepared.json').read_text())
+    require(manifest['arch'] == args.arch and manifest['kind'] == args.kind,
+            'prepared payload belongs to another lane')
+    require(manifest['scope'] == 'complete' or not os.environ.get('GITHUB_ACTIONS'),
+            'filtered payload cannot supply a recurring verdict')
+    require(manifest['results'], 'empty prepared fixture selection')
+    if manifest['scope'] == 'complete':
+        if args.kind == 'debugger':
+            require({r['label'] for r in manifest['results']} ==
+                    {'debug-' + o + '-' + s for o, s in PROFILES}
+                    and len(manifest['results']) == len(PROFILES), 'prepared debugger profiles incomplete')
+        else:
+            expected = {(str(p.relative_to(ROOT / 'compiler/tests/fixtures')), o, s, level)
+                        for p, _, o, s, level in work_items(args)}
+            actual = {(r['case'], r['optimize'], r['specialize'], r['level']) for r in manifest['results']}
+            require(actual == expected and len(actual) == len(manifest['results']), 'prepared corpus incomplete')
+    if os.environ.get('GITHUB_SHA'):
+        require(manifest['revision'] == os.environ['GITHUB_SHA'], 'prepared payload belongs to another revision')
+    require(sha(prepared / 'payload.tar.gz') == manifest['payload_sha256'], 'prepared payload checksum')
+    require(manifest['status'] == 'emitted' and manifest['sysroot_release'] == LOCK['release'],
+            'prepared payload is not an emitted locked-sysroot result')
+    actual = {p.name: sha(p) for p in (prepared / 'bundle').iterdir() if p.is_file()}
+    require(actual == manifest['bundle_sha256'], 'prepared bundle checksum')
+    lane = Lane.__new__(Lane)
+    lane.args, lane.output = args, args.output.resolve()
+    lane.bundle = lane.output / 'bundle'
+    shutil.copytree(prepared / 'bundle', lane.bundle)
+    shutil.copyfile(prepared / 'payload.tar.gz', lane.output / 'payload.tar.gz')
+    for path in prepared.glob('*.log'):
+        shutil.copyfile(path, lane.output / path.name)
+    if (prepared / 'source-verdicts.json').exists():
+        shutil.copyfile(prepared / 'source-verdicts.json', lane.output / 'source-verdicts.json')
+    lane.source_root = Path(manifest['source_root'])
+    require(lane.source_root.is_absolute() and len(lane.source_root.parts) > 3,
+            'invalid emission source root')
+    lane.remote_prefix = '/tmp/landin-' + manifest['refine_sha256'][:12] + '-' + args.arch + '-' + args.kind + '-' + lane.output.name
+    lane.remote_bundle = Path(lane.remote_prefix) / 'bundle'
+    lane.target = 'freebsd-x86-64' if args.arch == 'amd64' else 'freebsd-arm64'
+    for result in manifest['results']:
+        require(sha(lane.bundle / result['label']) == result['executable_sha256'], 'prepared executable checksum')
+        if args.kind != 'debugger':
+            result['base'] = str(ROOT / 'compiler/tests/fixtures' / result['case'])
+    return lane, manifest
+
+
+@contextmanager
+def configured_guest(lane, image):
+    args = lane.args
+    if args.runner_ssh:
+        guest = Guest(ssh=args.runner_ssh, sudo=True)
+        @contextmanager
+        def connection():
+            yield guest
+    else:
+        def connection():
+            return boot(args.arch, image, args.output.resolve(), port=args.ssh_port)
+    with connection() as guest:
+        previous = int(guest.checked('sysctl -n kern.maxdsiz'))
+        lane.transferred = False
+        try:
+            # Admit the 2 GiB BSS displacement fixture without reserving RAM.
+            if previous < 4294967296:
+                guest.checked('sysctl kern.maxdsiz=4294967296')
+            limits = guest.checked('sysctl kern.maxdsiz')
+            require(int(limits.decode().split(':')[1]) >= 4294967296, 'guest data limit is below corpus needs')
+            (args.output / 'guest-limits.log').write_bytes(limits)
+            yield guest
+        finally:
+            try:
+                if lane.transferred:
+                    lane.cleanup(guest)
+            finally:
+                if previous < 4294967296:
+                    guest.checked('sysctl kern.maxdsiz=' + str(previous))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--arch', choices=['amd64', 'arm64'], required=True)
     parser.add_argument('--kind', choices=['runtime', 'debugger', 'abi'], required=True)
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/landin/freebsd')
     parser.add_argument('--clang', default='clang-19')
@@ -333,61 +478,53 @@ def main():
     parser.add_argument('--assembler', default='as')
     parser.add_argument('--objdump', default='llvm-objdump-19')
     parser.add_argument('--ssh-port', type=int, help='development VM already running')
+    parser.add_argument('--runner-ssh', help='existing Linux-hosted VM SSH argv; uses guest sudo')
+    parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')
+    parser.add_argument('--prepared', type=Path, help='execute a checked Linux payload without a compiler')
     parser.add_argument('--case', action='append', help='exact fixture name, development only')
     args = parser.parse_args()
-    require(sys.platform.startswith('linux'), 'FreeBSD emission lane must run on Linux')
+    require(sys.platform.startswith('linux'), 'FreeBSD emission/controller lane must run on Linux')
+    require(not (args.prepare_only and args.prepared), 'prepare and execute are distinct stages')
+    require(args.refine is not None or args.prepared is not None, 'emission requires refine')
+    require(not args.prepared or args.runner_ssh or args.ssh_port, 'prepared execution requires a VM endpoint')
     args.output.mkdir(parents=True, exist_ok=False)
     summary = {'target': args.arch, 'kind': args.kind, 'scope': 'filtered' if args.case else 'complete',
-               'refine_sha256': sha(args.refine), 'status': 'failed', 'results': []}
+               'status': 'failed', 'results': []}
     try:
-        image, sysroot = prepare(args.arch, args.cache)
-        lane = Lane(args, sysroot)
-        with boot(args.arch, image, args.output.resolve(), port=args.ssh_port) as guest:
+        if args.prepared:
+            lane, manifest = load_prepared(args)
+            image = None
+            summary.update({k: manifest[k] for k in ('refine_sha256', 'scope', 'revision', 'sysroot_release', 'payload_sha256')})
+            results = manifest['results']
+        else:
+            image, sysroot = prepare(args.arch, args.cache, image=not args.prepare_only and not args.runner_ssh)
+            lane = Lane(args, sysroot)
+            summary.update(refine_sha256=sha(args.refine), revision=os.environ.get('GITHUB_SHA'), sysroot_release=LOCK['release'])
+            results = build_payload(lane)
+            archive = lane.payload()
+            summary['payload_sha256'] = sha(archive)
+            manifest = dict(summary, arch=args.arch, source_root=str(ROOT), results=results,
+                            bundle_sha256={p.name: sha(p) for p in lane.bundle.iterdir() if p.is_file()})
+            if args.prepare_only:
+                manifest['status'] = 'emitted'
+                (args.output / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
+                summary.update(status='emitted', results=results)
+                print(f"FreeBSD {args.arch} {args.kind}: {len(results)} {summary['scope']} outcomes emitted; execution pending")
+                return
+        summary['results'] = results
+        with configured_guest(lane, image) as guest:
             identity = guest.checked('uname -srm; freebsd-version; lldb --version').decode()
             require('FreeBSD' in identity and ('amd64' if args.arch == 'amd64' else 'arm64') in identity,
                     'wrong guest identity: ' + identity)
             (args.output / 'guest-identity.log').write_text(identity)
             summary['guest'] = identity
-            # The displacement-limit regression has a 2 GiB BSS object. FreeBSD
-            # arm64 defaults to a 1 GiB data limit; the test VM must admit it.
-            limits = guest.checked('sysctl kern.maxdsiz=4294967296; sysctl kern.maxdsiz')
-            require(b'kern.maxdsiz: 4294967296' in limits, 'guest data limit is below corpus needs')
-            (args.output / 'guest-limits.log').write_bytes(limits)
+            lane.transfer(guest)
             if args.kind == 'debugger':
-                summary['results'] = lane.debugger(guest)
+                lane.debugger(guest, results)
             else:
                 lane.processor(guest)
-                lane.assembler_control()
-                if args.kind == 'runtime' and not args.case:
-                    lane.sources()
-                candidates = select(args.arch, args.kind)
-                if args.case:
-                    require(set(args.case) <= {p.name for p, _ in candidates}, 'unknown exact case')
-                    candidates = [(p, m) for p, m in candidates if p.name in args.case]
-                work = []
-                for base, meta in candidates:
-                    levels = [None]
-                    if args.kind == 'runtime':
-                        default = 'x86-64-v1' if args.arch == 'amd64' else 'armv8-a'
-                        higher = 'x86-64-v3' if args.arch == 'amd64' else 'armv8.1-a'
-                        if higher in meta.get('levels', '').split(', '):
-                            levels += [default, higher]
-                    for level in levels:
-                        for optimize, specialize in PROFILES + (SPECIALIZED if meta.get('profiles') == 'specialization' else []):
-                            work.append((base, meta, optimize, specialize, level))
-                def build(item):
-                    result = lane.build(*item)
-                    print(lane.target + ': built ' + result['label'], flush=True)
-                    return result
-                with ThreadPoolExecutor(max_workers=int(os.environ.get('LANDIN_FREEBSD_JOBS', '4'))) as pool:
-                    results = list(pool.map(build, work))
-                summary['results'] = results
-                if args.kind == 'runtime':
-                    lane.instructions(results)
-                lane.transfer(guest)
                 lane.execute(guest, results)
-                summary['results'] = results
-            summary['status'] = 'passed'
+        summary['status'] = 'passed'
     finally:
         (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(f"FreeBSD {args.arch} {args.kind}: {len(summary['results'])} {summary['scope']} outcomes passed")

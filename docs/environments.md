@@ -28,7 +28,10 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 FreeBSD x86-64 and arm64 run in [system VMs](../environments/freebsd/README.md)
 on Linux. Each has separate recurring runtime, native guest LLDB and C ABI
-verdicts; Clang emits against a checksum-locked FreeBSD sysroot.
+verdicts. Linux x86-64 emits and inspects hashed payloads against a
+checksum-locked FreeBSD 14.4 sysroot. The self-hosted `freebsd-amd64` and
+`freebsd-arm64` Linux controllers execute them in their FreeBSD 15.1 KVM
+guests; the evidence records the actual guest version and CPU probes.
 
 ## Environments
 
