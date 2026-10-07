@@ -2107,6 +2107,9 @@
     "runtime/written-type-literal-pointer-controls": {
       "mode": "execute"
     },
+    "runtime/written-type-machine-function": {
+      "mode": "execute"
+    },
     "runtime/written-type-nominal-extraction": {
       "mode": "execute"
     },

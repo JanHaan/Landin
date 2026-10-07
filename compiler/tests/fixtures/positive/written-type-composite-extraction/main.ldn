@@ -11,6 +11,10 @@ nested_id: type = distinct nested_base
 byte_base: type = []u8
 byte_id: type = distinct byte_base
 tag: type (item: type, fixed label: u32) = distinct item
+extract: (item: type, fixed count: u32, hidden: type, value: hidden)
+         -> (result: [count]item) =
+    result = [count]item(value)
+end extract
 handle: type = tag(u32, 7)
 outer: type = distinct handle
 handles_base: type = [2]handle
@@ -41,6 +45,10 @@ module_callback: callback_base =
     (input: i32) -> (output: i32)(module_callback_hidden)
 
 public main: () -> (code: i32) =
+    generic_i32: tag([2]i32, 7) = tag([2]i32, 7)([10, 20])
+    generic_u8: tag([3]u8, 7) = tag([3]u8, 7)([u8(1), u8(2), u8(3)])
+    extracted_i32: [2]i32 = extract(item: i32, count: 2, hidden: tag([2]i32, 7), value: generic_i32)
+    extracted_u8: [3]u8 = extract(item: u8, count: 3, hidden: tag([3]u8, 7), value: generic_u8)
     hidden_array: array_id = array_id([10, 20])
     values: [2]i32 = [2]i32(hidden_array)
     hidden_slice: slice_id = slice_id(values[0..<2])
@@ -79,7 +87,8 @@ public main: () -> (code: i32) =
     erased: any readable = any(addr number)
     hidden_erased: view_id = view_id(erased)
     recovered_erased: any readable = any readable(hidden_erased)
-    if values[1] == 20 and view[0] == 10 and nested[1][0] == 3
+    if extracted_i32[1] == 20 and extracted_u8[2] == 3
+      and values[1] == 20 and view[0] == 10 and nested[1][0] == 3
       and bytes[1] == 75 and u32(handles[1]) == 7
       and recovered_erased.read() == 41 and fallible_result == 42
       and editable[0] == 5 and pointer_view[0].val == 41
