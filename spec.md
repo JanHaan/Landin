@@ -3652,6 +3652,9 @@ likewise retains its contextual construction; `any C(value)` applies a written
 erased type. A leading balanced parameter list followed by `->` begins a
 function-type application; otherwise parentheses retain their expression,
 struct-literal and anonymous-function meanings.
+Written `extern(c)`, `extern(interrupt)` and `extern(naked)` signatures retain
+their convention and target restrictions; extracting a machine-convention
+function value does not permit an ordinary call to it.
 
 Type prefixes nest as in declarations, for example `[][2]u8(hidden)` and
 `ptr []u8(hidden)`. At the terminal name the last parenthesized list supplies
