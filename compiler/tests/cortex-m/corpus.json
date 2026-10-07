@@ -2079,6 +2079,13 @@
     "runtime/written-function-values": {
       "mode": "execute"
     },
+    "runtime/written-type-c-function": {
+      "codes": [
+        "L0346"
+      ],
+      "mode": "refuse",
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this compiler-defined C-convention callback requires; written type application preserves that boundary."
+    },
     "runtime/written-type-composite-extraction": {
       "mode": "execute"
     },

@@ -1,0 +1,11 @@
+callback_base: type = extern(c) (input: i32) -> (output: i32)
+callback_id: type = distinct callback_base
+extern(c) increment: (input: i32) -> (output: i32) =
+    output = input + 1
+end increment
+public main: () -> (code: i32) =
+    hidden: callback_id = callback_id(increment)
+    callback: extern(c) (input: i32) -> (output: i32) =
+        extern(c) (input: i32) -> (output: i32)(hidden)
+    code = callback(41)
+end main

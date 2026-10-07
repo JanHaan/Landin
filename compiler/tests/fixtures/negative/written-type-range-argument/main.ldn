@@ -1,0 +1,5 @@
+percent: type = u8 range 0..100
+scalar: type (item: type) = item
+bad: () -> none =
+    _ = scalar(percent)(3)
+end bad
