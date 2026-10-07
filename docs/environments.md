@@ -10,7 +10,8 @@ here are historical; `scripts/ci/` has been removed.
 
 Native macOS arm64 remains a development and gate environment. Use
 `./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
-`darwin-host`, `darwin-parity` and `lldb` on `macos-26`. The former Darwin
+`darwin-host`, `darwin-parity` and `lldb` on the self-hosted
+`darwin-arm64` runner, or `macos-26` for fork pull requests. The former Darwin
 acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
 verified bundle had to match the Linux bundle with compatible committed scope
 at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
@@ -32,6 +33,123 @@ verdicts. Linux x86-64 emits and inspects hashed payloads against a
 checksum-locked FreeBSD 14.4 sysroot. The self-hosted `freebsd-amd64` and
 `freebsd-arm64` Linux controllers execute them in their FreeBSD 15.1 KVM
 guests; the evidence records the actual guest version and CPU probes.
+
+RV64 Linux LP64D is cross-emitted on the supported Linux compiler host and
+executed on the RISE service's physical runners with the sole label
+`ubuntu-24.04-riscv`. Separate recurring runtime, native GDB, C ABI and
+ISA-level verdicts retain hardware identity and transcripts. See the
+[RV64 evidence guide](../compiler/tests/rv64/README.md).
+
+## GitHub Actions runners
+
+The workflows select labels, not runner names. Pushes, manual runs and
+same-repository pull requests use the following registered runners. Linux
+and Darwin jobs for fork pull requests retain the previous GitHub-hosted
+images; this also applies inside the called determinism workflow. FreeBSD
+execution retains the existing dedicated VM lanes.
+
+| runner name | required platform label | role |
+|---|---|---|
+| `landin-linux-amd64` | `linux-amd64` | Linux x86-64 compiler and execution, Cortex-M, FreeBSD and RV64 emission, documents, scripts, links, Pages and release publication |
+| `landin-linux-arm64` | `linux-arm64` | gate input classification; native Linux arm64 compiler and execution |
+| `landin-darwin-arm64` | `darwin-arm64` | native Darwin compiler, parity and LLDB |
+| `landin-freebsd-amd64` | `freebsd-amd64` | accelerated FreeBSD x86-64 VM execution, ABI and debugging |
+| `landin-freebsd-arm64` | `freebsd-arm64` | accelerated FreeBSD arm64 VM execution, ABI and debugging |
+
+Linux and Darwin selectors also require `self-hosted` and the matching OS
+and architecture labels. Their three hosts supply determinism manifests and
+release builds. A missing or offline matching runner leaves a job queued;
+the workflows do not fall back to a hosted image for a trusted event.
+With one runner per platform, that platform's jobs run one at a time.
+The small gate input classifier uses arm64 so the compiler lanes can start
+while documents and scripts occupy the x86-64 runner. Explicit prebuilds
+limit GPRbuild to four Linux workers and three Darwin workers before the
+test wrappers check their manifests. A container CPU quota can leave the
+host's larger processor count visible to the project's default `-j0`.
+
+Both Linux compiler runners use Ubuntu 24.04 with glibc 2.39, Python 3,
+Git, curl, archive tools, binutils and the C development headers. They need
+passwordless sudo for the existing pinned Clang and Emacs installs, the
+editor grammar's Node.js/npm install, and release publication's GitHub CLI
+install. Ada archives still come from the checksums in `environments/pins.sh`.
+The FreeBSD VM controllers retain their existing SSH and guest setup.
+
+The x86-64 runner selects private Emacs 30.2 with tree-sitter 0.25.10
+through `/usr/local/bin/emacs`. Ubuntu's Emacs remains in `/usr/bin`;
+the private selection survives the workflow's apt installs. The grammar
+requires ABI 15, which the distribution runtime did not support.
+Both the unchanged grammar integration and the real Eglot-to-`refine lsp`
+diagnostic smoke passed with the compatible editor. The runner supplies a
+compatible editor for the repository's pinned CLI and committed parser.
+The tools live in the persistent home at
+`/home/runner/.local/editor-tools/emacs-30.2-tree-sitter-0.25.10`.
+The updated `landin-github-runner:amd64` image restores the editor links at
+startup; its isolated check used a read-only home without registration and
+exited before starting a Listener. The active container was not recreated.
+
+The Darwin runner uses its `xcode-select` developer directory. Its Command
+Line Tools match `environments/macos-arm64/policy.json`; a versioned Xcode
+application path is required only for the hosted `macos-26` fallback.
+The runner account needs Python 3, Git, curl, SHA256 and archive tools.
+Its LaunchAgent requires `LimitLoadToSessionType=Aqua` and omits
+`SessionCreate`, so it inherits the logged-in GUI security audit session.
+The default service template's `SessionCreate=true` created a separate
+session without graphical or terminal access and caused LLDB to refuse
+process launch, even with a pseudo-terminal. The fix changes only this
+runner's service; debugger authorization, DevToolsSecurity and group
+membership remain as configured.
+
+Startup explicitly invokes the service script through `/bin/bash`.
+Setup also reinstalled this runner's and its dedicated Ada toolchain's
+executables byte for byte on fresh inodes from a neutral LaunchAgent.
+Their cached macOS process provenance had caused ordinary files, including
+formatter replacement files, to acquire `com.apple.provenance`; the native
+adapter correctly refuses to discard extended metadata. Removing the
+attribute from an already executed binary did not clear that cache.
+The repair preserved executable hashes, modes, ownership and other
+attributes; its manifest, helper and rollback journal are retained under
+`/Users/jan/.local/state/landin/formatter-debug/2026-10-07`.
+
+The runner's `.path` prefers private copies of Bash 5.3.20 and Python 3.14.8,
+then the system tools, before retaining its previous fallback paths.
+The private Python still uses the matching Homebrew framework, standard
+library and linked libraries. Refresh these copies from a neutral process
+before package cleanup removes their matching Homebrew runtime version.
+The original Homebrew files are unchanged. Future installation must avoid
+reintroducing process provenance into this runner's executable chain.
+
+The service still starts at login and requires `jan` to remain logged into
+an Aqua GUI session. To reinstall it, use
+`/Users/jan/actions-runner-landin/install-service.sh`, which selects
+`service/actions.runner.aqua.plist.template` through
+`GITHUB_ACTIONS_RUNNER_SERVICE_TEMPLATE`; plain `svc.sh install` would
+restore the default session behavior. The host's before/after service
+files and diagnostic transcripts live under
+`/Users/jan/.local/state/landin/runner-debug/2026-10-07`.
+
+[The actual service inspection](https://github.com/JanHaan/Landin/actions/runs/37657619938/job/112923344689)
+passed after the restart: LLDB launched an arm64 program, stopped at its
+`main` breakpoint, continued and observed exit zero. This is a service
+smoke check, not the full debugger corpus verdict.
+
+[The fresh-checkout service inspection](https://github.com/JanHaan/Landin/actions/runs/37665046440/job/112942008357)
+also passed after the provenance repair: it built a new release compiler,
+ran the unchanged formatter replacement safety suite with all seven
+Darwin-applicable tests passing, and repeated the LLDB smoke. The suite's
+four Linux-only tests were skipped. This verifies the service environment;
+the full gate supplies the remaining compiler and target verdicts.
+
+[The runner inspection](https://github.com/JanHaan/Landin/actions/runs/37657040045)
+checked the three compiler hosts on 2026-10-07: both Linux hosts reported
+Ubuntu 24.04 and passwordless sudo, and the Mac's selected SDK, Clang,
+linker and LLDB matched the recorded policy. This checks host prerequisites;
+the gate supplies compiler and target verdicts.
+
+[The complete staging gate](https://github.com/JanHaan/Landin/actions/runs/37658700277)
+passed on 2026-10-07 after these host repairs. It exercised all five runners,
+including the Linux debug and release suites, Darwin host suites and native
+parity, GDB and LLDB, both FreeBSD architectures, and cross-host determinism.
+This is gate evidence for the workflow setup, not exact-revision acceptance.
 
 ## Environments
 

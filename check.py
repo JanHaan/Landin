@@ -224,6 +224,12 @@ NAMED_FILE_ALLOWLIST = frozenset((
     "scripts/ci/approval.py",
     "scripts/ci/publish.py",
     "scripts/ci/common.py",
+    #  Installed on the self-hosted Mac, outside this repository.  The
+    #  environment guide names the custom runner service installer and
+    #  GitHub's upstream service wrapper so a reinstall preserves Aqua
+    #  audit-session inheritance.  Other missing script names still fail.
+    "/Users/jan/actions-runner-landin/install-service.sh",
+    "svc.sh",
 ))
 
 STALE_BACKLOG_ALLOWLIST = {

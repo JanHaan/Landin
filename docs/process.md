@@ -20,6 +20,12 @@ what they cost.
 | before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
 | every push and pull request | `.github/workflows/gate.yml` | every target unless the verified explanatory-only reuse exception below applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; physical RV64 Linux runtime, GDB, C ABI and ISA-level verdicts on RISE runners; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 
+Pushes and same-repository pull requests use the self-hosted Linux and
+Darwin platform runners; fork pull requests keep the hosted Linux and Darwin
+images. The FreeBSD VM lanes already use dedicated runners.
+See [the runner requirements](environments.md#github-actions-runners) for
+labels, tools and scheduling.
+
 From the repository root on a Mac, with the default `darwin-arm64` build tag:
 
 ```sh

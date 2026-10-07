@@ -45,13 +45,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-24.04
+          - runner: ["self-hosted", "Linux", "X64", "linux-amd64"]
             platform: x86_64-linux
             build: linux-amd64
-          - runner: ubuntu-24.04-arm
+          - runner: ["self-hosted", "Linux", "ARM64", "linux-arm64"]
             platform: aarch64-linux
             build: linux-arm64
-          - runner: macos-15
+          - runner: ["self-hosted", "macOS", "ARM64", "darwin-arm64"]
             platform: aarch64-darwin
             build: darwin-arm64
     runs-on: ${{ matrix.runner }}
@@ -156,7 +156,7 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted", "Linux", "X64", "linux-amd64"]
     permissions:
       contents: write
     steps:
@@ -176,6 +176,11 @@ jobs:
       - name: What was built
         run: |
           cd release-assets && ls -l && cat ./*.sha256
+
+      - name: Install the GitHub CLI
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gh
 
       - name: Publish
         env:
