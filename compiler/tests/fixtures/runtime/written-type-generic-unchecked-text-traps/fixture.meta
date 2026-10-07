@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: written generic UTF-8 conversion retains shortest-form validation inside unchecked
+program: main.ldn
+constructs: 0310, 0600, 0790, 1280, 1730
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+traps: yes

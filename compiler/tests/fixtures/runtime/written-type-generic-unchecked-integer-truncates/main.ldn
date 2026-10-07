@@ -1,0 +1,18 @@
+scalar: type (item: type) = item
+narrow: (source: u16) -> (result: u8) =
+    unchecked begin
+        result = scalar(u8)(source)
+    end unchecked
+end narrow
+signed_narrow: (source: i16) -> (result: u8) =
+    unchecked begin
+        result = scalar(u8)(source)
+    end unchecked
+end signed_narrow
+public main: () -> (code: i32) =
+    if narrow(300) == 44 and signed_narrow(-1) == 255 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

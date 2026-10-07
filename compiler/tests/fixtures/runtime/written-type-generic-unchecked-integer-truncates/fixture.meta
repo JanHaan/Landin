@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: written generic integer conversions retain unchecked low-bit truncation for signed and unsigned sources
+program: main.ldn
+constructs: 0310, 1280, 1730, 1950
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 42

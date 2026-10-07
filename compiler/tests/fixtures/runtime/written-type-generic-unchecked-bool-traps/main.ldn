@@ -1,0 +1,10 @@
+scalar: type (item: type) = item
+convert: (source: u8) -> (result: bool) =
+    unchecked begin
+        result = scalar(bool)(source)
+    end unchecked
+end convert
+public main: () -> (code: i32) =
+    _ = convert(2)
+    code = 42
+end main

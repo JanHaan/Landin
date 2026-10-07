@@ -2092,6 +2092,18 @@
     "runtime/written-type-generic-range-traps": {
       "mode": "execute"
     },
+    "runtime/written-type-generic-unchecked-bool-traps": {
+      "mode": "execute"
+    },
+    "runtime/written-type-generic-unchecked-float-traps": {
+      "mode": "execute"
+    },
+    "runtime/written-type-generic-unchecked-integer-truncates": {
+      "mode": "execute"
+    },
+    "runtime/written-type-generic-unchecked-text-traps": {
+      "mode": "execute"
+    },
     "runtime/written-type-literal-pointer-controls": {
       "mode": "execute"
     },

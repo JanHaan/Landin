@@ -1,0 +1,10 @@
+scalar: type (item: type) = item
+narrow: (source: f64) -> (result: u8) =
+    unchecked begin
+        result = scalar(u8)(source)
+    end unchecked
+end narrow
+public main: () -> (code: i32) =
+    _ = narrow(300.0)
+    code = 42
+end main
