@@ -1,7 +1,7 @@
 import { Failure, MODEL, EFFORT, MAX_OUTPUT, MAX_BODY_BYTES, MAX_CODE_BYTES,
   MAX_QUESTION_BYTES, boundedText, parseJSON, inputText, sameSecret,
   clientIdentity, usageCost, digest } from "./policy.js";
-import { retrieve, SYSTEM, messages, validateAnswer } from "./retrieval.js";
+import { retrieve, SYSTEM, ANSWER_FORMAT, messages, validateAnswer } from "./retrieval.js";
 import { chatTurn, conversationCredentials } from "./chat.js";
 import { remoteJSON } from "./upstream.js";
 
@@ -212,7 +212,7 @@ export function createService(corpus, fetcher = fetch) {
                   method: "POST", headers: { "Content-Type": "application/json",
                     "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
                   body: JSON.stringify({ model: MODEL, max_tokens: MAX_OUTPUT,
-                    thinking: { type: "adaptive" }, output_config: { effort: EFFORT },
+                    thinking: { type: "adaptive" }, output_config: { effort: EFFORT, format: ANSWER_FORMAT },
                     system: SYSTEM, messages: messages(text, passages) })
                 }, fetcher, 96_000);
                 cost = usageCost(data.usage);

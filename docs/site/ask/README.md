@@ -93,6 +93,8 @@ only during the live tool loop and never stored or displayed. Citation IDs must 
 URLs come from the source index. This validates citation identity, not that
 the cited passage supports every sentence: that needs answer evaluation.
 Answers, source titles, diagnostics and program output are rendered as text.
+The provider receives one fixed JSON output schema throughout each live turn;
+the service still checks citation identity, source size and other limits itself.
 
 `evaluation.json` records representative questions and answer criteria.
 `npm test` checks retrieval, limits, authentication, upstream request shape,
@@ -301,6 +303,11 @@ from an interrupted call. Visitor messages distinguish API rate limits,
 overload, access rejection, billing limits and request rejection. There is no
 automatic retry, escalation or budget reset. See
 [Claude API errors](https://platform.claude.com/docs/en/api/errors).
+If final-answer validation fails, the record retains up to 16 KiB of rejected
+text for private review, plus block types and the validation error. Thinking and
+signatures are excluded. JSON grammar constraints reduce formatting failures;
+they do not establish factual accuracy or waive local limits. See
+[structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
 
 An input record must be persisted before calling the model or sandbox. A
 completion record must be saved before delivering an answer. Interrupted work

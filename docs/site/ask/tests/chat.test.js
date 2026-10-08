@@ -51,6 +51,7 @@ test('server history supports follow-ups, rejects another capability and ignores
     assert.equal(JSON.parse(body.messages[0].content).workspaceCode, code);
     assert.equal(JSON.stringify(body).includes('forged'), false);
     assert.equal(body.model, 'claude-haiku-5-5'); assert.equal(body.output_config.effort, 'high');
+    assert.equal(body.output_config.format.type, 'json_schema');
     const rows = await h.exportRows(); assert.equal(rows.length, 2);
     assert.equal(rows[1].contextTurns, 1); assert.equal(rows[0].workspaceCode, code);
     for (const forbidden of [key, secret, 'test-api-key', 'signed-secret']) assert.equal(JSON.stringify(rows).includes(forbidden), false);
@@ -64,12 +65,29 @@ test('bounded documentation loop forwards tool results and signed thinking only 
     const data = await response.json(); assert.equal(data.steps.length, 3); assert.equal(h.requests.length, 4);
     assert.deepEqual(h.requests[3].body.tools.map(t => t.name), ['search_docs']);
     assert.deepEqual(h.requests[3].body.tool_choice, { type: 'none' });
+    assert.deepEqual(h.requests[3].body.output_config, h.requests[0].body.output_config);
     assert.equal(h.requests[1].body.messages.at(-2).content[0].signature, 'signed-secret');
     assert.equal(h.requests[1].body.messages.at(-1).content[0].type, 'tool_result');
     assert.equal((await h.budget()).bookedMicroUSD, 600);
     const rows = await h.exportRows(); assert.equal(rows[0].calls.length, 4); assert.equal(rows[0].steps.length, 3);
     assert.equal(JSON.stringify(rows).includes('private-reasoning-must-not-be-saved'), false);
     assert.equal(JSON.stringify(data).includes('signed-secret'), false);
+  } finally { await h.mf.dispose(); }
+});
+test('rejected final answers retain bounded visible text while excluding thinking', async () => {
+  const h = await harness(() => Response.json({ stop_reason: 'end_turn', usage, content: [
+    { type: 'thinking', thinking: 'private-reasoning-value', signature: 'private-signature' },
+    { type: 'text', text: 'Malformed answer ' + '😀'.repeat(10000) }
+  ] }));
+  try {
+    assert.equal((await h.post()).status, 502);
+    const rows = await h.exportRows(), rejected = rows[0].calls[0].answerRejected;
+    assert.match(rejected.candidateText, /^Malformed answer/); assert.equal(rejected.truncated, true);
+    assert.ok(new TextEncoder().encode(rejected.candidateText).length <= 16384);
+    assert.ok(!rejected.candidateText.includes('\uFFFD'));
+    assert.ok(!JSON.stringify(rows).includes('private-reasoning-value'));
+    assert.ok(!JSON.stringify(rows).includes('private-signature'));
+    assert.equal((await h.budget()).bookedMicroUSD, 150);
   } finally { await h.mf.dispose(); }
 });
 test('disabled execution excludes its tool and refuses a forged execution', async () => {
