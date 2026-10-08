@@ -4,6 +4,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
+with Landin.Diagnostics.Catalogue;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
@@ -4893,7 +4894,8 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0507  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 92,
+        (Item, Occurrences (Listed, "" & LF),
+         Landin.Diagnostics.Catalogue.Count,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,
