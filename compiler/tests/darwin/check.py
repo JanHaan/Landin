@@ -44,6 +44,20 @@ def outcome(meta, status, stdout, stderr, expected=None):
         require(not stderr, f"unexpected stderr: {stderr[:400]!r}")
 
 
+def large_image_outcome(meta, status, stdout, stderr, expected,
+                        control_status, control_out, control_err):
+    """Require the same demonstrated outcome from Landin and native Clang."""
+    if status == control_status == 42:
+        outcome(meta, status, stdout, stderr, expected if expected is not None else b"")
+        require(not control_out and not control_err, "unexpected large-image control output")
+        return "passed"
+    message = b"syscall to map cache into shared region failed"
+    require(status == control_status == -signal.SIGABRT
+            and message in stdout + stderr and message in control_out + control_err,
+            "large-image outcome does not match the demonstrated native loader limit")
+    return "platform-limited"
+
+
 # These bridges tail-forward without changing the caller's frame or link
 # register. Their complete instruction bodies, not just their names, are
 # checked before accepting the absence of a frame record.
@@ -306,11 +320,9 @@ def main(argv=None):
                                 label + "-control-link", cwd)
                     control_status, control_out, control_err = run.command(
                         [control], label + "-control-execute", cwd, expected=None, timeout=30, merged=True)
-                    message = b"syscall to map cache into shared region failed"
-                    require(status == control_status == -signal.SIGABRT
-                            and message in stdout + stderr and message in control_out + control_err,
-                            "large-image outcome does not match the demonstrated native loader limit")
-                    verdict = "platform-limited"
+                    verdict = large_image_outcome(
+                        meta, status, stdout, stderr, expected,
+                        control_status, control_out, control_err)
                 else:
                     outcome(meta, status, stdout, stderr, expected)
                 lowering = level_lowering(executable, level, cwd, run, label) if level else {}

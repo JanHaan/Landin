@@ -299,7 +299,8 @@ This is the maintained inventory of what the compiler does today:
   runtime, C ABI and debugger gate verdicts. RV64 uses LP64D and cross-emitted
   payloads on [physical RISE runners](compiler/tests/rv64/README.md), with
   separate runtime, native GDB, C ABI and ISA-level verdicts.
-  Darwin keeps an explicit large-image loader limitation. Cortex-M0 builds
+  Darwin checks a host-dependent large-image loader limitation against a native
+  Clang control. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
   clearing, typed interrupt and naked functions, vector references, placement
   and fixed assembly, within a 32 KiB flash, 16 KiB RAM and 4 KiB stack
@@ -343,7 +344,7 @@ FreeBSD programs in accelerated VMs and Cortex-M firmware under QEMU,
 with separate runtime, C ABI and debugger verdicts and RV64 ISA-level
 checks. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
-shared-region placement limit.
+shared-region placement limit observed on some hosts.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of
