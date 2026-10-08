@@ -2507,11 +2507,11 @@ def check_grammar_corpus(full_run):
                                         "fixture expects %r"
                                         % (complaint, expected)))
 
-    #  Repository-owned core and example modules are source programs too.
+    #  Repository-owned library and example modules are source programs too.
     #  Rooted runtime fixtures execute them, while this independent side
     #  holds each file to the normative grammar before the Ada parser is
     #  involved.
-    for corpus in ("core", "examples"):
+    for corpus in ("core", "hosted", "platform", "examples"):
         corpus_root = os.path.join(ROOT, corpus)
         if not os.path.isdir(corpus_root):
             continue

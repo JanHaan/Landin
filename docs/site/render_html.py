@@ -1783,7 +1783,8 @@ def roadmap_progress(text, recent_count=3):
              for m in ROADMAP_ITEM.finditer(text)]
     by_key = {item["key"]: item for item in items}
     try:
-        items = [by_key[key] for key in execution_order(text, by_key)]
+        items = [by_key[key] for key in execution_order(
+            text, [item["key"] for item in items])]
     except ValueError as error:
         raise SystemExit("render_html: " + str(error)) from error
 

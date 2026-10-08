@@ -538,6 +538,30 @@ class GrammarCorpus(unittest.TestCase):
             said = [why for _, _, why in checker.check_grammar_corpus(True)]
         self.assertTrue(said)
 
+    def test_each_library_root_has_independent_grammar_checks(self):
+        from check_controls import tree
+        with tree(copied=["spec.md", "compiler/ada/src/diagnostics"]) as root:
+            sources = []
+            for namespace in ("core", "hosted", "platform"):
+                source = root / namespace / "sample/sample.ldn"
+                source.parent.mkdir(parents=True)
+                source.write_text("n: u32 = 1\n")
+                sources.append(source)
+            #  This tree has library sources and no fixture inventory; isolate
+            #  their verdicts from the missing fixture-citation/token records.
+            def source_faults():
+                return [fault for fault in checker.check_grammar_corpus(True)
+                        if fault[0].endswith(".ldn")]
+
+            self.assertEqual(source_faults(), [])
+            for source in sources:
+                source.write_text("%%% not Landin %%%\n")
+            said = source_faults()
+            self.assertEqual({where for where, _, _ in said},
+                             {str(source.relative_to(root)) for source in sources})
+            self.assertTrue(all("grammar does not derive" in why
+                                for _, _, why in said))
+
     def test_an_end_name_mismatch_alone_must_derive(self):
         #  The grammar writes `"end" identifier?`, so a program whose only
         #  fault is the name after `end` derives, and a fixture claiming

@@ -143,6 +143,11 @@ Depends on: none
                 with self.assertRaises(SystemExit):
                     RENDER.roadmap_progress(roadmap)
 
+    def test_site_refuses_duplicate_item_identities(self):
+        duplicate = BETWEEN_ITEMS + BETWEEN_ITEMS.split("\n\n", 1)[1]
+        with self.assertRaisesRegex(SystemExit, "repeats"):
+            RENDER.roadmap_progress(duplicate)
+
     def test_real_library_and_device_sequence(self):
         text = (ROOT / "ROADMAP.md").read_text()
         headings = {match.group(3): match.group(1)
@@ -185,6 +190,14 @@ Depends on: none
         complete([devices, headings["The first board"],
                   headings["Thumb-2, Cortex-M33 and M4F"]])
         assert_next(headings["RISC-V microcontrollers"], "RISC-V microcontrollers")
+        #  Completion of the newer Cortex cores alone cannot open the
+        #  freestanding library before the agreed device-phase boundary.
+        blocks = {match.group(1): (match.group(4).split(", ")
+                                 if match.group(4) else [])
+                  for match in RENDER.ROADMAP_ITEM.finditer(text)}
+        states = CHECK.roadmap_statuses(text)
+        self.assertFalse(all(states[identity] == "complete"
+                             for identity in blocks[freestanding]))
         complete([identity for identity in headings.values()
                   if identity.startswith(device_phase + ".")
                   and CHECK.roadmap_statuses(text)[identity] == "planned"])

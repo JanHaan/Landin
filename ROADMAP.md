@@ -77,9 +77,10 @@ There are no dates, estimates or versions here.
 Execution order: R8, R9, R10, R11, R13.10, R13.30, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
-The freestanding facilities retain R12.30's prerequisite and follow the whole
-microcontroller phase. R12 stays in scope, its gates and R13's gate retain
-their requirements, and no identity is renumbered. Each new R12 target repeats
+R12.10 depends on R13.30 to hold the first boundary. The freestanding
+facilities retain R12.30's prerequisite and also depend on R12.60 to hold
+the boundary after the whole microcontroller phase. R12 stays in scope, and
+its gates and R13's gate retain their requirements, and no identity is renumbered. Each new R12 target repeats
 the shared-library consumer matrix established by R13.10.
 
 An item is complete when its exit evidence exists: the gate green on the
@@ -938,7 +939,7 @@ R12.40 and R12.50 each apply this rule to any profile they first admit.
 ### R12.10 — Describe devices
 
 Status: planned
-Depends on: R11.10
+Depends on: R11.10, R13.30
 
 A general SVD generator, memory profiles, linker configuration and firmware
 vector mappings selected per device instead of the fixed constrained profile,
@@ -1161,7 +1162,22 @@ no hosted runtime or services. A module mixing these availability classes is
 split so importing one class does not select declarations from another. The
 existing `core/cpu` belongs in this root for the M-profile family, including
 its later feature levels, rather than in either the shared or hosted root. The
-two sibling roots' names are decided here, with [1480] and [1660] amended.
+chosen sibling roots are `hosted/*` and `platform/*`, with [1480] and [1660]
+amended. Availability follows the source namespace independently of which
+project-first root supplies its contents; the names are not lexical keywords.
+
+Migration inventory:
+
+| Existing modules | Destination | Availability |
+|---|---|---|
+| `core/diag`, `core/failing`, `core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`, `core/small`, `core/sort`, `core/text`, `core/tree`, `core/vec` | retain `core/*` | Every supported hosted and firmware target |
+| `core/heap`, `core/io/hosted` | `hosted/heap`, `hosted/io` | Hosted targets only |
+| `core/cpu` | `platform/cpu` | M-profile family, including its higher levels |
+| `core/c` | `platform/c` | Currently supported LP64 C ABI descriptions; no hosted services required |
+
+The C spelling layer's scope remains explicit until a later consumer extends
+it. This migration does not enable Cortex-M C signatures or bind the library
+split to R13.20's interoperation work.
 
 Exit evidence: the amended paragraphs and an inventory assigning every
 existing module to the shared, target-specific freestanding or hosted root;
@@ -1182,7 +1198,7 @@ target's gate must repeat this matrix for that target.
 ### R13.20 — The freestanding library
 
 Status: planned
-Depends on: R13.10, R12.30
+Depends on: R13.10, R12.30, R12.60
 
 What firmware on the R12 boards needs, each facility driven by a complete
 consumer: peripheral configuration beyond one baud rate, a reusable
