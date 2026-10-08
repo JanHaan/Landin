@@ -26,8 +26,8 @@ SUMMARY = (
     "permission and binding mutability; local origin and escape analysis "
     "rather than a borrow checker; concepts with evidence tables for both "
     "static generics and runtime dispatch; no compile-time execution and no "
-    "macros. Three native backends emit assembly for Linux x86-64, Darwin "
-    "arm64 and Cortex-M0."
+    "macros. The compiler retains its own native assembly backends; the "
+    "README's current compiler capabilities describe target coverage."
 )
 
 #  The two halves of [1830], as the compiler dispatches on them.  The

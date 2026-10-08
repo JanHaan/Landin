@@ -111,6 +111,19 @@ jobs:
             python3 "$test"
           done
 
+      - name: Node for the public assistant controls
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.21.0'
+
+      - name: Public assistant controls and Worker packaging
+        working-directory: docs/site/ask
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
       - name: The determinism, quality and debugging controls
         run: |
           set -eu

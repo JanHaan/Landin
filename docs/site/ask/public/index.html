@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Ask about Landin</title>
+  <link rel="icon" href="icon.svg">
+  <link rel="stylesheet" href="brand.css">
+  <link rel="stylesheet" href="ask.css">
+  <script src="ask.js" defer></script>
+</head>
+<body>
+  <header><a href="https://www.701.dev"><img src="icon.svg" alt="Landin" width="40" height="40"></a>
+    <a href="https://www.701.dev">Read the documents</a></header>
+  <main>
+    <p class="eyebrow">A guide to the language and its compiler</p>
+    <h1>Ask about Landin</h1>
+    <p>Find the rule, understand a diagnostic, or explore how Landin works.
+      Answers are generated and can be wrong. Follow their sources.</p>
+    <p class="notice">Questions and relevant public documentation go to Anthropic.
+      Submitted programs go to an isolated execution server. Questions, answers and
+      submitted code are saved to improve this assistant. Avoid secrets or private code.</p>
+    <form id="ask-form">
+      <div id="private-access" hidden><label for="preview-key">Private preview key</label>
+        <input id="preview-key" type="password" autocomplete="off"></div>
+      <label for="question">Your question</label>
+      <textarea id="question" rows="4" maxlength="2048" required
+        placeholder="How are reference permission and binding mutability different?"></textarea>
+      <div class="actions"><button id="ask" type="submit" disabled>Ask</button>
+        <button id="search" type="button">Find documentation</button></div>
+    </form>
+    <div id="challenge"></div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="result" hidden aria-label="Answer">
+      <div id="answer"></div><ul id="sources"></ul>
+    </section>
+    <section id="example" hidden aria-label="Landin example">
+      <label for="code">Example source</label>
+      <p>Generated examples are unverified. Review or edit the source before running it.</p>
+      <textarea id="code" rows="14" maxlength="8192" spellcheck="false"></textarea>
+      <button id="run" type="button" disabled>Build and run</button>
+      <p id="run-status" role="status" aria-live="polite"></p>
+      <pre id="output"></pre>
+    </section>
+    <details id="editor" hidden><summary>Try your own Landin program</summary>
+      <p>A single source file, up to 8 KiB. No input, network access or persistent files.
+        Execution stops at its resource limits.</p>
+      <button id="new-program" type="button">Open source editor</button>
+    </details>
+    <footer><p id="revision"></p><p>Transcripts are stored privately by the Landin maintainer
+      until deleted. They are not shared with other visitors.</p></footer>
+  </main>
+</body>
+</html>

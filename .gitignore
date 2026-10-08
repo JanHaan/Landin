@@ -5,6 +5,11 @@ compiler/ada/.build-locks/
 .scratch/
 docs/site/site/
 docs/site/landin-site.tar.gz
+docs/site/ask/build/
+docs/site/ask/node_modules
+docs/site/ask/.wrangler/
+docs/site/ask/.dev.vars
+docs/site/ask/.env*
 .claude/worktrees/
 highlight/build/
 highlight/tree-sitter/node_modules/

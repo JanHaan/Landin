@@ -1615,13 +1615,14 @@ def check_roadmap_citations(full_run):
     pointers = (CURRENT_ROADMAP_WORK, NEXT_ROADMAP_ITEM, ENDPOINT_ROADMAP_ITEM)
     out = []
     for here, dirs, files in os.walk(ROOT):
-        #  docs/site contains tracked sources; only its rendered output is
-        #  generated and excluded from the citation check.
+        #  docs/site contains tracked sources. Its rendered pages and the
+        #  assistant's Wrangler cache copy sources into generated output.
         dirs[:] = sorted(d for d in dirs
                          if d not in (".git", "build", ".scratch", ".claude",
                                       "node_modules", "__pycache__")
                          and os.path.relpath(os.path.join(here, d), ROOT)
-                           != os.path.join("docs", "site", "site"))
+                           not in (os.path.join("docs", "site", "site"),
+                                   os.path.join("docs", "site", "ask", ".wrangler")))
         for name in sorted(files):
             relative = os.path.relpath(os.path.join(here, name), ROOT)
             if relative == ROADMAP:

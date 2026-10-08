@@ -127,7 +127,7 @@ still succeed. The linked full run contains the target-test results.
 |---|---|---|
 | `inputs` | self-hosted `linux-arm64` | verify a recent full pass for an identical candidate, or a full main pass for a declared explanatory edit |
 | `documents` | self-hosted `linux-amd64` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
+| `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, the public assistant's Node/workerd controls and Worker packaging, and the determinism, quality and debugging controls |
 | `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
 | `linux-release-build` | self-hosted `linux-amd64` | build the release executables once for the Linux release, Cortex-M and scaling jobs |
 | `release` | self-hosted `linux-amd64` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |

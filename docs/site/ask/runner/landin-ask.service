@@ -1,0 +1,32 @@
+[Unit]
+Description=Isolated Landin execution launcher
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=landin-runner
+Group=landin-runner
+SupplementaryGroups=docker
+WorkingDirectory=/opt/landin-ask
+EnvironmentFile=/etc/landin-ask/runner.env
+Environment=RUNNER_STATE=/var/lib/landin-ask
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+ExecStart=/usr/bin/python3 /opt/landin-ask/server.py
+StateDirectory=landin-ask
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=40
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1165,12 +1165,15 @@ class RoadmapStructure(unittest.TestCase):
                 "docs/site/README.md": "See %s for the rest.\n" % PLANNED,
                 "docs/site/llms.py": "# See %s for the rest.\n" % MEASURED,
                 "docs/site/site/index.html": "See %s for the rest.\n" % CLOSED,
+                "docs/site/ask/src/worker.js": "// %s\n" % PLANNED,
+                "docs/site/ask/build/corpus.json": '"%s"\n' % MEASURED,
+                "docs/site/ask/.wrangler/tmp/worker.js": "// %s\n" % CLOSED,
         }):
             said = [(where, why) for where, _, why
                     in checker.check_roadmap_citations(True)]
         self.assertEqual(
             {where for where, _ in said},
-            {"docs/site/README.md", "docs/site/llms.py"})
+            {"docs/site/README.md", "docs/site/llms.py", "docs/site/ask/src/worker.js"})
         self.assertTrue(any(PLANNED in why for _, why in said))
         self.assertTrue(any(MEASURED in why for _, why in said))
 

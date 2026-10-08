@@ -1,0 +1,19 @@
+# Build from the prepared context, using BASE_IMAGE from environments/pins.sh.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes \
+    ca-certificates curl binutils libc6-dev python3 \
+ && rm -rf /var/lib/apt/lists/*
+COPY pins.sh /opt/landin/pins.sh
+RUN set -eu; . /opt/landin/pins.sh; \
+    landin_install_toolchain /opt/landin-toolchains x86_64-linux; \
+    ln -s "gnat-$LANDIN_GNAT_VERSION" /opt/landin-toolchains/gnat
+COPY refine compiler.sha256 container_entry.py /opt/landin/
+COPY core /opt/landin/core
+RUN cd /opt/landin && sha256sum -c compiler.sha256 && chmod 755 refine
+ENV LANDIN_GNAT_HOME=/opt/landin-toolchains/gnat
+ENV PATH=/opt/landin-toolchains/gnat/bin:/usr/bin:/bin
+USER 65532:65532
+WORKDIR /work
+ENTRYPOINT ["/usr/bin/python3", "/opt/landin/container_entry.py"]

@@ -180,3 +180,17 @@ files it found in them.
 The site has no separate build system or asset pipeline. The shared scanner is
 a file in this repository rather than a package, and Pygments is a dependency
 of the lexer that wraps it rather than of anything the pages need.
+
+## The private question-answering prototype
+
+[`ask/`](ask/README.md) is a separate Cloudflare Worker and browser preview.
+It retrieves passages from these same documents, returns generated answers
+with source links, and enforces a $70 monthly API budget through a shared
+Durable Object. It is private by default and is not published by the Pages
+workflow. Its optional build-and-run endpoint uses Cloudflare Containers with
+a prebuilt compiler and a fresh microVM per job; execution is disabled by default.
+Private transcripts share the SQLite-backed budget service's storage and
+have a separate administrator-only export; the visitor page discloses retention.
+Its execution quota is separate from the API budget and is not a cap on the
+Cloudflare invoice. The reading copies keep their
+standard-library-only build and have no dependency on this service.

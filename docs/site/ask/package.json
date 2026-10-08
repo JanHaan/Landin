@@ -1,0 +1,17 @@
+{
+  "name": "landin-ask",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "python3 build.py",
+    "dev": "npm run build && wrangler dev --ip 127.0.0.1",
+    "test": "npm run build && wrangler deploy --dry-run --outdir build/bundle && node --test tests/*.test.js",
+    "deploy": "python3 build.py --release && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.148.0",
+    "miniflare": "5.20261006.0-alpha"
+  },
+  "overrides": { "sharp": "0.35.5" }
+}
