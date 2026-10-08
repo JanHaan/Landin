@@ -62,7 +62,8 @@ test('bounded documentation loop forwards tool results and signed thinking only 
   try {
     const response = await h.post(); assert.equal(response.status, 200);
     const data = await response.json(); assert.equal(data.steps.length, 3); assert.equal(h.requests.length, 4);
-    assert.equal(h.requests[3].body.tools, undefined);
+    assert.deepEqual(h.requests[3].body.tools.map(t => t.name), ['search_docs']);
+    assert.deepEqual(h.requests[3].body.tool_choice, { type: 'none' });
     assert.equal(h.requests[1].body.messages.at(-2).content[0].signature, 'signed-secret');
     assert.equal(h.requests[1].body.messages.at(-1).content[0].type, 'tool_result');
     assert.equal((await h.budget()).bookedMicroUSD, 600);
@@ -86,7 +87,9 @@ test('compile diagnostics can lead to one repair, using only a fixed source-only
     }
     modelCalls++;
     if (modelCalls <= 2) return tool('compile_run', { code: modelCalls === 1 ? 'broken source' : code });
-    assert.deepEqual(body.tools.map(t => t.name), ['search_docs']);
+    assert.deepEqual(body.tools.map(t => t.name), ['search_docs', 'compile_run']);
+    const initialTools = h.requests.find(r => r.url !== 'https://runner.example/run').body.tools;
+    assert.deepEqual(body.tools, initialTools);
     assert.match(body.messages.at(-1).content[0].content, /"ran"/); return answer(body);
   }, { EXECUTION_ENABLED: 'true', RUNNER_URL: 'https://runner.example/run', RUNNER_KEY: secret });
   try {
@@ -94,6 +97,27 @@ test('compile diagnostics can lead to one repair, using only a fixed source-only
     assert.equal((await response.json()).steps[1].result.exitCode, 42); assert.equal(runs, 2); assert.equal(modelCalls, 3);
     const rows = await h.exportRows(); assert.equal(rows[0].steps[0].code, 'broken source');
     assert.equal(rows[0].steps[0].result.output, 'L0010'); assert.equal(rows[0].calls.length, 3);
+  } finally { await h.mf.dispose(); }
+});
+test('the final response preserves signed tool schemas after searches and execution', async () => {
+  let modelCalls = 0;
+  const h = await harness((body, url) => {
+    if (url === 'https://runner.example/run') return Response.json({ status: 'terminated', output: '', exitCode: -4, compiler: 'a'.repeat(64) });
+    modelCalls++;
+    if (modelCalls <= 2) return tool('search_docs', { query: 'integer overflow' });
+    if (modelCalls === 3) return tool('compile_run', { code });
+    const initial = h.requests.find(r => r.url !== 'https://runner.example/run').body;
+    if (JSON.stringify(body.tools) !== JSON.stringify(initial.tools)) {
+      return Response.json({ error: { type: 'invalid_request_error', message: 'Invalid signature in thinking block. The tools list differs.' } }, { status: 400 });
+    }
+    assert.deepEqual(body.tool_choice, { type: 'none' });
+    assert.equal(body.messages.at(-2).content[0].signature, 'signed-secret');
+    return answer(body);
+  }, { EXECUTION_ENABLED: 'true', RUNNER_URL: 'https://runner.example/run', RUNNER_KEY: secret });
+  try {
+    const response = await h.post(); assert.equal(response.status, 200);
+    assert.equal(modelCalls, 4); assert.equal((await response.json()).steps[2].result.exitCode, -4);
+    assert.equal((await h.exportRows())[0].calls[3].state, 'complete');
   } finally { await h.mf.dispose(); }
 });
 test('duplicate source execution is rejected without a second sandbox attempt', async () => {
@@ -105,12 +129,45 @@ test('duplicate source execution is rejected without a second sandbox attempt', 
   try { assert.equal((await h.post()).status, 502); assert.equal(runs, 1); }
   finally { await h.mf.dispose(); }
 });
+test('retaining signed tool schemas does not authorize a third execution', async () => {
+  let modelCalls = 0, runs = 0;
+  const h = await harness((body, url) => {
+    if (url === 'https://runner.example/run') {
+      runs++; return Response.json({ status: 'compile_error', output: 'L0010', exitCode: 1, compiler: 'a'.repeat(64) });
+    }
+    modelCalls++;
+    return tool('compile_run', { code: 'different source ' + modelCalls });
+  }, { EXECUTION_ENABLED: 'true', RUNNER_URL: 'https://runner.example/run', RUNNER_KEY: secret });
+  try {
+    assert.equal((await h.post()).status, 502); assert.equal(runs, 2); assert.equal(modelCalls, 3);
+    assert.deepEqual(h.requests.at(-1).body.tools.map(t => t.name), ['search_docs', 'compile_run']);
+    assert.equal((await h.exportRows())[0].steps.length, 2);
+  } finally { await h.mf.dispose(); }
+});
 test('uncertain provider failures keep the full turn booking and never retry', async () => {
   const h = await harness(() => new Response('unavailable', { status: 500 }));
   try {
     assert.equal((await h.post()).status, 502); assert.equal(h.requests.length, 1);
     const b = await h.budget(); assert.equal(b.bookedMicroUSD, RESERVATION_MICRO_USD * MAX_AGENT_CALLS); assert.equal(b.active, 0);
-    const rows = await h.exportRows(); assert.equal(rows[0].costMicroUSD, null); assert.equal(rows[0].calls[0].state, 'pending');
+    const rows = await h.exportRows(); assert.equal(rows[0].costMicroUSD, null); assert.equal(rows[0].calls[0].state, 'failed');
+  } finally { await h.mf.dispose(); }
+});
+test('Claude errors retain safe status, type and request ID while hiding raw body and credentials', async () => {
+  const h = await harness(() => Response.json({ type: 'error', request_id: 'req_trace_429',
+    error: { type: 'rate_limit_error', message: 'input tokens per minute exceeded: secret-provider-body' } },
+  { status: 429, headers: { 'retry-after': '12', 'anthropic-ratelimit-input-tokens-limit': '40000',
+    'x-secret-header': 'secret-header-value' } }));
+  try {
+    const response = await h.post(); assert.equal(response.status, 502);
+    assert.match((await response.json()).error, /rate limit/);
+    const rows = await h.exportRows(), failure = rows[0].calls[0].upstream;
+    assert.equal(failure.httpStatus, 429); assert.equal(failure.errorType, 'rate_limit_error');
+    assert.equal(failure.requestId, 'req_trace_429'); assert.equal(failure.retryAfterSeconds, 12);
+    assert.equal(failure.category, 'input_token_rate'); assert.equal(failure.inputTokenLimit, 40000);
+    for (const forbidden of ['secret-provider-body', 'secret-header-value', secret, 'test-api-key']) {
+      assert.equal(JSON.stringify(rows).includes(forbidden), false);
+    }
+    assert.equal(h.requests.length, 1); assert.equal((await h.budget()).bookedMicroUSD, RESERVATION_MICRO_USD * MAX_AGENT_CALLS);
   } finally { await h.mf.dispose(); }
 });
 test('cancellation blocks further tools and overlapping turns', async () => {

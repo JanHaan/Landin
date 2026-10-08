@@ -66,6 +66,7 @@ export async function chatTurn(request, env, corpus, { stub, call, provider, exe
       sources: sourceData(initial), executionAvailable: env.EXECUTION_ENABLED === 'true',
       limits: { modelCalls: MAX_AGENT_CALLS, tools: MAX_AGENT_TOOLS, executions: MAX_AGENT_RUNS } }) });
     let runs = 0;
+    const definitions = [SEARCH, ...(env.EXECUTION_ENABLED === 'true' ? [RUN] : [])];
     const executed = new Set();
     for (let n = 0; n < MAX_AGENT_CALLS; n++) {
       await checkpoint();
@@ -79,12 +80,20 @@ export async function chatTurn(request, env, corpus, { stub, call, provider, exe
         data = await provider({ model: MODEL, max_tokens: MAX_OUTPUT,
           thinking: { type: 'adaptive' }, output_config: { effort: EFFORT },
           system: CHAT_SYSTEM, messages,
-          ...(tools.length ? { tools, tool_choice: { type: 'auto', disable_parallel_tool_use: true } } : {})
+          // Signed thinking is bound to the tool schemas. Keep them identical
+          // throughout this live turn; the local allowlist still rejects tools
+          // whose quota has been used, and none forces the final text response.
+          tools: definitions,
+          tool_choice: tools.length ? { type: 'auto', disable_parallel_tool_use: true } : { type: 'none' }
         }, Math.min(35_000, deadline - Date.now()));
         cost += usageCost(data.usage);
-      } catch (error) { cost = null; throw error; }
+      } catch (error) {
+        calls[n] = { ordinal: n + 1, state: 'failed', ...(error.upstream ? { upstream: error.upstream } : {}) };
+        cost = null; throw error;
+      }
       calls[n] = { ordinal: n + 1, state: 'complete', stopReason: data.stop_reason,
-        inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens };
+        inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens,
+        ...(data.upstream ? { upstream: data.upstream } : {}) };
       await progress();
       await checkpoint();
       if (data.stop_reason === 'end_turn') {

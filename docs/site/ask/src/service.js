@@ -3,22 +3,10 @@ import { Failure, MODEL, EFFORT, MAX_OUTPUT, MAX_BODY_BYTES, MAX_CODE_BYTES,
   clientIdentity, usageCost, digest } from "./policy.js";
 import { retrieve, SYSTEM, messages, validateAnswer } from "./retrieval.js";
 import { chatTurn, conversationCredentials } from "./chat.js";
+import { remoteJSON } from "./upstream.js";
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-async function remoteJSON(url, options, fetcher, limit = 32_768, timeoutMS = 35_000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMS);
-  try {
-    // Workerd supports manual/follow, not the browser's redirect="error".
-    // Reject every non-success status below without following a destination
-    // that could receive the provider key or runner authorization.
-    const response = await fetcher(url, { ...options, signal: controller.signal, redirect: "manual" });
-    if (!response.ok) throw new Failure(502, "The upstream service is unavailable. Try later.");
-    return parseJSON(await boundedText(response.body, limit));
-  } finally { clearTimeout(timeout); }
 }
 
 async function authorize(request, env, operation, fetcher) {
@@ -228,6 +216,7 @@ export function createService(corpus, fetcher = fetch) {
                     system: SYSTEM, messages: messages(text, passages) })
                 }, fetcher, 96_000);
                 cost = usageCost(data.usage);
+                recording.upstream = data.upstream;
                 recording.usage = { inputTokens: data.usage.input_tokens,
                   outputTokens: data.usage.output_tokens, stopReason: data.stop_reason };
                 if (data.stop_reason !== "end_turn") {
@@ -270,6 +259,7 @@ export function createService(corpus, fetcher = fetch) {
           response = await env.ASSETS.fetch(request);
         }
       } catch (error) {
+        if (recording && error.upstream) recording.upstreamFailure = error.upstream;
         response = json({ error: error instanceof Failure ? error.message : "The service is unavailable. Try later." },
           error instanceof Failure ? error.status : 503);
       }
@@ -294,7 +284,9 @@ export function createService(corpus, fetcher = fetch) {
           await ledgerCall(recording.stub, "transcripts/finish", { id: recording.id,
             finished: new Date().toISOString(), status: response.status,
             response: await response.clone().json(), usage: recording.usage,
-            costMicroUSD: recording.costMicroUSD, upstreamAttempted: recording.upstreamAttempted });
+            costMicroUSD: recording.costMicroUSD, upstreamAttempted: recording.upstreamAttempted,
+            ...(recording.upstream ? { upstream: recording.upstream } : {}),
+            ...(recording.upstreamFailure ? { upstreamFailure: recording.upstreamFailure } : {}) });
         } catch {
           // A pending row survives a crash or failed completion write. No
           // answer is delivered when its transcript cannot be saved.

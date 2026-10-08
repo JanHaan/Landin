@@ -68,7 +68,10 @@ upstream endpoints. Visitor input cannot supply tools, system messages,
 models or destinations. The bounded agent loop has only `search_docs` and,
 when execution is enabled, `compile_run`. It can inspect compiler diagnostics
 and repair source. Each turn allows at most four model calls, three tool calls,
-two sandbox attempts and 90 seconds. The last model call has no tools. Parallel
+two sandbox attempts and 90 seconds. Every model call keeps the same tool schemas
+because provider thinking signatures are bound to that list. The last call
+explicitly sets `tool_choice: none`, preventing further calls. Local admission
+still refuses a third execution even though its schema remains present. Parallel
 tool requests, unknown tools, oversized arguments and duplicate executions of
 the same source are rejected. Transport failures never trigger another attempt.
 Build and run also lets the visitor test an edited source file manually.
@@ -289,6 +292,15 @@ next model call; interrupted turns can retain partial progress. Generated exampl
 Headers, API/preview/administrator keys, Turnstile tokens, raw IPs and provider
 thinking are not copied into records. Visitors are told before submitting
 that transcripts are stored to improve the assistant, and to avoid private code.
+
+Claude calls retain selected diagnostic metadata: HTTP status, a validated
+request ID, numeric rate-limit headers and, on failure, an allowlisted error
+type and fixed category. Raw provider error messages and other headers are
+discarded. A failed call is marked `failed`, rather than left indistinguishable
+from an interrupted call. Visitor messages distinguish API rate limits,
+overload, access rejection, billing limits and request rejection. There is no
+automatic retry, escalation or budget reset. See
+[Claude API errors](https://platform.claude.com/docs/en/api/errors).
 
 An input record must be persisted before calling the model or sandbox. A
 completion record must be saved before delivering an answer. Interrupted work
