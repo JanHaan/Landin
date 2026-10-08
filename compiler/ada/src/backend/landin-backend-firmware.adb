@@ -101,6 +101,7 @@ package body Landin.Backend.Firmware is
       & "cpsie i" & LF
       & "bl " & Entry_Symbol & "" & LF
       & ".globl _landin_firmware_returned" & LF
+      & ".thumb_func" & LF
       & "_landin_firmware_returned:" & LF
       & Returned & LF
       & "b _landin_firmware_returned" & LF
