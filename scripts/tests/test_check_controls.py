@@ -11,6 +11,7 @@ tree that satisfies it, and shows it speaking on one that does not.  Where
 a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
+import json
 import re
 import subprocess
 import sys
@@ -350,6 +351,29 @@ class DebuggerContract(unittest.TestCase):
             said = [why for _, _, why in checker.check_debugger_contract(True)]
         self.assertTrue(said)
         self.assertIn("workload schedule", said[0])
+
+    def test_a_moved_source_without_resorting_is_reported(self):
+        from check_controls import tree
+        with tree(copied=DEBUGGER) as root:
+            target = root / "compiler/tests/debugging/workload-sources.json"
+            inventory = json.loads(target.read_text())
+            names = inventory["parser"]
+            hosted = next(name for name in names if name.startswith("hosted/"))
+            names.remove(hosted)
+            names.insert(2, hosted)
+            target.write_text(json.dumps(inventory))
+            said = [why for _, _, why in checker.check_debugger_contract(True)]
+        self.assertTrue(any("sorted unique" in why for why in said))
+
+    def test_a_duplicate_source_is_reported(self):
+        from check_controls import tree
+        with tree(copied=DEBUGGER) as root:
+            target = root / "compiler/tests/debugging/workload-sources.json"
+            inventory = json.loads(target.read_text())
+            inventory["parser"] = sorted(inventory["parser"] + inventory["parser"][:1])
+            target.write_text(json.dumps(inventory))
+            said = [why for _, _, why in checker.check_debugger_contract(True)]
+        self.assertTrue(any("sorted unique" in why for why in said))
 
 
 class HostedDerivation(unittest.TestCase):

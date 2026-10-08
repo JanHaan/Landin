@@ -7073,12 +7073,30 @@ def check_debugger_contract(full_run):
     """Keep complete workloads wired to both native compiler modes."""
     if not full_run:
         return []
-    paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py"]
+    paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py",
+             "compiler/tests/debugging/workload-sources.json"]
     out = absent(paths)
     if not out:
         import runpy
         debugger = runpy.run_path(paths[1], run_name="debugger_contract_check")
         out += debugger_workload_problems(debugger)
+        try:
+            with io.open(paths[2], encoding="utf-8") as stream:
+                inventory = json.load(stream)
+        except (ValueError, OSError) as exc:
+            out.append((paths[2], 1, "debugger source inventory: " + str(exc)))
+            return out
+        if (not isinstance(inventory, dict)
+                or set(inventory) != {"parser", "containers", "hosted"}):
+            out.append((paths[2], 1, "debugger source inventories must cover "
+                        "parser, containers and hosted"))
+            return out
+        for workload, names in inventory.items():
+            if (not isinstance(names, list) or not names
+                    or any(not isinstance(name, str) for name in names)
+                    or names != sorted(set(names))):
+                out.append((paths[2], 1, workload + " debugger source inventory "
+                            "must be a nonempty sorted unique path list"))
     # The retired acceptance policy independently held both debugger modes to the
     # canonical policy, including the clean builds and required tool identity.
     return out

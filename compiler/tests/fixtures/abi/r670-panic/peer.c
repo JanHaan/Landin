@@ -26,7 +26,7 @@ int main(void)
     /* Independent source-byte pins, not values read from generated assembly.
        Each byte reserves four family slots: 1 + 4*offset + family-1. */
     static const uint32_t kinds[] = {2,3,1,2,1,3,4,2,2,2,4,3,3,3};
-    static const uint32_t sites[] = {3730,3951,4261,4490,4681,4879,5060,3730,2998,3730,0,5551,5959,6763};
+    static const uint32_t sites[] = {3750,3971,4281,4510,4701,4899,5080,3750,3018,3750,0,5571,5979,6783};
     static const int32_t values[] = {1,256,2,0,-1,2,0,1,0,1,0,0,0,255};
     struct rlimit limit = {0, 0};
     if (setrlimit(RLIMIT_CORE, &limit) != 0) return 1;
