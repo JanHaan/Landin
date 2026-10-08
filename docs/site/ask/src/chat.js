@@ -1,6 +1,6 @@
 import { Failure, MODEL, EFFORT, MAX_OUTPUT, MAX_CODE_BYTES, MAX_QUESTION_BYTES,
   MAX_CHAT_BODY_BYTES, MAX_AGENT_CALLS, MAX_AGENT_TOOLS, MAX_AGENT_RUNS,
-  CHAT_DEADLINE_MS, boundedText, parseJSON, inputText, clientIdentity, usageCost } from './policy.js';
+  CHAT_DEADLINE_MS, boundedText, parseJSON, inputText, clientIdentity, usageCost, digest } from './policy.js';
 import { retrieve, SYSTEM, validateAnswer } from './retrieval.js';
 
 const CHAT_SYSTEM = SYSTEM.replace('Do not claim to have compiled or executed code.',
@@ -60,7 +60,7 @@ export async function chatTurn(request, env, corpus, { stub, call, provider, exe
     const messages = begun.history.flatMap(entry => [
       { role: 'user', content: JSON.stringify({ question: entry.question, workspaceCode: entry.workspaceCode }) },
       { role: 'assistant', content: JSON.stringify({ answer: entry.answer, citations: entry.citations,
-        code: entry.code, execution: entry.execution }) }
+        code: entry.code, codeSHA256: entry.codeSHA256, execution: entry.execution }) }
     ]);
     messages.push({ role: 'user', content: JSON.stringify({ question, workspaceCode,
       sources: sourceData(initial), executionAvailable: env.EXECUTION_ENABLED === 'true',
@@ -94,8 +94,9 @@ export async function chatTurn(request, env, corpus, { stub, call, provider, exe
         // in the transcript. Tool reasoning/signatures live only in this turn.
         await call(stub, 'conversation/finish', { ...session, entry: { question, workspaceCode,
           answer: answer.answer.slice(0, 6000), citations: answer.citations.map(p => p.id),
-          code: answer.code, execution: steps.filter(s => s.tool === 'compile_run').map(s => ({
-            status: s.result?.status, exitCode: s.result?.exitCode, output: s.result?.output.slice(0, 2000) })) } });
+          code: answer.code, codeSHA256: answer.code ? await digest(answer.code) : null,
+          execution: await Promise.all(steps.filter(s => s.tool === 'compile_run').map(async s => ({
+            sourceSHA256: await digest(s.code), status: s.result?.status, exitCode: s.result?.exitCode, output: s.result?.output.slice(0, 2000) }))) } });
         break;
       }
       const uses = data.content?.filter(block => block.type === 'tool_use') || [];

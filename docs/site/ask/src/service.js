@@ -1,6 +1,6 @@
 import { Failure, MODEL, EFFORT, MAX_OUTPUT, MAX_BODY_BYTES, MAX_CODE_BYTES,
   MAX_QUESTION_BYTES, boundedText, parseJSON, inputText, sameSecret,
-  clientIdentity, usageCost } from "./policy.js";
+  clientIdentity, usageCost, digest } from "./policy.js";
 import { retrieve, SYSTEM, messages, validateAnswer } from "./retrieval.js";
 import { chatTurn, conversationCredentials } from "./chat.js";
 
@@ -104,7 +104,7 @@ export function createService(corpus, fetcher = fetch) {
       const url = new URL(request.url);
       const origin = request.headers.get("origin");
       const permitted = !origin || origin === url.origin || origin === env.ALLOWED_ORIGIN;
-      let response, recording;
+      let response, recording, manualSession;
       const beginTranscript = async (operation, text, input) => {
         const id = crypto.randomUUID(), stub = coordinator(env);
         const conversation = typeof input.conversation === "string"
@@ -117,6 +117,12 @@ export function createService(corpus, fetcher = fetch) {
           maxOutput: operation === "ask" ? MAX_OUTPUT : null,
           snapshot: { commit: corpus.commit, sha256: corpus.sha256, dirty: corpus.dirty } });
         recording = { id, stub, usage: null, costMicroUSD: null, upstreamAttempted: false };
+        if (["search", "run"].includes(operation) && request.headers.has("x-conversation-key")) {
+          const credentials = await conversationCredentials(request, input);
+          const session = { ...credentials, turn: id };
+          await ledgerCall(stub, "conversation/begin", session);
+          manualSession = { stub, session, operation, text };
+        }
       };
       try {
         if (!permitted) throw new Failure(403, "This origin is not allowed.");
@@ -170,8 +176,8 @@ export function createService(corpus, fetcher = fetch) {
           await ledgerCall(stub, "reserve", { id, client, operation: "search" });
           try {
             await beginTranscript("search", question, input);
-            response = json({ sources: retrieve(corpus, question).map(({ title, url, source, authority }) =>
-              ({ title, url, source, authority })) });
+            response = json({ sources: retrieve(corpus, question).map(({ id, title, url, source, authority }) =>
+              ({ id, title, url, source, authority })) });
           } finally { await ledgerCall(stub, "settle", { id, cost: 0 }); }
         } else if (["/api/ask", "/api/run"].includes(url.pathname) && request.method === "POST") {
           const operation = url.pathname.endsWith("run") ? "run" : "ask";
@@ -265,6 +271,22 @@ export function createService(corpus, fetcher = fetch) {
       } catch (error) {
         response = json({ error: error instanceof Failure ? error.message : "The service is unavailable. Try later." },
           error instanceof Failure ? error.status : 503);
+      }
+      if (manualSession) {
+        try {
+          const { stub, session, operation, text } = manualSession;
+          const data = await response.clone().json();
+          const hash = operation === "run" && response.ok ? await digest(text) : null;
+          await ledgerCall(stub, "conversation/finish", { ...session, ...(response.ok ? { entry: {
+            question: operation === "search" ? text : "Build and run this source file.",
+            workspaceCode: operation === "run" ? text : "", code: operation === "run" ? text : null,
+            codeSHA256: hash, citations: (data.sources || []).map(p => p.id),
+            answer: operation === "search" ? "Relevant documentation was found."
+              : `Manual run: ${data.status}; exit ${data.exitCode ?? "unavailable"}.`,
+            execution: operation === "run" ? [{ sourceSHA256: hash, status: data.status,
+              exitCode: data.exitCode, output: data.output.slice(0, 2000) }] : []
+          } } : {}) });
+        } catch { response = json({ error: "Conversation storage is unavailable. Try later." }, 503); }
       }
       if (recording) {
         try {

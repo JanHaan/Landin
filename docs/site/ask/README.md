@@ -76,7 +76,11 @@ Build and run also lets the visitor test an edited source file manually.
 The browser sends only a question and its current source file, never model
 history. A server-owned conversation stores at most eight completed pairs in
 64 KiB of context, dropping old pairs together; full transcripts remain saved.
-A random conversation capability is kept in page memory and sent as a header.
+Manual build/run results and documentation searches also enter the trusted
+conversation context, so a follow-up can refer to the console or sources.
+Stored execution results carry the exact source hash; a changed final example
+does not inherit an earlier program's verification. A random conversation
+capability is kept in page memory and sent as a header.
 A shared preview key alone cannot read another conversation. One turn may be
 active per conversation. Stop records cancellation; an in-flight call can finish,
 but no further model or tool calls are admitted afterwards. Reloading loses the

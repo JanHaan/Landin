@@ -35,7 +35,7 @@ async function call(operation, body, signal) {
     if (config.private) headers['X-Preview-Key'] = byID('preview-key').value;
     else headers['X-Turnstile-Token'] = await token(operation.startsWith('chat') ? 'ask' : operation);
   }
-  if (operation.startsWith('chat')) headers['X-Conversation-Key'] = conversationKey;
+  headers['X-Conversation-Key'] = conversationKey;
   const response = await fetch('/api/' + operation, { method: 'POST', headers,
     body: JSON.stringify({ ...body, conversation }), signal: signal || AbortSignal.timeout(60_000) });
   const result = await response.json();
@@ -135,7 +135,8 @@ byID('clear-console').addEventListener('click', () => byID('console').replaceChi
 byID('run').addEventListener('click', async () => {
   if (pending) return; const source = byID('code').value;
   busy(true); byID('run-status').textContent = 'Building and running…';
-  try { const result = await call('run', { code: source }); execution(result, source, 'Your run'); sourceChanged(); }
+  try { const result = await call('run', { code: source }); execution(result, source, 'Your run'); sourceChanged();
+    message('assistant', `Manual run: ${result.status}; exit ${result.exitCode ?? 'unavailable'}. The result is in the console.`, [], source); }
   catch (error) { byID('run-status').textContent = error.message; }
   finally { busy(false); }
 });

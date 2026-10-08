@@ -154,3 +154,20 @@ test('private search requires auth and its quota bounds transcript writes withou
     assert.equal((await h.budget()).bookedMicroUSD, 0);
   } finally { await h.mf.dispose(); }
 });
+test('manual runs and document searches become trusted context for the next message', async () => {
+  const h = await harness((body, url) => url === 'https://runner.example/run'
+    ? Response.json({ status: 'ran', exitCode: 42, output: 'result', compiler: 'a'.repeat(64) }) : answer(body),
+  { EXECUTION_ENABLED: 'true', RUNNER_URL: 'https://runner.example/run', RUNNER_KEY: secret });
+  try {
+    assert.equal((await h.post('run', { code })).status, 200);
+    assert.equal((await h.post('search', { question: 'memory arenas' })).status, 200);
+    assert.equal((await h.post('chat', { question: 'Explain that run and those documents' })).status, 200);
+    const body = h.requests.at(-1).body;
+    assert.equal(body.messages.length, 5);
+    const manual = JSON.parse(body.messages[1].content);
+    assert.equal(manual.execution[0].exitCode, 42); assert.equal(manual.execution[0].output, 'result');
+    assert.equal(manual.codeSHA256, manual.execution[0].sourceSHA256);
+    assert.equal(JSON.parse(body.messages[3].content).citations.length > 0, true);
+    const rows = await h.exportRows(); assert.equal(rows[2].contextTurns, 2);
+  } finally { await h.mf.dispose(); }
+});
