@@ -106,6 +106,18 @@ class ProbeFailures(unittest.TestCase):
              ('diag', 'failing', 'io', 'map', 'mem', 'panic', 'pool', 'region',
               'small', 'sort', 'text', 'tree', 'vec')})
 
+    def test_shared_library_inventory_requires_each_small_consumer(self):
+        from freestanding import MODULES, ROOT
+        actual = {'core/'+directory.name for directory in (ROOT / 'core').iterdir()
+                  if directory.is_dir() and any(directory.glob('*.ldn'))}
+        self.assertEqual(actual, {module for module in MODULES
+                                  if module.startswith('core/')})
+        for module in actual:
+            fixture = (ROOT / 'compiler/tests/fixtures/runtime'
+                       / ('library-shared-'+module.split('/')[1]))
+            self.assertTrue((fixture / 'main.ldn').is_file(), module)
+            self.assertTrue((fixture / 'fixture.meta').is_file(), module)
+
     def test_oracle_refuses_false_pass(self):
         for text in ('', 'PASS PASS', 'PASS\nAssertionError', 'PASS\n[WARNING] bad',
                      'PASS\nThere was an error executing command'):

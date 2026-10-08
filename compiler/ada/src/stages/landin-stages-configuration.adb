@@ -1,12 +1,12 @@
 with Landin.Targets.Capabilities;
 with Ada.Containers.Vectors;
+with Ada.Strings.Unbounded;
 
 with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Modules;
 with Landin.Modules.Availability;
-with Ada.Strings.Unbounded;
 with Landin.Diagnostics.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
@@ -57,6 +57,7 @@ package body Landin.Stages.Configuration is
       Activity : constant not null access Landin.Configuration.Table :=
         Configurations (Context);
       Found : Landin.Diagnostics.Diagnostic_List;
+      Unavailable_Import : Boolean := False;
 
       type Fixed_Kind is
         (Bad_Value, Truth, Number, Machine, Byte_Order, Build_Kind,
@@ -1187,6 +1188,7 @@ package body Landin.Stages.Configuration is
                     (Ada.Strings.Unbounded.To_String (Logical),
                      Target (Context))
                   then
+                     Unavailable_Import := True;
                      Landin.Diagnostics.Modules.Report
                        (Item => Landin.Diagnostics.Modules
                           .Module_Unavailable_For_Target,
@@ -1215,6 +1217,26 @@ package body Landin.Stages.Configuration is
                   end if;
                end;
             end loop;
+         end;
+      end loop;
+      if Unavailable_Import then
+         declare
+            Ordered : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Diagnostics.Sorted (Found);
+         begin
+            for Index in 1 .. Landin.Diagnostics.Count (Ordered) loop
+               Report (Context, Landin.Diagnostics.Get (Ordered, Index));
+            end loop;
+         end;
+         Outcome := Stop;
+         return;
+      end if;
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all, Nth_Source (Context, Index));
+         begin
             for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
                Gather_Options
                  (Of_Tree.all,

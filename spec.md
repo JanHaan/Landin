@@ -14487,6 +14487,45 @@ mistake once for every use.
 The C boundary, the machine directives, the entry point, and the
 contract an optimization has to keep.
 
+### D267 — Library source namespaces declare target availability
+
+**Chosen:** `core/*` is the shared freestanding library. Every public interface
+of core/diag, core/failing, core/io, core/map, core/mem, core/panic, core/pool,
+core/region, core/small, core/sort, core/text, core/tree and core/vec is available
+on every target. Target-specific implementation does not change its interface
+or introduce hosted authority. The memory-backed I/O provider remains part of
+core/io; importing it does not select hosted I/O or allocation.
+
+`hosted/*` is available only where the target has a hosted system. The current
+modules are hosted/heap and hosted/io. The latter is ordinarily imported
+`as hosted` when a consumer also imports core/io. `platform/*` holds scoped
+freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
+AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
+does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cpu
+admits the Cortex M-profile family, including armv6-m, armv7-m and armv7e-m
+feature levels, and refuses hosted architectures. Existing compiler.assert
+source guards remain. No generic package manifest is introduced.
+
+Availability is a property of the written source namespace, independent of
+project-first module selection. It is checked for rooted imports and
+explicit-file compatibility requests before name resolution. An unavailable
+import reports L0015 once at the import, names the module and states its target
+requirement; checking stops without later missing-name errors. Names hosted and
+platform remain ordinary identifiers. Imports are the source prelude, not
+declarations within fixed arms; inactive declarations cannot make an import
+available or unavailable. Runtime helpers are selected only by reached
+operations; moving modules does not add an implicit import.
+
+**Alternative:** using pointer width to admit C aliases would enable an ABI
+whose transport is not implemented. Relying only on provider bodies would let
+a harmless project override bypass a firmware refusal. Namespace checking
+preserves root selection while making availability explicit.
+
+**Pinned by** `negative/library-platform-cpu-hosted`, the driver case
+`source namespaces enforce target availability` and the separately sized
+shared-library consumers.
+
+
 ### D12 — The first hosted path accepts one `main` shape
 
 **The tour said** that hosted `main` follows the system C ABI, calls the
@@ -17139,40 +17178,3 @@ row. The C fixture publishes its argument through an ordinary external
 `cstring` result, then uses the existing explicitly unsafe integer-pointer
 round trip to install `C2 00` and a later ignored byte; it does not add a
 pointer-to-cstring conversion.
-
-### D267 — Library source namespaces declare target availability
-
-**Chosen:** `core/*` is the shared freestanding library. Every public interface
-of core/diag, core/failing, core/io, core/map, core/mem, core/panic, core/pool,
-core/region, core/small, core/sort, core/text, core/tree and core/vec is available
-on every target. Target-specific implementation does not change its interface
-or introduce hosted authority. The memory-backed I/O provider remains part of
-core/io; importing it does not select hosted I/O or allocation.
-
-`hosted/*` is available only where the target has a hosted system. The current
-modules are hosted/heap and hosted/io. The latter is ordinarily imported
-`as hosted` when a consumer also imports core/io. `platform/*` holds scoped
-freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
-AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
-does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cpu
-admits the Cortex M-profile family, including armv6-m, armv7-m and armv7e-m
-feature levels, and refuses hosted architectures. Existing compiler.assert
-source guards remain. No generic package manifest is introduced.
-
-Availability is a property of the written source namespace, independent of
-project-first module selection. It is checked for rooted imports and
-explicit-file compatibility requests before name resolution. An unavailable
-import reports L0015 once at the import, names the module and states its target
-requirement; checking stops without later missing-name errors. Names hosted and
-platform remain ordinary identifiers. Imports are the source prelude, not
-declarations within fixed arms; inactive declarations cannot make an import
-available or unavailable. Runtime helpers are selected only by reached
-operations; moving modules does not add an implicit import.
-
-**Alternative:** using pointer width to admit C aliases would enable an ABI
-whose transport is not implemented. Relying only on provider bodies would let
-a harmless project override bypass a firmware refusal. Namespace checking
-preserves root selection while making availability explicit.
-
-**Pinned by** the driver case `source namespaces enforce target availability`
-and the separately sized shared-library consumers.

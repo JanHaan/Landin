@@ -302,24 +302,24 @@
     },
     "runtime/benchmark-game-fannkuch-redux": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-fasta": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-mandelbrot": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/binary-search": {
       "mode": "execute"
@@ -341,7 +341,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
+      "reason": "Source namespace checking refuses platform/c on the freestanding target before checking declarations."
     },
     "runtime/caller-is-an-ordinary-name": {
       "mode": "execute"
@@ -413,10 +413,10 @@
     },
     "runtime/core-io-erased-system": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/core-io-identity-memory": {
       "mode": "execute"
@@ -432,25 +432,24 @@
     },
     "runtime/core-mem-initialized-objects": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-mem-initialized-prefix": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-mem-owned-bytes": {
       "codes": [
-        "L0300",
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-mem-raw-storage": {
       "counterpart": "core-mem-raw-storage",
@@ -459,17 +458,17 @@
     },
     "runtime/core-mem-reference-prefix": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-mem-zero-prefix": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-text-byte-positions": {
       "mode": "execute"
@@ -481,42 +480,41 @@
     },
     "runtime/core-tree-count-overflow": {
       "codes": [
-        "L0300",
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "This hosted tree boundary fixture uses usize literals above the Cortex-M0 32-bit range, including a 64-bit leaf-count boundary, and imports the hosted heap's unsupported general C source surface. The target-sized tree fields remain 32-bit on Cortex-M0."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-tree-indices": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-tree-provider-failures": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-vec-pointer-storage": {
       "mode": "execute"
     },
     "runtime/core-vec-used-references": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/core-vec-used-sort": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/cstring-conversion-truncated-traps": {
       "codes": [
@@ -575,34 +573,34 @@
     },
     "runtime/derived-containers": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "The complete hosted derivative imports hosted/heap, whose allocator/releaser require extern(c); the freestanding core slice has no such provider. This is not an emulator execution verdict."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/derived-hosted-memory": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap, hosted/io on the freestanding target before checking declarations."
     },
     "runtime/derived-parser": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/derived-storage-address-origin": {
       "mode": "execute"
     },
     "runtime/diagnostic-loggers-dispatch": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
@@ -649,10 +647,10 @@
     },
     "runtime/fizzbuzz": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/float-decimal-rounding": {
       "mode": "execute"
@@ -785,18 +783,17 @@
     },
     "runtime/hosted-heap-provider": {
       "codes": [
-        "L0300",
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/hosted-io-reads-parser-input": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/hosted-text-traversal": {
       "mode": "execute"
@@ -1135,10 +1132,10 @@
     },
     "runtime/r420-argument-text-worlds": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/r420-array-place-recovery": {
       "mode": "execute"
@@ -1150,10 +1147,10 @@
     },
     "runtime/r420-failing-providers": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-fixed-array-pointer-whole-copy": {
       "mode": "execute"
@@ -1178,17 +1175,17 @@
     },
     "runtime/r420-map-operations": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-map-reference-providers": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-memory-delivery": {
       "mode": "execute",
@@ -1212,10 +1209,10 @@
     },
     "runtime/r420-object-buffer-providers": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-pool-provider": {
       "mode": "execute",
@@ -1224,27 +1221,27 @@
     },
     "runtime/r420-reader-cleanup": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-reference-provider-matrix": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-runtime-array-writes": {
       "mode": "execute"
     },
     "runtime/r420-small-aggregate": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-small-real-exhaustion": {
       "mode": "execute",
@@ -1258,17 +1255,17 @@
     },
     "runtime/r420-small-vector-providers": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-stateful-filter-list": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r420-static-nested-array-stores": {
       "mode": "execute"
@@ -1316,7 +1313,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
+      "reason": "Source namespace checking refuses platform/c on the freestanding target before checking declarations."
     },
     "runtime/r440-callback-pointer-witness": {
       "codes": [
@@ -1333,7 +1330,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
+      "reason": "Source namespace checking refuses platform/c on the freestanding target before checking declarations."
     },
     "runtime/r440-checker-qualified-range-traps": {
       "mode": "execute"
@@ -1343,10 +1340,10 @@
     },
     "runtime/r440-errno-detail": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/r440-io-partial-progress": {
       "mode": "execute",
@@ -1484,17 +1481,17 @@
     },
     "runtime/r480-hosted-count": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap, hosted/io on the freestanding target before checking declarations."
     },
     "runtime/r480-hosted-text": {
       "codes": [
-        "L0346"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "Source namespace checking refuses hosted/heap, hosted/io on the freestanding target before checking declarations."
     },
     "runtime/r480-loop-fresh-view": {
       "mode": "execute"

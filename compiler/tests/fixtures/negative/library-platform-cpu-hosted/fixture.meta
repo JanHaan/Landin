@@ -1,0 +1,6 @@
+class: negative
+summary: A hosted target refuses the M-profile CPU namespace before missing-name checking
+program: main.ldn
+codes: L0015
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
+constructs: 1410, 1420, 1480

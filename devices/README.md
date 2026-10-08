@@ -156,7 +156,7 @@ the retired acceptance, not this interface guide.
 The QEMU consumer cold-boots compiler-generated reset/vectors/linker output,
 checks initialized data and BSS, immutable flash, RAM-code copying, literal
 addresses/strides/layouts, raw reserved/unnamed bits, encoded updates and nested
-`core/cpu` mask restoration. Stack paint reports only observed writes. QEMU
+`platform/cpu` mask restoration. Stack paint reports only observed writes. QEMU
 executes compiler-generated firmware against `FixturePeripheral` in
 `environments/cortex-m/models.py`, served at every access by the harness in
 `machine.py`, whose

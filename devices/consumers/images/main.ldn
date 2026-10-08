@@ -5,7 +5,7 @@ import rp2040/timer
 import rp2040/uart0
 import rp2040/uart1
 import rp2040/dma
-import core/cpu
+import platform/cpu
 
 mut initialized: u32 = 0x680
 mut cleared: u32 = 0

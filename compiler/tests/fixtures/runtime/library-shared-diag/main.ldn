@@ -2,7 +2,7 @@ import core/diag
 
 exercise: () -> (ok: bool) ! diag.out_of_bounds =
     ok = false
-    mut value := diag.new_log(capacity: usize(1))
+    mut value := diag.new_log(capacity: 1)
     return when diag.stored(addr value) <> 0 or diag.dropped(addr value) <> 0
     _ = diag.note_at(addr value, usize(0)) else (problem)
         ok = problem == diag.out_of_bounds

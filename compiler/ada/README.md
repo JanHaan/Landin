@@ -125,6 +125,7 @@ different responsibilities.
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and freed with the forest | hand out a tree that can be copied, written to or kept past the forest |
 | `Landin.Formatting` | D252's layout of one source's bytes: the scan and the parse as locals, the edits that take the source to the layout, and a re-scan that the edits changed no token and no comment | read anything later than the parse, keep anything past the call, break or join a line, or write a file |
 | `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
+| `Landin.Modules.Availability` | source namespace availability from target facts, independent of root selection | read the host, resolve imports, enable an ABI or select runtime authority |
 | `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |

@@ -18,7 +18,7 @@ for Linux x86-64, Linux arm64, Linux RV64, FreeBSD x86-64 and arm64, and
 native macOS arm64, and builds firmware for
 Cortex-M0. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
-`any`. Hosted containers, allocators, text and I/O in `core`, a complete
+`any`. Containers, allocators, text and I/O capabilities, a complete
 recovering configuration parser and a hosted log filter now run alongside the
 automatically tested sensor-polling, FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and

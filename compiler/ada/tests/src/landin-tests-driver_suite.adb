@@ -5192,6 +5192,9 @@ package body Landin.Tests.Driver_Suite is
    procedure Namespace_Availability (Item : in out Landin.Testing.Context);
 
    procedure Namespace_Availability (Item : in out Landin.Testing.Context) is
+      Unavailable_Code : constant String := "L0015";
+      Unavailable_Error : constant String :=
+        "error[" & Unavailable_Code & "]:";
       procedure Refused (Target, Logical : String; Rooted : Boolean;
                          Transitive : Boolean := False);
       procedure Refused (Target, Logical : String; Rooted : Boolean;
@@ -5234,7 +5237,7 @@ package body Landin.Tests.Driver_Suite is
          begin
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Reported
-               and then Occurrences (Report, "error[L0015]:") = 1
+               and then Occurrences (Report, Unavailable_Error) = 1
                and then Occurrences (Report, "error[") = 1
                and then Contains (Report, Logical),
                "unavailable import is named once without a cascade");
@@ -5254,7 +5257,7 @@ package body Landin.Tests.Driver_Suite is
            ("root/platform/cpu/cpu.ldn", "public answer: u32 = 42");
          Host.Add_File
            ("root/app/main.ldn", "import platform/cpu" & LF
-            & "answer: u32 = cpu.answer");
+            & "read: () -> (answer: u32) = answer = cpu.answer end read");
          Args.Append ("--root=root");
          Args.Append ("--target=cortex-m0");
          Args.Append ("--level=" & Level);
@@ -5266,10 +5269,39 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Success
                and then Unbounded.Length (Result.Report) = 0,
-               "M-profile CPU namespace admits " & Level);
+               "M-profile CPU namespace admits " & Level
+               & ": " & Unbounded.To_String (Result.Report));
          end;
       end CPU_Accepted;
+      procedure Explicit_Preflight;
+      procedure Explicit_Preflight is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File
+           ("app.ldn", "import hosted/heap" & LF & "answer := missing");
+         Host.Add_File
+           ("heap.ldn", "compiler.assert(compiler.os == linux)" & LF
+            & "public answer := 42");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("app.ldn");
+         Args.Append ("heap.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Occurrences (Report, Unavailable_Error) = 1
+               and then Occurrences (Report, "error[") = 1,
+               "availability preflight stops supplied provider configuration"
+               & " and missing-name checking");
+         end;
+      end Explicit_Preflight;
    begin
+      Explicit_Preflight;
       CPU_Accepted ("armv6-m");
       CPU_Accepted ("armv7-m");
       CPU_Accepted ("armv7e-m");

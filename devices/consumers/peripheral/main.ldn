@@ -4,7 +4,7 @@ import rp2040/sio
 import rp2040/uart0
 import rp2040/timer
 import rp2040/dma
-import core/cpu
+import platform/cpu
 
 gpio_base: usize = 0x40070000
 sio_base: usize = 0x40070100

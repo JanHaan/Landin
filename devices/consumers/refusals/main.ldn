@@ -1,7 +1,7 @@
 -- Runtime failure inputs come from the synthetic device, not constant folding.
 import rp2040/io_bank0
 import rp2040/uart0
-import core/cpu
+import platform/cpu
 import core/panic
 
 mut observed_kind: u32 = 0
