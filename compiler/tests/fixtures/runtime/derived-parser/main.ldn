@@ -1,6 +1,6 @@
 import core/diag
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import core/mem
 import core/text
 import examples/config_parser/lexer

@@ -1,7 +1,7 @@
 --  The Benchmark Game correctness image is 200 by 200.  Each membership bit
 --  is packed most-significant first and written in binary PBM format.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 in_set: (real_coordinate: f64, imaginary_coordinate: f64)
         -> (member: bool) =

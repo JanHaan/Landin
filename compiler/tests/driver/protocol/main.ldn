@@ -2,7 +2,7 @@
 -- are test transport only; they never compute producer/consumer state.
 import drivers/uart
 import rp2040/dma
-import core/cpu
+import platform/cpu
 
 link(align: 256)
 mut storage: [512]u8 = zeroed

@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/map
 
 key_equal: (left: u32, right: u32) -> (same: bool) =

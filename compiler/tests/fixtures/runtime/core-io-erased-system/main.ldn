@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 path_rules_code: () -> (code: i32) =
     code = 10

@@ -1,5 +1,5 @@
 import core/failing
-import core/heap
+import hosted/heap
 import core/map
 import core/mem
 import core/pool

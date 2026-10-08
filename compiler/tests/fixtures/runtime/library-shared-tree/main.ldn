@@ -1,0 +1,19 @@
+import core/tree
+
+exercise: () -> (ok: bool) ! tree.no_such_node =
+    ok = false
+    value := tree.new_tree()
+    return when tree.length(value) <> 0 or tree.ordinal(tree.id(usize(42))) <> 42
+    _ = tree.get(value, tree.id(usize(0))) else (problem)
+        ok = problem == tree.no_such_node
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

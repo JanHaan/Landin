@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 extern(c) c_replace_root: (state: ptr hosted.system) -> none
 

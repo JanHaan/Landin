@@ -575,7 +575,7 @@ end build
 
 ```landin
 import core/mem
-import core/heap
+import hosted/heap
 import core/region
 import core/text
 import core/vec
@@ -657,7 +657,7 @@ Hosted entry. The sketch names its argument adapter `io.args`; the complete
 derivative uses the supplied world's `argument_count` and `argument` entries,
 then admits their bytes directly into run-lifetime raw storage and appends one
 NUL for paths. The ordinary `io.copy_argument` remains available for callers
-with initialized scratch. Its hosted `entry` routine imports `core/io/hosted`
+with initialized scratch. Its hosted `entry` routine imports `hosted/io`
 and is the only place that acquires the heap and system world.
 No uninitialized view constructor is implied.
 ```landin

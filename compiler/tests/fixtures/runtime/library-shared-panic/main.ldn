@@ -1,0 +1,15 @@
+import core/panic
+
+exercise: () -> (ok: bool) =
+    ok = false
+    kind: panic.panic_kind = panic.bad_conversion
+    ok = kind == panic.bad_conversion and kind <> panic.overflow
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

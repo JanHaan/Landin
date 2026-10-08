@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 bad: (inout state: hosted.system, opened: io.file)
      -> none ! io.io_failed =

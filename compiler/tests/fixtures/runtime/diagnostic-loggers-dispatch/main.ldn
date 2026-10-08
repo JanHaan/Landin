@@ -1,6 +1,6 @@
 import core/diag
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import core/text
 
 message_a: [2]u8 = [65, 10]

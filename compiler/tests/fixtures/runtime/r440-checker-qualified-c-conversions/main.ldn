@@ -1,4 +1,4 @@
-import core/c
+import platform/c
 
 highbit: c.c_ulong = c.c_ulong(0x8000000000000000)
 image: [2]c.c_uint = [c.c_uint(40), c.c_uint(2)]

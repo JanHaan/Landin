@@ -137,7 +137,7 @@ Fixture source: `compiler/tests/fixtures/runtime/fizzbuzz/main.ldn`.
 --  The classifier stays independent of presentation; the hosted entry prints
 --  the traditional lines and checks the complete tally for one through 100.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 fizz, buzz, fizz_buzz, number: atom
 fizzbuzz_kind: type = fizz | buzz | fizz_buzz | number
@@ -580,7 +580,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/m
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 score: type = struct
     checksum: i32
@@ -708,7 +708,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.
 --  The Benchmark Game correctness image is 200 by 200.  Each membership bit
 --  is packed most-significant first and written in binary PBM format.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 in_set: (real_coordinate: f64, imaginary_coordinate: f64)
         -> (member: bool) =
@@ -797,7 +797,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn`.
 --  The official correctness input is 1000.  The probability search remains
 --  linear and the naïve LCG advances once for every random nucleotide.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
 iub_symbols: []u8 = "acgtBDHKMNRSVWY"

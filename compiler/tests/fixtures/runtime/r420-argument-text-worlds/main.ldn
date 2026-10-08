@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import core/text
 
 memory_word: [5]u8 = [97, 108, 112, 104, 97]

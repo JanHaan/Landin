@@ -1,0 +1,23 @@
+import core/mem
+
+exercise: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [32]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], 32)
+    address := try mem.allocate(state, usize(4), usize(1))
+    address.val = 42
+    return when address.val <> 42
+    _ = mem.allocate(state, usize(64), usize(1)) else (problem)
+        _ = problem
+        ok = mem.arena_used(state) == 4
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

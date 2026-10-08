@@ -39,7 +39,7 @@ def sha(path):
 
 
 def source_hashes():
-    return {str(p.relative_to(ROOT)): sha(p) for directory in ('compiler/tests', 'core', 'examples')
+    return {str(p.relative_to(ROOT)): sha(p) for directory in ('compiler/tests', 'core', 'hosted', 'platform', 'examples')
             for p in sorted((ROOT / directory).rglob('*'))
             if p.is_file() and '__pycache__' not in p.parts}
 

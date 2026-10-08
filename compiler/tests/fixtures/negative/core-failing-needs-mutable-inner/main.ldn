@@ -1,5 +1,5 @@
 import core/failing
-import core/heap
+import hosted/heap
 
 heap_provider: type = heap.system
 

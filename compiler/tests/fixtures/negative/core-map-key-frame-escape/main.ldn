@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/map
 
 node: type = struct

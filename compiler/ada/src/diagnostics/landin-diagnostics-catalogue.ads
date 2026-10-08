@@ -72,6 +72,7 @@ package Landin.Diagnostics.Catalogue is
       Unwritable_Output,
       Module_Not_Found,
       Module_Directory_Invalid,
+      Module_Unavailable_For_Target,
       --  `refine fmt --check`: a source that parses and is not in the
       --  layout.  Whose rule is D252, not a language rule, and no program
       --  is refused for it.
@@ -221,6 +222,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => "L0005",
             when Module_Not_Found      => "L0006",
             when Module_Directory_Invalid => "L0007",
+            when Module_Unavailable_For_Target => "L0015",
             when Not_Formatted         => "L0008",
             when Unknown_Level         => "L0009",
             when Construct_Not_Enabled => "L0010",
@@ -316,6 +318,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => Error,
             when Module_Not_Found      => Error,
             when Module_Directory_Invalid => Error,
+            when Module_Unavailable_For_Target => Error,
             when Not_Formatted         => Error,
             when Unknown_Level         => Error,
             when Construct_Not_Enabled => Error,
@@ -351,6 +354,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => Live,
             when Module_Not_Found      => Live,
             when Module_Directory_Invalid => Live,
+            when Module_Unavailable_For_Target => Live,
             when Not_Formatted         => Live,
             when Unknown_Level         => Live,
             when Construct_Not_Enabled => Live,
@@ -392,6 +396,9 @@ package Landin.Diagnostics.Catalogue is
                "[1420]: no ordered import root contains the requested module",
             when Module_Directory_Invalid =>
                "[1410], [1420]: a module directory is invalid or unreadable",
+            when Module_Unavailable_For_Target =>
+               "D267: an imported source namespace is unavailable"
+                 & " for the target",
             when Not_Formatted         =>
                "D252: a source `refine fmt --check` finds out of the layout",
             when Unknown_Level         =>
@@ -636,6 +643,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => False,
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
+            when Module_Unavailable_For_Target => True,
             when Not_Formatted         => True,
             when Unknown_Level         => False,
             when Construct_Not_Enabled => True,
@@ -670,6 +678,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => False,
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
+            when Module_Unavailable_For_Target => True,
             --  The first line out of the layout, which may be one whose
             --  only fault is its missing line end, and so empty.
             when Not_Formatted         => False,
@@ -782,7 +791,8 @@ package Landin.Diagnostics.Catalogue is
             when Construct_Not_Enabled => 2,
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
-            when Module_Not_Found | Module_Directory_Invalid => 1,
+            when Module_Not_Found | Module_Directory_Invalid
+               | Module_Unavailable_For_Target => 1,
             --  What a reader runs to put the file right.
             when Not_Formatted         => 1,
             when Name_Expected .. Positional_After_Named => 1,

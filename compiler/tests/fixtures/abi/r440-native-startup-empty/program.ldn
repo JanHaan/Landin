@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 extern(c) c_argument_table: (table: ptr ptr u8) -> (ok: bool)
 extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)

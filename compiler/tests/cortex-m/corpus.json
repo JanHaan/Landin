@@ -338,10 +338,10 @@
     },
     "runtime/c-aliases-unsigned-char": {
       "codes": [
-        "L0324"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
+      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
     },
     "runtime/caller-is-an-ordinary-name": {
       "mode": "execute"
@@ -578,7 +578,7 @@
         "L0346"
       ],
       "mode": "refuse",
-      "reason": "The complete hosted derivative imports core/heap, whose allocator/releaser require extern(c); the freestanding core slice has no such provider. This is not an emulator execution verdict."
+      "reason": "The complete hosted derivative imports hosted/heap, whose allocator/releaser require extern(c); the freestanding core slice has no such provider. This is not an emulator execution verdict."
     },
     "runtime/derived-hosted-memory": {
       "codes": [
@@ -861,6 +861,45 @@
       "mode": "execute"
     },
     "runtime/lenof-named-fixed-arrays": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-diag": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-failing": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-io": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-map": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-mem": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-panic": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-pool": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-region": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-small": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-sort": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-text": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-tree": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-vec": {
       "mode": "execute"
     },
     "runtime/line-end-continues-expression": {
@@ -1274,10 +1313,10 @@
     },
     "runtime/r440-c-aliases": {
       "codes": [
-        "L0324"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
+      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
     },
     "runtime/r440-callback-pointer-witness": {
       "codes": [
@@ -1291,10 +1330,10 @@
     },
     "runtime/r440-checker-qualified-c-conversions": {
       "codes": [
-        "L0324"
+        "L0015"
       ],
       "mode": "refuse",
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
+      "reason": "The platform/c source namespace requires an enabled LP64 C ABI; Cortex-M0 has no admitted C alias surface."
     },
     "runtime/r440-checker-qualified-range-traps": {
       "mode": "execute"
@@ -2101,9 +2140,6 @@
     "runtime/written-type-generic-unchecked-integer-truncates": {
       "mode": "execute"
     },
-    "runtime/written-type-unchecked-text-traps": {
-      "mode": "execute"
-    },
     "runtime/written-type-literal-pointer-controls": {
       "mode": "execute"
     },
@@ -2123,6 +2159,9 @@
       "mode": "execute"
     },
     "runtime/written-type-text-invalid-traps": {
+      "mode": "execute"
+    },
+    "runtime/written-type-unchecked-text-traps": {
       "mode": "execute"
     },
     "runtime/zeroed-aggregate-carrier-order": {

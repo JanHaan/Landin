@@ -2,7 +2,7 @@
 
 -- landin/compiler is implicit and must not be imported.
 
-import core/c
+import platform/c
 
 compiler.assert(compiler.c_sysv_lp64)
 

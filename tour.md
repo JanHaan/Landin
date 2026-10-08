@@ -3238,7 +3238,7 @@ across a reset budget. Because `free` has no result, its live count is exact
 under valid-free use and cannot discover an inner provider's rejection of a
 malformed free.
 
-The separately imported hosted `core/heap` provider reaches libc through
+The separately imported hosted `hosted/heap` provider reaches libc through
 [1975]'s hosted C bridge, returns independent aligned blocks, and
 really releases each block. It accepts every `usize` alignment, treats zero
 and one as byte alignment, gives a successful zero-byte request a distinct
@@ -3578,12 +3578,19 @@ worth more than one that can download things. Arranging
 the roots so that only one version of each package name is
 reachable is that tool's job. Until it does so, [1470]'s
 one-version rule is not enforced by the compiler.
-core and landin are reserved, and both are used. The bare tool namespace
+core, hosted, platform and landin are repository-owned source namespaces. The bare tool namespace
 names `compiler`, `assembler` and `linker` cannot be declared or bound by an
 import. Their built-in paths are implicitly available; an explicit import
 of `landin/compiler`, `landin/assembler` or `landin/linker` is refused by
 name before searching roots. core is
-the standard library: core/mem, core/text, core/vec. landin
+the shared freestanding library: core/mem, core/text, core/vec. Every core
+module and its public interface is available on every target. hosted holds
+hosted providers such as hosted/heap and hosted/io. platform holds scoped
+freestanding interfaces: platform/c currently requires an enabled LP64 C ABI,
+and platform/cpu requires an M-profile target, including supported higher
+feature levels. Imports outside those scopes are refused by name at target
+checking, even when project-first roots override their contents (D267).
+These source namespace names remain ordinary identifiers. landin
 holds the toolchain modules of [1560] — landin/compiler,
 landin/assembler, landin/linker — which are available
 without an import, and that is why the bare names
@@ -3861,7 +3868,7 @@ width. Dynamic construction checks the converted address and traps on zero,
 even in `unchecked`; losing origin is not permission to create null. Absent
 allocator backing uses a named union, not a fake `ptr(1)` allocation.
 
-The ordinary `core/c` aliases name C's signed and unsigned integer widths,
+The ordinary `platform/c` aliases name C's signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
 `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
 or compiler.c_riscv_lp64d` admits the four explicitly supported hosted ABIs. Equal pointer widths alone
@@ -4046,7 +4053,7 @@ programmer's obligations; D248 records the design.
 The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
 passes one `u32` in and out of r0, and the text names r0 itself.
 
-`core/cpu.disable_interrupts()` returns the prior PRIMASK value;
+`platform/cpu.disable_interrupts()` returns the prior PRIMASK value;
 `restore_interrupts(previous)` restores it, so nested critical sections do not
 enable interrupts prematurely. These functions can run in thread or handler
 mode. They do not stop DMA or mask NMI/HardFault. `wait_for_interrupt()` issues
@@ -4139,7 +4146,7 @@ The entry point is a usual place to mint roots and pass
 them down — an allocator, an Io, a diagnostics log. The
 language does not reserve host constructors for the entry
 point: another routine can call them too [1680]. The hosted
-root imports `core/io/hosted`; a caller-backed root needs only
+root imports `hosted/io as hosted`; a caller-backed root needs only
 `core/io`. The derived hosted example's `main` delegates to
 `app.entry`, whose essential flow is:
 

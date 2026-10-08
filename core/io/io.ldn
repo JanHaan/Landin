@@ -1,5 +1,5 @@
 --  Target-neutral I/O capability, adapters and caller-backed provider.
---  Hosted services live in core/io/hosted and are selected explicitly.
+--  Hosted services live in hosted/io and are selected explicitly.
 
 import core/text
 

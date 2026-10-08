@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/mem
 
 empty: type = [0]u8

@@ -1,5 +1,5 @@
 import core/io
-import core/heap
+import hosted/heap
 import core/region
 import core/failing
 import core/mem

@@ -1,0 +1,21 @@
+import core/sort
+
+less: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less
+i32 is sort.ordered (less: less)
+
+exercise: () -> (ok: bool) =
+    ok = false
+    mut values: [3]i32 = [3, 1, 2]
+    sort.sort(values[0..<3])
+    ok = values[0] == 1 and values[1] == 2 and values[2] == 3
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

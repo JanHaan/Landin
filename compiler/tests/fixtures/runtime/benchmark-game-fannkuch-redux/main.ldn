@@ -1,7 +1,7 @@
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 score: type = struct
     checksum: i32

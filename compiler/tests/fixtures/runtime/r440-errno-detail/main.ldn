@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 --  These are paths supplied by the selected Linux execution profile.  The
 --  missing parent makes ENOENT deterministic; /dev/full and /dev/null provide

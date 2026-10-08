@@ -1,7 +1,7 @@
 import core/mem
 import core/failing
 import core/pool
-import core/heap
+import hosted/heap
 import core/vec
 
 counter: type = concept (t: type)

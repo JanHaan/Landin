@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Qualified core/c scalar conversions preserve LP64 widths in folded images and runtime expressions
+summary: Qualified platform/c scalar conversions preserve LP64 widths in folded images and runtime expressions
 program: main.ldn
 root: ../../../../..
 status: 42

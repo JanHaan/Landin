@@ -19,7 +19,7 @@ explains the package boundaries, not a second work list.
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
 | logical hosted helper identities | `Landin.Hosted`, shared by checker and backend |
 | native driver, archive resolution and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
-| C alias identities | ordinary `core/c`, guarded by the selected ABI fact |
+| C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
 
 The Linux x86-64, Linux arm64 and Darwin descriptions all use 64-bit pointers,
@@ -122,7 +122,7 @@ write-open bridge passes its mode in w2 rather than on Apple's variadic stack.
 
 ## C aliases and generated bindings
 
-`core/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or
+`platform/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or
 compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d`, and its `c_char` is `u8`
 under standard AAPCS64 and RISC-V LP64D
 and `i8` otherwise. Each fact identifies its own implemented ABI, not LP64
@@ -199,7 +199,7 @@ respectively, with the existing C ABI configuration facts, plain-char
 signedness, alignment and arm64 register rules. The hosted system is selected
 separately: `__error` supplies thread-local errno and the create/truncate open
 flags are BSD values. `compiler.os == freebsd` selects the private 224-byte
-`stat` record in `core/io/hosted`; a C peer checks the actual headers, record
+`stat` record in `hosted/io`; a C peer checks the actual headers, record
 extent, alignment and field offsets on each architecture.
 
 The cross driver is Clang against the checked FreeBSD 14.4 sysroot, using
@@ -348,7 +348,7 @@ record; eligible leaves describe SP-relative homes without that record. Interrup
 routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
 EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
 padding, nested exception records and restoration have independent executable
-controls. An ordinary block has its source line, and the `core/cpu` source session
+controls. An ordinary block has its source line, and the `platform/cpu` source session
 stops on `disable_interrupts`' block with PRIMASK clear and steps past it to
 find it set. Naked assembly has a source function/declaration boundary, not
 line-by-line locations inside its assembly string or an inferred stack frame.
@@ -492,7 +492,7 @@ L0502. C signatures, records, varargs and standalone object output remain
 disabled; the explicit `lines` source-debug contract is described above.
 The independent external startup/linker harness remains distinct
 from the compiler-owned firmware path.
-`core/c` accepts the explicitly implemented hosted C ABIs; the separate
+`platform/c` accepts the explicitly implemented hosted C ABIs; the separate
 header generator supports its declared target set, and Cortex C remains
 disabled.
 
@@ -571,7 +571,7 @@ the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
 [GNU Arm directives](https://sourceware.org/binutils/docs/as/ARM-Directives.html)
 and [GCC Arm options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/ARM-Options.html)
 are checked against the pinned tools. Their unsigned plain C char and ILP32
-model are measured, not inherited from the hosted `core/c` aliases.
+model are measured, not inherited from the hosted `platform/c` aliases.
 
 The [probe guide](../environments/cortex-m/README.md#layout-and-abi-evidence)
 distinguishes Ada planner/IR tests, GCC layout measurements and executed
@@ -724,7 +724,7 @@ which no block may name and every block may overwrite, and stores it last. A
 branch then skips the literal pool the text may have used. D230's shorthand is
 one `inout` operand at r0. The existing low-register/flag clobbers and full
 opaque effects remain; no high-register, frame or naked-body restriction is
-relaxed. `core/cpu` uses MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB
+relaxed. `platform/cpu` uses MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB
 SY/WFI through `general` operands. CPU functions retain ordinary framed Landin calls in both thread and
 handler mode. Its explicit barriers preserve D227, including the difference
 between a compiler boundary and device completion. The freestanding consumers
@@ -874,7 +874,7 @@ consumes a0. Every unnamed variadic argument uses integer transport,
 including floating bit patterns. This placement remains outside the
 verified target-neutral IR.
 
-The target fact `compiler.c_riscv_lp64d` selects `core/c`'s LP64 aliases,
+The target fact `compiler.c_riscv_lp64d` selects `platform/c`'s LP64 aliases,
 including unsigned plain `c_char`. Linux libc record selection stays separate;
 the generic 128-byte `stat` is checked against independently compiled headers.
 

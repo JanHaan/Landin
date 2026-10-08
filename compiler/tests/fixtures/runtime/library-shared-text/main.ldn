@@ -1,0 +1,21 @@
+import core/text
+
+exercise: () -> (ok: bool) ! text.past_end =
+    ok = false
+    source: [1]u8 = [42]
+    first := text.first(source[0..<1])
+    found := try text.byte(source[0..<1], first)
+    return when found <> 42
+    _ = text.byte(source[0..<1], text.next(first)) else (problem)
+        ok = problem == text.past_end
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

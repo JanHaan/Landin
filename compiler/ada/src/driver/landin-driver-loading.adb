@@ -13,6 +13,7 @@ with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Resolution;
 with Landin.Diagnostics.Suggestions;
 with Landin.Modules;
+with Landin.Modules.Availability;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
@@ -722,6 +723,26 @@ package body Landin.Driver.Loading is
                                  Into => Found);
                               Landin.Stages.Report (Context,
                                 Landin.Diagnostics.Get (Found, 1));
+                           end;
+                        elsif not Landin.Modules.Availability.Permitted
+                          (Logical, Landin.Stages.Target (Context))
+                        then
+                           declare
+                              Found : Landin.Diagnostics.Diagnostic_List;
+                           begin
+                              Module_Diagnostics.Report
+                                (Item => Module_Diagnostics
+                                   .Module_Unavailable_For_Target,
+                                 Source => Source_Id,
+                                 Where => Landin.Syntax.Where
+                                   (Tree.all, Import_Node),
+                                 Message => "module unavailable for target: "
+                                   & Logical,
+                                 Note => Landin.Modules.Availability
+                                   .Requirement (Logical),
+                                 Into => Found);
+                              Landin.Stages.Report
+                                (Context, Landin.Diagnostics.Get (Found, 1));
                            end;
                         elsif Target = Landin.Modules.No_Module then
                            declare

@@ -1,6 +1,6 @@
 import core/io
 import core/mem
-import core/heap
+import hosted/heap
 import core/failing
 
 reader: type = struct

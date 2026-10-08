@@ -430,7 +430,7 @@ end take_events
 ## app  —  freestanding, no main
 
 ```landin
-import core/cpu
+import platform/cpu
 import drivers/uart
 import chip/vendor/gpio
 import chip/vendor/dma

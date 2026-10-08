@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 -- The C root omitted argument initialization. Acquiring the system world is
 -- an actual argv-dependent operation; it must trap before publishing a ptr.

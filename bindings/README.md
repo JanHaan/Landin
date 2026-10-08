@@ -83,7 +83,7 @@ preprocessor environment. The ABI fixture harness additionally uses
 `-Wall -Wextra -Werror`; generated adapters are validated with those warnings
 before publication.
 
-`bindings.ldn` imports `core/c`, whose aliases admit the explicitly supported
+`bindings.ldn` imports `platform/c`, whose aliases admit the explicitly supported
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
 ABIs. Each generated binding
 visibly asserts only its selected ABI fact; equal LP64 widths do not establish

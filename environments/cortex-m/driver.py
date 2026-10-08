@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SOURCE = ROOT / 'compiler/tests/driver'
 MODULES = ('drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
-           'rp2040/sio', 'rp2040/timer', 'core/cpu')
+           'rp2040/sio', 'rp2040/timer', 'platform/cpu')
 
 
 def build(run, refine, name, optimize, specialize, debug='none'):

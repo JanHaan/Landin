@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import examples/derived_hosted/app
 extern(c) unlink: (path: cstring) -> (status: i32)
 path: []u8 = "build/r480-hosted-output.txt\x00"

@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/mem
 reader: type = concept (t: type)
     read: (self: ptr t) -> (value: i32)

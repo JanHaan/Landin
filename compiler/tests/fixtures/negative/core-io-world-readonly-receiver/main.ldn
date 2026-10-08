@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 public main: () -> (code: i32) =
     state := hosted.host()

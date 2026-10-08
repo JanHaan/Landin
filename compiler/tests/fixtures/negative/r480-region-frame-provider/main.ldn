@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/region
 
 bad: () -> (value: region.region(heap.system)) =

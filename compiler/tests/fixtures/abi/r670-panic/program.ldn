@@ -1,6 +1,6 @@
 import core/panic
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 extern(c) record: (kind: u32, site: u32) -> none
 extern(c) finish: () -> noreturn

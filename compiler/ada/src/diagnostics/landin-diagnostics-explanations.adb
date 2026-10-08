@@ -71,6 +71,14 @@ package body Landin.Diagnostics.Explanations is
                & "rectory that cannot be listed while searching in root or"
                & "der [1420]. Check the named path and its permissions; a "
                & "genuinely absent module is reported by L0006.",
+            when Catalogue.Module_Unavailable_For_Target =>
+               "An import names a source namespace unavailable for the s"
+               & "elected target (D267). `hosted/*` requires a hosted targ"
+               & "et; `platform/c` requires one of the currently enabled L"
+               & "P64 C ABIs; `platform/cpu` requires an M-profile target,"
+               & " including its higher supported feature levels. Select a"
+               & "n applicable target or remove the import. Project-first "
+               & "root selection cannot change namespace availability.",
             when Catalogue.Not_Formatted =>
                "`refine fmt --check` found a source that is not in the l"
                & "ayout D252 decides and `docs/format.md` shows. The diagn"
@@ -718,6 +726,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Not_Found =>
                "",
             when Catalogue.Module_Directory_Invalid =>
+               "",
+            when Catalogue.Module_Unavailable_For_Target =>
                "",
             when Catalogue.Not_Formatted =>
                "",

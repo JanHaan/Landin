@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 -- Native Darwin failures retain the errno captured by the helper.
 missing: [41]u8 =

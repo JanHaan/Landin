@@ -224,7 +224,7 @@ Landin source-debugging evidence come from `environments/cortex-m/evidence.py`.
 | Range `baud_rate`, `open` omissions and undeclared busy behavior | Plain u32 plus declared recoverable checks; exact supported configuration and check order above. Buffer size/alignment is explicitly adapted to ring geometry and the 32 KiB target. |
 | Descriptor stores, publication barrier, enable, return | `open`, with checked preflight and publication after enable; source/lifetime and no-partial-publication controls. |
 | `available` modulo tail and `read` modulo head | Quiescent monotone-epoch snapshot and bounded ordinary-slice copy; complete loss/timeout/restart contract replaces the sketch's unproved no-wrap/no-overwrite assumptions. |
-| DMA1 stream-5 ISR, `rx_events`, `take_events` | IRQ0/vector16 DMA and IRQ1/vector17 timer handlers; coalescing notification latch, one-clears acknowledgment, completion boundary and ordinary `core/cpu` mask operations. No C ABI/interrupt convention conflation. |
+| DMA1 stream-5 ISR, `rx_events`, `take_events` | IRQ0/vector16 DMA and IRQ1/vector17 timer handlers; coalescing notification latch, one-clears acknowledgment, completion boundary and ordinary `platform/cpu` mask operations. No C ABI/interrupt convention conflation. |
 | `app`, static buffer, scratch, incomplete `handle`, `halt`, WFI | Complete `app/main.ldn`; deterministic echo/GPIO commands, timer wakeups, recoverable driver errors and declared terminal policy. Compiler-owned reset/vectors, no module initialization. |
 | `bad_start` ellipses and escaping demonstration | `check_sources.py` constructs a complete refused frame-buffer program; readonly and missing-return-origin controls pin adjacent obligations. |
 | X1 encoded unions | Existing generated encoded domains and the packed-encoding and generated-device hole/membership execution; driver raw carriers never silently validate unknown encodings. |
@@ -234,7 +234,7 @@ Landin source-debugging evidence come from `environments/cortex-m/evidence.py`.
 | X5 register read/write/reset semantics | Existing public normal/command accessors, explicit synthetic reset premises; vendor reset metadata initializes no device. |
 | X6 pointer/integer/volatile address | Explicit descriptor address conversion with escaping origin check; protocol reuse test names its unsafe erasure. MMIO volatility attaches to access, not integer address. |
 | X7 runtime packed indexing | Ring index arithmetic is ordinary CPU arithmetic over ordinary storage; generated image operations and inherited packed-index controls remain separate. |
-| X8 ordinary CPU library | `core/cpu` mask save/disable/restore, WFI, DMB/DSB/compiler boundaries; assembler effects stay opaque and constrained. |
+| X8 ordinary CPU library | `platform/cpu` mask save/disable/restore, WFI, DMB/DSB/compiler boundaries; assembler effects stay opaque and constrained. |
 | X9 retention versus convention | `link(vector)` compiler-owned kept vector image retains handlers; `.ramtext.handle` copies RAM code and `link(keep)` retains immutable data. Interrupt convention alone grants no retention. |
 
 Prototype 3 Z3/Z5/Z8/Z10/Z16/Z19 and existing `core/mem`, `core/vec`,

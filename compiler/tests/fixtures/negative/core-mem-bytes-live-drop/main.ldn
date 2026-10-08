@@ -1,5 +1,5 @@
 import core/mem
-import core/heap
+import hosted/heap
 bad: (inout state: heap.system,
       inout source: mem.byte_buffer) -> (count: usize) =
     view := mem.bytes(source)

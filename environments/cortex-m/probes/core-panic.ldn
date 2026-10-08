@@ -1,4 +1,4 @@
-import core/cpu
+import platform/cpu
 import core/panic
 
 mut initialized: u32 = 0x670

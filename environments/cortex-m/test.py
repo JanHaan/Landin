@@ -83,8 +83,9 @@ class ProbeFailures(unittest.TestCase):
 
     def test_freestanding_module_and_linker_closure(self):
         from freestanding import imports, linker_closure, programs
-        self.assertEqual(imports('import core/mem\nimport core/cpu\n'), {'mem', 'cpu'})
-        for name in ('heap', 'io', 'c', '../heap'):
+        self.assertEqual(imports('import core/mem\nimport platform/cpu\n'), {'core/mem', 'platform/cpu'})
+        self.assertEqual(imports('import core/io'), {'core/io'})
+        for name in ('heap', 'c', '../heap'):
             with self.assertRaises(RuntimeError):
                 imports('import core/'+name)
         helper = '/tools/thumb/v6-m/nofp/libgcc.a'
@@ -100,7 +101,10 @@ class ProbeFailures(unittest.TestCase):
                 linker_closure(bad, helper)
         self.assertEqual(set(programs()), {
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
-            'core-mem-arena-boundaries', 'core-mem-raw-storage'})
+            'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
+            {'library-shared-'+name for name in
+             ('diag', 'failing', 'io', 'map', 'mem', 'panic', 'pool', 'region',
+              'small', 'sort', 'text', 'tree', 'vec')})
 
     def test_oracle_refuses_false_pass(self):
         for text in ('', 'PASS PASS', 'PASS\nAssertionError', 'PASS\n[WARNING] bad',

@@ -5189,8 +5189,104 @@ package body Landin.Tests.Driver_Suite is
          "the usage names it");
    end Lsp_Is_A_Subcommand;
 
+   procedure Namespace_Availability (Item : in out Landin.Testing.Context);
+
+   procedure Namespace_Availability (Item : in out Landin.Testing.Context) is
+      procedure Refused (Target, Logical : String; Rooted : Boolean;
+                         Transitive : Boolean := False);
+      procedure Refused (Target, Logical : String; Rooted : Boolean;
+                         Transitive : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Args.Append ("--target=" & Target);
+         Host.Add_Directory ("project");
+         Host.Add_Directory ("project/app");
+         Host.Add_Directory ("project/bridge");
+         Host.Add_Directory ("project/hosted");
+         Host.Add_Directory ("project/hosted/heap");
+         Host.Add_Directory ("project/platform");
+         Host.Add_Directory ("project/platform/c");
+         Host.Add_Directory ("project/platform/cpu");
+         --  Harmless project overrides cannot bypass namespace policy.
+         Host.Add_File ("project/hosted/heap/heap.ldn", "public x := 1");
+         Host.Add_File ("project/platform/c/c.ldn", "public x := 1");
+         Host.Add_File ("project/platform/cpu/cpu.ldn", "public x := 1");
+         Host.Add_File
+           ("project/bridge/bridge.ldn", "import " & Logical & LF
+            & "public x := 1");
+         Host.Add_File
+           ("project/app/main.ldn",
+            "import " & (if Transitive then "bridge" else Logical) & LF
+            & "public main: () -> (code: i32) = code = 42 end main");
+         if Rooted then
+            Args.Append ("--root=project");
+            Args.Append ("project/app");
+         else
+            Args.Append ("project/app/main.ldn");
+         end if;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Occurrences (Report, "error[L0015]:") = 1
+               and then Occurrences (Report, "error[") = 1
+               and then Contains (Report, Logical),
+               "unavailable import is named once without a cascade");
+         end;
+      end Refused;
+      procedure CPU_Accepted (Level : String);
+      procedure CPU_Accepted (Level : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/app");
+         Host.Add_Directory ("root/platform");
+         Host.Add_Directory ("root/platform/cpu");
+         Host.Add_File
+           ("root/platform/cpu/cpu.ldn", "public answer: u32 = 42");
+         Host.Add_File
+           ("root/app/main.ldn", "import platform/cpu" & LF
+            & "answer: u32 = cpu.answer");
+         Args.Append ("--root=root");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=" & Level);
+         Args.Append ("root/app");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Unbounded.Length (Result.Report) = 0,
+               "M-profile CPU namespace admits " & Level);
+         end;
+      end CPU_Accepted;
+   begin
+      CPU_Accepted ("armv6-m");
+      CPU_Accepted ("armv7-m");
+      CPU_Accepted ("armv7e-m");
+      Refused ("cortex-m0", "hosted/heap", True);
+      Refused ("cortex-m0", "hosted/io", False);
+      Refused ("cortex-m0", "hosted/heap", True, True);
+      Refused ("cortex-m0", "platform/c", True);
+      Refused ("synthetic-32", "platform/c", True);
+      Refused ("linux-x86-64", "platform/cpu", True);
+      Refused ("linux-x86-64", "platform/cpu", False);
+   end Namespace_Availability;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "source namespaces enforce target availability",
+         Namespace_Availability'Access);
       Landin.Testing.Register
         (Into, "driver", "assembler refusals name their block",
          Assembler_Refusals_Name_Their_Block'Access);

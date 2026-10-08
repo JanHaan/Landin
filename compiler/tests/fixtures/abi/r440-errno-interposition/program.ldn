@@ -3,7 +3,7 @@
 --  scripts return values and checks every offered address, extent and byte.
 
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 extern(c) r440_errno_select: (scenario: i32) -> none
 extern(c) r440_errno_check: (scenario: i32) -> (fault: i32)

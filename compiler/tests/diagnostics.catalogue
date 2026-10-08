@@ -11,6 +11,7 @@ L0004  Live     a target no description names
 L0005  Live     an output file that cannot be written
 L0006  Live     [1420]: no ordered import root contains the requested module
 L0007  Live     [1410], [1420]: a module directory is invalid or unreadable
+L0015  Live     D267: an imported source namespace is unavailable for the target
 L0008  Live     D252: a source `refine fmt --check` finds out of the layout
 L0009  Live     D255: a CPU feature level the selected target does not have
 L0010  Live     [1830]: the tour describes this and the kernel omits it

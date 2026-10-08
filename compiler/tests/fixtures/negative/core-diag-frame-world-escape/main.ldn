@@ -1,6 +1,6 @@
 import core/diag
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 retain: (escaping value: diag.streaming) -> none =
 end retain

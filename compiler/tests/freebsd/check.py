@@ -185,7 +185,7 @@ class Lane:
     def payload(self):
         archive = self.output / 'payload.tar.gz'
         with tarfile.open(archive, 'w:gz') as tar:
-            for relative in ('compiler/tests', 'core', 'examples'):
+            for relative in ('compiler/tests', 'core', 'hosted', 'platform', 'examples'):
                 tar.add(ROOT / relative, arcname='source/' + relative,
                         filter=lambda info: None if '__pycache__' in info.name else info)
             tar.add(self.bundle, arcname='bundle')

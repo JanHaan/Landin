@@ -15,7 +15,9 @@ from setup import DEFAULT, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-MODULES = ('mem', 'cpu', 'vec', 'pool', 'panic')
+MODULES = tuple('core/'+name for name in
+                ('diag', 'failing', 'io', 'map', 'mem', 'panic', 'pool',
+                 'region', 'small', 'sort', 'text', 'tree', 'vec')) + ('platform/cpu',)
 
 
 def imports(program):
@@ -24,7 +26,7 @@ def imports(program):
     for line in program.splitlines():
         if not line.startswith('import '):
             continue
-        match = re.fullmatch(r'import core/(\w+)', line)
+        match = re.fullmatch(r'import ((?:core|platform)/\w+)', line)
         require(match is not None and match[1] in MODULES,
                 'undeclared freestanding module: '+line)
         result.add(match[1])
@@ -52,8 +54,8 @@ def build(run, refine, program, optimize, specialize, debug='none'):
         if module in modules:
             continue
         modules.add(module)
-        shutil.copytree(ROOT / 'core' / module, source / 'core' / module)
-        for path in sorted((source / 'core' / module).glob('*.ldn')):
+        shutil.copytree(ROOT / module, source / module)
+        for path in sorted((source / module).glob('*.ldn')):
             pending.update(imports(path.read_text()) - modules)
     inputs = {str(p.relative_to(source)): sha(p)
               for p in sorted(source.rglob('*.ldn'))}
@@ -83,7 +85,7 @@ def build(run, refine, program, optimize, specialize, debug='none'):
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'), 'wrong private runtime')
     loads, members = linker_closure(mapping, helper)
     record = {'image': image_contract(elf),
-              'modules': ['app'] + ['core/'+m for m in sorted(modules)],
+              'modules': ['app'] + sorted(modules),
               'source_inputs': inputs, 'symbols': sorted(names),
               'linker_inputs': loads, 'runtime_members': members,
               'runtime_archive': helper, 'runtime_archive_sha256': sha(Path(helper))}
@@ -291,7 +293,7 @@ def programs():
     for old, new in changes.items():
         require(old in dma, 'stale DMA library derivation: '+old)
         dma = dma.replace(old, new)
-    result['dma'] = 'import core/cpu\n' + dma
+    result['dma'] = 'import platform/cpu\n' + dma
     for name in ('core-mem-allocators', 'core-mem-arena-boundaries',
                  'core-mem-raw-storage'):
         fixture = ROOT / 'compiler/tests/fixtures/runtime' / name
@@ -300,6 +302,15 @@ def programs():
         source = (ROOT / 'compiler/tests/cortex-m/cases' / name / 'main.ldn'
                   if name == 'core-mem-raw-storage' else fixture / 'main.ldn')
         result[name] = source.read_text() + '''
+mut observed: u32 = 0
+start: () -> none = observed = u32(main()) end start
+'''
+    for module in MODULES:
+        if not module.startswith('core/'):
+            continue
+        name = 'library-shared-'+module.split('/')[1]
+        fixture = ROOT / 'compiler/tests/fixtures/runtime' / name
+        result[name] = (fixture / 'main.ldn').read_text() + '''
 mut observed: u32 = 0
 start: () -> none = observed = u32(main()) end start
 '''

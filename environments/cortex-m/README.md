@@ -4,7 +4,7 @@ The profile keeps independent C/assembly, memory-model and hosted transport
 controls beside compiler-generated ARMv6-M execution with direct synthetic
 peripheral access. A separate lane runs compiler-owned startup and firmware
 linking, and rooted `core/mem`, `core/vec`, `core/pool`
-and `core/cpu`/`core/panic` consumers run through that compiler-owned firmware path.
+and `platform/cpu`/`core/panic` consumers run through that compiler-owned firmware path.
 
 ## Selected lanes and pins
 
@@ -565,7 +565,7 @@ source-map bytes. A focused run is development feedback, not a complete gate run
 
 | Consumer | Independent observation |
 |---|---|
-| `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; `core/cpu` runs on D248's `general` operands; scalar assembly preserves live values, generic/discarded operations execute; a multi-output block destructures, a block holding every one of r0-r7 stores them all, `general` passes over a register the text writes and a signed byte input is extended; PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
+| `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; `platform/cpu` runs on D248's `general` operands; scalar assembly preserves live values, generic/discarded operations execute; a multi-output block destructures, a block holding every one of r0-r7 stores them all, `general` passes over a register the text writes and a signed byte input is extended; PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
 | Default panic derivative | The same source with the hook removed traps on arithmetic, violated nonreturning return and firmware entry return. It retains neither a panic latch nor a source map; the independent hardware exception frame points at UDF. |
 | `core-panic.ldn` | Seventeen independently expected kind/site paths per profile, including conversion/bounds/arithmetic, alignment, packed membership, nonnull pointer construction, reserved bits, UTF-8 decoding, recursive panic, forced nonreturning-callee return, normal firmware-entry return and a real NVIC handler. Poisoned data/BSS, no later actions, stack bounds and off-target source lookup are checked. |
 | `core-noreturn.ldn` | Six cold boots select direct, generic, static/erased evidence, deferred and recovery paths; independent memory assertions check completed stores, skipped later actions/cleanup and retained kept data. The expected frame-chain depth and each previous-r11/incoming-LR record are checked at every selected nonreturning path. Nonreturning entry and 200–376-byte observed stack writes execute in the fixed profile. |
@@ -576,7 +576,7 @@ source-map bytes. A focused run is development feedback, not a complete gate run
 | Library-derived DMA | The unchanged firmware-lane peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
 
 The runner copies only its declared `core/mem`, `core/vec`, `core/pool` and
-`core/cpu`/`core/panic` import closure. Maps must list the generated object and pinned
+`platform/cpu`/`core/panic` import closure. Maps must list the generated object and pinned
 `thumb/v6-m/nofp/libgcc.a`, with optional GNU linker stubs and no other LOAD
 input. Closure records include source hashes, selected archive members, all
 symbols and decoded image extents. Undefined symbols and hosted runtime names

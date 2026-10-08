@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import core/text
 
 -- The plain bridge receives file capabilities from the C root. Importing the

@@ -142,6 +142,14 @@ level of the selected target's family (D255). A level belongs to one family,
 so `armv8.1-a` is refused with `--target=linux-x86-64`, and synthetic-32 has
 no level to select. `refine --identify` lists each target's levels.
 
+### L0015
+
+An import names a source namespace unavailable for the selected target (D267).
+`hosted/*` requires a hosted target; `platform/c` requires one of the currently
+enabled LP64 C ABIs; `platform/cpu` requires an M-profile target, including its
+higher supported feature levels. Select an applicable target or remove the
+import. Project-first root selection cannot change namespace availability.
+
 ## Lexical, and what is not enabled
 
 ### L0010

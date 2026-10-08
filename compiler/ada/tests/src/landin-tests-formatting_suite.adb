@@ -612,6 +612,8 @@ package body Landin.Tests.Formatting_Suite is
       Status  : Landin.Platform.Read_Status;
    begin
       Walk_Sources (Item, Root & "/core", Visit'Access);
+      Walk_Sources (Item, Root & "/hosted", Visit'Access);
+      Walk_Sources (Item, Root & "/platform", Visit'Access);
       Walk_Sources (Item, Root & "/examples", Visit'Access);
       Landin.Testing.Check
         (Item, Files >= 30, "core and the examples were read, and"

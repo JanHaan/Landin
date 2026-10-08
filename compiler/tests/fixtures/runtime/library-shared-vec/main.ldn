@@ -1,0 +1,25 @@
+import core/mem
+import core/vec
+
+exercise: () -> (ok: bool) ! mem.out_of_memory | vec.empty =
+    ok = false
+    mut backing: [256]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], 256)
+    mut values := vec.new_list(item: i32)
+    try vec.push(values, state, i32(42))
+    return when vec.length(values) <> 1
+    removed := try vec.pop(values)
+    return when removed <> 42
+    _ = vec.pop(values) else (problem)
+        ok = problem == vec.empty and vec.length(values) == 0
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

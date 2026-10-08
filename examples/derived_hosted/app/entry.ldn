@@ -1,7 +1,7 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 import core/diag
-import core/heap
+import hosted/heap
 import core/region
 
 public entry: () -> (code: i32) =

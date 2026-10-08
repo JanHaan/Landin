@@ -30,12 +30,12 @@ def build(run, refine, program, optimize, specialize):
         if not line.startswith('import '):
             continue
         module = line[7:]
-        require(module in ('core/cpu', 'core/panic') or module in
+        require(module in ('platform/cpu', 'core/panic') or module in
                 ('rp2040/io_bank0', 'rp2040/sio', 'rp2040/timer',
                  'rp2040/uart0', 'rp2040/uart1', 'rp2040/dma'),
                 'undeclared device consumer module: '+module)
         modules.add(module)
-        origin = ROOT / module if module.startswith('core/') else DEVICES / 'generated' / module
+        origin = ROOT / module if module.startswith(('core/', 'platform/')) else DEVICES / 'generated' / module
         shutil.copytree(origin, source / module)
     inputs = {str(p.relative_to(source)): sha(p)
               for p in sorted(source.rglob('*.ldn'))}
@@ -243,7 +243,7 @@ def refusal(run, elf, name):
     }[name]
     paths = [run.out / 'source' / p for p in (
         'app/main.ldn', 'rp2040/io_bank0/device.ldn',
-        'rp2040/uart0/device.ldn', 'core/cpu/cpu.ldn', 'core/panic/panic.ldn')]
+        'rp2040/uart0/device.ldn', 'platform/cpu/cpu.ldn', 'core/panic/panic.ldn')]
     require(set(paths) == set((run.out / 'source').rglob('*.ldn')),
             'panic oracle source inventory changed')
     offset = 0

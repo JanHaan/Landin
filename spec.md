@@ -1701,7 +1701,7 @@ plain `char`.
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
 and `compiler.c_riscv_lp64d` are their respective fixed bool configuration facts, each true for its own ABI
 alone, not guesses from pointer width or architecture spelling. The ordinary
-`core/c` aliases assert one supported fact before exposing `c_char`, `c_schar`,
+`platform/c` aliases assert one supported fact before exposing `c_char`, `c_schar`,
 `c_uchar`, `c_short`, `c_ushort`,
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
@@ -1713,7 +1713,7 @@ LP64D; `c_schar` and `c_uchar` keep their signedness everywhere. A described
 target's ABI identity
 and widths do not imply that its C boundary is implemented. C signature,
 record-layout and variadic-call capabilities are selected explicitly; neither
-`core/c` nor generated bindings may infer them from LP64 alone.
+`platform/c` nor generated bindings may infer them from LP64 alone.
 
 A C signature is nongeneric and infallible, takes only `in` runtime
 parameters, and returns at most one value. Its admitted values are the enabled
@@ -1848,7 +1848,7 @@ ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
 for already absent backing; a successful release clears backing to its atom.
 
 Foreign failure detail is ordinary explicit state. After a documented libc
-failure indication, `core/io/hosted` captures errno before any other host call and
+failure indication, `hosted/io` captures errno before any other host call and
 retains the exact terminal value in its system provider, exposed by
 `hosted.last_errno`. Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
@@ -1891,8 +1891,8 @@ on an out-of-range index or null entry.
 The remaining repository-owned runtime bridge exposes fixed wrappers for
 `strlen`, read-only and write-create-truncate `open`, `read`, `write`, `close`,
 `errno`, and hosted heap allocation and release; those wrappers call libc. This
-is a compiler/runtime ABI used by `core/io/hosted` and `core/heap`, not a set of
-privileged language operations. `core/io/hosted` turns descriptors and
+is a compiler/runtime ABI used by `hosted/io` and `hosted/heap`, not a set of
+privileged language operations. `hosted/io` turns descriptors and
 pointer-and-length argument views into ordinary values, maps foreseeable host
 failures onto declared atoms, and threads its `world(provider)` concept as the
 authority for opening files and touching streams [1660] [1680]. Direct Linux
@@ -6163,7 +6163,7 @@ refuses every read-modify-write atomic (D227), so a wrapper portable across
 every implemented target would offer only loads, stores and fences there, and which
 operations a wrapper exposes is a design question for the program that needs
 one. No derived program or `core` module needed one: the driver uses
-`core/cpu`'s interrupt masking and D227's barriers.
+`platform/cpu`'s interrupt masking and D227's barriers.
 
 **The alternatives:** `compiler.vector_*` as aliases of the operators was
 declined as two spellings of one operation. A `core/atomic` wrapper now was
@@ -12512,7 +12512,7 @@ classified failure boundary before the repository gate can pass.
 | `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io/hosted` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` copies at most N messages of up to `diag.message_capacity` bytes and counts later or oversized notes in `dropped` | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -12529,6 +12529,7 @@ classified failure boundary before the repository gate can pass.
 | `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1270, 1340 | L0317--L0319 or L0341 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved`, `positive/r490-conformance-input-keys`, `negative/r490-conformance-input-alias-collision` |
 | `any.construction` | static | 1370, 1380 | L0314, L0318 or L0342 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
+| `modules.availability` | static | 1480, 1660 | L0015 names an unavailable hosted or scoped platform import before resolution; project-first overrides cannot bypass target availability | the driver case `source namespaces enforce target availability`; `runtime/library-shared-mem`, `runtime/library-shared-io`, `runtime/library-shared-map`, `runtime/library-shared-tree` |
 | `modules.visibility` | static | 1410, 1420, 1430, 1440, 1450, 1480 | L0006 or L0007 for an unresolved root; L0200 for duplicate import bindings, L0201 for missing selected names, L0202 for private members or representations and L0203 for reserved tool names | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage`, `negative/import-selected-private`, `negative/import-selected-missing`, `negative/import-selected-duplicate`, `runtime/import-alias-selected-identities`, `runtime/import-contextual-as` |
 | `entry.point` | static | 1650, 1970 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code`, `negative/r440-native-renamed-entry` |
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
@@ -14537,7 +14538,7 @@ nonempty C structs and separate INTEGER/SSE banks define this boundary.
 `compiler.c_sysv_lp64` (and D226’s `compiler.c_darwin_lp64` and D256's
 `compiler.c_aapcs64_lp64`, and D265's `compiler.c_riscv_lp64d`) is a fixed
 bool supplied by the selected ABI;
-`core/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
+`platform/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
 Register exhaustion rolls an aggregate wholly onto the stack; MEMORY results
 use the C hidden destination. The internal Landin convention is unchanged.
 
@@ -15063,7 +15064,7 @@ D248 makes this form the shorthand for `inout value: u32 at r0 = operand`
 without an operand name, so its text names r0 directly. Hosted targets refuse
 it by name, because r0 is Cortex-M0's; they check the operand form instead.
 
-This permits `core/cpu` to implement PRIMASK save/disable/restore with ordinary
+This permits `platform/cpu` to implement PRIMASK save/disable/restore with ordinary
 Landin functions. It does not add a CPU intrinsic namespace, an assembly
 template language, pointer operands or a new calling convention. The saved
 mask is explicit caller state; nested sections restore their own prior mask.
@@ -15253,7 +15254,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `core-cpu.ldn` |
 | Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
 | `general` counts only the registers the block does not otherwise name | Counting the whole class accepts a block the compiler cannot give registers to, and leaves the failure to emission | `negative/assembly-general-exhausted` |
-| D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `core/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
+| D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `platform/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
 | The operand form was specified and checked on every target before any lowered it, refused by one stated lowering limit until each did | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | the runtime `assembly-*` fixtures, `negative/assembly-synthetic-target` |
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
@@ -15556,7 +15557,7 @@ plain `char` and reserved x18. `compiler.os` is a fixed configuration value
 in its own equality domain, with `linux`, `darwin`, `freebsd` and
 `freestanding` as compiler-owned values. It names the target's hosted system,
 never the compiler host, and is available only in fixed configuration.
-`core/io/hosted` uses it to select FreeBSD's native libc record; calling
+`hosted/io` uses it to select FreeBSD's native libc record; calling
 conventions remain selected by C ABI facts. The hosted bridge uses `__error`
 and `O_WRONLY | O_CREAT | O_TRUNC = 0x601`. The selected FreeBSD driver is
 Clang with an explicit FreeBSD sysroot and ELF linker; x86-64 assembly uses
@@ -15710,7 +15711,7 @@ which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.
 **From** [1500], [1580] and [1975].
 
 **The discrepancy:** [1975] selected two hosted C ABIs, both with signed
-plain `char`, and `core/c` made `c_char` an `i8`. Linux on arm64 uses the
+plain `char`, and `platform/c` made `c_char` an `i8`. Linux on arm64 uses the
 standard Procedure Call Standard for the Arm 64-bit Architecture, which is
 neither: Apple's variant puts every unnamed argument on the stack and packs
 named stack scalars at their natural size, the standard does neither, and its
@@ -15724,7 +15725,7 @@ exactly one ABI and `compiler.arch == arm64` is what the two arm64 targets
 share. [1975] states the transport: Darwin's banks, homogeneous floating
 aggregates, sixteen-byte indirect bound and x8 result, with unnamed arguments
 assigned as named ones are and every stack argument in whole eight-byte slots.
-`core/c`'s `c_char` is the selected ABI's plain `char`, `u8` under
+`platform/c`'s `c_char` is the selected ABI's plain `char`, `u8` under
 `compiler.c_aapcs64_lp64` and `i8` otherwise, chosen by a `fixed if` on that
 fact. x18 stays reserved, so one register rule, and one rule for assembly
 blocks, holds for `compiler.arch == arm64`. Both arm64 targets share D255's
@@ -15761,7 +15762,7 @@ explicit fixed fact `compiler.c_riscv_lp64d` and `compiler.arch == rv64`.
 assembly boundary uses canonical integer operands and recognizes raw ABI
 aliases as those same registers, without reserving caller floating registers;
 [1990] lists the saved floating registers that integer operands cannot declare.
-`core/c` exposes
+`platform/c` exposes
 the LP64 aliases and unsigned plain `c_char`; [1975]'s existing C subset,
 including callbacks and outgoing variadic calls, is enabled. The Linux
 hosted bridge uses libc's `__errno_location`, Linux open flags, and the
@@ -16142,7 +16143,7 @@ cleanup cannot replace it.
 
 The `core/io` module contains the target-neutral `world` concept, adapters and
 caller-backed `memory` provider. The libc-backed `system` provider and its
-`extern(c)` bridge live in `core/io/hosted`; hosted roots import that module
+`extern(c)` bridge live in `hosted/io`; hosted roots import that module
 explicitly and call `hosted.host()`. Selecting `core/io` alone does not select
 foreign declarations, so the same world API can be used by Cortex-M0
 consumers. The hosted provider still conforms to `io.world`, and the bridge
@@ -16623,7 +16624,7 @@ origin [0790], and that cleanup errors hidden by a monotonic arena need a real
 reclaiming provider. They did not give the hosted provider an alignment or
 zero-size contract, or choose the libc operation behind it.
 
-**Chosen:** `core/heap` is a hosted module separate from the freestanding
+**Chosen:** `hosted/heap` is a hosted module separate from the freestanding
 `core/mem` protocol and caller-backed providers. Its `system` type conforms to
 `mem.allocator`, and `host()` mints the otherwise stateless capability. The
 module declares only two [1975] runtime routines: `(usize, usize) ->
@@ -16736,7 +16737,7 @@ its finite free-state or how a generic failing provider retains and audits its
 inner allocator.
 
 **Chosen:** `core/pool` is a caller-backed reclaiming provider distinct from
-the monotonic `core/mem.arena` and hosted `core/heap`. Construction receives an
+the monotonic `core/mem.arena` and hosted `hosted/heap`. Construction receives an
 explicit byte pointer and exact extent, a positive uniform slot size, a finite
 slot count, a slot alignment, and a caller-supplied initialized `[]mut
 pool.slot`. Each record holds the live request extent or vacancy sentinel, and one
@@ -17107,3 +17108,40 @@ row. The C fixture publishes its argument through an ordinary external
 `cstring` result, then uses the existing explicitly unsafe integer-pointer
 round trip to install `C2 00` and a later ignored byte; it does not add a
 pointer-to-cstring conversion.
+
+### D267 — Library source namespaces declare target availability
+
+**Chosen:** `core/*` is the shared freestanding library. Every public interface
+of core/diag, core/failing, core/io, core/map, core/mem, core/panic, core/pool,
+core/region, core/small, core/sort, core/text, core/tree and core/vec is available
+on every target. Target-specific implementation does not change its interface
+or introduce hosted authority. The memory-backed I/O provider remains part of
+core/io; importing it does not select hosted I/O or allocation.
+
+`hosted/*` is available only where the target has a hosted system. The current
+modules are hosted/heap and hosted/io. The latter is ordinarily imported
+`as hosted` when a consumer also imports core/io. `platform/*` holds scoped
+freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
+AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
+does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cpu
+admits the Cortex M-profile family, including armv6-m, armv7-m and armv7e-m
+feature levels, and refuses hosted architectures. Existing compiler.assert
+source guards remain. No generic package manifest is introduced.
+
+Availability is a property of the written source namespace, independent of
+project-first module selection. It is checked for rooted imports and
+explicit-file compatibility requests before name resolution. An unavailable
+import reports L0015 once at the import, names the module and states its target
+requirement; checking stops without later missing-name errors. Names hosted and
+platform remain ordinary identifiers. Imports are the source prelude, not
+declarations within fixed arms; inactive declarations cannot make an import
+available or unavailable. Runtime helpers are selected only by reached
+operations; moving modules does not add an implicit import.
+
+**Alternative:** using pointer width to admit C aliases would enable an ABI
+whose transport is not implemented. Relying only on provider bodies would let
+a harmless project override bypass a firmware refusal. Namespace checking
+preserves root selection while making availability explicit.
+
+**Pinned by** the driver case `source namespaces enforce target availability`
+and the separately sized shared-library consumers.

@@ -2,7 +2,7 @@
 -- The declarations and type dependencies in bindings.ldn came only from
 -- r440-bindings.h through Clang's JSON AST.
 
-import core/c
+import platform/c
 import core/mem
 
 no_callback_storage: atom

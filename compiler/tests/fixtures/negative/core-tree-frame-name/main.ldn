@@ -1,4 +1,4 @@
-import core/heap
+import hosted/heap
 import core/tree
 
 retain: (inout value: tree.tree,

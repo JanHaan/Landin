@@ -7629,7 +7629,7 @@ package body Landin.Backend.X86_64 is
          End_Bridge (Errno_Value);
       end if;
 
-         --  core/heap keeps allocation behind the same fixed scalar/pointer
+         --  hosted/heap keeps allocation behind the same fixed scalar/pointer
          --  bridge as hosted I/O.  Over-allocation leaves one pointer word
          --  immediately before the aligned result so release can recover
          --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks

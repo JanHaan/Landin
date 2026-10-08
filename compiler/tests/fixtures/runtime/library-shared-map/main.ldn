@@ -1,0 +1,28 @@
+import core/map
+
+eq: (left: u32, right: u32) -> (same: bool) =
+    same = left == right
+end eq
+hash: (value: u32) -> (result: u64) =
+    result = u64(value)
+end hash
+u32 is map.equatable (eq: eq)
+u32 is map.hashable (hash: hash)
+
+exercise: () -> (ok: bool) ! map.missing =
+    ok = false
+    value := map.new_map(key: u32, item: i32)
+    return when map.length(value) <> 0 or map.capacity(value) <> 0
+    _ = map.get(value, u32(42)) else (problem)
+        ok = problem == map.missing
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

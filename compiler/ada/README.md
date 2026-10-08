@@ -12,7 +12,7 @@ non-authoritative account derived from the implementation and its tests.
 Every `assembler.block` form, D248's named operands, D230's Cortex-only u32
 shorthand through r0 and the operand-free block, is one IR instruction with
 the same conservative effects and ordinary register/frame restrictions.
-`core/cpu` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
+`platform/cpu` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
 Linux freestanding lane executes the generated firmware. D231/D232 implement
 nonreturning control and selected panic handlers on every implemented backend.
@@ -260,7 +260,7 @@ not the bodyless import flag or a concrete callee item. Checking admits only
 verification checks the same signature facts for direct and indirect calls.
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
 and `compiler.c_riscv_lp64d`
-are early fixed configuration bools, with no runtime storage. Ordinary `core/c`
+are early fixed configuration bools, with no runtime storage. Ordinary `platform/c`
 accepts any supported LP64 contract; generated bindings assert their selected
 contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to

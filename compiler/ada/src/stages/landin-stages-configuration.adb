@@ -4,6 +4,9 @@ with Ada.Containers.Vectors;
 with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
+with Landin.Diagnostics.Modules;
+with Landin.Modules.Availability;
+with Ada.Strings.Unbounded;
 with Landin.Diagnostics.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
@@ -1166,7 +1169,35 @@ package body Landin.Stages.Configuration is
                declare
                   Node : constant Syn.Node_Id :=
                     Syn.Nth_Import (Of_Tree.all, Which);
+                  Logical : Ada.Strings.Unbounded.Unbounded_String;
                begin
+                  for Segment in
+                    1 .. Syn.Import_Segment_Count (Of_Tree.all, Node)
+                  loop
+                     if Segment > 1 then
+                        Ada.Strings.Unbounded.Append (Logical, "/");
+                     end if;
+                     Ada.Strings.Unbounded.Append
+                       (Logical, Landin.Source.Names.Spelling
+                          (Names.all, Syn.Name (Of_Tree.all,
+                             Syn.Nth_Import_Segment
+                               (Of_Tree.all, Node, Segment))));
+                  end loop;
+                  if not Landin.Modules.Availability.Permitted
+                    (Ada.Strings.Unbounded.To_String (Logical),
+                     Target (Context))
+                  then
+                     Landin.Diagnostics.Modules.Report
+                       (Item => Landin.Diagnostics.Modules
+                          .Module_Unavailable_For_Target,
+                        Source => Syn.Source_Of (Of_Tree.all),
+                        Where => Syn.Where (Of_Tree.all, Node),
+                        Message => "module unavailable for target: " &
+                          Ada.Strings.Unbounded.To_String (Logical),
+                        Note => Landin.Modules.Availability.Requirement
+                          (Ada.Strings.Unbounded.To_String (Logical)),
+                        Into => Found);
+                  end if;
                   --  Explicit-file requests have no driver root walk.
                   if Landin.Configuration.Is_Builtin_Import
                     (Names.all, Of_Tree.all, Node)

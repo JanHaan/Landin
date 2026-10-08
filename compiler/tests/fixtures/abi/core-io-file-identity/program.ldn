@@ -1,5 +1,5 @@
 import core/io
-import core/io/hosted
+import hosted/io as hosted
 
 extern(c) identity_select: (scenario: i32) -> none
 extern(c) identity_check: (expected_calls: i32) -> (good: bool)

@@ -241,7 +241,7 @@ QUALITY = ["compiler/tests/quality", "scripts/quality.sh",
            "compiler/ada/refine.gpr", "compiler/tests",
            #  The quality checker reads the derived programs' own sources
            #  for routine evidence, so its reach is most of the tree.
-           "examples", "core", "compiler/ada"]
+           "examples", "core", "hosted", "platform", "compiler/ada"]
 
 
 class SplitSubjects(unittest.TestCase):
@@ -296,7 +296,7 @@ class SplitSubjects(unittest.TestCase):
         from check_controls import tree
         with tree(copied=["scripts", "devices", "environments", "check.py",
                           "ROADMAP.md", "spec.md", "tour.md", "compiler",
-                          "core", "examples", "highlight", "assets",
+                          "core", "hosted", "platform", "examples", "highlight", "assets",
                           "bindings"] + list(checker.LIVE_DOCS)) as root:
             broken = root / "devices/test.py"
             broken.write_text("import sys\nsys.exit(3)\n")
@@ -1297,7 +1297,7 @@ REGISTERS = ["spec.md", "tour.md", "ROADMAP.md",
              "prototype-3-containers.md", "prototype-4-app.md",
              "compiler/tests", "compiler/ada/src", "compiler/ada/tests",
              "scripts", "check.py", "environments", "devices",
-             "examples", "core", "bindings", "highlight"]
+             "examples", "core", "hosted", "platform", "bindings", "highlight"]
 
 
 class Registers(unittest.TestCase):

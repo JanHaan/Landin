@@ -1,5 +1,5 @@
-import core/c
-import core/c (c_bool, c_double, c_float, c_long, c_longlong, c_ptrdiff,
+import platform/c
+import platform/c (c_bool, c_double, c_float, c_long, c_longlong, c_ptrdiff,
                c_size, c_ulong, c_ulonglong)
 
 public main: () -> (code: i32) =

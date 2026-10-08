@@ -1,9 +1,29 @@
-# Repository-owned core modules
+# Repository-owned library modules
 
 These ordinary Landin modules use explicit roots and imports, with no user-code
 module initialization. `spec.md` owns their language contracts, and the
 [freestanding library lane](../environments/cortex-m/README.md#freestanding-library-consumers)
 executes them on Cortex-M0.
+
+## Availability inventory
+
+The shared freestanding modules are `core/diag`, `core/failing`, `core/io`,
+`core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`, `core/small`,
+`core/sort`, `core/text`, `core/tree` and `core/vec`. Every public interface is
+available on every target. Their providers retain caller-supplied authority.
+
+`hosted/heap` and `hosted/io` require a hosted system. Import the I/O provider
+`as hosted` alongside the shared `core/io` protocol. `platform/c` holds the
+currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
+synthetic-32. `platform/cpu` holds M-profile CPU operations and admits the
+armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
+by import name independently of project-first root selection (D267).
+
+The `runtime/library-shared-*` consumers are separate small programs, one per
+shared module, with success and applicable failure oracles. The constrained
+firmware lane compiles, links and executes them separately and records every
+reached source and linker input. No consumer relies on an image-size refusal
+as positive evidence.
 
 ## Constrained Cortex-M0 consumers
 
@@ -16,7 +36,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
-| `core/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
+| `platform/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
 mean byte alignment; other `usize` alignments are honored when representable.
@@ -60,7 +80,7 @@ Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
 caller backing, and its `io.world` interface can be selected on Cortex-M0. The
-`core/io/hosted` provider, `core/heap` and the hosted C aliases in `core/c`
+`hosted/io` provider, `hosted/heap` and the hosted C aliases in `platform/c`
 remain outside this consumer closure. Even unused hosted declarations in a
 selected module must meet target checks.
 
@@ -92,12 +112,12 @@ not run a pending deferred mask restoration; a nonreturning cleanup stops
 later cleanups. D232 specifies panic dispatch and its optional source map.
 
 The [generated device fixtures](../devices/README.md) import no core module.
-Their consumers explicitly import `core/cpu` and optionally `core/panic`;
+Their consumers explicitly import `platform/cpu` and optionally `core/panic`;
 ordinary DMA slices retain the completion/boundary/lifetime obligations above.
 No allocator, heap, scheduler or hosted initialization enters that closure.
 
 The [derived driver](../compiler/tests/driver/DERIVATION.md) uses caller-owned
-initialized static byte storage and the ordinary `core/cpu` interface. It
+initialized static byte storage and the ordinary `platform/cpu` interface. It
 requires no allocator, hosted initialization or reporting storage. Successful
 device drain precedes ordinary reads and storage reuse; failed stop retains
 the caller's manual lifetime obligation. The allocator, initialized-prefix,

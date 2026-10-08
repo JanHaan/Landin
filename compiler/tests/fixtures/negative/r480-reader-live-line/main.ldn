@@ -1,6 +1,6 @@
 import core/io
 import core/mem
-import core/heap
+import hosted/heap
 import examples/derived_hosted/app
 
 bad: (inout allocator: heap.system,
