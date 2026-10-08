@@ -194,7 +194,7 @@ recorded boundary, withdrawn or transferred to a successor.
 `refine fmt source.ldn ...` rewrites each named source in the one layout
 [`docs/format.md`](docs/format.md) shows, changing its space and nothing
 else; `refine fmt --check` writes nothing and reports each source that is not
-in it. `core` and the examples are kept in that layout.
+in it. The library roots and the examples are kept in that layout.
 
 `refine lsp` is a language server over standard input and output: an editor
 started with it gets diagnostics, definitions, hover types, formatting and
@@ -222,13 +222,16 @@ This is the maintained inventory of what the compiler does today:
   checked encoded fields. `compiler/tests/constructs.matrix` records every
   normative construct's state, targets and evidence, and `check.py` refuses a
   stale or unexplained row.
-- **The library.** `core` threads heap, arena, pool and failing allocators as
-  capabilities and builds on them `core/mem`, vectors, small vectors, maps,
-  trees, sorting, byte-oriented and validated text, interchangeable system and
-  memory I/O worlds, `core/region` for bulk cleanup and the `any`-dispatched
-  `core/diag.log`. D212 withdraws the former builtin arena syntax in favour of
-  those allocators. A freestanding slice adds CPU support, nonreturning
-  signatures and panic dispatch for firmware.
+- **The library.** The thirteen shared `core/*` modules thread arena, pool
+  and failing allocators as capabilities and supply raw memory, vectors,
+  small vectors, maps, trees, sorting, byte-oriented and validated text,
+  caller-backed I/O, bulk cleanup, panic dispatch and the `any`-dispatched
+  `core/diag.log`. `hosted/heap` and `hosted/io` supply the hosted heap and
+  system I/O capabilities. `platform/c` supplies aliases for the supported
+  LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
+  outside a module's target scope is refused by name, including through a
+  project-root override. D212 withdraws the former builtin arena syntax in
+  favour of ordinary allocator capabilities.
 - **The C boundary.** The C ABI of each hosted target, `layout(c)`, callbacks
   and variadic calls, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are

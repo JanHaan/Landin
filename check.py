@@ -5143,7 +5143,7 @@ def check_coverage_registers(full_run):
             "cleanup.defer",
             "cleanup.undo", "generics.substitution",
             "concepts.conformance", "any.construction", "any.dispatch",
-            "modules.visibility",
+            "modules.availability", "modules.visibility",
             "entry.point", "module.images", "configuration.fixed",
             "unchecked.region", "subtype.range", "pointer.optional"}
         classes = {"static", "trap", "beyond-lifetime", "outside"}

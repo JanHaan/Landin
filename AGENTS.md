@@ -366,7 +366,14 @@ six are derived documents and none of them decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
-`core/*` is reserved for the future standard library. `landin/compiler`, `landin/assembler`, and `landin/linker` are reserved toolchain modules. Package acquisition and arrangement of package roots belong to a separate companion tool rather than the compiler, and a program may contain only one version of a package name.
+The standard library uses `core/*` for shared modules, `hosted/*` for hosted
+services and `platform/*` for modules with a declared target scope. Target
+availability follows the import namespace even when a project root supplies
+the source. These namespace names are not lexical keywords.
+`landin/compiler`, `landin/assembler`, and `landin/linker` are reserved
+toolchain modules. Package acquisition and arrangement of package roots belong
+to a separate companion tool rather than the compiler, and a program may
+contain only one version of a package name.
 
 Implementation proceeds without waiting for every unresolved foundation.
 `ROADMAP.md` assigns each question to the first vertical slice that needs it.
