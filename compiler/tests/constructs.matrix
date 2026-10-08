@@ -24,7 +24,7 @@
 #  id | in | evidence | linux-x86-64 | linux-arm64 | macos-arm64 | freebsd-x86-64 | freebsd-arm64 | linux-rv64 | cortex-m | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
 0020 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Block comment. Nests properly
-0030 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Doc comment. Attaches to the declaration that follows
+0030 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Doc comment. Attaches to the declaration that follows
 0040 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Full form: name, type, value
 0050 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Type inferred from the value
 0060 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Mutable binding

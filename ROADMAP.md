@@ -920,6 +920,77 @@ cross-host determinism.
 - FreeBSD x86-64, FreeBSD arm64 and RV64 Linux each have a separate nonempty,
   executing C ABI verdict against independently compiled C peers.
 
+## Command-line preparation before microcontrollers
+
+The public compilation command is `refine compile`; `build` is reserved for
+future project orchestration. Shared options work before or after commands,
+and their names do not overlap command-specific options except intentional
+contextual actions such as help. Command help has equivalent command-local
+and `help COMMAND` forms. Existing direct compilation spellings remain
+compatible.
+
+The first phase covers this interface, help and completion from one catalogue,
+source/build identification without assigning a release version, presentation
+and tool tracing, response files, dry-run planning and source dependency files.
+Its evidence is the command and existing driver suites, plus native CLI and
+build-consumer checks.
+
+Done: The first-phase interface, generated build identity, catalogue-derived
+help and scoped completion, diagnostic presentation and tool tracing,
+response files, dry-run plans and dependency files are implemented. Native
+Linux x86-64 command, driver and optimization-driver suites and CLI/Make
+integration checks passed. These filtered developer checks are not gate
+evidence.
+
+The second phase examines the content behind the interface: warning coverage
+and actionable repairs, diagnostic completeness and useful execution detail.
+The warning survey found two existing families, unnecessary local `mut` and
+unused immutable locals with inert literal initializers. Their requirement
+for an exact fix hid the same observation when comments or layout prevented
+an edit. D251 now separates advisory observations from exact repairs and
+allows explicit invocation policy: named warning baselines and ordered
+per-code allow, warn and deny controls. Denial must stop artifact production,
+retain the original diagnostic data and never suppress a language error.
+
+The comparison informs the policy rather than prescribing one compiler's
+flags. [Rust](https://doc.rust-lang.org/stable/rustc/lints/levels.html) separates
+allow, warn and deny and supports ordered command-line overrides;
+[Clang](https://clang.llvm.org/docs/UsersManual.html#options-to-control-error-and-warning-messages)
+supports enabling, disabling and promoting individual warnings.
+[Go](https://go.dev/doc/faq#unused_variables_and_imports) makes unused locals
+and imports errors and keeps advisory analysis in
+[vet](https://pkg.go.dev/cmd/vet). [Zig](https://ziglang.org/documentation/0.16.0/)
+treats unmutated local variables as errors. Those policies are evidence that
+there is no universal warning interface, not grounds to change Landin's
+language legality.
+
+| Survey subject | Disposition |
+|---|---|
+| Unnecessary declarations with comments or multiline layout | Report the established fact without a fix; retain exact edits where safe. |
+| Unused signed numeric literals | Include a single negation of an integer or float literal; do not generalize to arbitrary constant expressions. |
+| Uninitialized reads, incompatible types, invalid reference escapes | Keep the existing language errors; warning controls cannot weaken them. |
+| Unused imports and shadowing | Keep the retained decisions: imports add conformances, and inner shadowing is explicitly permitted without a warning. |
+| Unused parameters | Require evidence about deliberate interface parameters before admitting a new warning family. |
+| Dead stores and unreachable code | Require source-level control-flow, alias and effect evidence, including volatile accesses and configured branches, before admitting a new warning family. |
+| Local suppression and dependency-specific policy | Invocation controls are the initial mechanism; add source or package scope only when a concrete use case needs it. |
+
+Diagnostic transport must preserve labels, notes and every alternative fix.
+Real diagnostics carrying edits exposed an incorrectly closed JSON fix object;
+warning and error cases must parse as independent JSON records and retain
+their edit data. This work precedes the microcontroller phase and changes no
+language or target scope.
+
+Done: The survey and initial content improvements implement named warning
+baselines and ordered per-code allow, warn and deny controls. Denial stops
+artifact production; advisories retain observations without unsafe edits,
+and unused signed numeric literals are covered. The language server uses
+recommended warnings and offers no edit for an advisory without a fix.
+Fix-bearing JSON diagnostics preserve every alternative edit. A strict
+native Linux debug build, 242 affected filtered cases with 13,499 checks,
+six native CLI tests and 32 executable language-server sessions passed.
+Document checks and 112 checker controls passed. These developer checks
+are not gate evidence.
+
 ## R12 — Microcontrollers
 
 The chips people buy: RP2040 and RP2350, STM32, and Espressif's ESP32,

@@ -1,0 +1,10 @@
+sample: () -> (result: i32) =
+    mut -- preserve this explanation
+        step: i32 = 2
+    --- Preserve this documentation.
+    documented: i32 = 42
+    commented: i32 = 7 -- preserve this comment
+    split: i32 =
+        3
+    result = step + 1
+end sample

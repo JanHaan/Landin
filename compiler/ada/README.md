@@ -44,6 +44,18 @@ compiler/ada/
   tests/src/            the harness, the fakes and the suites
 ```
 
+The build generates `Landin.Build_Identity` under its ignored generated-source
+directory. `scripts/build_identity.py` supplies the exact release tag, revision,
+compiler-input digest, dirty state and build mode; the host triplet comes from
+`Landin.Targets.Selection`. Release identity comes only from an exact numeric
+`v` tag on HEAD, independently of optimization mode. More than one such tag is
+refused. Tracked edits throughout the checkout and untracked compiler inputs
+mark it dirty; ignored generated outputs do not. The digest remains restricted
+to compiler inputs. A source archive without Git metadata has an unknown
+revision and no assigned release. The identity carries no checkout path or
+wall-clock time. `refine version` renders a concise banner, and its `--json`
+form retains the full provenance with a release `version` or `null`.
+
 `compiler/tests/` sits outside this directory on purpose. Fixtures describe
 the language, not this implementation, and must survive the bootstrap being
 replaced.
@@ -159,6 +171,7 @@ different responsibilities.
 | `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |
 | `Landin.Diagnostics.Text` | deterministic rendering, sharing a primary snippet with its first related label only when source and complete span agree | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
+| `Landin.Diagnostics.Warning_Policy` | catalogued warning selection and ordered invocation overrides, preserving diagnostic data when denied | change language legality, suppress an error or perform host effects |
 | `Landin.Diagnostics.Explanations` | what `refine explain` prints for each code, generated from `docs/diagnostics.md` | be edited by hand, or say anything the page does not |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
@@ -187,6 +200,11 @@ different responsibilities.
 | `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, infer a nonliteral condition's value, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
+| `Landin.Commands` | public command grammar, help, query dispatch and normalization into the existing driver request | implement a language rule or perform host effects outside `Landin.Platform` |
+| `Landin.Commands.Catalogue` | the shared command/option definitions used by parsing, help, reference and shell completion | assign a release version or decide warning selection outside the invocation policy |
+| `Landin.Commands.Response_Files` | bounded quoted argument expansion through the supplied filesystem | expand environment variables or execute shell text |
+| `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
+| `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
 | `Landin.Driver.Assembler_Sites` | placing an assembler's refusal of a `.s` line at the `assembler.block` whose text wrote it, by that text alone | change emitted assembly, or place a line two blocks share |
@@ -597,9 +615,11 @@ a client applying a fix, or sending one to an editor, never reads the text
 back. The compiler builds fixes and never applies one; the test program does,
 in its `fixes` suite.
 
-A warning is a catalogued code at warning level (D251). It never refuses a
-program, so the exit status and everything emitted are what they would be
-without it, and every occurrence carries the exact fix that settles it.
+A warning is a catalogued observation about legal source (D251). An exact fix
+is offered where the edit is safe; an advisory need not carry one. Recommended
+warnings do not change the exit status or generated bytes. Compilation
+requests may suppress or deny warnings by code. Denial fails the invocation
+before emission, without changing language legality or weakening an error.
 
 Generic checking coalesces identical complete diagnostics from different instances
 of one template. Instance-view transitions attribute each newly collected

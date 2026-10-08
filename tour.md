@@ -7,7 +7,8 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.5 — diagnostics and repairs. 0.1.0 was the first version
+Version 0.2.7 — compiler version and checkout identity.
+0.1.0 was the first version
 of the specification proper, arrived at over seventeen pre-release
 revisions, four prototype programs and two outside reviews; 0.2.0
 sealed the first implementation roadmap that followed, over which a
@@ -35,7 +36,14 @@ text view, D259. 0.2.5 keeps a parse's mistake inside its construct and
 suppresses the reports caused by it, D260; reports a refused statement as
 the smallest change that mends it and offers that repair to tools, D261;
 refuses an import without a root at the import, D262; and lets a checker
-refusal poison what it refused, D263. That history is kept in a separate
+refusal poison what it refused, D263. 0.2.6 adds FreeBSD x86-64 and arm64,
+with hosted system identity separate from C transport, D264; Linux RV64
+with LP64D and explicit ISA extension sets, D265; and conversions that apply
+the type as written, D266. It gives `refine` explicit commands,
+shared presentation options and build-system dependency files; warnings may
+also advise without a repair, and command-line policy can enable, suppress
+or deny them, D251. 0.2.7 makes the compiler identify its exact release,
+its development commit and a modified checkout. That history is kept in a separate
 archive; the part of it with
 lasting value is at the end of this file, under WHAT WAS TRIED AND
 DROPPED.
@@ -4458,6 +4466,13 @@ executables and compiler-owned firmware, and runs all four complete derived
 programs, the parser, containers and hosted application on the hosts and
 the driver on Cortex-M. Every construct was audited and every inherited
 item dispositioned before the first roadmap closed.
+
+Warnings are the compiler's observations about legal source, not additional
+language rules (D251). An exact repair is offered when a safe edit exists;
+an advisory can stand without one. Compilation requests can select, suppress
+or deny warnings by code. Denial fails that invocation before emission while
+the program remains legal Landin. Shadowing is still permitted without a
+warning.
 
 That compiler is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and

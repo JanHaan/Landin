@@ -6,6 +6,7 @@ with Landin.Backend.Entry_Point;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Warning_Policy;
 with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.IR;
@@ -334,7 +335,9 @@ package body Landin.Server.Analysis is
                   end if;
                end;
             end loop;
-            Answer.Found := Diag.Sorted (Merged);
+            Answer.Found := Diag.Sorted
+              (Diag.Warning_Policy.Apply
+                 (Diag.Warning_Policy.Defaults, Merged));
          end;
       end Finish;
 

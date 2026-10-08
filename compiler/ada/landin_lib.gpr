@@ -10,7 +10,7 @@ library project Landin_Lib is
      ("src/base", "src/source", "src/diagnostics", "src/platform",
       "src/stages", "src/syntax", "src/modules", "src/resolution", "src/checking",
       "src/backend", "src/formatting", "src/server",
-      "src/driver");
+      "src/driver", Landin_Common.Build_Dir & "/generated");
    for Object_Dir use Landin_Common.Build_Dir & "/lib-obj";
    for Library_Dir use Landin_Common.Build_Dir & "/lib";
    for Library_Name use "landin";

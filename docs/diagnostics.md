@@ -748,13 +748,16 @@ Split the routine or reduce the fields in the body or case.
 
 ### L0326
 
-A warning, and the program is accepted: a local binding is declared `mut` and
+A warning about legal source: a local binding is declared `mut` and
 nothing writes it, steps it, passes it `inout` or takes a mutable view of it.
 Without `mut` it means the same, so the diagnostic offers removing the word
-as an exact fix. The language permits the `mut`; the warning is the compiler's
+as an exact fix when only blanks separate it from the name. Comments or line
+breaks retain the observation without an automatic edit. The language permits
+the `mut`; the warning is the compiler's
 judgement and not a rule (D251). A shared declaration is warned about only
 when none of its names is written, and a module binding never is, since a
-linked routine or a debugger may write it.
+linked routine or a debugger may write it. A normal warning does not fail the
+invocation; `--deny=L0326` explicitly promotes it to an invocation error.
 
 ```landin
 count_up: () -> (total: u32) =
@@ -1177,10 +1180,14 @@ reports a value that its type or target cannot hold.
 ### L0349
 
 An immutable local that is never used and is initialized by a direct scalar
-literal can be removed without changing the program's meaning (D251). The
+literal, including a negated integer or float literal, can be removed without
+changing the program's meaning (D251). The
 warning offers that removal as an exact fix when the declaration occupies its
-own line. A declaration whose initializer may perform work is not warned
-about.
+own line without comments or attached documentation. Otherwise it reports the
+observation without an edit. Shared declarations, module bindings and
+declarations whose initializer may perform work are not warned about.
+`--allow=L0349` suppresses this observation; `--deny=L0349` enables it as an
+invocation error before emission.
 
 ```landin
 unused: () -> none =

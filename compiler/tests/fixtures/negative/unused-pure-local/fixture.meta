@@ -1,7 +1,7 @@
 class: negative
-summary: D251 removes unused scalar literal locals with an exact fix
+summary: D251 removes unused scalar literal locals, including signed numeric literals, with an exact fix
 program: program.ldn
-codes: L0349, L0349
+codes: L0349, L0349, L0349, L0349
 status: 0
 fixed: program.fixed
 constructs: 0060, 1900

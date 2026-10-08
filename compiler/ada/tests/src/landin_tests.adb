@@ -26,6 +26,7 @@ with Landin.Tests.Checking_Suite;
 with Landin.Tests.Debugging_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
+with Landin.Tests.Commands_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
 with Landin.Tests.Fixture_Suite;
 with Landin.Tests.Fixes_Suite;
@@ -94,6 +95,7 @@ procedure Landin_Tests is
       "debugging        ",
       "diagnostics      ",
       "driver           ",
+      "commands         ",
       "fixture execution",
       "fixtures         ",
       "fixes            ",
@@ -372,6 +374,7 @@ begin
    Landin.Tests.Debugging_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
+   Landin.Tests.Commands_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register
      (Cases, Include_Target_Workloads => Mode /= Run_Host and not Host_Only);
    Landin.Tests.Fixture_Suite.Register (Cases);

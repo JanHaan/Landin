@@ -1,0 +1,7 @@
+class: negative
+summary: D251 reports unnecessary local declarations without editing comments or multiline source
+program: program.ldn
+codes: L0326, L0349, L0349, L0349
+status: 0
+constructs: 0030, 0060, 1900
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

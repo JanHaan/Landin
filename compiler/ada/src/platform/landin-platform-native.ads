@@ -9,6 +9,8 @@ with Ada.Strings.Unbounded;
 
 package Landin.Platform.Native is
 
+   function Diagnostic_Color return Boolean;
+
    type Native_Filesystem is limited new Filesystem with null record;
 
    overriding function Exists

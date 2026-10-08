@@ -2,10 +2,16 @@ with Ada.Strings.Fixed;
 
 package body Landin.Targets.Selection is
 
-   function Is_Described (Name : String) return Boolean
-     is (Name in "linux-x86-64" | "linux-arm64" | "darwin-arm64"
-                | "freebsd-x86-64" | "freebsd-arm64" | "linux-rv64"
-                | "cortex-m0" | "synthetic-32");
+   function Described_Name (Index : Positive) return String is
+     (case Index is
+         when 1 => "linux-x86-64", when 2 => "linux-arm64",
+         when 3 => "darwin-arm64", when 4 => "freebsd-x86-64",
+         when 5 => "freebsd-arm64", when 6 => "linux-rv64",
+         when 7 => "cortex-m0", when 8 => "synthetic-32",
+         when others => raise Compiler_Defect);
+
+   function Is_Described (Name : String) return Boolean is
+     (for some Index in 1 .. Described_Count => Described_Name (Index) = Name);
 
    function Described (Name : String) return Target_Facts is
    begin

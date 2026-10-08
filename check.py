@@ -5755,17 +5755,12 @@ def check_diagnostic_matrix(full_run):
             out.append(("compiler/tests/diagnostics.matrix", 1,
                         "retired %s still has an emitter" % row["code"]))
         #  A code that may carry a fix is held to a fixture that applies
-        #  one and compiles the result clean, and a warning must carry one:
-        #  a warning is admitted only as a repair the program did not need
-        #  to be refused for.
+        #  one and compiles the result clean. Advisory warnings may lack an
+        #  edit; an admitted edit still owes its own executable evidence.
         if row["fixes"] in ("May_Fix", "Must_Fix") \
                 and row["code"] not in fixed:
             out.append(("compiler/tests/diagnostics.matrix", 1,
                         "%s admits a fix and no fixture applies one"
-                        % row["code"]))
-        if row["level"] == "Warning" and row["fixes"] != "Must_Fix":
-            out.append(("compiler/tests/diagnostics.matrix", 1,
-                        "%s is a warning without a fix it must carry"
                         % row["code"]))
     path = os.path.join(ROOT, "compiler/tests/diagnostics.matrix")
     if not os.path.exists(path):

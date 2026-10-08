@@ -35952,10 +35952,10 @@ package body Landin.Stages.Checking is
 
       --  D251: a local declared `mut` that nothing needed to be.  Only on
       --  a program this stage accepted, because a refusal can leave a write
-      --  unchecked and the warning would then say something false; and only
-      --  where the repair is exact -- the declaration begins with `mut`,
-      --  and between it and the name lie blanks and nothing else, so the
-      --  edit never touches a comment or a line end.  A shared declaration
+      --  unchecked and the warning would then say something false.  An exact
+      --  repair is offered when only blanks separate `mut` from its name;
+      --  other spacing still admits the observation, without an edit that
+      --  could touch a comment or a line end.  A shared declaration
       --  is one `mut` for every name [0100], so it is warned about only
       --  when none of its names needed it.  Module bindings are not asked:
       --  a module value can be written from outside the program, by a
@@ -36052,7 +36052,6 @@ package body Landin.Stages.Checking is
                                 and then Named.First > Word.Last
                                 and then Landin.Source.Slice (Text, Word)
                                            = "mut"
-                                and then Only_Blanks
                               then
                                  Bad.Report
                                    (Item    => Bad.Mutable_Never_Written,
@@ -36063,15 +36062,17 @@ package body Landin.Stages.Checking is
                                           (Syn.Name (Of_Tree.all, Node))
                                       & "` is declared `mut` and nothing"
                                       & " writes it",
-                                    Note    => "D251: a warning, and the"
-                                      & " program is accepted; without"
+                                    Note    => "D251: the language permits"
+                                      & " this declaration; without"
                                       & " `mut` it means the same",
                                     Fixes   =>
-                                      [1 => Landin.Diagnostics.Fixes
+                                      (if Only_Blanks then
+                                       [1 => Landin.Diagnostics.Fixes
                                               .Unmark_Mutable
                                          (Id, Word, Blanks,
                                           Spelled
-                                            (Syn.Name (Of_Tree.all, Node)))],
+                                            (Syn.Name (Of_Tree.all, Node)))]
+                                       else Landin.Diagnostics.No_Fixes),
                                     Into    => Found);
                               end if;
                            end;
@@ -36098,6 +36099,25 @@ package body Landin.Stages.Checking is
                Text : Landin.Source.Snapshot renames
                  Landin.Stages.Source (Context, Id).Element.all;
                Referenced : Declaration_Sets.Set;
+
+               function Inert_Literal (Value : Syn.Node_Id) return Boolean;
+
+               function Inert_Literal (Value : Syn.Node_Id) return Boolean
+               is
+               begin
+                  return Value /= Syn.No_Node
+                    and then
+                      (Syn.Kind (Of_Tree.all, Value)
+                         in Syn.Integer_Literal | Syn.Float_Literal
+                          | Syn.Character_Literal | Syn.True_Literal
+                          | Syn.False_Literal
+                       or else
+                         (Syn.Kind (Of_Tree.all, Value) = Syn.Negation
+                          and then Syn.Kind
+                            (Of_Tree.all,
+                             Syn.Operand_Of (Of_Tree.all, Value))
+                              in Syn.Integer_Literal | Syn.Float_Literal));
+               end Inert_Literal;
             begin
                --  An if/while condition binding is also used implicitly.
                for Ref in 1 .. Syn.Last_Node (Of_Tree.all) loop
@@ -36156,11 +36176,7 @@ package body Landin.Stages.Checking is
                             or else not Syn.Shares_Declared_Type
                               (Of_Tree.all,
                                Res.Node_Of (Meanings.all, Means + 1)))
-                          and then Value /= Syn.No_Node
-                          and then Syn.Kind (Of_Tree.all, Value)
-                            in Syn.Integer_Literal | Syn.Float_Literal
-                             | Syn.Character_Literal | Syn.True_Literal
-                             | Syn.False_Literal
+                          and then Inert_Literal (Value)
                           and then Landin.Configuration.Is_Active
                             (Configurations (Context).all, Id, Node)
                           and then not Is_Traversal_Element (Means)
@@ -36184,8 +36200,8 @@ package body Landin.Stages.Checking is
                                   (Text, Line);
                               Whole : constant Landin.Source.Span :=
                                 Landin.Source.Line_Span (Text, Line);
-                           begin
-                              if Landin.Source.Contains
+                              Can_Remove : constant Boolean :=
+                                Landin.Source.Contains
                                    (Content, Written)
                                 and then Ada.Strings.Fixed.Trim
                                   (Landin.Source.Slice
@@ -36204,9 +36220,9 @@ package body Landin.Stages.Checking is
                                         (Landin.Source.Line_Text
                                           (Text, Line - 1),
                                          Ada.Strings.Left),
-                                      "---") /= 1)
-                              then
-                                 Bad.Report
+                                      "---") /= 1);
+                           begin
+                              Bad.Report
                                    (Item    => Bad.Unused_Pure_Local,
                                     Source  => Id,
                                     Where   => Syn.Anchor
@@ -36220,13 +36236,14 @@ package body Landin.Stages.Checking is
                                       & " declaration leaves the"
                                       & " program's meaning unchanged",
                                     Fixes   =>
-                                      [1 => Landin.Diagnostics.Fixes
+                                      (if Can_Remove then
+                                       [1 => Landin.Diagnostics.Fixes
                                         .Remove_Unused_Local
                                           (Id, Whole, Spelled
                                             (Syn.Name
-                                              (Of_Tree.all, Node)))],
+                                              (Of_Tree.all, Node)))]
+                                       else Landin.Diagnostics.No_Fixes),
                                     Into    => Found);
-                              end if;
                            end;
                         end if;
                      end;

@@ -59,6 +59,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
+          fetch-tags: true
 
       #  Inlined rather than using .github/actions/pinned-toolchain, which
       #  the other workflows share. This one checks out a TAG, and a tag
@@ -106,6 +107,21 @@ jobs:
           fi
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
           "$binary" --identify
+          test "$("$binary" --version)" = "refine $version"
+          test "$("$binary" version)" = "refine $version"
+          "$binary" version --json > "$RUNNER_TEMP/version.json"
+          python3 - "$version" "$(git rev-parse HEAD)" "$RUNNER_TEMP/version.json" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          version, revision, path = sys.argv[1:]
+          identity = json.loads(Path(path).read_text())
+          assert identity["version"] == version, identity
+          assert identity["revision"] == revision, identity
+          assert identity["dirty"] is False, identity
+          assert identity["mode"] == "release", identity
+          assert re.fullmatch(r"[0-9a-f]{64}", identity["source_digest"]), identity
+          print(json.dumps(identity, sort_keys=True))
+          PY
           for target in linux-x86-64 linux-arm64 darwin-arm64; do
             "$binary" --target="$target" --emit=asm -o "$RUNNER_TEMP/smoke.s" \
               compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn

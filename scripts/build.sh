@@ -45,7 +45,12 @@ done
 
 Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
 Tests_Manifest="$LANDIN_BUILD_DIR/tests-manifest.txt"
+Identity_Source="$LANDIN_BUILD_DIR/generated/landin-build_identity.ads"
 Configuration="$LANDIN_ADA_DIR/.build-locks/$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE.cgpr"
+
+python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+    --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
+    --output "$Identity_Source"
 
 #  Everything that invalidates an object: the sources and project files,
 #  the compiler and builder actually on PATH, the mode and tag, and the
@@ -61,8 +66,12 @@ landin_manifest() {
     Script_Rows="$(cksum "$LANDIN_ROOT/scripts/build.sh" \
         "$LANDIN_ROOT/scripts/env.sh" \
         "$LANDIN_ROOT/scripts/build_lock.py" \
-        "$LANDIN_ROOT/scripts/build_config.py")" || return
+        "$LANDIN_ROOT/scripts/build_config.py" \
+        "$LANDIN_ROOT/scripts/build_identity.py")" || return
     printf '%s\n' "$Script_Rows" | sort || return
+    python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+        --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
+        --output "$Identity_Source" --manifest || return
     Gnat_Banner="$(gnat --version 2>/dev/null)" || return
     Gnat_First="$(printf '%s\n' "$Gnat_Banner" | sed -n '1p')" || return
     Gpr_Banner="$(gprbuild --version 2>/dev/null)" || return
@@ -218,6 +227,9 @@ if [ "$Incremental" = "yes" ]; then
 fi
 
 mkdir -p "$LANDIN_BUILD_DIR"
+python3 "$LANDIN_ROOT/scripts/build_identity.py" \
+    --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
+    --output "$Identity_Source"
 
 #  An edit during the build leaves objects the manifest would not describe;
 #  the manifest goes only when the selected projects built from the tree as it

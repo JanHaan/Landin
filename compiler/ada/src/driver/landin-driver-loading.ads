@@ -37,7 +37,8 @@ package Landin.Driver.Loading is
       Missing_Directories : access Landin.Platform.Path_List := null;
       Previous        : access Landin.Stages.Compilation := null;
       Watch_Syntax    : access procedure (Name : String) := null;
-      Cache           : access Landin.Stages.Syntax.Parse_Cache := null);
+      Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
+      Dependency_Directories : access Landin.Platform.Path_List := null);
 
    function Joined_Path (Directory, Child : String) return String;
 

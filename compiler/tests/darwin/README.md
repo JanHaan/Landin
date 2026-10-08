@@ -42,13 +42,13 @@ python3 scripts/ci/darwin.py accept FULL_COMMIT
 | Variadic calls and indirect results | Native counterparts check Apple's stack tails and x8 result destination. SysV's `al` count and returned `rax` destination are not Darwin ABI obligations. |
 | Generated bindings and archives | The same header, policy categories and peer regenerate with the pinned Apple triple. Exact `.a` selection, a competing dylib, missing archive refusal and a custom path with spaces execute natively. The SDK has no Linux `libm.a`. |
 | System fault endpoints | `io_endpoints.c` supplies only the two named `/sys/landin-r420-denied` and `/dev/full` fault endpoints absent on Darwin. All other operations call libSystem. The shared Landin errno, failure and cleanup oracles are unchanged. This is explicit fault injection, not evidence that those Linux devices exist on Darwin. |
-| Large static reservation | The unchanged 2 GiB zero-reserved global still expects status 42. On the pinned Darwin default image layout, dyld aborts before `main`; `large_image.c` reproduces the same loader abort with native Clang. Every profile retains both executions and requires their exact signal and loader diagnostic. Rows are `platform-limited`, never passing runtime rows. General large-image placement remains open work. |
+| Large static reservation | The unchanged 2 GiB zero-reserved global still expects status 42. Every profile builds and runs the independent native Clang control `large_image.c`. Both programs abort before `main` on the observed macOS 26.6.2 host, but both return 42 on the observed macOS 27.0.1 VM. A runtime pass requires both to return 42, the original Landin output oracle and a silent control. A `platform-limited` row requires both to abort with SIGABRT and the exact shared-region loader diagnostic; it is never a passing runtime row. Asymmetric or unknown outcomes fail. General large-image placement remains open work. |
 
 The last row does not change array semantics or claim all large executables
 are impossible on macOS. The compiler must still emit the complete byte
 offset and the assembler/linker must succeed. A bounded Ada seam regression
 checks both read and write without assembling a large object. Acceptance
-retains the small zero-reservation objects and the actual loader failures;
+retains the small zero-reservation objects and both programs' actual outcomes;
 an unexplained signal, timeout or missing control fails verification.
 
 ## Complete source debugging

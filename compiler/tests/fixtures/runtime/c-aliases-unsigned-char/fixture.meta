@@ -4,5 +4,6 @@ summary: D256 and D265 give standard AAPCS64 and RV64 LP64D an unsigned plain ch
 program: main.ldn
 root: ../../../../..
 status: 42
+codes: L0349
 constructs: 0120, 0370, 0700, 1420, 1500, 1510, 1795
 targets: linux-arm64, freebsd-arm64, linux-rv64

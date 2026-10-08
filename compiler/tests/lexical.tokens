@@ -89703,7 +89703,7 @@ file negative/unnamed-error-binding-is-removed/program.ldn tokens 43
   121 126 value
 file negative/unterminated-raw-literal/program.ldn refused a raw literal is never closed
 file negative/unterminated-text-literal/main.ldn refused a text literal is never closed
-file negative/unused-pure-local/program.ldn tokens 49
+file negative/unused-pure-local/program.ldn tokens 61
   0 11 side_effect
   11 12 :
   13 14 (
@@ -89741,18 +89741,30 @@ file negative/unused-pure-local/program.ldn tokens 49
   125 129 bool
   130 131 =
   132 136 true
-  141 147 called
-  147 148 :
-  149 152 i32
-  153 154 =
-  155 166 side_effect
-  166 167 (
-  167 168 )
-  173 179 result
-  180 181 =
-  182 188 called
-  189 192 end
-  193 199 sample
+  141 149 negative
+  149 150 :
+  151 154 i32
+  155 156 =
+  157 158 -
+  158 160 42
+  165 173 fraction
+  173 174 :
+  175 178 f64
+  179 180 =
+  181 182 -
+  182 186 1.25
+  191 197 called
+  197 198 :
+  199 202 i32
+  203 204 =
+  205 216 side_effect
+  216 217 (
+  217 218 )
+  223 229 result
+  230 231 =
+  232 238 called
+  239 242 end
+  243 249 sample
 file negative/upper-case-name/program.ldn refused no rule spells 'X'
 file negative/use-after-sink/program.ldn tokens 45
   0 7 consume
@@ -92762,6 +92774,46 @@ file negative/variant-whole-copy-source-unassigned/program.ldn tokens 48
   212 218 source
   219 222 end
   223 227 copy
+file negative/warning-advisory/program.ldn tokens 39
+  0 6 sample
+  6 7 :
+  8 9 (
+  9 10 )
+  11 13 ->
+  14 15 (
+  15 21 result
+  21 22 :
+  23 26 i32
+  26 27 )
+  28 29 =
+  34 37 mut
+  75 79 step
+  79 80 :
+  81 84 i32
+  85 86 =
+  87 88 2
+  130 140 documented
+  140 141 :
+  142 145 i32
+  146 147 =
+  148 150 42
+  155 164 commented
+  164 165 :
+  166 169 i32
+  170 171 =
+  172 173 7
+  203 208 split
+  208 209 :
+  210 213 i32
+  214 215 =
+  224 225 3
+  230 236 result
+  237 238 =
+  239 243 step
+  244 245 +
+  246 247 1
+  248 251 end
+  252 258 sample
 file negative/wide-integer-not-enabled/program.ldn tokens 5
   0 4 wide
   4 5 :

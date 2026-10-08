@@ -5,6 +5,8 @@ end side_effect
 sample: () -> (result: i32) =
     count: i32 = 42
     flag: bool = true
+    negative: i32 = -42
+    fraction: f64 = -1.25
     called: i32 = side_effect()
     result = called
 end sample
