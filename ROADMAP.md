@@ -861,7 +861,7 @@ their compiler-host emission and verifier checks recur in the full gate.
 
 ### R11.50 — Convert to a written type
 
-Status: active
+Status: complete
 Depends on: none
 
 A conversion is a type applied to a value [0310], but only a name can stand
@@ -876,6 +876,14 @@ Exit evidence: `spec.md`'s grammar and a register decision, every conversion
 an alias reaches spelled with its type expression in positive and runtime
 fixtures on every target, and the ambiguous prefixes pinned by fixtures that
 derive or refuse as decided.
+
+Done: D266 defines written conversion heads and their boundaries while
+preserving alias admission. Positive, runtime and refusal fixtures cover
+the existing conversion families, literal and pointer syntax, folding,
+origins and traps. The [full candidate gate](https://github.com/JanHaan/Landin/actions/runs/37702617097)
+passed all 42 jobs with no skips, including every target, physical RV64
+runtime, GDB, ABI and ISA execution, formatting, editor grammar and
+cross-host determinism.
 
 ### R11 gate
 
