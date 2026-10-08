@@ -7,7 +7,7 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.6 — hosted targets, conversions and command-line tools.
+Version 0.2.7 — compiler version and checkout identity.
 0.1.0 was the first version
 of the specification proper, arrived at over seventeen pre-release
 revisions, four prototype programs and two outside reviews; 0.2.0
@@ -42,7 +42,8 @@ with LP64D and explicit ISA extension sets, D265; and conversions that apply
 the type as written, D266. It gives `refine` explicit commands,
 shared presentation options and build-system dependency files; warnings may
 also advise without a repair, and command-line policy can enable, suppress
-or deny them, D251. That history is kept in a separate
+or deny them, D251. 0.2.7 makes the compiler identify its exact release,
+its development commit and a modified checkout. That history is kept in a separate
 archive; the part of it with
 lasting value is at the end of this file, under WHAT WAS TRIED AND
 DROPPED.

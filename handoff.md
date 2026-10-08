@@ -1,7 +1,7 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.2.6**, the sixth under the
+anything. Kept current at specification **0.2.7**, the seventh under the
 second implementation roadmap.
 
 ---

@@ -26,6 +26,33 @@ package body Landin.Commands is
    use type Landin.Targets.Capabilities.Backend_Kind;
    LF : constant Character := ASCII.LF;
 
+   --  Rendering is pure: release status comes from the exact source tag,
+   --  independently of the compiler's optimization/build mode.
+   function Version_Banner
+     (Release_Version, Revision, Source_Digest : String;
+      Dirty : Boolean) return String;
+   function Version_Banner
+     (Release_Version, Revision, Source_Digest : String;
+      Dirty : Boolean) return String
+   is
+      function Short (Text : String) return String is
+        (Text (Text'First .. Text'First + Natural'Min (8, Text'Length) - 1));
+      Label : constant String :=
+        (if Release_Version = "" then "dev" else Release_Version);
+      Origin : constant String :=
+        (if Revision = "unknown" then "source " & Short (Source_Digest)
+         else Short (Revision));
+   begin
+      if Release_Version /= "" and then not Dirty then
+         return "refine " & Label;
+      end if;
+      return "refine " & Label & " (" & Origin
+        & (if Dirty then ", dirty" else "") & ")";
+   end Version_Banner;
+
+   function Version_Json (Release_Version : String) return String is
+     (if Release_Version = "" then "null" else J.Quoted (Release_Version));
+
    type Request is record
       Command : C.Action := C.Overview;
       Explicit_Command : Boolean := False;
@@ -307,6 +334,9 @@ package body Landin.Commands is
             J.Write_Integer (B, 1);
             J.Name (B, "compiler");
             J.Write_String (B, "refine");
+            J.Name (B, "version");
+            J.Write_Raw
+              (B, Version_Json (Landin.Build_Identity.Release_Version));
             J.Name (B, "revision");
             J.Write_String (B, Landin.Build_Identity.Revision);
             J.Name (B, "source_digest");
@@ -321,12 +351,11 @@ package body Landin.Commands is
             Result.Output := US.To_Unbounded_String (J.Result (B) & LF);
          else
             Result.Output := US.To_Unbounded_String
-              (Landin.Driver.Identity & LF & "revision: "
-               & Landin.Build_Identity.Revision
-               & (if Landin.Build_Identity.Dirty then " (dirty)" else "")
-               & LF & "source digest: " & Landin.Build_Identity.Source_Digest
-               & LF & "build mode: " & Landin.Build_Identity.Mode
-               & LF & "host: " & Built_For & LF);
+              (Version_Banner
+                 (Landin.Build_Identity.Release_Version,
+                  Landin.Build_Identity.Revision,
+                  Landin.Build_Identity.Source_Digest,
+                  Landin.Build_Identity.Dirty) & LF);
          end if;
       end Identify;
       procedure List_Targets;

@@ -13,7 +13,7 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.2.6. The compiler can build and run Landin programs
+**Status: specification 0.2.7. The compiler can build and run Landin programs
 for Linux x86-64, Linux arm64, Linux RV64, FreeBSD x86-64 and arm64, and
 native macOS arm64, and builds firmware for
 Cortex-M0. It handles functions, user-defined data types, generic
@@ -195,11 +195,20 @@ options retain their order, and duplicate single-valued options are refused.
 Use `--` before literal operands. `@FILE` expands a bounded response file with
 single/double quotes and backslash escapes, without shell expansion.
 
-`refine version` (also `--version`) identifies the source revision, compiler
-input digest, dirty state, build mode and host triplet. It assigns no release
-version. `refine targets` lists described targets and their CPU feature levels;
-`--json` gives structured output for either query. `--identify` retains the
-older capability summary.
+`refine version` (also `--version`) prints `refine 0.2.7` for an exact release
+checkout, or `refine dev (01234567)` for a development commit. A modified
+checkout adds `dirty`; a modified release also includes its commit. The
+release name comes from an exact numeric `v` tag, independently of debug or
+release optimization. Tracked edits anywhere in the checkout and untracked
+compiler inputs count as dirty; generated build outputs do not.
+`refine version --json` retains the full revision, compiler-input digest,
+dirty state, build mode and host triplet, with `version` set to the release
+name or `null` for development. The input digest covers compiler sources and
+build policy, so a prose edit changes dirty state without changing that digest.
+Without Git metadata, the banner identifies the source digest instead.
+`refine targets` lists described targets and their CPU feature levels;
+`--json` gives structured output. `--identify` retains the older capability
+summary.
 
 Shared `--verbose` (or `-v`) describes the compilation request; repeating it
 also traces the actual native tool argument vectors. `--quiet` retains

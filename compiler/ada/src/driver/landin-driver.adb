@@ -134,7 +134,7 @@ package body Landin.Driver is
 
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
-      & "no release version is assigned" & LF
+      & "use refine version for build identity" & LF
       & "language frontend: scanner, parser, names, types, definite assignment"
       & LF
       & "target-neutral IR: lowered and verified" & LF

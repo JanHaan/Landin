@@ -45,10 +45,16 @@ compiler/ada/
 ```
 
 The build generates `Landin.Build_Identity` under its ignored generated-source
-directory. `scripts/build_identity.py` supplies revision, compiler-input digest,
-dirty state and build mode; the host triplet comes from
-`Landin.Targets.Selection`. The identity carries no checkout path, wall-clock
-time or assigned release version.
+directory. `scripts/build_identity.py` supplies the exact release tag, revision,
+compiler-input digest, dirty state and build mode; the host triplet comes from
+`Landin.Targets.Selection`. Release identity comes only from an exact numeric
+`v` tag on HEAD, independently of optimization mode. More than one such tag is
+refused. Tracked edits throughout the checkout and untracked compiler inputs
+mark it dirty; ignored generated outputs do not. The digest remains restricted
+to compiler inputs. A source archive without Git metadata has an unknown
+revision and no assigned release. The identity carries no checkout path or
+wall-clock time. `refine version` renders a concise banner, and its `--json`
+form retains the full provenance with a release `version` or `null`.
 
 `compiler/tests/` sits outside this directory on purpose. Fixtures describe
 the language, not this implementation, and must survive the bootstrap being

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shlex
 import shutil
 import subprocess
@@ -30,6 +31,124 @@ class NativeCLI(unittest.TestCase):
                                 text=True, capture_output=True, timeout=60)
         self.assertEqual(result.returncode, status, result.stdout + result.stderr)
         return result
+
+    def assert_version(self, expected=None):
+        machine = self.run_cli('version', '--json')
+        self.assertEqual(machine.stderr, '')
+        self.assertEqual(self.run_cli('--version', '--json').stdout, machine.stdout)
+        info = json.loads(machine.stdout)
+        self.assertEqual(set(info), {'schema', 'compiler', 'version', 'revision',
+                                    'source_digest', 'dirty', 'mode', 'host_triplet'})
+        self.assertEqual(info['schema'], 1)
+        self.assertEqual(info['compiler'], 'refine')
+        self.assertIs(type(info['dirty']), bool)
+        self.assertIn(info['mode'], ('debug', 'release'))
+        self.assertRegex(info['revision'], r'^(?:[0-9a-f]{40}|unknown)$')
+        self.assertRegex(info['source_digest'], r'^[0-9a-f]{64}$')
+        self.assertIsInstance(info['host_triplet'], str)
+        self.assertTrue(info['host_triplet'])
+        if info['version'] is not None:
+            self.assertRegex(info['version'], r'^[0-9]+(?:\.[0-9]+)+$')
+        if expected is not None:
+            self.assertEqual(info, expected)
+        label = info['version'] if info['version'] is not None else 'dev'
+        banner = 'refine ' + label
+        if info['version'] is None or info['dirty']:
+            origin = ('source ' + info['source_digest'][:8]
+                      if info['revision'] == 'unknown' else info['revision'][:8])
+            banner += ' (' + origin + (', dirty' if info['dirty'] else '') + ')'
+        human = self.run_cli('version')
+        self.assertEqual(human.stderr, '')
+        self.assertEqual(human.stdout, banner + '\n')
+        self.assertEqual(self.run_cli('--version').stdout, human.stdout)
+        return info
+
+    def test_version_identity_and_banner(self):
+        self.assert_version()
+
+    @unittest.skipUnless(os.environ.get('LANDIN_VERSION_PROBES') == '1',
+                         'set LANDIN_VERSION_PROBES=1 for isolated rebuild probes')
+    def test_version_checkout_transitions(self):
+        # Native compiler rebuilds are deliberate host effects. All Git state,
+        # tags and edits belong to this temporary independent clone, never to
+        # the checkout supplying the test or its built compiler.
+        source = Path(__file__).resolve().parents[2]
+        checkout = self.root / 'checkout'
+
+        def command(*args):
+            result = subprocess.run(args, cwd=checkout if checkout.exists() else source,
+                                    text=True, capture_output=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return result.stdout
+
+        command('git', 'clone', '--no-local', '--quiet', str(source), str(checkout))
+        paths = subprocess.check_output(['git', '-C', str(source), 'ls-files', '-z'])
+        for name in paths.decode().split('\0'):
+            if not name:
+                continue
+            original, copied = source / name, checkout / name
+            if copied.is_symlink() or copied.exists():
+                copied.unlink()
+            if original.exists() or original.is_symlink():
+                copied.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(original, copied, follow_symlinks=False)
+        command('git', 'add', '-u')
+        command('git', '-c', 'user.name=Landin version probe',
+                '-c', 'user.email=version-probe@example.invalid',
+                '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty',
+                '-m', 'Isolated version probe snapshot')
+        revision = command('git', 'rev-parse', 'HEAD').strip()
+        identity = runpy.run_path(str(checkout / 'scripts/build_identity.py'))['identity']
+        env = dict(os.environ, LANDIN_BUILD_TAG='version-probe', LANDIN_BUILD_MODE='debug')
+        host_triplet = json.loads(self.run_cli('version', '--json').stdout)['host_triplet']
+        self.refine = str(checkout / 'compiler/ada/build/version-probe/debug/bin/refine')
+
+        def probe(version, dirty, known_revision=revision):
+            result = subprocess.run(['./scripts/dev-build.sh', '--compiler-only', '-j2'],
+                                    cwd=checkout, env=env, text=True, capture_output=True,
+                                    timeout=900)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            recorded_revision, digest, recorded_dirty, mode, recorded_version = identity(checkout, 'debug')
+            self.assertEqual((recorded_revision, recorded_dirty, recorded_version),
+                             (known_revision, dirty, version or ''))
+            info = self.assert_version(dict(schema=1, compiler='refine', version=version,
+                                           revision=known_revision, source_digest=digest,
+                                           dirty=dirty, mode=mode,
+                                           host_triplet=host_triplet))
+            print('version probe:', json.dumps(info, sort_keys=True), flush=True)
+            return digest
+
+        documentation = checkout / 'README.md'
+        original = documentation.read_bytes()
+        tag = 'v9999.0.0'
+        self.assertEqual(command('git', 'tag', '--list', tag).strip(), '',
+                         'probe tag must be exclusively owned')
+        tagged = False
+        git_directory = checkout / '.git'
+        hidden_git = self.root / 'probe-git-metadata'
+        try:
+            clean_digest = probe(None, False)
+            documentation.write_bytes(original + b'\nVersion probe.\n')
+            self.assertEqual(probe(None, True), clean_digest)
+            documentation.write_bytes(original)
+            command('git', 'tag', tag)
+            tagged = True
+            self.assertEqual(probe('9999.0.0', False), clean_digest)
+            documentation.write_bytes(original + b'\nTagged version probe.\n')
+            self.assertEqual(probe('9999.0.0', True), clean_digest)
+            documentation.write_bytes(original)
+            command('git', 'tag', '-d', tag)
+            tagged = False
+            git_directory.rename(hidden_git)
+            self.assertEqual(probe(None, False, 'unknown'), clean_digest)
+        finally:
+            if hidden_git.exists():
+                hidden_git.rename(git_directory)
+            documentation.write_bytes(original)
+            if tagged:
+                command('git', 'tag', '-d', tag)
+        self.assertEqual(command('git', 'status', '--porcelain', '--untracked-files=no'), '')
+        self.assertEqual(command('git', 'tag', '--points-at', 'HEAD'), '')
 
     def test_warning_controls(self):
         (self.root / 'warnings.ldn').write_text(

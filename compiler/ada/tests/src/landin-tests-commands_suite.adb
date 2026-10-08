@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Landin.Build_Identity;
 with Landin.Commands;
 with Landin.Commands.Catalogue;
 with Landin.Driver;
@@ -55,6 +56,118 @@ package body Landin.Tests.Commands_Suite is
         (Item, not Landin.Commands.Is_Server (["lsp", "--help"], Host),
          "server help never starts the protocol");
    end Help_And_Queries;
+
+   procedure Version_Identity (Item : in out Landin.Testing.Context);
+   procedure Version_Identity (Item : in out Landin.Testing.Context) is
+      package BI renames Landin.Build_Identity;
+      package J renames Landin.Json;
+      use type J.Integer_Value;
+      procedure Check_Identity
+        (Release_Version, Revision, Source_Digest, Mode : String;
+         Dirty : Boolean);
+      procedure Check_Identity
+        (Release_Version, Revision, Source_Digest, Mode : String;
+         Dirty : Boolean)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Meter : Landin.Platform.Unmetered;
+      begin
+         Host.Raise_On_Read;
+         declare
+            Human : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (["version"], Host, Tools, Meter);
+            Alias_Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (["--version"], Host, Tools, Meter);
+            Machine : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute
+                (["version", "--json"], Host, Tools, Meter,
+                 Built_For => "test-host");
+            Machine_Alias : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute
+                (["--version", "--json"], Host, Tools, Meter,
+                 Built_For => "test-host");
+            Doc : J.Document;
+            Expected : US.Unbounded_String :=
+              US.To_Unbounded_String ("refine ");
+            function Short (Text : String) return String is
+              (Text (Text'First .. Text'First + 7));
+            Origin : constant String :=
+              (if Revision = "unknown" then "source " & Short (Source_Digest)
+               else Short (Revision));
+            procedure Text_Field (Name, Expected_Text : String);
+            procedure Text_Field (Name, Expected_Text : String) is
+               Value : constant J.Value := J.Member (Doc, J.Root (Doc), Name);
+            begin
+               Landin.Testing.Check
+                 (Item, J.Is_Kind (Doc, Value, J.String_Value),
+                  Name & " is a JSON string");
+               if J.Is_Kind (Doc, Value, J.String_Value) then
+                  Landin.Testing.Check_Equal
+                    (Item, J.Text (Doc, Value), Expected_Text,
+                     Name & " is retained");
+               end if;
+            end Text_Field;
+         begin
+            US.Append (Expected,
+                       (if Release_Version = "" then "dev"
+                        else Release_Version));
+            if Release_Version = "" or else Dirty then
+               US.Append (Expected, " (" & Origin
+                          & (if Dirty then ", dirty" else "") & ")");
+            end if;
+            US.Append (Expected, ASCII.LF);
+            Landin.Testing.Check_Equal
+              (Item, Human.Status, 0, "version succeeds");
+            Landin.Testing.Check_Equal
+              (Item, US.To_String (Human.Output), US.To_String (Expected),
+               "one-line banner");
+            Landin.Testing.Check_Equal
+              (Item, US.To_String (Alias_Result.Output),
+               US.To_String (Human.Output),
+               "version aliases have identical human output");
+            Landin.Testing.Check_Equal
+              (Item, US.To_String (Machine_Alias.Output),
+               US.To_String (Machine.Output),
+               "version aliases have identical JSON");
+            J.Parse (Doc, US.To_String (Machine.Output));
+            Landin.Testing.Check (Item, J.Ok (Doc), "identity is JSON");
+            if J.Ok (Doc) then
+               Text_Field ("compiler", "refine");
+               Text_Field ("revision", Revision);
+               Text_Field ("source_digest", Source_Digest);
+               Text_Field ("mode", Mode);
+               Text_Field ("host_triplet", "test-host");
+               if Release_Version = "" then
+                  Landin.Testing.Check
+                    (Item, J.Is_Kind
+                       (Doc, J.Member (Doc, J.Root (Doc), "version"),
+                        J.Null_Value), "dev version is JSON null");
+               else
+                  Text_Field ("version", Release_Version);
+               end if;
+               Landin.Testing.Check
+                 (Item, J.Is_Kind (Doc, J.Member (Doc, J.Root (Doc), "dirty"),
+                                  (if Dirty then J.True_Value
+                                   else J.False_Value)),
+                  "dirty is the recorded Boolean");
+               Landin.Testing.Check
+                 (Item, J.Is_Integer
+                    (Doc, J.Member (Doc, J.Root (Doc), "schema"))
+                  and then J.Integer_Of
+                    (Doc, J.Member (Doc, J.Root (Doc), "schema")) = 1,
+                  "identity retains schema 1");
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "version writes no files");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "version invokes no tools");
+         end;
+      end Check_Identity;
+   begin
+      Check_Identity
+        (BI.Release_Version, BI.Revision, BI.Source_Digest, BI.Mode, BI.Dirty);
+   end Version_Identity;
 
    procedure Grammar (Item : in out Landin.Testing.Context);
    procedure Grammar (Item : in out Landin.Testing.Context) is
@@ -518,6 +631,8 @@ package body Landin.Tests.Commands_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "commands", "version identity", Version_Identity'Access);
       Landin.Testing.Register
         (Into, "commands", "warning controls", Warning_Controls'Access);
       Landin.Testing.Register

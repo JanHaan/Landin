@@ -85,10 +85,10 @@ package body Landin.Tests.Driver_Suite is
          "misuse prints usage");
    end No_Arguments_Is_Misuse;
 
-   procedure Identity_Claims_No_Version
+   procedure Identity_Points_To_Version
      (Item : in out Landin.Testing.Context);
 
-   procedure Identity_Claims_No_Version
+   procedure Identity_Points_To_Version
      (Item : in out Landin.Testing.Context)
    is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
@@ -101,8 +101,8 @@ package body Landin.Tests.Driver_Suite is
         (Item, Result.Status, Landin.Driver.Status_Success,
          "identifying succeeds");
       Landin.Testing.Check
-        (Item, Contains (Text, "no release version is assigned"),
-         "identity is version neutral");
+        (Item, Contains (Text, "use refine version for build identity"),
+         "identity points to the version query");
       Landin.Testing.Check
         (Item,
          Contains
@@ -128,7 +128,7 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item, not Contains (Text, "0."),
          "identity carries no version number");
-   end Identity_Claims_No_Version;
+   end Identity_Points_To_Version;
 
    procedure Unknown_Options_Are_Diagnosed
      (Item : in out Landin.Testing.Context);
@@ -5272,8 +5272,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "no arguments is misuse",
          No_Arguments_Is_Misuse'Access);
       Landin.Testing.Register
-        (Into, "driver", "identity claims no version",
-         Identity_Claims_No_Version'Access);
+        (Into, "driver", "identity points to version",
+         Identity_Points_To_Version'Access);
       Landin.Testing.Register
         (Into, "driver", "unknown options are diagnosed",
          Unknown_Options_Are_Diagnosed'Access);

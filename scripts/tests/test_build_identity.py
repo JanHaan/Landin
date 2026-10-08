@@ -41,11 +41,13 @@ class BuildIdentity(unittest.TestCase):
         shutil.copytree(self.root, copy)
         self.assertEqual(before, IDENTITY.identity(copy, 'debug'))
 
-    def test_source_dirty_docs_clean(self):
+    def test_tracked_prose_dirty_without_changing_source_digest(self):
         before = IDENTITY.identity(self.root, 'debug')
         (self.root / 'README.md').write_text('changed explanation\n')
         (self.root / 'compiler/ada/src/base/README.md').write_text('source prose\n')
-        self.assertEqual(before, IDENTITY.identity(self.root, 'debug'))
+        prose = IDENTITY.identity(self.root, 'debug')
+        self.assertTrue(prose[2])
+        self.assertEqual(before[1], prose[1])
         source = self.root / 'compiler/ada/src/base/main.ads'
         source.write_text('changed compiler\n')
         changed = IDENTITY.identity(self.root, 'debug')
@@ -84,7 +86,7 @@ class BuildIdentity(unittest.TestCase):
         digest = IDENTITY.identity(self.root, 'debug')[1]
         shutil.rmtree(self.root / '.git')
         archive = IDENTITY.identity(self.root, 'debug')
-        self.assertEqual(archive, ('unknown', digest, False, 'debug'))
+        self.assertEqual(archive, ('unknown', digest, False, 'debug', ''))
         nested = self.root / 'nested archive'
         shutil.copytree(self.root / 'compiler', nested / 'compiler')
         self.git('init', '-q')
@@ -102,6 +104,59 @@ class BuildIdentity(unittest.TestCase):
         self.assertIn('Mode : constant String := "debug"', text)
         IDENTITY.generate(self.root, 'release', output)
         self.assertIn('Mode : constant String := "release"', output.read_text())
+
+    def test_release_is_an_exact_tag_independent_of_mode(self):
+        self.assertEqual(IDENTITY.identity(self.root, 'release')[4], '')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'tag', '-a', 'v0.2.7', '-m', 'release')
+        for mode in ('debug', 'release'):
+            tagged = IDENTITY.identity(self.root, mode)
+            self.assertEqual(tagged[4], '0.2.7')
+            self.assertFalse(tagged[2])
+        (self.root / 'README.md').write_text('modified release declaration\n')
+        dirty = IDENTITY.identity(self.root, 'release')
+        self.assertEqual(dirty[4], '0.2.7')
+        self.assertTrue(dirty[2])
+        self.git('add', 'README.md')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'after release')
+        self.assertEqual(IDENTITY.identity(self.root, 'release')[4], '')
+
+    def test_nonrelease_and_ambiguous_tags(self):
+        self.git('tag', 'experiment')
+        self.git('tag', 'v0.2.7-not-a-release')
+        self.assertEqual(IDENTITY.identity(self.root, 'debug')[4], '')
+        self.git('tag', 'v0.2.7')
+        self.git('tag', 'v0.2.8')
+        with self.assertRaisesRegex(RuntimeError, 'multiple release tags'):
+            IDENTITY.identity(self.root, 'debug')
+
+    def test_staged_reverted_worktree_and_deleted_prose_are_dirty(self):
+        original = (self.root / 'README.md').read_text()
+        (self.root / 'README.md').write_text('staged change\n')
+        self.git('add', 'README.md')
+        (self.root / 'README.md').write_text(original)
+        self.assertTrue(IDENTITY.identity(self.root, 'debug')[2])
+        self.git('reset', '-q', 'HEAD', '--', 'README.md')
+        self.assertFalse(IDENTITY.identity(self.root, 'debug')[2])
+        (self.root / 'README.md').unlink()
+        self.assertTrue(IDENTITY.identity(self.root, 'debug')[2])
+
+    def test_tag_and_prose_changes_refresh_generated_identity_only(self):
+        output = self.root / 'compiler/ada/build/generated/landin-build_identity.ads'
+        IDENTITY.generate(self.root, 'debug', output)
+        original = output.read_bytes()
+        digest = IDENTITY.identity(self.root, 'debug')[1]
+        self.git('tag', 'v0.2.7')
+        IDENTITY.generate(self.root, 'debug', output)
+        self.assertNotEqual(original, output.read_bytes())
+        self.assertIn('Release_Version : constant String := "0.2.7"', output.read_text())
+        tagged = output.read_bytes()
+        (self.root / 'README.md').write_text('dirty prose\n')
+        IDENTITY.generate(self.root, 'debug', output)
+        self.assertNotEqual(tagged, output.read_bytes())
+        self.assertEqual(digest, IDENTITY.identity(self.root, 'debug')[1])
+        self.assertIn('Dirty : constant Boolean := True', output.read_text())
 
     def test_command_line_manifest_and_generation(self):
         output = Path(self.temp.name) / 'generated source' / 'landin-build_identity.ads'

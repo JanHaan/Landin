@@ -1,5 +1,5 @@
 refine - the Landin bootstrap compiler
-no release version is assigned
+use refine version for build identity
 language frontend: scanner, parser, names, types, definite assignment
 target-neutral IR: lowered and verified
 backends: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64 and cortex-m0 assembly
