@@ -1,5 +1,5 @@
 import { MONTHLY_MICRO_USD, RESERVATION_MICRO_USD,
-  EXECUTION_MONTHLY_MICRO_USD, EXECUTION_RESERVATION_MICRO_USD } from "./policy.js";
+  EXECUTION_MONTHLY_MICRO_USD, EXECUTION_RESERVATION_MICRO_USD, MAX_AGENT_CALLS } from "./policy.js";
 
 export function emptyLedger() {
   return { months: {}, executionMonths: {}, day: "", counts: {}, clients: {}, claims: {}, halted: false };
@@ -7,8 +7,8 @@ export function emptyLedger() {
 
 // Called inside a Durable Object storage transaction. No remote call or
 // asynchronous work can occur between checking a limit and booking funds.
-export function reserve(state, { operation, client, id, cloudflare = false }, now = Date.now()) {
-  if (!["ask", "run"].includes(operation) || !/^[a-f0-9]{64}$/.test(client)
+export function reserve(state, { operation, client, id, cloudflare = false, agentTurn = false }, now = Date.now()) {
+  if (!["ask", "run", "search"].includes(operation) || !/^[a-f0-9]{64}$/.test(client)
       || typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) {
     return { status: 400, error: "Invalid reservation." };
   }
@@ -26,18 +26,19 @@ export function reserve(state, { operation, client, id, cloudflare = false }, no
   for (const key of Object.keys(state.executionMonths)) {
     if (key !== month && !Object.values(state.claims).some(claim => claim.month === key)) delete state.executionMonths[key];
   }
-  if (state.halted) return { status: 503, error: "The service is paused." };
+  if (state.halted && operation !== "search") return { status: 503, error: "The service is paused." };
   if (state.claims[id]) return { status: 409, error: "Duplicate reservation." };
   const active = Object.values(state.claims).filter(claim => claim.operation === operation).length;
-  if (active >= (operation === "ask" ? 4 : 1)) return { status: 429, error: "The service is busy. Try later." };
+  if (active >= (operation === "run" ? 1 : 4)) return { status: 429, error: "The service is busy. Try later." };
   const execution = operation === "run" && cloudflare;
-  const cost = operation === "ask" ? RESERVATION_MICRO_USD
+  const cost = operation === "ask" ? RESERVATION_MICRO_USD * (agentTurn ? MAX_AGENT_CALLS : 1)
     : execution ? EXECUTION_RESERVATION_MICRO_USD : 0;
   const account = execution ? state.executionMonths : state.months;
   const spent = account[month] || 0;
   const limit = execution ? EXECUTION_MONTHLY_MICRO_USD : MONTHLY_MICRO_USD;
   if (spent + cost > limit) return { status: 429, error: `This month's ${execution ? "execution" : "answer"} budget is exhausted. Documentation search remains available.` };
-  const limits = operation === "ask" ? { minute: 3, day: 20, total: 1000 } : { minute: 2, day: 5, total: 200 };
+  const limits = operation === "ask" ? { minute: 3, day: 20, total: 1000 }
+    : operation === "run" ? { minute: 2, day: 5, total: 200 } : { minute: 10, day: 50, total: 1000 };
   const key = client + ":" + operation;
   const user = state.clients[key] || { day: 0, minute: -1, count: 0 };
   const minute = Math.floor(now / 60_000);

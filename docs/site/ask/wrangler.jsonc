@@ -5,16 +5,32 @@
   "compatibility_date": "2026-10-08",
   "workers_dev": true,
   "preview_urls": false,
-  "build": { "command": "python3 build.py" },
+  "build": {
+    "command": "python3 build.py"
+  },
   "assets": {
     "directory": "build/public",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "durable_objects": {
-    "bindings": [{ "name": "BUDGET", "class_name": "Budget" }]
+    "bindings": [
+      {
+        "name": "BUDGET",
+        "class_name": "Budget"
+      }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Budget"] }],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Budget"
+      ]
+    }
+  ],
   "vars": {
     "PRIVATE_MODE": "true",
     "ANSWERS_ENABLED": "true",
@@ -23,5 +39,10 @@
     "EXECUTION_ENABLED": "false",
     "RUNNER_URL": ""
   },
-  "observability": { "enabled": false }
+  "observability": {
+    "enabled": false
+  },
+  "limits": {
+    "cpu_ms": 25
+  }
 }

@@ -1,7 +1,8 @@
 # Ask about Landin
 
-This is a private Cloudflare Worker prototype and browser preview. It answers
-from a snapshot of the reading copies' source documents and returns source
+This is a private Cloudflare Worker prototype with a two-pane chat workspace.
+The conversation supports follow-up messages; an editable source file and console
+sit beside it. It answers from a snapshot of the reading copies' source documents and returns source
 links. Its optional Cloudflare Containers endpoint compiles and runs a single Landin
 source file inside a fresh Linux x86-64 microVM. The checked `refine` executable
 is packaged in the image once; visitor requests never rebuild the compiler.
@@ -19,8 +20,9 @@ npm test
 npm run dev
 ```
 
-Open the local URL printed by Wrangler. Documentation search works without
-an API key. Generated answers require local secrets in the ignored
+Open the local URL printed by Wrangler. Documentation search needs no model
+API key, but private access and quotas require `PREVIEW_KEY` and `RATE_SALT`.
+Generated answers also require an API key. Configure secrets in the ignored
 `.dev.vars` file: `ANTHROPIC_API_KEY`, `PREVIEW_KEY` and `RATE_SALT`. The last
 two must each contain at least 32 random characters. Keep keys outside Git
 and never put them in a page, prompt or generated corpus. The preview key
@@ -63,9 +65,24 @@ passages carry that standing into the prompt.
 
 The service fixes the model, prompt, maximum output, source corpus and
 upstream endpoints. Visitor input cannot supply tools, system messages,
-models or destinations. There is no agent loop or automatic execution.
-Generated examples are displayed as unverified until the visitor presses
-Build and run. Citation IDs must belong to the retrieved passages; their
+models or destinations. The bounded agent loop has only `search_docs` and,
+when execution is enabled, `compile_run`. It can inspect compiler diagnostics
+and repair source. Each turn allows at most four model calls, three tool calls,
+two sandbox attempts and 90 seconds. The last model call has no tools. Parallel
+tool requests, unknown tools, oversized arguments and duplicate executions of
+the same source are rejected. Transport failures never trigger another attempt.
+Build and run also lets the visitor test an edited source file manually.
+
+The browser sends only a question and its current source file, never model
+history. A server-owned conversation stores at most eight completed pairs in
+64 KiB of context, dropping old pairs together; full transcripts remain saved.
+A random conversation capability is kept in page memory and sent as a header.
+A shared preview key alone cannot read another conversation. One turn may be
+active per conversation. Stop records cancellation; an in-flight call can finish,
+but no further model or tool calls are admitted afterwards. Reloading loses the
+page capability and starts a new chat. Every run compiles a complete source file;
+there is no persistent interpreter state. Signed provider thinking is forwarded
+only during the live tool loop and never stored or displayed. Citation IDs must belong to the retrieved passages; their
 URLs come from the source index. This validates citation identity, not that
 the cited passage supports every sentence: that needs answer evaluation.
 Answers, source titles, diagnostics and program output are rendered as text.
@@ -185,10 +202,14 @@ ignored `build/api-smoke-20261008/`.
 ## Cost and abuse boundaries
 
 The application's model API budget is $70 per UTC calendar month. One shared
-Durable Object books a worst-case reservation before every call, atomically
+Durable Object books a worst-case reservation before each operation, atomically
 with rate and concurrency limits. It stays the same across source snapshots
 and redeployments. A successful response reconciles the reservation against
-the provider's reported usage. A failure with uncertain billing retains the
+the provider's reported usage. Chat turns reserve all four possible calls
+up front and reconcile their combined usage. An uncertain provider failure
+retains that whole turn reservation; unused calls are refunded when billing is
+known. Internal model calls do not consume extra visitor answer quotas; every
+sandbox attempt consumes the separate execution quota. A failure with uncertain billing retains the
 reservation; expiry only releases a concurrency slot. There is no automatic
 provider retry, and duplicate settlement cannot refund twice.
 
@@ -205,7 +226,8 @@ quota state. Do not reuse the workspace key for other applications.
 
 | operation | per visitor per minute | per visitor per day | service per day | simultaneous |
 |---|---|---|---|---|
-| answer | 3 | 20 | 1,000 | 4 |
+| answer / chat turn | 3 | 20 | 1,000 | 4 |
+| documentation search | 10 | 50 | 1,000 | 4 |
 | build and run | 2 | 5 | 200 | 1 |
 
 Visitors are counted through a daily rotating HMAC of Cloudflare's connecting
@@ -213,7 +235,8 @@ IP, using `RATE_SALT`. Raw IPs are not saved by the application. The ledger
 retains counts and reservations; the private transcript store below retains
 submitted content. Shared IPs
 share limits; changing IP can bypass a visitor quota but cannot bypass
-service quotas or the model budget. Public access additionally requires
+service quotas or the model budget. Private documentation search also requires the preview key, preventing
+anonymous callers from filling the transcript store. Public access requires
 server-validated Turnstile tokens with the expected hostname and operation.
 These controls bound abuse; they do not promise that abuse is impossible.
 
@@ -250,9 +273,12 @@ An attacker can exhaust quotas and deny service; GitHub Pages remains available.
 
 Every valid documentation-search submission and authenticated question or
 execution submission is saved in the existing budget Durable Object's SQLite
-storage. Records contain the input, timestamp, random page conversation tag,
+storage. Records contain the input, timestamp, random conversation identity,
 corpus identity, fixed model profile, displayed response or error, usage and
-accounting result. Generated examples and execution output remain untrusted.
+accounting result. Chat records also retain the submitted workspace source,
+model-call usage and each documentation/tool step, exact executed source and
+bounded result. Step intent is persisted before work, and result before the
+next model call; interrupted turns can retain partial progress. Generated examples and execution output remain untrusted.
 Headers, API/preview/administrator keys, Turnstile tokens, raw IPs and provider
 thinking are not copied into records. Visitors are told before submitting
 that transcripts are stored to improve the assistant, and to avoid private code.
@@ -444,7 +470,7 @@ secrets, supplied through `npx wrangler secret put NAME`: `ANTHROPIC_API_KEY`,
 `PREVIEW_KEY` and `RATE_SALT`. No secret is an ordinary Wrangler variable.
 For answer-only use, review and commit the deployment inputs, then run
 `npm run deploy`. For Containers, first build and check the prepared image on
-the native host, verify the paid account's billing controls, review and commit
+the native host, review the paid account's billing controls, review and commit
 deployment inputs, then explicitly run:
 
 ```sh

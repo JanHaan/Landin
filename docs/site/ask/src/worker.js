@@ -2,13 +2,21 @@ import corpus from "../build/corpus.json" with { type: "json" };
 import { createService } from "./service.js";
 import { emptyLedger, reserve, settle } from "./ledger.js";
 import { TranscriptStore } from "./transcripts.js";
+import { Conversations } from "./sessions.js";
 export { Execution } from "./execution.js";
 
 export default createService(corpus);
 
 export class Budget {
-  constructor(ctx) { this.ctx = ctx; this.transcripts = new TranscriptStore(ctx.storage); }
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.transcripts = new TranscriptStore(ctx.storage);
+    this.conversations = new Conversations(ctx.storage);
+  }
   async fetch(request) {
+    if (new URL(request.url).pathname.startsWith("/conversation/")) {
+      return this.conversations.fetch(request);
+    }
     if (new URL(request.url).pathname.startsWith("/transcripts")) {
       return this.transcripts.fetch(request);
     }

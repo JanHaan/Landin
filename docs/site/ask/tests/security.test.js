@@ -220,6 +220,6 @@ test("execution is disabled by default and uses only the fixed authenticated run
 test("browser renders model and program output without HTML interpretation", async () => {
   const script = await readFile(new URL("../public/ask.js", import.meta.url), "utf8");
   assert.equal(/innerHTML|outerHTML|insertAdjacentHTML|eval\(/.test(script), false);
-  assert.match(script, /byID\("answer"\)\.textContent/);
-  assert.match(script, /byID\("output"\)\.textContent/);
+  assert.match(script, /content\.textContent = text/);
+  assert.match(script, /output\.textContent = result\.output/);
 });

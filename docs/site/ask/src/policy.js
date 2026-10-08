@@ -18,6 +18,13 @@ export const MAX_BODY_BYTES = 16_384;
 export const MAX_CODE_BYTES = 8192;
 export const MAX_QUESTION_BYTES = 2048;
 export const MAX_CONTEXT_BYTES = 28_000;
+export const MAX_CHAT_BODY_BYTES = 24_576;
+export const MAX_CHAT_HISTORY_BYTES = 65_536;
+export const MAX_CHAT_HISTORY_TURNS = 8;
+export const MAX_AGENT_CALLS = 4;
+export const MAX_AGENT_TOOLS = 3;
+export const MAX_AGENT_RUNS = 2;
+export const CHAT_DEADLINE_MS = 90_000;
 
 export class Failure extends Error {
   constructor(status, message) {

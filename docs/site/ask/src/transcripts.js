@@ -25,15 +25,15 @@ export class TranscriptStore {
         nextCursor: rows.length ? String(rows.at(-1).seq) : null });
     }
     if (request.method !== "POST") return new Response(null, { status: 405 });
-    const data = parseJSON(await boundedText(request.body, 96_000));
+    const data = parseJSON(await boundedText(request.body, 256_000));
     if (!/^[a-f0-9-]{36}$/.test(data.id || "")) throw new Failure(400, "Invalid transcript identity.");
     if (url.pathname === "/transcripts/start") {
       this.sql.exec("INSERT INTO transcripts (id, record) VALUES (?, ?)", data.id,
         JSON.stringify({ ...data, state: "pending" }));
-    } else if (url.pathname === "/transcripts/finish") {
+    } else if (["/transcripts/finish", "/transcripts/progress"].includes(url.pathname)) {
       const previous = this.sql.exec("SELECT record FROM transcripts WHERE id = ?", data.id).one();
       this.sql.exec("UPDATE transcripts SET record = ? WHERE id = ?",
-        JSON.stringify({ ...JSON.parse(previous.record), ...data, state: "complete" }), data.id);
+        JSON.stringify({ ...JSON.parse(previous.record), ...data, state: url.pathname.endsWith("finish") ? "complete" : "pending" }), data.id);
     } else return new Response(null, { status: 404 });
     return Response.json({ saved: true });
   }

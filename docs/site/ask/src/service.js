@@ -2,14 +2,15 @@ import { Failure, MODEL, EFFORT, MAX_OUTPUT, MAX_BODY_BYTES, MAX_CODE_BYTES,
   MAX_QUESTION_BYTES, boundedText, parseJSON, inputText, sameSecret,
   clientIdentity, usageCost } from "./policy.js";
 import { retrieve, SYSTEM, messages, validateAnswer } from "./retrieval.js";
+import { chatTurn, conversationCredentials } from "./chat.js";
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-async function remoteJSON(url, options, fetcher, limit = 32_768) {
+async function remoteJSON(url, options, fetcher, limit = 32_768, timeoutMS = 35_000) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMS);
   try {
     // Workerd supports manual/follow, not the browser's redirect="error".
     // Reject every non-success status below without following a destination
@@ -60,6 +61,43 @@ async function ledgerCall(stub, path, data) {
   return result;
 }
 
+async function executeCode(env, code, client, deadline, fetcher) {
+  if (env.EXECUTION_ENABLED !== "true") throw new Failure(503, "Execution is unavailable.");
+  // Leave time for the sandbox's own destruction deadline and final answer.
+  if (deadline - Date.now() < 50_000) throw new Failure(504, "There is not enough turn time left for another execution.");
+  const cloudflare = env.EXECUTION_BACKEND === "cloudflare";
+  let runner;
+  if (cloudflare) {
+    if (!env.EXECUTION || !/^[a-f0-9]{64}$/.test(env.COMPILER_SHA256 || "")) throw new Failure(503, "Execution is not configured.");
+  } else {
+    try { runner = new URL(env.RUNNER_URL); } catch { /* checked below */ }
+    if (!runner || runner.protocol !== "https:" || runner.username || runner.password
+        || !env.RUNNER_KEY || env.RUNNER_KEY.length < 32) throw new Failure(503, "Execution is not configured.");
+  }
+  const stub = coordinator(env), id = crypto.randomUUID();
+  await ledgerCall(stub, "reserve", { id, client, operation: "run", cloudflare });
+  let cost = null;
+  try {
+    let data;
+    if (cloudflare) {
+      const runtime = env.EXECUTION.get(env.EXECUTION.idFromName("landin-execution-v1"));
+      const result = await runtime.fetch("https://execution.internal/run", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+        signal: AbortSignal.timeout(45_000) });
+      if (!result.ok) throw new Failure(result.status, "Execution is unavailable. Try later.");
+      data = parseJSON(await boundedText(result.body, 48_000));
+    } else data = await remoteJSON(runner.href, { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.RUNNER_KEY },
+      body: JSON.stringify({ code }) }, fetcher, 48_000);
+    if (!data || !["compile_error", "ran", "terminated", "timeout", "output_limit"].includes(data.status)
+        || typeof data.output !== "string" || new TextEncoder().encode(data.output).length > 16_384
+        || !(data.exitCode === null || Number.isInteger(data.exitCode))
+        || typeof data.compiler !== "string" || data.compiler.length > 160) throw new Failure(502, "The execution service returned an invalid result.");
+    cost = 0;
+    return { status: data.status, output: data.output, exitCode: data.exitCode, compiler: data.compiler };
+  } finally { await ledgerCall(stub, "settle", { id, cost }); }
+}
+
 export function createService(corpus, fetcher = fetch) {
   return {
     async fetch(request, env) {
@@ -104,12 +142,32 @@ export function createService(corpus, fetcher = fetch) {
             throw new Failure(400, "Invalid export cursor.");
           }
           response = await coordinator(env).fetch("https://budget.internal/transcripts?cursor=" + cursor);
+        } else if (["/api/chat", "/api/chat/cancel"].includes(url.pathname) && request.method === "POST") {
+          if (env.ANSWERS_ENABLED !== "true" || !env.ANTHROPIC_API_KEY) throw new Failure(503, "The answer service is unavailable. Documentation search remains available.");
+          await authorize(request, env, "ask", fetcher);
+          const stub = coordinator(env);
+          if (url.pathname.endsWith("cancel")) {
+            const input = parseJSON(await boundedText(request.body, MAX_BODY_BYTES));
+            const credentials = await conversationCredentials(request, input);
+            response = json(await ledgerCall(stub, "conversation/cancel", credentials));
+          } else response = await chatTurn(request, env, corpus, { stub, call: ledgerCall,
+            provider: (body, timeout) => remoteJSON("https://api.anthropic.com/v1/messages", {
+              method: "POST", headers: { "Content-Type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01" }, body: JSON.stringify(body)
+            }, fetcher, 96_000, timeout),
+            execute: (code, client, deadline) => executeCode(env, code, client, deadline, fetcher) });
         } else if (url.pathname === "/api/search" && request.method === "POST") {
+          await authorize(request, env, "search", fetcher);
           const input = parseJSON(await boundedText(request.body, MAX_BODY_BYTES));
           const question = inputText(input?.question, MAX_QUESTION_BYTES, "Question");
-          await beginTranscript("search", question, input);
-          response = json({ sources: retrieve(corpus, question).map(({ title, url, source, authority }) =>
-            ({ title, url, source, authority })) });
+          const stub = coordinator(env), id = crypto.randomUUID();
+          const client = await clientIdentity(request, env.RATE_SALT);
+          await ledgerCall(stub, "reserve", { id, client, operation: "search" });
+          try {
+            await beginTranscript("search", question, input);
+            response = json({ sources: retrieve(corpus, question).map(({ title, url, source, authority }) =>
+              ({ title, url, source, authority })) });
+          } finally { await ledgerCall(stub, "settle", { id, cost: 0 }); }
         } else if (["/api/ask", "/api/run"].includes(url.pathname) && request.method === "POST") {
           const operation = url.pathname.endsWith("run") ? "run" : "ask";
           if (env.ANSWERS_ENABLED !== "true" || (operation === "run" && env.EXECUTION_ENABLED !== "true")) {
@@ -226,7 +284,7 @@ export function createService(corpus, fetcher = fetch) {
         headers.set("Access-Control-Allow-Origin", origin);
         headers.set("Vary", "Origin");
         headers.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-        headers.set("Access-Control-Allow-Headers", "Content-Type, X-Preview-Key, X-Turnstile-Token, X-Admin-Key");
+        headers.set("Access-Control-Allow-Headers", "Content-Type, X-Preview-Key, X-Turnstile-Token, X-Admin-Key, X-Conversation-Key");
       }
       return new Response(response.body, { status: response.status, headers });
     }

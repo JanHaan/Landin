@@ -41,8 +41,8 @@ def main():
                                              headers={"X-Admin-Key": key,
                                                       "User-Agent": "LandinTranscriptExporter/1.0"})
             with opener.open(request, timeout=30) as response:
-                raw = response.read(1_000_001)
-            if len(raw) > 1_000_000:
+                raw = response.read(2_000_001)
+            if len(raw) > 2_000_000:
                 raise SystemExit("export page exceeded its size limit")
             page = json.loads(raw)
             for record in page["records"]:
