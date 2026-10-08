@@ -13,6 +13,8 @@
 --  state, so a test names exactly the host it wants.
 
 with Ada.Strings.Unbounded;
+with Ada.Containers.Vectors;
+with Landin.Source;
 
 with Landin.Diagnostics;
 with Landin.Platform;
@@ -37,12 +39,18 @@ package Landin.Driver is
    --  it points at was read from, indexed by Source_Id: a client that
    --  applies a fix, or hands one to an editor, needs both, and must not
    --  be made to read them back out of the text.
+   package Position_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Landin.Source.Position,
+      "=" => Landin.Source."=");
+
    type Outcome is record
       Status : Natural := Status_Success;
       Output : Ada.Strings.Unbounded.Unbounded_String;
       Report : Ada.Strings.Unbounded.Unbounded_String;
       Found  : Landin.Diagnostics.Diagnostic_List;
       Named  : Landin.Platform.Path_List;
+      Positions : Position_Vectors.Vector;
+      Trace  : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    --  Host and Tools are the only ways this reaches a disk or a process,
@@ -63,8 +71,9 @@ package Landin.Driver is
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
       Meter     : Landin.Platform.Resource_Meter'Class;
-      Built_For : String := Landin.Targets.Selection.Build_Triplet)
-      return Outcome;
+      Built_For : String := Landin.Targets.Selection.Build_Triplet;
+      Dry_Run   : Boolean := False;
+      Depfile   : String := "") return Outcome;
 
    --  Identity without a version.  This roadmap assigns no release
    --  designation, so neither does the executable.

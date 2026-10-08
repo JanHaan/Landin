@@ -26,9 +26,9 @@ with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.Formatting;
 with Landin.IR;
+with Landin.Json;
 with Landin.Modules;
 with Landin.Resolution;
-with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source_Digests;
@@ -94,6 +94,38 @@ package body Landin.Driver is
      Rows.Code (Rows.Frame_Not_Addressable);
    Code_Firmware_Frame : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Firmware_Frame_Exceeds_Stack);
+
+   procedure Keep_Locations
+     (Result : in out Outcome;
+      Sources : aliased Landin.Source.Sets.Source_Set);
+
+   procedure Keep_Locations
+     (Result : in out Outcome;
+      Sources : aliased Landin.Source.Sets.Source_Set)
+   is
+      use type Landin.Source.Source_Id;
+   begin
+      Result.Positions.Clear;
+      for Index in 1 .. Landin.Diagnostics.Count (Result.Found) loop
+         declare
+            Label : constant Landin.Diagnostics.Label :=
+              Landin.Diagnostics.Primary
+                (Landin.Diagnostics.Get (Result.Found, Index));
+            Id : constant Landin.Source.Source_Id :=
+              Landin.Diagnostics.Source_Of (Label);
+            Position : Landin.Source.Position;
+         begin
+            if Id /= Landin.Source.No_Source and then Sources.Contains (Id)
+              and then Landin.Source.Is_Valid
+                (Sources.Get (Id), Landin.Diagnostics.Span_Of (Label))
+            then
+               Position := Landin.Source.Position_Of
+                 (Sources.Get (Id), Landin.Diagnostics.Span_Of (Label).First);
+            end if;
+            Result.Positions.Append (Position);
+         end;
+      end loop;
+   end Keep_Locations;
 
    --  What a request asked to be left behind.  Nothing is the state every
    --  request had before the native path and most still have: a program is
@@ -454,6 +486,7 @@ package body Landin.Driver is
       end if;
 
       Result.Found := Found;
+      Keep_Locations (Result, Sources);
       Result.Report := Unbounded.To_Unbounded_String
         (Landin.Diagnostics.Text.Render (Found, Sources));
       Result.Status :=
@@ -496,8 +529,9 @@ package body Landin.Driver is
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
       Meter     : Landin.Platform.Resource_Meter'Class;
-      Built_For : String := Landin.Targets.Selection.Build_Triplet)
-      return Outcome
+      Built_For : String := Landin.Targets.Selection.Build_Triplet;
+      Dry_Run   : Boolean := False;
+      Depfile   : String := "") return Outcome
    is
       --  D257: the compiler's own host unless --target= names another.  A
       --  host no description covers has no default, and a build that then
@@ -542,6 +576,7 @@ package body Landin.Driver is
       Emit_Seen, Output_Seen : Boolean := False;
       Skip_Compilation : Boolean := False;
       Index     : Positive := 1;
+      Dependency_Directories : aliased Landin.Platform.Path_List;
    begin
       if Natural (Arguments.Length) = 0 then
          Result.Status := Status_Misuse;
@@ -845,6 +880,7 @@ package body Landin.Driver is
          --  rendered, and every source's name so a Source_Id means a path.
          procedure Keep_Report is
          begin
+            Result.Named.Clear;
             Result.Found :=
               Landin.Diagnostics.Sorted (Landin.Stages.Report (Context));
             for Index in 1 .. Landin.Stages.Source_Count (Context) loop
@@ -855,6 +891,7 @@ package body Landin.Driver is
                         Landin.Stages.Nth_Source (Context, Index))
                        .Element.all));
             end loop;
+            Keep_Locations (Result, Landin.Stages.Sources (Context).all);
          end Keep_Report;
 
          procedure Note_Failure
@@ -1048,6 +1085,20 @@ package body Landin.Driver is
                   Message => Text));
          end Note_Failure;
 
+         procedure Check_Dependency_Path (Path : String);
+
+         procedure Check_Dependency_Path (Path : String) is
+         begin
+            if Depfile /= ""
+              and then (for some Byte of Path => Byte in ASCII.LF | ASCII.CR)
+            then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option,
+                  "dependency paths cannot contain line breaks");
+            end if;
+         end Check_Dependency_Path;
+
          --  `--stage-report`: one row per stage, each the processor time
          --  spent in it and the process's peak resident set when it ended.
          --  The peak is a high-water mark, so the stage that raised it is
@@ -1076,7 +1127,7 @@ package body Landin.Driver is
                  (Long_Long_Integer'Image (Value), Ada.Strings.Both));
             Now : Landin.Platform.Resource_Sample;
          begin
-            if not Stage_Report_Seen then
+            if not Stage_Report_Seen or else Dry_Run then
                return;
             end if;
             Now := Meter.Sample;
@@ -1118,7 +1169,7 @@ package body Landin.Driver is
                  (Natural'Image (Value), Ada.Strings.Both));
          begin
             if not Stage_Report_Seen or else Bad_Use
-              or else Skip_Compilation
+              or else Skip_Compilation or else Dry_Run
             then
                return;
             end if;
@@ -1356,6 +1407,9 @@ package body Landin.Driver is
             --  All destinations are checked before the first artifact write,
             --  including source files discovered through module roots.
             Destinations.Append (Assembly_Path);
+            if Depfile /= "" then
+               Destinations.Append (Depfile);
+            end if;
             if Emit = Emit_Executable then
                Destinations.Append (Product_Path);
                if Cortex then
@@ -1680,6 +1734,78 @@ package body Landin.Driver is
                      Map_JSON := Map.JSON;
                   end;
                end if;
+               if Dry_Run then
+                  for Path of Destinations loop
+                     Unbounded.Append (Result.Output,
+                       "write " & Landin.Json.Quoted (Path) & LF);
+                  end loop;
+                  if Report_Seen then
+                     Unbounded.Append (Result.Output,
+                       "write " & Landin.Json.Quoted (Report_Path) & LF);
+                  end if;
+                  if Stage_Report_Seen then
+                     Unbounded.Append (Result.Output,
+                       "write " & Landin.Json.Quoted (Stage_Path) & LF);
+                  end if;
+                  if Emit = Emit_Executable then
+                     declare
+                        Driver : constant String :=
+                          Landin.Backend.Toolchain.Driver_For
+                            (Facts, Unbounded.To_String (Toolchain));
+                        Libraries : Landin.Platform.Path_List;
+                        procedure Plan_Tool
+                          (Arguments : Landin.Platform.Path_List);
+                        procedure Plan_Tool
+                          (Arguments : Landin.Platform.Path_List)
+                        is
+                        begin
+                           Unbounded.Append (Result.Output,
+                             "run [" & Landin.Json.Quoted (Driver));
+                           for Argument of Arguments loop
+                              Unbounded.Append (Result.Output,
+                                "," & Landin.Json.Quoted (Argument));
+                           end loop;
+                           Unbounded.Append (Result.Output, "]" & LF);
+                        end Plan_Tool;
+                     begin
+                        for Index in 1 .. Landin.Configuration.Library_Count
+                          (Landin.Stages.Configurations (Context).all)
+                        loop
+                           Libraries.Append
+                             (Landin.Configuration.Library_Name
+                                (Landin.Stages.Configurations (Context).all,
+                                 Index));
+                        end loop;
+                        if Cortex then
+                           Plan_Tool
+                          (Landin.Backend.Toolchain.Assemble_Arguments
+                             (Assembly_Path, Product_Path & ".o", Facts,
+                              Debug => Debug_Enabled,
+                              Level => Landin.Stages.Level (Context)));
+                        end if;
+                        if not Libraries.Is_Empty
+                          and then Landin.Targets.Capabilities.Backend_For
+                            (Facts)
+                            = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+                        then
+                           Unbounded.Append (Result.Output,
+                             "resolve Darwin archive paths before linking"
+                             & LF);
+                        else
+                           Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
+                             (Assembly => Assembly_Path,
+                              Output => Product_Path,
+                              Linker => Unbounded.To_String (Linker),
+                              Libraries => Libraries, Facts => Facts,
+                              Full_Debug => Debug_Enabled,
+                              Build_Id => Unbounded.To_String (Map_Id),
+                              Level => Landin.Stages.Level (Context)));
+                        end if;
+                     end;
+                  end if;
+                  return;
+               end if;
+
                Host.Write_File
                  (Assembly_Path, Unbounded.To_String (Emitted), Written);
                if Written /= Landin.Platform.Write_Ok then
@@ -2028,6 +2154,16 @@ package body Landin.Driver is
          end Emit_Requested;
 
       begin
+         Check_Dependency_Path (Depfile);
+         Check_Dependency_Path (Unbounded.To_String (Output));
+         Check_Dependency_Path (Unbounded.To_String (Build_Report_Path));
+         Check_Dependency_Path (Unbounded.To_String (Stage_Report_Path));
+         for Path of Inputs loop
+            Check_Dependency_Path (Path);
+         end loop;
+         for Path of Roots loop
+            Check_Dependency_Path (Path);
+         end loop;
          for Mode of Modes loop
             if Natural (Modes.Length) /= 1
               or else Mode not in "debug" | "release"
@@ -2265,6 +2401,7 @@ package body Landin.Driver is
          --  producing any of an executable request's artifacts. Run checks
          --  again when it starts, in case PATH changes meanwhile.
          if Emit = Emit_Executable
+           and then not Dry_Run
            and then not Bad_Use
            and then not Landin.Stages.Failed (Context)
          then
@@ -2292,11 +2429,23 @@ package body Landin.Driver is
             if Natural (Roots.Length) > 0 then
                if Natural (Inputs.Length) = 1 then
                   Loading.Load_Reachable_Program
-                    (Context, Host, Roots, Inputs.Element (1));
+                    (Context, Host, Roots, Inputs.Element (1),
+                     Dependency_Directories =>
+                       (if Depfile /= ""
+                        then Dependency_Directories'Access else null));
                end if;
             else
                Loading.Load_Files (Context, Host, Inputs);
             end if;
+
+            for Path of Dependency_Directories loop
+               Check_Dependency_Path (Path);
+            end loop;
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               Check_Dependency_Path
+                 (Landin.Source.Name (Landin.Stages.Source
+                    (Context, Landin.Stages.Nth_Source (Context, Index))));
+            end loop;
 
             --  A rooted request scans and parses each module as it is found,
             --  to read its imports, so its syntax is inside this row.
@@ -2345,6 +2494,49 @@ package body Landin.Driver is
                   Stage_Ended ("emission");
                end if;
             end if;
+         end if;
+         if Depfile /= "" and then not Dry_Run and then not Bad_Use
+           and then not Landin.Stages.Failed (Context)
+         then
+            declare
+               Text : Unbounded.Unbounded_String;
+               Written : Landin.Platform.Write_Status;
+               Product : constant String :=
+                 (if Unbounded.Length (Output) > 0
+                  then Unbounded.To_String (Output)
+                  elsif Emit = Emit_Executable then Default_Executable
+                  else Default_Assembly);
+               procedure Append_Path (Path : String);
+               procedure Append_Path (Path : String) is
+               begin
+                  for Byte of Path loop
+                     case Byte is
+                        when '$' => Unbounded.Append (Text, "$$");
+                        when ' ' | ASCII.HT | '#' | ':' | '\' =>
+                           Unbounded.Append (Text, "\" & Byte);
+                        when others => Unbounded.Append (Text, Byte);
+                     end case;
+                  end loop;
+               end Append_Path;
+            begin
+               Append_Path (Product);
+               Unbounded.Append (Text, ":");
+               for Path of Dependency_Directories loop
+                  Unbounded.Append (Text, " ");
+                  Append_Path (Path);
+               end loop;
+               for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+                  Unbounded.Append (Text, " ");
+                  Append_Path (Landin.Source.Name
+                    (Landin.Stages.Source
+                       (Context, Landin.Stages.Nth_Source (Context, Index))));
+               end loop;
+               Unbounded.Append (Text, LF & "");
+               Host.Write_File (Depfile, Unbounded.To_String (Text), Written);
+               if Written /= Landin.Platform.Write_Ok then
+                  Note_Failure (Code_Unwritable, "cannot write: " & Depfile);
+               end if;
+            end;
          end if;
          Write_Stage_Report;
 
@@ -2402,6 +2594,7 @@ package body Landin.Driver is
                     else ": " & Ada.Exceptions.Exception_Message (Defect))
                  & LF);
             Result.Status := Status_Defect;
+            Keep_Report;
       end;
 
       return Result;

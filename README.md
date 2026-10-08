@@ -177,13 +177,53 @@ above remains the complete suite.
 
 On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 
-`refine --identify` will tell you what it is. Giving it one or more `.ldn`
-files runs the frontend, lowering and verification over them as one module.
-Without `--emit` an accepted program deliberately writes no output file;
-`--emit=asm -o program.s` writes assembly for the selected target (Linux by
-default; `--target=darwin-arm64` selects native Mac output), and `--emit=exe -o
-program` assembles and links a hosted executable when the target toolchain and
-[1970]'s entry point are present. A program it refuses gets a report with a
+`refine check program.ldn ...` runs the frontend, lowering and verification
+on the named sources as one whole program, without writing an artifact.
+`refine compile program.ldn -o program` assembles and links an executable;
+`refine compile --emit asm program.ldn -o program.s` writes assembly.
+The default target is the compiler's own host; cross-compilation names a
+`--target`. `build` is reserved for future project orchestration.
+Bare source requests and `--emit=asm|exe` remain compatibility spellings.
+
+`refine --help` lists commands. `refine compile --help`, `refine --help
+compile` and `refine help compile` give the same command help.
+`refine help reference` prints the complete interface, and
+`refine completion bash|zsh|fish` prints shell completion definitions from
+the same option catalogue. Shared options work before or after the command;
+command-specific options follow it. Values accept a space or `=`, repeatable
+options retain their order, and duplicate single-valued options are refused.
+Use `--` before literal operands. `@FILE` expands a bounded response file with
+single/double quotes and backslash escapes, without shell expansion.
+
+`refine version` (also `--version`) identifies the source revision, compiler
+input digest, dirty state, build mode and host triplet. It assigns no release
+version. `refine targets` lists described targets and their CPU feature levels;
+`--json` gives structured output for either query. `--identify` retains the
+older capability summary.
+
+Shared `--verbose` (or `-v`) describes the compilation request; repeating it
+also traces the actual native tool argument vectors. `--quiet` retains
+warnings and errors. `--color auto|always|never` controls human diagnostic
+color; auto checks standard error's terminal, `NO_COLOR` and `TERM`.
+`--diagnostics human|short|json` selects the source report. JSON diagnostics
+are schema-versioned newline-delimited objects carrying labels, notes and
+fixes; line and byte-column coordinates are one-based, and spans retain the
+compiler's byte offsets. Paths also carry a hexadecimal encoding of their
+original bytes.
+
+`refine compile --dry-run` checks and emits in memory, prints planned writes
+and tool arguments, and performs no writes or tool executions. Darwin archive
+lookup is identified as a deferred step when it requires running a tool.
+`--depfile PATH` writes Make-format source dependencies after successful
+emission, including observed module-search directories so import membership
+changes can cause a rebuild. Keep artifacts and reports outside those
+watched directories: creating them there changes directory timestamps and
+can cause redundant rebuilds. Paths containing line breaks are refused when
+a depfile is requested. A consuming build rule must also track its
+compiler and native tool configuration. Build mode, optimization,
+specialization and debug information remain independent controls.
+
+A program it refuses gets a report with a
 span, a caret and a note, one per mistake and on the token it is about: what
 a mistake leaves behind is not reported again, and where one change of a
 token mends a line the report says which change and offers it as a fix. If
@@ -206,6 +246,11 @@ quick fixes from the compiler's own stages, as
 
 This is the maintained inventory of what the compiler does today:
 
+- **Command interface.** Explicit `check` and `compile` commands share a
+  catalogue for help and scoped shell completion. Build identity and target
+  queries, human/short/JSON diagnostics, response files, Make depfiles,
+  dry-run plans and tool traces support command-line consumers. Quiet mode
+  preserves warnings and errors; the compiler warning policy is unchanged.
 - **The language.** Functions, aggregates and variants, block-valued control
   flow, lexical `defer` and failure-only `undo`, declared errors, every loop
   and literal family, explicit conversion to a written type such as

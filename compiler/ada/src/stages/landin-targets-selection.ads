@@ -17,6 +17,10 @@
 
 package Landin.Targets.Selection is
 
+   Described_Count : constant Positive := 8;
+   function Described_Name (Index : Positive) return String
+     with Pre => Index <= Described_Count;
+
    function Is_Described (Name : String) return Boolean;
 
    function Described (Name : String) return Target_Facts

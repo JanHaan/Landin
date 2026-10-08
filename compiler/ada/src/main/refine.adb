@@ -12,6 +12,7 @@ with Ada.Text_IO.Text_Streams;
 
 with Landin;
 with Landin.Driver;
+with Landin.Commands;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
@@ -35,7 +36,7 @@ begin
 
    --  A server talks to its editor for as long as the editor runs it, so
    --  it has the process's channel rather than a request and a result.
-   if Landin.Driver.Is_Server (Arguments) then
+   if Landin.Commands.Is_Server (Arguments, Host) then
       declare
          Channel : Landin.Platform.Native.Native_Channel;
          Status  : Landin.Server.Sessions.Exit_Status;
@@ -48,7 +49,9 @@ begin
 
    declare
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments, Host, Tools, Meter);
+        Landin.Commands.Execute
+          (Arguments, Host, Tools, Meter,
+           Terminal_Color => Landin.Platform.Native.Diagnostic_Color);
    begin
       --  Written as bytes, not as text.  Ada.Text_IO does not recognise
       --  the line feeds inside these strings, so it believes the last line
@@ -58,6 +61,12 @@ begin
          String'Write
            (Text_IO.Text_Streams.Stream (Text_IO.Standard_Output),
             Unbounded.To_String (Result.Output));
+      end if;
+
+      if Unbounded.Length (Result.Trace) > 0 then
+         String'Write
+           (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
+            Unbounded.To_String (Result.Trace));
       end if;
 
       if Unbounded.Length (Result.Report) > 0 then

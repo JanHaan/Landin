@@ -4,6 +4,7 @@ with Ada.Containers;
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
+with Ada.Strings.Fixed;
 
 with Landin.Configuration;
 with Landin.Diagnostics;
@@ -222,7 +223,8 @@ package body Landin.Driver.Loading is
       Missing_Directories : access Landin.Platform.Path_List := null;
       Previous        : access Landin.Stages.Compilation := null;
       Watch_Syntax    : access procedure (Name : String) := null;
-      Cache           : access Landin.Stages.Syntax.Parse_Cache := null)
+      Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
+      Dependency_Directories : access Landin.Platform.Path_List := null)
    is
       type Directory_Listing is record
          Entries : Landin.Platform.Path_List;
@@ -236,6 +238,40 @@ package body Landin.Driver.Loading is
 
       Listings : Listing_Maps.Map;
       Children : Child_Maps.Map;
+
+      procedure Remember_Dependency (Directory : String);
+
+      procedure Remember_Dependency (Directory : String) is
+         Parent : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String (Directory);
+      begin
+         if Dependency_Directories = null then
+            return;
+         end if;
+         loop
+            exit when Host.Is_Directory (Unbounded.To_String (Parent));
+            declare
+               Path : constant String := Unbounded.To_String (Parent);
+               Slash : constant Natural := Ada.Strings.Fixed.Index
+                 (Path, "/", Ada.Strings.Backward);
+            begin
+               if Path = "." or else Path = "/" then
+                  return;
+               elsif Slash = 0 then
+                  Parent := Unbounded.To_Unbounded_String (".");
+               elsif Slash = 1 then
+                  Parent := Unbounded.To_Unbounded_String ("/");
+               else
+                  Parent := Unbounded.To_Unbounded_String
+                    (Path (Path'First .. Slash - 1));
+               end if;
+            end;
+         end loop;
+         if not Dependency_Directories.Contains (Unbounded.To_String (Parent))
+         then
+            Dependency_Directories.Append (Unbounded.To_String (Parent));
+         end if;
+      end Remember_Dependency;
 
       procedure Cached_Listing
         (Directory : String;
@@ -262,6 +298,7 @@ package body Landin.Driver.Loading is
                Status := Saved.Status;
             end;
          else
+            Remember_Dependency (Directory);
             Host.List_Directory (Directory, Entries, Status);
             Listings.Insert (Directory, (Entries, Status));
          end if;
@@ -595,6 +632,7 @@ package body Landin.Driver.Loading is
             First_New : constant Natural :=
               Landin.Stages.Source_Count (Context) + 1;
          begin
+            Remember_Dependency (Directory);
             Host.List_Directory (Directory, Entries, Listed);
             if Listed /= Landin.Platform.List_Ok then
                declare

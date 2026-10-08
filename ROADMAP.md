@@ -907,6 +907,35 @@ cross-host determinism.
 - FreeBSD x86-64, FreeBSD arm64 and RV64 Linux each have a separate nonempty,
   executing C ABI verdict against independently compiled C peers.
 
+## Command-line preparation before microcontrollers
+
+The public compilation command is `refine compile`; `build` is reserved for
+future project orchestration. Shared options work before or after commands,
+and their names do not overlap command-specific options except intentional
+contextual actions such as help. Command help has equivalent command-local
+and `help COMMAND` forms. Existing direct compilation spellings remain
+compatible.
+
+The first phase covers this interface, help and completion from one catalogue,
+source/build identification without assigning a release version, presentation
+and tool tracing, response files, dry-run planning and source dependency files.
+Its evidence is the command and existing driver suites, plus native CLI and
+build-consumer checks.
+
+Done: The first-phase interface, generated build identity, catalogue-derived
+help and scoped completion, diagnostic presentation and tool tracing,
+response files, dry-run plans and dependency files are implemented. Native
+Linux x86-64 command, driver and optimization-driver suites and CLI/Make
+integration checks passed. These filtered developer checks are not gate
+evidence.
+
+The second phase examines the content behind the interface: warning coverage
+and actionable repairs, diagnostic completeness and useful execution detail.
+Warning levels and suppression require evidence and a decision against the
+current specification's warning policy; declaring a flag alone would not
+supply that behavior. This work precedes the microcontroller phase and does
+not change its language or target scope.
+
 ## R12 — Microcontrollers
 
 The chips people buy: RP2040 and RP2350, STM32, and Espressif's ESP32,

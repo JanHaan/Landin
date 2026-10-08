@@ -110,11 +110,14 @@ class ManifestFailures(unittest.TestCase):
                      "compiler/ada/tests/src/test.adb",
                      "compiler/ada/library.gpr", "scripts/build.sh",
                      "scripts/env.sh", "scripts/build_lock.py",
-                     "scripts/build_config.py")
+                     "scripts/build_config.py", "scripts/build_identity.py")
             for name in files:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(name + "\n")
+            shutil.copyfile(ROOT / "scripts/build_identity.py",
+                            root / "scripts/build_identity.py")
+            identity_source = root / "generated/landin-build_identity.ads"
             (root / "scripts/build_config.py").write_text(
                 "raise SystemExit(23)\n" if failure == "configuration" else
                 "print('toolchain configuration selected')\n")
@@ -146,14 +149,19 @@ class ManifestFailures(unittest.TestCase):
                      + os.environ["PATH"], "LANDIN_ROOT": str(root),
                      "LANDIN_ADA_DIR": str(ada), "LANDIN_BUILD_MODE": "debug",
                      "LANDIN_BUILD_TAG": "test", "WRITTEN": str(written),
-                     "Configuration": str(root / "native.cgpr")})
+                     "Configuration": str(root / "native.cgpr"),
+                     "Identity_Source": str(identity_source)})
             text = written.read_text()
             if not failure:
                 rows = subprocess.check_output(
                     ["cksum", *[str(root / name) for name in files]],
                     text=True, timeout=5).splitlines()
+                identity_row = subprocess.check_output(
+                    ["python3", str(root / "scripts/build_identity.py"),
+                     "--root", str(root), "--mode", "debug", "--output",
+                     str(identity_source), "--manifest"], text=True).strip()
                 expected = (sorted(rows[:2]) + rows[2:3] + sorted(rows[3:])
-                            + ["mode debug tag test", "gnat pinned banner",
+                            + [identity_row, "mode debug tag test", "gnat pinned banner",
                                "gprbuild pinned banner",
                                "toolchain configuration selected"])
                 self.assertEqual(text.splitlines(), expected)
@@ -180,7 +188,7 @@ class ConfiguredBuild(unittest.TestCase):
         self.root = Path(temporary.name)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("build.sh", "build_config.py"):
+        for name in ("build.sh", "build_config.py", "build_identity.py"):
             shutil.copyfile(ROOT / "scripts" / name, scripts / name)
         (scripts / "build_lock.py").write_text("# fixture lock identity\n")
         (scripts / "env.sh").write_text('''set -eu

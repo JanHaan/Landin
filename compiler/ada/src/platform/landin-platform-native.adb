@@ -1,4 +1,5 @@
 with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces;
@@ -18,6 +19,16 @@ package body Landin.Platform.Native is
    --  One buffer size for both directions.  64 KiB is large enough that the
    --  syscall count stops mattering and small enough to sit in a frame.
    Chunk_Size : constant := 64 * 1024;
+
+   function Diagnostic_Color return Boolean is
+      use type Interfaces.C.int;
+      function Isatty (Descriptor : Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "isatty";
+   begin
+      return Isatty (2) /= 0
+        and then not Ada.Environment_Variables.Exists ("NO_COLOR")
+        and then Ada.Environment_Variables.Value ("TERM", "") /= "dumb";
+   end Diagnostic_Color;
 
    overriding function Exists
      (Host : Native_Filesystem; Path : String) return Boolean

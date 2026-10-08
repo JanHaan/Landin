@@ -185,6 +185,7 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       #  The sole direct source in each one-source positive, negative,
@@ -290,6 +291,7 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       - name: Object quality
