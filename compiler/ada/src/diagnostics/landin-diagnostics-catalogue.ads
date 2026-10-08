@@ -22,8 +22,10 @@
 --
 --  A warning is a row at warning level, and D251 is what admits one: the
 --  compiler's judgement and never the language's, raised only on a program
---  it accepts, and only with the exact fix that settles it, so its row is
---  Must_Fix.  Its number is in the band of the stage that found it, like
+--  it accepts.  An exact fix is offered where an edit is safe; otherwise
+--  the observation stands alone.  Invocation policy may suppress or deny
+--  warnings without changing language legality.  Its number is in the
+--  band of the stage that found it, like
 --  every other code; nothing about a number says it is a warning.
 --
 --  A code is a name, not an address. The bands below record where a code was
@@ -331,7 +333,7 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range
                .. Invalid_Tool_Directive => Error,
             when Call_Argument_Match .. Traversal_Source => Error,
-            --  A warning never refuses a program; see Fixes below.
+            --  Stage warnings do not refuse; invocation policy is separate.
             when Mutable_Never_Written | Unused_Pure_Local => Warning,
             when No_Toolchain .. Firmware_Frame_Exceeds_Stack => Error);
 
@@ -830,6 +832,9 @@ package Landin.Diagnostics.Catalogue is
             when No_Toolchain          => 1,
             when others                => 0);
 
+   function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean
+     is (Of_Code in Mutable_Never_Written | Unused_Pure_Local);
+
    --  Whether an occurrence may carry a fix, which the text renders as a
    --  `help` line and an editor offers as an action.  Must_Fix is a code
    --  whose every occurrence has one; No_Fix is a code a stage may not
@@ -859,9 +864,8 @@ package Landin.Diagnostics.Catalogue is
             when Immutable_Target => May_Fix,
             --  [0390]'s `=` inside an expression, offered `==`.
             when Assignment_In_Expression => May_Fix,
-            --  D251 admits a warning only with the exact repair that
-            --  settles it, so every occurrence carries one.
-            when Mutable_Never_Written | Unused_Pure_Local => Must_Fix,
+            --  D251 separates the observation from a safe source edit.
+            when Mutable_Never_Written | Unused_Pure_Local => May_Fix,
             when others => No_Fix);
 
    function Count return Natural

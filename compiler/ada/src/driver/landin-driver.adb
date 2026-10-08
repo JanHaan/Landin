@@ -531,7 +531,9 @@ package body Landin.Driver is
       Meter     : Landin.Platform.Resource_Meter'Class;
       Built_For : String := Landin.Targets.Selection.Build_Triplet;
       Dry_Run   : Boolean := False;
-      Depfile   : String := "") return Outcome
+      Depfile   : String := "";
+      Warnings  : Landin.Diagnostics.Warning_Policy.Policy :=
+        Landin.Diagnostics.Warning_Policy.Defaults) return Outcome
    is
       --  D257: the compiler's own host unless --target= names another.  A
       --  host no description covers has no default, and a build that then
@@ -873,6 +875,17 @@ package body Landin.Driver is
          Panic : aliased Landin.Panics.Plan;
          Panic_Problem : Unbounded.Unbounded_String;
          Target_Option_Refused : Boolean := False;
+         Policy_Denied : Boolean := False;
+
+         function Policy_Report return Landin.Diagnostics.Diagnostic_List;
+         function Policy_Report return Landin.Diagnostics.Diagnostic_List is
+           (Landin.Diagnostics.Warning_Policy.Apply
+              (Warnings, Landin.Stages.Report (Context)));
+
+         function Render_Report return String;
+         function Render_Report return String is
+           (Landin.Diagnostics.Text.Render
+              (Policy_Report, Landin.Stages.Sources (Context).all));
 
          procedure Keep_Report;
 
@@ -882,7 +895,7 @@ package body Landin.Driver is
          begin
             Result.Named.Clear;
             Result.Found :=
-              Landin.Diagnostics.Sorted (Landin.Stages.Report (Context));
+              Landin.Diagnostics.Sorted (Policy_Report);
             for Index in 1 .. Landin.Stages.Source_Count (Context) loop
                Result.Named.Append
                  (Landin.Source.Name
@@ -1169,7 +1182,7 @@ package body Landin.Driver is
                  (Natural'Image (Value), Ada.Strings.Both));
          begin
             if not Stage_Report_Seen or else Bad_Use
-              or else Skip_Compilation or else Dry_Run
+              or else Skip_Compilation or else Dry_Run or else Policy_Denied
             then
                return;
             end if;
@@ -2373,7 +2386,7 @@ package body Landin.Driver is
                Write_Stage_Report;
             end if;
             Result.Report := Unbounded.To_Unbounded_String
-              (Landin.Stages.Rendered_Report (Context));
+              (Render_Report);
             Keep_Report;
             Result.Status :=
               (if Bad_Use then Status_Misuse else Status_Reported);
@@ -2385,7 +2398,7 @@ package body Landin.Driver is
          if Wants_Usage or else Wants_Identity or else Bad_Use then
             if Bad_Use or else Landin.Stages.Failed (Context) then
                Result.Report := Unbounded.To_Unbounded_String
-                 (Landin.Stages.Rendered_Report (Context));
+                 (Render_Report);
                Keep_Report;
                Result.Status :=
                  (if Bad_Use then Status_Misuse else Status_Reported);
@@ -2479,12 +2492,15 @@ package body Landin.Driver is
               and then not Landin.Stages.Failed (Context)
             then
                Checking.Run (Context, Panic, Watch_Stage'Access);
+               Policy_Denied := Landin.Diagnostics.Warning_Policy.Denied
+                 (Warnings, Landin.Stages.Report (Context));
 
                --  The backend runs on nothing that was refused, for the same
                --  reason the lowering does: an unaccepted program has no Unit
                --  worth emitting, and a file written from one would be a
                --  plausible artefact of a failed compilation.
                if Emit /= Emit_Nothing
+                 and then not Policy_Denied
                  and then not Bad_Use
                  and then not Landin.Stages.Failed (Context)
                then
@@ -2496,6 +2512,7 @@ package body Landin.Driver is
             end if;
          end if;
          if Depfile /= "" and then not Dry_Run and then not Bad_Use
+           and then not Policy_Denied
            and then not Landin.Stages.Failed (Context)
          then
             declare
@@ -2556,12 +2573,12 @@ package body Landin.Driver is
 
          Result.Report :=
            Unbounded.To_Unbounded_String
-             (Landin.Stages.Rendered_Report (Context));
+             (Render_Report);
          Keep_Report;
 
          if Bad_Use then
             Result.Status := Status_Misuse;
-         elsif Landin.Stages.Failed (Context) then
+         elsif Landin.Stages.Failed (Context) or else Policy_Denied then
             Result.Status := Status_Reported;
          end if;
 
@@ -2586,7 +2603,7 @@ package body Landin.Driver is
          when Defect : others =>
             Result.Report :=
               Unbounded.To_Unbounded_String
-                (Landin.Stages.Rendered_Report (Context)
+                (Render_Report
                  & "refine: internal compiler defect in "
                  & Unbounded.To_String (Current_Stage)
                  & (if Ada.Exceptions.Exception_Message (Defect) = ""

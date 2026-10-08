@@ -1,4 +1,5 @@
 with Ada.Strings.Fixed;
+with Landin.Diagnostics.Warning_Policy;
 
 package body Landin.Commands.Catalogue is
 
@@ -54,7 +55,9 @@ package body Landin.Commands.Catalogue is
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
          when Depfile => "--depfile", when Format_Check => "--check",
-         when Stdio => "--stdio", when JSON => "--json");
+         when Stdio => "--stdio", when JSON => "--json",
+         when Warnings => "--warnings", when Warn => "--warn",
+         when Allow => "--allow", when Deny => "--deny");
 
    function Description (Flag : Option) return String is
      (case Flag is
@@ -88,10 +91,16 @@ package body Landin.Commands.Catalogue is
          when Format_Check =>
            "Report layout differences without rewriting files",
          when Stdio => "Use the standard input/output LSP transport (default)",
-         when JSON => "Print structured query output");
+         when JSON => "Print structured query output",
+         when Warnings => "Base warning selection: default, all, none",
+         when Warn => "Enable a warning code or all (repeatable)",
+         when Allow => "Suppress a warning code or all (repeatable)",
+         when Deny => "Enable and promote a warning to an error (repeatable)");
 
    function Values (Flag : Option) return String is
      (case Flag is
+         when Warnings => "default|all|none",
+         when Warn | Allow | Deny => "CODE|all",
          when Color => "auto|always|never",
          when Diagnostics => "human|short|json",
          when Build_Mode => "debug|release",
@@ -110,19 +119,25 @@ package body Landin.Commands.Catalogue is
      (Shared (Flag) or else
       (case Command is
           when Check => Flag in Target | Level | Root | Build_Option
-            | Build_Mode | Optimize | Specialize | Stage_Report,
-          when Compile => Flag in Target .. Depfile,
+            | Build_Mode | Optimize | Specialize | Stage_Report
+            | Warnings | Warn | Allow | Deny,
+          when Compile => Flag in Target .. Depfile
+            or else Flag in Warnings .. Deny,
           when Format => Flag = Format_Check,
           when Server => Flag = Stdio,
           when Version | Targets => Flag = JSON,
           when others => False));
 
    function Repeatable (Flag : Option) return Boolean is
-     (Flag in Help_Flag | Verbose | Quiet | Root | Build_Option);
+     (Flag in Help_Flag | Verbose | Quiet | Root | Build_Option
+       | Warn | Allow | Deny);
 
    function Valid_Value (Flag : Option; Text : String) return Boolean is
    begin
       case Flag is
+         when Warnings => return Text in "default" | "all" | "none";
+         when Warn | Allow | Deny =>
+            return Landin.Diagnostics.Warning_Policy.Valid_Selector (Text);
          when Color => return Text in "auto" | "always" | "never";
          when Diagnostics => return Text in "human" | "short" | "json";
          when Build_Mode => return Text in "debug" | "release";

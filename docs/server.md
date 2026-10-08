@@ -89,7 +89,10 @@ in that one notification.
 A diagnostic carries its catalogue code, a link to its explanation on the
 reading copy of [`docs/diagnostics.md`](diagnostics.md), every secondary
 label as related information, and each note at the end of its message. A
-warning is a warning, and an error an error. A report with no place in any
+warning is a warning, and an error an error. The server reports the
+catalogue's recommended warnings. Compilation warning controls are refused
+at server startup; they do not configure an editor session. An advisory
+without a safe edit has no code action. A report with no place in any
 source, such as a refused option, goes to `window/showMessage`.
 
 Every source the module reads is published, so an error in a file the editor

@@ -17,6 +17,7 @@ with Ada.Containers.Vectors;
 with Landin.Source;
 
 with Landin.Diagnostics;
+with Landin.Diagnostics.Warning_Policy;
 with Landin.Platform;
 with Landin.Targets.Selection;
 
@@ -73,7 +74,9 @@ package Landin.Driver is
       Meter     : Landin.Platform.Resource_Meter'Class;
       Built_For : String := Landin.Targets.Selection.Build_Triplet;
       Dry_Run   : Boolean := False;
-      Depfile   : String := "") return Outcome;
+      Depfile   : String := "";
+      Warnings  : Landin.Diagnostics.Warning_Policy.Policy :=
+        Landin.Diagnostics.Warning_Policy.Defaults) return Outcome;
 
    --  Identity without a version.  This roadmap assigns no release
    --  designation, so neither does the executable.

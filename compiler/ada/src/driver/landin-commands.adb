@@ -8,6 +8,7 @@ with Landin.Commands.Tracing;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
+with Landin.Diagnostics.Warning_Policy;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
@@ -18,6 +19,7 @@ package body Landin.Commands is
    package C renames Catalogue;
    package US renames Ada.Strings.Unbounded;
    package J renames Landin.Json;
+   package WP renames Landin.Diagnostics.Warning_Policy;
    use type C.Action;
    use type C.Option;
    use type US.Unbounded_String;
@@ -37,6 +39,7 @@ package body Landin.Commands is
       Structured : Boolean := False;
       Dry_Run : Boolean := False;
       Depfile : US.Unbounded_String;
+      Policy : WP.Policy := WP.Defaults;
       Forwarded : Landin.Platform.Path_List;
       Operands : Landin.Platform.Path_List;
       Problem : US.Unbounded_String;
@@ -139,6 +142,12 @@ package body Landin.Commands is
                              & C.Name (Result.Command));
                         end if;
                      end if;
+                     if Flag in C.Warnings .. C.Deny
+                       and then (not Result.Explicit_Command
+                         or else Result.Legacy_Identity)
+                     then
+                        Refuse (Stem & " requires explicit check or compile");
+                     end if;
                      case Flag is
                         when C.Help_Flag => Result.Wants_Help := True;
                         when C.Verbose =>
@@ -154,6 +163,22 @@ package body Landin.Commands is
                         when C.JSON => Result.Structured := True;
                         when C.Dry_Run => Result.Dry_Run := True;
                         when C.Depfile => Result.Depfile := Value;
+                        when C.Warnings =>
+                           if C.Valid_Value (Flag, US.To_String (Value)) then
+                              WP.Set_Base (Result.Policy,
+                                (if US.To_String (Value) = "all"
+                                 then WP.All_Warnings
+                                 elsif US.To_String (Value) = "none"
+                                 then WP.No_Warnings else WP.Recommended));
+                           end if;
+                        when C.Warn | C.Allow | C.Deny =>
+                           if WP.Valid_Selector (US.To_String (Value)) then
+                              WP.Add (Result.Policy, US.To_String (Value),
+                                (case Flag is
+                                    when C.Allow => WP.Allow,
+                                    when C.Deny => WP.Deny,
+                                    when others => WP.Warn));
+                           end if;
                         when others =>
                            Result.Forwarded.Append (C.Name (Flag)
                              & (if C.Takes_Value (Flag)
@@ -420,12 +445,14 @@ package body Landin.Commands is
                   begin
                      Result := Landin.Driver.Execute
                        (Forwarded, Host, Wrapped, Meter, Built_For,
-                        Asked.Dry_Run, US.To_String (Asked.Depfile));
+                        Asked.Dry_Run, US.To_String (Asked.Depfile),
+                        Asked.Policy);
                   end;
                else
                   Result := Landin.Driver.Execute
                     (Forwarded, Host, Tools, Meter, Built_For,
-                     Asked.Dry_Run, US.To_String (Asked.Depfile));
+                     Asked.Dry_Run, US.To_String (Asked.Depfile),
+                        Asked.Policy);
                end if;
                if Asked.Verbosity > 0 then
                   US.Append (Transcript, "refine " & C.Name (Asked.Command)

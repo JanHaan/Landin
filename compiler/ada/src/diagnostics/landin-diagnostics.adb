@@ -45,6 +45,15 @@ package body Landin.Diagnostics is
 
    function Level (Item : Diagnostic) return Severity is (Item.Level);
 
+   function With_Severity
+     (Item : Diagnostic; Level : Severity) return Diagnostic
+   is
+      Result : Diagnostic := Item;
+   begin
+      Result.Level := Level;
+      return Result;
+   end With_Severity;
+
    function Primary (Item : Diagnostic) return Label is (Item.Primary);
 
    procedure Add_Label (Item : in out Diagnostic; Extra : Label) is

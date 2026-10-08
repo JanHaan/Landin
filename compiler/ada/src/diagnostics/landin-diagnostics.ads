@@ -65,6 +65,9 @@ package Landin.Diagnostics is
    function Level   (Item : Diagnostic) return Severity;
    function Primary (Item : Diagnostic) return Label;
 
+   function With_Severity
+     (Item : Diagnostic; Level : Severity) return Diagnostic;
+
    procedure Add_Label (Item : in out Diagnostic; Extra : Label)
      with Pre => Role (Extra) = Secondary;
 

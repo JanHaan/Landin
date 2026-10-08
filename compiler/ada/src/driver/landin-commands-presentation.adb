@@ -3,6 +3,7 @@ with Ada.Strings.Unbounded;
 with Landin.Byte_Encoding;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Text;
+with Landin.Diagnostics.Catalogue;
 with Landin.Json;
 with Landin.Source;
 
@@ -10,6 +11,8 @@ package body Landin.Commands.Presentation is
    package US renames Ada.Strings.Unbounded;
    package D renames Landin.Diagnostics;
    package J renames Landin.Json;
+   package C renames Landin.Diagnostics.Catalogue;
+   use type D.Severity;
    use type Landin.Source.Source_Id;
    use type D.Label_Role;
    use type D.Applicability;
@@ -109,6 +112,11 @@ package body Landin.Commands.Presentation is
                end if;
                US.Append (Text, D.Text.Image (D.Level (Item)) & "["
                  & D.Code (Item) & "]: " & D.Message (D.Primary (Item))
+                 & (if D.Level (Item) = D.Error
+                      and then C.Holds (D.Code (Item))
+                      and then C.Level (C.Named (D.Code (Item))) = D.Warning
+                    then " (warning denied by command-line policy)"
+                    else "")
                  & ASCII.LF);
             else
                declare
@@ -180,7 +188,7 @@ package body Landin.Commands.Presentation is
                            end;
                         end loop;
                         J.End_Array (Into);
-                        J.End_Array (Into);
+                        J.End_Object (Into);
                      end;
                   end loop;
                   J.End_Array (Into);

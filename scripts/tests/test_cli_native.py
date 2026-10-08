@@ -31,6 +31,67 @@ class NativeCLI(unittest.TestCase):
         self.assertEqual(result.returncode, status, result.stdout + result.stderr)
         return result
 
+    def test_warning_controls(self):
+        (self.root / 'warnings.ldn').write_text(
+            'public main: () -> (code: i32) =\n'
+            'mut value: i32 = 1\nunused: i32 = 42\n'
+            'code = value - 1\nend main\n')
+
+        def diagnostics(*controls, status=0):
+            result = self.run_cli('check', 'warnings.ldn', '--diagnostics=json',
+                                  *controls, status=status)
+            return [json.loads(line) for line in result.stderr.splitlines()]
+
+        original = diagnostics()
+        self.assertEqual([d['code'] for d in original], ['L0326', 'L0349'])
+        self.assertEqual(diagnostics('--warnings=default'), original)
+        self.assertEqual(diagnostics('--warnings=all'), original)
+        self.assertEqual(diagnostics('--warnings=none'), [])
+        self.assertEqual(diagnostics('--allow=all'), [])
+        self.assertEqual(diagnostics('--warn=all', '--warnings=none'), original)
+        self.assertEqual(diagnostics('--deny=all', '--allow=all'), [])
+        self.assertEqual(diagnostics('--allow=all', '--warn=L0349'), [original[1]])
+        denied = diagnostics('--allow=all', '--deny=L0326', status=1)
+        self.assertEqual(len(denied), 1)
+        self.assertEqual(denied[0]['severity'], 'error')
+        for field in ('code', 'message', 'labels', 'fixes'):
+            self.assertEqual(denied[0][field], original[0][field])
+        self.assertEqual(denied[0]['notes'][:-1], original[0]['notes'])
+        self.assertIn('denied by command-line policy', denied[0]['notes'][-1])
+        for style in ('human', 'short'):
+            result = self.run_cli('check', 'warnings.ldn', '--deny=all',
+                                  '--diagnostics=' + style, status=1)
+            self.assertIn('error[L0326]', result.stderr)
+            self.assertIn('error[L0349]', result.stderr)
+            self.assertIn('warning denied by command-line policy' if style == 'short'
+                          else 'warning was denied by command-line policy', result.stderr)
+            normal = self.run_cli('check', 'warnings.ldn', '--diagnostics=' + style)
+            self.assertNotIn('denied by command-line policy', normal.stderr)
+        for path in ('program', 'program.d', 'build.json', 'stage.json'):
+            (self.root / path).write_text('preserved')
+        self.run_cli('compile', 'warnings.ldn', '--deny=all', '-vv',
+                     '-o=program', '--depfile=program.d',
+                     '--build-report=build.json', '--stage-report=stage.json',
+                     status=1)
+        for path in ('program', 'program.d', 'build.json', 'stage.json'):
+            self.assertEqual((self.root / path).read_text(), 'preserved')
+        self.assertFalse((self.root / 'program.s').exists())
+        self.run_cli('compile', 'warnings.ldn', '--allow=all', '-o=allowed')
+        self.assertEqual(subprocess.run([str(self.root / 'allowed')]).returncode, 0)
+        (self.root / 'bad.ldn').write_text('@')
+        self.run_cli('check', 'bad.ldn', '--warnings=none', '--allow=all', status=1)
+        for flag in ('--warn=L0001', '--deny=L9999', '--allow=bad',
+                     '--warnings=some'):
+            self.run_cli('check', 'missing.ldn', flag, status=2)
+        self.run_cli('--warn=all', 'check', 'missing.ldn', status=2)
+        self.run_cli('missing.ldn', '--warn=all', status=2)
+        advisory = Path(__file__).resolve().parents[2] / 'compiler/tests/fixtures/negative/warning-advisory/program.ldn'
+        result = self.run_cli('check', str(advisory), '--diagnostics=json')
+        emitted = [json.loads(line) for line in result.stderr.splitlines()]
+        self.assertEqual([d['code'] for d in emitted],
+                         ['L0326', 'L0349', 'L0349', 'L0349'])
+        self.assertTrue(all(d['fixes'] == [] for d in emitted))
+
     def test_help_queries_compile_and_tool_trace(self):
         helps = [self.run_cli(*args).stdout for args in
                  (('compile', '--help'), ('--help', 'compile'), ('help', 'compile'))]
@@ -79,6 +140,52 @@ class NativeCLI(unittest.TestCase):
         warning = self.run_cli('check', 'warning.ldn').stderr
         self.assertIn('warning[', warning)
         self.assertEqual(warning, self.run_cli('check', '--quiet', 'warning.ldn').stderr)
+
+    def test_json_fix_transport(self):
+        fixtures = Path(__file__).resolve().parents[2] / 'compiler/tests/fixtures/negative'
+        cases = [('mut-never-written', 0, 'L0326'),
+                 ('unused-pure-local', 0, 'L0349'),
+                 ('misspelt-name-is-offered-its-neighbour', 1, 'L0201')]
+        for fixture, status, code in cases:
+            with self.subTest(fixture=fixture):
+                source = self.root / (fixture + '.ldn')
+                source.write_bytes(next((fixtures / fixture).glob('*.ldn')).read_bytes())
+                run = self.run_cli('check', '--diagnostics=json', str(source), status=status)
+                self.assertEqual(run.stdout, '')
+                rows = [json.loads(line) for line in run.stderr.splitlines()]
+                self.assertGreaterEqual(len(rows), 2)
+                self.assertIn(code, [row['code'] for row in rows])
+                for row in rows:
+                    self.assertEqual(row['kind'], 'diagnostic')
+                    self.assertTrue(row['labels'])
+                    self.assertTrue(row['fixes'])
+                    self.assertIsInstance(row['notes'], list)
+                    for label in row['labels']:
+                        self.assertEqual(label['path'], str(source))
+                        self.assertEqual(bytes.fromhex(label['path_hex']).decode(), str(source))
+                    for fix in row['fixes']:
+                        self.assertIn(fix['applicability'], ('exact', 'likely'))
+                        self.assertTrue(fix['edits'])
+                        for edit in fix['edits']:
+                            self.assertEqual(edit['path'], str(source))
+                            self.assertEqual(bytes.fromhex(edit['path_hex']).decode(), str(source))
+                            self.assertIsInstance(edit['first_byte'], int)
+                            self.assertIsInstance(edit['last_byte'], int)
+                            self.assertIsInstance(edit['replacement'], str)
+                if status == 0:
+                    self.assertTrue(all(row['severity'] == 'warning' for row in rows))
+                    self.assertTrue(any(row['notes'] for row in rows))
+                else:
+                    self.assertTrue(any(len(row['fixes']) == 3 for row in rows))
+        source = self.root / 'likely.ldn'
+        source.write_text('public f: () -> none = value: i32 = 1 value = 2 end f\n')
+        run = self.run_cli('check', '--diagnostics=json', '-v', str(source), status=1)
+        rows = [json.loads(line) for line in run.stderr.splitlines()]
+        diagnostic = next(row for row in rows if row['kind'] == 'diagnostic')
+        self.assertEqual(diagnostic['code'], 'L0303')
+        self.assertEqual(diagnostic['fixes'][0]['applicability'], 'likely')
+        self.assertGreater(len(diagnostic['labels']), 1)
+        self.assertTrue(any(row['kind'] == 'trace' for row in rows))
 
     def test_bash_completion_scope(self):
         if not shutil.which('bash'):
@@ -129,19 +236,22 @@ class NativeCLI(unittest.TestCase):
         self.assertIn('second\\ root/lib/value.ldn', deps)
         make(1)  # A real consumer must regard the unchanged output as current.
         original = hashlib.sha256((self.root / 'out/program.s').read_bytes()).digest()
-        time.sleep(0.02)
+        # Apple's GNU Make 3.81 compares timestamps at whole-second precision.
+        # Cross that boundary before each dependency edit, including a root's
+        # directory membership change, so the real consumer sees newer inputs.
+        time.sleep(1.1)
         imported.write_text('public answer: () -> (value: i32) = value = 2 end answer\n')
         make(2)
         self.assertNotEqual(original, hashlib.sha256((self.root / 'out/program.s').read_bytes()).digest())
         make(2)
-        time.sleep(0.02)
+        time.sleep(1.1)
         (first / 'lib').mkdir()
         (first / 'lib/value.ldn').write_text(
             'public answer: () -> (value: i32) = value = 3 end answer\n')
         make(3)  # An earlier ordered root now supplies the imported module.
         self.assertIn('first\\ root/lib/value.ldn', (self.root / 'out/program.d').read_text())
         make(3)
-        time.sleep(0.02)
+        time.sleep(1.1)
         (entry / 'main.ldn').write_text(
             'import lib\npublic main: () -> (code: i32) = code = lib.answer() + 1 end main\n')
         make(4)

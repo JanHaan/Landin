@@ -397,15 +397,19 @@ package body Landin.Diagnostics.Explanations is
                & "name; its argument must have the required form and name "
                & "characters.",
             when Catalogue.Mutable_Never_Written =>
-               "A warning, and the program is accepted: a local binding "
-               & "is declared `mut` and nothing writes it, steps it, passe"
-               & "s it `inout` or takes a mutable view of it. Without `mut"
-               & "` it means the same, so the diagnostic offers removing t"
-               & "he word as an exact fix. The language permits the `mut`;"
-               & " the warning is the compiler's judgement and not a rule "
-               & "(D251). A shared declaration is warned about only when n"
-               & "one of its names is written, and a module binding never "
-               & "is, since a linked routine or a debugger may write it.",
+               "A warning about legal source: a local binding is declare"
+               & "d `mut` and nothing writes it, steps it, passes it `inou"
+               & "t` or takes a mutable view of it. Without `mut` it means"
+               & " the same, so the diagnostic offers removing the word as"
+               & " an exact fix when only blanks separate it from the name"
+               & ". Comments or line breaks retain the observation without"
+               & " an automatic edit. The language permits the `mut`; the "
+               & "warning is the compiler's judgement and not a rule (D251"
+               & "). A shared declaration is warned about only when none o"
+               & "f its names is written, and a module binding never is, s"
+               & "ince a linked routine or a debugger may write it. A norm"
+               & "al warning does not fail the invocation; `--deny=L0326` "
+               & "explicitly promotes it to an invocation error.",
             when Catalogue.Call_Argument_Match =>
                "A call's arguments do not match what the callee takes [1"
                & "920]. A runtime argument is missing, extra or given twic"
@@ -655,11 +659,16 @@ package body Landin.Diagnostics.Explanations is
                & "able` when there is no fallible conformance.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
-               & " by a direct scalar literal can be removed without chang"
-               & "ing the program's meaning (D251). The warning offers tha"
-               & "t removal as an exact fix when the declaration occupies "
-               & "its own line. A declaration whose initializer may perfor"
-               & "m work is not warned about.",
+               & " by a direct scalar literal, including a negated integer"
+               & " or float literal, can be removed without changing the p"
+               & "rogram's meaning (D251). The warning offers that removal"
+               & " as an exact fix when the declaration occupies its own l"
+               & "ine without comments or attached documentation. Otherwis"
+               & "e it reports the observation without an edit. Shared dec"
+               & "larations, module bindings and declarations whose initia"
+               & "lizer may perform work are not warned about. `--allow=L0"
+               & "349` suppresses this observation; `--deny=L0349` enables"
+               & " it as an invocation error before emission.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"

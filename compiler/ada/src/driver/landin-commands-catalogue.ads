@@ -17,7 +17,7 @@ package Landin.Commands.Catalogue is
       Target, Level, Root, Build_Option, Build_Mode, Optimize, Specialize,
       Emit, Output, Debug, Panic_Map, Toolchain, Linker, Firmware_Entry,
       Build_Report, Stage_Report, Dry_Run, Depfile, Format_Check, Stdio,
-      JSON);
+      JSON, Warnings, Warn, Allow, Deny);
 
    function Name (Flag : Option) return String;
    function Description (Flag : Option) return String;

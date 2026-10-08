@@ -534,6 +534,52 @@ package body Landin.Tests.Fixes_Suite is
          "a spelling offered twice keeps its innermost depth once");
    end Nearness_Is_Bounded_And_Ordered;
 
+   procedure Advisory_Warnings_Preserve_Source
+     (Item : in out Landin.Testing.Context);
+
+   procedure Advisory_Warnings_Preserve_Source
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Text : constant String :=
+        "sample: () -> (result: i32) =" & LF
+        & "    mut -- preserve this explanation" & LF
+        & "        step: i32 = 2" & LF
+        & "    --- Preserve this documentation." & LF
+        & "    documented: i32 = 42" & LF
+        & "    commented: i32 = 7 -- preserve this comment" & LF
+        & "    split: i32 =" & LF
+        & "        3" & LF
+        & "    result = step + 1" & LF
+        & "end sample" & LF;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Arguments : Landin.Platform.Path_List;
+      Ran : Landin.Driver.Outcome;
+      Clashed : Boolean;
+   begin
+      Host.Add_File ("advisory.ldn", Text);
+      Arguments.Append ("advisory.ldn");
+      Ran := Landin.Driver.Execute (Arguments, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Ran.Status, Landin.Driver.Status_Success,
+         "advisory observations do not refuse lawful source");
+      Landin.Testing.Check_Equal
+        (Item, Diag.Count (Ran.Found), 4,
+         "comments and multiline declarations retain observations");
+      for Index in 1 .. Diag.Count (Ran.Found) loop
+         Landin.Testing.Check_Equal
+           (Item, Diag.Fix_Count (Diag.Get (Ran.Found, Index)), 0,
+            "no edit swallows comments, documentation or adjacent lines");
+      end loop;
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Fixes.Applied
+           (Ran.Found, 1, Text, Clashed), Text,
+         "applying available exact fixes preserves all advisory source");
+      Landin.Testing.Check
+        (Item, not Clashed, "no advisory edits can conflict");
+   end Advisory_Warnings_Preserve_Source;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -545,6 +591,9 @@ package body Landin.Tests.Fixes_Suite is
       Landin.Testing.Register
         (Into, "fixes", "every pinned fix compiles clean",
          Every_Pinned_Fix_Compiles_Clean'Access);
+      Landin.Testing.Register
+        (Into, "fixes", "advisory warnings preserve source",
+         Advisory_Warnings_Preserve_Source'Access);
    end Register;
 
 end Landin.Tests.Fixes_Suite;

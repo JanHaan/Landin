@@ -4452,6 +4452,13 @@ programs, the parser, containers and hosted application on the hosts and
 the driver on Cortex-M. Every construct was audited and every inherited
 item dispositioned before the first roadmap closed.
 
+Warnings are the compiler's observations about legal source, not additional
+language rules (D251). An exact repair is offered when a safe edit exists;
+an advisory can stand without one. Compilation requests can select, suppress
+or deny warnings by code. Denial fails that invocation before emission while
+the program remains legal Landin. Shadowing is still permitted without a
+warning.
+
 That compiler is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and
 self-hosting are outside the current roadmap. A future roadmap may replace
