@@ -85,8 +85,12 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
 
 
-def build(run, refine, program=None, optimize="none", specialize="off", debug='none'):
+def build(run, refine, program=None, optimize="none", specialize="off", debug='none',
+          level="armv6-m", root=None):
     source = run.out / 'boot.ldn'
+    if root is not None:
+        (run.out / 'app').mkdir()
+        source = run.out / 'app/main.ldn'
     source.write_text(program if program is not None else '''mut initialized: u32 = 0x12345678
 mut cleared: u32 = 0
 mut observed: u32 = 0
@@ -96,9 +100,11 @@ start: () -> none =
 end start
 ''')
     elf = run.out / 'firmware.elf'
-    run.command('compile', [refine, '--target=cortex-m0', '--firmware-entry=start',
+    run.command('compile', [refine, '--target=cortex-m0', '--level='+level,
+        *(['--root='+str(root)] if root is not None else []), '--firmware-entry=start',
         '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
-        '--optimize='+optimize, '--specialize='+specialize, source.name, '-o', elf.name], timeout=60)
+        '--optimize='+optimize, '--specialize='+specialize,
+        'app' if root is not None else source.name, '-o', elf.name], timeout=60)
     run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
     run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
     symbols = run.command('symbols', [run.bin / 'arm-none-eabi-nm', '-n', elf])
@@ -113,6 +119,35 @@ end start
             'firmware contains unresolved symbols')
     (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
     return elf
+
+
+def cpu_levels(parent, refine):
+    """Link the scoped CPU module through compiler-owned startup at each level."""
+    root = Path(__file__).resolve().parents[2]
+    program = """import platform/cpu
+mut observed: u32 = 0
+start: () -> none =
+    saved := cpu.disable_interrupts()
+    observed = cpu.interrupt_mask()
+    cpu.compiler_barrier()
+    cpu.device_barrier()
+    cpu.completion_barrier()
+    cpu.restore_interrupts(saved)
+end start
+"""
+    inputs = {str(p.relative_to(root)): sha(p)
+              for p in sorted((root / 'platform/cpu').glob('*.ldn'))}
+    controls = []
+    for level in ('armv6-m', 'armv7-m', 'armv7e-m'):
+        out = parent.out / level
+        out.mkdir()
+        run = Run(out, parent.tools)
+        build(run, refine, program, level=level, root=root)
+        (out / 'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')
+        controls.append({'kind': 'cpu-level', 'level': level, 'optimize': 'none',
+                         'specialize': 'off', 'status': 'passed',
+                         'lane': 'compile-link'})
+    return controls
 
 
 def interrupts(run, elf):
@@ -441,7 +476,9 @@ def execute_suite(parent, refine, profiles=PROFILES):
         '-mfloat-abi=soft', '-print-libgcc-file-name']).strip()
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'),
             'firmware selected the wrong runtime archive')
-    controls = []
+    out = root / 'cpu-levels'
+    out.mkdir()
+    controls = cpu_levels(Run(out, parent.tools), refine)
     out = root / 'refusals'
     out.mkdir()
     failures(Run(out, parent.tools), refine)
