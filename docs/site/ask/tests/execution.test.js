@@ -75,6 +75,37 @@ test("lost execution response does not retry and still destroys the entire micro
   assert.equal(f.ctx.container.running, false);
 });
 
+test("private lifecycle diagnostics distinguish startup from execution without retaining exception text", async () => {
+  const f = fixture();
+  f.ctx.container.start = () => { throw Error("connection reset: private-token-value"); };
+  assert.equal((await f.execution.fetch(request("visitor program"))).status, 503);
+  const response = await f.execution.fetch(new Request("https://execution.internal/diagnostics"));
+  const { lastAttempt } = await response.json();
+  assert.deepEqual(Object.keys(lastAttempt).sort(),
+    ["started", "finished", "phase", "category", "status", "cleanupVerified"].sort());
+  assert.equal(lastAttempt.phase, "startup");
+  assert.equal(lastAttempt.category, "disconnected");
+  assert.equal(lastAttempt.cleanupVerified, true);
+  assert.ok(!JSON.stringify(lastAttempt).includes("private-token-value"));
+  assert.deepEqual(f.events, ["destroy"]);
+  const lost = fixture({ failRun: true });
+  await lost.execution.fetch(request("source"));
+  assert.equal(lost.data.get("lastAttempt").phase, "execution");
+});
+
+test("failed diagnostic persistence does not skip sandbox destruction", async () => {
+  const f = fixture();
+  const put = f.ctx.storage.put;
+  f.ctx.storage.put = async (key, value) => {
+    if (key === "lastAttempt") throw Error("storage unavailable");
+    return put(key, value);
+  };
+  assert.equal((await f.execution.fetch(request("source"))).status, 503);
+  assert.equal(f.ctx.container.running, false);
+  assert.equal(f.data.get("job"), undefined);
+  assert.deepEqual(f.events, ["start", "run", "destroy"]);
+});
+
 test("cleanup failure keeps a durable closed slot; alarm can only retry destruction", async () => {
   const f = fixture({ failCleanup: true });
   assert.equal((await f.execution.fetch(request("visitor program"))).status, 503);
@@ -188,4 +219,7 @@ test('administrator container status observes an empty sandbox without starting 
     get: () => ({ fetch: request => f.execution.fetch(new Request(request)) }) } };
   assert.equal((await service.fetch(new Request('https://preview.example/api/execution/status', { headers: { 'X-Admin-Key': secret } }), env)).status, 401);
   assert.equal((await service.fetch(new Request('https://preview.example/api/execution/status', { headers: { 'X-Admin-Key': 'admin-' + secret } }), env)).status, 200);
+  assert.equal((await service.fetch(new Request('https://preview.example/api/execution/diagnostics', { headers: { 'X-Preview-Key': secret } }), env)).status, 401);
+  const diagnostics = await service.fetch(new Request('https://preview.example/api/execution/diagnostics', { headers: { 'X-Admin-Key': 'admin-' + secret } }), env);
+  assert.deepEqual(await diagnostics.json(), { lastAttempt: null });
 });

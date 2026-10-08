@@ -106,8 +106,9 @@ The selected private profile is Haiku 5.5 with adaptive thinking, `high` effort
 and a hard 4,096-token limit shared by thinking and final text. Visitors cannot
 change those settings. Incomplete provider responses are rejected and their
 reported usage is charged to the ledger; the service does not retry them.
-The paired subscription comparison below supports this choice, while a
-direct API trial is still needed to test the enforced limit and response time.
+The paired subscription comparison below supports this choice. The subsequent
+direct API smoke checks the enforced request profile and response time on a
+small sample.
 
 ### Subscription comparison, 2026-10-08
 
@@ -399,7 +400,49 @@ loops, output flooding, allocation and process pressure, network/credential
 access, concurrent requests, cancellation/restart and verified destruction.
 Local Docker image checks prove the packaged launcher and native compiler,
 not Cloudflare's deployed microVM boundary, alarms, scheduling or billing.
-Keep execution disabled until the deployment controls pass privately.
+Enable execution only in the private preview while checking these controls;
+keep public execution disabled until they pass.
+
+### Private Cloudflare checks, 2026-10-08
+
+The deployed two-pane workspace passed desktop and mobile browser checks,
+including private-key gating, editable-source run gating and no browser script
+errors. One actual chat turn generated a returning program, called the compiler
+tool once, and reported the exact executed source with exit 42 in 7.36 seconds.
+The prebuilt compiler was reused; no compiler or image build occurred.
+
+Five jobs were admitted from the same visitor within the existing daily quota:
+
+| attempt | deployed result |
+| --- | --- |
+| chat-generated returning program | ran, exit 42 |
+| malformed source | compile error, exit 1, bounded diagnostic |
+| finite isolation probe | HTTP 503, no verified program result |
+| infinite loop | timeout, exit -9, no output |
+| output flooding | HTTP 503, no verified program result |
+
+A concurrent request during the infinite loop was rejected with HTTP 429.
+After each admitted attempt the administrator endpoint confirmed no running
+container, no durable job and an open slot. The pinned registry image was
+observed during execution. The final execution admission counter was $0.01;
+failed attempts kept their bookings. No failed execution was retried, quota
+reset or visitor identity changed. Minute-limit rejections were also retained.
+All 17 records in the subsequent private export were complete, including
+failed submissions, and contained no server secret values.
+
+Both HTTP 503 failures followed a preceding completed job closely. This is an
+observed pattern, not an established cause. Their generic errors do not prove
+whether startup, readiness or transport failed. The service now retains a
+bounded administrator-only lifecycle diagnostic for the latest admitted job,
+with phase, fixed failure category, status, timestamps and cleanup verification.
+It stores no provider exception text, source, headers or credentials.
+The failed isolation and flooding attempts do not pass their respective
+controls. Actual Cloudflare UID/capability/resource/egress observations,
+allocation/process pressure and restart/alarm behavior remain unverified.
+The service stays private while these checks and the lifecycle failures are
+resolved. Raw results, source hashes, observed container state, bookings and
+private export evidence are retained under ignored
+`build/cloudflare-checks-20261008/`.
 
 ## Optional fixed-server fallback
 
@@ -514,6 +557,9 @@ The administrator-only `GET /api/execution/status` endpoint accepts `X-Admin-Key
 and reports the execution slot, durable job deadline and provider container state.
 It never starts a container. Verify an empty slot, no durable job and no running
 container after private attempts; a preview key cannot access this endpoint.
+`GET /api/execution/diagnostics` uses the same administrator authentication and
+reads the latest admitted attempt's bounded lifecycle metadata without starting
+a container. Older full submission records remain in the transcript store.
 
 The private `/api/budget` endpoint accepts `X-Preview-Key` and reports the
 current month's API and execution bookings, active reservations and pause status.

@@ -1,6 +1,19 @@
 import { Failure, MAX_BODY_BYTES, MAX_CODE_BYTES, SANDBOX_DEADLINE_MS,
   boundedText, inputText, parseJSON } from "./policy.js";
 
+function failureCategory(error) {
+  if (error instanceof Failure) return "controlled";
+  // Retain a fixed classification, never provider exception text, source or
+  // headers. This helps distinguish lifecycle failures without copying secrets.
+  const message = typeof error?.message === "string" ? error.message : "";
+  for (const [category, pattern] of [
+    ["already_running", /already running/i], ["capacity", /capacity|instance limit/i],
+    ["not_running", /not running|not started/i], ["disconnected", /disconnect|connection|reset/i],
+    ["resource_limit", /cpu|memory|resource|limit exceeded/i], ["restarting", /restart|destroy/i]
+  ]) if (pattern.test(message)) return category;
+  return "provider_other";
+}
+
 // The binding is private to the Worker. One fixed DO owns one container;
 // visitors cannot choose its image, instance size, command or identity.
 export class Execution {
@@ -38,6 +51,9 @@ export class Execution {
 
   async fetch(request) {
     await this.ready;
+    if (request.method === "GET" && new URL(request.url).pathname === "/diagnostics") {
+      return Response.json({ lastAttempt: await this.ctx.storage.get("lastAttempt") || null });
+    }
     if (request.method === "GET" && new URL(request.url).pathname === "/status") {
       const container = this.ctx.container;
       return Response.json({ busy: this.busy, job: await this.ctx.storage.get("job") || null,
@@ -50,6 +66,8 @@ export class Execution {
     this.busy = true;
     let owned = false;
     let timer, response;
+    const started = Date.now();
+    let phase = "validation", category = null, cleanupVerified = false;
     const controller = new AbortController();
     try {
       if (await this.ctx.storage.get("job")) throw new Failure(503, "Execution is paused pending cleanup.");
@@ -74,29 +92,42 @@ export class Execution {
       // The image/size come ONLY from the default-policy Wrangler config.
       // No secrets, user environment, shell strings or snapshots are passed.
       const attempt = async () => {
+        phase = "startup";
         container.start({ enableInternet: false });
         await container.setInactivityTimeout(1000);
         controller.signal.throwIfAborted();
-        return this.run(container, code, deadline, controller.signal);
+        phase = "readiness";
+        return this.run(container, code, deadline, controller.signal, () => { phase = "execution"; });
       };
       const result = await Promise.race([attempt(), expires]);
       response = Response.json(result);
     } catch (error) {
+      category = failureCategory(error);
       response = Response.json({ error: error instanceof Failure ? error.message : "Execution is unavailable." },
         { status: error instanceof Failure ? error.status : 503 });
     } finally {
       clearTimeout(timer);
       controller.abort();
       if (owned) {
-        try { await this.cleanup(); }
-        catch { response = Response.json({ error: "Execution is paused pending cleanup." }, { status: 503 }); }
+        try { await this.cleanup(); cleanupVerified = true; }
+        catch (error) {
+          phase = "cleanup";
+          category = failureCategory(error);
+          response = Response.json({ error: "Execution is paused pending cleanup." }, { status: 503 });
+        }
+        try {
+          await this.ctx.storage.put("lastAttempt", { started, finished: Date.now(),
+            phase, category, status: response.status, cleanupVerified });
+        } catch {
+          response = Response.json({ error: "Execution diagnostics could not be saved." }, { status: 503 });
+        }
       }
       this.busy = false;
     }
     return response;
   }
 
-  async run(container, code, deadline, signal) {
+  async run(container, code, deadline, signal, executing = () => {}) {
     const port = container.getTcpPort(8080);
     // Poll readiness only. Never retry the compile/run operation: a lost
     // response may still represent a billed or already completed execution.
@@ -114,6 +145,7 @@ export class Execution {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     signal.throwIfAborted();
+    executing();
     const result = await port.fetch("http://container/run", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
