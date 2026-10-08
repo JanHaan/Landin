@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import shlex
+import re
 
 HERE = Path(__file__).resolve().parent
 ASK = HERE.parent
@@ -15,6 +16,7 @@ ROOT = ASK.parents[2]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", type=Path, required=True)
+    parser.add_argument("--image", help="digest-pinned Cloudflare registry image already published from the checked context")
     args = parser.parse_args()
     context = args.context.resolve()
     provenance = json.loads((context / "provenance.json").read_text())
@@ -39,8 +41,14 @@ def main():
     config["limits"] = {"cpu_ms": 25}
     config["durable_objects"]["bindings"].append({"name": "EXECUTION", "class_name": "Execution"})
     config["migrations"].append({"tag": "v2", "new_sqlite_classes": ["Execution"]})
+    image = str(context / "Containerfile")
+    if args.image:
+        if not re.fullmatch(r"registry\.cloudflare\.com/[a-f0-9]{32}/[a-z0-9._/-]+@sha256:[a-f0-9]{64}", args.image):
+            raise SystemExit("ask: use a digest-pinned Cloudflare registry image")
+        image = args.image
     config["containers"] = [{"class_name": "Execution", "scheduling_policy": "default",
-        "image": str(context / "Containerfile"), "image_build_context": str(context),
+        "image": image,
+        **({} if args.image else {"image_build_context": str(context)}),
         "max_instances": 1, "instance_type": {"vcpu": 1, "memory_mib": 1024, "disk_mb": 4096}}]
     config["vars"].update(EXECUTION_BACKEND="cloudflare", COMPILER_SHA256=digest,
                           EXECUTION_ENABLED="false", PRIVATE_MODE="true")

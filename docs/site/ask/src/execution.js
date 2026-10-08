@@ -38,6 +38,11 @@ export class Execution {
 
   async fetch(request) {
     await this.ready;
+    if (request.method === "GET" && new URL(request.url).pathname === "/status") {
+      const container = this.ctx.container;
+      return Response.json({ busy: this.busy, job: await this.ctx.storage.get("job") || null,
+        running: Boolean(container?.running), image: container ? await container.inspect() : null });
+    }
     if (request.method !== "POST" || new URL(request.url).pathname !== "/run") {
       return new Response(null, { status: 404 });
     }

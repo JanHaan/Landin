@@ -128,6 +128,11 @@ export function createService(corpus, fetcher = fetch) {
             execution: env.EXECUTION_ENABLED === "true",
             turnstileSiteKey: env.TURNSTILE_SITE_KEY || "", snapshot: {
               commit: corpus.commit, sha256: corpus.sha256, dirty: corpus.dirty } });
+        } else if (url.pathname === "/api/execution/status" && request.method === "GET") {
+          if (!await sameSecret(request.headers.get("x-admin-key"), env.ADMIN_KEY)) throw new Failure(401, "A valid administrator key is required.");
+          if (!env.EXECUTION) throw new Failure(503, "Execution is not configured.");
+          response = await env.EXECUTION.get(env.EXECUTION.idFromName("landin-execution-v1"))
+            .fetch("https://execution.internal/status");
         } else if (url.pathname === "/api/budget" && request.method === "GET") {
           if (!await sameSecret(request.headers.get("x-preview-key"), env.PREVIEW_KEY)) {
             throw new Failure(401, "A valid private preview key is required.");

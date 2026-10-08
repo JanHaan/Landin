@@ -177,3 +177,15 @@ test("public service reserves compute before calling only its private execution 
   assert.equal(calls, 1);
   assert.equal(Object.values(state.executionMonths)[0], EXECUTION_RESERVATION_MICRO_USD);
 });
+test('administrator container status observes an empty sandbox without starting one', async () => {
+  const f = fixture();
+  const response = await f.execution.fetch(new Request('https://execution.internal/status'));
+  assert.deepEqual(await response.json(), { busy: false, job: null, running: false, image: null });
+  assert.deepEqual(f.events, []);
+  const corpus = JSON.parse(await readFile(new URL('../build/corpus.json', import.meta.url)));
+  const service = createService(corpus, () => { throw Error('Status never uses a provider'); });
+  const env = { ADMIN_KEY: 'admin-' + secret, EXECUTION: { idFromName: name => name,
+    get: () => ({ fetch: request => f.execution.fetch(new Request(request)) }) } };
+  assert.equal((await service.fetch(new Request('https://preview.example/api/execution/status', { headers: { 'X-Admin-Key': secret } }), env)).status, 401);
+  assert.equal((await service.fetch(new Request('https://preview.example/api/execution/status', { headers: { 'X-Admin-Key': 'admin-' + secret } }), env)).status, 200);
+});

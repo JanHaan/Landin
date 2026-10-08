@@ -254,7 +254,9 @@ Objects, registry storage and optional logs have their own billing terms.
 The $70 API budget and $5 execution admission budget do **not** cap all those
 charges, taxes or the base plan. Rejected requests can still invoke a paid
 Worker. Cloudflare budget alerts do not stop spending; announced hard caps
-must be verified in the actual account before relying on them. See
+must be verified in the actual account before relying on them. Static assets bypass Worker execution; API requests
+remain billable even when rejected. Authentication and admission quotas reduce
+exposure but are not an account-wide invoice cap. See
 [container pricing](https://developers.cloudflare.com/containers/platform/pricing/),
 [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
 [budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/)
@@ -346,7 +348,13 @@ npx wrangler deploy --dry-run --containers-rollout=none \
   --config build/wrangler.containers.json --outdir build/container-bundle
 ```
 
-Image builds and the actual container deployment run on the native host.
+Image builds run on the native host. An already checked native image can be
+loaded and pushed from a coordination host without executing it, using
+`npx wrangler containers push LOCAL_IMAGE_TAG`. Retain the archive, config,
+manifest and registry digest identities. Pass its digest-pinned reference to
+`configure_cloudflare.py --context CHECKED_CONTEXT --image REGISTRY_DIGEST`
+to deploy without another image or compiler build. The context and current
+launcher checks still apply; never substitute an unverified registry image.
 
 The generated `build/wrangler.containers.json` preserves the Worker name,
 budget namespace and existing SQLite migration, adds the execution class,
@@ -492,6 +500,11 @@ widget for the preview/site hostnames, set `TURNSTILE_SITE_KEY`, supply
 `TURNSTILE_SECRET_KEY`, and change `PRIVATE_MODE=false`. Add the public entry
 to the reading copies only when the private evaluation and deployment are
 reviewed. Publication of those pages remains the existing Pages workflow.
+
+The administrator-only `GET /api/execution/status` endpoint accepts `X-Admin-Key`
+and reports the execution slot, durable job deadline and provider container state.
+It never starts a container. Verify an empty slot, no durable job and no running
+container after private attempts; a preview key cannot access this endpoint.
 
 The private `/api/budget` endpoint accepts `X-Preview-Key` and reports the
 current month's API and execution bookings, active reservations and pause status.

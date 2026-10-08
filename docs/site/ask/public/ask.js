@@ -113,7 +113,10 @@ async function ask(operation) {
 }
 byID('ask-form').addEventListener('submit', event => { event.preventDefault(); ask('chat'); });
 byID('question').addEventListener('input', () => busy(pending));
-byID('preview-key').addEventListener('input', () => busy(pending));
+byID('preview-key').addEventListener('input', () => {
+  busy(pending);
+  if (byID('preview-key').value.trim() && byID('status').textContent === 'Enter your private preview key to start chatting.') byID('status').textContent = 'Ready.';
+});
 byID('code').addEventListener('input', sourceChanged);
 byID('search').addEventListener('click', () => ask('search'));
 byID('stop').addEventListener('click', async () => {
