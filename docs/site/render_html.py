@@ -114,6 +114,7 @@ import fonts  # noqa: E402
 sys.path.insert(0, str(HERE))
 
 import llms  # noqa: E402
+from roadmap_order import execution_order  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
@@ -1780,6 +1781,11 @@ def roadmap_progress(text, recent_count=3):
     items = [dict(key=m.group(1), title=m.group(2), status=m.group(3),
                   depends=m.group(4).split(", ") if m.group(4) else [])
              for m in ROADMAP_ITEM.finditer(text)]
+    by_key = {item["key"]: item for item in items}
+    try:
+        items = [by_key[key] for key in execution_order(text, by_key)]
+    except ValueError as error:
+        raise SystemExit("render_html: " + str(error)) from error
 
     def track(recent_at, **lanes):
         completed = [item for item in items[:recent_at]
@@ -1808,7 +1814,7 @@ def roadmap_progress(text, recent_count=3):
         raise SystemExit("render_html: ROADMAP.md must have exactly one active "
                          "item or at least one dependency-ready planned item for the "
                          "front page")
-    # Roadmap order selects the next item when a phase opens parallel work.
+    # Execution order selects the next item when a phase opens parallel work.
     return track(ready[0], following=items[ready[0]])
 
 

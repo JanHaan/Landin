@@ -47,8 +47,8 @@ current-capability summary.
 
 ## Mechanics
 
-Phases are `R8`, `R9` and onward, in order, and each ends in one gate. Work
-items are `R8.10`, `R8.20` and so on, spaced in tens, so that work found
+Phases are `R8`, `R9` and onward, stored in identity order, and each ends in
+one gate. Work items are `R8.10`, `R8.20` and so on, spaced in tens, so work found
 necessary between two items is inserted with a unit identity: between R8.20
 and R8.30 it is numbered 21. Identities are never reused or renumbered,
 including the first roadmap's.
@@ -63,12 +63,24 @@ A status is `planned`, `active`, `blocked` or `complete`. `blocked` means the
 item cannot proceed for a reason other than its dependencies, and the reason
 is one nonempty `Blocked because:` line in the item. A complete item's
 dependencies are all complete. `none` is the only empty dependency value.
-Phases are claimed in order among work in scope; a phase explicitly deferred
-by a scope decision does not hold up later independent work. Its items stay
+Work follows the execution order declared below. A phase selector expands to
+its items in document order; an item selector selects only that item. Every
+item appears exactly once and follows its dependencies. A phase's gate cannot
+be claimed until all its items have their exit evidence, even when its work
+straddles another phase. A phase explicitly deferred by a scope decision
+does not hold up later independent work. Its items stay
 blocked with their reasons, and its gate is inactive until scope is restored.
-The next item is the first dependency-ready planned item in roadmap order,
+The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
+
+Execution order: R8, R9, R10, R11, R13.10, R13.30, R12, R13.20, R14, R15, R16
+
+The library availability split and hosted facilities precede microcontrollers.
+The freestanding facilities retain R12.30's prerequisite and follow the whole
+microcontroller phase. R12 stays in scope, its gates and R13's gate retain
+their requirements, and no identity is renumbered. Each new R12 target repeats
+the shared-library consumer matrix established by R13.10.
 
 An item is complete when its exit evidence exists: the gate green on the
 completing commit for every host the gate runs, and, for a claim about a host
@@ -1135,7 +1147,7 @@ A standard library split where the capability model already splits it.
 
 ### R13.10 — Separate library availability classes
 
-Status: planned
+Status: active
 Depends on: none
 
 `core/*` becomes the shared freestanding library: each module and its public

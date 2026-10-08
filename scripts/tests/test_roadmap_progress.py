@@ -29,6 +29,8 @@ FIRST, SECOND, THIRD = ("R%d.%d" % (4, n) for n in (50, 60, 70))
 
 
 BETWEEN_ITEMS = """\
+Execution order: R{phase}
+
 ### {first} — Finish the baseline
 
 Status: complete
@@ -38,7 +40,7 @@ Depends on: none
 
 Status: planned
 Depends on: {first}
-""".format(first=FIRST, second=SECOND)
+""".format(phase=4, first=FIRST, second=SECOND)
 
 ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
 #  The endpoint: the same two items, with nothing left to do.  It differs
@@ -107,6 +109,86 @@ Depends on: none
         problems = self.project_status(two_ready, wrong)
         self.assertTrue(any("roadmap status pointer" in problem[2]
                             for problem in problems))
+
+    def test_explicit_item_order_controls_both_status_and_site(self):
+        roadmap = BETWEEN_ITEMS + (
+            "\n### %s — Start the container program\n\n"
+            "Status: planned\nDepends on: none\n" % THIRD)
+        roadmap = roadmap.replace("Execution order: R%d" % 4,
+                                  "Execution order: "
+                                  + ", ".join([FIRST, THIRD, SECOND]))
+        marker = ("**Next roadmap item: " + THIRD
+                  + " — Start the container program (planned).**")
+        self.assertEqual(self.project_status(roadmap, marker), [])
+        progress = RENDER.roadmap_progress(roadmap)
+        self.assertEqual(progress["following"]["key"], THIRD)
+        active = roadmap.replace("Status: planned", "Status: active", 1)
+        progress = RENDER.roadmap_progress(active)
+        self.assertEqual(progress["current"]["key"], SECOND)
+        self.assertIsNone(progress["following"])
+        self.assertEqual([item["key"] for item in progress["recent"]], [FIRST])
+
+    def test_invalid_execution_order_is_refused_by_both_readers(self):
+        valid = "Execution order: R%d" % 4
+        for replacement in ("", valid + "\n" + valid,
+                            "Execution order: " + FIRST,
+                            "Execution order: " + ", ".join([FIRST, SECOND, FIRST]),
+                            "Execution order: R%d" % 99,
+                            "Execution order: " + FIRST + "; " + SECOND):
+            with self.subTest(replacement=replacement):
+                roadmap = BETWEEN_ITEMS.replace(valid, replacement)
+                problems = self.project_status(roadmap, "unused")
+                self.assertTrue(any("order" in problem[2].lower()
+                                    for problem in problems))
+                with self.assertRaises(SystemExit):
+                    RENDER.roadmap_progress(roadmap)
+
+    def test_real_library_and_device_sequence(self):
+        text = (ROOT / "ROADMAP.md").read_text()
+        headings = {match.group(3): match.group(1)
+                    for line in text.splitlines()
+                    if (match := CHECK.ROADMAP_WORK.match(line))}
+        split = headings["Separate library availability classes"]
+        hosted = headings["The hosted library"]
+        devices = headings["Describe devices"]
+        freestanding = headings["The freestanding library"]
+        text = text.replace("Status: active", "Status: planned")
+        device_phase = devices.split(".")[0]
+        selected = [split, hosted, freestanding] + [
+            identity for identity in headings.values()
+            if identity.startswith(device_phase + ".")]
+        for identity in selected:
+            start = text.index("### " + identity + " — ")
+            status = CHECK.roadmap_statuses(text)[identity]
+            text = text[:start] + text[start:].replace(
+                "Status: " + status, "Status: planned", 1)
+
+        def complete(identities):
+            nonlocal text
+            for identity in identities:
+                start = text.index("### " + identity + " — ")
+                text = text[:start] + text[start:].replace(
+                    "Status: planned", "Status: complete", 1)
+
+        def assert_next(identity, title):
+            marker = ("**Next roadmap item: " + identity + " — " + title
+                      + " (planned).**")
+            self.assertEqual(self.project_status(text, marker), [])
+            progress = RENDER.roadmap_progress(text)
+            self.assertEqual(progress["following"]["key"], identity)
+
+        assert_next(split, "Separate library availability classes")
+        complete([split])
+        assert_next(hosted, "The hosted library")
+        complete([hosted])
+        assert_next(devices, "Describe devices")
+        complete([devices, headings["The first board"],
+                  headings["Thumb-2, Cortex-M33 and M4F"]])
+        assert_next(headings["RISC-V microcontrollers"], "RISC-V microcontrollers")
+        complete([identity for identity in headings.values()
+                  if identity.startswith(device_phase + ".")
+                  and CHECK.roadmap_statuses(text)[identity] == "planned"])
+        assert_next(freestanding, "The freestanding library")
 
     def test_the_endpoint_uses_its_own_pointer(self):
         marker = ("**Roadmap endpoint: " + SECOND + " — Start source debugging"

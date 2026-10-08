@@ -28,6 +28,8 @@ import tempfile
 sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, "docs", "site"))
+from roadmap_order import execution_order
 
 #  The normative document, named once.  Every check that reads it goes
 #  through this, so a rename is one edit rather than nine -- and so that a
@@ -1500,6 +1502,18 @@ def check_roadmap(path):
                             " %s is %s" %
                             (work_id, name, work_statuses[name])))
 
+    try:
+        order = execution_order("\n".join(lines), works)
+    except ValueError as error:
+        out.append((1, str(error)))
+    else:
+        positions = {work_id: at for at, work_id in enumerate(order)}
+        for work_id, names in dependencies.items():
+            for name in names:
+                if name in positions and positions[name] >= positions[work_id]:
+                    out.append((works[work_id][0], "%s precedes dependency %s"
+                                " in execution order" % (work_id, name)))
+
     #  References in prose and matrices should be well formed and resolve
     #  too.  The first roadmap's items are in the history, not here, so a
     #  reference to one is a reference to nothing this file holds.
@@ -1653,7 +1667,7 @@ def check_project_status(full_run):
     in the handoff, and the roadmap then had no active item for the page to
     show.
     Keep all three answers mechanically one answer. Between active items, show
-    the first dependency-ready planned item in roadmap order rather than claiming its
+    the first dependency-ready planned item in execution order rather than claiming its
     implementation is active.
 
     The endpoint is the third state, the one a finished roadmap needs.
@@ -1696,6 +1710,12 @@ def check_project_status(full_run):
                 for dependency in line[len("Depends on:"):].split(",")
             ]
 
+    try:
+        items = {work_id: items[work_id]
+                 for work_id in execution_order("\n".join(lines), items)}
+    except ValueError as error:
+        return [(ROADMAP, 1, str(error))]
+
     active = [(work_id, item) for work_id, item in items.items()
               if item["status"] == "active"]
     ready = [(work_id, item) for work_id, item in items.items()
@@ -1715,7 +1735,7 @@ def check_project_status(full_run):
         marker_kind = "next"
         expected = "%s — %s" % (work_id, item["title"])
     elif items and not live:
-        #  The endpoint: the pages name the last item in roadmap order, which
+        #  The endpoint: the pages name the last item in execution order, which
         #  is the one that declared it.  ROADMAP.md's own endpoint rule holds
         #  the declaration to the same item.
         work_id, item = list(items.items())[-1]

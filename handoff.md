@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R12.10 — Describe devices (planned).**
+**Current roadmap work: R13.10 — Separate library availability classes.**
 
 ---
 

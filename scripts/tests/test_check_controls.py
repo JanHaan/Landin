@@ -1079,6 +1079,27 @@ class RoadmapStructure(unittest.TestCase):
         said = roadmap_faults(once("## R9 — ", "## R7 — "))
         self.assertTrue(any("not R8 onward in order" in why for why in said))
 
+    def test_execution_order_requires_complete_unique_known_items(self):
+        line = re.search(r"^Execution order: .+$", real_roadmap(), re.M).group(0)
+        selectors = line.removeprefix("Execution order: ").split(", ")
+        for replacement, expected in (
+                ("", "expected one Execution order"),
+                (line + "\n" + line, "expected one Execution order"),
+                ("Execution order: " + ", ".join(selectors[:-1]), "omits"),
+                (line + ", " + selectors[0], "repeats"),
+                (line + ", " + CLOSED, "unknown"),
+                (line.replace(", ", "; ", 1), "malformed")):
+            with self.subTest(expected=expected):
+                said = roadmap_faults(once(line, replacement))
+                self.assertTrue(any(expected in why for why in said))
+
+    def test_execution_order_cannot_precede_dependencies(self):
+        line = re.search(r"^Execution order: .+$", real_roadmap(), re.M).group(0)
+        selectors = line.removeprefix("Execution order: ").split(", ")
+        said = roadmap_faults(once(
+            line, "Execution order: " + ", ".join(reversed(selectors))))
+        self.assertTrue(any("precedes dependency" in why for why in said))
+
     def test_a_reference_to_nothing_is_reported(self):
         said = roadmap_faults(once("| Guarded cleanups can expand",
                                    "| %s's guarded cleanups can expand"
