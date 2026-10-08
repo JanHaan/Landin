@@ -4,8 +4,10 @@ const conversation = crypto.randomUUID();
 
 function busy(value) {
   pending = value;
-  byID("ask").disabled = value || !config?.answers;
-  byID("search").disabled = value;
+  const question = byID("question").value;
+  const validQuestion = Boolean(question.trim()) && new TextEncoder().encode(question).length <= 2048;
+  byID("ask").disabled = value || !validQuestion || !config?.answers;
+  byID("search").disabled = value || !validQuestion || !config;
   byID("run").disabled = value || !config?.execution;
 }
 
@@ -51,6 +53,7 @@ function sources(items) {
 
 async function ask(operation) {
   if (pending) return;
+  if (!byID("question").value.trim()) { byID("question").focus(); return; }
   busy(true); byID("status").textContent = "Looking up the documentation…";
   byID("result").hidden = true; byID("example").hidden = true;
   try {
@@ -69,6 +72,7 @@ async function ask(operation) {
 }
 
 byID("ask-form").addEventListener("submit", event => { event.preventDefault(); ask("ask"); });
+byID("question").addEventListener("input", () => busy(pending));
 byID("search").addEventListener("click", () => ask("search"));
 byID("new-program").addEventListener("click", () => {
   byID("example").hidden = false; byID("code").value = "";
