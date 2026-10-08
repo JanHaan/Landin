@@ -38,7 +38,8 @@ def main():
         args.output.chmod(0o600)
         while True:
             request = urllib.request.Request(origin + "/api/transcripts?cursor=" + cursor,
-                                             headers={"X-Admin-Key": key})
+                                             headers={"X-Admin-Key": key,
+                                                      "User-Agent": "LandinTranscriptExporter/1.0"})
             with opener.open(request, timeout=30) as response:
                 raw = response.read(1_000_001)
             if len(raw) > 1_000_000:
