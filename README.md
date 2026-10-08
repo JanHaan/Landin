@@ -13,7 +13,7 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.2.5. The compiler can build and run Landin programs
+**Status: specification 0.2.6. The compiler can build and run Landin programs
 for Linux x86-64, Linux arm64, Linux RV64, FreeBSD x86-64 and arm64, and
 native macOS arm64, and builds firmware for
 Cortex-M0. It handles functions, user-defined data types, generic
