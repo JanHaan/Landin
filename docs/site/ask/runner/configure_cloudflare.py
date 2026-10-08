@@ -49,7 +49,7 @@ def main():
     config["containers"] = [{"class_name": "Execution", "scheduling_policy": "default",
         "image": image,
         **({} if args.image else {"image_build_context": str(context)}),
-        "max_instances": 1, "instance_type": {"vcpu": 1, "memory_mib": 1024, "disk_mb": 4096}}]
+        "max_instances": 1, "instance_type": "basic"}]
     config["vars"].update(EXECUTION_BACKEND="cloudflare", COMPILER_SHA256=digest,
                           EXECUTION_ENABLED="false", PRIVATE_MODE="true")
     output = ASK / "build/wrangler.containers.json"

@@ -359,6 +359,11 @@ launcher checks still apply; never substitute an unverified registry image.
 The generated `build/wrangler.containers.json` preserves the Worker name,
 budget namespace and existing SQLite migration, adds the execution class,
 uses one fixed named execution Durable Object and sets `max_instances=1`.
+It uses the provider's `basic` type (¼ vCPU, 1 GiB memory, 4 GB disk). Custom
+instances require at least 3 GiB per full vCPU; the rejected 1-vCPU/1-GiB
+proposal is not the deployed resource shape. The per-job booking above retains
+a conservative full-vCPU allowance. See
+[instance limits](https://developers.cloudflare.com/containers/platform/limits/).
 The provider image is pinned by deployment. The default scheduling policy
 keeps ordinary process permissions: the newer Durable Object scheduling
 policy currently gives processes root capabilities regardless of their UID,
