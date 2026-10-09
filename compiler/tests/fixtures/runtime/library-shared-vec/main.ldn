@@ -1,13 +1,17 @@
 import core/mem
 import core/vec
 
-exercise: () -> (ok: bool) ! mem.out_of_memory | mem.empty =
+exercise: () -> (ok: bool) ! mem.out_of_memory | mem.empty | mem.out_of_bounds =
     ok = false
     mut backing: [256]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], 256)
     mut values := vec.new(item: i32)
-    try vec.push(values, state, i32(42))
+    try vec.push(values, state, i32(41))
     return when vec.length(values) <> 1
+    slot: ptr mut i32 = try vec.at(values, usize(0))
+    slot.val = 42
+    last: i32 = try vec.last(values)
+    return when last <> 42
     removed := try vec.pop(values)
     return when removed <> 42
     _ = vec.pop(values) else (problem)

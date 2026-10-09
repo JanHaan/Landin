@@ -1,0 +1,42 @@
+import core/map
+import core/sort
+import core/text
+
+hash_of: (key: type is map.hashable, value: key) -> (result: u64) =
+    result = key.hash(value)
+end hash_of
+
+equal: (key: type is map.equatable, left: key, right: key) -> (same: bool) =
+    same = key.eq(left, right)
+end equal
+
+--  Exercise the evidence directly, without the large map allocation path.
+--  The full map-key consumer remains a separate hosted runtime regression.
+public main: () -> (code: i32) =
+    code = 1
+    maximum: u64 = 0 -% 1
+    return when hash_of(i8(-128)) <> maximum - 127
+      or hash_of(i16(-32768)) <> maximum - 32767
+      or hash_of(i32(-2147483647 - 1)) <> maximum - 2147483647
+      or hash_of(i64(-9223372036854775807 - 1)) <> 9223372036854775808
+      or hash_of(isize(-1)) <> maximum
+    return when hash_of(u8(255)) <> 255 or hash_of(u16(65535)) <> 65535
+      or hash_of(u32(4294967295)) <> 4294967295
+      or hash_of(maximum) <> maximum or hash_of(usize(42)) <> 42
+    return when hash_of(true) <> 1 or hash_of(false) <> 0
+      or equal(true, false) or not equal(true, true)
+
+    literal: []u8 = "abc"
+    mut backing: [3]u8 = [97, 98, 99]
+    copy: []u8 = backing[0..<3]
+    return when not equal(literal, copy)
+      or hash_of(copy) <> 16654208175385433931
+    empty: []u8 = ""
+    return when hash_of(empty) <> 14695981039346656037
+    word: utf8 = "abc"
+    return when hash_of(word) <> hash_of(copy) or not equal(word, word)
+    mut texts: [3]utf8 = ["pear", "apple", "fig"]
+    sort.sort(texts[0..<3])
+    return when not text.eq(texts[0], "apple") or not text.eq(texts[2], "pear")
+    code = 42
+end main

@@ -861,10 +861,17 @@
       "mode": "execute"
     },
     "runtime/library-at-references": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
+    },
+    "runtime/library-builtin-evidence": {
       "mode": "execute"
     },
     "runtime/library-builtin-keys": {
-      "mode": "execute"
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
     "runtime/library-io-writer-adapter": {
       "mode": "execute"
@@ -873,7 +880,9 @@
       "mode": "execute"
     },
     "runtime/library-map-reserve-rollback": {
-      "mode": "execute"
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
     "runtime/library-shared-diag": {
       "mode": "execute"

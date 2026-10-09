@@ -25,6 +25,16 @@ firmware lane compiles, links and executes them separately and records every
 reached source and linker input. No consumer relies on an image-size refusal
 as positive evidence.
 
+The larger `library-at-references`, `library-builtin-keys` and
+`library-map-reserve-rollback` regressions exercise complete map operations.
+They exceed Cortex-M0's 32 KiB flash profile, as the earlier map workloads do;
+their measured image limits are not successful firmware executions. The
+shared vector and small-vector consumers exercise writable slots, the shared
+map consumer checks missing-key access, and `library-builtin-evidence`
+exercises the supplied hashes, equality and ordering without map allocation.
+These smaller programs and the writer-only and writer-adapter probes must
+execute within the constrained profile.
+
 ## Interface conventions
 
 Every module spells the same operations the same way (D269):

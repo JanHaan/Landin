@@ -2,8 +2,15 @@ import core/map
 
 exercise: () -> (ok: bool) ! map.missing =
     ok = false
-    value := map.new(key: u32, item: i32)
+    mut value := map.new(key: u32, item: i32)
     return when map.length(value) <> 0 or map.capacity(value) <> 0
+    return when map.contains(value, u32(42))
+    mut refused: bool = false
+    _ = map.at(value, u32(42)) else (problem)
+        return when problem <> map.missing
+        refused = true
+    end
+    return when not refused
     _ = map.get(value, u32(42)) else (problem)
         ok = problem == map.missing
         return

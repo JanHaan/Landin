@@ -4,7 +4,7 @@ error[L0202]: this type's representation is module-internal
 5 |     code = value.storage.inline_values[0]
   |                          ^^^^^^^^^^^^^
   --> ../../core/small/small.ldn:8:1
-   |
+  |
 8 | small_value: type (item: type, fixed inline_slots: u32) = struct
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields

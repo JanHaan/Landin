@@ -10818,13 +10818,13 @@ atom set 4 atoms {out_of_memory}
 atom set 5 atoms {out_of_memory}
 atom set 6 atoms {out_of_memory}
 atom set 7 atoms {raw_full}
-atom set 8 atoms {raw_not_empty, raw_empty}
+atom set 8 atoms {raw_not_empty, empty}
 atom set 9 atoms {out_of_memory}
 atom set 10 atoms {out_of_memory}
 atom set 11 atoms {out_of_memory}
 atom set 12 atoms {raw_full}
 atom set 13 atoms {raw_not_empty}
-atom set 14 atoms {raw_empty}
+atom set 14 atoms {empty}
 signature 1 (in usize, in usize) -> none
 signature 2 (in usize, in u32, in u32) -> none
 signature 3 (in usize) -> none
@@ -10862,8 +10862,8 @@ signature 34 (inout usize, inout usize) -> none
 signature 35 (in usize, inout usize, inout usize) -> none
 signature 36 (inout usize) -> none
 signature 37 (inout usize) -> none
-signature 38 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
-signature 39 (inout usize) -> usize from 1 errors atoms {raw_not_empty, raw_empty}
+signature 38 (inout usize) -> usize from 1 errors atoms {raw_not_empty, empty}
+signature 39 (inout usize) -> usize from 1 errors atoms {raw_not_empty, empty}
 signature 40 (inout usize) -> [2]usize errors atoms {out_of_memory}
 signature 41 (inout usize) -> [2]usize errors atoms {out_of_memory}
 signature 42 (inout usize, escaping in struct button) -> usize errors atoms {out_of_memory}
@@ -11559,8 +11559,8 @@ item 12 ROUTINE arena_grow result bool signature 12 params 5 slots 36 blocks 19 
     143 STORE slot 6 <- 142
     144 LOAD bool slot 6
     145 LEAVE <- 144
-item 13 ROUTINE fail_over result struct signature 13 params 4 slots 5 blocks 1 values 13
-  slot 1 fail_over usize param 1
+item 13 ROUTINE failing_over result struct signature 13 params 4 slots 5 blocks 1 values 13
+  slot 1 failing_over usize param 1
   slot 2 base usize param 2
   slot 3 size usize param 3
   slot 4 successful_allocations usize param 4
@@ -11579,8 +11579,8 @@ item 13 ROUTINE fail_over result struct signature 13 params 4 slots 5 blocks 1 v
     11 NUMBER usize 0
     12 STORE_FIELD slot 5 field 6 <- 11
     13 LEAVE
-item 14 ROUTINE fail_over_unchecked result struct signature 14 params 4 slots 5 blocks 1 values 13
-  slot 1 fail_over_unchecked usize param 1
+item 14 ROUTINE failing_over_unchecked result struct signature 14 params 4 slots 5 blocks 1 values 13
+  slot 1 failing_over_unchecked usize param 1
   slot 2 base usize param 2
   slot 3 size usize param 3
   slot 4 successful_allocations usize param 4
@@ -11880,7 +11880,7 @@ item 23 ROUTINE - result struct signature 25 params 4 slots 33 blocks 12 values 
   slot 5 result aggregate fields struct (usize,usize,[2]usize) usize return
   slot 6 zero usize
   slot 7 - usize
-  slot 8 empty aggregate fields usize usize [2]usize
+  slot 8 none_yet aggregate fields usize usize [2]usize
   slot 9 - address of struct (usize,usize,[2]usize)
   slot 10 - address of struct (usize,usize,[2]usize)
   slot 11 block usize
@@ -12255,9 +12255,9 @@ item 28 ROUTINE - result none signature 35 params 3 slots 15 blocks 6 values 48
   slot 6 extent usize
   slot 7 - address of usize
   slot 8 block usize
-  slot 9 - u32 atoms {raw_not_empty, raw_empty}
+  slot 9 - u32 atoms {raw_not_empty, empty}
   slot 10 - usize
-  slot 11 problem u32 atoms {raw_not_empty, raw_empty}
+  slot 11 problem u32 atoms {raw_not_empty, empty}
   slot 12 - address of usize
   slot 13 - usize signature 11
   slot 14 - address of struct (usize,usize,usize)
@@ -12359,7 +12359,7 @@ item 30 ROUTINE - result usize signature 39 params 1 slots 11 blocks 7 values 47
   slot 4 - u32 atoms {raw_not_empty}
   slot 5 - usize
   slot 6 - address of usize
-  slot 7 - u32 atoms {raw_empty}
+  slot 7 - u32 atoms {empty}
   slot 8 base usize
   slot 9 - address of usize
   slot 10 - elements 2 of usize
@@ -12388,7 +12388,7 @@ item 30 ROUTINE - result usize signature 39 params 1 slots 11 blocks 7 values 47
     19 EQUAL_TO bool <- 17 18
     20 BRANCH target 4 alternative 5 <- 19
   block 4 scope 97 BLOCK length 4
-    21 ATOM u32 identity raw_empty atoms {raw_empty}
+    21 ATOM u32 identity empty atoms {empty}
     22 STORE slot 7 <- 21
     23 LOAD u32 slot 7
     24 FAIL <- 23

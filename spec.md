@@ -17274,7 +17274,7 @@ smallest map use at forty lines. A weak library conformance that a program
 could override is retained position D2's rejected shape. Deriving evidence in
 the compiler is a language change the roadmap does not schedule.
 
-**Pinned by** `runtime/library-builtin-keys`,
+**Pinned by** `runtime/library-builtin-keys`, `runtime/library-builtin-evidence`,
 `negative/library-evidence-collision`, `runtime/r420-map-failure-rollback`,
 `runtime/core-vec-used-sort` and the conformance register.
 
