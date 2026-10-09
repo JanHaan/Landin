@@ -7,7 +7,7 @@ import core/text
 
 exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text =
     ok = false
-    mut backing: [4096]u8 = zeroed
+    mut backing: [1536]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
 
     least: i32 = (0 - 2147483647) - 1

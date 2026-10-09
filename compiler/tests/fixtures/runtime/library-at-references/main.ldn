@@ -7,7 +7,9 @@ import core/vec
 exercise: () -> (ok: bool)
           ! mem.out_of_memory | mem.out_of_bounds | mem.empty | map.missing =
     ok = false
-    mut backing: [4096]u8 = zeroed
+    --  Fits the old map plus both failed replacement attempts even on LP64;
+    --  leave room for the fixture's other locals on the firmware stack.
+    mut backing: [3072]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
 
     mut numbers := vec.new(item: i32)
