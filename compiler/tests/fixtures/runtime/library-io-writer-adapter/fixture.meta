@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: a provider implementing only io.writer drives a streaming diagnostics log
+summary: lending a writer from an erased world preserves full writes, partial progress, empty writes and failures
 program: main.ldn
 root: ../../../../..
 status: 42

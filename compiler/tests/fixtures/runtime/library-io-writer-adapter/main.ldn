@@ -1,0 +1,111 @@
+import core/io
+
+--  A small world with one writable stream. Unsupported services refuse;
+--  the adapter must preserve partial progress and failures on that stream.
+device: type = struct
+    byte: u8
+    calls: usize
+end device
+
+write: (self: ptr mut device, opened: io.file, bytes: []u8)
+       -> none ! io.io_failed =
+    fail io.io_failed when opened <> io.file(1) or lenof bytes <> 1
+    self.val.byte = bytes[0]
+    inc self.val.calls
+end write
+
+write_some: (self: ptr mut device, opened: io.file, bytes: []u8)
+            -> (count: usize) ! io.io_failed =
+    count = 0
+    return when lenof bytes == 0
+    try write(self, opened, bytes[0..<1])
+    count = 1
+end write_some
+
+read: (self: ptr mut device, opened: io.file, into: []mut u8)
+      -> (count: usize) ! io.io_failed =
+    _ = self
+    _ = opened
+    _ = into
+    fail io.io_failed
+end read
+
+open: (self: ptr mut device, path: ptr u8)
+      -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+    _ = self
+    _ = path
+    fail io.no_access
+end open
+
+same_file: (self: ptr mut device, left: ptr u8, right: ptr u8)
+           -> (same: bool) ! io.io_failed =
+    _ = self
+    _ = left
+    _ = right
+    fail io.io_failed
+end same_file
+
+close: (self: ptr mut device, sink opened: io.file) -> none ! io.io_failed =
+    _ = self
+    _ = opened
+    fail io.io_failed
+end close
+
+out: (self: ptr device) -> (stream: io.file) =
+    _ = self
+    stream = io.file(1)
+end out
+
+argument_count: (self: ptr device) -> (count: usize) =
+    _ = self
+    count = 0
+end argument_count
+
+argument: (self: ptr device, index: usize)
+          -> (value: io.argument from self) ! io.no_argument =
+    _ = self
+    _ = index
+    fail io.no_argument
+end argument
+
+device is io.writer (write: write, write_some: write_some)
+device is io.reader (read: read)
+device is io.files (open_read: open, open_write: open,
+                    same_file: same_file, close: close)
+device is io.process (out: out, err: out, argument_count: argument_count,
+                      argument: argument)
+device is io.world ()
+
+exercise: () -> (ok: bool) ! io.io_failed =
+    ok = false
+    mut state: device = (byte: 0, calls: 0)
+    world: any io.world = any(addr state)
+    mut lent := io.writer_of(addr world)
+    writer: any io.writer = any(addr lent)
+    try writer.write(world.out(), "A")
+    return when state.byte <> 65 or state.calls <> 1
+    partial: usize = try writer.write_some(world.out(), "BC")
+    return when partial <> 1 or state.byte <> 66 or state.calls <> 2
+    empty: usize = try writer.write_some(world.out(), "")
+    return when empty <> 0 or state.calls <> 2
+    mut refused: bool = false
+    writer.write(io.file(2), "D") else (problem)
+        return when problem <> io.io_failed
+        refused = true
+    end
+    return when not refused or state.byte <> 66 or state.calls <> 2
+    refused = false
+    _ = writer.write_some(io.file(2), "D") else (problem)
+        return when problem <> io.io_failed
+        refused = true
+    end
+    ok = refused and state.byte == 66 and state.calls == 2
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

@@ -1,0 +1,41 @@
+import core/failing
+import core/map
+import core/mem
+
+exercise: (allowed: usize) -> (ok: bool) ! mem.out_of_memory | map.missing =
+    ok = false
+    --  Each case gets fresh backing: the arena deliberately cannot reclaim
+    --  an individual temporary allocation, even though the wrapper frees it.
+    mut backing: [2048]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut table := map.new(key: u32, item: i32)
+    try map.reserve(table, state, usize(10))
+    try map.insert(table, state, u32(7), 2)
+    try map.insert(table, state, u32(8), 3)
+    reserved: usize = map.capacity(table)
+    mut counted := failing.new(addr state, allowed)
+    mut refused: bool = false
+    map.reserve(table, counted, usize(20)) else (problem)
+        return when problem <> mem.out_of_memory
+        refused = true
+    end
+    return when not refused or map.capacity(table) <> reserved
+      or map.length(table) <> 2 or failing.live(counted) <> 0
+      or failing.frees(counted) <> allowed
+    first: i32 = try map.get(table, u32(7))
+    second: i32 = try map.get(table, u32(8))
+    return when first <> 2 or second <> 3
+    map.release(table, state)
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    mut allowed: usize = 0
+    while allowed < 3 do
+        ok := exercise(allowed) else false
+        return when not ok
+        inc allowed
+    end while
+    code = 42
+end main

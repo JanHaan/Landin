@@ -866,7 +866,13 @@
     "runtime/library-builtin-keys": {
       "mode": "execute"
     },
+    "runtime/library-io-writer-adapter": {
+      "mode": "execute"
+    },
     "runtime/library-io-writer-only": {
+      "mode": "execute"
+    },
+    "runtime/library-map-reserve-rollback": {
       "mode": "execute"
     },
     "runtime/library-shared-diag": {

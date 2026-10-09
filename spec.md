@@ -17214,7 +17214,7 @@ provider; the handle-based entries are kept and the split is by concept.
 Converting `any io.world` to `any io.writer` implicitly would need the
 `any` subtyping D145 declined.
 
-**Pinned by** `runtime/library-io-writer-only`,
+**Pinned by** `runtime/library-io-writer-only`, `runtime/library-io-writer-adapter`,
 `runtime/diagnostic-loggers-dispatch`, `runtime/derived-hosted-memory`,
 `negative/core-diag-frame-world-escape` and the erased conformance register.
 
@@ -17299,5 +17299,5 @@ insert, remove or release while it lives is L0315. `vec.last`, `map.contains`,
 on every read and change every caller. A `set` taking a value would cover
 assignment but not update through a pointer. Both were declined.
 
-**Pinned by** `runtime/library-at-references` and
+**Pinned by** `runtime/library-at-references`, `runtime/library-map-reserve-rollback` and
 `negative/library-at-live-inout`.
