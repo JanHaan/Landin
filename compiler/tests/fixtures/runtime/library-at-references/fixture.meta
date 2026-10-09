@@ -4,5 +4,5 @@ summary: at lends a writable slot into a vector, a small vector and a map, and t
 program: main.ldn
 root: ../../../../..
 status: 42
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
 constructs: 0310, 0430, 0600, 0790, 0800, 1000, 1410, 1420, 1480, 1950

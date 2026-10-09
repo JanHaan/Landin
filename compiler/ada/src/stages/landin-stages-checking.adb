@@ -8212,6 +8212,18 @@ package body Landin.Stages.Checking is
                Shared : constant Boolean :=
                  Syn.Shares_Declared_Type (Of_Tree, Returned);
             begin
+               --  A `from` contract inspects the result's stored references,
+               --  so identity alone cannot answer it for a nominal record.
+               --  Complete that shape before Contains_References queries it.
+               if Syn.Return_Source_Count (Of_Tree, Returned) > 0 then
+                  declare
+                     Held : constant Ty.Type_Kind := Type_At
+                       (Of_Tree, Syn.Declared_Type (Of_Tree, Returned),
+                        Requirement => Value_Layout);
+                  begin
+                     Valid := Valid and then Held /= Ty.Ill_Typed;
+                  end;
+               end if;
                Results (Index) :=
                  Part_At (Returned, Syn.Origin (Of_Tree, Returned));
                if Syn.Return_Source_Count (Of_Tree, Returned) > 0

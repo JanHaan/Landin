@@ -4456,6 +4456,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Ordinary_Function_Signatures_Use_Identity_Only
      (Item : in out Landin.Testing.Context);
 
+   procedure Return_Sources_Complete_Nominal_Shapes
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context);
 
@@ -4482,6 +4485,62 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Fixed_Bound_Arithmetic_And_Applications_Are_Bounded
      (Item : in out Landin.Testing.Context);
+
+   procedure Return_Sources_Complete_Nominal_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Has_Reference, Record_First : Boolean);
+
+      procedure Check_Source (Has_Reference, Record_First : Boolean) is
+         Record_Text : constant String :=
+           "box: type = struct" & LF
+           & "    data: " & (if Has_Reference then "ptr u8" else "u8")
+           & LF & "end box" & LF;
+         Routine_Text : constant String :=
+           "missing: atom" & LF
+           & "produce: (source: ptr u8)" & LF
+           & "         -> (value: box from source) ! missing =" & LF
+           & "    _ = source" & LF
+           & "    fail missing" & LF & "end produce" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id := Landin.Stages.Add_Source
+           (Work, "return-source-shape.ldn",
+            (if Record_First then Record_Text & Routine_Text
+             else Routine_Text & Record_Text));
+         Ran : Natural;
+         pragma Unreferenced (Src);
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, "the return contract reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Has_Reference
+               and then
+                 (if Has_Reference then Landin.Diagnostics.Count (Reports) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0339"),
+               "record fields decide from, independent of declaration order"
+               & ": " & Landin.Stages.Rendered_Report (Work));
+         end;
+      end Check_Source;
+   begin
+      for Has_Reference in Boolean loop
+         for Record_First in Boolean loop
+            Check_Source (Has_Reference, Record_First);
+         end loop;
+      end loop;
+   end Return_Sources_Complete_Nominal_Shapes;
 
    procedure Ordinary_Function_Signatures_Use_Identity_Only
      (Item : in out Landin.Testing.Context)
@@ -15609,6 +15668,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);
+      Landin.Testing.Register
+        (Into, "checking", "return sources complete nominal shapes",
+         Return_Sources_Complete_Nominal_Shapes'Access);
       Landin.Testing.Register
         (Into, "checking", "parameterized aliases normalize descriptors",
          Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);
