@@ -37,7 +37,7 @@ public new_bytes: (provider: type is allocator, inout state: provider,
 end new_bytes
 
 public delete_bytes: (provider: type is allocator, inout state: provider,
-                    inout value: buffer) -> none =
+                      inout value: buffer) -> none =
     return when value.extent == 0
     extent: usize = value.extent
     clear(value.values)
