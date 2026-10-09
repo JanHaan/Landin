@@ -295,7 +295,12 @@ This is the maintained inventory of what the compiler does today:
   and failing allocators as capabilities and supply raw memory, vectors,
   small vectors, maps, trees, sorting, byte-oriented and validated text,
   caller-backed I/O, bulk cleanup, panic dispatch and the `any`-dispatched
-  `core/diag.log`. `hosted/heap` and `hosted/io` supply the hosted heap and
+  `core/diag.log`. I/O separates reader, writer, file and process capabilities;
+  a streaming log needs only a writer. Containers share construction and
+  release names, and vectors, small vectors and maps lend writable slots with
+  `at` alongside copying `get`. Integer keys and ordering, Boolean and byte
+  slice keys, and UTF-8 keys and ordering have library-supplied evidence.
+  `hosted/heap` and `hosted/io` supply the hosted heap and
   system I/O capabilities. `platform/c` supplies aliases for the supported
   LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
   outside a module's target scope is refused by name, including through a

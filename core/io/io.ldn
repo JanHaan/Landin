@@ -23,8 +23,8 @@ end argument
 
 --  The capability is four narrow concepts over one provider type, so a
 --  provider supplies only what it has: a UART is a writer, a read-only
---  image is a reader, and only a hosted system is also files and a
---  process.  A consumer names the narrowest concept it uses; diagnostics
+--  image is a reader; system and memory providers also supply files and
+--  process entries. A consumer names the narrowest concept it uses; diagnostics
 --  stream through any io.writer.  `world` composes all four for roots that
 --  have everything.  An erased `any io.world` dispatches every entry, but
 --  it is not an `any io.writer`: build that from the same provider pointer
