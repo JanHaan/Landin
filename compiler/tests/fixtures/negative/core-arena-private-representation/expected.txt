@@ -3,9 +3,9 @@ error[L0202]: this type's representation is module-internal
   |
 4 |     state = (base: base, size: 8, used: 0)
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/mem/mem.ldn:273:1
+  --> ../../core/mem/mem.ldn:336:1
     |
-273 | arena_value: type = struct
+336 | arena_value: type = struct
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields
 error[L0202]: this type's representation is module-internal
@@ -13,8 +13,8 @@ error[L0202]: this type's representation is module-internal
   |
 8 |     state = (base: base, size: 8, used: 0,
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/mem/mem.ldn:338:1
+  --> ../../core/mem/mem.ldn:411:1
     |
-338 | failing_value: type = struct
+411 | failing_value: type = struct
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields

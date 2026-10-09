@@ -12,10 +12,14 @@ small_value: type (item: type, fixed inline_slots: u32) = struct
     spilled: bool
 end small_value
 
+--- Vector with an inline prefix and allocator-backed spill storage. Only
+--- initialized slots are readable; the item type must conform to `zeroable`.
 public small: type (item: type is zeroable, fixed inline_slots: u32) = struct
     storage: small_value(item, inline_slots)
 end small
 
+--- Create an empty inline vector without allocating. Unused inline slots have
+--- no readable item value.
 public new: (item: type is zeroable, fixed inline_slots: u32)
             -> (value: small(item, inline_slots)) =
     fresh := vec.new(item: item)
@@ -23,13 +27,17 @@ public new: (item: type is zeroable, fixed inline_slots: u32)
                        spill: fresh, spilled: false))
 end new
 
---  A read-only pointer accepts addresses of mutable and immutable containers
---  without copying their inline storage.
+--- Return the initialized item count without copying inline storage.
+---
+--- A read-only pointer accepts addresses of mutable and immutable containers
+--- without copying their inline storage.
 public length: (item: type is zeroable, fixed inline_slots: u32,
                 value: ptr small(item, inline_slots)) -> (count: usize) =
     count = value.val.storage.count
 end length
 
+--- Return the inline capacity before spilling, or the backing vector capacity
+--- afterwards.
 public capacity: (item: type is zeroable, fixed inline_slots: u32,
                   value: ptr small(item, inline_slots)) -> (count: usize) =
     if value.val.storage.spilled then
@@ -59,6 +67,9 @@ pop_list: (item: type is zeroable, inout values: vec.list(item))
     end
 end pop_list
 
+--- Append inline while room remains, then spill to allocated storage.
+--- Allocation failure leaves the vector unchanged. Growth or the first spill
+--- invalidates old item views.
 public push: (item: type is zeroable, fixed inline_slots: u32,
               provider: type is mem.allocator,
               escaping inout value: small(item, inline_slots),
@@ -94,6 +105,8 @@ public push: (item: type is zeroable, fixed inline_slots: u32,
     inc value.storage.count
 end push
 
+--- Lend the initialized mutable prefix from inline or spill storage. The
+--- container and its backing must remain valid for the view's lifetime.
 public used: (item: type is zeroable, fixed inline_slots: u32,
               inout value: small(item, inline_slots))
              -> (view: []mut item from value) =
@@ -104,6 +117,8 @@ public used: (item: type is zeroable, fixed inline_slots: u32,
     end if
 end used
 
+--- Copy the indexed item without copying the container. Reports
+--- `mem.out_of_bounds` outside its initialized prefix.
 public get: (item: type is zeroable, fixed inline_slots: u32,
              value: ptr small(item, inline_slots), index: usize)
             -> (result: item from value) ! mem.out_of_bounds =
@@ -118,7 +133,10 @@ public get: (item: type is zeroable, fixed inline_slots: u32,
     end if
 end get
 
---  A writable slot, with the same binding lock as vec.at [0800].
+--- Lend a writable item pointer. Reports `mem.out_of_bounds` before forming
+--- an invalid pointer; end the pointer before a push or release.
+---
+--- A writable slot, with the same binding lock as vec.at [0800].
 public at: (item: type is zeroable, fixed inline_slots: u32,
             inout value: small(item, inline_slots), index: usize)
            -> (slot: ptr mut item from value) ! mem.out_of_bounds =
@@ -127,6 +145,8 @@ public at: (item: type is zeroable, fixed inline_slots: u32,
     slot = addr view[index]
 end at
 
+--- Remove and return the last item, retaining spill capacity. Reports
+--- `mem.empty` when empty; popping does not switch back to inline storage.
 public pop: (item: type is zeroable, fixed inline_slots: u32,
              inout value: small(item, inline_slots))
             -> (removed: item from value) ! mem.empty =
@@ -140,6 +160,8 @@ public pop: (item: type is zeroable, fixed inline_slots: u32,
     end if
 end pop
 
+--- Free any spill allocation through its original provider and reset to an
+--- empty inline vector. Does not clean up resources referenced by items.
 public release: (item: type is zeroable, fixed inline_slots: u32,
                  provider: type is mem.allocator,
                  inout value: small(item, inline_slots),

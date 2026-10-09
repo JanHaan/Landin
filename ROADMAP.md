@@ -1300,6 +1300,11 @@ gain `at`, a writable
 slot under [0800]'s binding lock, with `contains`, `clear` and `reserve` on
 the map and `last` on the vector; the tree's node is private and gets none.
 
+The library reference is generated from public signatures and attached doc
+comments, with module overviews, source links, search and existing executable
+examples. Documentation completeness and generated links are checked with
+the site build.
+
 Exit evidence: D268 to D271 with their fixtures; a writer-only provider
 driving a streaming log; a program keying a map by `[]u8` and `utf8` and
 sorting `utf8` with no evidence of its own; a program updating a vector, a

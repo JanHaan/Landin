@@ -2,18 +2,27 @@ import core/mem
 import core/vec
 
 identifier: type = distinct usize
+--- Opaque target-sized ordinal identifying a node in a particular tree. It
+--- does not retain or identify the tree itself.
 public node_id: type = identifier
 
+--- Wrap an ordinal as a node identifier without validating membership in a
+--- tree.
 public id: (ordinal: usize) -> (value: identifier) =
     value = identifier(ordinal)
 end id
 
+--- Return the ordinal carried by a node identifier.
 public ordinal: (value: identifier) -> (number: usize) =
     number = usize(value)
 end ordinal
+--- The node identifier is outside the tree's stored node range.
 public no_such_node: atom
+--- The requested child interval is not wholly within already published nodes.
 public invalid_children: atom
+--- Another node identifier cannot be represented in target `usize`.
 public too_many_nodes: atom
+--- The branch's leaf total cannot be represented in target `usize`.
 public too_many_leaves: atom
 
 node_value: type = struct
@@ -28,17 +37,23 @@ node_value: type = struct
         branch: (first: node_id, count: usize)
     end kind
 end node_value
+--- Opaque named leaf or branch with a precomputed leaf total. The name is
+--- borrowed UTF-8.
 public node: type = node_value
 
 tree_value: type = struct
     nodes: vec.list(node_value)
 end tree_value
+--- Append-only store of named nodes. Branches reference contiguous ranges of
+--- already published nodes; allocation is supplied explicitly.
 public tree: type = tree_value
 
+--- Create an empty tree without allocating.
 public new: () -> (result: tree_value) =
     result = (nodes: vec.new(item: node_value))
 end new
 
+--- Return the number of published nodes.
 public length: (value: tree_value) -> (count: usize) =
     count = vec.length(value.nodes)
 end length
@@ -49,6 +64,8 @@ next_id: (count: usize) -> (id: node_id) ! too_many_nodes =
     id = identifier(count)
 end next_id
 
+--- Append a named leaf and return its identifier. Retains the name's backing;
+--- allocation or identifier exhaustion leaves existing nodes unchanged.
 public add_leaf: (provider: type is mem.allocator, inout value: tree_value,
                   inout state: provider, escaping name: utf8)
                  -> (id: node_id) ! mem.out_of_memory | too_many_nodes =
@@ -72,10 +89,14 @@ public add_leaf: (provider: type is mem.allocator, inout value: tree_value,
     try vec.push(value.nodes, state, added)
 end add_leaf
 
---  Edges name only previously published nodes. Their leaf totals are fixed,
---  so their cumulative totals give bounded-stack queries at any depth.
---  Shared children count once for each incoming path, as recursive counting
---  would. An empty child interval has total zero.
+--- Append a branch over a contiguous interval of existing nodes. Retains the
+--- name, validates children and leaf totals before publication, and permits
+--- an empty interval.
+---
+--- Edges name only previously published nodes. Their leaf totals are fixed,
+--- so their cumulative totals give bounded-stack queries at any depth.
+--- Shared children count once for each incoming path, as recursive counting
+--- would. An empty child interval has total zero.
 public add_branch: (provider: type is mem.allocator, inout value: tree_value,
                     inout state: provider, escaping name: utf8,
                     first: node_id, count: usize)
@@ -129,6 +150,8 @@ public add_branch: (provider: type is mem.allocator, inout value: tree_value,
     try vec.push(value.nodes, state, added)
 end add_branch
 
+--- Copy the node selected by an identifier. Reports `no_such_node` if absent;
+--- the name remains borrowed from its original backing.
 public get: (value: tree_value, id: node_id)
             -> (result: node_value from value) ! no_such_node =
     result = vec.get(value.nodes, usize(id)) else (problem)
@@ -137,10 +160,13 @@ public get: (value: tree_value, id: node_id)
     end
 end get
 
+--- Lend the UTF-8 name retained in a node.
 public name: (value: node_value) -> (text: utf8 from value) =
     text = value.name
 end name
 
+--- Return the node's precomputed leaf total in constant time. Shared children
+--- count once per incoming path; an empty branch counts zero.
 public count_leaves: (value: tree_value, id: node_id)
                      -> (count: usize) ! no_such_node =
     selected: node_value = get(value, id) else (problem)
@@ -150,6 +176,8 @@ public count_leaves: (value: tree_value, id: node_id)
     count = selected.leaves
 end count_leaves
 
+--- Release node storage through the original allocator and reset the tree.
+--- Name backing remains owned by its caller.
 public release: (provider: type is mem.allocator, inout value: tree_value,
                  inout state: provider) -> none =
     vec.release(value.nodes, state)

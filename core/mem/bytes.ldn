@@ -4,12 +4,19 @@ buffer: type = struct
     values: storage(u8)
     extent: usize
 end buffer
+--- Opaque descriptor for an initialized byte allocation, retaining its full
+--- allocation extent.
 public byte_buffer: type = buffer
 
+--- Lend the buffer's mutable initialized bytes. The buffer must remain
+--- allocated while the view is used.
 public bytes: (source: buffer) -> (view: []mut u8 from source) =
     view = used(source.values)
 end bytes
 
+--- Allocate `count` zero-initialized bytes. A zero count returns an empty
+--- buffer without calling the provider; allocation failure reports
+--- `out_of_memory`.
 public new_bytes: (provider: type is allocator, inout state: provider,
                    count: usize) -> (result: buffer) ! out_of_memory =
     zero: usize = 0
@@ -36,6 +43,8 @@ public new_bytes: (provider: type is allocator, inout state: provider,
     result = (values: fresh, extent: count)
 end new_bytes
 
+--- Free the buffer using its saved extent and reset it. Empty buffers require
+--- no provider call. End all byte views before deletion.
 public delete_bytes: (provider: type is allocator, inout state: provider,
                       inout value: buffer) -> none =
     return when value.extent == 0

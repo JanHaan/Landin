@@ -3,6 +3,9 @@
 
 import core/mem
 
+--- Allocator wrapper with deterministic failure injection and cumulative
+--- counters. Borrows its inner provider, delegates permitted allocations and
+--- frees, and refuses in-place growth.
 public counted: type (inner_provider: type) = struct
     inner: ptr mut inner_provider
     remaining: usize
@@ -15,9 +18,12 @@ public counted: type (inner_provider: type) = struct
     live: usize
 end counted
 
---  allowed_attempts is the number of future allocation calls allowed to
---  reach inner.alloc. An inner failure consumes one such attempt. Injected
---  failures increment attempts/injected_failures only and never call inner.
+--- Wrap an allocator with an allocation-attempt budget. Inner failures
+--- consume the budget too; injected failures never call the inner provider.
+---
+--- allowed_attempts is the number of future allocation calls allowed to
+--- reach inner.alloc. An inner failure consumes one such attempt. Injected
+--- failures increment attempts/injected_failures only and never call inner.
 public new: (inner_provider: type is mem.allocator,
              inner: ptr mut inner_provider,
              allowed_attempts: usize)
@@ -28,8 +34,11 @@ public new: (inner_provider: type is mem.allocator,
              frees: 0, live: 0)
 end new
 
---  Replace only the future delegation budget. Evidence counters accumulate
---  across retries so the failed and successful calls remain distinguishable.
+--- Replace the future delegation budget without resetting accumulated
+--- counters.
+---
+--- Replace only the future delegation budget. Evidence counters accumulate
+--- across retries so the failed and successful calls remain distinguishable.
 public permit: (inner_provider: type,
                 inout state: counted(inner_provider),
                 allowed_attempts: usize) -> none =
@@ -88,42 +97,52 @@ end counted_grow
     is mem.allocator (alloc: counted_alloc, grow: counted_grow,
                       free: counted_free)
 
+--- Return how many allocation attempts may still reach the inner provider.
 public remaining: (inner_provider: type,
                    state: counted(inner_provider)) -> (count: usize) =
     count = state.remaining
 end remaining
 
+--- Return all allocation attempts, including injected and inner failures.
 public attempts: (inner_provider: type,
                   state: counted(inner_provider)) -> (count: usize) =
     count = state.attempts
 end attempts
 
+--- Return allocation attempts passed through to the inner provider.
 public delegated: (inner_provider: type,
                    state: counted(inner_provider)) -> (count: usize) =
     count = state.delegated
 end delegated
 
+--- Return the number of successful delegated allocations.
 public successes: (inner_provider: type,
                    state: counted(inner_provider)) -> (count: usize) =
     count = state.successes
 end successes
 
+--- Return attempts rejected by the wrapper before calling the inner provider.
 public injected_failures: (inner_provider: type,
                            state: counted(inner_provider))
                           -> (count: usize) =
     count = state.injected_failures
 end injected_failures
 
+--- Return allocation failures reported by the inner provider.
 public inner_failures: (inner_provider: type,
                         state: counted(inner_provider)) -> (count: usize) =
     count = state.inner_failures
 end inner_failures
 
+--- Return the number of delegated free calls.
 public frees: (inner_provider: type,
                state: counted(inner_provider)) -> (count: usize) =
     count = state.frees
 end frees
 
+--- Return successful allocations minus free calls, bounded below by zero.
+--- Exact under the allocator contract; malformed or duplicate frees are not
+--- validated here.
 public live: (inner_provider: type,
               state: counted(inner_provider)) -> (count: usize) =
     --  Successful allocations less delegated frees under valid-free use.

@@ -43,6 +43,7 @@ import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 HERE = Path(__file__).resolve().parent
@@ -114,6 +115,7 @@ import fonts  # noqa: E402
 sys.path.insert(0, str(HERE))
 
 import llms  # noqa: E402
+import library  # noqa: E402
 from roadmap_order import execution_order  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
@@ -1162,6 +1164,7 @@ class GuideTargets:
 
     def __init__(self, docs, source):
         self.pages = {d["src"]: d["out"] for d in docs}
+        self.pages["docs/library.md"] = "library.html"
         self.directory = posixpath.dirname(source)
 
     def resolve(self, href):
@@ -1553,7 +1556,8 @@ def nav_html(docs, current, sections):
         return f'<a class="{cls}"{now} href="{out}">{esc(label)}</a>' + (
             toc() if here else "")
 
-    out = [link("index.html", "the front page")]
+    out = [link("index.html", "the front page"),
+           link("library.html", "library reference")]
     for num, name, members in nav_groups(docs):
         holds = any(d["out"] == current for d in members)
         #  The language is open everywhere; any other group only when the
@@ -1655,7 +1659,8 @@ def says_json(region, says):
 
 
 def page(title, kind, heading, hero, body, nav, docname, logo=False,
-         out="index.html", description="", extra="", says=None):
+         out="index.html", description="", extra="", says=None,
+         source_note="The text file is the specification; this page is a reading of it."):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1697,7 +1702,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 </main>
 <footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
-The text file is the specification; this page is a reading of it.
+{esc(source_note)}
 The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>.
 <br>Copyright &#169; 2026 Jan Haan.
 Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
@@ -1882,7 +1887,7 @@ def with_uses(body, source, titles, construct_page):
     return "".join(parts)
 
 
-def write_resources(docs):
+def write_resources(docs, extra_pages=()):
     """The files a crawler asks for, and the card a chat window shows.
 
     A sitemap is worth more here than on most sites: almost nothing links
@@ -1890,7 +1895,7 @@ def write_resources(docs):
     with the pages rather than kept beside them, because a hand-written
     list written by hand is a list that goes stale on the next document.
     """
-    pages = ["index.html"] + [d["out"] for d in docs]
+    pages = ["index.html"] + [d["out"] for d in docs] + list(extra_pages)
     urls = "".join(
         "<url><loc>%s/%s</loc></url>"
         % (SITE_URL, "" if out == "index.html" else out)
@@ -2530,7 +2535,13 @@ def main(argv):
             index_page(DOCS + GUIDES, counts, intro, status, progress, program,
                        guide_symbols, says, footnote))
         print(f"{SITE.name}/index.html")
-        for name in write_resources(DOCS + GUIDES):
+        library_pages = library.write(source, SITE, SimpleNamespace(
+            DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,
+            render_guide=render_guide, guide_targets=guide_targets,
+            Highlighter=Highlighter, listing_of=listing_of,
+            render_landin=render_landin))
+        print(f"{SITE.name}/library.html  {len(library_pages)} reference and source pages")
+        for name in write_resources(DOCS + GUIDES, library_pages):
             print(f"{SITE.name}/{name}")
         for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
             print(f"{SITE.name}/{name}"

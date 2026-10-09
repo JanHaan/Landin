@@ -1,6 +1,8 @@
 import core/mem
 import core/vec
 
+--- Ledger entry storing an allocated address and its byte extent. Used by
+--- bounded regions in caller-supplied initialized storage.
 public allocation: type = struct
     address: usize
     extent: usize
@@ -20,15 +22,24 @@ region_value: type (provider: type) = struct
     end allocations
 end region_value
 
+--- Allocator that records payload allocations through a borrowed parent.
+--- Releasing the region frees all recorded payloads; the parent must outlive
+--- the region.
 public region: type (provider: type) = region_value(provider)
 
+--- Create a region whose ledger grows through its parent allocator. Ledger
+--- allocation failure rolls back the just-allocated payload.
 public new: (provider: type is mem.allocator, parent: ptr mut provider)
             -> (value: region(provider) from parent) =
     value = (parent: parent, allocations: empty)
 end new
 
---  The caller reserves one initialized record per simultaneously live payload.
---  No ledger request is sent to the parent in this form.
+--- Create a region with a bounded caller-owned ledger. Each live payload
+--- needs one entry; an exhausted ledger reports `mem.out_of_memory` and
+--- returns the new payload to the parent.
+---
+--- The caller reserves one initialized record per simultaneously live payload.
+--- No ledger request is sent to the parent in this form.
 public over: (provider: type is mem.allocator,
               parent: ptr mut provider, records: []mut allocation)
              -> (value: region(provider) from parent, records) =
@@ -92,9 +103,13 @@ end region_grow
 (provider: type is mem.allocator) region_value(provider) is mem.allocator
     (alloc: region_alloc, grow: region_grow, free: region_free)
 
---  End every alias before this call. Every payload and ledger allocation
---  is returned to the parent, including failed-construction payloads. A
---  monotonic parent keeps consumed backing until its own explicit reset.
+--- Free recorded payloads in reverse order and release any dynamic ledger
+--- backing. End every payload use first; a bounded caller ledger remains
+--- available for reuse.
+---
+--- End every alias before this call. Every payload and ledger allocation
+--- is returned to the parent, including failed-construction payloads. A
+--- monotonic parent keeps consumed backing until its own explicit reset.
 public release: (provider: type is mem.allocator,
                  inout state: region(provider)) -> none =
     match state.allocations

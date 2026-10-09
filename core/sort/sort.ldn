@@ -1,4 +1,8 @@
+--- Strict ordering evidence. `less` must be irreflexive and transitive, with
+--- consistent equivalence classes, for the duration of a sort.
 public ordered: type = concept (item: type)
+    --- Return true exactly when left precedes right under the strict weak
+    --- ordering.
     less: (left: item, right: item) -> (yes: bool)
 end ordered
 
@@ -67,9 +71,14 @@ sift_down: (item: type is ordered, values: []mut item,
     end while
 end sift_down
 
---  In-place heapsort for initialized views. Worst-case O(n log n)
---  comparisons, constant auxiliary storage and bounded call depth.
---  The caller supplies a strict ordering; stability is not promised.
+--- Sort an initialized mutable slice in place using heapsort. Requires
+--- consistent `ordered` evidence; uses constant auxiliary storage, no
+--- allocation and O(n log n) comparisons. Equal items need not retain their
+--- order.
+---
+--- In-place heapsort for initialized views. Worst-case O(n log n)
+--- comparisons, constant auxiliary storage and bounded call depth.
+--- The caller supplies a strict ordering; stability is not promised.
 public sort: (item: type is ordered, values: []mut item) -> none =
     count: usize = lenof values
     mut start: usize = count / 2
@@ -88,8 +97,12 @@ public sort: (item: type is ordered, values: []mut item) -> none =
     end while
 end sort
 
---  Selection sort for tiny or swap-expensive views. Exactly n(n-1)/2
---  comparisons, at most n-1 swaps, constant storage and bounded call depth.
+--- Sort in place using selection sort. Performs n(n-1)/2 comparisons and at
+--- most n-1 swaps, with no allocation. Useful for tiny or expensive-to-swap
+--- items; it is not stable.
+---
+--- Selection sort for tiny or swap-expensive views. Exactly n(n-1)/2
+--- comparisons, at most n-1 swaps, constant storage and bounded call depth.
 public sort_selection: (item: type is ordered, values: []mut item) -> none =
     mut at: usize = 0
     while at < lenof values do

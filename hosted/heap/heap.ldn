@@ -11,12 +11,16 @@ extern(c) _landin_host_heap_allocate:
     (size: usize, alignment: usize) -> (block: allocation)
 extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
 
---  Every usize alignment is accepted.  Zero and one mean no stricter than
---  byte alignment.  A zero-byte request still returns a distinct, non-null,
---  freeable token on success.  The host shim reserves one pointer word plus
---  at most alignment - 1 bytes and refuses an overflow or an extent above
---  the host's PTRDIFF_MAX before calling libc.  Any other libc failure is
---  reported through mem.out_of_memory.
+--- Host-heap allocator capability. Allocates and frees through runtime
+--- helpers; does not grow allocations in place. Available only on hosted
+--- targets.
+---
+--- Every usize alignment is accepted.  Zero and one mean no stricter than
+--- byte alignment.  A zero-byte request still returns a distinct, non-null,
+--- freeable token on success.  The host shim reserves one pointer word plus
+--- at most alignment - 1 bytes and refuses an overflow or an extent above
+--- the host's PTRDIFF_MAX before calling libc.  Any other libc failure is
+--- reported through mem.out_of_memory.
 public system: type = struct
     reserved: u8
 end system
@@ -51,6 +55,8 @@ end system_grow
 system is mem.allocator (alloc: system_alloc, grow: system_grow,
                          free: system_free)
 
+--- Create the host heap provider state. The state itself does not allocate;
+--- callers retain and free each successful allocation explicitly.
 public host: () -> (state: system) =
     state = (reserved: 0)
 end host

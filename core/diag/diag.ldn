@@ -6,8 +6,12 @@ import core/io
 import core/mem
 import core/text
 
+--- Byte carrier for diagnostic severity. Use the named `warning` and `error`
+--- values.
 public severity: type = u8
+--- Warning severity; recording it does not by itself mark a log as failed.
 public warning: severity = 0
+--- Error severity; recording it marks the log as failed.
 public error: severity = 1
 
 entry_value: type = struct
@@ -17,12 +21,22 @@ entry_value: type = struct
     what_length: usize
 end entry_value
 
+--- Opaque stored diagnostic containing severity, position and a bounded
+--- message copy.
 public entry: type = entry_value
+--- Maximum byte count stored for one bounded diagnostic message. Longer
+--- messages are dropped as whole entries.
 public message_capacity: usize = 256
 
+--- Diagnostic capability. `note` records severity, position and message;
+--- `failed` reports whether an error diagnostic has been observed. I/O
+--- failures propagate separately from `note`.
 public log: type = concept (logger: type)
+    --- Record a diagnostic, copying or consuming the message during the call.
+    --- I/O failure is returned separately from error severity.
     note: (self: ptr mut logger, where: text.position, kind: severity,
            what: []u8) -> none ! io.io_failed
+    --- Report whether an error diagnostic has been observed.
     failed: (self: ptr logger) -> (yes: bool)
 end log
 
@@ -33,6 +47,9 @@ bounded_value: type (fixed capacity: usize) = struct
     errors: usize
 end bounded_value
 
+--- Fixed-capacity diagnostic log. Stores entries without allocation, counts
+--- messages dropped for capacity or excessive length, and remembers errors even if
+--- their entries are dropped.
 public bounded: type (fixed capacity: usize) = bounded_value(capacity)
 
 bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
@@ -65,40 +82,52 @@ bounded_failed: (fixed capacity: usize, self: ptr bounded(capacity))
     yes = self.val.errors > 0
 end bounded_failed
 
+--- Create an empty bounded log with zero stored and dropped counts.
 public new: (fixed capacity: usize) -> (result: bounded(capacity)) =
     result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
 end new
 
---  Read-only pointers let both mutable and immutable log owners query without
---  copying the bounded note array.
+--- Return the number of retained diagnostic entries.
+---
+--- Read-only pointers let both mutable and immutable log owners query without
+--- copying the bounded note array.
 public stored: (fixed capacity: usize, value: ptr bounded(capacity))
                -> (count: usize) =
     count = value.val.stored
 end stored
 
+--- Return the number of entries not retained because the log was full or the
+--- message exceeded `message_capacity`.
 public dropped: (fixed capacity: usize, value: ptr bounded(capacity))
                 -> (count: usize) =
     count = value.val.dropped
 end dropped
 
+--- Copy a retained entry by index. Reports `mem.out_of_bounds` if the index
+--- is not stored.
 public note_at: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
                 -> (result: entry) ! mem.out_of_bounds =
     fail mem.out_of_bounds when index >= value.val.stored
     result = value.val.notes[index]
 end note_at
 
+--- Return the caller-supplied source position associated with an entry.
 public position_of: (value: entry) -> (where: usize) =
     where = value.where
 end position_of
 
+--- Return the severity recorded in an entry.
 public severity_of: (value: entry) -> (kind: severity) =
     kind = value.kind
 end severity_of
 
+--- Return the number of message bytes retained in an entry.
 public message_length: (value: entry) -> (length: usize) =
     length = value.what_length
 end message_length
 
+--- Read one retained message byte. Reports `mem.out_of_bounds` past the
+--- message length.
 public message_byte: (value: entry, index: usize)
                      -> (byte: u8) ! mem.out_of_bounds =
     fail mem.out_of_bounds when index >= value.what_length
@@ -114,6 +143,8 @@ streaming_value: type = struct
     errors: usize
 end streaming_value
 
+--- Diagnostic provider borrowing a writer and destination handle. Emits
+--- severity-prefixed messages and propagates write failures to the caller.
 public streaming: type = streaming_value
 
 warning_prefix: [2]u8 = [87, 58]
@@ -136,9 +167,12 @@ write_position: (state: any io.writer, where_to: io.file, value: usize)
     try state.write(where_to, digits[start..<lenof digits])
 end write_position
 
---  A streaming log needs only a writer.  A root holding an `any io.world`
---  builds the writer from the same provider pointer; the two erased values
---  do not convert.
+--- Create a streaming logger over an erased writer and file identifier. Keep
+--- both referenced bindings and the underlying provider alive while logging.
+---
+--- A streaming log needs only a writer.  A root holding an `any io.world`
+--- builds the writer from the same provider pointer; the two erased values
+--- do not convert.
 public to: (state: ptr any io.writer, where_to: ptr io.file)
            -> (result: streaming from state, where_to) =
     result = streaming(state: state, where_to: where_to, errors: 0)

@@ -343,6 +343,10 @@ def index(pages, site_url, release, sizes):
 
     groups = [
         ("Writing Landin", [
+            ("", "- [Library reference](%s/library.html): public API signatures, "
+                 "contracts, module overviews and executable examples. "
+                 "The searchable inventory is [library-index.json](%s/library-index.json)."
+                 % (site_url, site_url)),
             ("", "- [The primer](%s/llms-primer.txt): start here. Generated "
                  "from the compiler's own tables — how to compile and run, "
                  "the kernel's vocabulary, its grammar in one piece, every "

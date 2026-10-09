@@ -1,6 +1,10 @@
---  Finite caller-backed provider of every io concept. Handles are indexes,
---  not ownership tokens.
---  Clients preserve length <= capacity and supply all retained backing.
+--- Caller-supplied in-memory file slot holding its path, readable bytes and
+--- writable capacity. Keep all referenced ranges alive and initialize the
+--- fields before constructing the provider.
+---
+--- Finite caller-backed provider of every io concept. Handles are indexes,
+--- not ownership tokens.
+--- Clients preserve length <= capacity and supply all retained backing.
 public memory_file: type = struct
     name: []u8
     contents: []mut u8
@@ -12,6 +16,8 @@ public memory_file: type = struct
     writing: bool
 end memory_file
 
+--- In-memory world using caller-owned file slots, output buffers and argument
+--- records. No host handles or implicit allocator are used.
 public memory: type = struct
     files: []mut memory_file
     arguments: []argument
@@ -32,6 +38,9 @@ public memory: type = struct
     open_calls: usize
 end memory
 
+--- Create an in-memory world over the supplied records and buffers. Retains
+--- their references; keep them alive and avoid conflicting access for the
+--- world's lifetime.
 public memory_over: (files: []mut memory_file,
                      arguments: []argument,
                      output: []mut u8, errors: []mut u8)
@@ -246,9 +255,13 @@ memory is process
      argument_count: memory_argument_count, argument: memory_argument)
 memory is world ()
 
+--- Lend the initialized standard-output prefix accumulated by the memory
+--- provider.
 public written: (inout state: memory) -> (bytes: []u8 from state) =
     bytes = state.output[0..<state.output_used]
 end written
+--- Lend the initialized standard-error prefix accumulated by the memory
+--- provider.
 public written_errors: (inout state: memory) -> (bytes: []u8 from state) =
     bytes = state.errors[0..<state.errors_used]
 end written_errors

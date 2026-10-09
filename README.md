@@ -305,7 +305,9 @@ This is the maintained inventory of what the compiler does today:
   LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
   outside a module's target scope is refused by name, including through a
   project-root override. D212 withdraws the former builtin arena syntax in
-  favour of ordinary allocator capabilities.
+  favour of ordinary allocator capabilities. The [library reference](docs/library.md)
+  is generated from public signatures and doc comments, with module browsing,
+  search, source links and examples taken directly from runtime fixtures.
 - **The C boundary.** The C ABI of each hosted target, `layout(c)`, callbacks
   and variadic calls, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are

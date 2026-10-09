@@ -5,6 +5,8 @@
 
 import core/mem
 
+--- Caller-owned bookkeeping record for one pool slot. Supply an initialized
+--- slice to `over`; the provider maintains its fields after construction.
 public slot: type = struct
     size: usize
     free_index: usize
@@ -26,6 +28,9 @@ fixed_pool: type = struct
     rejected_frees: usize
 end fixed_pool
 
+--- Reclaiming allocator over uniform slots in caller storage. Reuses the
+--- lowest free index, never grows in place, and uses no fallback allocator.
+--- Even a zero-byte allocation occupies a slot.
 public provider: type = fixed_pool
 
 --  This is D193's absolute-address algorithm kept local because core/mem's
@@ -72,13 +77,17 @@ slot_stride: (size: usize, alignment: usize)
     stride = size + padding
 end slot_stride
 
---  slot_size is positive. The initialized bookkeeping slice is supplied by
---  the caller, its length is the finite bookkeeping capacity, and slot_count
---  may be zero but may not exceed it. The maximum usize marks a free slot,
---  so a positive pool cannot use that slot size. A positive pool aligns its
---  first slot from the absolute backing address, includes that padding in extent
---  accounting, and proves every later slot and its complete payload fit both
---  the backing extent and target address space before publishing the provider.
+--- Construct a pool over caller backing and bookkeeping. Validates positive
+--- slot size, alignment, extent and record capacity before publishing the
+--- provider. Keep both backing ranges alive until all allocations end.
+---
+--- slot_size is positive. The initialized bookkeeping slice is supplied by
+--- the caller, its length is the finite bookkeeping capacity, and slot_count
+--- may be zero but may not exceed it. The maximum usize marks a free slot,
+--- so a positive pool cannot use that slot size. A positive pool aligns its
+--- first slot from the absolute backing address, includes that padding in extent
+--- accounting, and proves every later slot and its complete payload fit both
+--- the backing extent and target address space before publishing the provider.
 public over: (base: ptr mut u8, extent: usize, slot_size: usize,
               slot_count: usize, slot_alignment: usize,
               bookkeeping: []mut slot)
@@ -251,27 +260,36 @@ end pool_grow
 fixed_pool is mem.allocator (alloc: pool_alloc, grow: pool_grow,
                              free: pool_free)
 
+--- Return the configured number of allocatable slots.
 public capacity: (state: provider) -> (count: usize) =
     count = state.slot_count
 end capacity
 
+--- Return the length of the supplied metadata slice, which may exceed the
+--- configured slot count.
 public bookkeeping_capacity: (state: provider) -> (count: usize) =
     bookkeeping: []mut slot = state.bookkeeping
     count = lenof bookkeeping
 end bookkeeping_capacity
 
+--- Return the number of currently allocated slots.
 public live: (state: provider) -> (count: usize) =
     count = state.live_count
 end live
 
+--- Return the number of successful allocations, including zero-byte
+--- allocations.
 public allocation_count: (state: provider) -> (count: usize) =
     count = state.allocations
 end allocation_count
 
+--- Return the number of successful slot reclamations.
 public free_count: (state: provider) -> (count: usize) =
     count = state.frees
 end free_count
 
+--- Return frees rejected for an invalid address, extent or already-free slot.
+--- A rejected free does not reclaim a slot.
 public rejected_free_count: (state: provider) -> (count: usize) =
     count = state.rejected_frees
 end rejected_free_count

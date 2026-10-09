@@ -65,6 +65,7 @@ REGISTERS = "compiler/tests/registers.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/documents.md",
+                     "docs/library.md",
                      "docs/environments.md",
                      "docs/diagnostics.md",
                      "docs/format.md",
@@ -7228,6 +7229,20 @@ def check_macos_environment(full_run):
     return out
 
 
+def check_library_documentation(full_run):
+    """Keep source docs and module overviews complete before rendering."""
+    if not full_run:
+        return []
+    from pathlib import Path
+    from docs.site import library
+    try:
+        modules, _ = library.collect(Path(ROOT))
+        library.overviews(Path(ROOT), modules)
+    except (OSError, ValueError) as error:
+        return [("docs/library.md", 1, str(error))]
+    return []
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -7333,6 +7348,7 @@ def main(argv):
     extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
     extra += check_running_examples(full_run)
+    extra += check_library_documentation(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)

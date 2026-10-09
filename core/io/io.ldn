@@ -3,66 +3,110 @@
 
 import core/text
 
+--- The requested file or path could not be found by the provider.
 public not_found: atom
+--- The provider refused access to the requested file.
 public no_access: atom
+--- An I/O operation failed. Provider-specific diagnostic detail, if offered,
+--- must be read from that provider.
 public io_failed: atom
+--- The argument index does not identify an available argument.
 public no_argument: atom
+--- The caller's scratch buffer cannot hold all argument bytes.
 public argument_too_long: atom
+--- The path has no bytes before its terminator.
 public empty_path: atom
+--- The supplied path bytes contain an embedded NUL.
 public path_contains_nul: atom
+--- The scratch buffer cannot hold the path and its terminating NUL.
 public path_too_long: atom
 
 file_value: type = distinct i32
 
+--- Provider-defined file identifier. Use a handle only with the provider that
+--- created it and obey that provider's close rules.
 public file: type = file_value
 
+--- A borrowed pointer and byte length for one process argument. The provider
+--- owns its lifetime; use `copy_argument` for a checked copy into caller
+--- storage.
 public argument: type = struct
     data: ptr u8
     length: usize
 end argument
 
---  The capability is four narrow concepts over one provider type, so a
---  provider supplies only what it has: a UART is a writer, a read-only
---  image is a reader; system and memory providers also supply files and
---  process entries. A consumer names the narrowest concept it uses; diagnostics
---  stream through any io.writer.  `world` composes all four for roots that
---  have everything.  An erased `any io.world` dispatches every entry, but
---  it is not an `any io.writer`: build that from the same provider pointer
---  where a writer is wanted [D268].
+--- Output capability with complete and partial writes. `write` completes all
+--- bytes or fails; failure may follow partial output. `write_some` reports
+--- positive progress for nonempty input, zero for empty input, and no
+--- progress on failure.
+---
+--- The capability is four narrow concepts over one provider type, so a
+--- provider supplies only what it has: a UART is a writer, a read-only
+--- image is a reader; system and memory providers also supply files and
+--- process entries. A consumer names the narrowest concept it uses; diagnostics
+--- stream through any io.writer.  `world` composes all four for roots that
+--- have everything.  An erased `any io.world` dispatches every entry, but
+--- it is not an `any io.writer`: build that from the same provider pointer
+--- where a writer is wanted [D268].
 public writer: type = concept (provider: type)
+    --- Write the entire byte slice or fail. Failure may follow partial
+    --- output; do not blindly retry the whole slice.
     write: (self: ptr mut provider, opened: file, bytes: []u8)
            -> none ! io_failed
-    --  One attempt returns its positive progress; empty input returns zero.
-    --  A failed nonempty attempt transfers no bytes, so a caller can retry
-    --  its uncommitted suffix.
+    --- Attempt one transfer. Nonempty success returns positive progress,
+    --- empty success returns zero, and failure transfers no bytes.
     write_some: (self: ptr mut provider, opened: file, bytes: []u8)
                 -> (count: usize) ! io_failed
 end writer
 
+--- Input capability. `read` fills at most the supplied slice and returns its
+--- byte count; zero denotes end of input. The caller retains the destination
+--- storage.
 public reader: type = concept (provider: type)
+    --- Read at most the destination length and return progress; zero is end
+    --- of input.
     read: (self: ptr mut provider, opened: file, into: []mut u8)
           -> (count: usize) ! io_failed
 end reader
 
+--- File lifecycle and identity capability. Path pointers must be readable
+--- through a terminating NUL. A successful open returns a provider-specific
+--- handle; close consumes the handle even when reporting failure.
 public files: type = concept (provider: type)
+    --- Open a NUL-terminated path for reading; return a handle owned by this
+    --- provider.
     open_read: (self: ptr mut provider, path: ptr u8)
                -> (opened: file) ! not_found | no_access | io_failed
+    --- Open a NUL-terminated path for writing; creation and truncation follow
+    --- the provider contract.
     open_write: (self: ptr mut provider, path: ptr u8)
                 -> (opened: file) ! not_found | no_access | io_failed
+    --- Compare file identity for two NUL-terminated paths.
     same_file: (self: ptr mut provider, left: ptr u8, right: ptr u8)
                -> (same: bool) ! io_failed
+    --- Consume a file handle, including when closure reports a failure.
     close: (self: ptr mut provider, sink opened: file)
            -> none ! io_failed
 end files
 
+--- Standard streams and argument access. Returned argument storage belongs to
+--- the provider; stream identifiers have provider-specific lifetime and
+--- closing rules.
 public process: type = concept (provider: type)
+    --- Return the standard-output handle.
     out: (self: ptr provider) -> (stream: file)
+    --- Return the standard-error handle.
     err: (self: ptr provider) -> (stream: file)
+    --- Return the count of available arguments.
     argument_count: (self: ptr provider) -> (count: usize)
+    --- Lend an argument by index; the provider retains its backing. Report
+    --- no_argument when out of range.
     argument: (self: ptr provider, index: usize)
               -> (value: argument from self) ! no_argument
 end process
 
+--- Composition of reader, writer, files and process over one provider type.
+--- Consumers should request the narrowest capability they use.
 public world: type = concept (provider: type) is reader, writer, files, process
 end world
 
@@ -72,8 +116,13 @@ end world
 lent: type = struct
     source: ptr any world
 end lent
+--- Adapter retaining an erased world's reference and forwarding the two
+--- writer entries.
 public lent_writer: type = lent
 
+--- Lend a writer adapter from an erased world. Keep the world and its
+--- underlying provider alive while the adapter is used; this does not
+--- transfer ownership.
 public writer_of: (erased: ptr any world) -> (adapter: lent from erased) =
     adapter = (source: erased)
 end writer_of
@@ -90,70 +139,94 @@ end lent_write_some
 
 lent is writer (write: lent_write, write_some: lent_write_some)
 
+--- Open a terminated path for reading through `files` evidence. The caller
+--- must close a successful handle using the same provider.
 public open_read: (provider: type is files, inout state: provider,
                    path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_read(addr state, path)
 end open_read
 
+--- Open a terminated path for writing through `files` evidence. Creation and
+--- truncation behavior belongs to the provider; close a successful handle
+--- through that provider.
 public open_write: (provider: type is files, inout state: provider,
                     path: ptr u8)
                    -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_write(addr state, path)
 end open_write
 
+--- Ask whether two terminated paths name the same file. Delegates
+--- provider-specific identity rules and reports `io_failed` on failure.
 public same_file: (provider: type is files, inout state: provider,
                    left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io_failed =
     same = try provider.same_file(addr state, left, right)
 end same_file
 
+--- Close a provider handle. Treat it as consumed even if closing reports
+--- `io_failed`; do not retry a consumed handle.
 public close: (provider: type is files, inout state: provider,
                sink opened: file) -> none ! io_failed =
     try provider.close(addr state, opened)
 end close
 
+--- Read up to the destination length through `reader` evidence. Returns the
+--- number of bytes placed in the buffer, or zero at end of input.
 public read: (provider: type is reader, inout state: provider,
               opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
     count = try provider.read(addr state, opened, into)
 end read
 
+--- Write the complete byte slice through `writer` evidence. `io_failed` may
+--- follow partial output; callers must not assume retrying the whole buffer
+--- is safe.
 public write: (provider: type is writer, inout state: provider,
                opened: file, bytes: []u8) -> none ! io_failed =
     try provider.write(addr state, opened, bytes)
 end write
 
+--- Make one write attempt and return its progress. Nonempty success is
+--- positive; empty input returns zero; failure transfers no bytes.
 public write_some: (provider: type is writer, inout state: provider,
                     opened: file, bytes: []u8) -> (count: usize) ! io_failed =
     count = try provider.write_some(addr state, opened, bytes)
 end write_some
 
+--- Return the provider's standard-output identifier.
 public out: (provider: type is process, state: provider) -> (stream: file) =
     stream = provider.out(addr state)
 end out
 
+--- Return the provider's standard-error identifier.
 public err: (provider: type is process, state: provider) -> (stream: file) =
     stream = provider.err(addr state)
 end err
 
+--- Return the number of argument entries exposed by the provider.
 public argument_count: (provider: type is process, state: provider)
                        -> (count: usize) =
     count = provider.argument_count(addr state)
 end argument_count
 
+--- Lend the indexed process argument. Reports `no_argument` for an invalid
+--- index; the provider's argument backing must outlive its use.
 public argument_at: (provider: type is process, state: ptr provider,
                      index: usize)
                     -> (value: argument from state) ! no_argument =
     value = try provider.argument(state, index)
 end argument_at
 
---  An argument is a foreign-shaped pointer and length, not a slice.  Copy it
---  into genuine caller-owned initialized storage before passing its bytes to
---  ordinary slice APIs.  Exact capacity is sufficient and failure precedes
---  every write.  The caller keeps the source extent readable and disjoint
---  from scratch, with representable address arithmetic, for the duration of
---  the copy.
+--- Copy an argument into caller scratch and lend the written prefix. Reports
+--- `argument_too_long` before any write when capacity is insufficient.
+---
+--- An argument is a foreign-shaped pointer and length, not a slice.  Copy it
+--- into genuine caller-owned initialized storage before passing its bytes to
+--- ordinary slice APIs.  Exact capacity is sufficient and failure precedes
+--- every write.  The caller keeps the source extent readable and disjoint
+--- from scratch, with representable address arithmetic, for the duration of
+--- the copy.
 public copy_argument: (source: argument, scratch: []mut u8)
                       -> (bytes: []u8 from scratch) ! argument_too_long =
     fail argument_too_long when source.length > lenof scratch
@@ -166,11 +239,15 @@ public copy_argument: (source: argument, scratch: []mut u8)
     bytes = scratch[0..<source.length]
 end copy_argument
 
---  A files entry receives one already terminated pointer. Dynamic callers
---  make that precondition explicit with caller-owned scratch: empty input,
---  an embedded NUL, and insufficient terminator capacity are distinct and
---  checked in that order. No byte is copied before all checks pass. Source
---  and scratch may overlap; the copy preserves the original source bytes.
+--- Copy path bytes into scratch and add a NUL terminator. Rejects empty
+--- input, embedded NUL and insufficient space in that order before any write;
+--- overlapping input and scratch are supported.
+---
+--- A files entry receives one already terminated pointer. Dynamic callers
+--- make that precondition explicit with caller-owned scratch: empty input,
+--- an embedded NUL, and insufficient terminator capacity are distinct and
+--- checked in that order. No byte is copied before all checks pass. Source
+--- and scratch may overlap; the copy preserves the original source bytes.
 public terminate_path: (source: []u8, scratch: []mut u8)
                        -> (path: ptr u8 from scratch)
                        ! empty_path | path_contains_nul | path_too_long =
@@ -199,6 +276,8 @@ public terminate_path: (source: []u8, scratch: []mut u8)
     path = addr scratch[0]
 end terminate_path
 
+--- Terminate a byte path in caller scratch, then open it for reading.
+--- Path-validation failures occur before the provider is called.
 public open_read_bytes: (provider: type is files, inout state: provider,
                          path: []u8, scratch: []mut u8)
                         -> (opened: file)
@@ -208,6 +287,8 @@ public open_read_bytes: (provider: type is files, inout state: provider,
     opened = try open_read(state, terminated)
 end open_read_bytes
 
+--- Terminate a byte path in caller scratch, then open it for writing. Path
+--- validation and provider failures remain distinct.
 public open_write_bytes: (provider: type is files, inout state: provider,
                           path: []u8, scratch: []mut u8)
                          -> (opened: file)
@@ -217,9 +298,12 @@ public open_write_bytes: (provider: type is files, inout state: provider,
     opened = try open_write(state, terminated)
 end open_write_bytes
 
---  UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
---  to bytes does not allocate or invent a terminator; the same caller-owned
---  scratch and validation policy as the byte adapters applies.
+--- Open a UTF-8 path for reading using caller scratch for the terminator.
+--- Delegates to the byte-path adapter; UTF-8 does not excuse embedded NUL.
+---
+--- UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
+--- to bytes does not allocate or invent a terminator; the same caller-owned
+--- scratch and validation policy as the byte adapters applies.
 public open_read_text: (provider: type is files, inout state: provider,
                         path: utf8, scratch: []mut u8)
                        -> (opened: file)
@@ -229,6 +313,8 @@ public open_read_text: (provider: type is files, inout state: provider,
     opened = try open_read_bytes(state, raw, scratch)
 end open_read_text
 
+--- Open a UTF-8 path for writing using caller scratch for the terminator.
+--- Delegates to the byte-path adapter.
 public open_write_text: (provider: type is files, inout state: provider,
                          path: utf8, scratch: []mut u8)
                         -> (opened: file)

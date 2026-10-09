@@ -3,8 +3,8 @@ error[L0318]: this concrete type has no conformance to `equatable`
   |
 7 | tag is map.hashable (hash: key_hash)
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/map/map.ldn:12:48
+  --> ../../core/map/map.ldn:21:48
    |
-12 | public hashable: type = concept (key: type) is equatable
+21 | public hashable: type = concept (key: type) is equatable
    |                                                ^^^^^^^^^ the constraint declared here
   = note: [1290]: every constrained type actual must have one whole-program conformance

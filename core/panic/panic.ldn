@@ -1,7 +1,15 @@
---  Compiler-check reasons. The representation is the ordinary nonzero
---  atom carrier; callers compare identities, never assumed integer codes.
+--- A checked index or range is outside its valid extent.
+---
+--- Compiler-check reasons. The representation is the ordinary nonzero
+--- atom carrier; callers compare identities, never assumed integer codes.
 public out_of_range: atom
+--- A checked arithmetic operation cannot represent its result.
 public overflow: atom
+--- A checked conversion cannot represent the source value in its target type.
 public bad_conversion: atom
+--- Execution reached a path declared unreachable.
 public unreachable: atom
+--- The compiler's four panic atoms. A program may supply the specified
+--- nonreturning panic handler; these failures are not allocator error
+--- returns.
 public panic_kind: type = out_of_range | overflow | bad_conversion | unreachable

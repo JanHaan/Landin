@@ -5,6 +5,11 @@ module initialization. `spec.md` owns their language contracts, and the
 [freestanding library lane](../environments/cortex-m/README.md#freestanding-library-consumers)
 executes them on Cortex-M0.
 
+The [library reference](../docs/library.md) is generated from public signatures
+and attached `---` comments. Build it with `scripts/site.sh` and open
+`docs/site/site/library.html`; [the site guide](../docs/site/README.md) describes
+the documentation convention.
+
 ## Availability inventory
 
 The shared freestanding modules are `core/diag`, `core/failing`, `core/io`,

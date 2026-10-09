@@ -13,22 +13,43 @@ compiler.assert(compiler.c_sysv_lp64 or compiler.c_darwin_lp64
                 or compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d)
 
 fixed if compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d then
+    --- The selected ABI's plain C char: unsigned under standard AAPCS64 and
+    --- RISC-V LP64D, signed under SysV and Darwin LP64. A numeric byte, not a
+    --- Unicode scalar.
     public c_char: type = u8
 else
+    --- The selected ABI's plain C char: unsigned under standard AAPCS64 and
+    --- RISC-V LP64D, signed under SysV and Darwin LP64. A numeric byte, not a
+    --- Unicode scalar.
     public c_char: type = i8
 end if
+--- Alias for C signed char under the supported LP64 ABIs.
 public c_schar: type = i8
+--- Alias for C unsigned char under the supported LP64 ABIs.
 public c_uchar: type = u8
+--- Alias for C signed short under the supported LP64 ABIs.
 public c_short: type = i16
+--- Alias for C unsigned short under the supported LP64 ABIs.
 public c_ushort: type = u16
+--- Alias for C signed int under the supported LP64 ABIs.
 public c_int: type = i32
+--- Alias for C unsigned int under the supported LP64 ABIs.
 public c_uint: type = u32
+--- Alias for C signed long under the supported LP64 ABIs.
 public c_long: type = i64
+--- Alias for C unsigned long under the supported LP64 ABIs.
 public c_ulong: type = u64
+--- Alias for C signed long long under the supported LP64 ABIs.
 public c_longlong: type = i64
+--- Alias for C unsigned long long under the supported LP64 ABIs.
 public c_ulonglong: type = u64
+--- Alias for C size_t under the supported LP64 ABIs.
 public c_size: type = usize
+--- Alias for C ptrdiff_t under the supported LP64 ABIs.
 public c_ptrdiff: type = isize
+--- Alias for C float under the supported LP64 ABIs.
 public c_float: type = f32
+--- Alias for C double under the supported LP64 ABIs.
 public c_double: type = f64
+--- Alias for C _Bool under the supported LP64 ABIs.
 public c_bool: type = bool

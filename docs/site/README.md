@@ -186,3 +186,41 @@ files it found in them.
 The site has no separate build system or asset pipeline. The shared scanner is
 a file in this repository rather than a package, and Pygments is a dependency
 of the lexer that wraps it rather than of anything the pages need.
+
+## Library API reference
+
+The full build also writes `library.html`, one page per library module and
+local source listings with line anchors. `library.py` discovers `.ldn` files
+under `core`, `hosted` and `platform`, extracts public signatures and reads
+the attached `---` comments using [2000]'s adjacency rule. Blank lines,
+ordinary comments and trailing comments do not attach. These are the same
+comments the language server shows in hover. The full `check.py` also
+requires a nonempty attached comment for every public declaration and a
+module overview with an existing example.
+
+Write a useful first paragraph explaining the operation, then document
+preconditions, returned views, allocation, failure and mutation behavior as
+applicable. Use ordinary Markdown paragraphs, lists and backticks. Keep
+comments directly above the declaration. Signatures come from source and
+are never retyped in a documentation file. Module introductions and links
+to executable fixtures live in [the library overview](../library.md);
+examples are included from their original files.
+
+The bounded source reader uses the shared scanner to ignore comments and
+strings, handles multiline routines, public structs and concepts, aliases,
+atoms and values, and preserves conditional declarations with their target
+conditions. It does not type-check, evaluate target conditions or infer
+private representations. An unsupported public form, missing public doc
+comment, missing overview or ambiguous item anchor stops generation.
+
+Every module page carries the complete search index inline, so browsing and
+search also work from disk without a server or network. Search matches API
+names, module paths, kinds and summaries. Source links point to generated
+listings from the same build, avoiding drift to another branch or revision.
+The machine-readable inventory is `library-index.json`. JavaScript-free
+readers can use the module and item indexes. The site navigation and sitemap
+include the reference, and the Pages workflow watches its library inputs.
+
+The reference is derived documentation; it does not change the specification
+or claim that every example executes on every target. Fixture metadata and
+the target-specific runtime lanes remain the evidence for those claims.

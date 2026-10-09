@@ -1,15 +1,25 @@
 import core/mem
 
+--- No live entry has the requested key.
 public missing: atom
+--- The insertion-order cursor has reached the end of the map.
 public end_of_entries: atom
 
+--- Equality evidence for keys. `eq` must define a consistent equivalence
+--- relation while the keys are stored.
 public equatable: type = concept (key: type)
+    --- Compare keys under a stable equivalence relation.
     eq: (left: key, right: key) -> (same: bool)
 end equatable
 
---  A hashable conformance composes equatable, but [1340] still requires a
---  concrete key type to declare both conformances explicitly.
+--- Hash evidence composing `equatable`. Equal keys must have equal hashes;
+--- key equality and hashes must remain stable while stored. Hashes are not
+--- cryptographic.
+---
+--- A hashable conformance composes equatable, but [1340] still requires a
+--- concrete key type to declare both conformances explicitly.
 public hashable: type = concept (key: type) is equatable
+    --- Return a stable hash; keys equal under eq must hash equally.
     hash: (value: key) -> (result: u64)
 end hashable
 
@@ -175,14 +185,18 @@ bucket: type = struct
     next_used: usize
 end bucket
 
---  This is deliberately a public composition, not an encapsulated object.
---  Callers can pass each storage to mem's public operations, can reach the
---  initialized K/V prefixes (including removed dense entries), and can copy
---  inferred whole bucket values despite bucket's private identity. They must
---  preserve equal capacities, a fully initialized bucket array, paired K/V
---  prefixes, one valid used/dead bucket per dense position, exact
---  count/tombstone totals, and a linked walk of exactly the used buckets
---  when composing below the map operations.
+--- Insertion-ordered hash map with public composition of slot metadata and
+--- dense key/value prefixes. Keep those fields consistent by using the module
+--- operations. Providers are supplied per operation.
+---
+--- This is deliberately a public composition, not an encapsulated object.
+--- Callers can pass each storage to mem's public operations, can reach the
+--- initialized K/V prefixes (including removed dense entries), and can copy
+--- inferred whole bucket values despite bucket's private identity. They must
+--- preserve equal capacities, a fully initialized bucket array, paired K/V
+--- prefixes, one valid used/dead bucket per dense position, exact
+--- count/tombstone totals, and a linked walk of exactly the used buckets
+--- when composing below the map operations.
 public map: type (key: type is hashable, item: type) = struct
     buckets: mem.storage(bucket)
     keys: mem.storage(key)
@@ -193,16 +207,21 @@ public map: type (key: type is hashable, item: type) = struct
     last_used: usize
 end map
 
---  Enumeration deliberately exposes ordinary public value shapes, matching
---  map's public-composition boundary above. A cursor is a manual
---  live-bucket position, not an ownership or snapshot token: it has no map
---  identity or generation check and is not transferable between maps. Any mutation,
---  including insert, remove, rehash, clear and release, invalidates an active
---  walk; callers must discard its cursor and restart.
+--- Position in an insertion-order entry walk. Start with `entries`; do not
+--- mutate the map during a walk.
+---
+--- Enumeration deliberately exposes ordinary public value shapes, matching
+--- map's public-composition boundary above. A cursor is a manual
+--- live-bucket position, not an ownership or snapshot token: it has no map
+--- identity or generation check and is not transferable between maps. Any mutation,
+--- including insert, remove, rehash, clear and release, invalidates an active
+--- walk; callers must discard its cursor and restart.
 public cursor: type = struct
     next_slot: usize
 end cursor
 
+--- A copied key/value pair returned by `next_entry`. References inside either
+--- value still depend on their original backing.
 public entry: type (key: type, item: type) = struct
     key: key
     item: item
@@ -212,6 +231,7 @@ empty_storage: (value: type) -> (result: mem.storage(value)) =
     result = mem.empty_storage(item: value)
 end empty_storage
 
+--- Create an empty map without allocating backing.
 public new: (key: type is hashable, item: type)
             -> (result: map(key, item)) =
     empty_buckets := empty_storage(value: bucket)
@@ -222,16 +242,21 @@ public new: (key: type is hashable, item: type)
               first_used: 0, last_used: 0)
 end new
 
+--- Return the number of live key/value entries.
 public length: (key: type is hashable, item: type,
                 value: map(key, item)) -> (count: usize) =
     count = value.count
 end length
 
+--- Return the current hash-slot capacity. Hash-slot occupancy can require
+--- rebuilding before every slot is used.
 public capacity: (key: type is hashable, item: type,
                   value: map(key, item)) -> (count: usize) =
     count = mem.capacity(value.buckets)
 end capacity
 
+--- Create a cursor positioned before the first entry. The walk follows
+--- current insertion order.
 public entries: () -> (position: cursor) =
     --  This marker means "start at the map's head" on the first call. It is
     --  distinct from every possible bucket capacity and from the exhausted
@@ -239,10 +264,13 @@ public entries: () -> (position: cursor) =
     position = (next_slot: 0 -% 1)
 end entries
 
---  Each call follows one live link. Across an unmodified walk, every live
---  entry is returned once in insertion order and the walk costs O(count),
---  including the exhausted call. The result retains `from value` because K
---  or V may hold references into the map's initialized storage.
+--- Copy the next live key/value pair and advance the cursor. Reports
+--- `end_of_entries` at the end; keep the map unchanged during the walk.
+---
+--- Each call follows one live link. Across an unmodified walk, every live
+--- entry is returned once in insertion order and the walk costs O(count),
+--- including the exhausted call. The result retains `from value` because K
+--- or V may hold references into the map's initialized storage.
 public next_entry: (key: type is hashable, item: type,
                     value: map(key, item), inout position: cursor)
                    -> (result: entry(key, item) from value) ! end_of_entries =
@@ -678,6 +706,9 @@ rehash: (key: type is hashable, item: type,
     value.last_used = new_last
 end rehash
 
+--- Insert a new key/value pair or replace the value of an equal key. New keys
+--- append in insertion order; replacement keeps its position. Allocation
+--- failure preserves the previous map. Growth can invalidate views.
 public insert: (key: type is hashable, item: type,
                 provider: type is mem.allocator,
                 inout value: map(key, item), inout state: provider,
@@ -747,6 +778,8 @@ locate: (key: type is hashable, item: type,
     fail missing
 end locate
 
+--- Copy the value associated with a key. Reports `missing` if absent;
+--- references inside the copy retain their origin.
 public get: (key: type is hashable, item: type,
              value: map(key, item), wanted: key)
             -> (result: item from value) ! missing =
@@ -757,9 +790,12 @@ public get: (key: type is hashable, item: type,
     end
 end get
 
---  A writable slot for the present key's item, for in-place update. While
---  the result lives the map binding may not be passed inout or sink
---  [0800]; let it end before the next insert, remove or release.
+--- Lend a writable pointer to an existing value. Reports `missing` if absent.
+--- End the pointer before mutating the map's structure or releasing backing.
+---
+--- A writable slot for the present key's item, for in-place update. While
+--- the result lives the map binding may not be passed inout or sink
+--- [0800]; let it end before the next insert, remove or release.
 public at: (key: type is hashable, item: type,
             inout value: map(key, item), wanted: key)
            -> (slot: ptr mut item from value) ! missing =
@@ -769,6 +805,7 @@ public at: (key: type is hashable, item: type,
     slot = addr view[found.dense]
 end at
 
+--- Return whether a live entry has the requested key, without allocating.
 public contains: (key: type is hashable, item: type,
                   value: map(key, item), wanted: key) -> (yes: bool) =
     _ = locate(value, wanted) else (problem)
@@ -779,6 +816,9 @@ public contains: (key: type is hashable, item: type,
     yes = true
 end contains
 
+--- Remove a key/value entry without returning it. Reports `missing` if
+--- absent; preserves the relative order of remaining entries. End existing
+--- value pointers and cursors before mutation.
 public remove: (key: type is hashable, item: type,
                 inout value: map(key, item), wanted: key)
                -> none ! missing =
@@ -849,6 +889,9 @@ public remove: (key: type is hashable, item: type,
     fail missing
 end remove
 
+--- Discard all entries, free the map's backing through its original provider
+--- and reset it. Nested resources referred to by keys or values are not freed
+--- automatically.
 public release: (key: type is hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item),
@@ -859,9 +902,13 @@ public release: (key: type is hashable, item: type,
     value = new(key: key, item: item)
 end release
 
---  Forget every entry but keep the bucket capacity. Every bucket is
---  rewritten free and both dense prefixes are emptied; values in them are
---  discarded, and resources they refer to remain the caller's.
+--- Discard all entries and tombstones while retaining allocations. End
+--- existing pointers and walks first; referenced resources remain the
+--- caller's responsibility.
+---
+--- Forget every entry but keep the bucket capacity. Every bucket is
+--- rewritten free and both dense prefixes are emptied; values in them are
+--- discarded, and resources they refer to remain the caller's.
 public clear: (key: type is hashable, item: type,
                inout value: map(key, item)) -> none =
     slots: usize = capacity(value)
@@ -880,10 +927,16 @@ public clear: (key: type is hashable, item: type,
     value.last_used = slots
 end clear
 
---  Room for `want` entries without a growth allocation: the capacity is
---  doubled from eight until `want` sits below the crowding threshold, and
---  the map is rebuilt once at that size. A map already that large is left
---  alone, including its tombstones.
+--- Ensure capacity for at least `want` entries without adding any. Allocates
+--- replacement key, value and hash-slot storage before committing it. Any
+--- allocation failure frees the partial replacement and preserves all
+--- original entries and capacities. Success can invalidate pointers and
+--- cursors.
+---
+--- Room for `want` entries without a growth allocation: the capacity is
+--- doubled from eight until `want` sits below the crowding threshold, and
+--- the map is rebuilt once at that size. A map already that large is left
+--- alone, including its tombstones.
 public reserve: (key: type is hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item), inout state: provider,

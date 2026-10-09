@@ -32,13 +32,20 @@ system_value: type = struct
     failure_errno: i32
 end system_value
 
+--- Hosted implementation of all four I/O capabilities and `io.world`, backed
+--- by libc. File identifiers belong to this provider; borrowed arguments
+--- refer to process storage.
 public system: type = system_value
 
---  Zero means that the most recent open/read/write/close did not report a
---  failing libc call.  A nonzero value is the exact errno captured for the
---  terminal call before the provider made any other host call.  Retriable
---  EINTR attempts are internal and do not replace a previously reported
---  operation with a failure.
+--- Return errno captured for the terminal failing provider call. Read it
+--- immediately after failure; it is provider state, not a portable error
+--- category.
+---
+--- Zero means that the most recent open/read/write/close did not report a
+--- failing libc call.  A nonzero value is the exact errno captured for the
+--- terminal call before the provider made any other host call.  Retriable
+--- EINTR attempts are internal and do not replace a previously reported
+--- operation with a failure.
 public last_errno: (state: system) -> (number: i32) =
     number = state.failure_errno
 end last_errno
@@ -263,6 +270,9 @@ system is io.process
      argument_count: system_argument_count, argument: system_argument)
 system is io.world ()
 
+--- Create the hosted I/O provider and expose process arguments and standard
+--- streams. Regular open-write operations create or truncate files; close
+--- regular files explicitly.
 public host: () -> (state: system) =
     state = (arguments: _landin_host_argument_table(),
              argument_length: _landin_host_argument_count(),

@@ -2,33 +2,48 @@
 --  Restore it in lexical reverse order; masking does not stop DMA or faults.
 compiler.assert(compiler.arch == cortex_m0)
 
+--- Disable maskable interrupts and return the previous PRIMASK. Save the
+--- result and pass it to `restore_interrupts`, including on early returns.
+--- NMI and HardFault remain unmasked.
 public disable_interrupts: () -> (previous: u32) =
     previous = assembler.block("mrs {mask}, primask\ncpsid i",
                                out mask: u32 at general)
 end disable_interrupts
 
+--- Restore a saved PRIMASK value. Only bit zero is implemented; use the value
+--- returned by `disable_interrupts` to preserve nesting.
 public restore_interrupts: (previous: u32) -> none =
     assembler.block("msr primask, {mask}\nisb sy",
                     in mask: u32 at general = previous)
 end restore_interrupts
 
+--- Read the current PRIMASK interrupt mask.
 public interrupt_mask: () -> (current: u32) =
     current = assembler.block("mrs {mask}, primask", out mask: u32 at general)
 end interrupt_mask
 
---  Architectural completion before sleep does not acknowledge a device.
+--- Issue a completion barrier and wait for an interrupt. Wakeups can be
+--- spurious; recheck the condition after waking.
+---
+--- Architectural completion before sleep does not acknowledge a device.
 public wait_for_interrupt: () -> none =
     assembler.block("dsb sy\nwfi")
 end wait_for_interrupt
 
+--- Issue a device memory barrier (DMB) to order memory accesses. This is not
+--- a proof that a device operation completed.
 public device_barrier: () -> none =
     compiler.device_barrier()
 end device_barrier
 
+--- Issue a data synchronization barrier (DSB) to wait for preceding explicit
+--- memory accesses to complete.
 public completion_barrier: () -> none =
     compiler.completion_barrier()
 end completion_barrier
 
+--- Prevent compiler memory knowledge from moving across this point. This
+--- emits no device-completion protocol.
 public compiler_barrier: () -> none =
     compiler.compiler_barrier()
 end compiler_barrier

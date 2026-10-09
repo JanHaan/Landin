@@ -1,7 +1,7 @@
 error[L0317]: this conformance has the same whole-program key as another
-  --> ../../core/map/map.ldn:142:1
+  --> ../../core/map/map.ldn:152:1
     |
-142 | u32 is hashable (hash: hash_u32)
+152 | u32 is hashable (hash: hash_u32)
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/library-evidence-collision/main.ldn:10:1
    |

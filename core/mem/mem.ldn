@@ -2,14 +2,20 @@
 --  can hold an inferred raw(T), but only these operations can expose a value
 --  or change the initialized-prefix count.
 
---  The two atoms every core container fails with. An index past the
---  initialized prefix is out_of_bounds whether the container is raw
---  storage, a vector, a small vector or a bounded log; taking from a
---  container with nothing to take is empty. Key lookups keep their own
---  atoms, because a missing key is not a bad index.
+--- The index is outside the initialized prefix.
+---
+--- The two atoms every core container fails with. An index past the
+--- initialized prefix is out_of_bounds whether the container is raw
+--- storage, a vector, a small vector or a bounded log; taking from a
+--- container with nothing to take is empty. Key lookups keep their own
+--- atoms, because a missing key is not a bad index.
 public out_of_bounds: atom
+--- No initialized item or backing allocation is available for this operation.
 public empty: atom
+--- The target storage has no room for the requested initialized prefix.
 public raw_full: atom
+--- Disposal requires an empty prefix; zero-prefix draining also rejects
+--- nonzero-sized items.
 public raw_not_empty: atom
 
 no_storage: atom
@@ -21,51 +27,79 @@ raw: type (item: type) = struct
     prefix: []mut item
 end raw
 
---  The alias is the opaque name other core modules can put in fields and
---  signatures. It still normalizes to raw(item), whose private declaration
---  keeps the representation inaccessible outside this module.
+--- Opaque typed storage over caller-owned backing. Tracks capacity and an
+--- initialized prefix; it does not own an allocator or prove the backing
+--- lifetime.
+---
+--- The alias is the opaque name other core modules can put in fields and
+--- signatures. It still normalizes to raw(item), whose private declaration
+--- keeps the representation inaccessible outside this module.
 public storage: type (item: type) = raw(item)
+--- The provider cannot satisfy the size or alignment request, or its
+--- arithmetic cannot represent the extent.
 public out_of_memory: atom
 
+--- Explicit allocation capability. Free each successful block once through
+--- its original provider with its current byte extent. Keep provider state
+--- and backing alive until all uses end. Alignment zero or one means byte
+--- alignment; zero-byte requests follow the provider's documented policy.
 public allocator: type = concept (provider: type)
+    --- Allocate the requested byte extent or report out_of_memory. Return
+    --- backing valid until the matching free; honor the requested alignment.
     alloc: (inout state: provider, size: usize, alignment: usize)
            -> (block: ptr mut u8) ! out_of_memory
-    --  Return true only when the same block now owns the larger extent.
-    --  A refusal leaves both the block and provider state unchanged.
+    --- Extend this same block in place. Return false without changing the
+    --- block or provider state when extension is refused.
     grow: (inout state: provider, block: ptr mut u8,
            old_size: usize, new_size: usize, alignment: usize)
           -> (grown: bool)
+    --- Return a successful block with its current extent. The caller ends all
+    --- uses first and must use the original provider.
     free: (inout state: provider, block: ptr mut u8, size: usize) -> none
 end allocator
 
+--- Request a byte extent with the supplied alignment through the provider.
+--- Propagates `out_of_memory`; the caller owns the resulting allocation
+--- obligation.
 public allocate: (provider: type is allocator, inout state: provider,
                   size: usize, alignment: usize)
                  -> (block: ptr mut u8) ! out_of_memory =
     block = try provider.alloc(state, size, alignment)
 end allocate
 
+--- Return a block to its provider using the allocation's current extent. The
+--- caller must end all uses first; no item cleanup runs.
 public free: (provider: type is allocator, inout state: provider,
               block: ptr mut u8, size: usize) -> none =
     provider.free(state, block, size)
 end free
 
---  A descriptor without an allocation is not a zero-address allocation.
---  It owns no extent, admits no item and cannot yield a pointer on disposal.
+--- Create an empty descriptor without allocating backing.
+---
+--- A descriptor without an allocation is not a zero-address allocation.
+--- It owns no extent, admits no item and cannot yield a pointer on disposal.
 public empty_storage: (item: type) -> (storage: raw(item)) =
     prefix: []mut item = []
     storage = (base: no_storage, capacity_count: 0, prefix: prefix)
 end empty_storage
 
+--- Describe `slots` items over an existing byte range without allocating or
+--- initializing items. The caller supplies sufficient, correctly aligned
+--- backing and keeps it alive; the extent multiplication must be
+--- representable.
 public reserve: (item: type, base: ptr mut u8, slots: usize)
                 -> (storage: raw(item) from base) =
     prefix: []mut item = []
     storage = (base: base, capacity_count: slots, prefix: prefix)
 end reserve
 
---  The provider validates the physical extension before the private logical
---  capacity changes. In particular, a zero-byte allocation keeps its usual
---  one-allocation-per-reserve behavior. Callers supply the actual old and
---  requested byte extents after checking capacity arithmetic.
+--- Attempt to extend the same positive-byte allocation in place. Publishes
+--- the new capacity only on success; refusal leaves storage unchanged.
+---
+--- The provider validates the physical extension before the private logical
+--- capacity changes. In particular, a zero-byte allocation keeps its usual
+--- one-allocation-per-reserve behavior. Callers supply the actual old and
+--- requested byte extents after checking capacity arithmetic.
 public grow_storage: (item: type, provider: type is allocator,
                       inout storage: raw(item), inout state: provider,
                       old_size: usize, new_size: usize, slots: usize)
@@ -84,20 +118,26 @@ public grow_storage: (item: type, provider: type is allocator,
     end match
 end grow_storage
 
+--- Return the logical slot capacity, including slots for zero-sized items.
 public capacity: (item: type, storage: raw(item)) -> (count: usize) =
     count = storage.capacity_count
 end capacity
 
+--- Return the number of initialized items in the prefix.
 public initialized: (item: type, storage: raw(item)) -> (count: usize) =
     prefix := storage.prefix
     count = lenof prefix
 end initialized
 
+--- Lend a mutable slice of the initialized prefix. End uses of the view
+--- before invalidating or freeing its backing.
 public used: (item: type, storage: raw(item))
              -> (view: []mut item from storage) =
     view = storage.prefix
 end used
 
+--- Append a complete value into a spare slot and return its index. Reports
+--- `raw_full` without publishing a new prefix when no slot is available.
 public admit: (item: type, inout storage: raw(item), escaping value: item)
               -> (index: usize) ! raw_full =
     index = initialized(storage)
@@ -120,20 +160,27 @@ public admit: (item: type, inout storage: raw(item), escaping value: item)
     end if
 end admit
 
+--- Copy the item at `index`. Reports `out_of_bounds` before reading outside
+--- the initialized prefix; references inside the copy retain their origin.
 public get: (item: type, storage: raw(item), index: usize)
             -> (value: item from storage) ! out_of_bounds =
     fail out_of_bounds when index >= initialized(storage)
     value = storage.prefix[index]
 end get
 
+--- Overwrite an initialized item. Reports `out_of_bounds` before mutation;
+--- the caller handles resources held by the replaced value.
 public replace: (item: type, inout storage: raw(item), index: usize,
                  escaping value: item) -> none ! out_of_bounds =
     fail out_of_bounds when index >= initialized(storage)
     storage.prefix[index] = value
 end replace
 
---  Read a complete source value before entering the destination's narrow
---  unchecked append. The new prefix is published only after its typed store.
+--- Copy one initialized source item to the end of the target. Checks source
+--- index and target capacity before mutation; the source remains initialized.
+---
+--- Read a complete source value before entering the destination's narrow
+--- unchecked append. The new prefix is published only after its typed store.
 public transfer: (item: type, source: raw(item), index: usize,
                   inout target: raw(item))
                  -> (admitted: usize) ! out_of_bounds | raw_full =
@@ -163,11 +210,15 @@ public transfer: (item: type, source: raw(item), index: usize,
     end if
 end transfer
 
---  A zero-byte prefix has one logical item value repeated at the same
---  address. Establish the destination's own initialized witness with a
---  complete typed store before extending it to the requested count. The
---  source and destination counters and the destination allocation remain
---  checked, just as they are for individual transfers.
+--- Initialize a target prefix from a zero-sized source item. Requires
+--- zero-sized items, an empty target, sufficient capacity and a source prefix
+--- at least `count` long.
+---
+--- A zero-byte prefix has one logical item value repeated at the same
+--- address. Establish the destination's own initialized witness with a
+--- complete typed store before extending it to the requested count. The
+--- source and destination counters and the destination allocation remain
+--- checked, just as they are for individual transfers.
 public transfer_zero_prefix: (item: type, source: raw(item),
                               inout target: raw(item), count: usize)
                              -> none ! out_of_bounds | raw_full =
@@ -191,16 +242,22 @@ public transfer_zero_prefix: (item: type, source: raw(item),
     end unchecked
 end transfer_zero_prefix
 
---  With no payload bytes to destroy, shortening this witness discards all
---  logical items at once. Reject a nonzero-sized item before changing it.
+--- Discard a zero-sized initialized prefix in constant time. Reports
+--- `raw_not_empty` for nonzero-sized items before changing storage.
+---
+--- With no payload bytes to destroy, shortening this witness discards all
+--- logical items at once. Reject a nonzero-sized item before changing it.
 public drain_zero_prefix: (item: type, inout storage: raw(item))
                           -> none ! raw_not_empty =
     fail raw_not_empty when sizeof item <> 0
     storage.prefix = storage.prefix[0..<0]
 end drain_zero_prefix
 
---  Take the last initialized item back out of the prefix. This is the raw
---  pop; `release` is reserved for giving a container's storage back.
+--- Remove and return the last initialized item. Reports `empty` when the
+--- prefix is empty; backing and capacity remain available.
+---
+--- Take the last initialized item back out of the prefix. This is the raw
+--- pop; `release` is reserved for giving a container's storage back.
 public withdraw: (item: type, inout storage: raw(item))
                  -> (value: item from storage) ! empty =
     count: usize = initialized(storage)
@@ -210,13 +267,19 @@ public withdraw: (item: type, inout storage: raw(item))
     storage.prefix = storage.prefix[0..<tail]
 end withdraw
 
---  Forget the initialized prefix without changing the backing allocation.
---  Values in that prefix are discarded; callers remain responsible for any
---  resources those values refer to.
+--- Discard all initialized items while retaining backing and capacity.
+--- Resources referred to by those values remain the caller's responsibility.
+---
+--- Forget the initialized prefix without changing the backing allocation.
+--- Values in that prefix are discarded; callers remain responsible for any
+--- resources those values refer to.
 public clear: (item: type, inout storage: raw(item)) -> none =
     storage.prefix = storage.prefix[0..<0]
 end clear
 
+--- Detach backing from an empty descriptor and reset it. Reports
+--- `raw_not_empty` if items remain, or `empty` if no allocation exists. The
+--- returned pointer must still be freed through its provider.
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage)
                 ! raw_not_empty | empty =
@@ -276,23 +339,33 @@ arena_value: type = struct
     used: usize
 end arena_value
 
+--- Monotonic allocator over caller-owned bytes. Individual frees do not
+--- reclaim space; only the most recent allocation can grow in place.
+--- Zero-byte requests may consume alignment padding.
 public arena: type = arena_value
 
---  The independent allocator result may be retained after this call. Only
---  backing which the caller may itself retain can enter the checked arena.
+--- Create an arena over retainable backing without allocating. The range must
+--- stay valid for the arena and all allocations made through it.
+---
+--- The independent allocator result may be retained after this call. Only
+--- backing which the caller may itself retain can enter the checked arena.
 public arena_over: (escaping base: ptr mut u8, size: usize)
                    -> (state: arena from base) =
     state = (base: base, size: size, used: 0)
 end arena_over
 
---  Explicit lifetime opt-out for a local extent. The handle still keeps its
---  tracked origin, but allocations do not; users must end every allocation
---  before the backing ends, including allocations retained by helpers.
+--- Create an arena over local backing with an explicit lifetime opt-out. The
+--- caller must end every allocated view before that backing ends.
+---
+--- Explicit lifetime opt-out for a local extent. The handle still keeps its
+--- tracked origin, but allocations do not; users must end every allocation
+--- before the backing ends, including allocations retained by helpers.
 public arena_over_unchecked: (base: ptr mut u8, size: usize)
                              -> (state: arena from base) =
     state = (base: base, size: size, used: 0)
 end arena_over_unchecked
 
+--- Return consumed arena bytes, including alignment padding.
 public arena_used: (state: arena) -> (count: usize) =
     count = state.used
 end arena_used
@@ -344,8 +417,13 @@ failing_value: type = struct
     frees: usize
 end failing_value
 
+--- Monotonic arena with a deterministic successful-allocation budget. It
+--- never grows blocks in place; frees are counted without reclaiming bytes.
 public failing: type = failing_value
 
+--- Create a bounded failing arena over retainable backing. Each successful
+--- allocation consumes one permit; exhausted budget or backing reports
+--- `out_of_memory`.
 public failing_over: (escaping base: ptr mut u8, size: usize,
                       successful_allocations: usize)
                      -> (state: failing from base) =
@@ -353,6 +431,8 @@ public failing_over: (escaping base: ptr mut u8, size: usize,
              remaining: successful_allocations, allocations: 0, frees: 0)
 end failing_over
 
+--- Create a failing arena with the local-backing lifetime opt-out. The caller
+--- must end every allocation before the supplied range ends.
 public failing_over_unchecked: (base: ptr mut u8, size: usize,
                                 successful_allocations: usize)
                                -> (state: failing from base) =
@@ -360,18 +440,22 @@ public failing_over_unchecked: (base: ptr mut u8, size: usize,
              remaining: successful_allocations, allocations: 0, frees: 0)
 end failing_over_unchecked
 
+--- Return consumed backing bytes, including alignment padding.
 public failing_used: (state: failing) -> (count: usize) =
     count = state.used
 end failing_used
 
+--- Return the number of further successful allocations permitted.
 public failing_remaining: (state: failing) -> (count: usize) =
     count = state.remaining
 end failing_remaining
 
+--- Return the number of successful allocations so far.
 public failing_allocations: (state: failing) -> (count: usize) =
     count = state.allocations
 end failing_allocations
 
+--- Return the number of free calls; these calls do not reclaim arena space.
 public failing_frees: (state: failing) -> (count: usize) =
     count = state.frees
 end failing_frees

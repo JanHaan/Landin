@@ -12,59 +12,87 @@ position_value: type = struct
     offset: usize
 end position_value
 
+--- Opaque byte offset for scanning. It does not retain or validate a source;
+--- when used to index UTF-8 it must identify a codepoint boundary.
 public position: type = position_value
+--- A byte read was requested at or beyond the end of its source.
 public past_end: atom
+--- The supplied bytes are not well-formed UTF-8.
 public invalid_text: atom
+--- The text is empty or contains a non-decimal digit where an unsigned
+--- integer is required.
 public invalid_number: atom
+--- The parsed unsigned decimal value exceeds `u32`.
 public number_overflow: atom
+--- The destination does not have room for the complete requested output.
 public no_space: atom
 
 byte_view: type = []u8
 
+--- The zero-offset position sentinel. It has the same offset as `first`; it
+--- is not a separate invalid-position tag.
 public nowhere: position = (offset: 0)
 
+--- Return a cursor at byte offset zero, including for an empty source.
 public first: (source: []u8) -> (result: position) =
     _ = source
     result = (offset: 0)
 end first
 
+--- Return whether the byte offset is at or beyond the source length.
 public at_end: (source: []u8, cursor: position) -> (yes: bool) =
     yes = cursor.offset >= lenof source
 end at_end
 
+--- Return the byte offset stored in a position.
 public ordinal: (cursor: position) -> (offset: usize) =
     offset = cursor.offset
 end ordinal
 
---  Copy a position out of aggregate storage without borrowing that storage.
---  This matters to scanners that retain the token start while advancing the
---  cursor field from which it was read.
+--- Copy a cursor value without retaining the aggregate from which it was
+--- read.
+---
+--- Copy a position out of aggregate storage without borrowing that storage.
+--- This matters to scanners that retain the token start while advancing the
+--- cursor field from which it was read.
 public copied: (cursor: position) -> (result: position) =
     result = (offset: cursor.offset)
 end copied
 
---  Reify an ordinal as an opaque position for byte-oriented scanners.  The
---  source argument makes the intended coordinate space explicit even though
---  The compact representation stores only the offset.
+--- Construct a cursor with the given byte offset. Does not check bounds or
+--- UTF-8 boundaries; later operations enforce their own requirements.
+---
+--- Reify an ordinal as an opaque position for byte-oriented scanners.  The
+--- source argument makes the intended coordinate space explicit even though
+--- The compact representation stores only the offset.
 public at: (source: []u8, offset: usize) -> (result: position) =
     _ = source
     result = (offset: offset)
 end at
 
+--- Return a cursor one byte later. This is byte traversal, not Unicode-scalar
+--- traversal; offset overflow follows ordinary checked arithmetic.
 public next: (cursor: position) -> (result: position) =
     result = (offset: cursor.offset + 1)
 end next
 
+--- Advance the cursor by one byte in place. Does not validate the source or
+--- skip a whole UTF-8 scalar.
 public advance: (inout cursor: position) -> none =
     inc cursor.offset
 end advance
 
+--- Read one source byte at the cursor. Reports `past_end` before reading
+--- outside the source.
 public byte: (source: []u8, cursor: position)
              -> (value: u8) ! past_end =
     fail past_end when at_end(source, cursor)
     value = source[cursor.offset]
 end byte
 
+--- Lend bytes between two cursor offsets, with an exclusive end. Requires an
+--- ordered interval within the source; invalid ranges follow the language's
+--- checked range behavior.
 public slice: (source: []u8, begins: position, ends: position)
               -> (result: []u8 from source) =
     result = source[begins.offset..<ends.offset]
@@ -144,29 +172,40 @@ valid_utf8: (source: []u8) -> (yes: bool) =
     yes = true
 end valid_utf8
 
---  The checked adapters report foreign or file-data defects before the
---  ordinary conversion establishes utf8's invariant.  Their result is a
---  source-derived view; no allocation, copy or canonical empty carrier is
---  introduced.
+--- Validate a byte slice and lend it as UTF-8 without allocation. Reports
+--- `invalid_text`; the caller keeps the bytes alive and valid while the view
+--- is used.
+---
+--- The checked adapters report foreign or file-data defects before the
+--- ordinary conversion establishes utf8's invariant.  Their result is a
+--- source-derived view; no allocation, copy or canonical empty carrier is
+--- introduced.
 public from_bytes: (source: []u8)
                    -> (result: utf8 from source) ! invalid_text =
     fail invalid_text when not valid_utf8(source)
     result = utf8(source)
 end from_bytes
 
+--- Validate a terminated C string and lend it as UTF-8. The pointer must
+--- remain readable through its terminator; invalid UTF-8 reports
+--- `invalid_text`.
 public from_c: (source: cstring)
                -> (result: utf8 from source) ! invalid_text =
     raw: []u8 = byte_view(source)
     result = try from_bytes(raw)
 end from_c
 
+--- Lend the encoded bytes of a UTF-8 view without copying or allocating.
 public bytes: (source: utf8) -> (result: []u8 from source) =
     result = byte_view(source)
 end bytes
 
---  Equality and containment are exact encoded-byte operations.  Valid UTF-8
---  has one shortest-form encoding per scalar sequence, so neither operation
---  needs normalization or locale authority.
+--- Compare UTF-8 values by their encoded bytes. Does not normalize Unicode
+--- spelling.
+---
+--- Equality and containment are exact encoded-byte operations.  Valid UTF-8
+--- has one shortest-form encoding per scalar sequence, so neither operation
+--- needs normalization or locale authority.
 public eq: (left: utf8, right: utf8) -> (same: bool) =
     left_bytes: []u8 = bytes(left)
     right_bytes: []u8 = bytes(right)
@@ -185,9 +224,12 @@ public eq: (left: utf8, right: utf8) -> (same: bool) =
     same = true
 end eq
 
---  Two-Way search uses a critical split of the sought bytes.  Its two
---  lexicographic passes and the search each take linear time; only scalar
---  counters are kept, so neither a table nor a caller allocator is needed.
+--- Test whether the sought UTF-8 byte sequence occurs in the source. Empty
+--- text matches; no normalization or allocation is performed.
+---
+--- Two-Way search uses a critical split of the sought bytes.  Its two
+--- lexicographic passes and the search each take linear time; only scalar
+--- counters are kept, so neither a table nor a caller allocator is needed.
 public contains: (source: utf8, sought: utf8) -> (yes: bool) =
     source_bytes: []u8 = bytes(source)
     sought_bytes: []u8 = bytes(sought)
@@ -295,6 +337,9 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
     yes = false
 end contains
 
+--- Parse nonempty ASCII decimal digits into `u32`. Rejects signs, whitespace
+--- and non-digits with `invalid_number`, and excessive values with
+--- `number_overflow`.
 public to_u32: (source: utf8)
                -> (result: u32) ! invalid_number | number_overflow =
     digits: []u8 = bytes(source)
@@ -313,9 +358,12 @@ public to_u32: (source: utf8)
     result = value
 end to_u32
 
---  Both writers preflight capacity before their first mutation.  A no_space
---  refusal therefore preserves every caller-owned byte and the written
---  count, including the multi-byte decimal operation.
+--- Append one byte at `used` and return the new used count. Checks capacity
+--- before writing and reports `no_space` without partial output.
+---
+--- Both writers preflight capacity before their first mutation.  A no_space
+--- refusal therefore preserves every caller-owned byte and the written
+--- count, including the multi-byte decimal operation.
 public write_byte: (inout into: []mut u8, used: usize, value: u8)
                    -> (next: usize) ! no_space =
     fail no_space when used >= lenof into
@@ -323,6 +371,9 @@ public write_byte: (inout into: []mut u8, used: usize, value: u8)
     next = used + 1
 end write_byte
 
+--- Append an unsigned decimal representation and return the new used count.
+--- Checks space for the whole number before writing; `no_space` leaves the
+--- buffer unchanged.
 public write_u32: (inout into: []mut u8, used: usize, value: u32)
                   -> (next: usize) ! no_space =
     fail no_space when used > lenof into
@@ -348,15 +399,20 @@ public write_u32: (inout into: []mut u8, used: usize, value: u32)
     next = used + digits
 end write_u32
 
+--- Lend the byte prefix of length `used`. Requires `used` within the source
+--- length; it does not validate UTF-8.
 public written: (source: []u8, used: usize)
                 -> (result: []u8 from source) ! no_space =
     fail no_space when used > lenof source
     result = source[0..<used]
 end written
 
---  utf8 is a map key and sortable as it stands: equality, hash and order
---  are over the encoded bytes, which valid UTF-8 makes unique per scalar
---  sequence. The hash is 64-bit FNV-1a, the same as core/map's for []u8.
+--- Hash UTF-8 encoded bytes consistently with `eq` and the byte-slice hash.
+--- No Unicode normalization or cryptographic guarantee is provided.
+---
+--- utf8 is a map key and sortable as it stands: equality, hash and order
+--- are over the encoded bytes, which valid UTF-8 makes unique per scalar
+--- sequence. The hash is 64-bit FNV-1a, the same as core/map's for []u8.
 public hash: (value: utf8) -> (result: u64) =
     raw: []u8 = bytes(value)
     mut folded: u64 = 14695981039346656037
@@ -368,7 +424,10 @@ public hash: (value: utf8) -> (result: u64) =
     result = folded
 end hash
 
---  Byte-wise lexicographic order, which for valid UTF-8 is scalar order.
+--- Compare encoded bytes lexicographically, with a shorter equal prefix
+--- sorting first. This is not locale-aware collation.
+---
+--- Byte-wise lexicographic order, which for valid UTF-8 is scalar order.
 public less: (left: utf8, right: utf8) -> (yes: bool) =
     left_bytes: []u8 = bytes(left)
     right_bytes: []u8 = bytes(right)
