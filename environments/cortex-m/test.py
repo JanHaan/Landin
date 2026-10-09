@@ -69,6 +69,28 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 source_line(run, 'library.ldn', 'selected statement')
 
+    def test_cpu_debug_session_tracks_documentation_edits(self):
+        from unittest.mock import patch
+        import source_debug
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = 'source/platform/cpu/cpu.ldn'
+            source = root / path
+            source.parent.mkdir(parents=True)
+            original = ('public disable_interrupts: () -> (previous: u32) =\n'
+                        r'    previous = assembler.block("mrs {mask}, primask\ncpsid i",'
+                        '\n        out mask: u32 at general)\nend disable_interrupts\n')
+            for comments in (0, 7):
+                source.write_text('--- Additional documentation.\n' * comments + original)
+                expected = 2 + comments
+                with patch.object(source_debug, 'checked'), \
+                     patch.object(source_debug, 'execute') as execute:
+                    source_debug.library(Run(root, root), root / 'core.elf', 'cpu')
+                commands = execute.call_args.args[2]
+                self.assertIn(f'break {path}:{expected}', commands)
+                self.assertIn(f'frame("disable_interrupts",{path!r},{expected})', commands)
+                self.assertIn(f'assert gdb.newest_frame().find_sal().line != {expected}', commands)
+
     def test_debug_selector_rejects_malformed_elf(self):
         import source_debug
         from cortex_debug import Image

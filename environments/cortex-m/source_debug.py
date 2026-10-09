@@ -134,12 +134,15 @@ def library(run, elf, kind):
     elif kind == 'cpu':
         # [1630]: `platform/cpu` on `general` operands.  The block has its own
         # line, PRIMASK changes across it, and its output is the next line's.
-        commands = ['break source/platform/cpu/cpu.ldn:6', 'continue', 'python',
-            'frame("disable_interrupts","source/platform/cpu/cpu.ldn",6)',
+        path = 'source/platform/cpu/cpu.ldn'
+        line = source_line(run, path,
+            r'previous = assembler.block("mrs {mask}, primask\ncpsid i",')
+        commands = [f'break {path}:{line}', 'continue', 'python',
+            f'frame("disable_interrupts",{path!r},{line})',
             'chain(["disable_interrupts","start","_landin_firmware_reset"])',
             'assert v("$primask") == 0', 'end', 'next', 'python',
             'frame("disable_interrupts","source/platform/cpu/cpu.ldn")',
-            'assert gdb.newest_frame().find_sal().line != 6',
+            f'assert gdb.newest_frame().find_sal().line != {line}',
             'assert v("$primask") == 1', 'end', 'bt',
             'delete breakpoints', 'break _landin_firmware_returned', 'continue',
             'python', 'assert v("*(unsigned*)&observed") == 0x670', 'end']
