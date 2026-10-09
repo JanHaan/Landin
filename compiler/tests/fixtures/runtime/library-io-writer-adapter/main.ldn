@@ -9,7 +9,7 @@ end device
 
 write: (self: ptr mut device, opened: io.file, bytes: []u8)
        -> none ! io.io_failed =
-    fail io.io_failed when opened <> io.file(1) or lenof bytes <> 1
+    fail io.io_failed when i32(opened) <> 1 or lenof bytes <> 1
     self.val.byte = bytes[0]
     inc self.val.calls
 end write
