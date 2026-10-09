@@ -2,6 +2,7 @@ class: negative
 summary: a slot lent by vec.at locks the vector against inout use until the slot's last use
 args: --root=../.. ../tests/fixtures/negative/library-at-live-inout
 status: 1
+expect: expected.txt
 codes: L0315
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 constructs: 0430, 0790, 0800, 1000

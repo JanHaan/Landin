@@ -6,12 +6,14 @@ import core/vec
 mut comparisons: usize = 0
 
 --  The vector sorts through the library's own i32 ordering. Comparison
---  counts are taken on a distinct wrapper with its own counting evidence.
-counted: type = distinct i32
+--  counts are taken on a wrapper struct with its own counting evidence.
+counted: type = struct
+    value: i32
+end counted
 
 less_counted: (left: counted, right: counted) -> (yes: bool) =
     inc comparisons
-    yes = i32(left) < i32(right)
+    yes = left.value < right.value
 end less_counted
 
 counted is sort.ordered (less: less_counted)
@@ -64,18 +66,18 @@ public main: () -> (code: i32) =
         lenof view == 21 and view[6] == 7 and view[7] == 7
           and view[20] == 20
     end
-    mut small: [5]counted = [counted(4), counted(1), counted(3), counted(1),
-                             counted(2)]
+    mut small: [5]counted = [(value: 4), (value: 1), (value: 3), (value: 1),
+                             (value: 2)]
     comparisons = 0
     sort.sort_selection(small[0..<lenof small])
-    selection_ok: bool = comparisons == 10 and i32(small[0]) == 1
-                         and i32(small[1]) == 1 and i32(small[2]) == 2
-                         and i32(small[3]) == 3 and i32(small[4]) == 4
+    selection_ok: bool = comparisons == 10 and small[0].value == 1
+                         and small[1].value == 1 and small[2].value == 2
+                         and small[3].value == 3 and small[4].value == 4
 
-    mut large: [256]counted
+    mut large: [256]counted = zeroed
     mut at: usize = 0
     while at < lenof large do
-        large[at] = counted(i32(lenof large - at))
+        large[at] = (value: i32(lenof large - at))
         inc at
     end while
     comparisons = 0
@@ -84,7 +86,7 @@ public main: () -> (code: i32) =
     at = 0
     mut large_sorted: bool = true
     while at < lenof large do
-        large_sorted = large_sorted and i32(large[at]) == i32(at + 1)
+        large_sorted = large_sorted and large[at].value == i32(at + 1)
         inc at
     end while
     after: usize = failing.attempts(state)

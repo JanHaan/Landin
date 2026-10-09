@@ -36,7 +36,7 @@ Every module spells the same operations the same way (D269):
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `small.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `small.get`, `map.get`, `tree.get` |
 | A writable slot for in-place update | `at` | `vec.at`, `small.at`, `map.at`; the binding is locked while the slot lives [0800] |
-| Count and room | `length`, `capacity` | every container |
+| Count and room | `length`, `capacity` | `vec`, `small`, `map` |
 | Initialized view | `used` | `mem.used`, `vec.used`, `small.used` |
 
 `core/mem` keeps `new`/`delete` for one allocated item and `new_bytes`/
@@ -53,9 +53,9 @@ is not a bad index.
 `core/io` is four narrow concepts over one provider type, `reader`, `writer`,
 `files` and `process`, with `world` their composition and `writer_of` lending
 a world's writer; a sink implements `writer`'s two entries and `core/diag`
-streams through `any io.writer` (D268). The library ships `equatable`,
-`hashable` and `ordered` for the integer scalars and `bool`, `[]u8` as a key,
-and `utf8` as a key and in order (D270); another reading of one of these goes
+streams through `any io.writer` (D268). The library ships `equatable` and
+`hashable` for the integer scalars, `bool` and `[]u8`, `ordered` for the
+integer scalars, and all three for `utf8` (D270); another reading goes
 on a `distinct` wrapper with its own evidence [1280].
 
 ## Constrained Cortex-M0 consumers

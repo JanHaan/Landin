@@ -1292,10 +1292,11 @@ with `new`, a view over caller bytes with `over`, every container's storage
 is given back with `release`, and the index and emptiness atoms are
 `core/mem`'s `out_of_bounds` and `empty` for every core container, while key
 lookups keep `missing` and `no_such_node`. The library ships the evidence
-the scalars were always going to need: `equatable`, `hashable` and `ordered`
-for the integer scalars and `bool`, `[]u8` as a key, and `utf8` as a key and
-in order; a program wanting another reading wraps the type in `distinct`
-[1280]. Every container keeps `get` as a copy and gains `at`, a writable
+the scalars were always going to need: `equatable` and `hashable` for the
+integer scalars, `bool` and `[]u8`, `ordered` for the integer scalars, and
+all three for `utf8`; a program wanting another reading wraps the type in
+`distinct` [1280]. The vector, small vector and map keep `get` as a copy and
+gain `at`, a writable
 slot under [0800]'s binding lock, with `contains`, `clear` and `reserve` on
 the map and `last` on the vector; the tree's node is private and gets none.
 

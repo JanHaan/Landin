@@ -1,3 +1,4 @@
+import core/failing
 import core/map
 import core/mem
 import core/small
@@ -10,9 +11,12 @@ exercise: () -> (ok: bool)
     mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
 
     mut numbers := vec.new(item: i32)
+    mut refused: bool = false
     _ = vec.last(numbers) else (problem)
         return when problem <> mem.empty
+        refused = true
     end
+    return when not refused
     try vec.push(numbers, state, 1)
     try vec.push(numbers, state, 2)
     second: ptr mut i32 = try vec.at(numbers, usize(1))
@@ -20,9 +24,12 @@ exercise: () -> (ok: bool)
     last: i32 = try vec.last(numbers)
     copied: i32 = try vec.get(numbers, usize(1))
     return when last <> 20 or copied <> 20
+    refused = false
     _ = vec.at(numbers, usize(2)) else (problem)
         return when problem <> mem.out_of_bounds
+        refused = true
     end
+    return when not refused
 
     mut few := small.new(item: i32, inline_slots: 2)
     try small.push(few, state, 5)
@@ -47,9 +54,12 @@ exercise: () -> (ok: bool)
     stored.val = 70
     updated: i32 = try map.get(table, u32(7))
     return when updated <> 70
+    refused = false
     _ = map.at(table, u32(8)) else (problem)
         return when problem <> map.missing
+        refused = true
     end
+    return when not refused
     map.clear(table)
     return when map.length(table) <> 0 or map.capacity(table) <> reserved
       or map.contains(table, u32(7))
@@ -59,6 +69,24 @@ exercise: () -> (ok: bool)
     return when again <> 3 or map.length(table) <> 2
     try map.reserve(table, state, usize(4))
     return when map.capacity(table) <> reserved
+
+    --  Each replacement-allocation failure preserves the old map and
+    --  frees the temporary extents. No successful reserve is assumed.
+    mut allowed: usize = 0
+    while allowed < 3 do
+        mut counted := failing.new(addr state, allowed)
+        refused = false
+        map.reserve(table, counted, usize(20)) else (problem)
+            return when problem <> mem.out_of_memory
+            refused = true
+        end
+        return when not refused or map.capacity(table) <> reserved
+          or map.length(table) <> 2 or failing.live(counted) <> 0
+          or failing.frees(counted) <> allowed
+        old: i32 = try map.get(table, u32(8))
+        return when old <> 3
+        inc allowed
+    end while
 
     map.release(table, state)
     small.release(few, state)

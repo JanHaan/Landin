@@ -17262,7 +17262,8 @@ scalars; `core/text` declares `utf8` as `equatable`, `hashable` and `ordered`,
 importing both. Scalar hashes are the two's-complement bits widened, computed
 without a narrowing conversion; byte slices and `utf8` use 64-bit FNV-1a, and
 `utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
-excluded: NaN and signed zero break the laws `hashable` states. There is one
+excluded: IEEE equality is not reflexive for NaN, and hashing raw bits would
+give different hashes to equal signed zeros. There is one
 register and no override (D2), so a program that re-declares `u32 is
 map.hashable` is refused as a collision, and another reading of a shipped key
 goes on a `distinct` wrapper with its own evidence, which is what the
@@ -17284,7 +17285,8 @@ that the source binding is locked against `inout` and `sink` while the
 reference lives. The containers returned items by copy only, so a large item
 was copied to be read and a stored item could not be updated in place.
 
-**Chosen:** every container keeps `get` as a copy and gains `at`, which takes
+**Chosen:** the vector, small vector and map keep `get` as a copy and gain
+`at`, which takes
 the container `inout` and returns `ptr mut item from value`, failing with the
 same atom as `get`: `vec.at`, `small.at` and `map.at`; `core/tree`'s node is
 private, so a slot into it would be useless outside the module. The slot is
