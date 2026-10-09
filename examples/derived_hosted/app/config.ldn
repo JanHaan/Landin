@@ -33,7 +33,7 @@ public copy_arguments: (provider: type is mem.allocator, inout allocator: provid
                         world: any io.world)
                        -> (arguments: vec.list([]u8))
                        ! bad_argument | mem.out_of_memory =
-    arguments = vec.new_list(item: []u8)
+    arguments = vec.new(item: []u8)
     count: usize = world.argument_count()
     for at in usize(0)..<count do
         arg: io.argument = world.argument(at) else (problem)
@@ -98,7 +98,7 @@ public prepare_logged: (provider: type is mem.allocator, inout allocator: provid
                        ! bad_argument | mem.out_of_memory | io.io_failed =
     arguments := try copy_arguments(allocator, world)
     args := vec.used(arguments)
-    mut chain := vec.new_list(item: any filter)
+    mut chain := vec.new(item: any filter)
     mut leading_level: u8 = 0
     mut only_levels: bool = true
     mut input: []u8 = ""
@@ -223,7 +223,9 @@ public build: (provider: type is mem.allocator, inout allocator: provider,
               ! bad_argument | mem.out_of_memory
               | io.not_found | io.no_access | io.io_failed =
     stream: io.file = world.err()
-    mut logger := diag.to(addr world, addr stream)
+    mut lent := io.writer_of(addr world)
+    writer: any io.writer = any(addr lent)
+    mut logger := diag.to(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     value = try build_logged(allocator, world, log)
 end build

@@ -18,6 +18,147 @@ end hashable
 --  while a key is stored, including across mutation of anything a
 --  pointer/reference key reaches.
 
+--  Keys the library supplies evidence for: the integer scalars, bool and
+--  byte slices here, and utf8 in core/text. There is one register and no
+--  override [1280]; a program wanting another equality or hash for one of
+--  these wraps the key in a distinct type and declares evidence for that.
+--  Signed hashes are the two's-complement bits widened, computed without
+--  a narrowing conversion; byte slices use 64-bit FNV-1a.
+eq_u8: (left: u8, right: u8) -> (same: bool) =
+    same = left == right
+end eq_u8
+hash_u8: (value: u8) -> (result: u64) =
+    result = u64(value)
+end hash_u8
+eq_u16: (left: u16, right: u16) -> (same: bool) =
+    same = left == right
+end eq_u16
+hash_u16: (value: u16) -> (result: u64) =
+    result = u64(value)
+end hash_u16
+eq_u32: (left: u32, right: u32) -> (same: bool) =
+    same = left == right
+end eq_u32
+hash_u32: (value: u32) -> (result: u64) =
+    result = u64(value)
+end hash_u32
+eq_u64: (left: u64, right: u64) -> (same: bool) =
+    same = left == right
+end eq_u64
+hash_u64: (value: u64) -> (result: u64) =
+    result = u64(value)
+end hash_u64
+eq_usize: (left: usize, right: usize) -> (same: bool) =
+    same = left == right
+end eq_usize
+hash_usize: (value: usize) -> (result: u64) =
+    result = u64(value)
+end hash_usize
+eq_i8: (left: i8, right: i8) -> (same: bool) =
+    same = left == right
+end eq_i8
+hash_i8: (value: i8) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i8
+eq_i16: (left: i16, right: i16) -> (same: bool) =
+    same = left == right
+end eq_i16
+hash_i16: (value: i16) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i16
+eq_i32: (left: i32, right: i32) -> (same: bool) =
+    same = left == right
+end eq_i32
+hash_i32: (value: i32) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i32
+eq_i64: (left: i64, right: i64) -> (same: bool) =
+    same = left == right
+end eq_i64
+hash_i64: (value: i64) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i64
+eq_isize: (left: isize, right: isize) -> (same: bool) =
+    same = left == right
+end eq_isize
+hash_isize: (value: isize) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_isize
+eq_bool: (left: bool, right: bool) -> (same: bool) =
+    same = left == right
+end eq_bool
+hash_bool: (value: bool) -> (result: u64) =
+    result = if value then 1 else 0 end if
+end hash_bool
+eq_bytes: (left: []u8, right: []u8) -> (same: bool) =
+    if lenof left <> lenof right then
+        same = false
+        return
+    end if
+    mut index: usize = 0
+    while index < lenof left do
+        if left[index] <> right[index] then
+            same = false
+            return
+        end if
+        inc index
+    end while
+    same = true
+end eq_bytes
+hash_bytes: (value: []u8) -> (result: u64) =
+    mut hash: u64 = 14695981039346656037
+    mut index: usize = 0
+    while index < lenof value do
+        hash = (hash ^ u64(value[index])) *% 1099511628211
+        inc index
+    end while
+    result = hash
+end hash_bytes
+u8 is equatable (eq: eq_u8)
+u8 is hashable (hash: hash_u8)
+u16 is equatable (eq: eq_u16)
+u16 is hashable (hash: hash_u16)
+u32 is equatable (eq: eq_u32)
+u32 is hashable (hash: hash_u32)
+u64 is equatable (eq: eq_u64)
+u64 is hashable (hash: hash_u64)
+usize is equatable (eq: eq_usize)
+usize is hashable (hash: hash_usize)
+i8 is equatable (eq: eq_i8)
+i8 is hashable (hash: hash_i8)
+i16 is equatable (eq: eq_i16)
+i16 is hashable (hash: hash_i16)
+i32 is equatable (eq: eq_i32)
+i32 is hashable (hash: hash_i32)
+i64 is equatable (eq: eq_i64)
+i64 is hashable (hash: hash_i64)
+isize is equatable (eq: eq_isize)
+isize is hashable (hash: hash_isize)
+bool is equatable (eq: eq_bool)
+bool is hashable (hash: hash_bool)
+[]u8 is equatable (eq: eq_bytes)
+[]u8 is hashable (hash: hash_bytes)
+
 slot_free: u8 = 0
 slot_used: u8 = 1
 slot_dead: u8 = 2
@@ -56,7 +197,7 @@ end map
 --  map's public-composition boundary above. A cursor is a manual
 --  live-bucket position, not an ownership or snapshot token: it has no map
 --  identity or generation check and is not transferable between maps. Any mutation,
---  including insert, remove, rehash and release_map, invalidates an active
+--  including insert, remove, rehash, clear and release, invalidates an active
 --  walk; callers must discard its cursor and restart.
 public cursor: type = struct
     next_slot: usize
@@ -71,15 +212,15 @@ empty_storage: (value: type) -> (result: mem.storage(value)) =
     result = mem.empty_storage(item: value)
 end empty_storage
 
-public new_map: (key: type is hashable, item: type)
-                -> (result: map(key, item)) =
+public new: (key: type is hashable, item: type)
+            -> (result: map(key, item)) =
     empty_buckets := empty_storage(value: bucket)
     empty_keys := empty_storage(value: key)
     empty_values := empty_storage(value: item)
     result = (buckets: empty_buckets, keys: empty_keys,
               values: empty_values, count: 0, tombstones: 0,
               first_used: 0, last_used: 0)
-end new_map
+end new
 
 public length: (key: type is hashable, item: type,
                 value: map(key, item)) -> (count: usize) =
@@ -144,7 +285,7 @@ end byte_extent
 
 drain: (value: type, inout storage: mem.storage(value)) -> none =
     while mem.initialized(storage) > 0 do
-        discarded: value = mem.release(storage) else (problem)
+        discarded: value = mem.withdraw(storage) else (problem)
             _ = problem
             return
         end
@@ -218,11 +359,15 @@ crowded: (key: type is hashable, item: type,
         return
     end if
     occupied: usize = value.count + value.tombstones
+    yes = occupied >= crowding_threshold(slots)
+end crowded
+
+--  Three quarters of the slots, computed without overflow.
+crowding_threshold: (slots: usize) -> (threshold: usize) =
     quarter: usize = slots / 4
     remainder: usize = slots % 4
-    threshold: usize = quarter * 3 + (remainder * 3) / 4
-    yes = occupied >= threshold
-end crowded
+    threshold = quarter * 3 + (remainder * 3) / 4
+end crowding_threshold
 
 install_at: (key: type is hashable, item: type,
              inout value: map(key, item), at: usize, was_dead: bool,
@@ -254,7 +399,7 @@ install_at: (key: type is hashable, item: type,
         value_dense: usize = (mem.admit(value.values, added_value)
             else (problem)
             _ = problem
-            discarded: key = (mem.release(value.keys) else (release_problem)
+            discarded: key = (mem.withdraw(value.keys) else (release_problem)
                 _ = release_problem
                 placed = false
                 return
@@ -565,16 +710,22 @@ public insert: (key: type is hashable, item: type,
     fail mem.out_of_memory when not inserted
 end insert
 
-public get: (key: type is hashable, item: type,
-             value: map(key, item), wanted: key)
-            -> (result: item from value) ! missing =
+--  Where a present key lives: its bucket and its dense position.
+location: type = struct
+    slot: usize
+    dense: usize
+end location
+
+locate: (key: type is hashable, item: type,
+         value: map(key, item), wanted: key)
+        -> (found: location) ! missing =
     fail missing when value.count == 0
     slots: usize = capacity(value)
     fail missing when slots == 0
-    mut at: usize = index_of(wanted, slots)
+    mut slot: usize = index_of(wanted, slots)
     mut probed: usize = 0
     while probed < slots do
-        record: bucket = (mem.get(value.buckets, at) else (problem)
+        record: bucket = (mem.get(value.buckets, slot) else (problem)
             _ = problem
             fail missing
         end)
@@ -586,19 +737,47 @@ public get: (key: type is hashable, item: type,
                 fail missing
             end)
             if key.eq(existing, wanted) then
-                result = (mem.get(value.values, record.dense_index)
-                    else (problem)
-                    _ = problem
-                    fail missing
-                end)
+                found = (slot: slot, dense: record.dense_index)
                 return
             end if
         end if
-        at = next_index(at, slots)
+        slot = next_index(slot, slots)
         inc probed
     end while
     fail missing
+end locate
+
+public get: (key: type is hashable, item: type,
+             value: map(key, item), wanted: key)
+            -> (result: item from value) ! missing =
+    found: location = try locate(value, wanted)
+    result = mem.get(value.values, found.dense) else (problem)
+        _ = problem
+        fail missing
+    end
 end get
+
+--  A writable slot for the present key's item, for in-place update. While
+--  the result lives the map binding may not be passed inout or sink
+--  [0800]; let it end before the next insert, remove or release.
+public at: (key: type is hashable, item: type,
+            inout value: map(key, item), wanted: key)
+           -> (slot: ptr mut item from value) ! missing =
+    found: location = try locate(value, wanted)
+    view: []mut item = mem.used(value.values)
+    fail missing when found.dense >= lenof view
+    slot = addr view[found.dense]
+end at
+
+public contains: (key: type is hashable, item: type,
+                  value: map(key, item), wanted: key) -> (yes: bool) =
+    _ = locate(value, wanted) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    yes = true
+end contains
 
 public remove: (key: type is hashable, item: type,
                 inout value: map(key, item), wanted: key)
@@ -670,12 +849,52 @@ public remove: (key: type is hashable, item: type,
     fail missing
 end remove
 
-public release_map: (key: type is hashable, item: type,
-                     provider: type is mem.allocator,
-                     inout value: map(key, item),
-                     inout state: provider) -> none =
+public release: (key: type is hashable, item: type,
+                 provider: type is mem.allocator,
+                 inout value: map(key, item),
+                 inout state: provider) -> none =
     discard_storage(value.values, state)
     discard_storage(value.keys, state)
     discard_storage(value.buckets, state)
-    value = new_map(key: key, item: item)
-end release_map
+    value = new(key: key, item: item)
+end release
+
+--  Forget every entry but keep the bucket capacity. Every bucket is
+--  rewritten free and both dense prefixes are emptied; values in them are
+--  discarded, and resources they refer to remain the caller's.
+public clear: (key: type is hashable, item: type,
+               inout value: map(key, item)) -> none =
+    slots: usize = capacity(value)
+    mut slot: usize = 0
+    while slot < slots do
+        free_bucket: bucket = (state: slot_free, dense_index: 0,
+                               previous_used: slots, next_used: slots)
+        return when not replace_value(value.buckets, slot, free_bucket)
+        inc slot
+    end while
+    mem.clear(value.keys)
+    mem.clear(value.values)
+    value.count = 0
+    value.tombstones = 0
+    value.first_used = slots
+    value.last_used = slots
+end clear
+
+--  Room for `want` entries without a growth allocation: the capacity is
+--  doubled from eight until `want` sits below the crowding threshold, and
+--  the map is rebuilt once at that size. A map already that large is left
+--  alone, including its tombstones.
+public reserve: (key: type is hashable, item: type,
+                 provider: type is mem.allocator,
+                 inout value: map(key, item), inout state: provider,
+                 want: usize) -> none ! mem.out_of_memory =
+    return when want == 0
+    maximum: usize = 0 -% 1
+    mut slots: usize = 8
+    while want >= crowding_threshold(slots) do
+        fail mem.out_of_memory when slots > maximum / 2
+        slots = slots * 2
+    end while
+    return when slots <= capacity(value)
+    try rehash(value, state, slots)
+end reserve

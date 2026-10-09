@@ -7,8 +7,8 @@ end retain
 
 bad: () -> none =
     mut host := hosted.host()
-    world: any io.world = any(addr host)
-    stream := world.err()
-    logger := diag.to(addr world, addr stream)
+    writer: any io.writer = any(addr host)
+    stream := io.err(host)
+    logger := diag.to(addr writer, addr stream)
     retain(logger)
 end bad

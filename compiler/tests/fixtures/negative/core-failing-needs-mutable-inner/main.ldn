@@ -6,7 +6,7 @@ heap_provider: type = heap.system
 bad: () -> (state: failing.counted(heap_provider)) =
     inner := heap.host()
     attempts: usize = 1
-    state = failing.count_down
+    state = failing.new
         (inner_provider: heap_provider, inner: addr inner,
          allowed_attempts: attempts)
 end bad

@@ -47,7 +47,7 @@ public main: () -> (code: i32) =
     args[0] = first
     args[1] = second
     args[2] = empty
-    mut state := io.memory_world(files[0..<1], args[0..<3],
+    mut state := io.memory_over(files[0..<1], args[0..<3],
                                 output[0..<3], errors[0..<1])
     world: any io.world = any(addr state)
     return when not arguments_ok(world)

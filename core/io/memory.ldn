@@ -1,4 +1,5 @@
---  Finite caller-backed world. Handles are indexes, not ownership tokens.
+--  Finite caller-backed provider of every io concept. Handles are indexes,
+--  not ownership tokens.
 --  Clients preserve length <= capacity and supply all retained backing.
 public memory_file: type = struct
     name: []u8
@@ -31,17 +32,17 @@ public memory: type = struct
     open_calls: usize
 end memory
 
-public memory_world: (files: []mut memory_file,
-                      arguments: []argument,
-                      output: []mut u8, errors: []mut u8)
-                     -> (state: memory from files, arguments, output, errors) =
+public memory_over: (files: []mut memory_file,
+                     arguments: []argument,
+                     output: []mut u8, errors: []mut u8)
+                    -> (state: memory from files, arguments, output, errors) =
     state = (files: files, arguments: arguments, output: output, errors: errors,
              output_used: 0, errors_used: 0,
              output_open: true, errors_open: true,
              read_limit: 0 -% 1, write_limit: 0 -% 1,
              fail_read_at: 0, fail_write_at: 0, fail_close_at: 0,
              read_calls: 0, write_calls: 0, close_calls: 0, open_calls: 0)
-end memory_world
+end memory_over
 
 memory_name_matches: (path: ptr u8, name: []u8) -> (yes: bool) =
     yes = false
@@ -235,13 +236,15 @@ memory_argument: (self: ptr memory, index: usize)
     value = self.val.arguments[index]
 end memory_argument
 
-memory is world
+memory is reader (read: memory_read)
+memory is writer (write: memory_write, write_some: memory_write_some)
+memory is files
     (open_read: memory_open_read, open_write: memory_open_write,
-     same_file: memory_same_file,
-     close: memory_close, read: memory_read, write: memory_write,
-     write_some: memory_write_some,
-     out: memory_out, err: memory_err,
+     same_file: memory_same_file, close: memory_close)
+memory is process
+    (out: memory_out, err: memory_err,
      argument_count: memory_argument_count, argument: memory_argument)
+memory is world ()
 
 public written: (inout state: memory) -> (bytes: []u8 from state) =
     bytes = state.output[0..<state.output_used]

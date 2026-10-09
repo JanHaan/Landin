@@ -25,6 +25,39 @@ firmware lane compiles, links and executes them separately and records every
 reached source and linker input. No consumer relies on an image-size refusal
 as positive evidence.
 
+## Interface conventions
+
+Every module spells the same operations the same way (D269):
+
+| Operation | Spelling | Examples |
+|---|---|---|
+| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `region.new(addr heap)`, `diag.new(capacity: 4)`, `failing.new(addr inner, 3)` |
+| View over caller-supplied bytes or records | `over` | `mem.arena_over`, `mem.failing_over`, `pool.over`, `region.over`, `io.memory_over` |
+| Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `small.release`, `region.release` |
+| Read one item as a copy | `get` | `vec.get`, `small.get`, `map.get`, `tree.get` |
+| A writable slot for in-place update | `at` | `vec.at`, `small.at`, `map.at`; the binding is locked while the slot lives [0800] |
+| Count and room | `length`, `capacity` | every container |
+| Initialized view | `used` | `mem.used`, `vec.used`, `small.used` |
+
+`core/mem` keeps `new`/`delete` for one allocated item and `new_bytes`/
+`delete_bytes` for a byte buffer; its raw-storage pop is `withdraw`, so that
+`release` never means anything but giving storage back. Accessors are
+prefixed only where one module holds several types (`arena_used`,
+`failing_used`).
+
+Two atoms serve every core container: `mem.out_of_bounds` for an index past
+the initialized prefix and `mem.empty` for taking from nothing. Key lookups
+keep their own, `map.missing` and `tree.no_such_node`, because a missing key
+is not a bad index.
+
+`core/io` is four narrow concepts over one provider type, `reader`, `writer`,
+`files` and `process`, with `world` their composition and `writer_of` lending
+a world's writer; a sink implements `writer`'s two entries and `core/diag`
+streams through `any io.writer` (D268). The library ships `equatable`,
+`hashable` and `ordered` for the integer scalars and `bool`, `[]u8` as a key,
+and `utf8` as a key and in order (D270); another reading of one of these goes
+on a `distinct` wrapper with its own evidence [1280].
+
 ## Constrained Cortex-M0 consumers
 
 The consumers use the existing memory and collection implementations. No
@@ -33,7 +66,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | Module | Interface and boundary |
 |---|---|
 | `core/mem` | `allocator` with `alloc`/`grow`/`free`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
-| `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
+| `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `platform/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
@@ -79,7 +112,7 @@ and `core/text` contain reusable target-neutral code. Existing tests and the
 Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
-caller backing, and its `io.world` interface can be selected on Cortex-M0. The
+caller backing, and every `core/io` concept can be selected on Cortex-M0. The
 `hosted/io` provider, `hosted/heap` and the hosted C aliases in `platform/c`
 remain outside this consumer closure. Even unused hosted declarations in a
 selected module must meet target checks.
@@ -91,8 +124,8 @@ explicit choice for tiny or swap-expensive views: exactly n(n-1)/2 comparisons
 and at most n-1 swaps. Both take the caller's strict ordering and neither
 promises stability.
 
-`core/region.new_region` grows its allocation ledger through the parent.
-`core/region.bounded_region` instead takes caller-owned initialized
+`core/region.new` grows its allocation ledger through the parent.
+`core/region.over` instead takes caller-owned initialized
 `region.allocation` records. One record is needed per live payload; a full
 ledger reports `out_of_memory` and returns the just-allocated payload to the
 parent. Release frees payloads in reverse order, resets the record count, and

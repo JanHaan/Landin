@@ -1,10 +1,10 @@
 import core/map
 
-key_hash: (value: u32) -> (result: u64) =
-    result = u64(value)
+tag: type = distinct u32
+key_hash: (value: tag) -> (result: u64) =
+    result = u64(u32(value))
 end key_hash
-
-u32 is map.hashable (hash: key_hash)
+tag is map.hashable (hash: key_hash)
 
 public main: () -> (code: i32) =
     code = 42

@@ -6,7 +6,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory =
     mut backing: [64]u8 = zeroed
     mut inner := mem.arena_over_unchecked(addr backing[0], 64)
     mut records: [1]region.allocation = zeroed
-    mut state := region.bounded_region(addr inner, records[0..<1])
+    mut state := region.over(addr inner, records[0..<1])
     address := try mem.allocate(state, usize(4), usize(1))
     address.val = 42
     return when address.val <> 42

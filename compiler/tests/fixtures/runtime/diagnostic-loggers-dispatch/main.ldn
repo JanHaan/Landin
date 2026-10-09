@@ -24,11 +24,11 @@ check_position_writes: () -> (ok: bool) =
     arguments: []io.argument = []
     mut output: [1]u8 = zeroed
     mut errors: [80]u8 = zeroed
-    mut memory := io.memory_world(files, arguments, output[0..<1],
+    mut memory := io.memory_over(files, arguments, output[0..<1],
                                   errors[0..<lenof errors])
     destination: io.file = io.err(memory)
-    world: any io.world = any(addr memory)
-    mut stream := diag.to(addr world, addr destination)
+    writer: any io.writer = any(addr memory)
+    mut stream := diag.to(addr writer, addr destination)
     logger: any diag.log = any(addr stream)
     logger.note(text.at(message_a[0..<2], 0), diag.warning, "A")
         else (problem)
@@ -71,7 +71,7 @@ end emit_frame_note
 --  not truncated, and the full fitting message survives source mutation.
 owned_message_limits: () -> (ok: bool) =
     ok = false
-    mut notes := diag.new_log(capacity: 1)
+    mut notes := diag.new(capacity: 1)
     limit_log: any diag.log = any(addr notes)
     mut bytes: [257]u8 = zeroed
     limit_log.note(text.first(bytes[0..<257]), diag.error, bytes[0..<257])
@@ -103,7 +103,7 @@ end owned_message_limits
 public main: () -> (code: i32) =
     code = 1
 
-    mut collected := diag.new_log(capacity: 3)
+    mut collected := diag.new(capacity: 3)
     mut bounded_log: any diag.log = any(addr collected)
     emit_notes(bounded_log) else (unexpected_bounded_failure)
         _ = unexpected_bounded_failure
@@ -174,7 +174,8 @@ public main: () -> (code: i32) =
     mut host := hosted.host()
     diagnostic_stream := io.err(host)
     world: any io.world = any(addr host)
-    mut immediate := diag.to(addr world, addr diagnostic_stream)
+    host_writer: any io.writer = any(addr host)
+    mut immediate := diag.to(addr host_writer, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
     emit_notes(streaming_log) else (unexpected_stream_failure)
         _ = unexpected_stream_failure
@@ -195,7 +196,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut copied := diag.new_log(capacity: 2)
+    mut copied := diag.new(capacity: 2)
     mut copied_log: any diag.log = any(addr copied)
     emit_frame_note(copied_log) else (unexpected_frame_copy_failure)
         _ = unexpected_frame_copy_failure
@@ -222,7 +223,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut overflowed := diag.new_log(capacity: 2)
+    mut overflowed := diag.new(capacity: 2)
     mut overflow_log: any diag.log = any(addr overflowed)
     emit_notes(overflow_log) else (unexpected_overflow_failure)
         _ = unexpected_overflow_failure
@@ -251,7 +252,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut broken := diag.to(addr world, addr dead_stream)
+    mut broken := diag.to(addr host_writer, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     broken_log.note(text.first(message_a[0..<2]), diag.error,
                     message_a[0..<2])

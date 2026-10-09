@@ -51,7 +51,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut limited := mem.fail_over_unchecked(misaligned_base, sixty_three, two)
+    mut limited := mem.failing_over_unchecked(misaligned_base, sixty_three, two)
     first: ptr mut u8 = mem.allocate(limited, one, eight) else (problem)
         _ = problem
         return
@@ -73,7 +73,7 @@ public main: () -> (code: i32) =
         mem.allocate(top, zero, two) else no_allocation
     past_top: allocation = mem.allocate(top, one, maximum) else no_allocation
 
-    mut limited_top := mem.fail_over_unchecked(raw_base, maximum, two)
+    mut limited_top := mem.failing_over_unchecked(raw_base, maximum, two)
     limited_at_top: ptr mut u8 =
         mem.allocate(limited_top, zero, maximum) else (problem)
         _ = problem

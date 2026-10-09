@@ -7,8 +7,8 @@ empty: type = [0]u8
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut state := mem.fail_over(addr backing[0], 0, 1)
-    mut values := vec.new_list(item: empty)
+    mut state := mem.failing_over(addr backing[0], 0, 1)
+    mut values := vec.new(item: empty)
     maximum: usize = 0 -% 1
     try vec.reserve(values, state, maximum)
     return when vec.capacity(values) <> maximum or mem.failing_used(state) <> 0

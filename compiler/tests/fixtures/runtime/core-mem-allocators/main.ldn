@@ -34,7 +34,7 @@ public main: () -> (code: i32) =
     limited_base: ptr mut u8 = addr limited_bytes[0]
     limited_extent: usize = 32
     allowance: usize = 1
-    mut limited := mem.fail_over_unchecked(limited_base, limited_extent, allowance)
+    mut limited := mem.failing_over_unchecked(limited_base, limited_extent, allowance)
     accepted: ptr mut u8 = mem.allocate(limited, eight, eight) else (problem)
         _ = problem
         return

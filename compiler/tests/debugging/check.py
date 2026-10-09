@@ -24,6 +24,8 @@ MAIN_SOURCE = HERE / "main.ldn"
 ODD_SOURCE = HERE / 'caller"\\path.ldn'
 SOURCES = (MAIN_SOURCE, ODD_SOURCE)
 CONTAINER_SOURCE = ROOT / "examples/derived_containers/workload/workload.ldn"
+#  The two orderings the workload dispatches to are the library's own.
+SORT_SOURCE = ROOT / "core/sort/sort.ldn"
 CONTAINER_FIXTURE = HERE.parent / "fixtures/runtime/derived-containers"
 HOSTED_SOURCE = ROOT / "examples/derived_hosted/app/app.ldn"
 HOSTED_FIXTURE = HERE.parent / "fixtures/runtime/derived-hosted-memory"
@@ -451,14 +453,26 @@ def container_lines() -> dict[str, int]:
                 and not source[index].lstrip().startswith("--"),
                 f"container marker {marker} does not precede executable source")
         result[name] = index + 1
-    for occurrence, instance in enumerate(("signed", "unsigned")):
-        result[instance + "-provider"] = source_line(
-            CONTAINER_SOURCE, "yes = left < right", occurrence)
+    for instance, provider in (("signed", "less_i32"), ("unsigned", "less_u32")):
+        result[instance + "-provider"] = provider_line(provider)
     result["signed-call"] = source_line(CONTAINER_SOURCE, "signed_order: bool =")
     result["unsigned-call"] = source_line(CONTAINER_SOURCE, "unsigned_order_ok: bool =")
     result["signed-ready"] = result["unsigned-call"]
     result["unsigned-ready"] = source_line(CONTAINER_SOURCE, "numbers_ok: bool =")
     return result
+
+
+def provider_line(provider: str) -> int:
+    """The comparison statement inside one of core/sort's scalar orderings."""
+    source = SORT_SOURCE.read_text().splitlines()
+    starts = [index for index, line in enumerate(source)
+              if line.startswith(provider + ": (")]
+    require(len(starts) == 1, f"{provider} is not declared once in sort.ldn")
+    for index in range(starts[0], len(source)):
+        if "yes = left < right" in source[index]:
+            return index + 1
+    require(False, f"{provider} has no comparison statement")
+    return 0
 
 
 def container_gdb_script(start_commands: list[str],
@@ -522,7 +536,7 @@ def check_container_transcript(transcript: str,
         expect_value(transcript, scope + ".left", left)
         expect_value(transcript, scope + ".right", right)
         expect_line(transcript, scope + "-dispatch",
-                    source_lines[instance + "-provider"], provider, "workload.ldn")
+                    source_lines[instance + "-provider"], provider, "sort.ldn")
         stack = marker_section(transcript, scope + "-dispatch")
         require(re.search(r"#0\s+.*\b" + provider + r"\b", stack) is not None
                 and re.search(r"#1\s+.*\bevidence_less\b", stack) is not None

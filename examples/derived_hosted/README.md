@@ -68,7 +68,7 @@ allocation, including region bookkeeping, uses that supplied authority.
 A new region carries an explicit empty ledger; the list is initialized when
 the first payload is recorded, keeping the constructor's `from parent`
 contract free of an independent list-return origin.
-`defer region.release_region` returns every recorded payload and ledger to the
+`defer region.release` returns every recorded payload and ledger to the
 parent on normal and failure exits. Region free is monotonic until release,
 and a monotonic parent still retains its consumed backing after release.
 If recording an allocation fails, the payload is returned through parent

@@ -154,12 +154,13 @@ Depends on: none
                     for line in text.splitlines()
                     if (match := CHECK.ROADMAP_WORK.match(line))}
         split = headings["Separate library availability classes"]
+        conventions = headings["Library interface conventions"]
         hosted = headings["The hosted library"]
         devices = headings["Describe devices"]
         freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
         device_phase = devices.split(".")[0]
-        selected = [split, hosted, freestanding] + [
+        selected = [split, conventions, hosted, freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
@@ -184,6 +185,8 @@ Depends on: none
 
         assert_next(split, "Separate library availability classes")
         complete([split])
+        assert_next(conventions, "Library interface conventions")
+        complete([conventions])
         assert_next(hosted, "The hosted library")
         complete([hosted])
         assert_next(devices, "Describe devices")

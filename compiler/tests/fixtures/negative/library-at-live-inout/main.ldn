@@ -1,0 +1,16 @@
+import core/mem
+import core/vec
+
+bad: () -> (code: i32) ! mem.out_of_memory | mem.out_of_bounds =
+    mut backing: [256]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut numbers := vec.new(item: i32)
+    try vec.push(numbers, state, 1)
+    slot: ptr mut i32 = try vec.at(numbers, usize(0))
+    try vec.push(numbers, state, 2)
+    code = slot.val
+end bad
+
+public main: () -> (code: i32) =
+    code = bad() else 0
+end main

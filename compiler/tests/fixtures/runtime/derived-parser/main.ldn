@@ -50,7 +50,7 @@ depth_recovery_is_expected: () -> (yes: bool) =
     yes = false
     source: []u8 = "g0 = {\ng1 = {\ng2 = {\ng3 = {\ng4 = {\ng5 = {\ng6 = {\ng7 = {\ng8 = {\ninner = {\nx = 1\n}\nafter = 9\n}\ny = 2\n}\n}\n}\n}\n}\n}\n}\n}\nz = 3\n"
     mut arena := mem.arena_over(addr depth_memory[0], lenof depth_memory)
-    mut notes := diag.new_log(capacity: 4)
+    mut notes := diag.new(capacity: 4)
     mut logger: any diag.log = any(addr notes)
     mut tree := parser.empty()
     parser.parse_file(source, logger, arena, tree) else (problem)
@@ -294,7 +294,7 @@ public main: () -> (code: i32) =
     source: []u8 = source_bytes[0..<source_length]
 
     mut first_arena := mem.arena_over_unchecked(addr first_memory[0], 4096)
-    mut collected := diag.new_log(capacity: 8)
+    mut collected := diag.new(capacity: 8)
     mut bounded_log: any diag.log = any(addr collected)
     mut tree := parser.empty()
     parser.parse_file(source, bounded_log, first_arena, tree) else (problem)
@@ -309,7 +309,8 @@ public main: () -> (code: i32) =
 
     mut second_arena := mem.arena_over_unchecked(addr second_memory[0], 4096)
     diagnostic_stream := world.err()
-    mut immediate := diag.to(addr world, addr diagnostic_stream)
+    writer: any io.writer = any(addr host)
+    mut immediate := diag.to(addr writer, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
     mut streamed_tree := parser.empty()
     parser.parse_file(source, streaming_log, second_arena, streamed_tree)
@@ -322,7 +323,7 @@ public main: () -> (code: i32) =
     end if
 
     mut tiny_arena := mem.arena_over_unchecked(addr tiny_memory[0], 1)
-    mut quiet := diag.new_log(capacity: 1)
+    mut quiet := diag.new(capacity: 1)
     mut quiet_log: any diag.log = any(addr quiet)
     mut missing_tree := parser.empty()
     mut saw_out_of_memory: bool = false
@@ -335,7 +336,7 @@ public main: () -> (code: i32) =
     end if
 
     mut third_arena := mem.arena_over_unchecked(addr third_memory[0], 4096)
-    mut broken := diag.to(addr world, addr dead_stream)
+    mut broken := diag.to(addr writer, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     mut interrupted_tree := parser.empty()
     mut saw_io_failure: bool = false
@@ -360,7 +361,7 @@ public main: () -> (code: i32) =
         inc at
     end while
     mut blank_arena := mem.arena_over(addr blank_memory[0], 1)
-    mut blank_notes := diag.new_log(capacity: 1)
+    mut blank_notes := diag.new(capacity: 1)
     mut blank_log: any diag.log = any(addr blank_notes)
     mut blank_tree := parser.empty()
     parser.parse_file(blank_source[0..<50000], blank_log,
@@ -383,7 +384,7 @@ public main: () -> (code: i32) =
     long_line[100003] = 49
     long_line[100004] = 10
     mut long_arena := mem.arena_over(addr long_line_memory[0], 4096)
-    mut long_notes := diag.new_log(capacity: 1)
+    mut long_notes := diag.new(capacity: 1)
     mut long_logger: any diag.log = any(addr long_notes)
     mut long_tree := parser.empty()
     parser.parse_file(long_line[0..<100005], long_logger, long_arena,

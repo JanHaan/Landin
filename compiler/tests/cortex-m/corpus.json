@@ -860,6 +860,15 @@
     "runtime/lenof-named-fixed-arrays": {
       "mode": "execute"
     },
+    "runtime/library-at-references": {
+      "mode": "execute"
+    },
+    "runtime/library-builtin-keys": {
+      "mode": "execute"
+    },
+    "runtime/library-io-writer-only": {
+      "mode": "execute"
+    },
     "runtime/library-shared-diag": {
       "mode": "execute"
     },

@@ -5,6 +5,9 @@
 --  D182 also accepts this exact public position identity for O(1) utf8
 --  indexing; a position used that way must begin a codepoint.
 
+import core/map
+import core/sort
+
 position_value: type = struct
     offset: usize
 end position_value
@@ -350,3 +353,36 @@ public written: (source: []u8, used: usize)
     fail no_space when used > lenof source
     result = source[0..<used]
 end written
+
+--  utf8 is a map key and sortable as it stands: equality, hash and order
+--  are over the encoded bytes, which valid UTF-8 makes unique per scalar
+--  sequence. The hash is 64-bit FNV-1a, the same as core/map's for []u8.
+public hash: (value: utf8) -> (result: u64) =
+    raw: []u8 = bytes(value)
+    mut folded: u64 = 14695981039346656037
+    mut index: usize = 0
+    while index < lenof raw do
+        folded = (folded ^ u64(raw[index])) *% 1099511628211
+        inc index
+    end while
+    result = folded
+end hash
+
+--  Byte-wise lexicographic order, which for valid UTF-8 is scalar order.
+public less: (left: utf8, right: utf8) -> (yes: bool) =
+    left_bytes: []u8 = bytes(left)
+    right_bytes: []u8 = bytes(right)
+    mut index: usize = 0
+    while index < lenof left_bytes and index < lenof right_bytes do
+        if left_bytes[index] <> right_bytes[index] then
+            yes = left_bytes[index] < right_bytes[index]
+            return
+        end if
+        inc index
+    end while
+    yes = lenof left_bytes < lenof right_bytes
+end less
+
+utf8 is map.equatable (eq: eq)
+utf8 is map.hashable (hash: hash)
+utf8 is sort.ordered (less: less)

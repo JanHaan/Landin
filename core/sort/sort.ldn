@@ -2,6 +2,50 @@ public ordered: type = concept (item: type)
     less: (left: item, right: item) -> (yes: bool)
 end ordered
 
+--  The library supplies the ordering of every integer scalar, and core/text
+--  that of utf8. One register, no override [1280]: another ordering for one
+--  of these goes on a distinct wrapper.
+less_u8: (left: u8, right: u8) -> (yes: bool) =
+    yes = left < right
+end less_u8
+less_u16: (left: u16, right: u16) -> (yes: bool) =
+    yes = left < right
+end less_u16
+less_u32: (left: u32, right: u32) -> (yes: bool) =
+    yes = left < right
+end less_u32
+less_u64: (left: u64, right: u64) -> (yes: bool) =
+    yes = left < right
+end less_u64
+less_usize: (left: usize, right: usize) -> (yes: bool) =
+    yes = left < right
+end less_usize
+less_i8: (left: i8, right: i8) -> (yes: bool) =
+    yes = left < right
+end less_i8
+less_i16: (left: i16, right: i16) -> (yes: bool) =
+    yes = left < right
+end less_i16
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+less_i64: (left: i64, right: i64) -> (yes: bool) =
+    yes = left < right
+end less_i64
+less_isize: (left: isize, right: isize) -> (yes: bool) =
+    yes = left < right
+end less_isize
+u8 is ordered (less: less_u8)
+u16 is ordered (less: less_u16)
+u32 is ordered (less: less_u32)
+u64 is ordered (less: less_u64)
+usize is ordered (less: less_usize)
+i8 is ordered (less: less_i8)
+i16 is ordered (less: less_i16)
+i32 is ordered (less: less_i32)
+i64 is ordered (less: less_i64)
+isize is ordered (less: less_isize)
+
 --  Restore the max-heap property in values[0..<count] below root.
 --  A parent has a child exactly when at < count / 2, so the child-index
 --  arithmetic cannot overflow even for a maximum-length view.

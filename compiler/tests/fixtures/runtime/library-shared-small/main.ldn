@@ -1,7 +1,7 @@
 import core/mem
 import core/small
 
-exercise: () -> (ok: bool) ! mem.out_of_memory | small.empty =
+exercise: () -> (ok: bool) ! mem.out_of_memory | mem.empty =
     ok = false
     mut backing: [32]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], 32)
@@ -11,7 +11,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | small.empty =
     value := try small.pop(values)
     return when value <> 42
     _ = small.pop(values) else (problem)
-        ok = problem == small.empty and small.length(addr values) == 0
+        ok = problem == mem.empty and small.length(addr values) == 0
         return
     end
 end exercise

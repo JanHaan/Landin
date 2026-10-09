@@ -28,12 +28,12 @@ public main: () -> (code: i32) =
         view := mem.used(target)
         lenof view == 2
     end
-    _ = mem.release(target) else value
+    _ = mem.withdraw(target) else value
     shortened: bool = begin
         view := mem.used(target)
         lenof view == 1
     end
-    _ = mem.release(target) else value
+    _ = mem.withdraw(target) else value
     ended: bool = begin
         view := mem.used(target)
         lenof view == 0
@@ -95,11 +95,11 @@ public main: () -> (code: i32) =
     positive_kept: bool = mem.initialized(positive) == 1
                          and mem.initialized(positive_target) == 0
                          and (mem.get(positive, zero) else u8(0)) == 17
-    _ = mem.release(positive) else u8(0)
+    _ = mem.withdraw(positive) else u8(0)
     _ = mem.dispose(positive) else positive_base
     mem.free(allocator, positive_base, one)
-    _ = mem.release(source) else value
-    _ = mem.release(source) else value
+    _ = mem.withdraw(source) else value
+    _ = mem.withdraw(source) else value
     released: ptr mut u8 = mem.dispose(source) else (problem)
         _ = problem
         return

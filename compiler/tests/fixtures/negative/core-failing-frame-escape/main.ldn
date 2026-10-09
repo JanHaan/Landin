@@ -16,7 +16,7 @@ bad: () -> (state: failing.counted(fixed_provider)) ! mem.out_of_memory =
     mut inner := try pool.over
         (base, extent, slot_size, slot_count, alignment, bookkeeping)
     attempts: usize = 1
-    state = failing.count_down
+    state = failing.new
         (inner_provider: fixed_provider, inner: addr inner,
          allowed_attempts: attempts)
 end bad

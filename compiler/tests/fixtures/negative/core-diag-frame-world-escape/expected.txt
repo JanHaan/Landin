@@ -5,6 +5,6 @@ error[L0314]: this frame-origin reference cannot be retained beyond the call
    |            ^^^^^^
   --> ../tests/fixtures/negative/core-diag-frame-world-escape/main.ldn:10:5
    |
-10 |     world: any io.world = any(addr host)
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+10 |     writer: any io.writer = any(addr host)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

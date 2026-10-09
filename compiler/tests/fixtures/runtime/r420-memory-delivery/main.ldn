@@ -95,7 +95,7 @@ public main: () -> (code: i32) =
     mut files: [1]io.memory_file
     files[0] = configured
     no_arguments: []io.argument = []
-    mut memory := io.memory_world(
+    mut memory := io.memory_over(
         files[0..<1], no_arguments, output_bytes[0..<8], error_bytes[0..<8])
     memory.write_limit = 2
     world: any io.world = any(addr memory)
@@ -159,7 +159,8 @@ public main: () -> (code: i32) =
     return when not close_failed
 
     diagnostic_stream: io.file = world.err()
-    mut streaming := diag.to(addr world, addr diagnostic_stream)
+    writer: any io.writer = any(addr memory)
+    mut streaming := diag.to(addr writer, addr diagnostic_stream)
     mut logger: any diag.log = any(addr streaming)
     message: []u8 = "bad"
     where: text.position = text.at(message, 7)

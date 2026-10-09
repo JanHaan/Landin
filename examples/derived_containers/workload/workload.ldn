@@ -10,30 +10,9 @@ import core/vec
 
 pool_provider: type = pool.provider
 
-less_i32: (left: i32, right: i32) -> (yes: bool) =
-    yes = left < right
-end less_i32
-
-less_u32: (left: u32, right: u32) -> (yes: bool) =
-    yes = left < right
-end less_u32
-
-i32 is sort.ordered (less: less_i32)
-u32 is sort.ordered (less: less_u32)
-
-u32_equal: (left: u32, right: u32) -> (same: bool) =
-    same = left == right
-end u32_equal
-
-u32_hash: (value: u32) -> (result: u64) =
-    result = u64(value) *% 0x9E37_79B9_7F4A_7C15
-end u32_hash
-
-u32 is map.equatable (eq: u32_equal)
-u32 is map.hashable (hash: u32_hash)
-
 --  This small, ordinary constrained routine gives the debugger a stable
---  generic body whose real calls select two different core/sort tables.
+--  generic body whose real calls select two different core/sort tables,
+--  the library's own i32 and u32 orderings.
 public evidence_less: (item: type is sort.ordered, left: item, right: item)
                       -> (result: bool) =
     --  R470_DEBUG_EVIDENCE_ENTRY
@@ -73,7 +52,7 @@ numbers_path: () -> (ok: bool) =
     last_index: usize = 19
     square_three: u32 = 3
     square_twenty: u32 = 20
-    mut numbers := vec.new_list(item: i32)
+    mut numbers := vec.new(item: i32)
     for number in seed do
         vec.push(numbers, provider, number) else (problem)
             _ = problem
@@ -101,26 +80,26 @@ numbers_path: () -> (ok: bool) =
     --  R470_DEBUG_SORTED_LIST
     sorted: bool = count == 20 and first == 1 and last == 20
 
-    mut squares := map.new_map(key: u32, item: u32)
+    mut squares := map.new(key: u32, item: u32)
     for number in vec.used(numbers) do
         key: u32 = u32(number)
         square: u32 = key * key
         map.insert(squares, provider, key, square) else (problem)
             _ = problem
-            map.release_map(squares, provider)
+            map.release(squares, provider)
             vec.release(numbers, provider)
             return
         end
     end for
     nine: u32 = map.get(squares, square_three) else (problem)
         _ = problem
-        map.release_map(squares, provider)
+        map.release(squares, provider)
         vec.release(numbers, provider)
         return
     end
     squares_ok: bool = map.length(squares) == 20 and nine == 9
                        and (map.get(squares, square_twenty) else 0) == 400
-    map.release_map(squares, provider)
+    map.release(squares, provider)
 
     removed: i32 = vec.pop(numbers) else (problem)
         _ = problem
@@ -223,13 +202,13 @@ raw_reference_prefix: () -> (ok: bool) =
                     and mem.initialized(storage) == 2 and lenof view == 2
                     and view[0].val.value == 1 and view[1].val.value == 2
     end
-    removed_second: ptr sample_node = mem.release(storage) else (problem)
+    removed_second: ptr sample_node = mem.withdraw(storage) else (problem)
         _ = problem
         return
     end
     second_ok: bool = removed_second.val.value == 2
                       and mem.initialized(storage) == 1
-    removed_first: ptr sample_node = mem.release(storage) else (problem)
+    removed_first: ptr sample_node = mem.withdraw(storage) else (problem)
         _ = problem
         return
     end
@@ -261,10 +240,10 @@ vector_growth_retry: () -> (ok: bool) =
     one: usize = 1
     seven: usize = 7
     eight: usize = 8
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: one)
-    mut values := vec.new_list(item: ptr sample_node)
+    mut values := vec.new(item: ptr sample_node)
     vec.push(values, state, addr node_1) else (problem) _ = problem return end
     vec.push(values, state, addr node_2) else (problem) _ = problem return end
     vec.push(values, state, addr node_3) else (problem) _ = problem return end
@@ -336,7 +315,7 @@ small_spill_retry: () -> (ok: bool) =
     end
     zero: usize = 0
     one: usize = 1
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut values := small.new(item: i32, inline_slots: 2)
@@ -454,7 +433,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     discarded: map.entry(ptr sample_node, ptr sample_node) =
         (key: addr node_1, item: addr node_2)
     mut provider := heap.host()
-    mut value := map.new_map(key: ptr sample_node, item: ptr sample_node)
+    mut value := map.new(key: ptr sample_node, item: ptr sample_node)
     mut empty_cursor := map.entries()
     mut empty_seen: bool = false
     _ = map.next_entry(value, empty_cursor) else (problem)
@@ -468,7 +447,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     end
     map.insert(value, provider, addr node_3, addr node_4) else (problem)
         _ = problem
-        map.release_map(value, provider)
+        map.release(value, provider)
         return
     end
 
@@ -480,7 +459,7 @@ reference_entry_enumeration: () -> (ok: bool) =
         selected: map.entry(ptr sample_node, ptr sample_node) =
             map.next_entry(value, position) else (problem)
                 _ = problem
-                map.release_map(value, provider)
+                map.release(value, provider)
                 return
             end
         key_sum += selected.key.val.value
@@ -491,7 +470,7 @@ reference_entry_enumeration: () -> (ok: bool) =
         selected: map.entry(ptr sample_node, ptr sample_node) =
             map.next_entry(value, position) else (problem)
                 _ = problem
-                map.release_map(value, provider)
+                map.release(value, provider)
                 return
             end
         key_sum += selected.key.val.value
@@ -510,7 +489,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     end
     enumerated: bool = empty_seen and exhausted_seen and exhausted_again
                        and count == 2 and key_sum == 4 and value_sum == 6
-    map.release_map(value, provider)
+    map.release(value, provider)
     ok = enumerated and map.length(value) == 0
 end reference_entry_enumeration
 
@@ -520,7 +499,7 @@ map_operations: () -> (ok: bool) =
         (key: (identity: u64(0), home: u64(0)), item: i32(0))
     mut bytes: [4096]u8 = zeroed
     mut provider := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
-    mut value := map.new_map(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
     k3: collision_key = (identity: 3, home: 6)
@@ -641,12 +620,12 @@ map_operations: () -> (ok: bool) =
                   and map.length(value) == 1
     end
     used_bytes: bool = mem.arena_used(provider) > 0
-    map.release_map(value, provider)
+    map.release(value, provider)
 
     --  Churn reaches the capacity-eight pressure threshold with three live
     --  entries and three tombstones. The next absent insert reuses a dead
     --  bucket without allocating; enumeration still yields each survivor.
-    mut compact := map.new_map(key: collision_key, item: i32)
+    mut compact := map.new(key: collision_key, item: i32)
     map.insert(compact, provider, k1, 11) else (problem) _ = problem return end
     map.insert(compact, provider, k2, 22) else (problem) _ = problem return end
     map.insert(compact, provider, k3, 33) else (problem) _ = problem return end
@@ -670,15 +649,15 @@ map_operations: () -> (ok: bool) =
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
          tombstone_key_sum, tombstone_item_sum, tombstone_order)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
          tombstone_key_sum, tombstone_item_sum, tombstone_order)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     accumulate_collision_entry
         (compact, tombstone_position, tombstone_count,
          tombstone_key_sum, tombstone_item_sum, tombstone_order)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     mut tombstone_exhausted: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
         tombstone_exhausted = problem == map.end_of_entries
@@ -711,16 +690,16 @@ map_operations: () -> (ok: bool) =
     mut order_code: u64 = 0
     accumulate_collision_entry
         (compact, position, enumeration_count, key_sum, item_sum, order_code)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     accumulate_collision_entry
         (compact, position, enumeration_count, key_sum, item_sum, order_code)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     accumulate_collision_entry
         (compact, position, enumeration_count, key_sum, item_sum, order_code)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     accumulate_collision_entry
         (compact, position, enumeration_count, key_sum, item_sum, order_code)
-        else (problem) _ = problem map.release_map(compact, provider) return end
+        else (problem) _ = problem map.release(compact, provider) return end
     mut exhausted: bool = false
     _ = map.next_entry(compact, position) else (problem)
         exhausted = problem == map.end_of_entries
@@ -735,7 +714,7 @@ map_operations: () -> (ok: bool) =
                        and enumeration_count == 4
                        and key_sum == 22 and item_sum == 242
                        and order_code == 4567
-    map.release_map(compact, provider)
+    map.release(compact, provider)
 
     ok = updated and reused_tombstone and insertion_order
          and rehashed and removed and sparse_walk and empty_after_removal
@@ -757,10 +736,10 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
         return
     end
     three: usize = 3
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: three)
-    mut value := map.new_map(key: collision_key, item: i32)
+    mut value := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
     k3: collision_key = (identity: 3, home: 6)
@@ -810,7 +789,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     failing.permit(state, three)
     map.insert(value, state, k7, 77) else (problem)
         _ = problem
-        map.release_map(value, state)
+        map.release(value, state)
         return
     end
     expected_allocations: usize = 6 + allowed
@@ -835,7 +814,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                     and pool.free_count(inner) == rollback_frees + 3
                     and pool.live(inner) == 3
                     and pool.rejected_free_count(inner) == 0
-    map.release_map(value, state)
+    map.release(value, state)
     released: bool = map.length(value) == 0
                      and failing.frees(state) == rollback_frees + 6
                      and failing.live(state) == 0
@@ -862,10 +841,10 @@ tree_append_retry: () -> (ok: bool) =
     zero: usize = 0
     one: usize = 1
     eight: usize = 8
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
-    mut value := tree.new_tree()
+    mut value := tree.new()
 
     mut empty_failed: bool = false
     _ = tree.add_leaf(value, state, leaf_name) else (problem)
@@ -1038,8 +1017,8 @@ heterogeneous_drawables: () -> (ok: bool) =
     text_shape.calls = 0
     mut host := heap.host()
     one: usize = 1
-    mut provider := failing.count_down(addr host, one)
-    mut items := vec.new_list(item: any drawable)
+    mut provider := failing.new(addr host, one)
+    mut items := vec.new(item: any drawable)
     round: any drawable = any(addr round_shape)
     text: any drawable = any(addr text_shape)
     vec.push(items, provider, round) else (problem) _ = problem return end

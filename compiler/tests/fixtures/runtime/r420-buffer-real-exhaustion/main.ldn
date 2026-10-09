@@ -69,7 +69,7 @@ arena_case: () -> (ok: bool) =
         view := mem.bytes(empty)
         lenof view == 0
     end
-    mem.drop_bytes(state, empty)
+    mem.delete_bytes(state, empty)
     return when not empty_ok or mem.arena_used(state) <> extent
 
     --  A one-byte buffer is refused, and the refusal binds no descriptor.
@@ -106,7 +106,7 @@ arena_case: () -> (ok: bool) =
     return when not keeper_still_ok
 
     mem.delete(state, value)
-    mem.drop_bytes(state, keeper)
+    mem.delete_bytes(state, keeper)
     --  The arena's free is a documented no-op, so the offset does not move.
     ok = mem.arena_used(state) == extent
 end arena_case
@@ -137,7 +137,7 @@ fixed_case: () -> (ok: bool) =
         view := mem.bytes(empty)
         lenof view == 0
     end
-    mem.drop_bytes(state, empty)
+    mem.delete_bytes(state, empty)
     return when not empty_ok or pool.allocation_count(state) <> 0
       or pool.free_count(state) <> 0
 
@@ -168,7 +168,7 @@ fixed_case: () -> (ok: bool) =
         count_refused = problem == mem.out_of_memory
         first
     end
-    mem.drop_bytes(state, first)
+    mem.delete_bytes(state, first)
     return when pool.live(state) <> 1 or pool.free_count(state) <> 1
     mut width_refused: bool = false
     _ = mem.new_bytes(state, oversized) else (problem)
@@ -193,7 +193,7 @@ fixed_case: () -> (ok: bool) =
     counts_ok: bool = pool.allocation_count(state) == 3
                       and pool.live(state) == 2
 
-    mem.drop_bytes(state, reused)
+    mem.delete_bytes(state, reused)
     mem.delete(state, value)
     ok = reused_ok and counts_ok and pool.live(state) == 0
          and pool.free_count(state) == 3

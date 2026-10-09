@@ -1,8 +1,9 @@
 --  Diagnostics are an ordinary capability.  A producer sees only `log`;
 --  callers choose whether notes are retained in bounded storage or written
---  immediately to a hosted stream.
+--  immediately to any io.writer.
 
 import core/io
+import core/mem
 import core/text
 
 public severity: type = u8
@@ -18,7 +19,6 @@ end entry_value
 
 public entry: type = entry_value
 public message_capacity: usize = 256
-public out_of_bounds: atom
 
 public log: type = concept (logger: type)
     note: (self: ptr mut logger, where: text.position, kind: severity,
@@ -65,9 +65,9 @@ bounded_failed: (fixed capacity: usize, self: ptr bounded(capacity))
     yes = self.val.errors > 0
 end bounded_failed
 
-public new_log: (fixed capacity: usize) -> (result: bounded(capacity)) =
+public new: (fixed capacity: usize) -> (result: bounded(capacity)) =
     result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
-end new_log
+end new
 
 --  Read-only pointers let both mutable and immutable log owners query without
 --  copying the bounded note array.
@@ -82,8 +82,8 @@ public dropped: (fixed capacity: usize, value: ptr bounded(capacity))
 end dropped
 
 public note_at: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
-                -> (result: entry) ! out_of_bounds =
-    fail out_of_bounds when index >= value.val.stored
+                -> (result: entry) ! mem.out_of_bounds =
+    fail mem.out_of_bounds when index >= value.val.stored
     result = value.val.notes[index]
 end note_at
 
@@ -100,8 +100,8 @@ public message_length: (value: entry) -> (length: usize) =
 end message_length
 
 public message_byte: (value: entry, index: usize)
-                     -> (byte: u8) ! out_of_bounds =
-    fail out_of_bounds when index >= value.what_length
+                     -> (byte: u8) ! mem.out_of_bounds =
+    fail mem.out_of_bounds when index >= value.what_length
     byte = value.what_bytes[index]
 end message_byte
 
@@ -109,7 +109,7 @@ end message_byte
     (note: bounded_note, failed: bounded_failed)
 
 streaming_value: type = struct
-    state: ptr any io.world
+    state: ptr any io.writer
     where_to: ptr io.file
     errors: usize
 end streaming_value
@@ -120,7 +120,7 @@ warning_prefix: [2]u8 = [87, 58]
 error_prefix: [2]u8 = [69, 58]
 separator: [1]u8 = [58]
 
-write_position: (state: any io.world, where_to: io.file, value: usize)
+write_position: (state: any io.writer, where_to: io.file, value: usize)
                 -> none ! io.io_failed =
     --  Twenty bytes hold every decimal digit of a 64-bit usize.  Build
     --  backwards so the provider receives exactly one position slice.
@@ -136,14 +136,17 @@ write_position: (state: any io.world, where_to: io.file, value: usize)
     try state.write(where_to, digits[start..<lenof digits])
 end write_position
 
-public to: (state: ptr any io.world, where_to: ptr io.file)
+--  A streaming log needs only a writer.  A root holding an `any io.world`
+--  builds the writer from the same provider pointer; the two erased values
+--  do not convert.
+public to: (state: ptr any io.writer, where_to: ptr io.file)
            -> (result: streaming from state, where_to) =
     result = streaming(state: state, where_to: where_to, errors: 0)
 end to
 
 stream_note: (self: ptr mut streaming, where: text.position,
               kind: severity, what: []u8) -> none ! io.io_failed =
-    state: ptr any io.world = self.val.state
+    state: ptr any io.writer = self.val.state
     where_to: ptr io.file = self.val.where_to
     if kind == error then
         inc self.val.errors

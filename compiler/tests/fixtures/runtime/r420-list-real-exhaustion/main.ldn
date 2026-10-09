@@ -102,7 +102,7 @@ arena_case: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 24 * sizeof u64
     mut state := mem.arena_over_unchecked(base, extent)
-    mut values := vec.new_list(item: node_ptr)
+    mut values := vec.new(item: node_ptr)
 
     eight: usize = 8
     return when not fill(state, values, eight)
@@ -136,7 +136,7 @@ arena_byte_case: () -> (ok: bool) =
     ok = false
     mut backing: [256]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
-    mut values := vec.new_list(item: u8)
+    mut values := vec.new(item: u8)
     mut at: usize = 0
     while at < 256 do
         vec.push(values, state, u8(at)) else (problem)
@@ -172,7 +172,7 @@ arena_interleaved_case: () -> (ok: bool) =
     ok = false
     mut backing: [40]u8 = zeroed
     mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
-    mut values := vec.new_list(item: u8)
+    mut values := vec.new(item: u8)
     mut at: usize = 0
     while at < 8 do
         vec.push(values, state, u8(at)) else (problem)
@@ -218,7 +218,7 @@ single_slot_case: () -> (ok: bool) =
         _ = problem
         return
     end
-    mut values := vec.new_list(item: node_ptr)
+    mut values := vec.new(item: node_ptr)
 
     eight: usize = 8
     return when not fill(state, values, eight)
@@ -237,7 +237,7 @@ single_slot_case: () -> (ok: bool) =
     return when pool.live(state) <> 0 or pool.free_count(state) <> 1
 
     --  Release returned the slot, so an ordinary later vector reuses it.
-    mut again := vec.new_list(item: node_ptr)
+    mut again := vec.new(item: node_ptr)
     return when not fill(state, again, eight)
     reused: bool = contents_ok(again, eight)
                    and pool.allocation_count(state) == 2
@@ -260,7 +260,7 @@ two_slot_case: () -> (ok: bool) =
         _ = problem
         return
     end
-    mut values := vec.new_list(item: node_ptr)
+    mut values := vec.new(item: node_ptr)
 
     nine: usize = 9
     return when not fill(state, values, nine)
@@ -285,7 +285,7 @@ arena_any_case: (escaping a: any counter, escaping b: any counter)
     extent: usize = 24 * item_bytes
     return when extent > lenof backing * sizeof u64
     mut state := mem.arena_over_unchecked(base, extent)
-    mut values := vec.new_list(item: any counter)
+    mut values := vec.new(item: any counter)
 
     eight: usize = 8
     return when not fill_erased(state, values, eight, a, b)
@@ -327,7 +327,7 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
         _ = problem
         return
     end
-    mut values := vec.new_list(item: any counter)
+    mut values := vec.new(item: any counter)
 
     eight: usize = 8
     return when not fill_erased(state, values, eight, a, b)
@@ -345,7 +345,7 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
     vec.release(values, state)
     return when pool.live(state) <> 0 or pool.free_count(state) <> 1
 
-    mut again := vec.new_list(item: any counter)
+    mut again := vec.new(item: any counter)
     return when not fill_erased(state, again, eight, a, b)
     reused: bool = erased_ok(again, eight)
                    and pool.allocation_count(state) == 2
@@ -372,7 +372,7 @@ two_slot_any_case: (escaping a: any counter, escaping b: any counter)
         _ = problem
         return
     end
-    mut values := vec.new_list(item: any counter)
+    mut values := vec.new(item: any counter)
 
     nine: usize = 9
     return when not fill_erased(state, values, nine, a, b)
@@ -446,7 +446,7 @@ grown_extent_free: () -> (ok: bool) =
     mut bytes: [32]u8 = zeroed
     mut state: growing = (base: addr bytes[0], used: 0, allocations: 0,
                            frees: 0, released_size: 0)
-    mut values := vec.new_list(item: u8)
+    mut values := vec.new(item: u8)
     for at in usize(0)..<usize(17) do
         vec.push(values, state, u8(at)) else (problem) _ = problem return end
     end for

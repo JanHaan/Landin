@@ -5,8 +5,6 @@
 import core/mem
 import core/vec
 
-public empty: atom
-
 small_value: type (item: type, fixed inline_slots: u32) = struct
     count: usize
     inline_values: [inline_slots]item
@@ -20,7 +18,7 @@ end small
 
 public new: (item: type is zeroable, fixed inline_slots: u32)
             -> (value: small(item, inline_slots)) =
-    fresh := vec.new_list(item: item)
+    fresh := vec.new(item: item)
     value = (storage: (count: 0, inline_values: uninit,
                        spill: fresh, spilled: false))
 end new
@@ -54,10 +52,10 @@ first_capacity: (fixed inline_slots: u32)
 end first_capacity
 
 pop_list: (item: type is zeroable, inout values: vec.list(item))
-          -> (removed: item from values) ! empty =
+          -> (removed: item from values) ! mem.empty =
     removed = vec.pop(values) else (problem)
         _ = problem
-        fail empty
+        fail mem.empty
     end
 end pop_list
 
@@ -78,7 +76,7 @@ public push: (item: type is zeroable, fixed inline_slots: u32,
     end if
 
     wanted: usize = try first_capacity(inline_slots: inline_slots)
-    mut fresh := vec.new_list(item: item)
+    mut fresh := vec.new(item: item)
     try vec.reserve(fresh, state, wanted)
 
     mut at: usize = 0
@@ -106,10 +104,33 @@ public used: (item: type is zeroable, fixed inline_slots: u32,
     end if
 end used
 
+public get: (item: type is zeroable, fixed inline_slots: u32,
+             value: ptr small(item, inline_slots), index: usize)
+            -> (result: item from value) ! mem.out_of_bounds =
+    if value.val.storage.spilled then
+        result = (vec.get(value.val.storage.spill, index) else (problem)
+            _ = problem
+            fail mem.out_of_bounds
+        end)
+    else
+        fail mem.out_of_bounds when index >= value.val.storage.count
+        result = value.val.storage.inline_values[index]
+    end if
+end get
+
+--  A writable slot, with the same binding lock as vec.at [0800].
+public at: (item: type is zeroable, fixed inline_slots: u32,
+            inout value: small(item, inline_slots), index: usize)
+           -> (slot: ptr mut item from value) ! mem.out_of_bounds =
+    view: []mut item = used(value)
+    fail mem.out_of_bounds when index >= lenof view
+    slot = addr view[index]
+end at
+
 public pop: (item: type is zeroable, fixed inline_slots: u32,
              inout value: small(item, inline_slots))
-            -> (removed: item from value) ! empty =
-    fail empty when value.storage.count == 0
+            -> (removed: item from value) ! mem.empty =
+    fail mem.empty when value.storage.count == 0
     if value.storage.spilled then
         removed = try pop_list(value.storage.spill)
         dec value.storage.count

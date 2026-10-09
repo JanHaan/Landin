@@ -8,8 +8,8 @@ public main: () -> (code: i32) =
     code = 1
     mut host := heap.host()
     budget: usize = 20
-    mut state := failing.count_down(addr host, budget)
-    mut value := tree.new_tree()
+    mut state := failing.new(addr host, budget)
+    mut value := tree.new()
     first: tree.node_id = tree.add_leaf(value, state, label) else (problem)
         _ = problem
         return

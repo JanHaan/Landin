@@ -4,6 +4,6 @@ bad: () -> (view: []u8) =
     mut errors: [1]u8 = zeroed
     files: []mut io.memory_file = []
     args: []io.argument = []
-    mut state := io.memory_world(files, args, output[0..<2], errors[0..<1])
+    mut state := io.memory_over(files, args, output[0..<2], errors[0..<1])
     view = io.written(state)
 end bad

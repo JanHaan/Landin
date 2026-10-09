@@ -71,26 +71,26 @@ public main: () -> (code: i32) =
         refused: allocation = mem.dispose(target) else absent
         is_absent(refused)
     end
-    tail: u32 = mem.release(target) else 0
+    tail: u32 = mem.withdraw(target) else 0
     remaining: bool = begin
         view := mem.used(target)
         lenof view == 1 and view[0] == 31
     end
-    head: u32 = mem.release(target) else 0
+    head: u32 = mem.withdraw(target) else 0
     mut empty_refused: bool = false
-    _ = mem.release(target) else (problem)
+    _ = mem.withdraw(target) else (problem)
         _ = problem
         empty_refused = true
         0
     end
     again: usize = mem.admit(target, second) else two
-    repeated: u32 = mem.release(target) else 0
+    repeated: u32 = mem.withdraw(target) else 0
     target_block: ptr mut u8 = mem.dispose(target) else (problem)
         _ = problem
         return
     end
-    _ = mem.release(source) else 0
-    _ = mem.release(source) else 0
+    _ = mem.withdraw(source) else 0
+    _ = mem.withdraw(source) else 0
     source_block: ptr mut u8 = mem.dispose(source) else (problem)
         _ = problem
         return

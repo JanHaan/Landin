@@ -1,0 +1,75 @@
+import core/map
+import core/mem
+import core/small
+import core/vec
+
+exercise: () -> (ok: bool)
+          ! mem.out_of_memory | mem.out_of_bounds | mem.empty | map.missing =
+    ok = false
+    mut backing: [4096]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+
+    mut numbers := vec.new(item: i32)
+    _ = vec.last(numbers) else (problem)
+        return when problem <> mem.empty
+    end
+    try vec.push(numbers, state, 1)
+    try vec.push(numbers, state, 2)
+    second: ptr mut i32 = try vec.at(numbers, usize(1))
+    second.val = 20
+    last: i32 = try vec.last(numbers)
+    copied: i32 = try vec.get(numbers, usize(1))
+    return when last <> 20 or copied <> 20
+    _ = vec.at(numbers, usize(2)) else (problem)
+        return when problem <> mem.out_of_bounds
+    end
+
+    mut few := small.new(item: i32, inline_slots: 2)
+    try small.push(few, state, 5)
+    inline_slot: ptr mut i32 = try small.at(few, usize(0))
+    inline_slot.val = 50
+    inline_value: i32 = try small.get(addr few, usize(0))
+    return when inline_value <> 50
+    try small.push(few, state, 6)
+    try small.push(few, state, 7)
+    spilled_slot: ptr mut i32 = try small.at(few, usize(2))
+    spilled_slot.val = 70
+    spilled_value: i32 = try small.get(addr few, usize(2))
+    return when spilled_value <> 70 or small.length(addr few) <> 3
+
+    mut table := map.new(key: u32, item: i32)
+    try map.reserve(table, state, usize(10))
+    reserved: usize = map.capacity(table)
+    return when reserved <> 16
+    try map.insert(table, state, u32(7), 1)
+    return when not map.contains(table, u32(7)) or map.contains(table, u32(8))
+    stored: ptr mut i32 = try map.at(table, u32(7))
+    stored.val = 70
+    updated: i32 = try map.get(table, u32(7))
+    return when updated <> 70
+    _ = map.at(table, u32(8)) else (problem)
+        return when problem <> map.missing
+    end
+    map.clear(table)
+    return when map.length(table) <> 0 or map.capacity(table) <> reserved
+      or map.contains(table, u32(7))
+    try map.insert(table, state, u32(7), 2)
+    try map.insert(table, state, u32(8), 3)
+    again: i32 = try map.get(table, u32(8))
+    return when again <> 3 or map.length(table) <> 2
+    try map.reserve(table, state, usize(4))
+    return when map.capacity(table) <> reserved
+
+    map.release(table, state)
+    small.release(few, state)
+    vec.release(numbers, state)
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

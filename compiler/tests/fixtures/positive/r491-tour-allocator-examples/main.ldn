@@ -28,10 +28,10 @@ new_buffers: (provider: type is mem.allocator,
              -> (first: mem.byte_buffer, second: mem.byte_buffer,
                  third: mem.byte_buffer) ! mem.out_of_memory =
     first = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, first)
+    undo mem.delete_bytes(state, first)
 
     second = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, second)
+    undo mem.delete_bytes(state, second)
 
     third = try mem.new_bytes(state: state, count: count)
     -- All three owners are published by the successful return.
@@ -49,7 +49,7 @@ probe: (inout state: mem.arena) -> none ! mem.out_of_memory =
     chosen := try make_widget(state)
     mut target: canvas = (marker: 0)
     chosen.draw(addr target)
-    mem.drop_bytes(state, buffers.first)
-    mem.drop_bytes(state, buffers.second)
-    mem.drop_bytes(state, buffers.third)
+    mem.delete_bytes(state, buffers.first)
+    mem.delete_bytes(state, buffers.second)
+    mem.delete_bytes(state, buffers.third)
 end probe

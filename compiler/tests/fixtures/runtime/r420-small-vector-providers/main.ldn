@@ -114,7 +114,7 @@ failing_path: () -> (ok: bool) =
     end
     zero: usize = 0
     one: usize = 1
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut values := small.new(item: i32, inline_slots: 1)

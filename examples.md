@@ -88,7 +88,7 @@ door is sensor (read: read_door)
 poll: (provider: type is mem.allocator, inout memory: provider,
        sensors: []mut any sensor)
       -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
-    readings = vec.new_list(item: i32)
+    readings = vec.new(item: i32)
     for device in sensors do
         --  An unplugged sensor is skipped; a jammed one stops the poll.
         value := device.read() else (why)

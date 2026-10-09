@@ -1,0 +1,14 @@
+import core/map
+
+--  core/map already declares u32 is map.hashable. There is no override:
+--  a second declaration for the same key is a collision, and another hash
+--  belongs on a distinct wrapper.
+my_hash: (value: u32) -> (result: u64) =
+    result = u64(value) *% 31
+end my_hash
+
+u32 is map.hashable (hash: my_hash)
+
+public main: () -> (code: i32) =
+    code = 42
+end main

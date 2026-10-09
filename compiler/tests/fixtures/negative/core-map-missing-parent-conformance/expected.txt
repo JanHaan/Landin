@@ -1,7 +1,7 @@
 error[L0318]: this concrete type has no conformance to `equatable`
   --> ../tests/fixtures/negative/core-map-missing-parent-conformance/main.ldn:7:1
   |
-7 | u32 is map.hashable (hash: key_hash)
+7 | tag is map.hashable (hash: key_hash)
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../../core/map/map.ldn:12:48
    |

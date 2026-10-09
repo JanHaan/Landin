@@ -74,7 +74,7 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.30, R12, R13.20, R14, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.30, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
 R12.10 depends on R13.30 to hold the first boundary. The freestanding
@@ -1219,7 +1219,7 @@ A standard library split where the capability model already splits it.
 
 ### R13.10 — Separate library availability classes
 
-Status: active
+Status: complete
 Depends on: none
 
 `core/*` becomes the shared freestanding library: each module and its public
@@ -1266,10 +1266,50 @@ combined image would exceed a constrained target's budget; an image-size
 refusal is not positive evidence that a shared module works. Every later
 target's gate must repeat this matrix for that target.
 
+Done: the three roots exist and the thirteen shared modules, `hosted/heap`,
+`hosted/io`, `platform/c` and `platform/cpu` sit under them (D267, [1480],
+[1660]). `Landin.Modules.Availability` decides a written namespace from target
+facts before name resolution, and an unavailable import is L0015 once, at the
+import. The thirteen `runtime/library-shared-*` consumers compile, link and
+return their status on Linux x86-64, Linux arm64, Darwin, both FreeBSD
+targets, RV64 and Cortex-M0; `negative/library-platform-cpu-hosted` and 37
+Cortex-M corpus rows pin the refusals; `environments/cortex-m` links
+`platform/cpu` at armv6-m, armv7-m and armv7e-m. The firmware return halt is
+Thumb code, which the higher levels needed.
+
+### R13.11 — Library interface conventions
+
+Status: active
+Depends on: R13.10
+
+The split left four shapes in the library that six hosted targets would
+cement. `core/io`'s one `world` concept becomes four narrow concepts, `reader`,
+`writer`, `files` and `process`, with `world` their composition and an adapter
+lending a world's writer, so a sink implements two entries and `core/diag`
+streams through `any io.writer`; this is the split [1260] waited for and
+closes E2. One naming convention: a module's principal type is constructed
+with `new`, a view over caller bytes with `over`, every container's storage
+is given back with `release`, and the index and emptiness atoms are
+`core/mem`'s `out_of_bounds` and `empty` for every core container, while key
+lookups keep `missing` and `no_such_node`. The library ships the evidence
+the scalars were always going to need: `equatable`, `hashable` and `ordered`
+for the integer scalars and `bool`, `[]u8` as a key, and `utf8` as a key and
+in order; a program wanting another reading wraps the type in `distinct`
+[1280]. Every container keeps `get` as a copy and gains `at`, a writable
+slot under [0800]'s binding lock, with `contains`, `clear` and `reserve` on
+the map and `last` on the vector; the tree's node is private and gets none.
+
+Exit evidence: D268 to D271 with their fixtures; a writer-only provider
+driving a streaming log; a program keying a map by `[]u8` and `utf8` and
+sorting `utf8` with no evidence of its own; a program updating a vector, a
+small vector and a map through `at`; a program re-declaring `u32 is
+map.hashable` refused as the collision it is; every renamed consumer, the
+derived programs and the debugger workloads passing on every target.
+
 ### R13.20 — The freestanding library
 
 Status: planned
-Depends on: R13.10, R12.30, R12.60
+Depends on: R13.10, R13.11, R12.30, R12.60
 
 What firmware on the R12 boards needs, each facility driven by a complete
 consumer: peripheral configuration beyond one baud rate, a reusable
@@ -1287,7 +1327,7 @@ adapters.
 ### R13.30 — The hosted library
 
 Status: planned
-Depends on: R13.10
+Depends on: R13.10, R13.11
 
 Files and directories, processes, the environment, time and sockets, each
 driven by a complete consumer, with the operating system reached through the
@@ -1306,6 +1346,9 @@ oracles.
 - Every shared-root module has R13.10's positive per-target compile/link
   evidence and applicable execution and failure checks. Target-specific
   freestanding and hosted availability checks remain separate.
+
+- The library's concepts, names and shipped evidence follow R13.11's
+  conventions, and every later facility is held to them.
 
 ## R14 — Concurrency
 
@@ -1613,7 +1656,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | C4 | Language evolution | Generational observers and inferred uniqueness; no trigger was ever given. | None until later evidence supplies one, recorded first. | That trigger recorded, then a design with its own evidence. | open |
 | C5 | Language evolution | Structure-of-arrays collections [0620]. | A simulation program needing one field contiguous. | [0620] enabled by amendment and register decision, with executable evidence. | open |
 | E1 | Language evolution | Labels, `break with` and `complete` are implemented and none of the four derived programs uses them. | A proposal to remove or reshape them, with evidence beyond non-use. | A tour amendment and register decision. | watch |
-| E2 | Language evolution | Concept width [1260]: one case each way. | A real library whose concept must widen or split. | [1260] confirmed or amended. | watch |
+| E2 | Language evolution | Concept width [1260]: one case each way; `core/io.world` is the library concept that had to split. | A real library whose concept must widen or split. | [1260] confirmed or amended. | scheduled R13.11 |
 | E3 | Language evolution | Two kinds of generated source exist, SVD modules and C bindings; a third starts the review of retained position D3. Generating the compiler's transcription tables from `spec.md` would be a third. | A third kind of generated source. | That review recorded against D3's rationale. | watch |
 | SR-01 | Release readiness | The Cortex-M lane pins `arm-none-eabi-gcc` 14.2.1; the same publisher's `arm-eabi-gcc` 16.1.0 builds a valid image, and moving changes every recorded firmware hash and disassembly. | R12's new cores rebaseline the firmware records anyway. | The toolchain moved with every Cortex-M record rebaselined in one change. | scheduled R12.10 |
 | SR-04 | Language evolution | D248 keeps assembly operands to integer registers; a float operand is refused by name as transferred here. | A program that needs a float operand, or a target with float registers: R12.30's M4F is the first. | [1630] and D248 amended with the float register class and its clobber set on each target that has one, with executed fixtures. | scheduled R12.30 |

@@ -68,7 +68,9 @@ public run: (provider: type is mem.allocator, inout allocator: provider,
             ! bad_argument | mem.out_of_memory
             | io.not_found | io.no_access | io.io_failed =
     stream: io.file = world.err()
-    mut logger := diag.to(addr world, addr stream)
+    mut lent := io.writer_of(addr world)
+    writer: any io.writer = any(addr lent)
+    mut logger := diag.to(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     kept = try run_logged(allocator, world, chunk_size, log)
 end run

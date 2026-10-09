@@ -1,0 +1,74 @@
+import core/map
+import core/mem
+import core/sort
+import core/text
+
+--  No conformance is declared here: every key and ordering is the library's.
+
+exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text =
+    ok = false
+    mut backing: [4096]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+
+    least: i32 = (0 - 2147483647) - 1
+    mut signed := map.new(key: i32, item: u8)
+    try map.insert(signed, state, -1, u8(1))
+    try map.insert(signed, state, 0, u8(2))
+    try map.insert(signed, state, least, u8(3))
+    first: u8 = try map.get(signed, -1)
+    second: u8 = try map.get(signed, 0)
+    third: u8 = try map.get(signed, least)
+    return when first <> 1 or second <> 2 or third <> 3
+    return when map.contains(signed, 1)
+
+    alpha: []u8 = "alpha"
+    beta: []u8 = "beta"
+    mut names := map.new(key: []u8, item: u32)
+    try map.insert(names, state, alpha, u32(1))
+    try map.insert(names, state, beta, u32(2))
+    mut spelled: [5]u8 = zeroed
+    mut at: usize = 0
+    while at < lenof alpha do
+        spelled[at] = alpha[at]
+        inc at
+    end while
+    --  Equal bytes at a different address are the same key.
+    copied: []u8 = spelled[0..<5]
+    found: u32 = try map.get(names, copied)
+    return when found <> 1 or map.length(names) <> 2
+
+    mut words := map.new(key: utf8, item: u32)
+    try map.insert(words, state, "one", u32(1))
+    try map.insert(words, state, "two", u32(2))
+    try map.insert(words, state, "one", u32(10))
+    one: u32 = try map.get(words, "one")
+    return when one <> 10 or map.length(words) <> 2
+    typed: utf8 = try text.from_bytes("two")
+    two: u32 = try map.get(words, typed)
+    return when two <> 2
+
+    mut texts: [3]utf8 = ["pear", "apple", "fig"]
+    sort.sort(texts[0..<3])
+    return when not text.eq(texts[0], "apple") or not text.eq(texts[1], "fig")
+      or not text.eq(texts[2], "pear")
+    mut numbers: [4]i64 = [3, -5, 0, -1]
+    sort.sort(numbers[0..<4])
+    return when numbers[0] <> -5 or numbers[1] <> -1 or numbers[2] <> 0
+      or numbers[3] <> 3
+    mut bytes: [3]u8 = [9, 2, 5]
+    sort.sort_selection(bytes[0..<3])
+    return when bytes[0] <> 2 or bytes[2] <> 9
+
+    map.release(words, state)
+    map.release(names, state)
+    map.release(signed, state)
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

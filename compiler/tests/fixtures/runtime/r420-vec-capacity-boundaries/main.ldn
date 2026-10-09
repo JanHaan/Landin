@@ -51,7 +51,7 @@ public main: () -> (code: i32) =
     mut overflow_state: probe =
         (calls: 0, frees: 0, last_alloc_size: 0,
          last_free_size: 0, base: base)
-    mut overflow_values := vec.new_list(item: u64)
+    mut overflow_values := vec.new(item: u64)
     mut overflow_refused: bool = false
     vec.reserve(overflow_values, overflow_state, impossible) else (problem)
         _ = problem
@@ -64,14 +64,14 @@ public main: () -> (code: i32) =
     mut exact_state: probe =
         (calls: 0, frees: 0, last_alloc_size: 0,
          last_free_size: 0, base: base)
-    mut exact_values := vec.new_list(item: u64)
+    mut exact_values := vec.new(item: u64)
     vec.reserve(exact_values, exact_state, largest) else 0
     vec.release(exact_values, exact_state)
 
     mut zero_state: probe =
         (calls: 0, frees: 0, last_alloc_size: maximum,
          last_free_size: maximum, base: base)
-    mut zero_values := vec.new_list(item: zero_item)
+    mut zero_values := vec.new(item: zero_item)
     empty_value: zero_item = zeroed
     for index in 0..<9 do
         _ = index
@@ -98,15 +98,15 @@ public main: () -> (code: i32) =
     mut maximum_zero_state: probe =
         (calls: 0, frees: 0, last_alloc_size: maximum,
          last_free_size: maximum, base: base)
-    mut maximum_zero := vec.new_list(item: zero_item)
+    mut maximum_zero := vec.new(item: zero_item)
     vec.reserve(maximum_zero, maximum_zero_state, maximum) else 0
     maximum_zero_capacity: usize = vec.capacity(maximum_zero)
     vec.release(maximum_zero, maximum_zero_state)
 
     --  A refused second zero-byte allocation leaves the first allocation's
     --  initialized witness available for access and eventual release.
-    mut refused_state := mem.fail_over_unchecked(base, 0, 1)
-    mut refused_values := vec.new_list(item: zero_item)
+    mut refused_state := mem.failing_over_unchecked(base, 0, 1)
+    mut refused_values := vec.new(item: zero_item)
     for index in 0..<8 do
         _ = index
         vec.push(refused_values, refused_state, empty_value) else 0

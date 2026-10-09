@@ -30,7 +30,7 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     one: usize = 1
     two: usize = 2
     three: usize = 3
-    mut state := failing.count_down(addr inner, zero)
+    mut state := failing.new(addr inner, zero)
     before: usize = evaluations
     mut empty := mem.new_bytes(state, zero) else (problem)
         _ = problem
@@ -40,7 +40,7 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
         view := mem.bytes(empty)
         lenof view
     end
-    mem.drop_bytes(state, empty)
+    mem.delete_bytes(state, empty)
     return when empty_size <> 0 or failing.attempts(state) <> 0
     mut refused: bool = false
     absent: object_result = mem.new(state, initial()) else (problem)
@@ -69,8 +69,8 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     object_ok: bool = value.val.value == 42 and value.val.next.val == 37
       and usize(value) % alignof node == 0
     mem.delete(state, value)
-    mem.drop_bytes(state, bytes)
-    mem.drop_bytes(state, bytes)
+    mem.delete_bytes(state, bytes)
+    mem.delete_bytes(state, bytes)
     return when failing.live(state) <> 0 or failing.frees(state) <> 2
     failing.permit(state, one)
     mut retry := mem.new_bytes(state, three) else (problem)
@@ -81,7 +81,7 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
         view := mem.bytes(retry)
         lenof view == 3 and view[0] == 0 and view[2] == 0
     end
-    mem.drop_bytes(state, retry)
+    mem.delete_bytes(state, retry)
     okay = content_ok and object_ok and retry_ok and evaluations == before + 2
       and failing.attempts(state) == 4 and failing.successes(state) == 3
       and failing.injected_failures(state) == 1 and failing.inner_failures(state) == 0

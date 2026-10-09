@@ -6,8 +6,8 @@ mut observed: u32 = 0
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut state := mem.fail_over(addr backing[0], lenof backing, 1)
-    mut values := vec.new_list(item: u32)
+    mut state := mem.failing_over(addr backing[0], lenof backing, 1)
+    mut values := vec.new(item: u32)
     try vec.reserve(values, state, usize(2))
     try vec.push(values, state, u32(17))
     try vec.push(values, state, u32(25))

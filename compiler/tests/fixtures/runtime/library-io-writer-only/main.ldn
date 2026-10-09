@@ -1,0 +1,84 @@
+import core/diag
+import core/io
+import core/text
+
+--  A provider that can only write: the two writer entries and nothing else.
+room: usize = 64
+
+outlet: type = struct
+    bytes: [64]u8
+    used: usize
+    writes: usize
+end outlet
+
+sink_write: (self: ptr mut outlet, opened: io.file, bytes: []u8)
+            -> none ! io.io_failed =
+    _ = opened
+    fail io.io_failed when lenof bytes > room - self.val.used
+    mut index: usize = 0
+    while index < lenof bytes do
+        self.val.bytes[self.val.used + index] = bytes[index]
+        inc index
+    end while
+    self.val.used += lenof bytes
+    inc self.val.writes
+end sink_write
+
+sink_write_some: (self: ptr mut outlet, opened: io.file, bytes: []u8)
+                 -> (count: usize) ! io.io_failed =
+    try sink_write(self, opened, bytes)
+    count = lenof bytes
+end sink_write_some
+
+outlet is io.writer (write: sink_write, write_some: sink_write_some)
+
+same_bytes: (actual: []u8, expected: []u8) -> (same: bool) =
+    same = false
+    return when lenof actual <> lenof expected
+    mut at: usize = 0
+    while at < lenof expected do
+        return when actual[at] <> expected[at]
+        inc at
+    end while
+    same = true
+end same_bytes
+
+exercise: () -> (ok: bool) ! io.io_failed =
+    ok = false
+    mut only: outlet = (bytes: zeroed, used: 0, writes: 0)
+    stream: io.file = io.file(1)
+    writer: any io.writer = any(addr only)
+    mut logger := diag.to(addr writer, addr stream)
+    log: any diag.log = any(addr logger)
+    message: []u8 = "ab"
+    try log.note(text.first(message), diag.warning, "A")
+    try log.note(text.at(message, 1), diag.error, "B")
+    return when not log.failed()
+    --  The generic free function asks for a writer, which the outlet is.
+    try io.write(only, stream, "!")
+    return when not same_bytes(only.bytes[0..<only.used], "W:0:AE:1:B!")
+    return when only.writes <> 9
+
+    --  A routine holding only an erased world lends its writer.
+    files: []mut io.memory_file = []
+    arguments: []io.argument = []
+    mut output: [8]u8 = zeroed
+    mut errors: [8]u8 = zeroed
+    mut memory := io.memory_over(files, arguments, output[0..<8], errors[0..<8])
+    world: any io.world = any(addr memory)
+    mut lent := io.writer_of(addr world)
+    lent_writer: any io.writer = any(addr lent)
+    try lent_writer.write(world.out(), "ok")
+    accepted: usize = try lent_writer.write_some(world.out(), "!")
+    return when accepted <> 1
+    return when not same_bytes(io.written(memory), "ok!")
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

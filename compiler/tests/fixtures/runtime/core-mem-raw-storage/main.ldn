@@ -49,7 +49,7 @@ growth_case: () -> (ok: bool) =
         mem.admit(short, value) else one
     end
     rolled_back: i32 = begin
-        value: ptr node = mem.release(short) else addr second
+        value: ptr node = mem.withdraw(short) else addr second
         value.val.value
     end
     short_freed: ptr mut u8 = mem.dispose(short) else (problem)
@@ -80,11 +80,11 @@ growth_case: () -> (ok: bool) =
         mem.admit(grown, value) else four
     end
     drained_second: i32 = begin
-        value: ptr node = mem.release(old) else addr first
+        value: ptr node = mem.withdraw(old) else addr first
         value.val.value
     end
     drained_first: i32 = begin
-        value: ptr node = mem.release(old) else addr second
+        value: ptr node = mem.withdraw(old) else addr second
         value.val.value
     end
     old_freed: ptr mut u8 = mem.dispose(old) else (problem)
@@ -133,12 +133,12 @@ public main: () -> (code: i32) =
         right.val.value
     end
     released_value: i32 = begin
-        released: ptr node = mem.release(storage) else addr first
+        released: ptr node = mem.withdraw(storage) else addr first
         released.val.value
     end
-    _ = mem.release(storage) else addr first
+    _ = mem.withdraw(storage) else addr first
     empty_value: i32 = begin
-        empty: ptr node = mem.release(storage) else addr first
+        empty: ptr node = mem.withdraw(storage) else addr first
         empty.val.value
     end
 

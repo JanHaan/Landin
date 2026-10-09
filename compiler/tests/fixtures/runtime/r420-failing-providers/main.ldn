@@ -10,7 +10,7 @@ pool_provider: type = pool.provider
 heap_budgets: () -> (ok: bool) =
     mut inner := heap.host()
     zero: usize = 0
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: heap_provider, inner: addr inner,
          allowed_attempts: zero)
     size_1: usize = 17
@@ -88,7 +88,7 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
     zero: usize = 0
     one: usize = 1
     two: usize = 2
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut failed_zero: bool = false
@@ -132,7 +132,7 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
         ok = false
         return
     end
-    mut inner_failure := failing.count_down
+    mut inner_failure := failing.new
         (inner_provider: pool_provider, inner: addr empty,
          allowed_attempts: one)
     mut failed_inner: bool = false
@@ -195,10 +195,10 @@ vec_initial_failure: () -> (ok: bool) =
         return
     end
     zero: usize = 0
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
-    mut values := vec.new_list(item: ptr node)
+    mut values := vec.new(item: ptr node)
     mut failed: bool = false
     vec.push(values, state, addr node_1) else (problem)
         _ = problem
@@ -231,10 +231,10 @@ vec_growth_retry: () -> (ok: bool) =
         return
     end
     one: usize = 1
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: one)
-    mut values := vec.new_list(item: ptr node)
+    mut values := vec.new(item: ptr node)
     vec.push(values, state, addr node_1) else (problem) _ = problem end
     vec.push(values, state, addr node_2) else (problem) _ = problem end
     vec.push(values, state, addr node_3) else (problem) _ = problem end

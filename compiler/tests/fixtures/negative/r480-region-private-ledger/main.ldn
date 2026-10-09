@@ -3,7 +3,7 @@ import core/region
 
 public main: () -> (code: i32) =
     mut provider := heap.host()
-    value := region.new_region(addr provider)
+    value := region.new(addr provider)
     _ = value.allocations
     code = 0
 end main

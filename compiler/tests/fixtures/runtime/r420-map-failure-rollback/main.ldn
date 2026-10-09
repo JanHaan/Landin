@@ -5,17 +5,22 @@ import core/pool
 
 fixed_provider: type = pool.provider
 
-key_equal: (left: u64, right: u64) -> (same: bool) =
-    same = left == right
+--  Every key hashes alike, so each insert probes the same chain. The
+--  library's own u64 evidence cannot be overridden [1280]; the colliding
+--  key is a distinct wrapper with its own.
+colliding: type = distinct u64
+
+key_equal: (left: colliding, right: colliding) -> (same: bool) =
+    same = u64(left) == u64(right)
 end key_equal
 
-colliding_hash: (value: u64) -> (result: u64) =
+colliding_hash: (value: colliding) -> (result: u64) =
     _ = value
     result = 6
 end colliding_hash
 
-u64 is map.equatable (eq: key_equal)
-u64 is map.hashable (hash: colliding_hash)
+colliding is map.equatable (eq: key_equal)
+colliding is map.hashable (hash: colliding_hash)
 
 node: type = struct
     payload: i32
@@ -29,7 +34,7 @@ n5: node = (payload: 55)
 n6: node = (payload: 66)
 n7: node = (payload: 77)
 
-has: (value: map.map(u64, ptr node), key: u64, wanted: i32)
+has: (value: map.map(colliding, ptr node), key: colliding, wanted: i32)
      -> (ok: bool) =
     found: ptr node = map.get(value, key) else (problem)
         _ = problem
@@ -60,17 +65,17 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     end
 
     three: usize = 3
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: fixed_provider, inner: addr inner,
          allowed_attempts: three)
-    mut value := map.new_map(key: u64, item: ptr node)
-    k1: u64 = 1
-    k2: u64 = 2
-    k3: u64 = 3
-    k4: u64 = 4
-    k5: u64 = 5
-    k6: u64 = 6
-    k7: u64 = 7
+    mut value := map.new(key: colliding, item: ptr node)
+    k1: colliding = colliding(u64(1))
+    k2: colliding = colliding(u64(2))
+    k3: colliding = colliding(u64(3))
+    k4: colliding = colliding(u64(4))
+    k5: colliding = colliding(u64(5))
+    k6: colliding = colliding(u64(6))
+    k7: colliding = colliding(u64(7))
     map.insert(value, state, k1, addr n1) else 0
     map.insert(value, state, k2, addr n2) else 0
     map.insert(value, state, k3, addr n3) else 0
@@ -152,7 +157,7 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                    and failing.inner_failures(state) == 0
                    and pool.allocation_count(inner) == expected_allocations
 
-    map.release_map(value, state)
+    map.release(value, state)
     released: bool = map.length(value) == 0
                      and failing.frees(state) == rollback_frees + 6
                      and failing.live(state) == 0
@@ -167,16 +172,16 @@ churn_case: () -> (ok: bool) =
     mut words: [64]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut state := mem.arena_over_unchecked(base, lenof words * sizeof u64)
-    mut value := map.new_map(key: u64, item: ptr node)
-    map.insert(value, state, u64(1), addr n1) else 0
-    map.insert(value, state, u64(2), addr n2) else 0
-    map.insert(value, state, u64(3), addr n3) else 0
-    map.insert(value, state, u64(4), addr n4) else 0
-    map.insert(value, state, u64(5), addr n5) else 0
-    map.insert(value, state, u64(6), addr n6) else 0
+    mut value := map.new(key: colliding, item: ptr node)
+    map.insert(value, state, colliding(u64(1)), addr n1) else 0
+    map.insert(value, state, colliding(u64(2)), addr n2) else 0
+    map.insert(value, state, colliding(u64(3)), addr n3) else 0
+    map.insert(value, state, colliding(u64(4)), addr n4) else 0
+    map.insert(value, state, colliding(u64(5)), addr n5) else 0
+    map.insert(value, state, colliding(u64(6)), addr n6) else 0
     before: usize = mem.arena_used(state)
-    mut departing: u64 = 1
-    mut arriving: u64 = 7
+    mut departing: colliding = colliding(u64(1))
+    mut arriving: colliding = colliding(u64(7))
     mut cycles: usize = 0
     mut intact: bool = true
     while cycles < 32 do
@@ -192,12 +197,12 @@ churn_case: () -> (ok: bool) =
                  and map.capacity(value) == 8
                  and map.length(value) == 6
                  and has(value, arriving, 77)
-                 and has(value, 6, 66)
+                 and has(value, colliding(u64(6)), 66)
         departing = arriving
-        inc arriving
+        arriving = colliding(u64(arriving) + 1)
         inc cycles
     end while
-    map.release_map(value, state)
+    map.release(value, state)
     ok = intact and mem.arena_used(state) == before and map.length(value) == 0
 end churn_case
 

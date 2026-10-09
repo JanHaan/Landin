@@ -1,4 +1,5 @@
---  Linux/Darwin libc-backed provider for core/io.world.
+--  Linux/Darwin libc-backed provider of every core/io concept: reader,
+--  writer, files and process, and so of their composition, world.
 --  Import this module only at a hosted authority root.
 
 import core/io
@@ -18,7 +19,7 @@ extern(c) _landin_host_close: (descriptor: i32) -> (status: i32)
 extern(c) _landin_host_errno: () -> (number: i32)
 
 --  Values shared by Linux and Darwin (historical names). Kept at the only
---  provider that interprets libc errno, rather than leaking into world users.
+--  provider that interprets libc errno, rather than leaking into its users.
 linux_eperm: i32 = 1
 linux_enoent: i32 = 2
 linux_eintr: i32 = 4
@@ -252,14 +253,15 @@ system_argument: (self: ptr system, index: usize)
     value = (data: data, length: length)
 end system_argument
 
-system is io.world
+system is io.reader (read: system_read)
+system is io.writer (write: system_write, write_some: system_write_some)
+system is io.files
     (open_read: system_open_read, open_write: system_open_write,
-     same_file: system_same_file,
-     close: system_close,
-     read: system_read, write: system_write,
-     write_some: system_write_some, out: system_out,
-     err: system_err, argument_count: system_argument_count,
-     argument: system_argument)
+     same_file: system_same_file, close: system_close)
+system is io.process
+    (out: system_out, err: system_err,
+     argument_count: system_argument_count, argument: system_argument)
+system is io.world ()
 
 public host: () -> (state: system) =
     state = (arguments: _landin_host_argument_table(),

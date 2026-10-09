@@ -15,7 +15,7 @@ public main: () -> (code: i32) =
     files[0] = source
     mut arguments: [1]io.argument
     arguments[0] = (data: addr path[0], length: 0)
-    mut state: io.memory = io.memory_world
+    mut state: io.memory = io.memory_over
         (files[0..<1], arguments[0..<0], output[0..<5], errors[0..<1])
     mut world: any io.world = any(addr state)
 

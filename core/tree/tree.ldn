@@ -35,9 +35,9 @@ tree_value: type = struct
 end tree_value
 public tree: type = tree_value
 
-public new_tree: () -> (result: tree_value) =
-    result = (nodes: vec.new_list(item: node_value))
-end new_tree
+public new: () -> (result: tree_value) =
+    result = (nodes: vec.new(item: node_value))
+end new
 
 public length: (value: tree_value) -> (count: usize) =
     count = vec.length(value.nodes)

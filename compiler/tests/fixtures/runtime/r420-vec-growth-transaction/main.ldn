@@ -108,7 +108,7 @@ public main: () -> (code: i32) =
          attempts: 0, allocations: 0, frees: 0,
          first_free_size: 0, second_free_size: 0,
          first_address: 0, second_address: 0, exact_frees: true)
-    mut values := vec.new_list(item: ptr node)
+    mut values := vec.new(item: ptr node)
 
     vec.push(values, state, addr n0) else 0
     vec.push(values, state, addr n1) else 0

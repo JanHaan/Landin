@@ -5,19 +5,23 @@ import core/vec
 
 mut comparisons: usize = 0
 
-less_i32: (left: i32, right: i32) -> (yes: bool) =
-    inc comparisons
-    yes = left < right
-end less_i32
+--  The vector sorts through the library's own i32 ordering. Comparison
+--  counts are taken on a distinct wrapper with its own counting evidence.
+counted: type = distinct i32
 
-i32 is sort.ordered (less: less_i32)
+less_counted: (left: counted, right: counted) -> (yes: bool) =
+    inc comparisons
+    yes = i32(left) < i32(right)
+end less_counted
+
+counted is sort.ordered (less: less_counted)
 
 public main: () -> (code: i32) =
     code = 1
     mut heap_state := heap.host()
     budget: usize = 10
-    mut state := failing.count_down(addr heap_state, budget)
-    mut numbers := vec.new_list(item: i32)
+    mut state := failing.new(addr heap_state, budget)
+    mut numbers := vec.new(item: i32)
     sort.sort(vec.used(numbers))
     vec.push(numbers, state, 20) else (problem)
         _ = problem
@@ -60,17 +64,18 @@ public main: () -> (code: i32) =
         lenof view == 21 and view[6] == 7 and view[7] == 7
           and view[20] == 20
     end
-    mut small: [5]i32 = [4, 1, 3, 1, 2]
+    mut small: [5]counted = [counted(4), counted(1), counted(3), counted(1),
+                             counted(2)]
     comparisons = 0
     sort.sort_selection(small[0..<lenof small])
-    selection_ok: bool = comparisons == 10 and small[0] == 1
-                         and small[1] == 1 and small[2] == 2
-                         and small[3] == 3 and small[4] == 4
+    selection_ok: bool = comparisons == 10 and i32(small[0]) == 1
+                         and i32(small[1]) == 1 and i32(small[2]) == 2
+                         and i32(small[3]) == 3 and i32(small[4]) == 4
 
-    mut large: [256]i32 = zeroed
+    mut large: [256]counted
     mut at: usize = 0
     while at < lenof large do
-        large[at] = i32(lenof large - at)
+        large[at] = counted(i32(lenof large - at))
         inc at
     end while
     comparisons = 0
@@ -79,7 +84,7 @@ public main: () -> (code: i32) =
     at = 0
     mut large_sorted: bool = true
     while at < lenof large do
-        large_sorted = large_sorted and large[at] == i32(at + 1)
+        large_sorted = large_sorted and i32(large[at]) == i32(at + 1)
         inc at
     end while
     after: usize = failing.attempts(state)

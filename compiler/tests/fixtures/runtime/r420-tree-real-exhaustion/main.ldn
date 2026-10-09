@@ -7,8 +7,8 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
          -> (okay: bool) =
     okay = false
     budget: usize = 10
-    mut state := failing.count_down(addr inner, budget)
-    mut value := tree.new_tree()
+    mut state := failing.new(addr inner, budget)
+    mut value := tree.new()
     name: utf8 = "kept"
     mut at: usize = 0
     while at < 8 do
@@ -58,7 +58,7 @@ end exhaust
 
 reuse: (inout state: pool.provider) -> (okay: bool) =
     okay = false
-    mut value := tree.new_tree()
+    mut value := tree.new()
     name: utf8 = "again"
     mut at: usize = 0
     while at < 3 do

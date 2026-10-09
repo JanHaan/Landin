@@ -736,12 +736,12 @@ prefix, `replace` writes an existing initialized slot, and `used` exposes that
 prefix as a mutable slice `from storage`. `release` removes only its tail, and
 `dispose` returns the backing byte pointer only when the prefix is empty and
 backing is present. It clears that backing to the private union's absent atom;
-a repeated disposal reports `raw_empty`, never a zero or fabricated pointer.
+a repeated disposal reports `empty`, never a zero or fabricated pointer.
 `transfer` copies one initialized source
 slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
-foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
-`raw_empty`, and `raw_not_empty`.
+foreseeable and therefore declared outcomes: `raw_full`, `out_of_bounds`,
+`empty`, and `raw_not_empty`.
 For byte storage, `clear` shortens the typed initialized prefix to
 zero in one step; it leaves the backing allocation for `dispose` to return.
 
@@ -772,7 +772,7 @@ satisfy its `escaping` parameter. `mem.delete` consumes one pointer binding
 and releases the original object extent through the supplied allocator.
 `mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
 every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
-slice, and `mem.drop_bytes(state, owner)` releases the original allocation and
+slice, and `mem.delete_bytes(state, owner)` releases the original allocation and
 clears the owner after the byte prefix is emptied. A zero count makes no
 allocation. A copied view or owner is
 still subject to manual lifetime discipline; consumption is not ownership.
@@ -1803,14 +1803,14 @@ report: () -> (code: i32) =
 end report
 ```
 
-For bulk hosted cleanup, `core/region.new_region(addr provider)` creates an
+For bulk hosted cleanup, `core/region.new(addr provider)` creates an
 ordinary allocator that records its acquired extents through that provider.
-An explicit `defer region.release_region(program)` releases them together.
+An explicit `defer region.release(program)` releases them together.
 The region value borrows its provider; its allocations are still independent,
 and its bookkeeping also consumes the supplied provider's capacity. A finite
 caller-backed provider therefore remains finite, with no hidden heap fallback.
 This library operation is not the withdrawn lexical escape guarantee. Region
-allocations must stop being used before `release_region`, regardless of the
+allocations must stop being used before `release`, regardless of the
 parent provider's backing lifetime. Likewise, `core/pool.over` retains the
 backing origin in its handle, but its allocation results are independent:
 callers must keep the backing live until every use of those results ends.
@@ -1821,9 +1821,9 @@ The allocator's independent no-`from` result permits both live allocations
 and useful helper results. It does not acquire a lexical frame origin when
 called inside a block. In particular, a helper can store an allocated result
 in module storage without returning it through that block. A checked arena
-therefore cannot take frame backing. `mem.fail_over` follows the same rule.
+therefore cannot take frame backing. `mem.failing_over` follows the same rule.
 For a local buffer whose use the programmer can keep entirely within its
-frame, `mem.arena_over_unchecked` and `mem.fail_over_unchecked` make the
+frame, `mem.arena_over_unchecked` and `mem.failing_over_unchecked` make the
 lifetime opt-out explicit at construction. Their allocation results remain
 independent, even through helpers; the caller must ensure every result stops
 being used before the buffer ends. Borrowing the mutable allocator for each
@@ -2521,10 +2521,10 @@ new_buffers: (provider: type is mem.allocator,
              -> (first: mem.byte_buffer, second: mem.byte_buffer,
                  third: mem.byte_buffer) ! mem.out_of_memory =
     first = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, first)
+    undo mem.delete_bytes(state, first)
 
     second = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, second)
+    undo mem.delete_bytes(state, second)
 
     third = try mem.new_bytes(state: state, count: count)
     -- All three owners are published by the successful return.
@@ -4163,10 +4163,11 @@ public entry: () -> (code: i32) =
     mut host := hosted.host()
     world: any io.world = any(addr host)
     mut heap := heap.host()
-    mut program := region.new_region(addr heap)
-    defer region.release_region(program)
+    mut program := region.new(addr heap)
+    defer region.release(program)
     stream: io.file = world.err()
-    mut logger := diag.to(addr world, addr stream)
+    writer: any io.writer = any(addr host)
+    mut logger := diag.to(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     kept: usize = run_logged(program, world, usize(4096), log) else (problem)
         _ = problem
@@ -4217,13 +4218,13 @@ test_drops_debug: () -> (ok: bool) =
       (data: addr path[0], length: lenof path)]
     mut output: [128]u8 = zeroed
     mut errors: [128]u8 = zeroed
-    mut memory := io.memory_world(files[0..<1], arguments[0..<3],
+    mut memory := io.memory_over(files[0..<1], arguments[0..<3],
                                   output[0..<128], errors[0..<128])
     world: any io.world = any(addr memory)
     mut backing := heap.host()
-    mut program := region.new_region(addr backing)
-    defer region.release_region(program)
-    mut logger := diag.new_log(capacity: 4)
+    mut program := region.new(addr backing)
+    defer region.release(program)
+    mut logger := diag.new(capacity: 4)
     log: any diag.log = any(addr logger)
     kept: usize = app.run_logged(program, world, usize(4096), log) else (problem)
         _ = problem
@@ -4239,6 +4240,20 @@ type, so something else can satisfy it. It travels as
 in front of a system call costs nothing, where an allocator
 is threaded generically because it sits in hot loops. Same
 machinery, [1690], chosen per case.
+
+It is four concepts, not one, because a provider should
+supply only what it has [1260]: `io.writer` is `write` and
+`write_some`, `io.reader` is `read`, `io.files` is open,
+close and `same_file`, and `io.process` is the two standard
+streams and the argument table. `io.world` composes all
+four for a root that has everything, and `world.write` on
+an erased world reaches the writer entry through the
+composed table. A UART implements `writer` and nothing
+else, and a diagnostics log asks for `any io.writer`, which
+is why `entry` builds one from the same `host`: an erased
+world is not an erased writer, the two do not convert. A
+routine holding only the world lends its writer with
+`io.writer_of(addr world)` (D268).
 
 The system provider captures errno immediately after a libc failure and keeps
 the exact terminal value in explicit state, available through `hosted.last_errno`.
@@ -4258,11 +4273,11 @@ file, following symbolic links and recognizing hard links. The left path
 must exist; failure to inspect it is an error. An absent right path returns
 false, but other lookup failures are errors. The log filter checks this
 before truncating an output. Names must remain stable during the check and
-open: this is not an atomic operation. Custom world providers must implement
-both `same_file` and `write_some` when migrating to this interface.
+open: this is not an atomic operation. A `files` provider implements
+`same_file` and a `writer` implements `write_some`; neither is optional.
 
 The bounded library provider is `core/io.memory`, constructed with
-`memory_world(files, arguments, output, errors)`. Its caller supplies every
+`memory_over(files, arguments, output, errors)`. Its caller supplies every
 file name, content buffer, descriptor and output extent. Files must already
 exist in the table; opening for writing truncates after checks. Reads stop at
 the initialized length. Memory `write` completes the slice or reports failure

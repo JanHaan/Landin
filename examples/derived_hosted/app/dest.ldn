@@ -10,7 +10,7 @@ public message: type = struct
     delivered: usize
 end message
 public new_message: () -> (value: message) =
-    bytes := vec.new_list(item: u8)
+    bytes := vec.new(item: u8)
     value = (bytes: bytes, delivered: 0)
 end new_message
 reserve_message: (provider: type is mem.allocator, inout allocator: provider,

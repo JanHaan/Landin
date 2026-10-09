@@ -22,19 +22,19 @@ end region_value
 
 public region: type (provider: type) = region_value(provider)
 
-public new_region: (provider: type is mem.allocator, parent: ptr mut provider)
-                   -> (value: region(provider) from parent) =
+public new: (provider: type is mem.allocator, parent: ptr mut provider)
+            -> (value: region(provider) from parent) =
     value = (parent: parent, allocations: empty)
-end new_region
+end new
 
 --  The caller reserves one initialized record per simultaneously live payload.
 --  No ledger request is sent to the parent in this form.
-public bounded_region: (provider: type is mem.allocator,
-                        parent: ptr mut provider, records: []mut allocation)
-                       -> (value: region(provider) from parent, records) =
+public over: (provider: type is mem.allocator,
+              parent: ptr mut provider, records: []mut allocation)
+             -> (value: region(provider) from parent, records) =
     value = (parent: parent,
              allocations: bounded(values: (values: records, used: 0)))
-end bounded_region
+end over
 
 region_alloc: (provider: type is mem.allocator,
                inout state: region(provider), size: usize, alignment: usize)
@@ -54,7 +54,7 @@ record_allocation: (provider: type is mem.allocator,
                    -> none ! mem.out_of_memory =
     match state.allocations
         empty: begin
-            mut records := vec.new_list(item: allocation)
+            mut records := vec.new(item: allocation)
             try vec.push(records, state.parent.val, record)
             state.allocations = recorded(values: records)
         end
@@ -95,8 +95,8 @@ end region_grow
 --  End every alias before this call. Every payload and ledger allocation
 --  is returned to the parent, including failed-construction payloads. A
 --  monotonic parent keeps consumed backing until its own explicit reset.
-public release_region: (provider: type is mem.allocator,
-                        inout state: region(provider)) -> none =
+public release: (provider: type is mem.allocator,
+                 inout state: region(provider)) -> none =
     match state.allocations
         empty: return
         recorded(inout records): release_records(state.parent, records)
@@ -107,7 +107,7 @@ public release_region: (provider: type is mem.allocator,
         end
     end match
     state.allocations = empty
-end release_region
+end release
 
 release_bounded: (provider: type is mem.allocator, parent: ptr mut provider,
                   records: []mut allocation, used: usize) -> none =

@@ -1,10 +1,5 @@
 import core/sort
 
-less: (left: i32, right: i32) -> (yes: bool) =
-    yes = left < right
-end less
-i32 is sort.ordered (less: less)
-
 exercise: () -> (ok: bool) =
     ok = false
     mut values: [3]i32 = [3, 1, 2]

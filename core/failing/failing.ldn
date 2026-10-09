@@ -18,15 +18,15 @@ end counted
 --  allowed_attempts is the number of future allocation calls allowed to
 --  reach inner.alloc. An inner failure consumes one such attempt. Injected
 --  failures increment attempts/injected_failures only and never call inner.
-public count_down: (inner_provider: type is mem.allocator,
-                    inner: ptr mut inner_provider,
-                    allowed_attempts: usize)
-                   -> (state: counted(inner_provider) from inner) =
+public new: (inner_provider: type is mem.allocator,
+             inner: ptr mut inner_provider,
+             allowed_attempts: usize)
+            -> (state: counted(inner_provider) from inner) =
     state = (inner: inner, remaining: allowed_attempts,
              attempts: 0, delegated: 0, successes: 0,
              injected_failures: 0, inner_failures: 0,
              frees: 0, live: 0)
-end count_down
+end new
 
 --  Replace only the future delegation budget. Evidence counters accumulate
 --  across retries so the failed and successful calls remain distinguishable.

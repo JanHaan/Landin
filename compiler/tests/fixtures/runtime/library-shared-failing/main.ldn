@@ -5,7 +5,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
     mut backing: [32]u8 = zeroed
     mut inner := mem.arena_over_unchecked(addr backing[0], 32)
-    mut state := failing.count_down(addr inner, usize(1))
+    mut state := failing.new(addr inner, usize(1))
     address := try mem.allocate(state, usize(4), usize(1))
     address.val = 42
     return when address.val <> 42

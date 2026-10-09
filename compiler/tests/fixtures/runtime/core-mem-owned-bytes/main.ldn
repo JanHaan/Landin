@@ -117,7 +117,7 @@ public main: () -> (code: i32) =
     large: usize = 4096
     four: usize = 4
     maximum: usize = 18_446_744_073_709_551_615
-    mut state := failing.count_down(addr heap_state, zero)
+    mut state := failing.new(addr heap_state, zero)
     mut empty := mem.new_bytes(state, zero) else (problem)
         _ = problem
         return
@@ -128,8 +128,8 @@ public main: () -> (code: i32) =
         refused = true
         empty
     end
-    mem.drop_bytes(state, failed)
-    mem.drop_bytes(state, empty)
+    mem.delete_bytes(state, failed)
+    mem.delete_bytes(state, empty)
     failing.permit(state, four)
     mut small := mem.new_bytes(state, one) else (problem)
         _ = problem
@@ -168,22 +168,22 @@ public main: () -> (code: i32) =
         overflow = true
         empty
     end
-    mem.drop_bytes(state, huge)
-    mem.drop_bytes(state, bigger)
+    mem.delete_bytes(state, huge)
+    mem.delete_bytes(state, bigger)
     survivors: bool = begin
         a := mem.bytes(small)
         c := mem.bytes(other)
         a[0] == 17 and c[0] == 37
     end
-    mem.drop_bytes(state, small)
-    mem.drop_bytes(state, other)
+    mem.delete_bytes(state, small)
+    mem.delete_bytes(state, other)
     cleared: bool = begin
         a := mem.bytes(small)
         b := mem.bytes(bigger)
         c := mem.bytes(other)
         lenof a == 0 and lenof b == 0 and lenof c == 0
     end
-    mem.drop_bytes(state, small)
+    mem.delete_bytes(state, small)
     if refused and initialized and overflow and survivors and cleared
       and failing.attempts(state) == 5 and failing.successes(state) == 3
       and failing.injected_failures(state) == 1

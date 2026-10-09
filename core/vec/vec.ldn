@@ -1,8 +1,5 @@
 import core/mem
 
-public empty: atom
-public out_of_bounds: atom
-
 --  The list shape is public as in prototype 3, but its `values` field has the
 --  opaque mem.storage(item) type: clients can inspect the container shape
 --  without reaching raw-storage counters or bytes.
@@ -10,10 +7,10 @@ public list: type (item: type) = struct
     values: mem.storage(item)
 end list
 
-public new_list: (item: type) -> (result: list(item)) =
+public new: (item: type) -> (result: list(item)) =
     store := mem.empty_storage(item: item)
     result = (values: store)
-end new_list
+end new
 
 public length: (item: type, value: list(item)) -> (count: usize) =
     count = mem.initialized(value.values)
@@ -68,7 +65,7 @@ drain: (item: type, inout value: mem.storage(item)) -> none =
     end if
 
     while mem.initialized(value) > 0 do
-        discarded: item = mem.release(value) else (problem)
+        discarded: item = mem.withdraw(value) else (problem)
             --  D151 makes this unreachable after the positive initialized
             --  query. It is an internal raw-state defect, not allocation
             --  pressure, so do not manufacture out_of_memory here.
@@ -164,18 +161,38 @@ public push: (item: type, provider: type is mem.allocator,
 end push
 
 public get: (item: type, value: list(item), at: usize)
-            -> (result: item from value) ! out_of_bounds =
+            -> (result: item from value) ! mem.out_of_bounds =
     result = mem.get(value.values, at) else (problem)
         _ = problem
-        fail out_of_bounds
+        fail mem.out_of_bounds
     end
 end get
 
-public pop: (item: type, inout value: list(item))
-            -> (result: item from value) ! empty =
-    result = mem.release(value.values) else (problem)
+--  A writable slot for in-place update. While the result lives the list
+--  binding may not be passed inout or sink [0800]: bind it, update through
+--  it, and let it end before the next push, reserve or release.
+public at: (item: type, inout value: list(item), index: usize)
+           -> (slot: ptr mut item from value) ! mem.out_of_bounds =
+    view: []mut item = mem.used(value.values)
+    fail mem.out_of_bounds when index >= lenof view
+    slot = addr view[index]
+end at
+
+public last: (item: type, value: list(item))
+             -> (result: item from value) ! mem.empty =
+    count: usize = length(value)
+    fail mem.empty when count == 0
+    result = mem.get(value.values, count - 1) else (problem)
         _ = problem
-        fail empty
+        fail mem.empty
+    end
+end last
+
+public pop: (item: type, inout value: list(item))
+            -> (result: item from value) ! mem.empty =
+    result = mem.withdraw(value.values) else (problem)
+        _ = problem
+        fail mem.empty
     end
 end pop
 

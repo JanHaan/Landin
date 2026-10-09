@@ -48,8 +48,8 @@ public main: () -> (code: i32) =
     code = 1
     mut outer_bytes: [4]u8 = zeroed
     mut inner_bytes: [2]u8 = zeroed
-    mut outer := mem.fail_over_unchecked(addr outer_bytes[0], 4, 4)
-    mut inner := mem.fail_over_unchecked(addr inner_bytes[0], 2, 3)
+    mut outer := mem.failing_over_unchecked(addr outer_bytes[0], 4, 4)
+    mut inner := mem.failing_over_unchecked(addr inner_bytes[0], 2, 3)
     ok: bool = nested(outer, inner) else false
     return when not ok
     return when mem.failing_frees(outer) <> 2 or mem.failing_remaining(inner) <> 1

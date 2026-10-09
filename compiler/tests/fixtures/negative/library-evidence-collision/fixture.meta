@@ -1,0 +1,7 @@
+class: negative
+summary: a program re-declaring the library's u32 hashable evidence is refused as a conformance collision
+args: --root=../.. ../tests/fixtures/negative/library-evidence-collision
+status: 1
+codes: L0317
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+constructs: 1230, 1240, 1280, 1340

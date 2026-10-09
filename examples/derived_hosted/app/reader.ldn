@@ -22,7 +22,7 @@ public open_reader: (provider: type is mem.allocator, inout allocator: provider,
         world.close(opened) else (close_problem) _ = close_problem end
         fail problem
     end
-    line := vec.new_list(item: u8)
+    line := vec.new(item: u8)
     value = (opened: opened, chunk: chunk, line: line,
              filled: 0, position: 0, ended: false)
 end open_reader
@@ -86,7 +86,7 @@ public shut_reader: (provider: type is mem.allocator, inout allocator: provider,
                     -> none ! io.io_failed =
     mut chunk := value.chunk
     mut line := value.line
-    mem.drop_bytes(allocator, chunk)
+    mem.delete_bytes(allocator, chunk)
     vec.release(line, allocator)
     try world.close(value.opened)
 end shut_reader

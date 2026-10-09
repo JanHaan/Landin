@@ -83,13 +83,13 @@ public main: () -> (code: i32) =
     mut files: [1]io.memory_file
     files[0] = file_value
     args: []io.argument = []
-    mut state := io.memory_world(files[0..<1], args, output[0..<1], errors[0..<1])
+    mut state := io.memory_over(files[0..<1], args, output[0..<1], errors[0..<1])
     state.read_limit = 2
     state.fail_close_at = 1
     world: any io.world = any(addr state)
     mut heap_state := heap.host()
     budget: usize = 0
-    mut allocator := failing.count_down(addr heap_state, budget)
+    mut allocator := failing.new(addr heap_state, budget)
     return when not allocation_refused(allocator, world)
     return when publications <> 0 or state.open_calls <> 1
       or state.close_calls <> 1 or files[0].opened

@@ -229,7 +229,7 @@ public main: () -> (code: i32) =
     end if
 
     mut growth := new_audit()
-    mut values := vec.new_list(item: ptr node)
+    mut values := vec.new(item: ptr node)
     vec.push(values, growth, addr node_1) else 0
     vec.push(values, growth, addr node_2) else 0
     vec.push(values, growth, addr node_3) else 0

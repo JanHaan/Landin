@@ -7,7 +7,7 @@ public main: () -> (code: i32) =
     mut empty := mem.empty_storage(item: u8)
     mut absent_refused: bool = false
     _ = mem.dispose(empty) else (problem)
-        absent_refused = problem == mem.raw_empty
+        absent_refused = problem == mem.empty
     end
     mut admit_refused: bool = false
     _ = mem.admit(empty, initial) else (problem)
@@ -16,12 +16,12 @@ public main: () -> (code: i32) =
     end
     mut get_refused: bool = false
     _ = mem.get(empty, zero) else (problem)
-        get_refused = problem == mem.uninitialized
+        get_refused = problem == mem.out_of_bounds
         u8(0)
     end
     mut release_refused: bool = false
-    _ = mem.release(empty) else (problem)
-        release_refused = problem == mem.raw_empty
+    _ = mem.withdraw(empty) else (problem)
+        release_refused = problem == mem.empty
         u8(0)
     end
     empty_view: bool = begin
@@ -41,7 +41,7 @@ public main: () -> (code: i32) =
     exact: bool = usize(released) == usize(base)
     mut twice_refused: bool = false
     _ = mem.dispose(allocated) else (problem)
-        twice_refused = problem == mem.raw_empty
+        twice_refused = problem == mem.empty
     end
     disposed_view: bool = begin
         view := mem.used(allocated)

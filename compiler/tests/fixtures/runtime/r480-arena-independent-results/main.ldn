@@ -114,7 +114,7 @@ public main: () -> (code: i32) =
         absent: false
         ptr (retained): retained.val == 37
     end match
-    mut counted := mem.fail_over(addr counted_backing[0], 8, 1)
+    mut counted := mem.failing_over(addr counted_backing[0], 8, 1)
     counted_block: ptr mut u8 =
         mem.allocate(counted, usize(1), usize(1)) else (problem)
         _ = problem

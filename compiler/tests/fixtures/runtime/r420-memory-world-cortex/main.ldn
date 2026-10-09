@@ -13,7 +13,7 @@ public main: () -> (code: i32) =
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: []io.argument = []
-    mut state := io.memory_world(files[0..<1], no_arguments,
+    mut state := io.memory_over(files[0..<1], no_arguments,
                                  output[0..<4], errors[0..<1])
     stream: io.file = io.out(state)
     io.write(state, stream, "ok") else (problem)

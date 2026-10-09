@@ -54,9 +54,9 @@ list: type (item: type) = struct
     end storage
 end list
 
-new_list: (item: type) -> (result: list(item)) =
+new: (item: type) -> (result: list(item)) =
     result = (storage: vacant)
-end new_list
+end new
 
 initialized: (item: type, value: list(item)) -> (count: usize) =
     match value.storage

@@ -13,8 +13,8 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
     zero: usize = 0
     one: usize = 1
     eight: usize = 8
-    mut value := tree.new_tree()
-    mut state := failing.count_down(addr backing, zero)
+    mut value := tree.new()
+    mut state := failing.new(addr backing, zero)
     mut empty_refused: bool = false
     _ = tree.add_leaf(value, state, leaf_name) else (problem)
         _ = problem

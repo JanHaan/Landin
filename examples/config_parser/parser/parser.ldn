@@ -179,7 +179,7 @@ parse_entry: (source: []u8, inout parser: parser_state,
         inc parser.depth
         defer lower_depth(parser)
         advance(source, parser)
-        mut children := vec.new_list(item: ptr mut value)
+        mut children := vec.new(item: ptr mut value)
         try parse_sequence(source, parser, logger, arena, children, true)
         block: ptr mut u8 = try mem.allocate
             (arena, sizeof value, alignof value)
@@ -265,7 +265,7 @@ parse_sequence: (source: []u8, inout parser: parser_state,
 end parse_sequence
 
 public empty: () -> (result: document) =
-    result = (items: vec.new_list(item: ptr mut value))
+    result = (items: vec.new(item: ptr mut value))
 end empty
 
 public parse_file: (source: []u8, inout logger: any diag.log,
@@ -283,6 +283,6 @@ public length: (tree: document) -> (count: usize) =
 end length
 
 public at: (tree: document, index: usize)
-           -> (item: ptr mut value from tree) ! vec.out_of_bounds =
+           -> (item: ptr mut value from tree) ! mem.out_of_bounds =
     item = try vec.get(tree.items, index)
 end at

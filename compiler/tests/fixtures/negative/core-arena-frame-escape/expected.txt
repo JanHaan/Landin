@@ -19,10 +19,10 @@ error[L0314]: this frame-origin reference cannot be retained beyond the call
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
 error[L0314]: this frame-origin reference cannot be retained beyond the call
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:17:23
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:17:26
    |
-17 |     _ = mem.fail_over(addr bytes[0], 32, 1)
-   |                       ^^^^^^^^^^^^^
+17 |     _ = mem.failing_over(addr bytes[0], 32, 1)
+   |                          ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:16:5
    |
 16 |     mut bytes: [32]u8 = zeroed

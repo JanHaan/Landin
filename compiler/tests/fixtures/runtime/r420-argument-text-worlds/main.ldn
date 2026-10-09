@@ -72,11 +72,11 @@ public main: () -> (code: i32) =
     files: []mut io.memory_file = []
     output: []mut u8 = []
     errors: []mut u8 = []
-    mut state := io.memory_world(files, arguments[0..<3], output, errors)
-    memory_world: any io.world = any(addr state)
+    mut state := io.memory_over(files, arguments[0..<3], output, errors)
+    memory_over: any io.world = any(addr state)
     mut memory_word_copy: [5]u8 = zeroed
     mut memory_number_copy: [10]u8 = zeroed
-    return when not pair_is_expected(memory_world, 3,
+    return when not pair_is_expected(memory_over, 3,
                                      memory_word_copy[0..<5],
                                      memory_number_copy[0..<10])
 
@@ -85,7 +85,7 @@ public main: () -> (code: i32) =
       or too_small[0] <> 7 or too_small[1] <> 8
       or too_small[2] <> 9 or too_small[3] <> 10
 
-    empty_argument: io.argument = memory_world.argument(2) else (problem)
+    empty_argument: io.argument = memory_over.argument(2) else (problem)
         _ = problem
         return
     end

@@ -14,7 +14,7 @@ end main
 
 counted: () -> none =
     mut bytes: [32]u8 = zeroed
-    _ = mem.fail_over(addr bytes[0], 32, 1)
+    _ = mem.failing_over(addr bytes[0], 32, 1)
 end counted
 
 absent: atom

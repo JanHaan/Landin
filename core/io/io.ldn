@@ -21,7 +21,30 @@ public argument: type = struct
     length: usize
 end argument
 
-public world: type = concept (provider: type)
+--  The capability is four narrow concepts over one provider type, so a
+--  provider supplies only what it has: a UART is a writer, a read-only
+--  image is a reader, and only a hosted system is also files and a
+--  process.  A consumer names the narrowest concept it uses; diagnostics
+--  stream through any io.writer.  `world` composes all four for roots that
+--  have everything.  An erased `any io.world` dispatches every entry, but
+--  it is not an `any io.writer`: build that from the same provider pointer
+--  where a writer is wanted [D268].
+public writer: type = concept (provider: type)
+    write: (self: ptr mut provider, opened: file, bytes: []u8)
+           -> none ! io_failed
+    --  One attempt returns its positive progress; empty input returns zero.
+    --  A failed nonempty attempt transfers no bytes, so a caller can retry
+    --  its uncommitted suffix.
+    write_some: (self: ptr mut provider, opened: file, bytes: []u8)
+                -> (count: usize) ! io_failed
+end writer
+
+public reader: type = concept (provider: type)
+    read: (self: ptr mut provider, opened: file, into: []mut u8)
+          -> (count: usize) ! io_failed
+end reader
+
+public files: type = concept (provider: type)
     open_read: (self: ptr mut provider, path: ptr u8)
                -> (opened: file) ! not_found | no_access | io_failed
     open_write: (self: ptr mut provider, path: ptr u8)
@@ -30,75 +53,96 @@ public world: type = concept (provider: type)
                -> (same: bool) ! io_failed
     close: (self: ptr mut provider, sink opened: file)
            -> none ! io_failed
-    read: (self: ptr mut provider, opened: file, into: []mut u8)
-          -> (count: usize) ! io_failed
-    write: (self: ptr mut provider, opened: file, bytes: []u8)
-           -> none ! io_failed
-    --  One attempt returns its positive progress; empty input returns zero.
-    --  A failed nonempty attempt transfers no bytes, so a caller can retry
-    --  its uncommitted suffix.
-    write_some: (self: ptr mut provider, opened: file, bytes: []u8)
-                -> (count: usize) ! io_failed
+end files
+
+public process: type = concept (provider: type)
     out: (self: ptr provider) -> (stream: file)
     err: (self: ptr provider) -> (stream: file)
     argument_count: (self: ptr provider) -> (count: usize)
     argument: (self: ptr provider, index: usize)
               -> (value: argument from self) ! no_argument
+end process
+
+public world: type = concept (provider: type) is reader, writer, files, process
 end world
 
-public open_read: (provider: type is world, inout state: provider,
+--  The writer part of an erased world. `any io.world` and `any io.writer`
+--  do not convert, so a consumer holding only the world lends its writer
+--  through this adapter, which forwards both entries to the same provider.
+lent: type = struct
+    source: ptr any world
+end lent
+public lent_writer: type = lent
+
+public writer_of: (erased: ptr any world) -> (adapter: lent from erased) =
+    adapter = (source: erased)
+end writer_of
+
+lent_write: (self: ptr mut lent, opened: file, bytes: []u8)
+            -> none ! io_failed =
+    try self.val.source.val.write(opened, bytes)
+end lent_write
+
+lent_write_some: (self: ptr mut lent, opened: file, bytes: []u8)
+                 -> (count: usize) ! io_failed =
+    count = try self.val.source.val.write_some(opened, bytes)
+end lent_write_some
+
+lent is writer (write: lent_write, write_some: lent_write_some)
+
+public open_read: (provider: type is files, inout state: provider,
                    path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_read(addr state, path)
 end open_read
 
-public open_write: (provider: type is world, inout state: provider,
+public open_write: (provider: type is files, inout state: provider,
                     path: ptr u8)
                    -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_write(addr state, path)
 end open_write
 
-public same_file: (provider: type is world, inout state: provider,
+public same_file: (provider: type is files, inout state: provider,
                    left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io_failed =
     same = try provider.same_file(addr state, left, right)
 end same_file
 
-public close: (provider: type is world, inout state: provider,
+public close: (provider: type is files, inout state: provider,
                sink opened: file) -> none ! io_failed =
     try provider.close(addr state, opened)
 end close
 
-public read: (provider: type is world, inout state: provider,
+public read: (provider: type is reader, inout state: provider,
               opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
     count = try provider.read(addr state, opened, into)
 end read
 
-public write: (provider: type is world, inout state: provider,
+public write: (provider: type is writer, inout state: provider,
                opened: file, bytes: []u8) -> none ! io_failed =
     try provider.write(addr state, opened, bytes)
 end write
 
-public write_some: (provider: type is world, inout state: provider,
+public write_some: (provider: type is writer, inout state: provider,
                     opened: file, bytes: []u8) -> (count: usize) ! io_failed =
     count = try provider.write_some(addr state, opened, bytes)
 end write_some
 
-public out: (provider: type is world, state: provider) -> (stream: file) =
+public out: (provider: type is process, state: provider) -> (stream: file) =
     stream = provider.out(addr state)
 end out
 
-public err: (provider: type is world, state: provider) -> (stream: file) =
+public err: (provider: type is process, state: provider) -> (stream: file) =
     stream = provider.err(addr state)
 end err
 
-public argument_count: (provider: type is world, state: provider)
+public argument_count: (provider: type is process, state: provider)
                        -> (count: usize) =
     count = provider.argument_count(addr state)
 end argument_count
 
-public argument_at: (provider: type is world, state: ptr provider,
+public argument_at: (provider: type is process, state: ptr provider,
                      index: usize)
                     -> (value: argument from state) ! no_argument =
     value = try provider.argument(state, index)
@@ -122,7 +166,7 @@ public copy_argument: (source: argument, scratch: []mut u8)
     bytes = scratch[0..<source.length]
 end copy_argument
 
---  A world entry receives one already terminated pointer. Dynamic callers
+--  A files entry receives one already terminated pointer. Dynamic callers
 --  make that precondition explicit with caller-owned scratch: empty input,
 --  an embedded NUL, and insufficient terminator capacity are distinct and
 --  checked in that order. No byte is copied before all checks pass. Source
@@ -155,7 +199,7 @@ public terminate_path: (source: []u8, scratch: []mut u8)
     path = addr scratch[0]
 end terminate_path
 
-public open_read_bytes: (provider: type is world, inout state: provider,
+public open_read_bytes: (provider: type is files, inout state: provider,
                          path: []u8, scratch: []mut u8)
                         -> (opened: file)
                         ! empty_path | path_contains_nul | path_too_long
@@ -164,7 +208,7 @@ public open_read_bytes: (provider: type is world, inout state: provider,
     opened = try open_read(state, terminated)
 end open_read_bytes
 
-public open_write_bytes: (provider: type is world, inout state: provider,
+public open_write_bytes: (provider: type is files, inout state: provider,
                           path: []u8, scratch: []mut u8)
                          -> (opened: file)
                          ! empty_path | path_contains_nul | path_too_long
@@ -176,7 +220,7 @@ end open_write_bytes
 --  UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
 --  to bytes does not allocate or invent a terminator; the same caller-owned
 --  scratch and validation policy as the byte adapters applies.
-public open_read_text: (provider: type is world, inout state: provider,
+public open_read_text: (provider: type is files, inout state: provider,
                         path: utf8, scratch: []mut u8)
                        -> (opened: file)
                        ! empty_path | path_contains_nul | path_too_long
@@ -185,7 +229,7 @@ public open_read_text: (provider: type is world, inout state: provider,
     opened = try open_read_bytes(state, raw, scratch)
 end open_read_text
 
-public open_write_text: (provider: type is world, inout state: provider,
+public open_write_text: (provider: type is files, inout state: provider,
                          path: utf8, scratch: []mut u8)
                         -> (opened: file)
                         ! empty_path | path_contains_nul | path_too_long

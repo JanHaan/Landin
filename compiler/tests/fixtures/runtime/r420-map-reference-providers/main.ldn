@@ -38,10 +38,10 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
                allowed: usize) -> (ok: bool) =
     rollback_frees: usize = allowed
     three: usize = 3
-    mut state := failing.count_down
+    mut state := failing.new
         (inner_provider: provider, inner: addr inner,
          allowed_attempts: three)
-    mut value := map.new_map(key: node_ptr, item: ptr node)
+    mut value := map.new(key: node_ptr, item: ptr node)
     k1: node_ptr = addr n1
     k2: node_ptr = addr n2
     k3: node_ptr = addr n3
@@ -135,7 +135,7 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
                    and failing.injected_failures(state) == 1
                    and failing.inner_failures(state) == 0
 
-    map.release_map(value, state)
+    map.release(value, state)
     released: bool = map.length(value) == 0
                      and failing.frees(state) == rollback_frees + 6
                      and failing.live(state) == 0

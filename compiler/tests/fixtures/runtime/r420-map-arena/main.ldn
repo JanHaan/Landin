@@ -35,7 +35,7 @@ public main: () -> (code: i32) =
     --  next bucket extent does not, even before its key and value extents.
     mut backing: [1600]u8 = zeroed
     mut arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
-    mut value := map.new_map(key: arena_key, item: i32)
+    mut value := map.new(key: arena_key, item: i32)
 
     map.insert(value, arena, key(1), 101) else 0
     map.insert(value, arena, key(2), 102) else 0
@@ -84,7 +84,7 @@ public main: () -> (code: i32) =
     --  Arena free is deliberately a no-op. Release still drains and resets
     --  the public map composition to its logical empty state.
     before_release: usize = mem.arena_used(arena)
-    map.release_map(value, arena)
+    map.release(value, arena)
     released: bool = map.length(value) == 0
                      and mem.capacity(value.buckets) == 0
                      and mem.capacity(value.keys) == 0

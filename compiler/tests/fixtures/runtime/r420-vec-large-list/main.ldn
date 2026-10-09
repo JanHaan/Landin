@@ -19,8 +19,8 @@ public main: () -> (code: i32) =
     middle: usize = 32767
     last: usize = total - 1
     allowance: usize = 14
-    mut state := mem.fail_over_unchecked(addr backing[0], lenof backing, allowance)
-    mut values := vec.new_list(item: u32)
+    mut state := mem.failing_over_unchecked(addr backing[0], lenof backing, allowance)
+    mut values := vec.new(item: u32)
 
     for index in zero..<total do
         vec.push(values, state, u32(index)) else 0

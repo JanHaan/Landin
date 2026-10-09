@@ -2,9 +2,14 @@
 --  can hold an inferred raw(T), but only these operations can expose a value
 --  or change the initialized-prefix count.
 
+--  The two atoms every core container fails with. An index past the
+--  initialized prefix is out_of_bounds whether the container is raw
+--  storage, a vector, a small vector or a bounded log; taking from a
+--  container with nothing to take is empty. Key lookups keep their own
+--  atoms, because a missing key is not a bad index.
+public out_of_bounds: atom
+public empty: atom
 public raw_full: atom
-public uninitialized: atom
-public raw_empty: atom
 public raw_not_empty: atom
 
 no_storage: atom
@@ -116,14 +121,14 @@ public admit: (item: type, inout storage: raw(item), escaping value: item)
 end admit
 
 public get: (item: type, storage: raw(item), index: usize)
-            -> (value: item from storage) ! uninitialized =
-    fail uninitialized when index >= initialized(storage)
+            -> (value: item from storage) ! out_of_bounds =
+    fail out_of_bounds when index >= initialized(storage)
     value = storage.prefix[index]
 end get
 
 public replace: (item: type, inout storage: raw(item), index: usize,
-                 escaping value: item) -> none ! uninitialized =
-    fail uninitialized when index >= initialized(storage)
+                 escaping value: item) -> none ! out_of_bounds =
+    fail out_of_bounds when index >= initialized(storage)
     storage.prefix[index] = value
 end replace
 
@@ -131,8 +136,8 @@ end replace
 --  unchecked append. The new prefix is published only after its typed store.
 public transfer: (item: type, source: raw(item), index: usize,
                   inout target: raw(item))
-                 -> (admitted: usize) ! uninitialized | raw_full =
-    fail uninitialized when index >= initialized(source)
+                 -> (admitted: usize) ! out_of_bounds | raw_full =
+    fail out_of_bounds when index >= initialized(source)
     admitted = initialized(target)
     fail raw_full when admitted >= target.capacity_count
     saved: item = source.prefix[index]
@@ -165,9 +170,9 @@ end transfer
 --  checked, just as they are for individual transfers.
 public transfer_zero_prefix: (item: type, source: raw(item),
                               inout target: raw(item), count: usize)
-                             -> none ! uninitialized | raw_full =
-    fail uninitialized when sizeof item <> 0
-    fail uninitialized when count > initialized(source)
+                             -> none ! out_of_bounds | raw_full =
+    fail out_of_bounds when sizeof item <> 0
+    fail out_of_bounds when count > initialized(source)
     fail raw_full when initialized(target) <> 0
     fail raw_full when count > target.capacity_count
     return when count == 0
@@ -194,14 +199,16 @@ public drain_zero_prefix: (item: type, inout storage: raw(item))
     storage.prefix = storage.prefix[0..<0]
 end drain_zero_prefix
 
-public release: (item: type, inout storage: raw(item))
-                -> (value: item from storage) ! raw_empty =
+--  Take the last initialized item back out of the prefix. This is the raw
+--  pop; `release` is reserved for giving a container's storage back.
+public withdraw: (item: type, inout storage: raw(item))
+                 -> (value: item from storage) ! empty =
     count: usize = initialized(storage)
-    fail raw_empty when count == 0
+    fail empty when count == 0
     tail: usize = count - 1
     value = storage.prefix[tail]
     storage.prefix = storage.prefix[0..<tail]
-end release
+end withdraw
 
 --  Forget the initialized prefix without changing the backing allocation.
 --  Values in that prefix are discarded; callers remain responsible for any
@@ -212,10 +219,10 @@ end clear
 
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage)
-                ! raw_not_empty | raw_empty =
+                ! raw_not_empty | empty =
     fail raw_not_empty when initialized(storage) <> 0
     match storage.base
-        no_storage: fail raw_empty
+        no_storage: fail empty
         ptr (base): released = base
     end match
     storage.base = no_storage
@@ -339,19 +346,19 @@ end failing_value
 
 public failing: type = failing_value
 
-public fail_over: (escaping base: ptr mut u8, size: usize,
+public failing_over: (escaping base: ptr mut u8, size: usize,
                    successful_allocations: usize)
                   -> (state: failing from base) =
     state = (base: base, size: size, used: 0,
              remaining: successful_allocations, allocations: 0, frees: 0)
-end fail_over
+end failing_over
 
-public fail_over_unchecked: (base: ptr mut u8, size: usize,
+public failing_over_unchecked: (base: ptr mut u8, size: usize,
                              successful_allocations: usize)
                             -> (state: failing from base) =
     state = (base: base, size: size, used: 0,
              remaining: successful_allocations, allocations: 0, frees: 0)
-end fail_over_unchecked
+end failing_over_unchecked
 
 public failing_used: (state: failing) -> (count: usize) =
     count = state.used

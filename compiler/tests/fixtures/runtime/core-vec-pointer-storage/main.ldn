@@ -14,8 +14,8 @@ public main: () -> (code: i32) =
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 256
     allowance: usize = 2
-    mut state := mem.fail_over_unchecked(base, extent, allowance)
-    mut values := vec.new_list(item: ptr node)
+    mut state := mem.failing_over_unchecked(base, extent, allowance)
+    mut values := vec.new(item: ptr node)
 
     vec.push(values, state, addr first) else 0
     vec.push(values, state, addr second) else 0

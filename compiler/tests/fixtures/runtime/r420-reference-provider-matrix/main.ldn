@@ -38,9 +38,9 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     zero: usize = 0
     six: usize = 6
     two: usize = 2
-    mut allocator := failing.count_down(addr inner, zero)
-    mut pointers := vec.new_list(item: node_ptr)
-    mut erased := vec.new_list(item: any counter)
+    mut allocator := failing.new(addr inner, zero)
+    mut pointers := vec.new(item: node_ptr)
+    mut erased := vec.new(item: any counter)
     mut pointer_failed: bool = false
     vec.push(pointers, allocator, addr left) else (problem)
         pointer_failed = problem == mem.out_of_memory

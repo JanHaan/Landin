@@ -12,7 +12,7 @@ public main: () -> (code: i32) =
     args: [1]io.argument = [(data: addr first[0], length: 0)]
     mut out: [0]u8 = zeroed
     mut err: [0]u8 = zeroed
-    mut state := io.memory_world(files[0..<2], args[0..<0],
+    mut state := io.memory_over(files[0..<2], args[0..<0],
                                   out[0..<0], err[0..<0])
     a: [2]u8 = [97, 0]
     b: [2]u8 = [98, 0]
