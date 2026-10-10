@@ -1326,7 +1326,7 @@ closed: [1260]'s split is realized by the four narrow I/O concepts and their
 
 ### R13.12 — Answer the first outside reading
 
-Status: active
+Status: complete
 Depends on: R13.11
 
 The first reader from outside the project to read the published reference
@@ -1351,9 +1351,18 @@ collision refusal pinned at its new home; and a `platform/c` reference that
 says per target which fact holds, what LP64 is and where the OS enters. The
 reader's remark that some names are odd goes to R13.13 with names attached.
 
+Done: D272 makes the severity and the map's slot state atom sets, pinned by
+`library-diag-severity` and the map consumers; D273 moves the three
+comparison concepts and their evidence into `core/cmp`, with its own shared
+consumer and the collision refusal at its new home; the `platform/c`
+reference names each target's C ABI fact, the LP64 data model and where the
+operating system enters. All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38076543394)
+passed on `759dbb7e`, which also carries R13.13.
+
 ### R13.13 — Review the library
 
-Status: planned
+Status: complete
 Depends on: R13.12
 
 R13.11 held the library to conventions it wrote down; nobody has read the
@@ -1373,6 +1382,21 @@ Exit evidence: each finding either fixed with the fixtures that pin it and a
 decision where it changes an interface, or recorded in the register below with
 its trigger; the generated reference rebuilt and every renamed consumer, the
 derived programs and the debugger workloads passing on every target.
+
+Done: D274 records the fixes: `core/spill` and `core/fault` for the two
+adjective-named modules, one fault injector instead of two, the renames in
+`core/README.md`'s migration table, a map that counts tombstones towards
+growth and rebuilds in place only while its live entries fit in half its
+capacity, spread hashes, `capacity` beside `slots` and an exact `reserve`.
+A generic signature that applies its own parameter, or names nothing, is
+refused at the declaration instead of crashing. SR-14 holds what the review
+left, SR-15 the hosted gaps for R13.30, SR-16 atom display in debuggers and
+SR-17 unprivileged formatting. The gate's server fuzz round found two older
+defects on the reviewed corpus, a lowering crash and a hover crash, both
+fixed and pinned. All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38076543394)
+passed on `759dbb7e`, with every renamed consumer, the derived programs and
+the debugger workloads on every target.
 
 ### R13.20 — The freestanding library
 
