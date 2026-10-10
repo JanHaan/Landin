@@ -1,0 +1,18 @@
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (result: i32)
+end counter
+one: type = struct
+    value: i32
+end one
+bump_one: (self: ptr mut one) -> (result: i32) =
+    result = self.val.value
+end bump_one
+one is counter (bump: bump_one)
+mut left: one = (value: 7)
+
+main: () -> (status: i32) =
+    mut items: [2]any counter = [any(addr left), any(addr left)]
+    held := addr items[0]
+    view := items[0 ..< 2]
+    status = i32(lenof view) + held.val.bump()
+end main

@@ -1,0 +1,20 @@
+shelf: type (item: type) = struct
+    count: usize
+end shelf
+
+--  A name that names nothing in a generic signature is refused at the
+--  declaration, called or not, as in a plain signature, rather than only
+--  failing to match a call.
+copy_shelf: (item: type, source: shlf(item)) -> (result: shelf(item)) =
+    result = (count: source.count)
+end copy_shelf
+
+unused: (item: type, values: []item) -> (result: itme) =
+    result = values[0]
+end unused
+
+public main: () -> (code: i32) =
+    stored: shelf(u8) = (count: 3)
+    copied := copy_shelf(stored)
+    code = i32(copied.count)
+end main

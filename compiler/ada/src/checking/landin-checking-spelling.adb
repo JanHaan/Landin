@@ -124,6 +124,10 @@ package body Landin.Checking.Spelling is
       end case;
    end Shape_Text;
 
+   function Concept_Text (From : Tables; Id : Concept_Id) return String is
+     ("any " & Spelled (From, Res.Name_Of
+        (From.Meanings.all, Concept_Declaration (From.Types.all, Id))));
+
    function Referent_Text
      (From : Tables; Item : Reference_Descriptor) return String is
    begin
@@ -134,8 +138,11 @@ package body Landin.Checking.Spelling is
             return Nominal_Text (From, Item.Nominal);
          when Ty.Atom_Value =>
             return Atoms_Text (From, Item.Atoms);
-         when Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value =>
+         when Ty.Pointer_Value | Ty.Slice_Value =>
             return Reference_Text (From, Item.Reference);
+         --  An erased referent records its concept, not a reference.
+         when Ty.Any_Value =>
+            return Concept_Text (From, Item.Concept);
          when Ty.Function_Value =>
             return "function";
          when Ty.Fixed_Array =>
@@ -168,9 +175,7 @@ package body Landin.Checking.Spelling is
             return "[]" & (if Item.Mutable then "mut " else "")
               & Referent_Text (From, Item);
          when Ty.Any_Value =>
-            return "any " & Spelled (From, Res.Name_Of
-              (From.Meanings.all,
-               Concept_Declaration (From.Types.all, Item.Concept)));
+            return Concept_Text (From, Item.Concept);
          when others =>
             return "_";
       end case;

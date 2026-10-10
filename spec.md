@@ -17407,7 +17407,9 @@ public alias of a private type. `mem.aligned_offset`, the bump arithmetic,
 and `text.valid`, the UTF-8 check `from_bytes` makes, are public; the hosted
 heap's state is opaque. A generic routine's signature that applies one of its
 own parameters as a type, as `storage: storage(item)` does, is L0304 at the
-declaration, called or not, as the same application in a plain signature is.
+declaration, called or not, as the same application in a plain signature is,
+and a name in it that names nothing is that signature's L0304 or L0201 rather
+than a failed match that let the program reach the lowering.
 
 **The alternatives:** keeping both injectors leaves a user to learn that they
 count different things. Renaming only the misleading names leaves the
@@ -17424,5 +17426,6 @@ and an arena would never get them back.
 `runtime/core-spill-pointer-items`, `runtime/r420-map-operations`,
 `runtime/library-at-references`, `runtime/core-mem-zero-prefix`,
 `runtime/core-mem-arena-boundaries`, `runtime/r480-arena-nested-exhaustion`,
-`negative/core-text-prefix-frame` and
-`negative/generic-signature-applies-a-parameter`.
+`negative/core-text-prefix-frame`,
+`negative/generic-signature-applies-a-parameter` and
+`negative/generic-signature-names-nothing`.

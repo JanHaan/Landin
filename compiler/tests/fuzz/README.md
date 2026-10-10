@@ -67,7 +67,13 @@ defect as the original, compare the two server logs.
 The gate's `compiler` job runs one round from seed 500000 with the debug
 compiler, whose contracts are the stronger oracle. Its first run against the
 server found a definition asked of a module whose names were refused raising
-a defect; the server suite pins the fix.
+a defect; the server suite pins the fix. The round over the reviewed
+library's corpus found two more, older than the corpus that exposed them. A
+name that names nothing in a generic routine's signature only failed to match
+its call, so the program reached the lowering; it is now refused at the
+declaration, pinned by `negative/generic-signature-names-nothing`. A hover on
+a pointer to an erased value read a reference its descriptor does not have;
+the `hover-erased-referent` session pins the answer.
 
 The first driver was a Perl mutator, `mutate.pl`, run by `fuzz.sh`, with a
 `reduce.sh` beside it. They made the two recorded runs below and are in the

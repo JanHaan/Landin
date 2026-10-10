@@ -385,6 +385,7 @@ negative/generic-routine-undeduced-formal | linux-x86-64, linux-arm64, macos-arm
 negative/generic-routine-unused-unconditional-defect | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-scalar-result-escaping | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-signature-applies-a-parameter | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/generic-signature-names-nothing | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-single-result-layout-too-large | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-slice-field-permission | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-slice-field-wrong-from | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1664,7 +1665,7 @@ runtime/core-mem-owned-bytes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x
 runtime/core-mem-raw-storage | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-reference-prefix | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-zero-prefix | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-runtime/core-spill-pointer-items | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/core-spill-pointer-items | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
 runtime/core-text-byte-positions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-text-runtime-helpers | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-tree-count-overflow | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

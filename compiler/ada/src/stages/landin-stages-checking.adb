@@ -35495,8 +35495,9 @@ package body Landin.Stages.Checking is
                --  A parameter is in scope in its own signature's type
                --  positions, so `storage: storage(item)` applies the
                --  parameter. A generic signature is otherwise read only
-               --  when a call matches it, so report the application here,
-               --  as a non-generic signature's would be, called or not.
+               --  when a call matches it, and a name that names nothing
+               --  only fails that match, so report both here, as a
+               --  non-generic signature's would be, called or not.
                procedure Check_Applications (Written : Syn.Node_Id);
 
                procedure Check_Applications (Written : Syn.Node_Id) is
@@ -35511,18 +35512,40 @@ package body Landin.Stages.Checking is
                      when Syn.Array_Type =>
                         Check_Applications
                           (Syn.Element_Of (Of_Tree.all, Written));
+                     when Syn.Type_Reference =>
+                        --  A bound name is a formal or a declaration; an
+                        --  unbound one is a scalar, a refused type or a
+                        --  misspelling, which only Type_At tells apart.
+                        if Res.Verdict_Of
+                             (Meanings.all, Of_Tree.all, Written)
+                           /= Res.Bound
+                        then
+                           declare
+                              Ignored : constant Ty.Type_Kind :=
+                                Type_At (Of_Tree.all, Written);
+                              pragma Unreferenced (Ignored);
+                           begin
+                              null;
+                           end;
+                        end if;
                      when Syn.Type_Application =>
                         declare
                            Applied : constant Syn.Node_Id :=
                              Syn.Applied_Type (Of_Tree.all, Written);
                         begin
                            if Syn.Kind (Of_Tree.all, Applied)
-                                in Syn.Type_Reference | Syn.Name_Reference
-                                   | Syn.Member_Selection
-                             and then Res.Verdict_Of
+                                not in Syn.Type_Reference
+                                       | Syn.Name_Reference
+                                       | Syn.Member_Selection
+                             or else Res.Verdict_Of
                                (Meanings.all, Of_Tree.all, Applied)
-                                 = Res.Bound
-                             and then Res.Sort_Of
+                                 /= Res.Bound
+                           then
+                              Report_Application
+                                (Of_Tree.all, Applied,
+                                 "a parameterized type application targets"
+                                 & " a declared alias");
+                           elsif Res.Sort_Of
                                (Meanings.all,
                                 Res.Bound_To
                                   (Meanings.all, Of_Tree.all, Applied))
