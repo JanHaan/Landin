@@ -231,20 +231,20 @@ single_slot_case: () -> (ok: bool) =
     --  The old block is still the only live one and nothing fell back.
     return when not exhausted or not contents_ok(values, eight)
       or vec.capacity(values) <> 8 or pool.live(state) <> 1
-      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 0
+      or pool.allocations(state) <> 1 or pool.frees(state) <> 0
 
     vec.release(values, state)
-    return when pool.live(state) <> 0 or pool.free_count(state) <> 1
+    return when pool.live(state) <> 0 or pool.frees(state) <> 1
 
     --  Release returned the slot, so an ordinary later vector reuses it.
     mut again := vec.new(item: node_ptr)
     return when not fill(state, again, eight)
     reused: bool = contents_ok(again, eight)
-                   and pool.allocation_count(state) == 2
+                   and pool.allocations(state) == 2
                    and pool.live(state) == 1
     vec.release(again, state)
-    ok = reused and pool.live(state) == 0 and pool.free_count(state) == 2
-         and pool.rejected_free_count(state) == 0
+    ok = reused and pool.live(state) == 0 and pool.frees(state) == 2
+         and pool.rejected_frees(state) == 0
 end single_slot_case
 
 --  The same growth succeeds when a second slot can hold the new block while
@@ -266,11 +266,11 @@ two_slot_case: () -> (ok: bool) =
     return when not fill(state, values, nine)
     --  Two slots were taken and the old one returned inside that one growth.
     grown: bool = contents_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocation_count(state) == 2
-                  and pool.free_count(state) == 1 and pool.live(state) == 1
+                  and pool.allocations(state) == 2
+                  and pool.frees(state) == 1 and pool.live(state) == 1
     vec.release(values, state)
-    ok = grown and pool.live(state) == 0 and pool.free_count(state) == 2
-         and pool.rejected_free_count(state) == 0
+    ok = grown and pool.live(state) == 0 and pool.frees(state) == 2
+         and pool.rejected_frees(state) == 0
 end two_slot_case
 
 --  The erased item repeats the arena shape. [1380] keeps construction
@@ -340,19 +340,19 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
     --  The sixteen-item block fits the slot; the old list still occupies it.
     return when not exhausted or not erased_ok(values, eight)
       or vec.capacity(values) <> 8 or pool.live(state) <> 1
-      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 0
+      or pool.allocations(state) <> 1 or pool.frees(state) <> 0
 
     vec.release(values, state)
-    return when pool.live(state) <> 0 or pool.free_count(state) <> 1
+    return when pool.live(state) <> 0 or pool.frees(state) <> 1
 
     mut again := vec.new(item: any counter)
     return when not fill_erased(state, again, eight, a, b)
     reused: bool = erased_ok(again, eight)
-                   and pool.allocation_count(state) == 2
+                   and pool.allocations(state) == 2
                    and pool.live(state) == 1
     vec.release(again, state)
-    ok = reused and pool.live(state) == 0 and pool.free_count(state) == 2
-         and pool.rejected_free_count(state) == 0
+    ok = reused and pool.live(state) == 0 and pool.frees(state) == 2
+         and pool.rejected_frees(state) == 0
 end single_slot_any_case
 
 --  A second slot lets the same erased growth hold both blocks and succeed.
@@ -377,11 +377,11 @@ two_slot_any_case: (escaping a: any counter, escaping b: any counter)
     nine: usize = 9
     return when not fill_erased(state, values, nine, a, b)
     grown: bool = erased_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocation_count(state) == 2
-                  and pool.free_count(state) == 1 and pool.live(state) == 1
+                  and pool.allocations(state) == 2
+                  and pool.frees(state) == 1 and pool.live(state) == 1
     vec.release(values, state)
-    ok = grown and pool.live(state) == 0 and pool.free_count(state) == 2
-         and pool.rejected_free_count(state) == 0
+    ok = grown and pool.live(state) == 0 and pool.frees(state) == 2
+         and pool.rejected_frees(state) == 0
 end two_slot_any_case
 
 public main: () -> (code: i32) =

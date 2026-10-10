@@ -1,0 +1,39 @@
+import core/diag
+import core/io
+import core/mem
+import core/text
+
+--  Severity is an atom set: it crosses erased dispatch into a bounded log,
+--  is stored in an entry, and comes back as a value a match must cover.
+weight: (kind: diag.severity) -> (result: u32) =
+    result = match kind
+        diag.warning: 1
+        diag.error: 10
+    end match
+end weight
+
+exercise: () -> (ok: bool) ! mem.out_of_bounds | io.io_failed =
+    ok = false
+    mut retained := diag.new(capacity: 2)
+    log: any diag.log = any(addr retained)
+    message: []u8 = "ab"
+    try log.note(text.first(message), diag.warning, "first")
+    return when log.failed()
+    try log.note(text.cursor(message, 1), diag.error, "second")
+    return when not log.failed()
+
+    first := try diag.get(addr retained, usize(0))
+    second := try diag.get(addr retained, usize(1))
+    kinds: [2]diag.severity = [diag.severity_of(first),
+                               diag.severity_of(second)]
+    return when kinds[0] <> diag.warning or kinds[1] <> diag.error
+    ok = weight(kinds[0]) + weight(kinds[1]) == 11
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

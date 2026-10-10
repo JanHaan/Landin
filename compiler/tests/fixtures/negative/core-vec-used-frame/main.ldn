@@ -4,7 +4,7 @@ public bad: () -> (view: []mut u8) =
     mut backing: [1]u8 = [0]
     base: ptr mut u8 = addr backing[0]
     one: usize = 1
-    storage := mem.reserve(item: u8, base: base, slots: one)
+    storage := mem.storage_over(item: u8, base: base, slots: one)
     local: vec.list(u8) = (values: storage)
     view = vec.used(local)
 end bad

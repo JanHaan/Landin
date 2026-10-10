@@ -1,0 +1,11 @@
+import core/spill
+import core/vec
+
+public main: () -> (code: i32) =
+    fresh := vec.new(item: i32)
+    mut value: spill.list(i32, 4) =
+        (storage: (count: 4, inline_values: uninit,
+                   spill: fresh, spilled: false))
+    view := spill.used(value)
+    code = view[0]
+end main

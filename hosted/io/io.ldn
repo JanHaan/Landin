@@ -1,5 +1,5 @@
---  Linux/Darwin libc-backed provider of every core/io concept: reader,
---  writer, files and process, and so of their composition, world.
+--  The libc-backed provider of every core/io concept on hosted targets:
+--  reader, writer, files and process, and so of their composition, world.
 --  Import this module only at a hosted authority root.
 
 import core/io

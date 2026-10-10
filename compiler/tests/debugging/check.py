@@ -25,7 +25,7 @@ ODD_SOURCE = HERE / 'caller"\\path.ldn'
 SOURCES = (MAIN_SOURCE, ODD_SOURCE)
 CONTAINER_SOURCE = ROOT / "examples/derived_containers/workload/workload.ldn"
 #  The two orderings the workload dispatches to are the library's own.
-SORT_SOURCE = ROOT / "core/sort/sort.ldn"
+CMP_SOURCE = ROOT / "core/cmp/cmp.ldn"
 CONTAINER_FIXTURE = HERE.parent / "fixtures/runtime/derived-containers"
 HOSTED_SOURCE = ROOT / "examples/derived_hosted/app/app.ldn"
 HOSTED_FIXTURE = HERE.parent / "fixtures/runtime/derived-hosted-memory"
@@ -463,11 +463,11 @@ def container_lines() -> dict[str, int]:
 
 
 def provider_line(provider: str) -> int:
-    """The comparison statement inside one of core/sort's scalar orderings."""
-    source = SORT_SOURCE.read_text().splitlines()
+    """The comparison statement inside one of core/cmp's scalar orderings."""
+    source = CMP_SOURCE.read_text().splitlines()
     starts = [index for index, line in enumerate(source)
               if line.startswith(provider + ": (")]
-    require(len(starts) == 1, f"{provider} is not declared once in sort.ldn")
+    require(len(starts) == 1, f"{provider} is not declared once in cmp.ldn")
     for index in range(starts[0], len(source)):
         if "yes = left < right" in source[index]:
             return index + 1
@@ -536,7 +536,7 @@ def check_container_transcript(transcript: str,
         expect_value(transcript, scope + ".left", left)
         expect_value(transcript, scope + ".right", right)
         expect_line(transcript, scope + "-dispatch",
-                    source_lines[instance + "-provider"], provider, "sort.ldn")
+                    source_lines[instance + "-provider"], provider, "cmp.ldn")
         stack = marker_section(transcript, scope + "-dispatch")
         require(re.search(r"#0\s+.*\b" + provider + r"\b", stack) is not None
                 and re.search(r"#1\s+.*\bevidence_less\b", stack) is not None
@@ -627,7 +627,7 @@ def check_hosted_transcript(transcript: str,
 def parser_lines() -> dict[str, int]:
     return {
         "digits": source_line(PARSER_SOURCE,
-                              "if text.ordinal(cursor) == text.ordinal(ends)"),
+                              "if text.offset(cursor) == text.offset(ends)"),
         "recovery": source_line(PARSER_SOURCE,
                                 "while parser.look.what <> lexer.newline"),
         "nested": source_line(PARSER_SOURCE,
@@ -1347,7 +1347,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     if containers:
         families = {source.parent.name for source in sources
                     if source.parent.parent == ROOT / "core"}
-        require({"vec", "small", "map", "tree", "sort"} <= families,
+        require({"vec", "spill", "map", "tree", "sort"} <= families,
                 "container debug build did not reach every core container")
     require(executable.is_file(), f"compiler did not create {executable.name}")
     require(assembly.is_file(), f"compiler did not create {assembly.name}")

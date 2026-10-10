@@ -3,9 +3,9 @@ import core/mem
 --- Growable contiguous list with explicit allocator arguments. Its public
 --- shape contains opaque typed storage; no allocator is stored in the list.
 ---
---- The list shape is public as in prototype 3, but its `values` field has the
---- opaque mem.storage(item) type: clients can inspect the container shape
---- without reaching raw-storage counters or bytes.
+--- The list shape is public, but its `values` field has the opaque
+--- mem.storage(item) type: clients can inspect the container shape without
+--- reaching raw-storage counters or bytes.
 public list: type (item: type) = struct
     values: mem.storage(item)
 end list
@@ -19,68 +19,13 @@ end new
 
 --- Return the number of initialized items.
 public length: (item: type, value: list(item)) -> (count: usize) =
-    count = mem.initialized(value.values)
+    count = mem.length(value.values)
 end length
 
 --- Return the number of items that fit without further growth.
 public capacity: (item: type, value: list(item)) -> (count: usize) =
     count = mem.capacity(value.values)
 end capacity
-
-copy_zero_prefix: (item: type, source: mem.storage(item),
-                   inout target: mem.storage(item), count: usize)
-                  -> (ok: bool) =
-    mem.transfer_zero_prefix(source, target, count) else (problem)
-        _ = problem
-        ok = false
-        return
-    end
-    ok = true
-end copy_zero_prefix
-
-copy_prefix: (item: type, source: mem.storage(item),
-              inout target: mem.storage(item), count: usize)
-             -> (ok: bool) =
-    if sizeof item == 0 then
-        ok = copy_zero_prefix(source, target, count)
-        return
-    end if
-
-    mut at: usize = 0
-    while at < count do
-        admitted: usize = mem.transfer(source, at, target) else (problem)
-            _ = problem
-            ok = false
-            return
-        end
-        _ = admitted
-        inc at
-    end while
-    ok = true
-end copy_prefix
-
-drain_zero: (item: type, inout value: mem.storage(item)) -> none =
-    mem.drain_zero_prefix(value) else (problem)
-        _ = problem
-    end
-end drain_zero
-
-drain: (item: type, inout value: mem.storage(item)) -> none =
-    if sizeof item == 0 then
-        drain_zero(value)
-        return
-    end if
-
-    while mem.initialized(value) > 0 do
-        discarded: item = mem.withdraw(value) else (problem)
-            --  D151 makes this unreachable after the positive initialized
-            --  query. It is an internal raw-state defect, not allocation
-            --  pressure, so do not manufacture out_of_memory here.
-            _ = problem
-            return
-        end
-    end while
-end drain
 
 byte_extent: (item: type, slots: usize)
              -> (extent: usize) ! mem.out_of_memory =
@@ -126,7 +71,7 @@ end free_empty
 public reserve: (item: type, provider: type is mem.allocator,
                  inout value: list(item), inout state: provider, want: usize)
                 -> none ! mem.out_of_memory =
-    old_count: usize = mem.initialized(value.values)
+    old_count: usize = mem.length(value.values)
     old_capacity: usize = mem.capacity(value.values)
     return when want <= old_capacity
 
@@ -137,19 +82,19 @@ public reserve: (item: type, provider: type is mem.allocator,
     end if
     block: ptr mut u8 = try provider.alloc
         (state, extent, alignof item)
-    mut fresh := mem.reserve(item: item, base: block, slots: want)
-    copied: bool = copy_prefix(value.values, fresh, old_count)
-    if not copied then
+    mut fresh := mem.storage_over(item: item, base: block, slots: want)
+    mem.transfer_prefix(value.values, fresh, old_count) else (problem)
         --  Given D151's private counters, want > old_capacity and an empty
         --  replacement, transfer cannot reject this prefix. Keep the
         --  established rollback and public outcome if that internal
         --  invariant is ever violated; it is not evidence of provider OOM.
-        drain(fresh)
+        _ = problem
+        mem.clear(fresh)
         free_empty(fresh, state)
         fail mem.out_of_memory
-    end if
+    end
 
-    drain(value.values)
+    mem.clear(value.values)
     free_empty(value.values, state)
     value.values = fresh
 end reserve
@@ -165,7 +110,7 @@ public push: (item: type, provider: type is mem.allocator,
         try reserve(value, state, next)
     end if
     admitted: usize = mem.admit(value.values, added) else (problem)
-        --  After successful growth or a spare-slot check, raw_full would
+        --  After successful growth or a spare-slot check, mem.full would
         --  indicate an internal invariant defect. Retain the established
         --  public fallback without claiming the provider exhausted memory.
         _ = problem
@@ -176,19 +121,13 @@ end push
 
 --- Copy the indexed item, preserving origins of references it contains.
 --- Reports `mem.out_of_bounds` outside the initialized prefix.
-public get: (item: type, value: list(item), at: usize)
+public get: (item: type, value: list(item), index: usize)
             -> (result: item from value) ! mem.out_of_bounds =
-    result = mem.get(value.values, at) else (problem)
-        _ = problem
-        fail mem.out_of_bounds
-    end
+    result = try mem.get(value.values, index)
 end get
 
---- Lend a writable pointer to an indexed item. Reports `mem.out_of_bounds`
---- for a missing slot; end the pointer's lifetime before growing or releasing
---- the list.
----
---- A writable slot for in-place update. While the result lives the list
+--- Lend a writable pointer to an indexed item for in-place update. Reports
+--- `mem.out_of_bounds` for a missing slot. While the result lives the list
 --- binding may not be passed inout or sink [0800]: bind it, update through
 --- it, and let it end before the next push, reserve or release.
 public at: (item: type, inout value: list(item), index: usize)
@@ -214,10 +153,7 @@ end last
 --- empty; retains capacity.
 public pop: (item: type, inout value: list(item))
             -> (result: item from value) ! mem.empty =
-    result = mem.withdraw(value.values) else (problem)
-        _ = problem
-        fail mem.empty
-    end
+    result = try mem.withdraw(value.values)
 end pop
 
 --- Discard all items and retain capacity. Does not release resources
@@ -231,6 +167,6 @@ end clear
 --- responsibility.
 public release: (item: type, provider: type is mem.allocator,
                  inout value: list(item), inout state: provider) -> none =
-    drain(value.values)
+    mem.clear(value.values)
     free_empty(value.values, state)
 end release

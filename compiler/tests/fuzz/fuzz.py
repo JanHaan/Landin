@@ -322,7 +322,7 @@ def serve_one(server, seed, path, original, mutant):
 
 def check_imports(server):
     """Prove that rooted analysis reaches checking through fixture imports."""
-    path = (FIXTURES / "negative/core-failing-needs-mutable-inner/main.ldn")
+    path = (FIXTURES / "negative/core-fault-needs-mutable-inner/main.ldn")
     uri = path.as_uri()
     server.diagnostics.clear()
     server.notify("textDocument/didOpen", {"textDocument": {

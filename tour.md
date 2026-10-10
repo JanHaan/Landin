@@ -719,9 +719,9 @@ nothing checks the gap. Containers hold the invariant
 themselves — a growing array by its length, a hash table by
 its state array — and that works, for a container whose
 author is careful.
-Where it does not work is inline storage. `small(t, capacity)` holds
-an `[capacity]t` that is not full yet, and there is no honest value
-to put in the empty slots: [0540] forbids zeroed for a `t` with
+Where it does not work is inline storage. A list with an inline prefix of
+`capacity` items holds an `[capacity]t` that is not full yet, and there
+is no honest value to put in the empty slots: [0540] forbids zeroed for a `t` with
 no zero image, and ptr is such a `t`. So until there is a way
 to say uninitialised in a type, that shape is restricted to
 a `t` that has a zero image, and general uninitialised
@@ -740,8 +740,8 @@ a repeated disposal reports `empty`, never a zero or fabricated pointer.
 `transfer` copies one initialized source
 slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
-foreseeable and therefore declared outcomes: `raw_full`, `out_of_bounds`,
-`empty`, and `raw_not_empty`.
+foreseeable and therefore declared outcomes: `full`, `out_of_bounds`,
+`empty`, and `not_empty`.
 For byte storage, `clear` shortens the typed initialized prefix to
 zero in one step; it leaves the backing allocation for `dispose` to return.
 
@@ -1780,9 +1780,9 @@ absolute address and advances a monotonic offset; individual frees do nothing.
 A caller can supply a fixed array on a constrained target or explicitly
 acquired hosted storage, choosing the actual capacity rather than a hidden
 frame buffer. Overflow or an extent that does not fit reports
-`mem.out_of_memory` before changing the offset. A `mem.failing` provider adds
-an explicit successful-allocation budget [1360]. `mem.arena_used` and the
-`mem.failing_*` accessors report counters without exposing the private state.
+`mem.out_of_memory` before changing the offset. `mem.arena_used` reports the
+consumed bytes without exposing the private state, and `core/fault` wraps an
+arena, or any provider, with an explicit allocation budget [1360].
 
 ```landin
 import core/mem
@@ -1821,10 +1821,10 @@ The allocator's independent no-`from` result permits both live allocations
 and useful helper results. It does not acquire a lexical frame origin when
 called inside a block. In particular, a helper can store an allocated result
 in module storage without returning it through that block. A checked arena
-therefore cannot take frame backing. `mem.failing_over` follows the same rule.
+therefore cannot take frame backing.
 For a local buffer whose use the programmer can keep entirely within its
-frame, `mem.arena_over_unchecked` and `mem.failing_over_unchecked` make the
-lifetime opt-out explicit at construction. Their allocation results remain
+frame, `mem.arena_over_unchecked` makes the
+lifetime opt-out explicit at construction. Its allocation results remain
 independent, even through helpers; the caller must ensure every result stops
 being used before the buffer ends. Borrowing the mutable allocator for each
 result would also prevent its next ordinary allocation [0790].
@@ -3176,7 +3176,7 @@ condition; none of the three mechanisms executes user code.
 
 ```landin
 map: type (key_type: type is hashable, value_type: type) = struct ... end map
-small: type (t: type is zeroable, fixed capacity: u32) = struct ... end small
+cleared: type (t: type is zeroable, fixed capacity: u32) = struct ... end cleared
 
 ```
 
@@ -3237,7 +3237,7 @@ there is no hidden heap or fallback. A caller sizes the slots for its largest
 allocation and supplies enough metadata for its maximum simultaneous live
 set, including the six extents a transactional map rehash may need.
 
-`core/failing.counted(provider)` retains a mutable pointer to any supplied allocator
+`core/fault.injector(provider)` retains a mutable pointer to any supplied allocator
 and gives it a deterministic allocation-attempt budget. Calls within the
 budget are delegated, including failures from the inner allocator; later
 calls report `out_of_memory` without delegation. Attempts, delegations,
@@ -3329,9 +3329,9 @@ paired with a zero-byte free. Releasing capacity zero, including repeated
 release, makes no allocator call. These rules preserve the raw initialized
 prefix and publication order rather than exposing spare capacity as a slice.
 
-`core/small.small(t, capacity)` is the corresponding inline-capacity shape, with the
-written `t is zeroable` constraint [0550]; a pointer item is therefore rejected
-even though `core/vec` accepts one. Its public wrapper contains private storage:
+`core/spill.list(t, capacity)` is the corresponding inline-capacity shape. It
+needs no zero image of `t`, so it stores a pointer item as `core/vec` does.
+Its public wrapper contains private storage:
 an `[capacity]t` array whose unused slots have no readable item image, a count
 for its initialized prefix, a separate `core/vec.list(t)` spill descriptor, and
 a `spilled` flag. A first spill reserves a fresh list, copies the used inline
@@ -3342,7 +3342,7 @@ spill doubles `capacity` after a checked `usize` bound. Failed first spill or
 later growth leaves the published storage, length, capacity and initialized
 values unchanged.
 
-`small.used` takes the container `inout` and returns its initialized writable
+`spill.used` takes the container `inout` and returns its initialized writable
 prefix `from` that place, whether storage is inline or spilled. The
 ordinary live-view rule [0830] consequently blocks spill and release until the
 view's last use. `pop` removes the tail without moving a spilled allocation;
@@ -3351,13 +3351,13 @@ inline state by resetting metadata, without clearing the array. This is still
 [0860]'s shallow local guarantee: storing references
 through some other alias would not establish whole-program escape safety.
 
-The two `core/mem` arena providers align the absolute returned address, not
-merely the offset within their caller-supplied extent. An alignment of zero is
-the same request as byte alignment, and a size of zero is valid: it returns an
-aligned point, may consume the padding needed to reach that point, and counts
-against a failing allocator's successful-allocation budget. Exhaustion and an
+The `core/mem` arena aligns the absolute returned address, not merely the
+offset within its caller-supplied extent. An alignment of zero is the same
+request as byte alignment, and a size of zero is valid: it returns an aligned
+point and may consume the padding needed to reach that point, and under
+`core/fault` it spends one permit as any other call does. Exhaustion and an
 unrepresentable address, rounding step, or allocation end all report
-`out_of_memory` before changing the monotonic offset, budget, or counters.
+`out_of_memory` before changing the monotonic offset.
 These are provider contracts rather than stronger guarantees for the unsafe
 backing pointer and stated extent [1720].
 
@@ -3640,7 +3640,7 @@ end if
 The compiler exposes `compiler.arch`, whose compiler-owned values are
 `x86_64`, `arm64`, `rv64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
-(`debug` or `release`), plus `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`
+(`debug` or `release`), plus `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`,
 `compiler.c_aapcs64_lp64` and `compiler.c_riscv_lp64d`, bools identifying
 the selected C ABI rather
 than inferring it from pointer width or architecture: Linux and Apple
@@ -4167,7 +4167,7 @@ public entry: () -> (code: i32) =
     defer region.release(program)
     stream: io.file = world.err()
     writer: any io.writer = any(addr host)
-    mut logger := diag.to(addr writer, addr stream)
+    mut logger := diag.stream(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     kept: usize = run_logged(program, world, usize(4096), log) else (problem)
         _ = problem

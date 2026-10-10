@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/mem
 
@@ -81,17 +81,17 @@ byte_release_case: () -> (ok: bool) =
     mut bytes: [8]u8 = zeroed
     start: ptr mut u8 = addr bytes[0]
     slots: usize = 8
-    mut storage := mem.reserve(item: u8, base: start, slots: slots)
+    mut storage := mem.storage_over(item: u8, base: start, slots: slots)
     _ = mem.admit(storage, u8(11)) else slots
     _ = mem.admit(storage, u8(22)) else slots
     _ = mem.admit(storage, u8(33)) else slots
-    before: usize = mem.initialized(storage)
+    before: usize = mem.length(storage)
     refused: bool = begin
         absent: allocation = mem.dispose(storage) else no_allocation
         is_absent(absent)
     end
     mem.clear(storage)
-    empty: bool = mem.initialized(storage) == 0
+    empty: bool = mem.length(storage) == 0
                   and mem.capacity(storage) == slots
     released_address: usize = begin
         released: ptr mut u8 = mem.dispose(storage) else (problem)
@@ -117,7 +117,7 @@ public main: () -> (code: i32) =
     large: usize = 4096
     four: usize = 4
     maximum: usize = 18_446_744_073_709_551_615
-    mut state := failing.new(addr heap_state, zero)
+    mut state := fault.new(addr heap_state, zero)
     mut empty := mem.new_bytes(state, zero) else (problem)
         _ = problem
         return
@@ -130,7 +130,7 @@ public main: () -> (code: i32) =
     end
     mem.delete_bytes(state, failed)
     mem.delete_bytes(state, empty)
-    failing.permit(state, four)
+    fault.permit(state, four)
     mut small := mem.new_bytes(state, one) else (problem)
         _ = problem
         return
@@ -185,10 +185,10 @@ public main: () -> (code: i32) =
     end
     mem.delete_bytes(state, small)
     if refused and initialized and overflow and survivors and cleared
-      and failing.attempts(state) == 5 and failing.successes(state) == 3
-      and failing.injected_failures(state) == 1
-      and failing.inner_failures(state) == 1
-      and failing.frees(state) == 3 and failing.live(state) == 0
+      and fault.attempts(state) == 5 and fault.successes(state) == 3
+      and fault.injected_failures(state) == 1
+      and fault.inner_failures(state) == 1
+      and fault.frees(state) == 3 and fault.live(state) == 0
       and heap_state.exact and heap_state.allocated == 3
       and heap_state.freed == 3
       and is_absent(heap_state.first) and is_absent(heap_state.second)

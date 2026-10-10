@@ -1,0 +1,219 @@
+--  Comparison evidence shared by every module that compares, hashes or
+--  orders its items: the map, the sort and the text layer import it, and
+--  a later type declares its conformances against it.
+
+--- Equality evidence. `equal` must be an equivalence relation, and stay one
+--- while an item is stored, for example as a map key.
+public equatable: type = concept (item: type)
+    --- Report whether two items are equal under a stable equivalence.
+    equal: (left: item, right: item) -> (yes: bool)
+end equatable
+
+--- Hash evidence composing `equatable`. Items that are `equal` must have
+--- equal hashes, and both must stay stable while an item is stored. Hashes
+--- are not cryptographic.
+---
+--- A hashable conformance composes equatable, but [1340] still requires a
+--- concrete type to declare both conformances explicitly.
+public hashable: type = concept (item: type) is equatable
+    --- Return a stable hash; items `equal` to each other hash equally.
+    hash: (value: item) -> (result: u64)
+end hashable
+
+--  The compiler does not prove the semantic laws: equal must be an
+--  equivalence relation, equal items must hash alike, and both answers must
+--  stay stable while an item is stored, including across mutation of
+--  anything a pointer or reference item reaches.
+
+--  Types the library supplies evidence for: the integer scalars, bool and
+--  byte slices here, and utf8 in core/text. There is one register and no
+--  override [1280]; a program wanting another equality or hash for one of
+--  these wraps the type in a distinct type and declares evidence for that.
+--  Signed hashes are the two's-complement bits widened, computed without
+--  a narrowing conversion; byte slices use 64-bit FNV-1a.
+equal_u8: (left: u8, right: u8) -> (yes: bool) =
+    yes = left == right
+end equal_u8
+hash_u8: (value: u8) -> (result: u64) =
+    result = u64(value)
+end hash_u8
+equal_u16: (left: u16, right: u16) -> (yes: bool) =
+    yes = left == right
+end equal_u16
+hash_u16: (value: u16) -> (result: u64) =
+    result = u64(value)
+end hash_u16
+equal_u32: (left: u32, right: u32) -> (yes: bool) =
+    yes = left == right
+end equal_u32
+hash_u32: (value: u32) -> (result: u64) =
+    result = u64(value)
+end hash_u32
+equal_u64: (left: u64, right: u64) -> (yes: bool) =
+    yes = left == right
+end equal_u64
+hash_u64: (value: u64) -> (result: u64) =
+    result = u64(value)
+end hash_u64
+equal_usize: (left: usize, right: usize) -> (yes: bool) =
+    yes = left == right
+end equal_usize
+hash_usize: (value: usize) -> (result: u64) =
+    result = u64(value)
+end hash_usize
+equal_i8: (left: i8, right: i8) -> (yes: bool) =
+    yes = left == right
+end equal_i8
+hash_i8: (value: i8) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i8
+equal_i16: (left: i16, right: i16) -> (yes: bool) =
+    yes = left == right
+end equal_i16
+hash_i16: (value: i16) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i16
+equal_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left == right
+end equal_i32
+hash_i32: (value: i32) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i32
+equal_i64: (left: i64, right: i64) -> (yes: bool) =
+    yes = left == right
+end equal_i64
+hash_i64: (value: i64) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_i64
+equal_isize: (left: isize, right: isize) -> (yes: bool) =
+    yes = left == right
+end equal_isize
+hash_isize: (value: isize) -> (result: u64) =
+    if value >= 0 then
+        result = u64(value)
+    else
+        result = ~u64(0 - (value + 1))
+    end if
+end hash_isize
+equal_bool: (left: bool, right: bool) -> (yes: bool) =
+    yes = left == right
+end equal_bool
+hash_bool: (value: bool) -> (result: u64) =
+    result = if value then 1 else 0 end if
+end hash_bool
+equal_bytes: (left: []u8, right: []u8) -> (yes: bool) =
+    if lenof left <> lenof right then
+        yes = false
+        return
+    end if
+    mut index: usize = 0
+    while index < lenof left do
+        if left[index] <> right[index] then
+            yes = false
+            return
+        end if
+        inc index
+    end while
+    yes = true
+end equal_bytes
+hash_bytes: (value: []u8) -> (result: u64) =
+    mut hash: u64 = 14695981039346656037
+    mut index: usize = 0
+    while index < lenof value do
+        hash = (hash ^ u64(value[index])) *% 1099511628211
+        inc index
+    end while
+    result = hash
+end hash_bytes
+u8 is equatable (equal: equal_u8)
+u8 is hashable (hash: hash_u8)
+u16 is equatable (equal: equal_u16)
+u16 is hashable (hash: hash_u16)
+u32 is equatable (equal: equal_u32)
+u32 is hashable (hash: hash_u32)
+u64 is equatable (equal: equal_u64)
+u64 is hashable (hash: hash_u64)
+usize is equatable (equal: equal_usize)
+usize is hashable (hash: hash_usize)
+i8 is equatable (equal: equal_i8)
+i8 is hashable (hash: hash_i8)
+i16 is equatable (equal: equal_i16)
+i16 is hashable (hash: hash_i16)
+i32 is equatable (equal: equal_i32)
+i32 is hashable (hash: hash_i32)
+i64 is equatable (equal: equal_i64)
+i64 is hashable (hash: hash_i64)
+isize is equatable (equal: equal_isize)
+isize is hashable (hash: hash_isize)
+bool is equatable (equal: equal_bool)
+bool is hashable (hash: hash_bool)
+[]u8 is equatable (equal: equal_bytes)
+[]u8 is hashable (hash: hash_bytes)
+
+--- Strict ordering evidence. `less` must be irreflexive and transitive, with
+--- consistent equivalence classes, for the duration of a sort.
+public ordered: type = concept (item: type)
+    --- Return true exactly when left precedes right under the strict weak
+    --- ordering.
+    less: (left: item, right: item) -> (yes: bool)
+end ordered
+
+--  The library supplies the ordering of every integer scalar, and core/text
+--  that of utf8. One register, no override [1280]: another ordering for one
+--  of these goes on a distinct wrapper.
+less_u8: (left: u8, right: u8) -> (yes: bool) =
+    yes = left < right
+end less_u8
+less_u16: (left: u16, right: u16) -> (yes: bool) =
+    yes = left < right
+end less_u16
+less_u32: (left: u32, right: u32) -> (yes: bool) =
+    yes = left < right
+end less_u32
+less_u64: (left: u64, right: u64) -> (yes: bool) =
+    yes = left < right
+end less_u64
+less_usize: (left: usize, right: usize) -> (yes: bool) =
+    yes = left < right
+end less_usize
+less_i8: (left: i8, right: i8) -> (yes: bool) =
+    yes = left < right
+end less_i8
+less_i16: (left: i16, right: i16) -> (yes: bool) =
+    yes = left < right
+end less_i16
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+less_i64: (left: i64, right: i64) -> (yes: bool) =
+    yes = left < right
+end less_i64
+less_isize: (left: isize, right: isize) -> (yes: bool) =
+    yes = left < right
+end less_isize
+u8 is ordered (less: less_u8)
+u16 is ordered (less: less_u16)
+u32 is ordered (less: less_u32)
+u64 is ordered (less: less_u64)
+usize is ordered (less: less_usize)
+i8 is ordered (less: less_i8)
+i16 is ordered (less: less_i16)
+i32 is ordered (less: less_i32)
+i64 is ordered (less: less_i64)
+isize is ordered (less: less_isize)

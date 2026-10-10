@@ -23,7 +23,7 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
         _ = problem
         refused = true
     end
-    return when not refused or pool.allocation_count(state) <> 1
+    return when not refused or pool.allocations(state) <> 1
     mem.free(state, zero, usize(0))
     raw := try mem.allocate(state, usize(4), usize(4))
     object: ptr mut u32 = ptr(usize(raw))
@@ -43,8 +43,8 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
     return when not refused or object.val <> 42
     mem.free(state, bytes, usize(16))
     mem.free(state, raw, usize(4))
-    return when pool.live(state) <> 0 or pool.free_count(state) <> 3
-    return when pool.allocation_count(state) <> 3
+    return when pool.live(state) <> 0 or pool.frees(state) <> 3
+    return when pool.allocations(state) <> 3
     result = 42
 end exercise
 

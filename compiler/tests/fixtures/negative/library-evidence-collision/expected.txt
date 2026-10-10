@@ -1,10 +1,10 @@
 error[L0317]: this conformance has the same whole-program key as another
-  --> ../../core/map/map.ldn:152:1
+  --> ../../core/cmp/cmp.ldn:149:1
     |
-152 | u32 is hashable (hash: hash_u32)
+149 | u32 is hashable (hash: hash_u32)
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/library-evidence-collision/main.ldn:10:1
    |
-10 | u32 is map.hashable (hash: my_hash)
+10 | u32 is cmp.hashable (hash: my_hash)
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the conformance that keeps the key
   = note: [1280]: conformances have no precedence or override

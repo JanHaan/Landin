@@ -69,6 +69,14 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 source_line(run, 'library.ldn', 'selected statement')
 
+    def test_library_anchors_occur_once_in_the_library_sources(self):
+        from source_debug import LIBRARY_ANCHORS
+        for kind, (_, path, statement) in LIBRARY_ANCHORS.items():
+            lines = (HERE.parents[1] / path.removeprefix('source/')).read_text()
+            matches = [text for text in lines.splitlines()
+                       if text.strip() == statement]
+            self.assertEqual(len(matches), 1, kind)
+
     def test_cpu_debug_session_tracks_documentation_edits(self):
         from unittest.mock import patch
         import source_debug
@@ -125,8 +133,8 @@ class ProbeFailures(unittest.TestCase):
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
-             ('diag', 'failing', 'io', 'map', 'mem', 'panic', 'pool', 'region',
-              'small', 'sort', 'text', 'tree', 'vec')})
+             ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool', 'region',
+              'sort', 'spill', 'text', 'tree', 'vec')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):
         from freestanding import MODULES, ROOT

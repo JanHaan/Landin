@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: at lends a writable slot into a vector, a small vector and a map, and the map's contains, clear and reserve and the vector's last behave
+summary: at lends a writable slot into a vector, a spill list and a map, and the map's contains, clear and reserve and the vector's last behave
 program: main.ldn
 root: ../../../../..
 status: 42

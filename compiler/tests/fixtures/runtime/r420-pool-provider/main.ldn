@@ -38,7 +38,7 @@ zero_slots_exhaust: () -> (ok: bool) =
     end
     ok = refused and pool.capacity(state) == 0
          and pool.bookkeeping_capacity(state) == lenof bookkeeping
-         and pool.allocation_count(state) == 0 and pool.live(state) == 0
+         and pool.allocations(state) == 0 and pool.live(state) == 0
 end zero_slots_exhaust
 
 zero_size_occupies_slot: () -> (ok: bool) =
@@ -67,12 +67,12 @@ zero_size_occupies_slot: () -> (ok: bool) =
     end
     mem.free(state, block, one)
     ok = exhausted and pool.live(state) == 1
-         and pool.rejected_free_count(state) == 1
+         and pool.rejected_frees(state) == 1
     mem.free(state, block, zero)
-    ok = ok and pool.live(state) == 0 and pool.free_count(state) == 1
+    ok = ok and pool.live(state) == 0 and pool.frees(state) == 1
     maximum: usize = 0 -% 1
     mem.free(state, block, maximum)
-    ok = ok and pool.rejected_free_count(state) == 2
+    ok = ok and pool.rejected_frees(state) == 2
 end zero_size_occupies_slot
 
 one_slot_reuses: () -> (ok: bool) =
@@ -118,10 +118,10 @@ one_slot_reuses: () -> (ok: bool) =
     ok = exhausted and usize(first) == usize(second)
          and usize(second) % alignment == 0
          and second.val == 13 and second_last.val == 17
-         and pool.allocation_count(state) == 2
-         and pool.free_count(state) == 1 and pool.live(state) == 1
+         and pool.allocations(state) == 2
+         and pool.frees(state) == 1 and pool.live(state) == 1
     mem.free(state, second, second_size)
-    ok = ok and pool.free_count(state) == 2 and pool.live(state) == 0
+    ok = ok and pool.frees(state) == 2 and pool.live(state) == 0
 
     --  The non-power-of-two slot alignment admits both kinds of divisors.
     eight: usize = 8
@@ -160,8 +160,8 @@ one_slot_reuses: () -> (ok: bool) =
         five_refused = true
     end
     ok = ok and sixteen_refused and five_refused
-         and pool.allocation_count(state) == 5
-         and pool.free_count(state) == 5 and pool.live(state) == 0
+         and pool.allocations(state) == 5
+         and pool.frees(state) == 5 and pool.live(state) == 0
 end one_slot_reuses
 
 multiple_live_and_bounds: () -> (ok: bool) =
@@ -245,14 +245,14 @@ multiple_live_and_bounds: () -> (ok: bool) =
          and exhausted and usize(replacement) == usize(first)
          and second.val == 29 and second_last.val == 31
          and wrong_free_kept_live and too_large and unsupported
-         and pool.allocation_count(state) == 4
-         and pool.free_count(state) == 1 and pool.live(state) == 3
-         and pool.rejected_free_count(state) == 1
+         and pool.allocations(state) == 4
+         and pool.frees(state) == 1 and pool.live(state) == 3
+         and pool.rejected_frees(state) == 1
 
     mem.free(state, replacement, replacement_size)
     mem.free(state, second, second_size)
     mem.free(state, third, third_size)
-    ok = ok and pool.free_count(state) == 4 and pool.live(state) == 0
+    ok = ok and pool.frees(state) == 4 and pool.live(state) == 0
 end multiple_live_and_bounds
 
 six_live_slots: () -> (ok: bool) =
@@ -328,7 +328,7 @@ six_live_slots: () -> (ok: bool) =
     mem.free(state, fourth, slot_size)
     mem.free(state, fifth, slot_size)
     mem.free(state, sixth, slot_size)
-    ok = ok and pool.live(state) == 0 and pool.free_count(state) == 6
+    ok = ok and pool.live(state) == 0 and pool.frees(state) == 6
 end six_live_slots
 
 out_of_order_reuse: () -> (ok: bool) =
@@ -381,8 +381,8 @@ out_of_order_reuse: () -> (ok: bool) =
     duplicate: ptr mut u8 = ptr(addresses[2])
     mem.free(state, duplicate, slot_size)
 
-    ok = pool.live(state) == 0 and pool.free_count(state) == count
-         and pool.rejected_free_count(state) == 5
+    ok = pool.live(state) == 0 and pool.frees(state) == count
+         and pool.rejected_frees(state) == 5
     index = 0
     while index < count do
         block: ptr mut u8 = mem.allocate(state, slot_size, alignment)
@@ -395,7 +395,7 @@ out_of_order_reuse: () -> (ok: bool) =
         inc index
     end while
     ok = ok and pool.live(state) == count
-         and pool.allocation_count(state) == count * 2
+         and pool.allocations(state) == count * 2
     second: ptr mut u8 = ptr(addresses[2])
     sixth: ptr mut u8 = ptr(addresses[6])
     mem.free(state, sixth, slot_size)

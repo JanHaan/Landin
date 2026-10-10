@@ -1844,7 +1844,7 @@ pointer; this check remains in `unchecked`. Integer construction still loses
 origin, not non-nullness. Foreign nullable data pointers use a named one-atom
 pointer union and exhaustive `match`. Absent allocator backing uses that same
 ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
-`core/mem.dispose` reports `raw_not_empty` for a nonempty prefix and `empty`
+`core/mem.dispose` reports `not_empty` for a nonempty prefix and `empty`
 for already absent backing; a successful release clears backing to its atom.
 
 Foreign failure detail is ordinary explicit state. After a documented libc
@@ -10688,11 +10688,11 @@ simultaneous allocations and helper results used by the caller, including
 pointer-containing aggregates, slices, erased values and callback state.
 The implementation's explicit integer-to-pointer conversion removes tracked
 origin under [0470]. A helper may retain its result in module storage without
-returning it through any caller boundary. Accordingly, `arena_over` and
-`failing_over` now require `escaping base`: an ordinary call cannot build either
-provider over tracked frame backing. Both representations are private, so a
-struct literal cannot evade this constructor rule. The explicitly named
-`arena_over_unchecked` and `failing_over_unchecked` allow local backing when the
+returning it through any caller boundary. Accordingly, `arena_over` now
+requires `escaping base`: an ordinary call cannot build the provider over
+tracked frame backing. Its representation is private, so a struct literal
+cannot evade this constructor rule. The explicitly named
+`arena_over_unchecked` allows local backing when the
 caller takes responsibility for all direct and helper-held results. Their
 handles still retain the base's origin. Backing validity, exact capacity and
 explicit release remain the caller's responsibility; neither constructor
@@ -12523,7 +12523,7 @@ classified failure boundary before the repository gate can pass.
 | `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 retains complete operand values in source order, allowing stable storage to supply them, and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
 | `arrays.element-traps` | trap | 0290, 0300, 0310, 0590, 1120, 1960 | D209 executes element operations in ascending index order with the scalar overflow and division edges; unchecked removes no division edge | `runtime/r450-array-later-overflow`, `runtime/r450-array-unary-overflow`, `runtime/r450-array-later-division-zero`, `runtime/r450-array-signed-division-overflow`, `runtime/r450-array-unchecked-division-zero` |
 | `layout.explicit-policy` | static | 0750, 0760 | D210 changes physical field placement only for explicit optimal policy and only for a strict final padded-size win; source identities and initializer evaluation order are unchanged | `positive/r450-optimal-layout-source`, `runtime/r450-optimal-layout-composition` |
-| `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `out_of_bounds`, `empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
+| `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `full`, `out_of_bounds`, `empty` or `not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | allocators report `core/mem.out_of_memory`, which a caller must handle or declare; arenas reject exhaustion and unrepresentable request arithmetic before mutation, vectors check extents and growth before provider calls and preserve the old list on failure, and heap refusal, finite pool exhaustion, injected refusal and delegated inner refusal use the same channel | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: backing validity and exact capacities remain the caller's responsibility; checked arena and counted-arena constructors refuse tracked frame backing with L0314 and private representations prevent ordinary construction around that check; their unchecked constructors expose the lifetime opt-out; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; D212 preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-arena-private-representation`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
@@ -12533,7 +12533,7 @@ classified failure boundary before the repository gate can pass.
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors and L0334 for a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0313 or L0334 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302, L0327, L0331, L0343 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
 | `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
@@ -14166,8 +14166,8 @@ identities and diagnostics host-dependent. All were declined.
 **Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
 `negative/core-mem-private-representation`,
 `negative/core-arena-private-representation`,
-`negative/core-small-private-representation`,
-`negative/core-small-forged-storage`,
+`negative/core-spill-private-representation`,
+`negative/core-spill-forged-storage`,
 `negative/core-text-frame-slice-escape`, `runtime/core-vec-pointer-storage`,
 and the parser, resolution, driver and hosted-entry cases.
 
@@ -14490,11 +14490,11 @@ contract an optimization has to keep.
 ### D267 — Library source namespaces declare target availability
 
 **Chosen:** `core/*` is the shared freestanding library. Every public interface
-of core/diag, core/failing, core/io, core/map, core/mem, core/panic, core/pool,
-core/region, core/small, core/sort, core/text, core/tree and core/vec is available
-on every target. Target-specific implementation does not change its interface
-or introduce hosted authority. The memory-backed I/O provider remains part of
-core/io; importing it does not select hosted I/O or allocation.
+of core/cmp, core/diag, core/fault, core/io, core/map, core/mem, core/panic,
+core/pool, core/region, core/sort, core/spill, core/text, core/tree and core/vec
+is available on every target. Target-specific implementation does not change
+its interface or introduce hosted authority. The memory-backed I/O provider
+remains part of core/io; importing it does not select hosted I/O or allocation.
 
 `hosted/*` is available only where the target has a hosted system. The current
 modules are hosted/heap and hosted/io. The latter is ordinarily imported
@@ -15942,11 +15942,11 @@ to the private type declaration. Code in the defining module retains ordinary
 field access; no field-visibility syntax or special raw type kind is
 introduced.
 
-`reserve` records a supplied byte pointer and capacity with an empty witness.
+`storage_over` records a supplied byte pointer and capacity with an empty witness.
 `admit` and `transfer` each construct a local `ptr mut [1]item` to name the
 first destination; constructing it is not a read or publication of an
-initialized array. `capacity` and `initialized` expose capacity and witness
-length. `admit` checks for `raw_full` before a
+initialized array. `capacity` and `length` expose capacity and witness
+length. `admit` checks for `full` before a
 complete typed store. For the first item it then takes the genuine singleton
 slice; for later items a narrow `unchecked` block stores at the old length
 before extending the witness by one. Neither step publishes spare capacity.
@@ -15957,7 +15957,7 @@ only the initialized witness, with mutable element permission and
 and then shortens the witness. `clear` shortens the witness to zero in one
 transition, retaining capacity and backing without reading the discarded
 values; callers still manage any resources those values refer to. `dispose`
-checks for `raw_not_empty`, returns
+checks for `not_empty`, returns
 the original byte pointer and clears the allocation state, witness and capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
 ownership remains the container's composition rather than state stored in
@@ -16031,16 +16031,16 @@ addition lets a monotonic arena extend its current top allocation without
 spending the old extent again; other providers may always refuse.
 Allocation reports the declared `out_of_memory` atom. `arena_over` builds a
 monotonic allocator over a caller-supplied pointer and byte extent, aligning
-each successful result and refusing a result that does not fit. `failing_over`
-adds a successful-allocation budget and public counters so exhaustion and
-cleanup paths have deterministic executable evidence. Both returned allocator
-handles retain `from base`; returning one over frame storage is L0314. Freeing
+each successful result and refusing a result that does not fit; `core/fault`
+wraps it, or any provider, with a deterministic budget and public counters so
+exhaustion and cleanup paths have executable evidence (D274). The returned
+allocator handle retains `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is the explicit-authority replacement for [0820]'s formerly promised
 builtin forms. Its checked constructors require retainable backing and its
-private representations prevent direct construction; `arena_over_unchecked`
-and `failing_over_unchecked` mark a local-backing lifetime opt-out. D212 withdraws
+private representation prevents direct construction; `arena_over_unchecked`
+marks a local-backing lifetime opt-out. D212 withdraws
 both builtin forms after D191 and D196 exposed the missing backing and escape
 semantics; the named refusals now report that disposition.
 
@@ -16077,13 +16077,13 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 
 The derived parser did not require maps and trees. The hosted core library
 slice supplies those libraries,
-the typed initialized-prefix slice witness and `core/small.small(item, N)`.
+the typed initialized-prefix slice witness and `core/spill.list(item, N)`.
 The vector has a public wrapper with one private nominal storage field.
 Its explicit `uninit` inline array has a readable prefix bounded by `count`;
 its separate `core/vec.list(item)` descriptor owns spilled storage and reuses
-that list's transactional growth. The written `zeroable` constraint remains
-on the public alias and operations, but no longer causes eager inline clearing.
-`small.push` declares its `inout` container `escaping` so an aggregate copied
+that list's transactional growth. No `zeroable` constraint remains: the inline
+array is never cleared, so an item needs no zero image (D274).
+`spill.push` declares its `inout` container `escaping` so an aggregate copied
 from the initialized inline prefix may be retained in the fresh list during
 first spill; a plain non-escaping `inout` source is refused by L0314.
 Pop and release shorten the readable prefix without clearing unused slots;
@@ -16118,8 +16118,8 @@ library design without parser evidence. All were declined.
 **Pinned by** `runtime/core-mem-allocators`,
 `runtime/core-vec-pointer-storage`, `runtime/r420-small-vector`,
 `runtime/r420-small-vector-providers`, `runtime/core-text-byte-positions`,
-`negative/core-arena-frame-escape`, `negative/core-small-live-view`,
-`negative/core-small-frame-view`, `negative/core-small-pointer-item`,
+`negative/core-arena-frame-escape`, `negative/core-spill-live-view`,
+`negative/core-spill-frame-view`, `runtime/core-spill-pointer-items`,
 `negative/core-text-frame-slice-escape`,
 `negative/core-text-private-position`, and the `allocation.failure`,
 `allocation.backing`, `raw.prefix`, `origins.escape` and
@@ -16345,8 +16345,8 @@ parser's error channel, how a retained message keeps its origin, or whether the
 two implementations use the same dynamic call path.
 
 **Chosen:** `core/diag.log(logger)` is an object-safe concept with `note` and
-`failed`. `note` receives a mutable self pointer, `core/text.position`, a
-`u8`-represented warning/error severity and a call-scoped `[]u8` message, and
+`failed`. `note` receives a mutable self pointer, `core/text.position`, the
+`warning | error` severity atom set (D272) and a call-scoped `[]u8` message, and
 declares `core/io.io_failed`. `failed` reports whether any error-severity note
 has been received. A producer accepts `any diag.log` and invokes both entries
 through D147's ordinary erased evidence table; it neither names nor branches on
@@ -16555,15 +16555,15 @@ same misaligned address for an alignment of eight. Its rounding addition and
 later base, padding, and size additions could also trap for `usize` overflow
 instead of taking the allocator's declared failure channel.
 
-**Chosen:** `core/mem.arena` and `core/mem.failing` align the numerical
+**Chosen:** `core/mem.arena` aligns the numerical
 absolute address `usize(base) + used`. Every positive alignment is its ordinary
 numeric address multiple; zero has the same byte-aligned meaning as one. The
 contract does not require power-of-two alignment, although every alignment
 produced by `alignof` for an enabled type is one. A size of zero is a valid
 request. It returns the aligned point and consumes any padding required to
-reach it, but no payload bytes. In `failing`, it is still one successful
-allocation and consumes one unit of allocation budget, just as the provider's
-existing counter contract says.
+reach it, but no payload bytes. Under `core/fault`, it is still one successful
+allocation and consumes one unit of allocation budget. The arithmetic is
+public as `mem.aligned_offset`, and the pool uses the same routine (D274).
 
 Before forming each sum, the providers prove that `base + used`, its aligned
 address, the aligned offset, and the exclusive allocation end fit `usize`, and
@@ -16867,9 +16867,9 @@ transactional map rehash that holds three old and three replacement extents
 uses six records. The implementation has no unrolled boolean ceiling and the
 capacity is not an arbitrary library constant.
 
-`core/failing.counted(A)` is a separate generic wrapper for any mutable
+`core/fault.injector(A)` is a separate generic wrapper for any mutable
 `A is mem.allocator`. `new` takes an ordinary nonescaping `ptr mut A`
-and returns `counted(A) from inner`: the returned value retains the actual's
+and returns `injector(A) from inner`: the returned value retains the actual's
 origin without [1880] requiring that actual itself to have an origin
 independent of the call. The wrapper therefore accepts local heap and pool
 providers for local use, while returning such a wrapper past the inner
@@ -16903,8 +16903,8 @@ local actual even when only the returned wrapper retains it.
 **Pinned by** `runtime/r420-pool-provider`,
 `runtime/r420-failing-providers`, `negative/core-pool-frame-escape`,
 `negative/core-pool-bookkeeping-frame-escape`,
-`negative/core-failing-needs-mutable-inner`,
-`negative/core-failing-frame-escape`, and the `allocation.failure`,
+`negative/core-fault-needs-mutable-inner`,
+`negative/core-fault-frame-escape`, and the `allocation.failure`,
 `allocation.backing`, `allocation.reclamation` and `origins.escape` guarantee
 rows. Runtime evidence covers zero and one delegation budgets, finite
 exhaustion, six simultaneous live slots, exact-alignment writes, exact
@@ -16923,18 +16923,18 @@ equal key did not occur later in the chain.
 
 **Chosen:** `core/map.map(K, V)` owns three `mem.storage` allocations. The
 first is a completely initialized array of bucket records whose module-private
-type contains a scalar free/used/dead tag, a dense index and previous/next
+type contains a free/used/dead atom-set state, a dense index and previous/next
 live-bucket links. The map stores the head and tail; capacity is the link's
 end marker. The other two are equally long
 initialized prefixes of K and V. A bucket that has never held an entry has no
 dense index in use. First occupation appends one actual K and V before marking
 the bucket used. Removal marks the bucket dead without reading, zeroing or
 releasing either value. Reuse replaces the K and V at that bucket's existing
-dense index. Rehash transfers only used positions and final release drains all
+dense index. Rehash transfers only used positions and final release discards all
 initialized positions, including dead ones. No K or V zero image, destructor
 or implicit resource ownership is introduced.
 
-`equatable(K)` and `hashable(K) is equatable` are public map concepts. A
+`equatable(K)` and `hashable(K) is equatable` are public `core/cmp` concepts (D273). A
 concrete key supplies both explicit conformances under [1340]; the child table
 does not synthesize its parent. Insert retains K and V through `escaping`
 parameters, and get returns `V from map`. Construction, insert, get, remove,
@@ -16970,19 +16970,22 @@ used/dead records, and a finite doubly linked walk through exactly the used
 records. The compiler neither enforces those map invariants nor
 supplies a deep-safety guarantee.
 
-The semantic conformance contract, also not compiler-proved, requires `eq` to
+The semantic conformance contract, also not compiler-proved, requires `equal` to
 be reflexive, symmetric and transitive. Equal keys produce the same hash.
 Equality and hash results for every stored key remain stable until removal,
 including when the key contains a pointer or reference: mutation of anything
 reached through it must not change either result while the key is stored.
 
-The starting capacity is eight. An absent-key insertion into a table with
-tombstones reuses the first dead bucket in its probe chain, or a free bucket
-when reached first. Even when every bucket has been occupied, at least one
-dead bucket is available and the bounded probe finds it. This uses no new
-extent and keeps the three initialized prefixes within capacity. A
-tombstone-free table doubles on insertion pressure after a checked maximum
-bound. Lookup,
+The starting table has eight slots. An absent-key insertion reuses the first
+dead bucket in its probe chain without a rebuild, using no new extent and
+keeping the three initialized prefixes within capacity. An absent key that
+would take a free bucket first meets the pressure check, in which tombstones
+count as live entries do: the table is rebuilt at its size, which empties the
+tombstones, while the live entries with the new key fit in half its capacity,
+and otherwise doubles after a checked maximum bound (D274). Without that check
+a single tombstone would let the table fill to its last free bucket and every
+miss probe all of it; without the half, a map churned just below its capacity
+would rebuild on nearly every new key. Lookup,
 removal and placement each probe at most capacity
 records and wrap without adding one to the final index. Placement records the
 first dead bucket until a free bucket or the probe bound is reached. Migration
@@ -16996,19 +16999,20 @@ before probing the replacement table for placement. Thus an update after a
 preceding tombstone changes one value without
 changing length, duplicating the key or depending on allocation availability,
 and malformed full or all-dead records still terminate.
-Bucket selection reduces the `u64` hash by the capacity before conversion to
-`usize`. For power-of-two capacities, a `u64(capacity - 1)` mask gives the
-same result as `hash(K) % u64(capacity)`; other capacities use the remainder.
+Bucket selection first spreads the `u64` hash with MurmurHash3's finalizer, so
+the shipped identity hashes of keys sharing a stride do not share low bits
+(D274), and reduces the result by the slot count before conversion to
+`usize`. For power-of-two counts, a `u64(slots - 1)` mask gives the same
+result as a remainder; other counts use the remainder.
 
-For a tombstone-free table, growth pressure has the meaning
-`(length + 1) * 4 > capacity * 3`, but computes the occupied count
+Growth pressure has the meaning `(length + tombstones + 1) * 4 > slots * 3`, but computes the occupied count
 only after proving both additions against capacity and computes the three-quarter
 threshold from quotient and remainder. Neither side can overflow. Before the
 first provider effect, rehash checks the bucket, K and V byte products. It then
 acquires initialized buckets, empty K storage and empty V storage in that order,
 registering failure-only cleanup after each acquisition. All migration remains
 private. Any failure releases every acquired replacement and leaves the old map
-untouched. After migration, only infallible drain, exact free and field
+untouched. After migration, only an infallible constant-time clear, exact free and field
 publication steps remain. The success path frees each old extent once; release
 frees each current extent once and resets the map to its empty shape. Growth
 retains all three refusal and rollback positions.
@@ -17124,7 +17128,7 @@ entering the trapping conversion on malformed input. Their successful
 `utf8 from source` results retain the actual input origin. `from_c` first
 uses the ordinary scan conversion and then the same byte validator.
 `core/text.bytes` is the infallible `utf8` representation view.
-`eq` and `contains` compare exact encoded bytes without normalization,
+`equal` and `contains` compare exact encoded bytes without normalization,
 locale or grapheme policy; `contains` considers the empty sequence present.
 Shortest-form validity makes exact byte equality equivalent to equality of
 the represented scalar sequence. `contains` uses a Two-Way byte search:
@@ -17197,7 +17201,7 @@ argument table to be a diagnostics destination.
 `world.write` on it reaches the writer entry through D147's flattened table.
 Each free function in `core/io` is constrained by the narrowest concept it
 calls. `core/io.memory` and `hosted/io.system` conform to all five, the fifth
-with an empty body. `core/diag.to` takes `ptr any io.writer`. Because `any C`
+with an empty body. `core/diag.stream` takes `ptr any io.writer`. Because `any C`
 has direct-concept identity (D145), an erased world is not an erased writer;
 a root builds the writer from the same provider pointer in typed context, and
 a routine holding only `any io.world` lends its writer through
@@ -17232,9 +17236,9 @@ caller-supplied bytes or records with `over`, and a container's storage is
 given back with `release`. `core/mem` keeps `new`/`delete` for one allocated
 item and `new_bytes`/`delete_bytes` for a byte buffer; its raw-storage pop is
 `withdraw`. Accessors are unprefixed unless one module holds several types,
-as `core/mem` does with `arena_used` and `failing_used`. `core/mem` declares
+as `core/mem` does with `arena_used`. `core/mem` declares
 `out_of_bounds` and `empty`, and every core container fails with them: raw
-storage, the vector, the small vector and the bounded log. Key lookups keep
+storage, the vector, the spill list and the bounded log. Key lookups keep
 `map.missing` and `tree.no_such_node`, because a missing key is not a bad
 index. [1850] admits the same name in different modules; qualification tells
 `vec.new` from `map.new`.
@@ -17244,7 +17248,7 @@ index. [1850] admits the same name in different modules; qualification tells
 constructors read well in isolation and differently in every module. Both
 were declined; a convention that has to be looked up is not one.
 
-**Pinned by** the thirteen `runtime/library-shared-*` consumers,
+**Pinned by** the fourteen `runtime/library-shared-*` consumers,
 `runtime/library-at-references`, `negative/core-mem-used-live-release` and
 `negative/core-mem-bytes-live-drop`.
 
@@ -17256,16 +17260,16 @@ wrapper or is passed explicitly. It left every program to declare `eq`,
 `hash` and `less` for `u32` before it could use a map or a sort, and eight
 fixtures and the derived containers did.
 
-**Chosen:** `core/map` declares `equatable` and `hashable` for the ten integer
-scalars, `bool` and `[]u8`; `core/sort` declares `ordered` for the ten integer
-scalars; `core/text` declares `utf8` as `equatable`, `hashable` and `ordered`,
-importing both. Scalar hashes are the two's-complement bits widened, computed
+**Chosen:** `core/cmp` (D273) declares `equatable` and `hashable` for the ten
+integer scalars, `bool` and `[]u8`, and `ordered` for the ten integer scalars;
+`core/text` declares `utf8` as `equatable`, `hashable` and `ordered`,
+importing it. Scalar hashes are the two's-complement bits widened, computed
 without a narrowing conversion; byte slices and `utf8` use 64-bit FNV-1a, and
 `utf8` orders byte-wise, which for valid UTF-8 is scalar order. Floats are
 excluded: IEEE equality is not reflexive for NaN, and hashing raw bits would
 give different hashes to equal signed zeros. There is one
 register and no override (D2), so a program that re-declares `u32 is
-map.hashable` is refused as a collision, and another reading of a shipped key
+cmp.hashable` is refused as a collision, and another reading of a shipped key
 goes on a `distinct` wrapper with its own evidence, which is what the
 colliding-hash fixture now does.
 
@@ -17285,10 +17289,10 @@ that the source binding is locked against `inout` and `sink` while the
 reference lives. The containers returned items by copy only, so a large item
 was copied to be read and a stored item could not be updated in place.
 
-**Chosen:** the vector, small vector and map keep `get` as a copy and gain
+**Chosen:** the vector, spill list and map keep `get` as a copy and gain
 `at`, which takes
 the container `inout` and returns `ptr mut item from value`, failing with the
-same atom as `get`: `vec.at`, `small.at` and `map.at`; `core/tree`'s node is
+same atom as `get`: `vec.at`, `spill.at` and `map.at`; `core/tree`'s node is
 private, so a slot into it would be useless outside the module. The slot is
 reached through the initialized view, so the result keeps the container's
 origin and [0800] locks the binding until the slot's last use; a push,
@@ -17301,3 +17305,124 @@ assignment but not update through a pointer. Both were declined.
 
 **Pinned by** `runtime/library-at-references`, `runtime/library-map-reserve-rollback` and
 `negative/library-at-live-inout`.
+
+### D272 — A closed set of named values in the library is an atom set
+
+**The tour said** [0630] that an atom is its own value and type, and [0640]
+that an enumeration is a union of atoms. D154 nevertheless carried
+`core/diag`'s severity as a `u8` with `warning` 0 and `error` 1, and D198 the
+map's bucket state as a `u8` with three named codes: when they were written an
+atom could not be a struct field, and D216 has since made it one.
+
+**Chosen:** `diag.warning` and `diag.error` are atoms and `diag.severity` is
+`warning | error`. The log concept's `note` receives it through erased
+dispatch, a bounded entry stores it, `severity_of` returns it and a `match`
+over it must cover both. An atom has no zero image, so the bounded log builds
+each entry whole rather than from `zeroed`; the entry's size is unchanged on
+every target, the four-byte atom carrier taking padding the byte left. The
+map's private bucket state is the atom set `slot_free | slot_used | slot_dead`
+for the same reason, with no change to its public surface.
+
+**The alternatives:** keeping the byte saves no storage, since both records pad
+to their `usize` fields either way, and lets any integer pass as a severity. An
+encoded union `(warning = 0 | error = 1)` would fix the codes for a packed
+image, which no consumer asks for.
+
+**Pinned by** `runtime/library-diag-severity`, `runtime/diagnostic-loggers-dispatch`,
+`runtime/library-io-writer-only` and the map consumers of D198.
+
+### D273 — The comparison concepts are a module of their own
+
+**The tour said** [1270] that which concepts exist is the standard library's
+business. D198 put `equatable` and `hashable` in `core/map` and D270 `ordered`
+in `core/sort`, so `core/text` imported a hash map and a sort to say that
+`utf8` compares, every program reaching text reached both, and a later key
+type would have had to import the container to describe itself.
+
+**Chosen:** `core/cmp` holds `equatable`, `hashable is equatable` and
+`ordered`, together with D270's shipped evidence for the integer scalars,
+`bool` and `[]u8`. `core/map`, `core/sort` and `core/text` import it; the map
+and the sort constrain on `cmp.hashable` and `cmp.ordered`, and `core/text`
+declares `utf8`'s three conformances against it. The concepts keep their
+declaration order, so retained evidence positions do not move, and the
+register is unchanged: a program that names one of these concepts imports
+`core/cmp` and with it every shipped conformance, so a re-declaration is still
+D270's collision. It is a shared module with its own consumer on every target.
+
+**The alternatives:** leaving the concepts with their first consumer couples
+every comparable type to a container. Splitting equality, hashing and order
+into three modules separates what one key declares together. Re-exporting the
+concepts from `core/map` and `core/sort` would need a re-export the module
+system does not have [1450].
+
+**Pinned by** `runtime/library-shared-cmp`, `runtime/library-builtin-evidence`,
+`negative/library-evidence-collision`,
+`negative/core-map-missing-parent-conformance` and the debugger's container
+workload, whose evidence entry now stops in `core/cmp`.
+
+### D274 — The library says what it does
+
+**The tour said** nothing about the library's names beyond [1270]'s "the
+standard library's business", and D269 wrote down construction, release, `get`,
+`at` and the shared atoms. Reading every public declaration as a user would
+found names that said something other than what the declaration did, a
+facility that existed twice, two adjectives among the module names, a hash map
+that one removal kept from growing, and doc comments that disagreed with their
+source.
+
+**Chosen:** a module is named by a short noun or a conventional abbreviation.
+`core/small` is `core/spill`, whose type is `spill.list`, and `core/failing` is
+`core/fault`, whose type is `fault.injector`. `core/mem.failing`, a bump arena
+with a budget that counted only successes, is withdrawn: `fault.new` over
+`mem.arena_over` is the one injector, and its budget spends a permit on every
+call that reaches the provider, including one the arena refuses.
+
+A name says what the declaration does. `mem.reserve`, a view over caller bytes,
+is `mem.storage_over`, so that `reserve` always allocates; `mem.initialized` is
+`mem.length`; `raw_full` and `raw_not_empty` are `mem.full` and
+`mem.not_empty`; `transfer_zero_prefix` is `transfer_prefix` for any item size,
+and `drain_zero_prefix` is `mem.clear`. The equality entry is `equal`, beside
+`less`, and `text.eq` is `text.equal`. `text.ordinal`, a byte offset that would
+index `utf8` as a scalar count, is `text.offset`; `text.at`, which lends
+nothing, is `text.cursor`; `text.written` is `text.prefix` and reports
+`past_end`. `diag.note_at`, a copy, is `diag.get`; `diag.to` is `diag.stream`;
+`diag.stored` is `diag.length`. The pool's counters are `allocations`, `frees`
+and `rejected_frees`, so `frees` no longer reads as the number of free slots.
+
+The map's `capacity` is D269's room: the entries that fit before the next new
+key rebuilds the table, three quarters of its `slots`. A new key taking a free
+bucket meets the pressure check with tombstones counted. The table is rebuilt
+at its size while its live entries with the new key fit in half its capacity,
+and grows otherwise, so tombstones make up at least half of any pressure that
+rebuilds in place and two rebuilds are at least half a capacity of operations
+apart.
+Hashes are spread with MurmurHash3's finalizer before reduction, since the
+shipped integer hashes are the identity. `reserve(n)` allocates the smallest
+table whose capacity holds `n`. Release clears a storage's prefix in constant
+time rather than withdrawing each item.
+
+`spill.list` drops the `zeroable` constraint D152 had left with no effect, so
+it stores pointers and atom-bearing records. Public signatures spell the
+public alias of a private type. `mem.aligned_offset`, the bump arithmetic,
+and `text.valid`, the UTF-8 check `from_bytes` makes, are public; the hosted
+heap's state is opaque. A generic routine's signature that applies one of its
+own parameters as a type, as `storage: storage(item)` does, is L0304 at the
+declaration, called or not, as the same application in a plain signature is.
+
+**The alternatives:** keeping both injectors leaves a user to learn that they
+count different things. Renaming only the misleading names leaves the
+convention to be looked up again. Re-exporting old names would need a
+re-export the module system does not have [1450]. A map that rebuilt on every
+tombstone would allocate on each steady-size remove and insert, which reusing
+a dead bucket on the key's own chain avoids. Growing only when the live
+entries alone fill the table would rebuild a map churned one entry below its
+capacity on nearly every new key, since one tombstone seldom lies on the new
+key's chain: each insertion would cost a whole table and three allocations,
+and an arena would never get them back.
+
+**Pinned by** `runtime/library-shared-spill`, `runtime/library-shared-fault`,
+`runtime/core-spill-pointer-items`, `runtime/r420-map-operations`,
+`runtime/library-at-references`, `runtime/core-mem-zero-prefix`,
+`runtime/core-mem-arena-boundaries`, `runtime/r480-arena-nested-exhaustion`,
+`negative/core-text-prefix-frame` and
+`negative/generic-signature-applies-a-parameter`.

@@ -1,0 +1,10 @@
+error[L0340]: this argument has a different reference permission or view from its parameter pattern
+  --> ../tests/fixtures/negative/core-fault-needs-mutable-inner/main.ldn:10:48
+   |
+10 |         (inner_provider: heap_provider, inner: addr inner,
+   |                                                ^^^^^^^^^^
+  --> ../../core/fault/fault.ldn:26:21
+   |
+26 |              inner: ptr mut inner_provider,
+   |                     ^^^^^^^^^^^^^^^^^^^^^^ the parameter's type, as written
+  = note: D138: an argument to a generic routine is typed on its own, before the parameter is known, and must match the type written for it; only `mut` may relax to read-only

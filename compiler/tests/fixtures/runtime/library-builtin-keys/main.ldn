@@ -49,8 +49,8 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
 
     mut texts: [3]utf8 = ["pear", "apple", "fig"]
     sort.sort(texts[0..<3])
-    return when not text.eq(texts[0], "apple") or not text.eq(texts[1], "fig")
-      or not text.eq(texts[2], "pear")
+    return when not text.equal(texts[0], "apple") or not text.equal(texts[1], "fig")
+      or not text.equal(texts[2], "pear")
     mut numbers: [4]i64 = [3, -5, 0, -1]
     sort.sort(numbers[0..<4])
     return when numbers[0] <> -5 or numbers[1] <> -1 or numbers[2] <> 0

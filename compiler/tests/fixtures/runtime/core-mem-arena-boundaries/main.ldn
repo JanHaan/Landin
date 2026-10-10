@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 
 no_allocation: atom
@@ -51,7 +52,10 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut limited := mem.failing_over_unchecked(misaligned_base, sixty_three, two)
+    mut limited_arena := mem.arena_over_unchecked(misaligned_base, sixty_three)
+    --  The backing refuses the size boundary; that refusal reached the arena
+    --  and so spends one of the three permits.
+    mut limited := fault.new(addr limited_arena, three)
     first: ptr mut u8 = mem.allocate(limited, one, eight) else (problem)
         _ = problem
         return
@@ -73,7 +77,8 @@ public main: () -> (code: i32) =
         mem.allocate(top, zero, two) else no_allocation
     past_top: allocation = mem.allocate(top, one, maximum) else no_allocation
 
-    mut limited_top := mem.failing_over_unchecked(raw_base, maximum, two)
+    mut limited_top_arena := mem.arena_over_unchecked(raw_base, maximum)
+    mut limited_top := fault.new(addr limited_top_arena, two)
     limited_at_top: ptr mut u8 =
         mem.allocate(limited_top, zero, maximum) else (problem)
         _ = problem
@@ -103,19 +108,21 @@ public main: () -> (code: i32) =
       and is_absent(beyond)
       and usize(empty_at_end) == usize(exact_base) + 16
       and usize(first) % 8 == 0
-      and mem.failing_used(limited) == usize(first) - usize(misaligned_base) + 1
+      and mem.arena_used(limited_arena) == usize(first) - usize(misaligned_base) + 1
       and is_absent(size_boundary)
-      and usize(second) == usize(misaligned_base) + mem.failing_used(limited)
-      and mem.failing_remaining(limited) == 0 and mem.failing_allocations(limited) == 2
+      and usize(second) == usize(misaligned_base) + mem.arena_used(limited_arena)
+      and fault.remaining(limited) == 0 and fault.successes(limited) == 2
+      and fault.inner_failures(limited) == 1
       and usize(at_top) == maximum
       and mem.arena_used(top) == maximum - usize(raw_base)
       and is_absent(rounding_past_top)
       and is_absent(past_top)
       and usize(limited_at_top) == maximum
       and is_absent(limited_rounding_past_top)
-      and mem.failing_used(limited_top) == maximum - usize(raw_base)
-      and mem.failing_remaining(limited_top) == 1
-      and mem.failing_allocations(limited_top) == 1 and mem.failing_frees(limited_top) == 0
+      and mem.arena_used(limited_top_arena) == maximum - usize(raw_base)
+      and fault.remaining(limited_top) == 0
+      and fault.inner_failures(limited_top) == 1
+      and fault.successes(limited_top) == 1 and fault.frees(limited_top) == 0
       and usize(odd_first) % three == 0
       and usize(odd_second) % six == 0
       and mem.arena_used(odd) == usize(odd_second) - usize(misaligned_base) + two

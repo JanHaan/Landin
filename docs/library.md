@@ -19,7 +19,7 @@ Their fixture metadata and target lanes determine where they execute.
 
 Memory providers and typed storage: the foundation for allocation, initialized prefixes and caller-owned backing.
 
-Use `allocator` evidence to supply storage explicitly. `arena` is monotonic; `failing` adds a deterministic allocation budget. Raw descriptors do not establish ownership or prove alias lifetimes. Use the same provider and extent when freeing a block.
+Use `allocator` evidence to supply storage explicitly. `arena` is monotonic and has no reset: its allocations end with its backing. `aligned_offset` is the arithmetic a bump provider of your own needs. Typed storage over caller bytes comes from `storage_over`; it does not establish ownership or prove alias lifetimes. Use the same provider and extent when freeing a block. Deterministic failure injection over any provider is `core/fault`.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-mem/main.ldn)
 
@@ -31,19 +31,27 @@ A growable contiguous list with explicit allocation and rollback on failed growt
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-vec/main.ldn)
 
-## core/small
+## core/spill
 
-A vector that keeps an inline prefix and spills into allocated storage when it fills.
+A list that keeps an inline prefix and spills into allocated storage when it fills.
 
-Queries use a pointer to avoid copying the inline array. Popping from spilled storage retains that allocation; `release` returns to an empty inline representation. The element type must supply `zeroable` evidence.
+Queries use a pointer to avoid copying the inline array. Popping from spilled storage retains that allocation; `release` returns to an empty inline representation. Items need no zero image: pointers and atom-bearing records are stored like any other.
 
-[Executable example](../compiler/tests/fixtures/runtime/library-shared-small/main.ldn)
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-spill/main.ldn)
+
+## core/cmp
+
+Equality, hashing and ordering evidence, apart from the containers and algorithms that consume it.
+
+`equatable`, `hashable` and `ordered` ship for the ten integer scalars, `bool` (equality and hashing) and `[]u8` (equality and hashing); `core/text` adds all three for `utf8`. There is one register and no override: another reading of a shipped type goes on a `distinct` wrapper with its own evidence. A `hashable` key declares its `equatable` conformance as well. The compiler does not prove the laws: equality must be an equivalence, equal keys must hash alike, and `less` must be a strict weak ordering. Floating-point types have no shipped evidence.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-cmp/main.ldn)
 
 ## core/map
 
-An insertion-ordered hash map, key equality and hash evidence, and explicit entry walks.
+An insertion-ordered hash map with explicit entry walks.
 
-The module supplies equality and hashing for ten integer scalars, `bool` and `[]u8`. `core/text` adds UTF-8 evidence. Alternative policies use a `distinct` wrapper. Keep keys and their backing stable while stored, and restart cursors after any mutation. Floating-point keys need an explicit equality and hashing policy.
+Keys are constrained on `core/cmp`'s `hashable`, which ships for ten integer scalars, `bool` and `[]u8`; `core/text` adds UTF-8 evidence. Alternative policies use a `distinct` wrapper. Hashes are spread before they choose a slot, so keys sharing a stride do not share a probe chain. `capacity` is how many entries fit before the next new key rebuilds the table, and `slots` its size; removed entries count against the capacity until a rebuild. Keep keys and their backing stable while stored, and restart cursors after any mutation. Floating-point keys need an explicit equality and hashing policy.
 
 Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB flash. The bounded example below checks the empty-map surface; it does not demonstrate that a populated map fits that profile.
 
@@ -53,7 +61,7 @@ Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB flash. Th
 
 Allocation-free in-place heapsort and selection sort using ordering evidence.
 
-The module supplies ordering for the ten integer scalars; `core/text` supplies UTF-8 byte ordering. Custom `ordered` evidence must obey a strict weak ordering. Neither algorithm promises stability.
+Items are constrained on `core/cmp`'s `ordered`, which ships for the ten integer scalars; `core/text` supplies UTF-8 byte ordering. Custom `ordered` evidence must obey a strict weak ordering. Neither algorithm promises stability.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-sort/main.ldn)
 
@@ -61,7 +69,7 @@ The module supplies ordering for the ten integer scalars; `core/text` supplies U
 
 Byte cursors, validated UTF-8 views, byte search and bounded decimal conversion.
 
-Cursors advance by bytes. The language provides separate UTF-8 indexing and traversal rules; this module does not turn byte offsets into validated character boundaries. UTF-8 equality, hashing and ordering use encoded bytes, with no normalization or locale collation. Views borrow their input.
+Cursors advance by bytes. `from_bytes` validates bytes as UTF-8 and reports `invalid_text` when they are not, and `valid` answers the same question without a view; the `utf8(bytes)` conversion validates too but traps on malformed input. A `text.position` indexes `utf8` by byte offset, while a `usize` index into `utf8` counts scalars, so do not index with `offset(position)`. This module does not turn byte offsets into validated character boundaries. UTF-8 equality, hashing and ordering use encoded bytes, with no normalization or locale collation. Views borrow their input.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-text/main.ldn)
 
@@ -77,7 +85,7 @@ Use the smallest concept a consumer needs. An erased world can lend `writer_of` 
 
 Bounded diagnostic storage and streaming diagnostics through a writer capability.
 
-A bounded log stores at most its fixed number of entries and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. A streaming log borrows a writer and file binding, emits severity and position prefixes, and propagates I/O failure.
+Severity is the atom set `warning | error`, so a `match` over it is checked for both. A bounded log stores at most its fixed number of entries and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. A streaming log from `stream` borrows a writer and file binding, writes each note as `W:` or `E:`, the decimal byte offset, `:` and the message, and propagates I/O failure.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-diag/main.ldn)
 
@@ -101,17 +109,17 @@ The pool allocates no backing storage of its own. It reuses the lowest free slot
 
 An allocator scope that records allocations through a borrowed parent and releases them together.
 
-Choose a dynamically grown ledger with `new` or a fixed caller ledger with `over`. Individual frees do nothing; every allocation consumes a ledger entry until region release. Release frees payloads in reverse order. End all payload uses before releasing the region.
+Choose a dynamically grown ledger with `new` or a fixed caller ledger with `over`. Individual frees do nothing; every allocation consumes a ledger entry until region release, whether or not its payload is still live. Release frees payloads in reverse order. End all payload uses before releasing the region.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-region/main.ldn)
 
-## core/failing
+## core/fault
 
 Deterministic allocation-failure injection over any allocator, with cumulative counters.
 
-The budget counts delegated attempts, including attempts the inner provider refuses. `permit` replaces that budget without resetting evidence. Free calls delegate to the parent; in-place growth is refused so allocation-failure tests remain predictable.
+`new` wraps a provider in an `injector`. The budget counts delegated attempts, including attempts the inner provider refuses, so wrapping an arena counts both injected failures and the arena's own. `permit` replaces that budget without resetting evidence. Free calls delegate to the parent; in-place growth is refused so allocation-failure tests remain predictable.
 
-[Executable example](../compiler/tests/fixtures/runtime/library-shared-failing/main.ldn)
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
 ## core/panic
 
@@ -139,9 +147,18 @@ Hosted file, stream and process operations through libc.
 
 ## platform/c
 
-C scalar aliases selected by the supported LP64 ABI.
+C scalar spellings for the target's C ABI, on every target whose C data model is LP64.
 
-The aliases preserve ordinary Landin scalar identity. Plain C `char` follows the selected ABI, rather than assuming signedness from pointer width. The source assertion and conditional signatures show the exact supported scope; Cortex-M C signatures are not admitted by this module.
+LP64 is a data model, not an architecture: C `int` is 32 bits while `long` and pointers are 64, as on every 64-bit Unix. Windows' LLP64 keeps `long` at 32 bits and Cortex-M's ILP32 makes all three 32 bits; neither is admitted here. Within LP64 the C ABI depends on the operating system as well as the architecture, so the compiler names it with one fact per ABI rather than reading it from `compiler.arch` or the pointer width:
+
+| Target | ABI fact | Plain `char` |
+|---|---|---|
+| `linux-x86-64`, `freebsd-x86-64` | `compiler.c_sysv_lp64`: the System V AMD64 ABI | `i8` |
+| `darwin-arm64` | `compiler.c_darwin_lp64`: Apple's arm64 variant of AAPCS64 | `i8` |
+| `linux-arm64`, `freebsd-arm64` | `compiler.c_aapcs64_lp64`: the standard AAPCS64 | `u8` |
+| `linux-rv64` | `compiler.c_riscv_lp64d`: RISC-V LP64D, LP64 with double-precision float registers | `u8` |
+
+Darwin and Linux share `compiler.arch == arm64` and still disagree on `char`, which is why the fact names the ABI. Every other alias is the same on all four: `c_int` is `i32`, `c_long` and `c_longlong` are `i64`, `c_size` is `usize`. The aliases keep ordinary Landin scalar identity; `c_char` is a numeric byte and never a Unicode scalar. Cortex-M C signatures are not admitted by this module.
 
 [Executable example](../compiler/tests/fixtures/runtime/r440-c-aliases/main.ldn)
 

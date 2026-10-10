@@ -160,10 +160,10 @@ public main: () -> (code: i32) =
 
     diagnostic_stream: io.file = world.err()
     writer: any io.writer = any(addr memory)
-    mut streaming := diag.to(addr writer, addr diagnostic_stream)
+    mut streaming := diag.stream(addr writer, addr diagnostic_stream)
     mut logger: any diag.log = any(addr streaming)
     message: []u8 = "bad"
-    where: text.position = text.at(message, 7)
+    where: text.position = text.cursor(message, 7)
     logger.note(where, diag.error, message) else (problem)
         _ = problem
         return

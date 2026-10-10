@@ -34,12 +34,11 @@ public new: (provider: type is mem.allocator, parent: ptr mut provider)
     value = (parent: parent, allocations: empty)
 end new
 
---- Create a region with a bounded caller-owned ledger. Each live payload
---- needs one entry; an exhausted ledger reports `mem.out_of_memory` and
---- returns the new payload to the parent.
----
---- The caller reserves one initialized record per simultaneously live payload.
---- No ledger request is sent to the parent in this form.
+--- Create a region with a bounded caller-owned ledger of initialized records.
+--- Every allocation takes one record until the region is released, since an
+--- individual free returns nothing; an exhausted ledger reports
+--- `mem.out_of_memory` and returns the new payload to the parent. No ledger
+--- request is sent to the parent in this form.
 public over: (provider: type is mem.allocator,
               parent: ptr mut provider, records: []mut allocation)
              -> (value: region(provider) from parent, records) =
@@ -104,12 +103,10 @@ end region_grow
     (alloc: region_alloc, grow: region_grow, free: region_free)
 
 --- Free recorded payloads in reverse order and release any dynamic ledger
---- backing. End every payload use first; a bounded caller ledger remains
---- available for reuse.
----
---- End every alias before this call. Every payload and ledger allocation
---- is returned to the parent, including failed-construction payloads. A
---- monotonic parent keeps consumed backing until its own explicit reset.
+--- backing; a bounded caller ledger remains available for reuse. End every
+--- payload use first. Every payload and ledger allocation is returned to the
+--- parent, including failed-construction payloads; an arena parent keeps the
+--- bytes it handed out, since it reclaims nothing until its backing ends.
 public release: (provider: type is mem.allocator,
                  inout state: region(provider)) -> none =
     match state.allocations

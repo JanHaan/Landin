@@ -1,10 +1,10 @@
 error[L0318]: this concrete type has no conformance to `equatable`
   --> ../tests/fixtures/negative/core-map-missing-parent-conformance/main.ldn:7:1
   |
-7 | tag is map.hashable (hash: key_hash)
+7 | tag is cmp.hashable (hash: key_hash)
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/map/map.ldn:21:48
+  --> ../../core/cmp/cmp.ldn:18:49
    |
-21 | public hashable: type = concept (key: type) is equatable
-   |                                                ^^^^^^^^^ the constraint declared here
+18 | public hashable: type = concept (item: type) is equatable
+   |                                                 ^^^^^^^^^ the constraint declared here
   = note: [1290]: every constrained type actual must have one whole-program conformance

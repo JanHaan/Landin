@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/tree
 
@@ -6,7 +6,7 @@ public main: () -> (code: i32) =
     code = 1
     mut host := heap.host()
     budget: usize = 10
-    mut state := failing.new(addr host, budget)
+    mut state := fault.new(addr host, budget)
     zero_count: usize = 0
     one_count: usize = 1
     three_count: usize = 3
@@ -94,8 +94,8 @@ public main: () -> (code: i32) =
     tree.release(value, state)
     if three == 3 and empty == 0 and six == 6 and deep_count == 3
       and invalid and unchanged and tree.length(value) == 0
-      and failing.live(state) == 0 and failing.successes(state) == 8
-      and failing.frees(state) == 8
+      and fault.live(state) == 0 and fault.successes(state) == 8
+      and fault.frees(state) == 8
     then
         code = 42
     end if

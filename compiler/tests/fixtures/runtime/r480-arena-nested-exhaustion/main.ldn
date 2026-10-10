@@ -1,10 +1,12 @@
+import core/fault
 import core/mem
 
 stopped: atom
 absent: atom
 optional: type = absent | ptr mut u8
+counted: type = fault.injector(mem.arena)
 
-leave: (inout arena: mem.failing, mode: u8) -> none ! stopped =
+leave: (inout arena: counted, mode: u8) -> none ! stopped =
     block := mem.allocate(arena, usize(1), usize(1)) else (problem)
         _ = problem
         fail stopped
@@ -18,7 +20,7 @@ leave: (inout arena: mem.failing, mode: u8) -> none ! stopped =
     end if
 end leave
 
-nested: (inout outer: mem.failing, inout inner: mem.failing)
+nested: (inout outer: counted, inout inner: counted)
          -> (ok: bool) ! mem.out_of_memory =
     ok = false
     first := try mem.allocate(outer, usize(1), usize(1))
@@ -40,19 +42,24 @@ nested: (inout outer: mem.failing, inout inner: mem.failing)
     --  The outer provider has independent authority and still works.
     second := try mem.allocate(outer, usize(1), usize(1))
     defer mem.free(outer, second, usize(1))
-    ok = empty and mem.failing_used(outer) == 2 and mem.failing_used(inner) == 2
-      and mem.failing_allocations(inner) == 2 and mem.failing_frees(inner) == 2
+    ok = empty and fault.successes(inner) == 2 and fault.frees(inner) == 2
 end nested
 
 public main: () -> (code: i32) =
     code = 1
     mut outer_bytes: [4]u8 = zeroed
     mut inner_bytes: [2]u8 = zeroed
-    mut outer := mem.failing_over_unchecked(addr outer_bytes[0], 4, 4)
-    mut inner := mem.failing_over_unchecked(addr inner_bytes[0], 2, 3)
+    mut outer_arena := mem.arena_over_unchecked(addr outer_bytes[0], 4)
+    mut inner_arena := mem.arena_over_unchecked(addr inner_bytes[0], 2)
+    mut outer := fault.new(addr outer_arena, usize(4))
+    mut inner := fault.new(addr inner_arena, usize(3))
     ok: bool = nested(outer, inner) else false
-    return when not ok
-    return when mem.failing_frees(outer) <> 2 or mem.failing_remaining(inner) <> 1
+    return when not ok or mem.arena_used(outer_arena) <> 2
+      or mem.arena_used(inner_arena) <> 2
+    --  The arena's refusal reached it, so it spent the inner budget's third
+    --  permit.
+    return when fault.frees(outer) <> 2 or fault.remaining(inner) <> 0
+      or fault.inner_failures(inner) <> 1
     leave(outer, 0) else (problem)
         _ = problem
         return
@@ -60,8 +67,8 @@ public main: () -> (code: i32) =
     leave(outer, 1) else (problem)
         _ = problem
     end
-    if mem.failing_used(outer) == 4 and mem.failing_allocations(outer) == 4
-      and mem.failing_frees(outer) == 4 and mem.failing_used(inner) == 2
+    if mem.arena_used(outer_arena) == 4 and fault.successes(outer) == 4
+      and fault.frees(outer) == 4 and mem.arena_used(inner_arena) == 2
     then
         code = 42
     end if

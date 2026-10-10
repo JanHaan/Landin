@@ -1,5 +1,6 @@
-import core/failing
+import core/fault
 import hosted/heap
+import core/cmp
 import core/sort
 import core/vec
 
@@ -16,13 +17,13 @@ less_counted: (left: counted, right: counted) -> (yes: bool) =
     yes = left.value < right.value
 end less_counted
 
-counted is sort.ordered (less: less_counted)
+counted is cmp.ordered (less: less_counted)
 
 public main: () -> (code: i32) =
     code = 1
     mut heap_state := heap.host()
     budget: usize = 10
-    mut state := failing.new(addr heap_state, budget)
+    mut state := fault.new(addr heap_state, budget)
     mut numbers := vec.new(item: i32)
     sort.sort(vec.used(numbers))
     vec.push(numbers, state, 20) else (problem)
@@ -38,7 +39,7 @@ public main: () -> (code: i32) =
         end
         dec n
     end while
-    before: usize = failing.attempts(state)
+    before: usize = fault.attempts(state)
     sort.sort(vec.used(numbers))
     sort.sort(vec.used(numbers))
     sorted: bool = begin
@@ -89,11 +90,11 @@ public main: () -> (code: i32) =
         large_sorted = large_sorted and large[at].value == i32(at + 1)
         inc at
     end while
-    after: usize = failing.attempts(state)
+    after: usize = fault.attempts(state)
     vec.release(numbers, state)
     if sorted and squares == 2870 and duplicates and selection_ok
       and scalable_count and large_sorted and before == after
-      and failing.live(state) == 0 and failing.frees(state) == 3
+      and fault.live(state) == 0 and fault.frees(state) == 3
     then
         code = 42
     end if

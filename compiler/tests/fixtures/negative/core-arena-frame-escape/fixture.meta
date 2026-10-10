@@ -3,6 +3,6 @@ summary: checked arena constructors refuse frame backing before a helper can ret
 expect: expected.txt
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 args: --root=../.. ../tests/fixtures/negative/core-arena-frame-escape
-codes: L0314, L0314, L0314, L0314
+codes: L0314, L0314, L0314
 status: 1
 constructs: 0430, 0520, 0540, 0770, 0790, 1360, 1410, 1420

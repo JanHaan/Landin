@@ -33,14 +33,14 @@ growth_case: () -> (ok: bool) =
     four: usize = 4
 
     old_start: ptr mut u8 = addr old_bytes[0]
-    mut old := mem.reserve(item: node_ptr, base: old_start, slots: two)
+    mut old := mem.storage_over(item: node_ptr, base: old_start, slots: two)
     _ = mem.admit(old, addr first) else two
     _ = mem.admit(old, addr second) else two
 
     --  A too-small replacement may be changed while it is private, then
     --  rolled back. The published old prefix is not touched.
     short_start: ptr mut u8 = addr short_bytes[0]
-    mut short := mem.reserve(item: node_ptr, base: short_start, slots: one)
+    mut short := mem.storage_over(item: node_ptr, base: short_start, slots: one)
     copied_first: usize = begin
         value: ptr node = mem.get(old, zero) else addr second
         mem.admit(short, value) else one
@@ -71,7 +71,7 @@ growth_case: () -> (ok: bool) =
     --  every fallible copy succeeds is the old prefix drained and released;
     --  the final assignment is the publication point.
     grown_start: ptr mut u8 = addr grown_bytes[0]
-    mut grown := mem.reserve(item: node_ptr, base: grown_start, slots: four)
+    mut grown := mem.storage_over(item: node_ptr, base: grown_start, slots: four)
     grown_first: usize = begin
         value: ptr node = mem.get(old, zero) else addr second
         mem.admit(grown, value) else four
@@ -105,7 +105,7 @@ growth_case: () -> (ok: bool) =
       and grown_first == zero and grown_second == one
       and drained_second == 23 and drained_first == 19
       and usize(old_freed) == usize(old_start)
-      and mem.capacity(old) == four and mem.initialized(old) == two
+      and mem.capacity(old) == four and mem.length(old) == two
       and published_second == 23
 end growth_case
 
@@ -113,7 +113,7 @@ public main: () -> (code: i32) =
     mut bytes: [16]u8 = zeroed
     start: ptr mut u8 = addr bytes[0]
     slots: usize = 2
-    mut storage := mem.reserve(item: node_ptr, base: start, slots: slots)
+    mut storage := mem.storage_over(item: node_ptr, base: start, slots: slots)
 
     first_slot: usize = mem.admit(storage, addr first) else slots
     second_slot: usize = mem.admit(storage, addr second) else slots
@@ -153,7 +153,7 @@ public main: () -> (code: i32) =
       and right_value == 23 and released_value == 23
       and empty_value == 19 and slots * sizeof ptr node == 8
       and usize(freed) == usize(start)
-      and mem.capacity(storage) == 0 and mem.initialized(storage) == 0
+      and mem.capacity(storage) == 0 and mem.length(storage) == 0
       and growth_case()
     then
         code = 42

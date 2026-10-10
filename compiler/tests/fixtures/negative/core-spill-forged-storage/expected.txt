@@ -1,0 +1,10 @@
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/core-spill-forged-storage/main.ldn:7:19
+  |
+7 |         (storage: (count: 4, inline_values: uninit,
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/spill/spill.ldn:8:1
+  |
+8 | spill_value: type (item: type, fixed inline_slots: usize) = struct
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields

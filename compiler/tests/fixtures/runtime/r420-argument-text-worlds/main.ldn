@@ -41,7 +41,7 @@ pair_is_expected: (world: any io.world, expected_count: usize,
         _ = problem
         return
     end
-    yes = text.eq(word, "alpha") and parsed == 4294967295
+    yes = text.equal(word, "alpha") and parsed == 4294967295
 end pair_is_expected
 
 copy_is_refused: (source: io.argument, scratch: []mut u8) -> (yes: bool) =
@@ -100,7 +100,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    if lenof empty_bytes == 0 and text.eq(empty_text, "")
+    if lenof empty_bytes == 0 and text.equal(empty_text, "")
       and state.open_calls == 0 and state.read_calls == 0
       and state.write_calls == 0 and state.close_calls == 0
     then code = 42 end if

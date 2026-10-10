@@ -1,4 +1,5 @@
 import hosted/heap
+import core/cmp
 import core/map
 
 node: type = struct
@@ -13,8 +14,8 @@ pointer_hash: (value: ptr node) -> (result: u64) =
     result = u64(usize(value))
 end pointer_hash
 
-ptr node is map.equatable (eq: pointer_equal)
-ptr node is map.hashable (hash: pointer_hash)
+ptr node is cmp.equatable (equal: pointer_equal)
+ptr node is cmp.hashable (hash: pointer_hash)
 
 bad: () -> (result: map.map(ptr node, u32)) ! ... =
     mut provider := heap.host()

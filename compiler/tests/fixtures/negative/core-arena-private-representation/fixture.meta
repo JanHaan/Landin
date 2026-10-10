@@ -3,6 +3,6 @@ summary: arena representations cannot be constructed around checked backing vali
 expect: expected.txt
 targets: linux-x86-64, macos-arm64, synthetic-32, freebsd-x86-64
 args: --root=../.. ../tests/fixtures/negative/core-arena-private-representation
-codes: L0202, L0202
+codes: L0202
 status: 1
 constructs: 0420, 0770, 0780, 0790, 1360

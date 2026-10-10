@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/mem
 import core/pool
@@ -10,7 +10,7 @@ pool_provider: type = pool.provider
 heap_budgets: () -> (ok: bool) =
     mut inner := heap.host()
     zero: usize = 0
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: heap_provider, inner: addr inner,
          allowed_attempts: zero)
     size_1: usize = 17
@@ -22,7 +22,7 @@ heap_budgets: () -> (ok: bool) =
     end
 
     one: usize = 1
-    failing.permit(state, one)
+    fault.permit(state, one)
     first: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else (problem)
         _ = problem
         ok = false
@@ -36,7 +36,7 @@ heap_budgets: () -> (ok: bool) =
     mem.free(state, first, size_1)
 
     two: usize = 2
-    failing.permit(state, two)
+    fault.permit(state, two)
     size_2: usize = 31
     alignment_2: usize = 64
     second: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else (problem)
@@ -60,12 +60,12 @@ heap_budgets: () -> (ok: bool) =
 
     ok = failed_zero and failed_after_two and first_observed
          and third_aligned
-         and failing.attempts(state) == 5
-         and failing.delegated(state) == 3
-         and failing.successes(state) == 3
-         and failing.injected_failures(state) == 2
-         and failing.inner_failures(state) == 0
-         and failing.frees(state) == 3 and failing.live(state) == 0
+         and fault.attempts(state) == 5
+         and fault.delegated(state) == 3
+         and fault.successes(state) == 3
+         and fault.injected_failures(state) == 2
+         and fault.inner_failures(state) == 0
+         and fault.frees(state) == 3 and fault.live(state) == 0
 end heap_budgets
 
 pool_budgets_and_inner_failure: () -> (ok: bool) =
@@ -88,7 +88,7 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
     zero: usize = 0
     one: usize = 1
     two: usize = 2
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut failed_zero: bool = false
@@ -96,14 +96,14 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
         _ = problem
         failed_zero = true
     end
-    failing.permit(state, one)
+    fault.permit(state, one)
     first: ptr mut u8 = mem.allocate(state, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     mem.free(state, first, slot_size)
-    failing.permit(state, two)
+    fault.permit(state, two)
     second: ptr mut u8 = mem.allocate(state, slot_size, alignment) else (problem)
         _ = problem
         ok = false
@@ -132,7 +132,7 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
         ok = false
         return
     end
-    mut inner_failure := failing.new
+    mut inner_failure := fault.new
         (inner_provider: pool_provider, inner: addr empty,
          allowed_attempts: one)
     mut failed_inner: bool = false
@@ -147,21 +147,21 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
     end
 
     ok = failed_zero and failed_after_two
-         and failing.attempts(state) == 5
-         and failing.delegated(state) == 3
-         and failing.successes(state) == 3
-         and failing.injected_failures(state) == 2
-         and failing.inner_failures(state) == 0
-         and failing.frees(state) == 3 and failing.live(state) == 0
-         and pool.allocation_count(inner) == 3
-         and pool.free_count(inner) == 3 and pool.live(inner) == 0
-         and pool.rejected_free_count(inner) == 0
+         and fault.attempts(state) == 5
+         and fault.delegated(state) == 3
+         and fault.successes(state) == 3
+         and fault.injected_failures(state) == 2
+         and fault.inner_failures(state) == 0
+         and fault.frees(state) == 3 and fault.live(state) == 0
+         and pool.allocations(inner) == 3
+         and pool.frees(inner) == 3 and pool.live(inner) == 0
+         and pool.rejected_frees(inner) == 0
          and failed_inner and then_injected
-         and failing.attempts(inner_failure) == 2
-         and failing.delegated(inner_failure) == 1
-         and failing.successes(inner_failure) == 0
-         and failing.inner_failures(inner_failure) == 1
-         and failing.injected_failures(inner_failure) == 1
+         and fault.attempts(inner_failure) == 2
+         and fault.delegated(inner_failure) == 1
+         and fault.successes(inner_failure) == 0
+         and fault.inner_failures(inner_failure) == 1
+         and fault.injected_failures(inner_failure) == 1
 end pool_budgets_and_inner_failure
 
 node: type = struct
@@ -195,7 +195,7 @@ vec_initial_failure: () -> (ok: bool) =
         return
     end
     zero: usize = 0
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut values := vec.new(item: ptr node)
@@ -205,13 +205,13 @@ vec_initial_failure: () -> (ok: bool) =
         failed = true
     end
     ok = failed and vec.length(values) == 0 and vec.capacity(values) == 0
-         and failing.attempts(state) == 1
-         and failing.delegated(state) == 0
-         and failing.successes(state) == 0
-         and failing.injected_failures(state) == 1
-         and failing.frees(state) == 0 and failing.live(state) == 0
-         and pool.allocation_count(inner) == 0
-         and pool.free_count(inner) == 0 and pool.live(inner) == 0
+         and fault.attempts(state) == 1
+         and fault.delegated(state) == 0
+         and fault.successes(state) == 0
+         and fault.injected_failures(state) == 1
+         and fault.frees(state) == 0 and fault.live(state) == 0
+         and pool.allocations(inner) == 0
+         and pool.frees(inner) == 0 and pool.live(inner) == 0
 end vec_initial_failure
 
 vec_growth_retry: () -> (ok: bool) =
@@ -231,7 +231,7 @@ vec_growth_retry: () -> (ok: bool) =
         return
     end
     one: usize = 1
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: one)
     mut values := vec.new(item: ptr node)
@@ -258,17 +258,17 @@ vec_growth_retry: () -> (ok: bool) =
         if growth_failed and vec.length(values) == 8
           and vec.capacity(values) == 8
           and kept_first.val.value == 1 and kept_eighth.val.value == 8
-          and failing.attempts(state) == 2
-          and failing.successes(state) == 1
-          and failing.injected_failures(state) == 1
-          and failing.frees(state) == 0 and failing.live(state) == 1
+          and fault.attempts(state) == 2
+          and fault.successes(state) == 1
+          and fault.injected_failures(state) == 1
+          and fault.frees(state) == 0 and fault.live(state) == 1
           and pool.live(inner) == 1
         then
             preserved = true
         end if
     end
 
-    failing.permit(state, one)
+    fault.permit(state, one)
     vec.push(values, state, addr node_9) else (problem)
         _ = problem
         preserved = false
@@ -277,18 +277,18 @@ vec_growth_retry: () -> (ok: bool) =
     kept_ninth: ptr node = vec.get(values, at_ninth) else addr node_1
     ok = preserved and vec.length(values) == 9 and vec.capacity(values) == 16
          and kept_ninth.val.value == 9
-         and failing.attempts(state) == 3
-         and failing.delegated(state) == 2
-         and failing.successes(state) == 2
-         and failing.frees(state) == 1 and failing.live(state) == 1
-         and pool.allocation_count(inner) == 2
-         and pool.free_count(inner) == 1 and pool.live(inner) == 1
-         and pool.rejected_free_count(inner) == 0
+         and fault.attempts(state) == 3
+         and fault.delegated(state) == 2
+         and fault.successes(state) == 2
+         and fault.frees(state) == 1 and fault.live(state) == 1
+         and pool.allocations(inner) == 2
+         and pool.frees(inner) == 1 and pool.live(inner) == 1
+         and pool.rejected_frees(inner) == 0
     vec.release(values, state)
     ok = ok and vec.length(values) == 0 and vec.capacity(values) == 0
-         and failing.frees(state) == 2 and failing.live(state) == 0
-         and pool.free_count(inner) == 2 and pool.live(inner) == 0
-         and pool.rejected_free_count(inner) == 0
+         and fault.frees(state) == 2 and fault.live(state) == 0
+         and pool.frees(inner) == 2 and pool.live(inner) == 0
+         and pool.rejected_frees(inner) == 0
 end vec_growth_retry
 
 public main: () -> (code: i32) =

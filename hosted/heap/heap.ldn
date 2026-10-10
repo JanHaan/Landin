@@ -11,6 +11,12 @@ extern(c) _landin_host_heap_allocate:
     (size: usize, alignment: usize) -> (block: allocation)
 extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
 
+--  The state carries no information; it is opaque so that only `host` makes
+--  one.
+system_value: type = struct
+    reserved: u8
+end system_value
+
 --- Host-heap allocator capability. Allocates and frees through runtime
 --- helpers; does not grow allocations in place. Available only on hosted
 --- targets.
@@ -21,9 +27,7 @@ extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
 --- at most alignment - 1 bytes and refuses an overflow or an extent above
 --- the host's PTRDIFF_MAX before calling libc.  Any other libc failure is
 --- reported through mem.out_of_memory.
-public system: type = struct
-    reserved: u8
-end system
+public system: type = system_value
 
 system_alloc: (inout state: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =

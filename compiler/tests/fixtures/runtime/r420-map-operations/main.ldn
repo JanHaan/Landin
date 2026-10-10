@@ -1,4 +1,5 @@
 import hosted/heap
+import core/cmp
 import core/map
 import core/mem
 
@@ -13,13 +14,26 @@ end keys_equal
 
 mut hash_calls: usize = 0
 
+--  The map spreads every hash with MurmurHash3's finalizer before reducing
+--  it. This is that finalizer's inverse, so a key's `home` is the value the
+--  table reduces and the cases below place keys in buckets of their choice.
+unspread: (spread: u64) -> (hash: u64) =
+    mut value: u64 = spread
+    value ^= value >> 33
+    value *%= 11291846944257947611
+    value ^= value >> 33
+    value *%= 5725274745694666757
+    value ^= value >> 33
+    hash = value
+end unspread
+
 key_hash: (value: collision_key) -> (result: u64) =
     inc hash_calls
-    result = value.home
+    result = unspread(value.home)
 end key_hash
 
-collision_key is map.equatable (eq: keys_equal)
-collision_key is map.hashable (hash: key_hash)
+collision_key is cmp.equatable (equal: keys_equal)
+collision_key is cmp.hashable (hash: key_hash)
 
 node: type = struct
     identity: u64
@@ -43,8 +57,8 @@ pointer_hash: (value: ptr node) -> (result: u64) =
     result = value.val.identity
 end pointer_hash
 
-ptr node is map.equatable (eq: pointer_equal)
-ptr node is map.hashable (hash: pointer_hash)
+ptr node is cmp.equatable (equal: pointer_equal)
+ptr node is cmp.hashable (hash: pointer_hash)
 
 expect_value: (value: map.map(collision_key, i32), identity: u64,
                home: u64, wanted: i32) -> (ok: bool) =
@@ -76,10 +90,10 @@ resize_storage: (item: type, provider: type is mem.allocator,
                  inout storage: mem.storage(item), inout state: provider,
                  slots: usize) -> none ! mem.out_of_memory =
     old_slots: usize = mem.capacity(storage)
-    count: usize = mem.initialized(storage)
+    count: usize = mem.length(storage)
     block: ptr mut u8 = try provider.alloc(state, slots * sizeof item,
                                            alignof item)
-    mut replacement := mem.reserve(item: item, base: block, slots: slots)
+    mut replacement := mem.storage_over(item: item, base: block, slots: slots)
     mut at: usize = 0
     while at < count and at < slots do
         _ = mem.transfer(storage, at, replacement) else (problem)
@@ -88,7 +102,7 @@ resize_storage: (item: type, provider: type is mem.allocator,
         end
         inc at
     end while
-    while mem.initialized(storage) > 0 do
+    while mem.length(storage) > 0 do
         _ = mem.withdraw(storage) else (problem)
             _ = problem
             fail mem.out_of_memory
@@ -131,7 +145,7 @@ composed_seven_buckets: () -> (ok: bool) =
     map.insert(value, provider, first, 20) else 0
     map.insert(value, provider, second, 30) else 0
     map.insert(value, provider, third, 40) else 0
-    mut placed: bool = map.capacity(value) == 7
+    mut placed: bool = map.slots(value) == 7
                    and expect_value(value, 2, 4294967296, 20)
                    and expect_value(value, 3, 4294967299, 30)
                    and expect_value(value, 4, 4294967306, 40)
@@ -168,30 +182,47 @@ composed_seven_buckets: () -> (ok: bool) =
     fifth: collision_key = (identity: 6, home: 4294967298)
     sixth: collision_key = (identity: 7, home: 4294967300)
     seventh: collision_key = (identity: 8, home: 4294967301)
+    --  Seven slots hold five entries, and the tombstone counts towards them.
+    --  The fourth and fifth keys take free buckets five and six.
     map.insert(value, provider, fourth, 50) else 0
     map.insert(value, provider, fifth, 60) else 0
-    --  Keep the composed seven-slot capacity while a tombstone remains.
-    --  The eighth key reuses it; only the following insertion doubles.
-    map.insert(value, provider, sixth, 70) else 0
-    retained: bool = map.capacity(value) == 7
-                      and expect_value(value, 3, 4294967299, 30)
-                      and expect_value(value, 4, 4294967306, 40)
+    kept: bool = map.slots(value) == 7 and value.tombstones == 1
+    --  With one live entry among four tombstones, the seventh key takes free
+    --  bucket two. The live entries with it fit in half the capacity, so the
+    --  table is rebuilt at its composed size, emptying the tombstones,
+    --  rather than grown.
+    map.remove(value, second) else 0
+    map.remove(value, third) else 0
+    map.remove(value, fourth) else 0
     map.insert(value, provider, seventh, 80) else 0
-    reused: bool = map.capacity(value) == 7
-    eighth: collision_key = (identity: 9, home: 4294967296)
-    map.insert(value, provider, eighth, 90) else 0
-    filled: bool = map.capacity(value) == 7 and value.tombstones == 0
-                   and map.length(value) == 7
-    ninth: collision_key = (identity: 10, home: 4294967297)
-    map.insert(value, provider, ninth, 100) else 0
-    grown: bool = map.capacity(value) == 14
-                  and expect_value(value, 3, 4294967299, 30)
+    rebuilt: bool = map.slots(value) == 7 and value.tombstones == 0
+                    and map.length(value) == 2
+                    and expect_value(value, 6, 4294967298, 60)
+                    and expect_value(value, 8, 4294967301, 80)
+    --  Two keys back, one removed again and one more leave four live
+    --  entries and a tombstone in bucket zero. The sixth key's chain from
+    --  bucket one passes the third and seventh keys to a free bucket, so it
+    --  meets the pressure again, and four live entries do not fit in half
+    --  the capacity: the table doubles rather than rebuilding in place.
+    map.insert(value, provider, second, 30) else 0
+    map.insert(value, provider, third, 40) else 0
+    map.remove(value, second) else 0
+    map.insert(value, provider, fourth, 50) else 0
+    churned: bool = map.slots(value) == 7 and value.tombstones == 1
+                    and map.length(value) == 4
+    map.insert(value, provider, sixth, 70) else 0
+    grown: bool = map.slots(value) == 14 and value.tombstones == 0
+                  and map.length(value) == 5
+                  and missing_value(value, 3, 4294967299)
                   and expect_value(value, 4, 4294967306, 40)
+                  and expect_value(value, 5, 4294967297, 50)
+                  and expect_value(value, 6, 4294967298, 60)
+                  and expect_value(value, 7, 4294967300, 70)
                   and expect_value(value, 8, 4294967301, 80)
     ok = empty_get and empty_remove and placed and removed
-         and retained and reused and filled and grown
+         and kept and rebuilt and churned and grown
     map.release(value, provider)
-    ok = ok and map.capacity(value) == 0
+    ok = ok and map.slots(value) == 0
 end composed_seven_buckets
 
 tombstone_update: () -> (ok: bool) =
@@ -359,7 +390,7 @@ empty_tombstone_misses: () -> (ok: bool) =
     map.remove(value, k5) else 0
     map.remove(value, k6) else 0
     retained: bool = map.length(value) == 0
-                     and map.capacity(value) == 8
+                     and map.slots(value) == 8
                      and value.tombstones == 6
 
     --  The exact live count settles both misses before hashing or probing

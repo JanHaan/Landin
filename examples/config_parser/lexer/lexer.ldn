@@ -4,8 +4,9 @@
 
 import core/text
 
---  Atom-valued struct fields remain outside the enabled aggregate matrix, so
---  the token tag uses the same private-width representation as diag.severity.
+--  The token tag stays a byte rather than an atom set: a debugger shows an
+--  atom only as its carrier number, which differs between programs, and the
+--  debugger sessions read this tag.
 public kind: type = u8
 public identifier: kind = 0
 public number: kind = 1
@@ -84,15 +85,15 @@ take_string: (source: []u8, inout cursor: usize) -> none =
 end take_string
 
 single: (source: []u8, what: kind, begins: usize) -> (result: token) =
-    result = (what: what, begins: text.at(source, begins),
-              ends: text.at(source, begins + 1))
+    result = (what: what, begins: text.cursor(source, begins),
+              ends: text.cursor(source, begins + 1))
 end single
 
 public next: (source: []u8, inout lexer: state) -> (result: token) =
     skip_blanks(source, lexer.cursor)
     begins: usize = cursor_of(lexer)
     if begins >= lenof source then
-        at_end: text.position = text.at(source, begins)
+        at_end: text.position = text.cursor(source, begins)
         result = (what: end_of_input, begins: at_end, ends: at_end)
         return
     end if
@@ -101,15 +102,15 @@ public next: (source: []u8, inout lexer: state) -> (result: token) =
     if is_letter(byte) or byte == 95 then
         inc lexer.cursor
         take_identifier(source, lexer.cursor)
-        result = (what: identifier, begins: text.at(source, begins),
-                  ends: text.at(source, lexer.cursor))
+        result = (what: identifier, begins: text.cursor(source, begins),
+                  ends: text.cursor(source, lexer.cursor))
         return
     end if
     if is_digit(byte) then
         inc lexer.cursor
         take_number(source, lexer.cursor)
-        result = (what: number, begins: text.at(source, begins),
-                  ends: text.at(source, lexer.cursor))
+        result = (what: number, begins: text.cursor(source, begins),
+                  ends: text.cursor(source, lexer.cursor))
         return
     end if
     if byte == 34 then
@@ -119,14 +120,14 @@ public next: (source: []u8, inout lexer: state) -> (result: token) =
             closing: u8 = source[lexer.cursor]
             if closing == 34 then
                 inc lexer.cursor
-                result = (what: string, begins: text.at(source, begins),
-                          ends: text.at(source, lexer.cursor))
+                result = (what: string, begins: text.cursor(source, begins),
+                          ends: text.cursor(source, lexer.cursor))
                 return
             end if
         end if
         result = (what: unterminated_string,
-                  begins: text.at(source, begins),
-                  ends: text.at(source, lexer.cursor))
+                  begins: text.cursor(source, begins),
+                  ends: text.cursor(source, lexer.cursor))
         return
     end if
 

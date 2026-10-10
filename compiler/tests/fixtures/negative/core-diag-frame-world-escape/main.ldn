@@ -9,6 +9,6 @@ bad: () -> none =
     mut host := hosted.host()
     writer: any io.writer = any(addr host)
     stream := io.err(host)
-    logger := diag.to(addr writer, addr stream)
+    logger := diag.stream(addr writer, addr stream)
     retain(logger)
 end bad

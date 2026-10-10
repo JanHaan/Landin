@@ -1,9 +1,10 @@
-import core/failing
+import core/fault
 import hosted/heap
+import core/cmp
 import core/map
 import core/mem
 import core/pool
-import core/small
+import core/spill
 import core/sort
 import core/tree
 import core/vec
@@ -11,9 +12,9 @@ import core/vec
 pool_provider: type = pool.provider
 
 --  This small, ordinary constrained routine gives the debugger a stable
---  generic body whose real calls select two different core/sort tables,
+--  generic body whose real calls select two different core/cmp tables,
 --  the library's own i32 and u32 orderings.
-public evidence_less: (item: type is sort.ordered, left: item, right: item)
+public evidence_less: (item: type is cmp.ordered, left: item, right: item)
                       -> (result: bool) =
     --  R470_DEBUG_EVIDENCE_ENTRY
     result = item.less(left, right)
@@ -162,8 +163,8 @@ node_pointer_hash: (value: ptr sample_node) -> (result: u64) =
     result = u64(usize(value))
 end node_pointer_hash
 
-ptr sample_node is map.equatable (eq: node_pointer_equal)
-ptr sample_node is map.hashable (hash: node_pointer_hash)
+ptr sample_node is cmp.equatable (equal: node_pointer_equal)
+ptr sample_node is cmp.hashable (hash: node_pointer_hash)
 
 raw_reference_prefix: () -> (ok: bool) =
     ok = false
@@ -183,7 +184,7 @@ raw_reference_prefix: () -> (ok: bool) =
         _ = problem
         return
     end
-    mut storage := mem.reserve
+    mut storage := mem.storage_over
         (item: ptr sample_node, base: block, slots: slots)
     first_index: usize = mem.admit(storage, addr node_1) else (problem)
         _ = problem
@@ -199,7 +200,7 @@ raw_reference_prefix: () -> (ok: bool) =
         view: []mut ptr sample_node = mem.used(storage)
         prefix_ok = first_index == 0 and second_index == 1
                     and mem.capacity(storage) == 2
-                    and mem.initialized(storage) == 2 and lenof view == 2
+                    and mem.length(storage) == 2 and lenof view == 2
                     and view[0].val.value == 1 and view[1].val.value == 2
     end
     removed_second: ptr sample_node = mem.withdraw(storage) else (problem)
@@ -207,22 +208,22 @@ raw_reference_prefix: () -> (ok: bool) =
         return
     end
     second_ok: bool = removed_second.val.value == 2
-                      and mem.initialized(storage) == 1
+                      and mem.length(storage) == 1
     removed_first: ptr sample_node = mem.withdraw(storage) else (problem)
         _ = problem
         return
     end
     first_ok: bool = removed_first.val.value == 1
-                     and mem.initialized(storage) == 0
+                     and mem.length(storage) == 0
     released: ptr mut u8 = mem.dispose(storage) else (problem)
         _ = problem
         return
     end
     mem.free(provider, released, extent)
     ok = prefix_ok and second_ok and first_ok
-         and pool.allocation_count(provider) == 1
-         and pool.free_count(provider) == 1 and pool.live(provider) == 0
-         and pool.rejected_free_count(provider) == 0
+         and pool.allocations(provider) == 1
+         and pool.frees(provider) == 1 and pool.live(provider) == 0
+         and pool.rejected_frees(provider) == 0
 end raw_reference_prefix
 
 vector_growth_retry: () -> (ok: bool) =
@@ -240,7 +241,7 @@ vector_growth_retry: () -> (ok: bool) =
     one: usize = 1
     seven: usize = 7
     eight: usize = 8
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: one)
     mut values := vec.new(item: ptr sample_node)
@@ -263,17 +264,17 @@ vector_growth_retry: () -> (ok: bool) =
     preserved: bool = failed and vec.length(values) == 8
                       and vec.capacity(values) == 8
                       and first.val.value == 1 and eighth.val.value == 8
-                      and failing.attempts(state) == 2
-                      and failing.delegated(state) == 1
-                      and failing.successes(state) == 1
-                      and failing.injected_failures(state) == 1
-                      and failing.frees(state) == 0
-                      and failing.live(state) == 1
-                      and pool.allocation_count(inner) == 1
-                      and pool.free_count(inner) == 0
+                      and fault.attempts(state) == 2
+                      and fault.delegated(state) == 1
+                      and fault.successes(state) == 1
+                      and fault.injected_failures(state) == 1
+                      and fault.frees(state) == 0
+                      and fault.live(state) == 1
+                      and pool.allocations(inner) == 1
+                      and pool.frees(inner) == 0
                       and pool.live(inner) == 1
 
-    failing.permit(state, one)
+    fault.permit(state, one)
     vec.push(values, state, addr node_9) else (problem)
         _ = problem
         vec.release(values, state)
@@ -282,23 +283,23 @@ vector_growth_retry: () -> (ok: bool) =
     ninth: ptr sample_node = vec.get(values, eight) else addr node_1
     retried: bool = vec.length(values) == 9 and vec.capacity(values) == 16
                     and ninth.val.value == 9
-                    and failing.attempts(state) == 3
-                    and failing.delegated(state) == 2
-                    and failing.successes(state) == 2
-                    and failing.injected_failures(state) == 1
-                    and failing.frees(state) == 1
-                    and failing.live(state) == 1
-                    and pool.allocation_count(inner) == 2
-                    and pool.free_count(inner) == 1
+                    and fault.attempts(state) == 3
+                    and fault.delegated(state) == 2
+                    and fault.successes(state) == 2
+                    and fault.injected_failures(state) == 1
+                    and fault.frees(state) == 1
+                    and fault.live(state) == 1
+                    and pool.allocations(inner) == 2
+                    and pool.frees(inner) == 1
                     and pool.live(inner) == 1
-                    and pool.rejected_free_count(inner) == 0
+                    and pool.rejected_frees(inner) == 0
     vec.release(values, state)
     released: bool = vec.length(values) == 0 and vec.capacity(values) == 0
-                     and failing.frees(state) == 2
-                     and failing.live(state) == 0
-                     and pool.free_count(inner) == 2
+                     and fault.frees(state) == 2
+                     and fault.live(state) == 0
+                     and pool.frees(inner) == 2
                      and pool.live(inner) == 0
-                     and pool.rejected_free_count(inner) == 0
+                     and pool.rejected_frees(inner) == 0
     ok = preserved and retried and released
 end vector_growth_retry
 
@@ -315,64 +316,64 @@ small_spill_retry: () -> (ok: bool) =
     end
     zero: usize = 0
     one: usize = 1
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
-    mut values := small.new(item: i32, inline_slots: 2)
-    small.push(values, state, 11) else (problem) _ = problem return end
-    small.push(values, state, 13) else (problem) _ = problem return end
+    mut values := spill.new(item: i32, inline_slots: 2)
+    spill.push(values, state, 11) else (problem) _ = problem return end
+    spill.push(values, state, 13) else (problem) _ = problem return end
 
     mut failed: bool = false
-    small.push(values, state, 17) else (problem)
+    spill.push(values, state, 17) else (problem)
         _ = problem
         failed = true
     end
     mut atomic: bool = false
     begin
-        view := small.used(values)
-        atomic = failed and small.length(addr values) == 2
-                 and small.capacity(addr values) == 2
+        view := spill.used(values)
+        atomic = failed and spill.length(addr values) == 2
+                 and spill.capacity(addr values) == 2
                  and view[0] == 11 and view[1] == 13
-                 and failing.attempts(state) == 1
-                 and failing.delegated(state) == 0
-                 and failing.injected_failures(state) == 1
-                 and failing.frees(state) == 0
-                 and failing.live(state) == 0
-                 and pool.allocation_count(inner) == 0
-                 and pool.free_count(inner) == 0 and pool.live(inner) == 0
+                 and fault.attempts(state) == 1
+                 and fault.delegated(state) == 0
+                 and fault.injected_failures(state) == 1
+                 and fault.frees(state) == 0
+                 and fault.live(state) == 0
+                 and pool.allocations(inner) == 0
+                 and pool.frees(inner) == 0 and pool.live(inner) == 0
     end
 
-    failing.permit(state, one)
-    small.push(values, state, 17) else (problem)
+    fault.permit(state, one)
+    spill.push(values, state, 17) else (problem)
         _ = problem
         return
     end
-    popped: i32 = small.pop(values) else (problem)
+    popped: i32 = spill.pop(values) else (problem)
         _ = problem
         return
     end
     mut spilled: bool = false
     begin
-        view := small.used(values)
-        spilled = popped == 17 and small.length(addr values) == 2
-                  and small.capacity(addr values) == 4
+        view := spill.used(values)
+        spilled = popped == 17 and spill.length(addr values) == 2
+                  and spill.capacity(addr values) == 4
                   and view[0] == 11 and view[1] == 13
-                  and failing.attempts(state) == 2
-                  and failing.delegated(state) == 1
-                  and failing.successes(state) == 1
-                  and failing.injected_failures(state) == 1
-                  and failing.frees(state) == 0
-                  and failing.live(state) == 1
-                  and pool.allocation_count(inner) == 1
+                  and fault.attempts(state) == 2
+                  and fault.delegated(state) == 1
+                  and fault.successes(state) == 1
+                  and fault.injected_failures(state) == 1
+                  and fault.frees(state) == 0
+                  and fault.live(state) == 1
+                  and pool.allocations(inner) == 1
                   and pool.live(inner) == 1
     end
-    small.release(values, state)
-    released: bool = small.length(addr values) == 0 and small.capacity(addr values) == 2
-                     and failing.frees(state) == 1
-                     and failing.live(state) == 0
-                     and pool.free_count(inner) == 1
+    spill.release(values, state)
+    released: bool = spill.length(addr values) == 0 and spill.capacity(addr values) == 2
+                     and fault.frees(state) == 1
+                     and fault.live(state) == 0
+                     and pool.frees(inner) == 1
                      and pool.live(inner) == 0
-                     and pool.rejected_free_count(inner) == 0
+                     and pool.rejected_frees(inner) == 0
     ok = atomic and spilled and released
 end small_spill_retry
 
@@ -389,8 +390,8 @@ key_hash: (value: collision_key) -> (result: u64) =
     result = value.home
 end key_hash
 
-collision_key is map.equatable (eq: keys_equal)
-collision_key is map.hashable (hash: key_hash)
+collision_key is cmp.equatable (equal: keys_equal)
+collision_key is cmp.hashable (hash: key_hash)
 
 map_has: (value: map.map(collision_key, i32), identity: u64,
           wanted: i32) -> (ok: bool) =
@@ -586,7 +587,7 @@ map_operations: () -> (ok: bool) =
             ended_again = problem == map.end_of_entries
             discarded
         end
-        sparse_walk = map.capacity(value) == 16 and map.length(value) == 1
+        sparse_walk = map.slots(value) == 16 and map.length(value) == 1
                       and value.tombstones == 6
                       and survivor.key.identity == 6
                       and survivor.item == 106
@@ -601,7 +602,7 @@ map_operations: () -> (ok: bool) =
             discarded
         end
         empty_after_removal = empty_after_removal
-                              and map.capacity(value) == 16
+                              and map.slots(value) == 16
                               and map.length(value) == 0
     end
     map.insert(value, provider, k1, 111) else (problem)
@@ -622,7 +623,7 @@ map_operations: () -> (ok: bool) =
     used_bytes: bool = mem.arena_used(provider) > 0
     map.release(value, provider)
 
-    --  Churn reaches the capacity-eight pressure threshold with three live
+    --  Churn reaches the eight-slot pressure threshold with three live
     --  entries and three tombstones. The next absent insert reuses a dead
     --  bucket without allocating; enumeration still yields each survivor.
     mut compact := map.new(key: collision_key, item: i32)
@@ -635,7 +636,7 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k1) else (problem) _ = problem return end
     map.remove(compact, k2) else (problem) _ = problem return end
     map.remove(compact, k3) else (problem) _ = problem return end
-    before_capacity: usize = map.capacity(compact)
+    before_slots: usize = map.slots(compact)
     before_tombstones: usize = compact.tombstones
     before_used: usize = mem.arena_used(provider)
 
@@ -674,9 +675,9 @@ map_operations: () -> (ok: bool) =
                                           and tombstone_exhausted and tombstone_exhausted_again
 
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
-    reused_without_growth: bool = before_capacity == 8
+    reused_without_growth: bool = before_slots == 8
                                   and before_tombstones == 3
-                                  and map.capacity(compact) == before_capacity
+                                  and map.slots(compact) == before_slots
                                   and mem.arena_used(provider) == before_used
                                   and compact.tombstones == 2
                                   and map.length(compact) == 4
@@ -736,7 +737,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
         return
     end
     three: usize = 3
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: three)
     mut value := map.new(key: collision_key, item: i32)
@@ -754,24 +755,24 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     map.insert(value, state, k5, 55) else (problem) _ = problem return end
     map.insert(value, state, k6, 66) else (problem) _ = problem return end
     initial: bool = map.length(value) == 6
-                    and map.capacity(value) == 8
+                    and map.slots(value) == 8
                     and value.tombstones == 0
-                    and failing.attempts(state) == 3
-                    and failing.delegated(state) == 3
-                    and failing.successes(state) == 3
-                    and failing.frees(state) == 0
-                    and failing.live(state) == 3
-                    and pool.allocation_count(inner) == 3
-                    and pool.free_count(inner) == 0 and pool.live(inner) == 3
+                    and fault.attempts(state) == 3
+                    and fault.delegated(state) == 3
+                    and fault.successes(state) == 3
+                    and fault.frees(state) == 0
+                    and fault.live(state) == 3
+                    and pool.allocations(inner) == 3
+                    and pool.frees(inner) == 0 and pool.live(inner) == 3
 
-    failing.permit(state, allowed)
+    fault.permit(state, allowed)
     mut failed: bool = false
     map.insert(value, state, k7, 77) else (problem)
         _ = problem
         failed = true
     end
     preserved: bool = failed and map.length(value) == 6
-                      and map.capacity(value) == 8
+                      and map.slots(value) == 8
                       and value.tombstones == 0
                       and map_has(value, 1, 11)
                       and map_has(value, 2, 22)
@@ -780,13 +781,13 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                       and map_has(value, 5, 55)
                       and map_has(value, 6, 66)
                       and map_lacks(value, 7)
-                      and failing.frees(state) == rollback_frees
-                      and failing.live(state) == 3
-                      and pool.free_count(inner) == rollback_frees
+                      and fault.frees(state) == rollback_frees
+                      and fault.live(state) == 3
+                      and pool.frees(inner) == rollback_frees
                       and pool.live(inner) == 3
-                      and pool.rejected_free_count(inner) == 0
+                      and pool.rejected_frees(inner) == 0
 
-    failing.permit(state, three)
+    fault.permit(state, three)
     map.insert(value, state, k7, 77) else (problem)
         _ = problem
         map.release(value, state)
@@ -795,7 +796,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
     retried: bool = map.length(value) == 7
-                    and map.capacity(value) == 16
+                    and map.slots(value) == 16
                     and value.tombstones == 0
                     and map_has(value, 1, 11)
                     and map_has(value, 2, 22)
@@ -803,24 +804,24 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                     and map_has(value, 4, 44)
                     and map_has(value, 5, 55)
                     and map_has(value, 7, 77)
-                    and failing.attempts(state) == expected_attempts
-                    and failing.delegated(state) == expected_allocations
-                    and failing.successes(state) == expected_allocations
-                    and failing.injected_failures(state) == 1
-                    and failing.inner_failures(state) == 0
-                    and failing.frees(state) == rollback_frees + 3
-                    and failing.live(state) == 3
-                    and pool.allocation_count(inner) == expected_allocations
-                    and pool.free_count(inner) == rollback_frees + 3
+                    and fault.attempts(state) == expected_attempts
+                    and fault.delegated(state) == expected_allocations
+                    and fault.successes(state) == expected_allocations
+                    and fault.injected_failures(state) == 1
+                    and fault.inner_failures(state) == 0
+                    and fault.frees(state) == rollback_frees + 3
+                    and fault.live(state) == 3
+                    and pool.allocations(inner) == expected_allocations
+                    and pool.frees(inner) == rollback_frees + 3
                     and pool.live(inner) == 3
-                    and pool.rejected_free_count(inner) == 0
+                    and pool.rejected_frees(inner) == 0
     map.release(value, state)
     released: bool = map.length(value) == 0
-                     and failing.frees(state) == rollback_frees + 6
-                     and failing.live(state) == 0
-                     and pool.free_count(inner) == rollback_frees + 6
+                     and fault.frees(state) == rollback_frees + 6
+                     and fault.live(state) == 0
+                     and pool.frees(inner) == rollback_frees + 6
                      and pool.live(inner) == 0
-                     and pool.rejected_free_count(inner) == 0
+                     and pool.rejected_frees(inner) == 0
     ok = initial and preserved and retried and released
 end map_failure_case
 
@@ -841,7 +842,7 @@ tree_append_retry: () -> (ok: bool) =
     zero: usize = 0
     one: usize = 1
     eight: usize = 8
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: pool_provider, inner: addr inner,
          allowed_attempts: zero)
     mut value := tree.new()
@@ -853,12 +854,12 @@ tree_append_retry: () -> (ok: bool) =
         tree.id(0)
     end
     initial: bool = empty_failed and tree.length(value) == 0
-                    and failing.attempts(state) == 1
-                    and failing.injected_failures(state) == 1
-                    and failing.delegated(state) == 0
+                    and fault.attempts(state) == 1
+                    and fault.injected_failures(state) == 1
+                    and fault.delegated(state) == 0
                     and pool.live(inner) == 0
 
-    failing.permit(state, one)
+    fault.permit(state, one)
     mut at: usize = 0
     mut ids_ok: bool = true
     while at < 8 do
@@ -889,11 +890,11 @@ tree_append_retry: () -> (ok: bool) =
 
     mut retained: bool = leaf_failed and branch_failed
                          and tree.length(value) == 8
-                         and failing.attempts(state) == 4
-                         and failing.injected_failures(state) == 3
-                         and failing.delegated(state) == 1
-                         and failing.frees(state) == 0
-                         and failing.live(state) == 1
+                         and fault.attempts(state) == 4
+                         and fault.injected_failures(state) == 3
+                         and fault.delegated(state) == 1
+                         and fault.frees(state) == 0
+                         and fault.live(state) == 1
                          and pool.live(inner) == 1
     at = 0
     while at < 8 do
@@ -921,7 +922,7 @@ tree_append_retry: () -> (ok: bool) =
         inc at
     end while
 
-    failing.permit(state, one)
+    fault.permit(state, one)
     root: tree.node_id = tree.add_branch
         (value, state, branch_name, tree.id(0), eight) else (problem)
         _ = problem
@@ -943,22 +944,22 @@ tree_append_retry: () -> (ok: bool) =
     appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
                      and lenof root_name == 6 and root_first == 'b'
                      and total == 8
-                     and failing.attempts(state) == 5
-                     and failing.delegated(state) == 2
-                     and failing.successes(state) == 2
-                     and failing.injected_failures(state) == 3
-                     and failing.frees(state) == 1
-                     and failing.live(state) == 1
-                     and pool.allocation_count(inner) == 2
-                     and pool.free_count(inner) == 1
+                     and fault.attempts(state) == 5
+                     and fault.delegated(state) == 2
+                     and fault.successes(state) == 2
+                     and fault.injected_failures(state) == 3
+                     and fault.frees(state) == 1
+                     and fault.live(state) == 1
+                     and pool.allocations(inner) == 2
+                     and pool.frees(inner) == 1
                      and pool.live(inner) == 1
     tree.release(value, state)
     released: bool = tree.length(value) == 0
-                     and failing.frees(state) == 2
-                     and failing.live(state) == 0
-                     and pool.free_count(inner) == 2
+                     and fault.frees(state) == 2
+                     and fault.live(state) == 0
+                     and pool.frees(inner) == 2
                      and pool.live(inner) == 0
-                     and pool.rejected_free_count(inner) == 0
+                     and pool.rejected_frees(inner) == 0
     ok = initial and ids_ok and retained and appended and released
 end tree_append_retry
 
@@ -1017,7 +1018,7 @@ heterogeneous_drawables: () -> (ok: bool) =
     text_shape.calls = 0
     mut host := heap.host()
     one: usize = 1
-    mut provider := failing.new(addr host, one)
+    mut provider := fault.new(addr host, one)
     mut items := vec.new(item: any drawable)
     round: any drawable = any(addr round_shape)
     text: any drawable = any(addr text_shape)
@@ -1035,15 +1036,15 @@ heterogeneous_drawables: () -> (ok: bool) =
                        and target.draws == 6 and target.total == 56
                        and round_shape.calls == 2 and text_shape.calls == 1
                        and layout_preserved
-                       and failing.attempts(provider) == 1
-                       and failing.delegated(provider) == 1
-                       and failing.successes(provider) == 1
-                       and failing.injected_failures(provider) == 0
-                       and failing.frees(provider) == 0
-                       and failing.live(provider) == 1
+                       and fault.attempts(provider) == 1
+                       and fault.delegated(provider) == 1
+                       and fault.successes(provider) == 1
+                       and fault.injected_failures(provider) == 0
+                       and fault.frees(provider) == 0
+                       and fault.live(provider) == 1
     vec.release(items, provider)
     ok = dispatched and vec.length(items) == 0
-         and failing.frees(provider) == 1 and failing.live(provider) == 0
+         and fault.frees(provider) == 1 and fault.live(provider) == 0
 end heterogeneous_drawables
 
 public containers_run: () -> (ok: bool) =

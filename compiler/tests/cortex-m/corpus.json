@@ -470,6 +470,9 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
+    "runtime/core-spill-pointer-items": {
+      "mode": "execute"
+    },
     "runtime/core-text-byte-positions": {
       "mode": "execute"
     },
@@ -873,6 +876,9 @@
       "profile_limit": "selected-image",
       "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
+    "runtime/library-diag-severity": {
+      "mode": "execute"
+    },
     "runtime/library-io-writer-adapter": {
       "mode": "execute"
     },
@@ -884,10 +890,13 @@
       "profile_limit": "selected-image",
       "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
+    "runtime/library-shared-cmp": {
+      "mode": "execute"
+    },
     "runtime/library-shared-diag": {
       "mode": "execute"
     },
-    "runtime/library-shared-failing": {
+    "runtime/library-shared-fault": {
       "mode": "execute"
     },
     "runtime/library-shared-io": {
@@ -908,10 +917,10 @@
     "runtime/library-shared-region": {
       "mode": "execute"
     },
-    "runtime/library-shared-small": {
+    "runtime/library-shared-sort": {
       "mode": "execute"
     },
-    "runtime/library-shared-sort": {
+    "runtime/library-shared-spill": {
       "mode": "execute"
     },
     "runtime/library-shared-text": {

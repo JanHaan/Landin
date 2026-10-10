@@ -73,7 +73,7 @@ parent on normal and failure exits. Region free is monotonic until release,
 and a monotonic parent still retains its consumed backing after release.
 If recording an allocation fails, the payload is returned through parent
 `free`; a monotonic parent keeps those bytes consumed. Replaced vector
-bookkeeping also consumes capacity until that parent is reset.
+bookkeeping also consumes capacity until that parent's backing ends.
 `run`, `build`, and `copy_arguments` require such a run-lifetime allocator:
 they deliberately do not individually reclaim configuration graphs. Copies,
 retained pointers, and double release remain manual lifetime obligations.

@@ -1,4 +1,5 @@
-import core/failing
+import core/fault
+import core/cmp
 import core/map
 import core/mem
 import core/pool
@@ -19,8 +20,8 @@ colliding_hash: (value: colliding) -> (result: u64) =
     result = 6
 end colliding_hash
 
-colliding is map.equatable (eq: key_equal)
-colliding is map.hashable (hash: colliding_hash)
+colliding is cmp.equatable (equal: key_equal)
+colliding is cmp.hashable (hash: colliding_hash)
 
 node: type = struct
     payload: i32
@@ -65,7 +66,7 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     end
 
     three: usize = 3
-    mut state := failing.new
+    mut state := fault.new
         (inner_provider: fixed_provider, inner: addr inner,
          allowed_attempts: three)
     mut value := map.new(key: colliding, item: ptr node)
@@ -84,17 +85,17 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     map.insert(value, state, k6, addr n6) else 0
 
     mut initial: bool = map.length(value) == 6
-                        and failing.attempts(state) == 3
-                        and failing.successes(state) == 3
-                        and failing.frees(state) == 0
-                        and failing.live(state) == 3
-                        and pool.allocation_count(inner) == 3
-                        and pool.free_count(inner) == 0
+                        and fault.attempts(state) == 3
+                        and fault.successes(state) == 3
+                        and fault.frees(state) == 0
+                        and fault.live(state) == 3
+                        and pool.allocations(inner) == 3
+                        and pool.frees(inner) == 0
                         and pool.live(inner) == 3
 
     --  An existing-key update at the six-of-eight threshold needs no growth.
     zero: usize = 0
-    failing.permit(state, zero)
+    fault.permit(state, zero)
     map.insert(value, state, k6, addr n7) else (problem)
         _ = problem
         initial = false
@@ -102,12 +103,12 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     updated_without_allocation: bool = map.length(value) == 6
                                        and has(value, k6, 77)
                                        and has(value, k1, 11)
-                                       and failing.attempts(state) == 3
-                                       and failing.injected_failures(state) == 0
-                                       and failing.frees(state) == 0
-                                       and failing.live(state) == 3
+                                       and fault.attempts(state) == 3
+                                       and fault.injected_failures(state) == 0
+                                       and fault.frees(state) == 0
+                                       and fault.live(state) == 3
 
-    failing.permit(state, allowed)
+    fault.permit(state, allowed)
     mut failed: bool = false
     map.insert(value, state, k7, addr n7) else (problem)
         _ = problem
@@ -119,11 +120,11 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     mut preserved: bool = failed and map.length(value) == 6
                           and has(value, k2, 22) and has(value, k3, 33)
                           and has(value, k6, 77)
-                          and failing.frees(state) == rollback_frees
-                          and failing.live(state) == 3
-                          and pool.free_count(inner) == rollback_frees
+                          and fault.frees(state) == rollback_frees
+                          and fault.live(state) == 3
+                          and pool.frees(inner) == rollback_frees
                           and pool.live(inner) == 3
-                          and pool.rejected_free_count(inner) == 0
+                          and pool.rejected_frees(inner) == 0
     mut seventh_missing: bool = false
     _ = map.get(value, k7) else (problem)
         _ = problem
@@ -133,37 +134,37 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
 
     --  The rollback returned every temporary slot to the pool. A three-call
     --  retry can therefore coexist with all three unchanged old allocations.
-    failing.permit(state, three)
+    fault.permit(state, three)
     map.insert(value, state, k7, addr n7) else (problem)
         _ = problem
         preserved = false
     end
     retried: bool = map.length(value) == 7
-                   and map.capacity(value) == 16
+                   and map.slots(value) == 16
                    and has(value, k2, 22)
                    and has(value, k4, 44) and has(value, k7, 77)
-                   and failing.frees(state) == rollback_frees + 3
-                   and failing.live(state) == 3
-                   and pool.free_count(inner) == rollback_frees + 3
+                   and fault.frees(state) == rollback_frees + 3
+                   and fault.live(state) == 3
+                   and pool.frees(inner) == rollback_frees + 3
                    and pool.live(inner) == 3
-                   and pool.rejected_free_count(inner) == 0
+                   and pool.rejected_frees(inner) == 0
 
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
-    counts: bool = failing.attempts(state) == expected_attempts
-                   and failing.delegated(state) == expected_allocations
-                   and failing.successes(state) == expected_allocations
-                   and failing.injected_failures(state) == 1
-                   and failing.inner_failures(state) == 0
-                   and pool.allocation_count(inner) == expected_allocations
+    counts: bool = fault.attempts(state) == expected_attempts
+                   and fault.delegated(state) == expected_allocations
+                   and fault.successes(state) == expected_allocations
+                   and fault.injected_failures(state) == 1
+                   and fault.inner_failures(state) == 0
+                   and pool.allocations(inner) == expected_allocations
 
     map.release(value, state)
     released: bool = map.length(value) == 0
-                     and failing.frees(state) == rollback_frees + 6
-                     and failing.live(state) == 0
-                     and pool.free_count(inner) == rollback_frees + 6
+                     and fault.frees(state) == rollback_frees + 6
+                     and fault.live(state) == 0
+                     and pool.frees(inner) == rollback_frees + 6
                      and pool.live(inner) == 0
-                     and pool.rejected_free_count(inner) == 0
+                     and pool.rejected_frees(inner) == 0
     ok = initial and updated_without_allocation and preserved
          and retried and counts and released
 end failure_case
@@ -194,7 +195,7 @@ churn_case: () -> (ok: bool) =
             intact = false
         end
         intact = intact and mem.arena_used(state) == before
-                 and map.capacity(value) == 8
+                 and map.slots(value) == 8
                  and map.length(value) == 6
                  and has(value, arriving, 77)
                  and has(value, colliding(u64(6)), 66)

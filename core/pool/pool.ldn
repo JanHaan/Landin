@@ -33,35 +33,6 @@ end fixed_pool
 --- Even a zero-byte allocation occupies a slot.
 public provider: type = fixed_pool
 
---  This is D193's absolute-address algorithm kept local because core/mem's
---  helper is private and the pool must remain an independent module.  Every
---  potentially overflowing operation is preceded by its own bound.
-allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
-                    size: usize, alignment: usize)
-                   -> (offset: usize) ! mem.out_of_memory =
-    maximum: usize = 0 -% 1
-    fail mem.out_of_memory when used > extent
-
-    base_address: usize = usize(base)
-    fail mem.out_of_memory when used > maximum - base_address
-    current_address: usize = base_address + used
-
-    mut padding: usize = 0
-    if alignment > 1 then
-        remainder: usize = current_address % alignment
-        if not (remainder == 0) then
-            padding = alignment - remainder
-        end if
-    end if
-
-    fail mem.out_of_memory when padding > extent - used
-    fail mem.out_of_memory when padding > maximum - current_address
-    offset = used + padding
-    aligned_address: usize = current_address + padding
-    fail mem.out_of_memory when size > extent - offset
-    fail mem.out_of_memory when size > maximum - aligned_address
-end allocation_offset
-
 slot_stride: (size: usize, alignment: usize)
              -> (stride: usize) ! mem.out_of_memory =
     fail mem.out_of_memory when size == 0
@@ -105,8 +76,8 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
 
     mut offset: usize = 0
     if slot_count > 0 then
-        offset = try allocation_offset(base, 0, extent, slot_size,
-                                       normalized_alignment)
+        offset = try mem.aligned_offset(base, 0, extent, slot_size,
+                                        normalized_alignment)
         remaining_slots: usize = slot_count - 1
         after_first: usize = extent - offset - slot_size
         fail mem.out_of_memory when remaining_slots > after_first / step
@@ -279,17 +250,17 @@ end live
 
 --- Return the number of successful allocations, including zero-byte
 --- allocations.
-public allocation_count: (state: provider) -> (count: usize) =
+public allocations: (state: provider) -> (count: usize) =
     count = state.allocations
-end allocation_count
+end allocations
 
 --- Return the number of successful slot reclamations.
-public free_count: (state: provider) -> (count: usize) =
+public frees: (state: provider) -> (count: usize) =
     count = state.frees
-end free_count
+end frees
 
 --- Return frees rejected for an invalid address, extent or already-free slot.
 --- A rejected free does not reclaim a slot.
-public rejected_free_count: (state: provider) -> (count: usize) =
+public rejected_frees: (state: provider) -> (count: usize) =
     count = state.rejected_frees
-end rejected_free_count
+end rejected_frees

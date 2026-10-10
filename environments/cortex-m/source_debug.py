@@ -115,14 +115,20 @@ def source_line(run, path, statement):
     return matches[0]
 
 
+# The library statement each lane stops at: its function, the source copy's
+# path, and the statement, which must occur once in that library source.
+LIBRARY_ANCHORS = {
+    'pool': ('allocate', 'source/core/mem/mem.ldn',
+             'block = try provider.alloc(state, size, alignment)'),
+    'vec': ('reserve', 'source/core/vec/vec.ldn',
+            'old_count: usize = mem.length(value.values)'),
+}
+
+
 def library(run, elf, kind):
     checked(run, elf)
-    if kind in ('pool','vec'):
-        name, path, statement = (
-            ('allocate', 'source/core/mem/mem.ldn',
-             'block = try provider.alloc(state, size, alignment)') if kind == 'pool'
-            else ('reserve', 'source/core/vec/vec.ldn',
-                  'old_count: usize = mem.initialized(value.values)'))
+    if kind in LIBRARY_ANCHORS:
+        name, path, statement = LIBRARY_ANCHORS[kind]
         line = source_line(run, path, statement)
         commands = [f'break {path}:{line}', 'continue', 'python',
             f'frame({name!r},{path!r},{line})',

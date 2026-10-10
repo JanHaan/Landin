@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 
 no_allocation: atom
@@ -34,7 +35,8 @@ public main: () -> (code: i32) =
     limited_base: ptr mut u8 = addr limited_bytes[0]
     limited_extent: usize = 32
     allowance: usize = 1
-    mut limited := mem.failing_over_unchecked(limited_base, limited_extent, allowance)
+    mut limited_arena := mem.arena_over_unchecked(limited_base, limited_extent)
+    mut limited := fault.new(addr limited_arena, allowance)
     accepted: ptr mut u8 = mem.allocate(limited, eight, eight) else (problem)
         _ = problem
         return
@@ -48,10 +50,10 @@ public main: () -> (code: i32) =
       and mem.arena_used(bump) == usize(second) - usize(base) + eight
       and is_absent(refused)
       and usize(accepted) % eight == 0
-      and mem.failing_used(limited) == usize(accepted) - usize(limited_base) + eight
+      and mem.arena_used(limited_arena) == usize(accepted) - usize(limited_base) + eight
       and is_absent(budget_refused)
-      and mem.failing_allocations(limited) == 1 and mem.failing_remaining(limited) == 0
-      and mem.failing_frees(limited) == 1
+      and fault.successes(limited) == 1 and fault.remaining(limited) == 0
+      and fault.frees(limited) == 1
     then
         code = 42
     else

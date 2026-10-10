@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/mem
 
@@ -51,14 +51,14 @@ public main: () -> (code: i32) =
     mut heap_state := heap.host()
     zero: usize = 0
     four: usize = 4
-    mut state := failing.new(addr heap_state, zero)
+    mut state := fault.new(addr heap_state, zero)
     mut refused: bool = false
     failed: object_result = mem.new(state, initial_value()) else (problem)
         _ = problem
         refused = true
         no_object
     end
-    failing.permit(state, four)
+    fault.permit(state, four)
     scalar: ptr mut u32 = mem.new(state, initial_value()) else (problem)
         _ = problem
         return
@@ -100,9 +100,9 @@ public main: () -> (code: i32) =
     if refused and is_absent(failed) and evaluations == 2
       and scalar_ok and object_ok and text_ok and target.value == 14
       and data[0] == 17 and data[1] == 31
-      and failing.attempts(state) == 5 and failing.successes(state) == 4
-      and failing.injected_failures(state) == 1
-      and failing.frees(state) == 4 and failing.live(state) == 0
+      and fault.attempts(state) == 5 and fault.successes(state) == 4
+      and fault.injected_failures(state) == 1
+      and fault.frees(state) == 4 and fault.live(state) == 0
     then
         code = 42
     end if

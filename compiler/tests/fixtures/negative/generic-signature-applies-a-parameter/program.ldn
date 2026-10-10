@@ -1,0 +1,21 @@
+cell: type (item: type) = struct
+    count: usize
+end cell
+
+store: type (item: type) = cell(item)
+
+--  A parameter is in scope in its own signature's type positions, so this
+--  applies the parameter, called or not.
+length: (item: type, store: store(item)) -> (count: usize) =
+    count = store.count
+end length
+
+unused: (item: type, values: []store(item), store: u8)
+        -> (result: ptr store(item)) =
+    result = addr values[0]
+end unused
+
+public main: () -> (code: i32) =
+    value: store(u8) = (count: 3)
+    code = i32(length(value))
+end main

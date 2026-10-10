@@ -12,7 +12,7 @@ exercise: () -> (ok: bool) ! mem.out_of_memory =
     _ = mem.allocate(state, usize(1), usize(1)) else (problem)
         _ = problem
         mem.free(state, address, usize(16))
-        ok = pool.live(state) == 0 and pool.free_count(state) == 1
+        ok = pool.live(state) == 0 and pool.frees(state) == 1
         return
     end
 end exercise

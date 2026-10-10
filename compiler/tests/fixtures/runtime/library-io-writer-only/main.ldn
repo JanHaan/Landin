@@ -48,11 +48,11 @@ exercise: () -> (ok: bool) ! io.io_failed =
     mut only: outlet = (bytes: zeroed, used: 0, writes: 0)
     stream: io.file = io.file(1)
     writer: any io.writer = any(addr only)
-    mut logger := diag.to(addr writer, addr stream)
+    mut logger := diag.stream(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     message: []u8 = "ab"
     try log.note(text.first(message), diag.warning, "A")
-    try log.note(text.at(message, 1), diag.error, "B")
+    try log.note(text.cursor(message, 1), diag.error, "B")
     return when not log.failed()
     --  The generic free function asks for a writer, which the outlet is.
     try io.write(only, stream, "!")

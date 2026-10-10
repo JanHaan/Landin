@@ -12,14 +12,14 @@ status 42 is its complete oracle.
 
 | Prototype section or pressure | Executable evidence |
 |---|---|
-| Opening parameterization, allocator, escape and specialization pressure | One `containers_run` composes the repository `core` modules without copying them. `evidence_less` is a constrained generic routine called with `i32` and `u32`; both calls execute the selected `sort.ordered.less` entry. The heterogeneous drawable list retains genuinely runtime-selected evidence. |
-| `core/mem` — allocation as a capability | Every allocating container receives its provider explicitly. The workload uses `heap.system`, `mem.arena`, `pool.provider`, and the generic `failing.counted(pool.provider)`/`failing.counted(heap.system)` conformances. No container stores a provider or imports a hidden heap. |
+| Opening parameterization, allocator, escape and specialization pressure | One `containers_run` composes the repository `core` modules without copying them. `evidence_less` is a constrained generic routine called with `i32` and `u32`; both calls execute the selected `cmp.ordered.less` entry. The heterogeneous drawable list retains genuinely runtime-selected evidence. |
+| `core/mem` — allocation as a capability | Every allocating container receives its provider explicitly. The workload uses `heap.system`, `mem.arena`, `pool.provider`, and the generic `fault.injector(pool.provider)`/`fault.injector(heap.system)` conformances. No container stores a provider or imports a hidden heap. |
 | `core/mem` — bump allocator over borrowed storage | `map_operations` runs over an explicit caller-backed `mem.arena`. Its no-op `free` is used only for ordinary arena composition, never as evidence that failure rollback reclaimed storage. |
-| `core/mem` — allocator that fails on purpose | Vector, small-vector, map, and tree failures use `failing.new` over a reclaiming fixed pool. Each path checks attempts, delegated calls, injected failures, frees, live extents, and the pool's accepted/rejected free counts. |
-| `core/mem` — slices from an allocator | `raw_reference_prefix` obtains one exact provider extent, creates private typed storage with `mem.reserve`, publishes two pointer values with `mem.admit`, exposes only the initialized prefix, releases both values, disposes empty storage, and frees the original byte extent. It never fabricates a typed spare-capacity slice. |
+| `core/mem` — allocator that fails on purpose | Vector, spill-list, map, and tree failures use `fault.new` over a reclaiming fixed pool. Each path checks attempts, delegated calls, injected failures, frees, live extents, and the pool's accepted/rejected free counts. |
+| `core/mem` — slices from an allocator | `raw_reference_prefix` obtains one exact provider extent, creates private typed storage with `mem.storage_over`, publishes two pointer values with `mem.admit`, exposes only the initialized prefix, releases both values, disposes empty storage, and frees the original byte extent. It never fabricates a typed spare-capacity slice. |
 | `core/vec` — growing array | The application reverses a fixed array into the prototype's 20 descending numbers, pushes all 20 into a list, sorts its initialized view, observes 1 and 20 at the ends, pops and restores the tail, then explicitly releases it. A separate pointer list injects replacement failure at length eight, proves the old first/eighth values and allocation remain intact, retries growth, and finishes with zero live pool extents. |
-| `core/small` — inline capacity and spilling | `small(i32, 2)` stores 11 and 13 in its private initialized prefix. An injected first spill failure leaves the published inline storage, length, capacity, and values unchanged; retry publishes a separate list of capacity four, pop returns 17, and release resets the count and spill flag without clearing unused inline slots while both wrapper and pool report zero live extents. |
-| `core/map` — open addressing without null | The normal arena path declares both composed conformances, inserts colliding keys, updates through a preceding probe chain, removes and reuses a tombstone, performs no-tombstone geometric growth, gets retained values, and removes again. A separate churn path reaches capacity-eight pressure with three tombstones, proves through the public `capacity()` query and arena used-byte count that the next absent insertion reuses a dead bucket without allocating, and preserves every survivor. The application path also maps the sorted numbers to squares and observes key 3 as 9 and key 20 as 400. |
+| `core/spill` — inline capacity and spilling | `spill.list(i32, 2)` stores 11 and 13 in its private initialized prefix. An injected first spill failure leaves the published inline storage, length, capacity, and values unchanged; retry publishes a separate list of capacity four, pop returns 17, and release resets the count and spill flag without clearing unused inline slots while both wrapper and pool report zero live extents. |
+| `core/map` — open addressing without null | The normal arena path declares both composed conformances, inserts colliding keys, updates through a preceding probe chain, removes and reuses a tombstone, performs no-tombstone geometric growth, gets retained values, and removes again. A separate churn path reaches eight-slot pressure with three tombstones, proves through the public `slots()` query and arena used-byte count that the next absent insertion reuses a dead bucket without allocating, and preserves every survivor. The application path also maps the sorted numbers to squares and observes key 3 as 9 and key 20 as 400. |
 | `core/map` — entry enumeration | `entries()` creates a manual live-bucket cursor. `next_entry(map, cursor)` follows the linked used buckets in insertion order, returns each live `entry(K, V) from map` once, and reports `end_of_entries` on both empty and exhausted maps; repeated exhausted calls remain exhausted. Reusing a tombstone is checked to append after surviving entries. A capacity-sixteen table is reduced to one survivor and its walk returns that entry before exhausting twice; removing the survivor leaves retained capacity but an immediately empty walk, and reinsertion starts a new live chain. Before reuse, exact count, sums and order prove three live records are found despite three tombstones; the post-insertion walk finds all four survivors in the same order before the new entry. Scalar entries are copied before a later mutation, while pointer-bearing keys and values exercise retained entry origins. The cursor deliberately has no map identity or generation check, is not transferable between maps, and must be discarded after any mutation. |
 | `core/map` — three-acquisition rollback | Three independent reclaiming-pool cases inject failure before the first, second, and third acquisition of a growth replacement. They observe exact partial frees 0, 1, and 2, unchanged capacity and old entries, a missing new key, successful three-acquisition retry, retirement of the three old extents, and final zero live extents. |
 | `core/tree` — arenas and indices | `node_id` is `distinct usize`; the workload explicitly constructs `tree.node_id` values and extracts their `usize` ordinals. Eight named leaves receive IDs 0 through 7. Refused leaf and branch appends preserve every ID, count, retained name, and cached leaf count. The branch retry receives ID 8, names the contiguous range, reports eight leaves, retains `"branch"`, and releases the two vector extents exactly. |
@@ -52,9 +52,10 @@ less and unsigned `u32` not to report less. At the second, `count = 20`,
 `map_first_failure_ok`, `map_second_failure_ok`, `map_third_failure_ok`,
 `tree_ok`, and `drawables_ok`.
 
-The map policy is equally explicit. Absent insertion reuses available dead or
-free buckets while tombstones remain; pressure with no tombstones doubles
-geometrically.
+The map policy is equally explicit. Absent insertion reuses a dead bucket on
+the key's own probe chain; a key taking a free bucket counts the tombstones
+towards the pressure threshold, which rebuilds the table at its size while the
+live entries fit in half its capacity and doubles it otherwise.
 Enumeration exposes `entries()` and `next_entry`, returning `entry(K, V) from
 map` or `end_of_entries` for an empty or exhausted walk. Its cursor is only a
 manual live-bucket position: there is intentionally no map/generation validation,
@@ -64,25 +65,25 @@ it cannot be transferred between maps, and any mutation invalidates it.
 
 | Finding | Derivative disposition and evidence |
 |---|---|
-| Z1 — quantified conformance for parameterized types | `failing.counted(A)` is used with both pool and heap providers through its existing quantified `mem.allocator` conformance. The derivative does not revive the source-incompatible historical `vec.list(T) is iterable` sketch; retained-origin traversal uses `vec.used`. |
-| Z2 — constrained and fixed parameters on types | `map.map(collision_key, i32)` selects a constrained key parameter, while `small.small(i32, 2)` selects a fixed inline bound. Both execute, rather than serving only as type-checking examples. |
-| Z3 — pointer/slice system primitives | D151's private raw-storage operations are used through `mem.reserve`/`used`; the rejected general `slice_from`, `base_of`, and public pointer-arithmetic sketch is not duplicated. |
+| Z1 — quantified conformance for parameterized types | `fault.injector(A)` is used with both pool and heap providers through its existing quantified `mem.allocator` conformance. The derivative does not revive the source-incompatible historical `vec.list(T) is iterable` sketch; retained-origin traversal uses `vec.used`. |
+| Z2 — constrained and fixed parameters on types | `map.map(collision_key, i32)` selects a constrained key parameter, while `spill.list(i32, 2)` selects a fixed inline bound. Both execute, rather than serving only as type-checking examples. |
+| Z3 — pointer/slice system primitives | D151's private raw-storage operations are used through `mem.storage_over`/`used`; the rejected general `slice_from`, `base_of`, and public pointer-arithmetic sketch is not duplicated. |
 | Z4 — size and alignment in evidence | Constrained allocation runs through map and every generic provider wrapper. Pool slot alignment and exact extents are checked by their existing target-width-aware APIs; no specialization-time host constant is assumed. |
-| Z5 — accessor results retain their source | `vec.used`, `small.used`, and `mem.used` views are consumed inside scopes that end before growth or release. Pointer-bearing `map.next_entry` results likewise retain the map while used. `negative/r470-container-entry-live-map` proves that keeping such an entry live blocks both insertion and release. |
+| Z5 — accessor results retain their source | `vec.used`, `spill.used`, and `mem.used` views are consumed inside scopes that end before growth or release. Pointer-bearing `map.next_entry` results likewise retain the map while used. `negative/r470-container-entry-live-map` proves that keeping such an entry live blocks both insertion and release. |
 | Z6 — `escaping` on a generic value | Pointer vectors, map entries, tree names, and erased drawable pairs all cross generic retaining operations. Reference-free scalar cases use the same APIs without a special convention. |
-| Z7 — variant pattern binding aliases payload storage | This derivative no longer exercises variant pattern binding through `core/small`: its private inline array and separate spill descriptor replaced the two variant arms. The small-vector path still checks publication after prefix transfer and preservation of inline values after failure; Z7's aliasing rule needs its dedicated variant fixtures. |
-| Z8 — honest uninitialized storage | D151/D198 representations are used exactly: initialized prefixes for vec/raw K/V values, a private initialized prefix with unwritten spare slots in `core/small`, and fully initialized map buckets. Neither pointer nor erased values need a zero image, and no capacity slice claims uninitialized objects exist. |
+| Z7 — variant pattern binding aliases payload storage | This derivative no longer exercises variant pattern binding through `core/spill`: its private inline array and separate spill descriptor replaced the two variant arms. The spill-list path still checks publication after prefix transfer and preservation of inline values after failure; Z7's aliasing rule needs its dedicated variant fixtures. |
+| Z8 — honest uninitialized storage | D151/D198 representations are used exactly: initialized prefixes for vec/raw K/V values, a private initialized prefix with unwritten spare slots in `core/spill`, and fully initialized map buckets. Neither pointer nor erased values need a zero image, and no capacity slice claims uninitialized objects exist. |
 | Z9 — concrete allocator error set | Every provider and counted wrapper exposes `mem.out_of_memory`; injected and delegated failures are distinguished with counters while container error handling remains provider-independent. |
 | Z10 — allocator threading | Every mutating allocation/release call names the provider argument. Lists and maps retain only their item/key/value parameters and move between provider implementations without a provider type in their identity. |
-| Z11 — composed concepts require explicit parents | `u32` and `collision_key` each declare `map.equatable` and `map.hashable` separately. `negative/core-map-missing-parent-conformance` remains the stronger direct refusal. |
+| Z11 — composed concepts require explicit parents | `u32` and `collision_key` each declare `cmp.equatable` and `cmp.hashable` separately. `negative/core-map-missing-parent-conformance` remains the stronger direct refusal. |
 | Z12 — a pointer target is an `inout` place | Each counted wrapper retains `ptr mut` to its concrete provider and delegates allocation/free through `.val`; success and free counters prove those calls reach the original state. |
-| Z13 — `sink` on a struct field | The obsolete `drop_slice` sketch is not recreated. Current `mem.dispose`, `vec.release`, `small.release`, `map.release`, and `tree.release` clear their live initialized states before exact provider release. |
+| Z13 — `sink` on a struct field | The obsolete `drop_slice` sketch is not recreated. Current `mem.dispose`, `vec.release`, `spill.release`, `map.release`, and `tree.release` clear their live initialized states before exact provider release. |
 | Z14 — payload-free variant arm | `tree.add_leaf` and subsequent `tree.get` execute the current payload-free `leaf` arm; branch nodes execute the payload-bearing arm and cached count path. |
 | Z15 — no gap | Preserved as the prototype's deliberate no-gap finding. Bounded `while` loops, ordinary `break`, failure recovery, and result assignment express every probe/traversal here; the derivative introduces no label, value-break, or complete-clause requirement. |
 | Z16 — reference permission follows the reference | Sorting receives a writable initialized view; read-only tree names and pointer values retain their permissions; mutable erased drawable entries update their original pointees without replacing the stored evidence pair. |
 | Z17 — contextual named struct construction | Pool records, map keys, nodes, canvas values, and parameterized container results are constructed in named contexts throughout the running program. |
 | Z18 — conventions do not appear at call sites | Direct calls pass ordinary places (`reverse_seed(seed)`, container/provider state, and pointer targets) while declarations alone carry `inout`, `escaping`, and constrained conventions. |
-| Z19 — exact failure rollback | Reclaiming pool evidence—not arena no-op free—proves vector replacement atomicity, small spill atomicity, all three map-growth acquisition positions with 0/1/2 partial frees and retry, and tree append preservation. Every path checks final zero live extents and no rejected free. |
+| Z19 — exact failure rollback | Reclaiming pool evidence—not arena no-op free—proves vector replacement atomicity, spill-list atomicity, all three map-growth acquisition positions with 0/1/2 partial frees and retry, and tree append preservation. Every path checks final zero live extents and no rejected free. |
 
 ## Negative controls
 
@@ -90,7 +91,7 @@ The derivative adds three controls specific to its public application and map
 enumeration surface:
 
 - `negative/r470-container-missing-order-evidence` calls `evidence_less` with a
-  type that has no `sort.ordered` conformance (`L0318`).
+  type that has no `cmp.ordered` conformance (`L0318`).
 - `negative/r470-container-entry-live-map` keeps a pointer-bearing entry live
   across both `insert` and `release`; each mutation is refused (`L0315`).
 - `negative/r470-container-entry-wrong-from` extracts a pointer item returned
@@ -102,7 +103,7 @@ copies under a new prefix would:
 
 - missing composed evidence: `negative/core-map-missing-parent-conformance`
 - live initialized views: `negative/core-vec-used-live-growth`,
-  `negative/core-vec-used-live-release`, and `negative/core-small-live-view`
+  `negative/core-vec-used-live-release`, and `negative/core-spill-live-view`
 - frame-backed raw/list views: `negative/core-mem-used-frame` and
   `negative/core-vec-used-frame`
 - retained map key/value frame escape: `negative/core-map-key-frame-escape` and

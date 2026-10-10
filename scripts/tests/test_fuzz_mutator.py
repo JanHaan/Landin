@@ -142,7 +142,7 @@ class Mutator(unittest.TestCase):
 
     def test_import_preflight_requires_current_code_line_and_uri(self):
         uri = (fuzz.FIXTURES /
-               "negative/core-failing-needs-mutable-inner/main.ldn").as_uri()
+               "negative/core-fault-needs-mutable-inner/main.ldn").as_uri()
         for code, line, report_uri, accepted in (
                 ("L0340", 9, uri, True), ("L0301", 9, uri, False),
                 ("L0340", 8, uri, False), ("L0340", 9, uri + "other", False)):

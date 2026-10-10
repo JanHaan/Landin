@@ -15,7 +15,7 @@ bounded_pool: () -> (ok: bool) =
     mut ledger: [2]region.allocation = zeroed
     mut child := region.over(addr parent, ledger[0..<2])
     region.release(child)
-    return when pool.allocation_count(parent) <> 0
+    return when pool.allocations(parent) <> 0
 
     first: ptr mut u8 = mem.allocate(child, usize(1), usize(1)) else (problem)
         _ = problem
@@ -27,7 +27,7 @@ bounded_pool: () -> (ok: bool) =
     end
     first.val = 11
     second.val = 22
-    return when pool.live(parent) <> 2 or pool.allocation_count(parent) <> 2
+    return when pool.live(parent) <> 2 or pool.allocations(parent) <> 2
 
     mut refused: bool = false
     _ = mem.allocate(child, usize(1), usize(1)) else (problem)
@@ -35,12 +35,12 @@ bounded_pool: () -> (ok: bool) =
         first
     end
     return when not refused or pool.live(parent) <> 2
-      or pool.allocation_count(parent) <> 3 or pool.free_count(parent) <> 1
+      or pool.allocations(parent) <> 3 or pool.frees(parent) <> 1
       or first.val <> 11 or second.val <> 22
 
     region.release(child)
-    return when pool.live(parent) <> 0 or pool.free_count(parent) <> 3
-      or pool.rejected_free_count(parent) <> 0
+    return when pool.live(parent) <> 0 or pool.frees(parent) <> 3
+      or pool.rejected_frees(parent) <> 0
 
     again: ptr mut u8 = mem.allocate(child, usize(1), usize(1)) else (problem)
         _ = problem
@@ -48,8 +48,8 @@ bounded_pool: () -> (ok: bool) =
     end
     again.val = 33
     region.release(child)
-    ok = pool.live(parent) == 0 and pool.allocation_count(parent) == 4
-      and pool.free_count(parent) == 4 and pool.rejected_free_count(parent) == 0
+    ok = pool.live(parent) == 0 and pool.allocations(parent) == 4
+      and pool.frees(parent) == 4 and pool.rejected_frees(parent) == 0
 end bounded_pool
 
 public main: () -> (code: i32) =

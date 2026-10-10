@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: core/small preserves inline and spilled values across failed first spill and later growth
+summary: core/spill preserves inline and spilled values across failed first spill and later growth
 program: main.ldn
 root: ../../../../..
 status: 42

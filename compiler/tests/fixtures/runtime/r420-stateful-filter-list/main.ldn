@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/vec
 
@@ -32,7 +32,7 @@ public main: () -> (code: i32) =
     code = 1
     mut host := heap.host()
     budget: usize = 3
-    mut allocator := failing.new(addr host, budget)
+    mut allocator := fault.new(addr host, budget)
     mut filters := vec.new(item: any filter)
     first: any filter = any(addr low)
     second: any filter = any(addr alternate)
@@ -57,14 +57,14 @@ public main: () -> (code: i32) =
         if selected.keep(20) then inc second_pass end if
     end for
     shape_ok: bool = vec.length(filters) == 20
-      and failing.attempts(allocator) == 3
-      and failing.live(allocator) == 1
+      and fault.attempts(allocator) == 3
+      and fault.live(allocator) == 1
     vec.release(filters, allocator)
     if shape_ok and accepted == 10 and second_pass == 15
       and low.calls == 20 and low.minimum == 10
       and alternate.calls == 20 and alternate.total == 300
       and alternate.sentinel == 917
-      and failing.live(allocator) == 0 and failing.frees(allocator) == 3
+      and fault.live(allocator) == 0 and fault.frees(allocator) == 3
     then
         code = 42
     end if

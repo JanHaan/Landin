@@ -1,0 +1,17 @@
+import core/mem
+import core/spill
+
+bad_spill: (inout state: mem.arena,
+            escaping inout value: spill.list(i32, 1))
+           -> (result: i32) ! mem.out_of_memory =
+    view := spill.used(value)
+    try spill.push(value, state, 2)
+    result = view[0]
+end bad_spill
+
+bad_release: (inout state: mem.arena,
+              inout value: spill.list(i32, 1)) -> (result: i32) =
+    view := spill.used(value)
+    spill.release(value, state)
+    result = view[0]
+end bad_release

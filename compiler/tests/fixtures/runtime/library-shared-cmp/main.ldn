@@ -1,0 +1,34 @@
+import core/cmp
+
+--  The shipped evidence answers through the concepts alone, without a map
+--  or a sort to carry it.
+same: (item: type is cmp.equatable, left: item, right: item) -> (yes: bool) =
+    yes = item.equal(left, right)
+end same
+
+digest: (item: type is cmp.hashable, value: item) -> (result: u64) =
+    result = item.hash(value)
+end digest
+
+before: (item: type is cmp.ordered, left: item, right: item) -> (yes: bool) =
+    yes = item.less(left, right)
+end before
+
+exercise: () -> (ok: bool) =
+    ok = false
+    bytes: []u8 = "ab"
+    copy: []u8 = "ab"
+    other: []u8 = "ba"
+    return when not same(u32(7), u32(7)) or same(true, false)
+    return when not same(bytes, copy) or same(bytes, other)
+    return when digest(u16(9)) <> 9 or digest(bytes) == digest(other)
+    ok = before(i32(-1), i32(0)) and not before(u8(2), u8(2))
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

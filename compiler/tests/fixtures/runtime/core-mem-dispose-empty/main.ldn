@@ -11,7 +11,7 @@ public main: () -> (code: i32) =
     end
     mut admit_refused: bool = false
     _ = mem.admit(empty, initial) else (problem)
-        admit_refused = problem == mem.raw_full
+        admit_refused = problem == mem.full
         usize(0)
     end
     mut get_refused: bool = false
@@ -33,7 +33,7 @@ public main: () -> (code: i32) =
     --  that address exactly once. It is distinct from no allocation at all.
     mut bytes: [1]u8 = [11]
     base: ptr mut u8 = addr bytes[0]
-    mut allocated := mem.reserve(item: u8, base: base, slots: zero)
+    mut allocated := mem.storage_over(item: u8, base: base, slots: zero)
     released: ptr mut u8 = mem.dispose(allocated) else (problem)
         _ = problem
         return

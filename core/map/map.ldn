@@ -1,3 +1,4 @@
+import core/cmp
 import core/mem
 
 --- No live entry has the requested key.
@@ -5,173 +6,10 @@ public missing: atom
 --- The insertion-order cursor has reached the end of the map.
 public end_of_entries: atom
 
---- Equality evidence for keys. `eq` must define a consistent equivalence
---- relation while the keys are stored.
-public equatable: type = concept (key: type)
-    --- Compare keys under a stable equivalence relation.
-    eq: (left: key, right: key) -> (same: bool)
-end equatable
-
---- Hash evidence composing `equatable`. Equal keys must have equal hashes;
---- key equality and hashes must remain stable while stored. Hashes are not
---- cryptographic.
----
---- A hashable conformance composes equatable, but [1340] still requires a
---- concrete key type to declare both conformances explicitly.
-public hashable: type = concept (key: type) is equatable
-    --- Return a stable hash; keys equal under eq must hash equally.
-    hash: (value: key) -> (result: u64)
-end hashable
-
---  The compiler does not prove the semantic laws: eq must be an equivalence
---  relation, equal keys must hash alike, and both answers must stay stable
---  while a key is stored, including across mutation of anything a
---  pointer/reference key reaches.
-
---  Keys the library supplies evidence for: the integer scalars, bool and
---  byte slices here, and utf8 in core/text. There is one register and no
---  override [1280]; a program wanting another equality or hash for one of
---  these wraps the key in a distinct type and declares evidence for that.
---  Signed hashes are the two's-complement bits widened, computed without
---  a narrowing conversion; byte slices use 64-bit FNV-1a.
-eq_u8: (left: u8, right: u8) -> (same: bool) =
-    same = left == right
-end eq_u8
-hash_u8: (value: u8) -> (result: u64) =
-    result = u64(value)
-end hash_u8
-eq_u16: (left: u16, right: u16) -> (same: bool) =
-    same = left == right
-end eq_u16
-hash_u16: (value: u16) -> (result: u64) =
-    result = u64(value)
-end hash_u16
-eq_u32: (left: u32, right: u32) -> (same: bool) =
-    same = left == right
-end eq_u32
-hash_u32: (value: u32) -> (result: u64) =
-    result = u64(value)
-end hash_u32
-eq_u64: (left: u64, right: u64) -> (same: bool) =
-    same = left == right
-end eq_u64
-hash_u64: (value: u64) -> (result: u64) =
-    result = u64(value)
-end hash_u64
-eq_usize: (left: usize, right: usize) -> (same: bool) =
-    same = left == right
-end eq_usize
-hash_usize: (value: usize) -> (result: u64) =
-    result = u64(value)
-end hash_usize
-eq_i8: (left: i8, right: i8) -> (same: bool) =
-    same = left == right
-end eq_i8
-hash_i8: (value: i8) -> (result: u64) =
-    if value >= 0 then
-        result = u64(value)
-    else
-        result = ~u64(0 - (value + 1))
-    end if
-end hash_i8
-eq_i16: (left: i16, right: i16) -> (same: bool) =
-    same = left == right
-end eq_i16
-hash_i16: (value: i16) -> (result: u64) =
-    if value >= 0 then
-        result = u64(value)
-    else
-        result = ~u64(0 - (value + 1))
-    end if
-end hash_i16
-eq_i32: (left: i32, right: i32) -> (same: bool) =
-    same = left == right
-end eq_i32
-hash_i32: (value: i32) -> (result: u64) =
-    if value >= 0 then
-        result = u64(value)
-    else
-        result = ~u64(0 - (value + 1))
-    end if
-end hash_i32
-eq_i64: (left: i64, right: i64) -> (same: bool) =
-    same = left == right
-end eq_i64
-hash_i64: (value: i64) -> (result: u64) =
-    if value >= 0 then
-        result = u64(value)
-    else
-        result = ~u64(0 - (value + 1))
-    end if
-end hash_i64
-eq_isize: (left: isize, right: isize) -> (same: bool) =
-    same = left == right
-end eq_isize
-hash_isize: (value: isize) -> (result: u64) =
-    if value >= 0 then
-        result = u64(value)
-    else
-        result = ~u64(0 - (value + 1))
-    end if
-end hash_isize
-eq_bool: (left: bool, right: bool) -> (same: bool) =
-    same = left == right
-end eq_bool
-hash_bool: (value: bool) -> (result: u64) =
-    result = if value then 1 else 0 end if
-end hash_bool
-eq_bytes: (left: []u8, right: []u8) -> (same: bool) =
-    if lenof left <> lenof right then
-        same = false
-        return
-    end if
-    mut index: usize = 0
-    while index < lenof left do
-        if left[index] <> right[index] then
-            same = false
-            return
-        end if
-        inc index
-    end while
-    same = true
-end eq_bytes
-hash_bytes: (value: []u8) -> (result: u64) =
-    mut hash: u64 = 14695981039346656037
-    mut index: usize = 0
-    while index < lenof value do
-        hash = (hash ^ u64(value[index])) *% 1099511628211
-        inc index
-    end while
-    result = hash
-end hash_bytes
-u8 is equatable (eq: eq_u8)
-u8 is hashable (hash: hash_u8)
-u16 is equatable (eq: eq_u16)
-u16 is hashable (hash: hash_u16)
-u32 is equatable (eq: eq_u32)
-u32 is hashable (hash: hash_u32)
-u64 is equatable (eq: eq_u64)
-u64 is hashable (hash: hash_u64)
-usize is equatable (eq: eq_usize)
-usize is hashable (hash: hash_usize)
-i8 is equatable (eq: eq_i8)
-i8 is hashable (hash: hash_i8)
-i16 is equatable (eq: eq_i16)
-i16 is hashable (hash: hash_i16)
-i32 is equatable (eq: eq_i32)
-i32 is hashable (hash: hash_i32)
-i64 is equatable (eq: eq_i64)
-i64 is hashable (hash: hash_i64)
-isize is equatable (eq: eq_isize)
-isize is hashable (hash: hash_isize)
-bool is equatable (eq: eq_bool)
-bool is hashable (hash: hash_bool)
-[]u8 is equatable (eq: eq_bytes)
-[]u8 is hashable (hash: hash_bytes)
-
-slot_free: u8 = 0
-slot_used: u8 = 1
-slot_dead: u8 = 2
+slot_free: atom
+slot_used: atom
+slot_dead: atom
+slot_state: type = slot_free | slot_used | slot_dead
 
 --  Buckets are always initialized. Keys and values occupy two independent
 --  dense initialized prefixes, and each used/dead bucket names its prefix
@@ -179,7 +17,7 @@ slot_dead: u8 = 2
 --  the map's capacity is the end marker for every link. Reusing a tombstone
 --  replaces its dense position and appends it to that walk.
 bucket: type = struct
-    state: u8
+    state: slot_state
     dense_index: usize
     previous_used: usize
     next_used: usize
@@ -197,7 +35,7 @@ end bucket
 --- prefixes, one valid used/dead bucket per dense position, exact
 --- count/tombstone totals, and a linked walk of exactly the used buckets
 --- when composing below the map operations.
-public map: type (key: type is hashable, item: type) = struct
+public map: type (key: type is cmp.hashable, item: type) = struct
     buckets: mem.storage(bucket)
     keys: mem.storage(key)
     values: mem.storage(item)
@@ -232,7 +70,7 @@ empty_storage: (value: type) -> (result: mem.storage(value)) =
 end empty_storage
 
 --- Create an empty map without allocating backing.
-public new: (key: type is hashable, item: type)
+public new: (key: type is cmp.hashable, item: type)
             -> (result: map(key, item)) =
     empty_buckets := empty_storage(value: bucket)
     empty_keys := empty_storage(value: key)
@@ -243,17 +81,26 @@ public new: (key: type is hashable, item: type)
 end new
 
 --- Return the number of live key/value entries.
-public length: (key: type is hashable, item: type,
+public length: (key: type is cmp.hashable, item: type,
                 value: map(key, item)) -> (count: usize) =
     count = value.count
 end length
 
---- Return the current hash-slot capacity. Hash-slot occupancy can require
---- rebuilding before every slot is used.
-public capacity: (key: type is hashable, item: type,
+--- Return how many entries the map holds before inserting a new key
+--- rebuilds it: three quarters of its hash slots. Removed entries occupy
+--- their slots until a rebuild, so after a removal the rebuild can come
+--- sooner.
+public capacity: (key: type is cmp.hashable, item: type,
                   value: map(key, item)) -> (count: usize) =
-    count = mem.capacity(value.buckets)
+    count = crowding_threshold(slots(value))
 end capacity
+
+--- Return the number of hash slots, the table size `capacity` is three
+--- quarters of.
+public slots: (key: type is cmp.hashable, item: type,
+               value: map(key, item)) -> (count: usize) =
+    count = mem.capacity(value.buckets)
+end slots
 
 --- Create a cursor positioned before the first entry. The walk follows
 --- current insertion order.
@@ -271,10 +118,10 @@ end entries
 --- entry is returned once in insertion order and the walk costs O(count),
 --- including the exhausted call. The result retains `from value` because K
 --- or V may hold references into the map's initialized storage.
-public next_entry: (key: type is hashable, item: type,
+public next_entry: (key: type is cmp.hashable, item: type,
                     value: map(key, item), inout position: cursor)
                    -> (result: entry(key, item) from value) ! end_of_entries =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     if position.next_slot == 0 -% 1 then
         position.next_slot = value.first_used
     end if
@@ -311,15 +158,6 @@ byte_extent: (value: type, slots: usize)
     extent = slots * size
 end byte_extent
 
-drain: (value: type, inout storage: mem.storage(value)) -> none =
-    while mem.initialized(storage) > 0 do
-        discarded: value = mem.withdraw(storage) else (problem)
-            _ = problem
-            return
-        end
-    end while
-end drain
-
 free_empty: (value: type, provider: type is mem.allocator,
              inout storage: mem.storage(value),
              inout state: provider) -> none =
@@ -336,7 +174,7 @@ end free_empty
 discard_storage: (value: type, provider: type is mem.allocator,
                   inout storage: mem.storage(value),
                   inout state: provider) -> none =
-    drain(storage)
+    mem.clear(storage)
     free_empty(storage, state)
 end discard_storage
 
@@ -350,12 +188,20 @@ replace_value: (value: type, inout storage: mem.storage(value),
     ok = true
 end replace_value
 
-index_of: (key: type is hashable, value: key, slots: usize)
+index_of: (key: type is cmp.hashable, value: key, slots: usize)
           -> (index: usize) =
-    --  Every library-created nonempty capacity is a power of two. Mask in
-    --  u64 before narrowing, so the same full-width reduction applies on a
-    --  32-bit target. Publicly composed maps may have other capacities.
-    hash: u64 = key.hash(value)
+    --  The shipped integer hashes are the value itself, so keys sharing a
+    --  stride would share their low bits and one probe chain. MurmurHash3's
+    --  finalizer spreads every input bit over the word first. Every
+    --  library-created nonempty table is a power of two; mask in u64 before
+    --  narrowing, so the same full-width reduction applies on a 32-bit
+    --  target. Publicly composed maps may have other sizes.
+    mut hash: u64 = key.hash(value)
+    hash ^= hash >> 33
+    hash *%= 18397679294719823053
+    hash ^= hash >> 33
+    hash *%= 14181476777654086739
+    hash ^= hash >> 33
     if (slots & (slots - 1)) == 0 then
         index = usize(hash & u64(slots - 1))
     else
@@ -374,10 +220,11 @@ end next_index
 --  This is equivalent to `(count + tombstones + 1) * 4 > slots * 3`
 --  without overflowing either addition or multiplication. Corrupt counters
 --  conservatively report pressure rather than wrapping to "not crowded".
---  Insert consults this only when no tombstones remain.
-crowded: (key: type is hashable, item: type,
+--  Insert consults this whenever a new key would take a free bucket, so
+--  tombstones count towards the pressure as live entries do.
+crowded: (key: type is cmp.hashable, item: type,
           value: map(key, item)) -> (yes: bool) =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     if slots == 0 then
         yes = true
         return
@@ -397,11 +244,11 @@ crowding_threshold: (slots: usize) -> (threshold: usize) =
     threshold = quarter * 3 + (remainder * 3) / 4
 end crowding_threshold
 
-install_at: (key: type is hashable, item: type,
+install_at: (key: type is cmp.hashable, item: type,
              inout value: map(key, item), at: usize, was_dead: bool,
-             escaping added_key: key, escaping added_value: item)
+             escaping added_key: key, escaping added_item: item)
             -> (placed: bool) =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     mut dense: usize = 0
     if was_dead then
         record: bucket = (mem.get(value.buckets, at) else (problem)
@@ -414,7 +261,7 @@ install_at: (key: type is hashable, item: type,
             placed = false
             return
         end if
-        if not replace_value(value.values, dense, added_value) then
+        if not replace_value(value.values, dense, added_item) then
             placed = false
             return
         end if
@@ -424,7 +271,7 @@ install_at: (key: type is hashable, item: type,
             placed = false
             return
         end)
-        value_dense: usize = (mem.admit(value.values, added_value)
+        value_dense: usize = (mem.admit(value.values, added_item)
             else (problem)
             _ = problem
             discarded: key = (mem.withdraw(value.keys) else (release_problem)
@@ -480,11 +327,11 @@ insert_search: type = struct
     was_dead: bool
 end insert_search
 
-search_for_insert: (key: type is hashable, item: type,
+search_for_insert: (key: type is cmp.hashable, item: type,
                     inout value: map(key, item), wanted: key,
                     escaping replacement: item)
                    -> (result: insert_search) ! mem.out_of_memory =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     if slots == 0 then
         result = (updated: false, slot_index: slots, was_dead: false)
         return
@@ -517,7 +364,7 @@ search_for_insert: (key: type is hashable, item: type,
                 _ = problem
                 fail mem.out_of_memory
             end)
-            if key.eq(existing, wanted) then
+            if key.equal(existing, wanted) then
                 if not replace_value(value.values, record.dense_index,
                                      replacement)
                 then
@@ -537,11 +384,11 @@ end search_for_insert
 --  The caller has already proved this key absent. Probes are still bounded
 --  if no free bucket exists, and the first tombstone wins only after the
 --  search has reached a free bucket or exhausted the table.
-place_absent: (key: type is hashable, item: type,
+place_absent: (key: type is cmp.hashable, item: type,
                inout value: map(key, item),
-               escaping added_key: key, escaping added_value: item)
+               escaping added_key: key, escaping added_item: item)
               -> (placed: bool) =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     if slots == 0 then
         placed = false
         return
@@ -563,10 +410,10 @@ place_absent: (key: type is hashable, item: type,
         elsif record.state == slot_free then
             if first_dead < slots then
                 placed = install_at(value, first_dead, true,
-                                    added_key, added_value)
+                                    added_key, added_item)
             else
                 placed = install_at(value, at, false,
-                                    added_key, added_value)
+                                    added_key, added_item)
             end if
             return
         end if
@@ -575,13 +422,13 @@ place_absent: (key: type is hashable, item: type,
     end while
 
     if first_dead < slots then
-        placed = install_at(value, first_dead, true, added_key, added_value)
+        placed = install_at(value, first_dead, true, added_key, added_item)
     else
         placed = false
     end if
 end place_absent
 
-rehash: (key: type is hashable, item: type,
+rehash: (key: type is cmp.hashable, item: type,
          provider: type is mem.allocator,
          inout value: map(key, item), inout state: provider, want: usize)
         -> none ! mem.out_of_memory =
@@ -594,7 +441,7 @@ rehash: (key: type is hashable, item: type,
 
     bucket_block: ptr mut u8 = try provider.alloc
         (state, bucket_extent, alignof bucket)
-    mut new_buckets := mem.reserve
+    mut new_buckets := mem.storage_over
         (item: bucket, base: bucket_block, slots: want)
     undo discard_storage(new_buckets, state)
 
@@ -615,15 +462,15 @@ rehash: (key: type is hashable, item: type,
 
     key_block: ptr mut u8 = try provider.alloc
         (state, key_extent, alignof key)
-    mut new_keys := mem.reserve(item: key, base: key_block, slots: want)
+    mut new_keys := mem.storage_over(item: key, base: key_block, slots: want)
     undo discard_storage(new_keys, state)
 
     value_block: ptr mut u8 = try provider.alloc
         (state, value_extent, alignof item)
-    mut new_values := mem.reserve(item: item, base: value_block, slots: want)
+    mut new_values := mem.storage_over(item: item, base: value_block, slots: want)
     undo discard_storage(new_values, state)
 
-    old_slots: usize = capacity(value)
+    old_slots: usize = slots(value)
     mut old_at: usize = value.first_used
     mut migrated: usize = 0
     mut new_first: usize = want
@@ -709,35 +556,42 @@ end rehash
 --- Insert a new key/value pair or replace the value of an equal key. New keys
 --- append in insertion order; replacement keeps its position. Allocation
 --- failure preserves the previous map. Growth can invalidate views.
-public insert: (key: type is hashable, item: type,
+public insert: (key: type is cmp.hashable, item: type,
                 provider: type is mem.allocator,
                 inout value: map(key, item), inout state: provider,
-                escaping added_key: key, escaping added_value: item)
+                escaping added_key: key, escaping added_item: item)
                -> none ! mem.out_of_memory =
     position: insert_search = try search_for_insert
-        (value, added_key, added_value)
+        (value, added_key, added_item)
     return when position.updated
 
-    --  A dead bucket can be reused without extending either dense prefix.
-    --  Even at full physical occupancy, the bounded placement probe finds
-    --  one. Rebuilding on tombstone pressure would allocate three extents
-    --  for every steady-size remove/insert cycle on an arena.
-    if value.tombstones == 0 and crowded(value) then
-        old_capacity: usize = capacity(value)
+    --  A dead bucket on the key's own chain is reused without extending
+    --  either dense prefix or rebuilding. A new key taking a free bucket
+    --  counts against the threshold with the tombstones. The table is
+    --  rebuilt at its size, emptying them, only while the live entries with
+    --  the new key fit in half its capacity, and grows otherwise: tombstones
+    --  then make up at least half the pressure, so at least half a capacity
+    --  of removals and insertions separates two rebuilds, and a map churned
+    --  just below its capacity does not rebuild on every new key.
+    if not position.was_dead and crowded(value) then
+        old_slots: usize = slots(value)
         mut want: usize = 8
-        if old_capacity > 0 then
-            maximum: usize = 0 -% 1
-            fail mem.out_of_memory when old_capacity > maximum / 2
-            want = old_capacity * 2
+        if old_slots > 0 then
+            want = old_slots
+            if value.count >= crowding_threshold(old_slots) / 2 then
+                maximum: usize = 0 -% 1
+                fail mem.out_of_memory when old_slots > maximum / 2
+                want = old_slots * 2
+            end if
         end if
         try rehash(value, state, want)
-        inserted: bool = place_absent(value, added_key, added_value)
+        inserted: bool = place_absent(value, added_key, added_item)
         fail mem.out_of_memory when not inserted
         return
     end if
-    fail mem.out_of_memory when position.slot_index == capacity(value)
+    fail mem.out_of_memory when position.slot_index == slots(value)
     inserted: bool = install_at(value, position.slot_index, position.was_dead,
-                                added_key, added_value)
+                                added_key, added_item)
     fail mem.out_of_memory when not inserted
 end insert
 
@@ -747,11 +601,11 @@ location: type = struct
     dense: usize
 end location
 
-locate: (key: type is hashable, item: type,
+locate: (key: type is cmp.hashable, item: type,
          value: map(key, item), wanted: key)
         -> (found: location) ! missing =
     fail missing when value.count == 0
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     fail missing when slots == 0
     mut slot: usize = index_of(wanted, slots)
     mut probed: usize = 0
@@ -767,7 +621,7 @@ locate: (key: type is hashable, item: type,
                 _ = problem
                 fail missing
             end)
-            if key.eq(existing, wanted) then
+            if key.equal(existing, wanted) then
                 found = (slot: slot, dense: record.dense_index)
                 return
             end if
@@ -780,7 +634,7 @@ end locate
 
 --- Copy the value associated with a key. Reports `missing` if absent;
 --- references inside the copy retain their origin.
-public get: (key: type is hashable, item: type,
+public get: (key: type is cmp.hashable, item: type,
              value: map(key, item), wanted: key)
             -> (result: item from value) ! missing =
     found: location = try locate(value, wanted)
@@ -790,13 +644,11 @@ public get: (key: type is hashable, item: type,
     end
 end get
 
---- Lend a writable pointer to an existing value. Reports `missing` if absent.
---- End the pointer before mutating the map's structure or releasing backing.
----
---- A writable slot for the present key's item, for in-place update. While
---- the result lives the map binding may not be passed inout or sink
---- [0800]; let it end before the next insert, remove or release.
-public at: (key: type is hashable, item: type,
+--- Lend a writable pointer to the present key's item for in-place update.
+--- Reports `missing` if absent. While the result lives the map binding may
+--- not be passed inout or sink [0800]; let it end before the next insert,
+--- remove or release.
+public at: (key: type is cmp.hashable, item: type,
             inout value: map(key, item), wanted: key)
            -> (slot: ptr mut item from value) ! missing =
     found: location = try locate(value, wanted)
@@ -806,7 +658,7 @@ public at: (key: type is hashable, item: type,
 end at
 
 --- Return whether a live entry has the requested key, without allocating.
-public contains: (key: type is hashable, item: type,
+public contains: (key: type is cmp.hashable, item: type,
                   value: map(key, item), wanted: key) -> (yes: bool) =
     _ = locate(value, wanted) else (problem)
         _ = problem
@@ -819,11 +671,11 @@ end contains
 --- Remove a key/value entry without returning it. Reports `missing` if
 --- absent; preserves the relative order of remaining entries. End existing
 --- value pointers and cursors before mutation.
-public remove: (key: type is hashable, item: type,
+public remove: (key: type is cmp.hashable, item: type,
                 inout value: map(key, item), wanted: key)
                -> none ! missing =
     fail missing when value.count == 0
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     fail missing when slots == 0
     mut at: usize = index_of(wanted, slots)
     mut probed: usize = 0
@@ -839,7 +691,7 @@ public remove: (key: type is hashable, item: type,
                 _ = problem
                 fail missing
             end)
-            if key.eq(existing, wanted) then
+            if key.equal(existing, wanted) then
                 if record.previous_used < slots then
                     mut previous: bucket =
                         (mem.get(value.buckets, record.previous_used)
@@ -892,7 +744,7 @@ end remove
 --- Discard all entries, free the map's backing through its original provider
 --- and reset it. Nested resources referred to by keys or values are not freed
 --- automatically.
-public release: (key: type is hashable, item: type,
+public release: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item),
                  inout state: provider) -> none =
@@ -902,16 +754,13 @@ public release: (key: type is hashable, item: type,
     value = new(key: key, item: item)
 end release
 
---- Discard all entries and tombstones while retaining allocations. End
---- existing pointers and walks first; referenced resources remain the
---- caller's responsibility.
----
---- Forget every entry but keep the bucket capacity. Every bucket is
---- rewritten free and both dense prefixes are emptied; values in them are
---- discarded, and resources they refer to remain the caller's.
-public clear: (key: type is hashable, item: type,
+--- Discard all entries and tombstones while keeping the allocations: every
+--- bucket is rewritten free and both dense prefixes are emptied. End
+--- existing pointers and walks first; resources the discarded values refer
+--- to remain the caller's.
+public clear: (key: type is cmp.hashable, item: type,
                inout value: map(key, item)) -> none =
-    slots: usize = capacity(value)
+    slots: usize = slots(value)
     mut slot: usize = 0
     while slot < slots do
         free_bucket: bucket = (state: slot_free, dense_index: 0,
@@ -927,27 +776,23 @@ public clear: (key: type is hashable, item: type,
     value.last_used = slots
 end clear
 
---- Ensure capacity for at least `want` entries without adding any. Allocates
---- replacement key, value and hash-slot storage before committing it. Any
---- allocation failure frees the partial replacement and preserves all
---- original entries and capacities. Success can invalidate pointers and
---- cursors.
----
---- Room for `want` entries without a growth allocation: the capacity is
---- doubled from eight until `want` sits below the crowding threshold, and
---- the map is rebuilt once at that size. A map already that large is left
---- alone, including its tombstones.
-public reserve: (key: type is hashable, item: type,
+--- Ensure room for at least `want` entries without a growth allocation: the
+--- table is doubled from eight slots until its `capacity` holds `want`, and
+--- the map is rebuilt once at that size, allocating the replacement storage
+--- before committing it. A map already that large is left alone, including
+--- its tombstones. Allocation failure frees the partial replacement and
+--- preserves every entry; success can invalidate pointers and cursors.
+public reserve: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item), inout state: provider,
                  want: usize) -> none ! mem.out_of_memory =
     return when want == 0
     maximum: usize = 0 -% 1
-    mut slots: usize = 8
-    while want >= crowding_threshold(slots) do
-        fail mem.out_of_memory when slots > maximum / 2
-        slots = slots * 2
+    mut want_slots: usize = 8
+    while want > crowding_threshold(want_slots) do
+        fail mem.out_of_memory when want_slots > maximum / 2
+        want_slots = want_slots * 2
     end while
-    return when slots <= capacity(value)
-    try rehash(value, state, slots)
+    return when want_slots <= slots(value)
+    try rehash(value, state, want_slots)
 end reserve

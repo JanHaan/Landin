@@ -1,13 +1,13 @@
-import core/map
+import core/cmp
 import core/sort
 import core/text
 
-hash_of: (key: type is map.hashable, value: key) -> (result: u64) =
+hash_of: (key: type is cmp.hashable, value: key) -> (result: u64) =
     result = key.hash(value)
 end hash_of
 
-equal: (key: type is map.equatable, left: key, right: key) -> (same: bool) =
-    same = key.eq(left, right)
+equal: (key: type is cmp.equatable, left: key, right: key) -> (same: bool) =
+    same = key.equal(left, right)
 end equal
 
 --  Exercise the evidence directly, without the large map allocation path.
@@ -37,6 +37,6 @@ public main: () -> (code: i32) =
     return when hash_of(word) <> hash_of(copy) or not equal(word, word)
     mut texts: [3]utf8 = ["pear", "apple", "fig"]
     sort.sort(texts[0..<3])
-    return when not text.eq(texts[0], "apple") or not text.eq(texts[2], "pear")
+    return when not text.equal(texts[0], "apple") or not text.equal(texts[2], "pear")
     code = 42
 end main

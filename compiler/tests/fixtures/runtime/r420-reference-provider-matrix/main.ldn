@@ -1,5 +1,5 @@
 import core/mem
-import core/failing
+import core/fault
 import core/pool
 import hosted/heap
 import core/vec
@@ -38,7 +38,7 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     zero: usize = 0
     six: usize = 6
     two: usize = 2
-    mut allocator := failing.new(addr inner, zero)
+    mut allocator := fault.new(addr inner, zero)
     mut pointers := vec.new(item: node_ptr)
     mut erased := vec.new(item: any counter)
     mut pointer_failed: bool = false
@@ -52,8 +52,8 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     return when not pointer_failed or not erased_failed
       or vec.length(pointers) <> 0 or vec.capacity(pointers) <> 0
       or vec.length(erased) <> 0 or vec.capacity(erased) <> 0
-      or failing.live(allocator) <> 0
-    failing.permit(allocator, six)
+      or fault.live(allocator) <> 0
+    fault.permit(allocator, six)
     mut at: usize = 0
     while at < 17 do
         vec.push(pointers, allocator, addr left) else (problem)
@@ -79,8 +79,8 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     return when not pointer_failed or not erased_failed
       or vec.length(pointers) <> 17 or vec.capacity(pointers) <> 32
       or vec.length(erased) <> 17 or vec.capacity(erased) <> 32
-      or failing.live(allocator) <> 2 or failing.frees(allocator) <> 4
-    failing.permit(allocator, two)
+      or fault.live(allocator) <> 2 or fault.frees(allocator) <> 4
+    fault.permit(allocator, two)
     vec.reserve(pointers, allocator, want) else (problem)
         _ = problem
         return
@@ -125,10 +125,10 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     okay = pointer_ok and dispatch_ok and tail_ok and left.value == 21
       and right.value == 41 and right.sentinel == 123 and other.value == 37
       and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
-      and failing.attempts(allocator) == 12 and failing.successes(allocator) == 8
-      and failing.injected_failures(allocator) == 4
-      and failing.inner_failures(allocator) == 0
-      and failing.frees(allocator) == 8 and failing.live(allocator) == 0
+      and fault.attempts(allocator) == 12 and fault.successes(allocator) == 8
+      and fault.injected_failures(allocator) == 4
+      and fault.inner_failures(allocator) == 0
+      and fault.frees(allocator) == 8 and fault.live(allocator) == 0
 end exercise
 
 public main: () -> (code: i32) =
@@ -149,7 +149,7 @@ public main: () -> (code: i32) =
     end
     fixed_ok: bool = exercise(fixed_state, a, b)
     if heap_ok and arena_ok and fixed_ok and mem.arena_used(arena) > 0
-      and pool.live(fixed_state) == 0 and pool.allocation_count(fixed_state) == 8
-      and pool.free_count(fixed_state) == 8 and pool.rejected_free_count(fixed_state) == 0
+      and pool.live(fixed_state) == 0 and pool.allocations(fixed_state) == 8
+      and pool.frees(fixed_state) == 8 and pool.rejected_frees(fixed_state) == 0
     then code = 42 end if
 end main

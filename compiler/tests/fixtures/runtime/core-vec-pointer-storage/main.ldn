@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 import core/vec
 
@@ -14,7 +15,8 @@ public main: () -> (code: i32) =
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 256
     allowance: usize = 2
-    mut state := mem.failing_over_unchecked(base, extent, allowance)
+    mut state_arena := mem.arena_over_unchecked(base, extent)
+    mut state := fault.new(addr state_arena, allowance)
     mut values := vec.new(item: ptr node)
 
     vec.push(values, state, addr first) else 0
@@ -39,12 +41,12 @@ public main: () -> (code: i32) =
 
     if failed and vec.length(values) == 2 and vec.capacity(values) == wanted
       and left.val.value == 7 and right.val.value == 11
-      and removed_value == 24 and mem.failing_allocations(state) == 2
-      and mem.failing_frees(state) == 1
+      and removed_value == 24 and fault.successes(state) == 2
+      and fault.frees(state) == 1
     then
         vec.release(values, state)
         if vec.length(values) == 0 and vec.capacity(values) == 0
-          and mem.failing_frees(state) == 2
+          and fault.frees(state) == 2
         then
             code = 42
         else

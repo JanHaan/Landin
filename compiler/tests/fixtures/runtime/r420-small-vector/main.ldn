@@ -1,5 +1,5 @@
 import core/mem
-import core/small
+import core/spill
 
 audit: type = struct
     base: ptr mut u8
@@ -57,9 +57,9 @@ audit is mem.allocator (alloc: audit_alloc, grow: audit_grow,
                         free: audit_free)
 
 readonly_queries: () -> (ok: bool) =
-    values := small.new(item: i32, inline_slots: 512)
-    ok = small.length(addr values) == 0
-         and small.capacity(addr values) == 512
+    values := spill.new(item: i32, inline_slots: 512)
+    ok = spill.length(addr values) == 0
+         and spill.capacity(addr values) == 512
 end readonly_queries
 
 zero_inline_capacity: () -> (ok: bool) =
@@ -68,19 +68,19 @@ zero_inline_capacity: () -> (ok: bool) =
         (base: addr bytes[0], used: 0, fail_next: false,
          attempts: 0, allocations: 0, frees: 0,
          first_free_size: 0, second_free_size: 0)
-    mut values := small.new(item: i32, inline_slots: 0)
-    small.push(values, state, 31) else (problem)
+    mut values := spill.new(item: i32, inline_slots: 0)
+    spill.push(values, state, 31) else (problem)
         _ = problem
         ok = false
         return
     end
     begin
-        view := small.used(values)
-        ok = small.length(addr values) == 1 and small.capacity(addr values) == 8
+        view := spill.used(values)
+        ok = spill.length(addr values) == 1 and spill.capacity(addr values) == 8
              and view[0] == 31 and state.attempts == 1
              and state.allocations == 1 and state.frees == 0
     end
-    small.release(values, state)
+    spill.release(values, state)
     ok = ok and state.frees == 1
          and state.first_free_size == 8 * sizeof i32
 end zero_inline_capacity
@@ -91,29 +91,29 @@ larger_inline_capacity: () -> (ok: bool) =
         (base: addr bytes[0], used: 0, fail_next: false,
          attempts: 0, allocations: 0, frees: 0,
          first_free_size: 0, second_free_size: 0)
-    mut values := small.new(item: i32, inline_slots: 3)
-    small.push(values, state, 41) else 0
-    small.push(values, state, 42) else 0
-    small.push(values, state, 43) else 0
+    mut values := spill.new(item: i32, inline_slots: 3)
+    spill.push(values, state, 41) else 0
+    spill.push(values, state, 42) else 0
+    spill.push(values, state, 43) else 0
     begin
-        view := small.used(values)
+        view := spill.used(values)
         view[1] = 52
     end
-    removed: i32 = small.pop(values) else 0
+    removed: i32 = spill.pop(values) else 0
     begin
-        view := small.used(values)
-        ok = removed == 43 and small.length(addr values) == 2
-             and small.capacity(addr values) == 3
+        view := spill.used(values)
+        ok = removed == 43 and spill.length(addr values) == 2
+             and spill.capacity(addr values) == 3
              and view[0] == 41 and view[1] == 52
              and state.attempts == 0 and state.frees == 0
     end
-    small.release(values, state)
-    ok = ok and small.length(addr values) == 0
-         and small.capacity(addr values) == 3
+    spill.release(values, state)
+    ok = ok and spill.length(addr values) == 0
+         and spill.capacity(addr values) == 3
          and state.attempts == 0 and state.frees == 0
-    small.push(values, state, 99) else 0
+    spill.push(values, state, 99) else 0
     begin
-        view := small.used(values)
+        view := spill.used(values)
         ok = ok and lenof view == 1 and view[0] == 99
              and state.attempts == 0
     end
@@ -131,31 +131,31 @@ public main: () -> (code: i32) =
         (base: addr bytes[0], used: 0, fail_next: false,
          attempts: 0, allocations: 0, frees: 0,
          first_free_size: 0, second_free_size: 0)
-    mut values := small.new(item: i32, inline_slots: 1)
+    mut values := spill.new(item: i32, inline_slots: 1)
 
-    small.push(values, state, 10) else 0
-    if state.attempts <> 0 or small.length(addr values) <> 1
-      or small.capacity(addr values) <> 1
+    spill.push(values, state, 10) else 0
+    if state.attempts <> 0 or spill.length(addr values) <> 1
+      or spill.capacity(addr values) <> 1
     then
         code = 1
         return
     end if
 
     begin
-        view := small.used(values)
+        view := spill.used(values)
         view[0] = 11
     end
 
     state.fail_next = true
     mut first_failed: bool = false
-    small.push(values, state, 12) else (problem)
+    spill.push(values, state, 12) else (problem)
         _ = problem
         first_failed = true
     end
     begin
-        view := small.used(values)
-        if not first_failed or small.length(addr values) <> 1
-          or small.capacity(addr values) <> 1 or view[0] <> 11
+        view := spill.used(values)
+        if not first_failed or spill.length(addr values) <> 1
+          or spill.capacity(addr values) <> 1 or view[0] <> 11
           or state.allocations <> 0 or state.frees <> 0
         then
             code = 1
@@ -163,17 +163,17 @@ public main: () -> (code: i32) =
         end if
     end
 
-    small.push(values, state, 12) else 0
+    spill.push(values, state, 12) else 0
     state.fail_next = true
     mut growth_failed: bool = false
-    small.push(values, state, 13) else (problem)
+    spill.push(values, state, 13) else (problem)
         _ = problem
         growth_failed = true
     end
     begin
-        view := small.used(values)
-        if not growth_failed or small.length(addr values) <> 2
-          or small.capacity(addr values) <> 2
+        view := spill.used(values)
+        if not growth_failed or spill.length(addr values) <> 2
+          or spill.capacity(addr values) <> 2
           or view[0] <> 11 or view[1] <> 12
           or state.allocations <> 1 or state.frees <> 0
         then
@@ -183,10 +183,10 @@ public main: () -> (code: i32) =
         view[1] = 22
     end
 
-    small.push(values, state, 13) else 0
+    spill.push(values, state, 13) else 0
     begin
-        view := small.used(values)
-        if small.length(addr values) <> 3 or small.capacity(addr values) <> 4
+        view := spill.used(values)
+        if spill.length(addr values) <> 3 or spill.capacity(addr values) <> 4
           or view[0] <> 11 or view[1] <> 22 or view[2] <> 13
           or state.first_free_size <> 2 * sizeof i32
         then
@@ -195,10 +195,10 @@ public main: () -> (code: i32) =
         end if
     end
 
-    removed: i32 = small.pop(values) else 0
-    small.release(values, state)
-    if removed == 13 and small.length(addr values) == 0
-      and small.capacity(addr values) == 1
+    removed: i32 = spill.pop(values) else 0
+    spill.release(values, state)
+    if removed == 13 and spill.length(addr values) == 0
+      and spill.capacity(addr values) == 1
       and state.attempts == 4 and state.allocations == 2
       and state.frees == 2 and state.second_free_size == 4 * sizeof i32
     then

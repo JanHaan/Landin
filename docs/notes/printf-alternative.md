@@ -233,8 +233,8 @@ The reason `writer` is a concept: no filesystem, no capture, no golden file.
 test_render: () -> (ok: bool) =
     mut sink := fmt.to_slice(buf: buffer[0..], used: 0, needed: 0)
     render(any(addr sink), a_note())
-    ok = text.eq(utf8(sink.buf[0 ..< sink.used]),
-                 "main.ldn:12:5: error: expected ';', found 'end' [L0210]\n")
+    ok = text.equal(utf8(sink.buf[0 ..< sink.used]),
+                    "main.ldn:12:5: error: expected ';', found 'end' [L0210]\n")
 end test_render
 ```
 

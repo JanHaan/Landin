@@ -16,8 +16,8 @@ from setup import DEFAULT, inventory, sha, supported_host
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MODULES = tuple('core/'+name for name in
-                ('diag', 'failing', 'io', 'map', 'mem', 'panic', 'pool',
-                 'region', 'small', 'sort', 'text', 'tree', 'vec')) + ('platform/cpu',)
+                ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool',
+                 'region', 'sort', 'spill', 'text', 'tree', 'vec')) + ('platform/cpu',)
 
 
 def imports(program):

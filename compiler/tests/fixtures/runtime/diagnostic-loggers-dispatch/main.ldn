@@ -28,20 +28,20 @@ check_position_writes: () -> (ok: bool) =
                                   errors[0..<lenof errors])
     destination: io.file = io.err(memory)
     writer: any io.writer = any(addr memory)
-    mut stream := diag.to(addr writer, addr destination)
+    mut stream := diag.stream(addr writer, addr destination)
     logger: any diag.log = any(addr stream)
-    logger.note(text.at(message_a[0..<2], 0), diag.warning, "A")
+    logger.note(text.cursor(message_a[0..<2], 0), diag.warning, "A")
         else (problem)
         _ = problem
         return
     end
-    logger.note(text.at(message_b[0..<2], 1234567890), diag.error, "B")
+    logger.note(text.cursor(message_b[0..<2], 1234567890), diag.error, "B")
         else (problem)
         _ = problem
         return
     end
     largest: usize = 0 -% 1
-    logger.note(text.at(message_c[0..<2], largest), diag.warning, "C")
+    logger.note(text.cursor(message_c[0..<2], largest), diag.warning, "C")
         else (problem)
         _ = problem
         return
@@ -79,7 +79,7 @@ owned_message_limits: () -> (ok: bool) =
         _ = problem
         return
     end
-    return when diag.stored(addr notes) <> 0
+    return when diag.length(addr notes) <> 0
       or diag.dropped(addr notes) <> 1 or not limit_log.failed()
     bytes[255] = 201
     limit_log.note(text.first(bytes[0..<256]), diag.warning, bytes[0..<256])
@@ -88,7 +88,7 @@ owned_message_limits: () -> (ok: bool) =
         return
     end
     bytes[255] = 0
-    saved := diag.note_at(addr notes, usize(0)) else (problem)
+    saved := diag.get(addr notes, usize(0)) else (problem)
         _ = problem
         return
     end
@@ -96,7 +96,7 @@ owned_message_limits: () -> (ok: bool) =
         _ = problem
         return
     end
-    ok = diag.stored(addr notes) == 1 and diag.dropped(addr notes) == 1
+    ok = diag.length(addr notes) == 1 and diag.dropped(addr notes) == 1
          and diag.message_length(saved) == diag.message_capacity and tail == 201
 end owned_message_limits
 
@@ -114,27 +114,27 @@ public main: () -> (code: i32) =
     second_index: usize = 1
     third_index: usize = 2
     immutable_notes: diag.bounded(3) = collected
-    immutable_note := diag.note_at(addr immutable_notes, second_index)
+    immutable_note := diag.get(addr immutable_notes, second_index)
         else (missing_immutable)
         _ = missing_immutable
         return
     end
-    if diag.stored(addr immutable_notes) <> 3
+    if diag.length(addr immutable_notes) <> 3
       or diag.dropped(addr immutable_notes) <> 0
       or diag.position_of(immutable_note) <> 1
       or diag.severity_of(immutable_note) <> diag.error
     then
         return
     end if
-    first_note := diag.note_at(addr collected, first_index) else (missing_first)
+    first_note := diag.get(addr collected, first_index) else (missing_first)
         _ = missing_first
         return
     end
-    second_note := diag.note_at(addr collected, second_index) else (missing_second)
+    second_note := diag.get(addr collected, second_index) else (missing_second)
         _ = missing_second
         return
     end
-    third_note := diag.note_at(addr collected, third_index) else (missing_third)
+    third_note := diag.get(addr collected, third_index) else (missing_third)
         _ = missing_third
         return
     end
@@ -153,7 +153,7 @@ public main: () -> (code: i32) =
         _ = missing_third_byte
         return
     end
-    if diag.stored(addr collected) <> 3 or diag.dropped(addr collected) <> 0
+    if diag.length(addr collected) <> 3 or diag.dropped(addr collected) <> 0
       or not bounded_log.failed()
       or diag.position_of(first_note) <> 0
       or diag.position_of(second_note) <> 1
@@ -175,7 +175,7 @@ public main: () -> (code: i32) =
     diagnostic_stream := io.err(host)
     world: any io.world = any(addr host)
     host_writer: any io.writer = any(addr host)
-    mut immediate := diag.to(addr host_writer, addr diagnostic_stream)
+    mut immediate := diag.stream(addr host_writer, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
     emit_notes(streaming_log) else (unexpected_stream_failure)
         _ = unexpected_stream_failure
@@ -202,7 +202,7 @@ public main: () -> (code: i32) =
         _ = unexpected_frame_copy_failure
         return
     end
-    copied_note := diag.note_at(addr copied, usize(0)) else (missing_copied_note)
+    copied_note := diag.get(addr copied, usize(0)) else (missing_copied_note)
         _ = missing_copied_note
         return
     end
@@ -217,7 +217,7 @@ public main: () -> (code: i32) =
         _ = unexpected_long_failure
         return
     end
-    if diag.stored(addr copied) <> 1 or diag.dropped(addr copied) <> 1
+    if diag.length(addr copied) <> 1 or diag.dropped(addr copied) <> 1
       or not copied_log.failed() or copied_byte <> 68
     then
         return
@@ -229,7 +229,7 @@ public main: () -> (code: i32) =
         _ = unexpected_overflow_failure
         return
     end
-    if diag.stored(addr overflowed) <> 2 or diag.dropped(addr overflowed) <> 1
+    if diag.length(addr overflowed) <> 2 or diag.dropped(addr overflowed) <> 1
       or not overflow_log.failed()
     then
         return
@@ -252,7 +252,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut broken := diag.to(addr host_writer, addr dead_stream)
+    mut broken := diag.stream(addr host_writer, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     broken_log.note(text.first(message_a[0..<2]), diag.error,
                     message_a[0..<2])

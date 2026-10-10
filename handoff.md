@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R13.30 — The hosted library (planned).**
+**Current roadmap work: R13.12 — Answer the first outside reading.**
 
 ---
 

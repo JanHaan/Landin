@@ -80,19 +80,19 @@ public main: () -> (code: i32) =
     end
 
     mut output_storage: [11]u8 = [of 0]
-    mut output: []mut u8 = output_storage[0..<lenof output_storage]
+    output: []mut u8 = output_storage[0..<lenof output_storage]
     mut used: usize = text.write_byte(output, 0, 65) else 99
     used = text.write_u32(output, used, 4294967295) else 99
-    output_bytes: []u8 = text.written(output, used) else []
+    output_bytes: []u8 = text.prefix(output, used) else []
 
     mut edge_storage: [13]u8 = [of 0]
-    mut edge: []mut u8 = edge_storage[0..<lenof edge_storage]
+    edge: []mut u8 = edge_storage[0..<lenof edge_storage]
     mut edge_used: usize = text.write_u32(edge, 0, 0) else 99
     edge_used = text.write_u32(edge, edge_used, 10) else 99
     edge_used = text.write_u32(edge, edge_used, 1000000000) else 99
 
     mut small_storage: [3]u8 = [7, 8, 9]
-    mut small: []mut u8 = small_storage[0..<lenof small_storage]
+    small: []mut u8 = small_storage[0..<lenof small_storage]
     mut refused_write: bool = false
     _ = text.write_u32(small, 1, 999) else (problem)
         refused_write = problem == text.no_space
@@ -113,8 +113,8 @@ public main: () -> (code: i32) =
 
     if lenof valid == 5 and lenof valid_bytes == 5
       and valid_bytes[0] == 65 and valid_bytes[4] == 0
-      and lenof empty == 0 and text.eq(from_c, "C text")
-      and text.eq("same", "same") and not text.eq("same", "other")
+      and lenof empty == 0 and text.equal(from_c, "C text")
+      and text.equal("same", "same") and not text.equal("same", "other")
       and text.contains("", "") and text.contains("abc", "")
       and text.contains("banana", "ana")
       and text.contains("abc", "b")

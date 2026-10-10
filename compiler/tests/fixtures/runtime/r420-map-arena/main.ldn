@@ -1,3 +1,4 @@
+import core/cmp
 import core/map
 import core/mem
 
@@ -13,8 +14,8 @@ colliding_hash: (value: arena_key) -> (result: u64) =
     result = value.identity - value.identity + 6
 end colliding_hash
 
-arena_key is map.equatable (eq: keys_equal)
-arena_key is map.hashable (hash: colliding_hash)
+arena_key is cmp.equatable (equal: keys_equal)
+arena_key is cmp.hashable (hash: colliding_hash)
 
 key: (identity: u64) -> (result: arena_key) =
     result = (identity: identity)

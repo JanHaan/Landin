@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import core/map
 import core/mem
 
@@ -13,15 +13,15 @@ exercise: (allowed: usize) -> (ok: bool) ! mem.out_of_memory | map.missing =
     try map.insert(table, state, u32(7), 2)
     try map.insert(table, state, u32(8), 3)
     reserved: usize = map.capacity(table)
-    mut counted := failing.new(addr state, allowed)
+    mut counted := fault.new(addr state, allowed)
     mut refused: bool = false
     map.reserve(table, counted, usize(20)) else (problem)
         return when problem <> mem.out_of_memory
         refused = true
     end
     return when not refused or map.capacity(table) <> reserved
-      or map.length(table) <> 2 or failing.live(counted) <> 0
-      or failing.frees(counted) <> allowed
+      or map.length(table) <> 2 or fault.live(counted) <> 0
+      or fault.frees(counted) <> allowed
     first: i32 = try map.get(table, u32(7))
     second: i32 = try map.get(table, u32(8))
     return when first <> 2 or second <> 3

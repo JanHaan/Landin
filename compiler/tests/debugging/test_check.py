@@ -27,9 +27,9 @@ def transcript(lines: dict[str, int]) -> str:
         return (f"#0 {function} () at examples/derived_containers/workload/"
                 f"workload.ldn:{line}\nLine {line} of \"workload.ldn\"")
 
-    def sort_frame(function: str, line: int) -> str:
-        return (f"#0 {function} () at core/sort/sort.ldn:{line}\n"
-                f"Line {line} of \"sort.ldn\"")
+    def cmp_frame(function: str, line: int) -> str:
+        return (f"#0 {function} () at core/cmp/cmp.ldn:{line}\n"
+                f"Line {line} of \"cmp.ldn\"")
 
     for name, function in (("sorted", "numbers_path"),
                            ("done", "containers_run")):
@@ -42,7 +42,7 @@ def transcript(lines: dict[str, int]) -> str:
         sections.extend((f"LANDIN-VALUE {scope}.left={left}",
                          f"LANDIN-VALUE {scope}.right={right}"))
         section(scope + "-dispatch",
-                sort_frame(provider, lines[instance + "-provider"]) +
+                cmp_frame(provider, lines[instance + "-provider"]) +
                 "\n#1 evidence_less ()\n#2 containers_run ()\n#3 main ()")
         section(scope + "-provider-return", frame("evidence_less", lines["evidence"]))
         section(scope + "-return", frame("containers_run", lines[instance + "-call"]))
@@ -102,8 +102,8 @@ class ContainerTranscriptTests(unittest.TestCase):
     def test_wrong_provider_source_is_rejected(self) -> None:
         name = "container-unsigned-dispatch"
         body = CHECK.marker_section(self.transcript, name)
-        changed = body.replace("sort.ldn", "unrelated.ldn")
-        with self.assertRaisesRegex(ValueError, "sort.ldn"):
+        changed = body.replace("cmp.ldn", "unrelated.ldn")
+        with self.assertRaisesRegex(ValueError, "cmp.ldn"):
             CHECK.check_container_transcript(
                 self.transcript.replace(body, changed), self.lines)
 

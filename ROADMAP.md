@@ -74,7 +74,7 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.30, R12, R13.20, R14, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.30, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
 R12.10 depends on R13.30 to hold the first boundary. The freestanding
@@ -1324,6 +1324,56 @@ same commit reached main and its library reference was published by
 closed: [1260]'s split is realized by the four narrow I/O concepts and their
 `world` composition.
 
+### R13.12 — Answer the first outside reading
+
+Status: active
+Depends on: R13.11
+
+The first reader from outside the project to read the published reference
+found four things R13.11 left. A closed set of named values is carried in a
+`u8` where [0640] has an enumeration for it: `core/diag`'s severity, which
+D216 has since made storable as an atom, and the map's private slot state.
+The comparison concepts live in the modules that consume them, `equatable`
+and `hashable` in `core/map` and `ordered` in `core/sort`, so `core/text`
+imports a hash map and a sort to say that `utf8` compares, and any later key
+type would have to as well. `platform/c` reads as though LP64 were one
+architecture's term and the C ABI an architecture's alone: its reference names
+four facts on three different axes and does not say which target selects which,
+that LP64 is the data model, or that the operating system takes part, as
+`c_char` on Linux and Darwin arm64 shows.
+
+Exit evidence: severity an atom set that a bounded and a streaming log receive
+through erased dispatch and a program matches on, on every target; the map's
+slot state an atom set with its consumers unchanged; `equatable`, `hashable`
+and `ordered` with their shipped evidence in one shared module that map, sort
+and text import, with its own shared consumer on every target and the
+collision refusal pinned at its new home; and a `platform/c` reference that
+says per target which fact holds, what LP64 is and where the OS enters. The
+reader's remark that some names are odd goes to R13.13 with names attached.
+
+### R13.13 — Review the library
+
+Status: planned
+Depends on: R13.12
+
+R13.11 held the library to conventions it wrote down; nobody has read the
+whole of it as a user would since. Read every public declaration of `core`,
+`hosted` and `platform` against its own module, the conventions and the
+reference, for names that say something other than what the declaration does,
+facilities that exist twice, integers standing in for closed sets, contracts
+the doc comment and the source disagree on, and evidence a facility has
+without a consumer. The outside reader's names are the first entries:
+`core/mem.failing` and `core/failing.counted`, two deterministic failure
+injectors that count different things, the first of them a budgeted arena
+not called one; the equality concept's name; and module names that abbreviate
+in `map` and `vec` but spell out an adjective or a noun in `failing` and
+`region`.
+
+Exit evidence: each finding either fixed with the fixtures that pin it and a
+decision where it changes an interface, or recorded in the register below with
+its trigger; the generated reference rebuilt and every renamed consumer, the
+derived programs and the debugger workloads passing on every target.
+
 ### R13.20 — The freestanding library
 
 Status: planned
@@ -1687,6 +1737,10 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-11 | Language evolution | [1570] names direct Fortran interop as a candidate, but no Fortran calling convention is specified or scheduled. The enabled foreign boundary is `extern(c)`. | A concrete program needs to call or expose a Fortran procedure whose required signature cannot use the C boundary. | A decision in `spec.md` and an amendment to [1570] define the supported Fortran ABI and type subset; calls and callbacks run against a pinned Fortran producer on every host claimed, with negative cases for unsupported signatures. | open |
 | SR-12 | Language evolution | [1570] names direct Swift interop as a candidate, including its separate error channel, but no Swift calling convention is specified or scheduled. The enabled foreign boundary is `extern(c)`. | A concrete program needs direct Swift calls or callbacks, including error transport, that cannot use the C boundary. | A decision in `spec.md` and an amendment to [1570] define the supported Swift ABI, type subset and error mapping; calls, callbacks and failures run against a pinned Swift producer on every host claimed, with negative cases for unsupported signatures. | open |
 | SR-13 | Release readiness | A spelling from another language gets the generic report of what the parser stopped on rather than the Landin form: no single-token repair mends it, and R11.26 deliberately added no table of foreign spellings. R11.26's audit of agent sessions counted eight: `fn` for a function twice, `as` for a conversion once, `++` for concatenation once, `*u8` for a pointer once, and `[]u8(s)` as a slice conversion three times. That is the historical refusal inventory: D266 subsequently admits the written-type application `[]u8(s)`, so it is no longer a foreign spelling to diagnose. | Session audits show such spellings among the refusals people and agents actually make, recorded with their counts. | A decision in `spec.md`'s register: either a general mechanism that names the Landin construct a foreign form stands for, with negative fixtures pinning one report each, or the generic report kept, with the reason. | watch |
+| SR-14 | Broader standard library | R13.13's review left interface points no consumer has yet asked for: the map is a public composition with a seven-part invariant and a cursor whose start and end are sentinel slot numbers; a tree node cannot be asked for its leaf count, kind or children; a spill list has no `clear`, `last` or `reserve`; `io.out`, `err` and `argument_count` take the provider by value while `argument_at` takes a pointer; `host()` constructs where D269 says `new`; the memory file's two flags encode three states; a saved PRIMASK is a bare `u32`; `pool.over` reports misconfiguration as `out_of_memory`; `text.nowhere` cannot be told from offset zero; a bounded diagnostic entry lends its message only byte by byte; an arena has no reset; `grow_storage` trusts three separately passed extents; the fault injector and the region refuse in-place growth, so a container tested through them never takes that path; byte slices have no shipped order. | A consumer that needs one of them, or the next whole reading of the library. | Each changed with the fixtures that pin it, or retired with the reason it stands. | open |
+| SR-15 | Broader standard library | `core/text` formats and parses decimals only as `u32`, and parses only `utf8`: a directory listing's sizes are `u64` over bytes, and six programs in the tree hand-roll their own. The process concept has no standard input, and `ENOTDIR` reports `io_failed` rather than `not_found`. | R13.30's file and directory consumer. | `u64` and `usize` decimal writing and `[]u8` parsing in `core/text`, used by `core/diag` and the derived programs; standard input; the errno mapping, each with a consumer on every hosted target. | scheduled R13.30 |
+| SR-16 | Release readiness | A debugger shows an atom as its carrier number, which differs between programs, so the derived parser's token kind stays a `u8` that the debugger sessions read as 1 and 6. | A debugger session that has to show an atom-set value. | DWARF describing an atom set as an enumeration on every debugger target, then the token kind an atom set with its sessions reading names. | open |
+| SR-17 | Release readiness | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

@@ -4,9 +4,9 @@ This directory is the reusable library/application portion of the derived
 container program, derived from `prototype-3-containers.md` without rewriting its historical
 sketches or findings.
 
-`workload/workload.ldn` composes the repository-owned `core/mem`, `core/vec`,
-`core/small`, `core/map`, `core/tree`, `core/sort`, `hosted/heap`, `core/pool`,
-and `core/failing` modules. It exposes `containers_run`, the silent integrated
+`workload/workload.ldn` composes the repository-owned `core/mem`, `core/cmp`, `core/vec`,
+`core/spill`, `core/map`, `core/tree`, `core/sort`, `hosted/heap`, `core/pool`,
+and `core/fault` modules. It exposes `containers_run`, the silent integrated
 application routine, and `evidence_less`, a small constrained routine used by
 the debugger acceptance path with two concrete ordered types.
 

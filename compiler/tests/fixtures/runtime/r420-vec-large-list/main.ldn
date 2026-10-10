@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 import core/vec
 
@@ -19,7 +20,8 @@ public main: () -> (code: i32) =
     middle: usize = 32767
     last: usize = total - 1
     allowance: usize = 14
-    mut state := mem.failing_over_unchecked(addr backing[0], lenof backing, allowance)
+    mut state_arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut state := fault.new(addr state_arena, allowance)
     mut values := vec.new(item: u32)
 
     for index in zero..<total do
@@ -29,8 +31,8 @@ public main: () -> (code: i32) =
     if not (vec.length(values) == total)
       or not (vec.capacity(values) == total)
       or not contents_ok(values, middle, last)
-      or not (mem.failing_allocations(state) == allowance)
-      or not (mem.failing_frees(state) == allowance - 1)
+      or not (fault.successes(state) == allowance)
+      or not (fault.frees(state) == allowance - 1)
     then
         code = 1
         return
@@ -38,7 +40,7 @@ public main: () -> (code: i32) =
 
     vec.release(values, state)
     if vec.length(values) == 0 and vec.capacity(values) == 0
-      and mem.failing_frees(state) == allowance
+      and fault.frees(state) == allowance
     then
         code = 42
     else

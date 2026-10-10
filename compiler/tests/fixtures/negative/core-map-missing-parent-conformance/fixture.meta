@@ -1,5 +1,5 @@
 class: negative
-summary: a map hashable conformance does not imply its required equatable conformance
+summary: a hashable conformance does not imply its required equatable conformance
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-map-missing-parent-conformance
 status: 1

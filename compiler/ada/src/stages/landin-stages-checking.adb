@@ -10907,11 +10907,21 @@ package body Landin.Stages.Checking is
                          Tree_For (Res.Source_Of (Meanings.all, Template));
                      Declaration : constant Syn.Node_Id :=
                        Res.Node_Of (Meanings.all, Template);
+                     --  A parameter is in scope in its own signature's type
+                     --  positions, so an applied name can bind to a value.
+                     --  The signature check reports that as L0304; it is no
+                     --  pattern to match.
+                     Names_Type : constant Boolean :=
+                       Syn.Kind (Of_Template.all, Declaration)
+                         = Syn.Type_Declaration;
                      Formal_Count : constant Natural :=
-                       Syn.Type_Formal_Count (Of_Template.all, Declaration);
+                       (if Names_Type
+                        then Syn.Type_Formal_Count
+                          (Of_Template.all, Declaration)
+                        else 0);
                      Parent_Limit : constant Natural := Map_Limit;
                   begin
-                     if Count /= Formal_Count then
+                     if not Names_Type or else Count /= Formal_Count then
                         Good := False;
                         return False;
                      end if;
@@ -35482,7 +35492,72 @@ package body Landin.Stages.Checking is
                  Tree_For (Res.Source_Of (Meanings.all, Id));
                Node : constant Syn.Node_Id :=
                  Res.Node_Of (Meanings.all, Id);
+               --  A parameter is in scope in its own signature's type
+               --  positions, so `storage: storage(item)` applies the
+               --  parameter. A generic signature is otherwise read only
+               --  when a call matches it, so report the application here,
+               --  as a non-generic signature's would be, called or not.
+               procedure Check_Applications (Written : Syn.Node_Id);
+
+               procedure Check_Applications (Written : Syn.Node_Id) is
+               begin
+                  if Written = Syn.No_Node then
+                     return;
+                  end if;
+                  case Syn.Kind (Of_Tree.all, Written) is
+                     when Syn.Pointer_Type | Syn.Slice_Type =>
+                        Check_Applications
+                          (Syn.Referenced_Type (Of_Tree.all, Written));
+                     when Syn.Array_Type =>
+                        Check_Applications
+                          (Syn.Element_Of (Of_Tree.all, Written));
+                     when Syn.Type_Application =>
+                        declare
+                           Applied : constant Syn.Node_Id :=
+                             Syn.Applied_Type (Of_Tree.all, Written);
+                        begin
+                           if Syn.Kind (Of_Tree.all, Applied)
+                                in Syn.Type_Reference | Syn.Name_Reference
+                                   | Syn.Member_Selection
+                             and then Res.Verdict_Of
+                               (Meanings.all, Of_Tree.all, Applied)
+                                 = Res.Bound
+                             and then Res.Sort_Of
+                               (Meanings.all,
+                                Res.Bound_To
+                                  (Meanings.all, Of_Tree.all, Applied))
+                                 /= Res.Module_Type
+                           then
+                              Report_Application
+                                (Of_Tree.all, Applied,
+                                 "a parameterized type application targets"
+                                 & " a type alias");
+                           end if;
+                           for Index in 1 .. Syn.Type_Argument_Count
+                             (Of_Tree.all, Written)
+                           loop
+                              Check_Applications
+                                (Syn.Nth_Type_Argument
+                                   (Of_Tree.all, Written, Index));
+                           end loop;
+                        end;
+                     when others =>
+                        null;
+                  end case;
+               end Check_Applications;
             begin
+               for Index in 1 .. Syn.Parameter_Count (Of_Tree.all, Node) loop
+                  Check_Applications
+                    (Syn.Declared_Type
+                       (Of_Tree.all,
+                        Syn.Nth_Parameter (Of_Tree.all, Node, Index)));
+               end loop;
+               for Index in 1 .. Syn.Return_Count (Of_Tree.all, Node) loop
+                  Check_Applications
+                    (Syn.Declared_Type
+                       (Of_Tree.all,
+                        Syn.Nth_Return (Of_Tree.all, Node, Index)));
+               end loop;
                Check_Operands
                  (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node),
                   Whole_Fold => False);

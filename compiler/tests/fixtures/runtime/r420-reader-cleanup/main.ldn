@@ -1,7 +1,7 @@
 import core/io
 import core/mem
 import hosted/heap
-import core/failing
+import core/fault
 
 reader: type = struct
     opened: io.file
@@ -89,14 +89,14 @@ public main: () -> (code: i32) =
     world: any io.world = any(addr state)
     mut heap_state := heap.host()
     budget: usize = 0
-    mut allocator := failing.new(addr heap_state, budget)
+    mut allocator := fault.new(addr heap_state, budget)
     return when not allocation_refused(allocator, world)
     return when publications <> 0 or state.open_calls <> 1
       or state.close_calls <> 1 or files[0].opened
-      or failing.attempts(allocator) <> 1 or failing.live(allocator) <> 0
-      or failing.frees(allocator) <> 0
+      or fault.attempts(allocator) <> 1 or fault.live(allocator) <> 0
+      or fault.frees(allocator) <> 0
     allowed: usize = 2
-    failing.permit(allocator, allowed)
+    fault.permit(allocator, allowed)
     value: reader = acquire(allocator, world) else (problem)
         _ = problem
         return
@@ -107,7 +107,7 @@ public main: () -> (code: i32) =
     end
     return when sum <> 335 or publications <> 1 or files[0].opened
       or state.read_calls <> 4 or state.close_calls <> 2
-      or failing.live(allocator) <> 0 or failing.frees(allocator) <> 1
+      or fault.live(allocator) <> 0 or fault.frees(allocator) <> 1
     state.fail_read_at = 5
     state.fail_close_at = 3
     failed_reader: reader = acquire(allocator, world) else (problem)
@@ -122,8 +122,8 @@ public main: () -> (code: i32) =
     if refused and failed_sum == 0 and publications == 2
       and not files[0].opened and state.open_calls == 3
       and state.close_calls == 3 and state.read_calls == 5
-      and failing.attempts(allocator) == 3 and failing.successes(allocator) == 2
-      and failing.injected_failures(allocator) == 1
-      and failing.live(allocator) == 0 and failing.frees(allocator) == 2
+      and fault.attempts(allocator) == 3 and fault.successes(allocator) == 2
+      and fault.injected_failures(allocator) == 1
+      and fault.live(allocator) == 0 and fault.frees(allocator) == 2
     then code = 42 end if
 end main

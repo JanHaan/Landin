@@ -12,9 +12,9 @@ the documentation convention.
 
 ## Availability inventory
 
-The shared freestanding modules are `core/diag`, `core/failing`, `core/io`,
-`core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`, `core/small`,
-`core/sort`, `core/text`, `core/tree` and `core/vec`. Every public interface is
+The shared freestanding modules are `core/cmp`, `core/diag`, `core/fault`,
+`core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`,
+`core/sort`, `core/spill`, `core/text`, `core/tree` and `core/vec`. Every public interface is
 available on every target. Their providers retain caller-supplied authority.
 
 `hosted/heap` and `hosted/io` require a hosted system. Import the I/O provider
@@ -34,7 +34,7 @@ The larger `library-at-references`, `library-builtin-keys` and
 `library-map-reserve-rollback` regressions exercise complete map operations.
 They exceed Cortex-M0's 32 KiB flash profile, as the earlier map workloads do;
 their measured image limits are not successful firmware executions. The
-shared vector and small-vector consumers exercise writable slots, the shared
+shared vector and spill-list consumers exercise writable slots, the shared
 map consumer checks missing-key access, and `library-builtin-evidence`
 exercises the supplied hashes, equality and ordering without map allocation.
 These smaller programs and the writer-only and writer-adapter probes must
@@ -46,19 +46,22 @@ Every module spells the same operations the same way (D269):
 
 | Operation | Spelling | Examples |
 |---|---|---|
-| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `region.new(addr heap)`, `diag.new(capacity: 4)`, `failing.new(addr inner, 3)` |
-| View over caller-supplied bytes or records | `over` | `mem.arena_over`, `mem.failing_over`, `pool.over`, `region.over`, `io.memory_over` |
-| Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `small.release`, `region.release` |
-| Read one item as a copy | `get` | `vec.get`, `small.get`, `map.get`, `tree.get` |
-| A writable slot for in-place update | `at` | `vec.at`, `small.at`, `map.at`; the binding is locked while the slot lives [0800] |
-| Count and room | `length`, `capacity` | `vec`, `small`, `map` |
-| Initialized view | `used` | `mem.used`, `vec.used`, `small.used` |
+| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `region.new(addr heap)`, `diag.new(capacity: 4)`, `fault.new(addr inner, 3)` |
+| View over caller-supplied bytes or records | `over` | `mem.arena_over`, `mem.storage_over`, `pool.over`, `region.over`, `io.memory_over` |
+| Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
+| Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
+| A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is locked while the slot lives [0800] |
+| Count and room | `length`, `capacity` | `mem`, `vec`, `spill`, `map`, `diag`'s `length`; a map's `capacity` is the entries that fit before the next new key rebuilds it |
+| Initialized view | `used` | `mem.used`, `vec.used`, `spill.used` |
 
 `core/mem` keeps `new`/`delete` for one allocated item and `new_bytes`/
 `delete_bytes` for a byte buffer; its raw-storage pop is `withdraw`, so that
 `release` never means anything but giving storage back. Accessors are
-prefixed only where one module holds several types (`arena_used`,
-`failing_used`).
+prefixed only where one module holds several types (`arena_used`). A
+provider's counters are plural nouns: `pool.allocations`, `pool.frees`,
+`fault.frees`. A module is named by a short noun or a conventional
+abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `pool`,
+`spill`, `fault` (D274).
 
 Two atoms serve every core container: `mem.out_of_bounds` for an index past
 the initialized prefix and `mem.empty` for taking from nothing. Key lookups
@@ -68,10 +71,13 @@ is not a bad index.
 `core/io` is four narrow concepts over one provider type, `reader`, `writer`,
 `files` and `process`, with `world` their composition and `writer_of` lending
 a world's writer; a sink implements `writer`'s two entries and `core/diag`
-streams through `any io.writer` (D268). The library ships `equatable` and
-`hashable` for the integer scalars, `bool` and `[]u8`, `ordered` for the
-integer scalars, and all three for `utf8` (D270); another reading goes
-on a `distinct` wrapper with its own evidence [1280].
+streams through `any io.writer` (D268). The comparison concepts `equatable`,
+`hashable` and `ordered` live in `core/cmp`, apart from the map and the sort
+that consume them (D273). It ships `equatable` and `hashable` for the integer
+scalars, `bool` and `[]u8` and `ordered` for the integer scalars, and
+`core/text` all three for `utf8` (D270); another reading goes on a `distinct`
+wrapper with its own evidence [1280]. A closed set of named values, such as
+`core/diag`'s severity, is an atom set rather than an integer (D272).
 
 ## Constrained Cortex-M0 consumers
 
@@ -80,11 +86,11 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator` with `alloc`/`grow`/`free`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
+| `core/mem` | `allocator` with `alloc`/`grow`/`free`, `allocate`/`free`, the caller-backed `arena` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
-| `platform/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
+| `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
 mean byte alignment; other `usize` alignments are honored when representable.
@@ -122,8 +128,8 @@ exclusive-access primitives or VTOR. Ordinary DMA buffers remain slices.
 
 ## Other modules and closure
 
-`core/failing`, `core/region`, `core/small`, `core/map`, `core/tree`, `core/sort`
-and `core/text` contain reusable target-neutral code. Existing tests and the
+`core/cmp`, `core/fault`, `core/region`, `core/spill`, `core/map`, `core/tree`,
+`core/sort` and `core/text` contain reusable target-neutral code. Existing tests and the
 Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
@@ -141,7 +147,8 @@ promises stability.
 
 `core/region.new` grows its allocation ledger through the parent.
 `core/region.over` instead takes caller-owned initialized
-`region.allocation` records. One record is needed per live payload; a full
+`region.allocation` records. Every allocation takes one record until release,
+because an individual free returns nothing to the ledger; a full
 ledger reports `out_of_memory` and returns the just-allocated payload to the
 parent. Release frees payloads in reverse order, resets the record count, and
 leaves the caller's ledger available for reuse. The caller keeps that storage
@@ -191,14 +198,14 @@ Zero-byte allocation, failure, matching-free and lifetime contracts are unchange
 accepted use is an explicitly named inline array field in a compact private
 struct literal within the defining module. That module must initialize each
 element before a typed read. Whole-value transport remains a complete copy.
-Small-vector storage is private: use `small.new`, `push`, `pop`, `used` and
+Spill-list storage is private: use `spill.new`, `push`, `pop`, `used` and
 `release` instead of constructing or inspecting its representation. Wrappers
-that forward a container to `small.push` must declare that parameter
+that forward a container to `spill.push` must declare that parameter
 `escaping inout`; this makes the existing backing-lifetime responsibility
 explicit when inline aggregates move into spill storage.
 
-Pass `addr container` to `small.length`, `small.capacity`, `diag.stored`,
-`diag.dropped` and `diag.note_at`. These queries take read-only pointers and
+Pass `addr container` to `spill.length`, `spill.capacity`, `diag.length`,
+`diag.dropped` and `diag.get`. These queries take read-only pointers and
 accept mutable or immutable containers without copying their inline capacity.
 Generic deduction permits mutable-to-read-only relaxation only for an outer
 runtime pointer or slice pattern; nested permissions still match exactly.
@@ -210,6 +217,34 @@ make `failed` true. Callers may reuse their message bytes after `note` returns.
 Each bounded entry reserves its full inline message capacity, even when the
 message is short; empty log construction leaves the private entry array
 uninitialized and initializes its counters only.
+
+## Migrating to the reviewed library
+
+The library was read whole after its first outside reading (D272 to D274).
+Rename as follows; behaviour is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `core/small`, `small.small(item, n)` | `core/spill`, `spill.list(item, n)`; `inline_slots` is `usize` and items need no `zeroable` evidence |
+| `core/failing`, `failing.counted(provider)` | `core/fault`, `fault.injector(provider)` |
+| `mem.failing_over(base, size, n)`, `mem.failing_over_unchecked` | `fault.new(addr arena, n)` over `mem.arena_over(base, size)` or `mem.arena_over_unchecked`; its budget also spends a permit when the arena refuses |
+| `mem.failing_used`, `failing_allocations`, `failing_frees`, `failing_remaining` | `mem.arena_used(arena)`, `fault.successes`, `fault.frees`, `fault.remaining` |
+| `mem.reserve`, `mem.initialized` | `mem.storage_over`, `mem.length` |
+| `mem.raw_full`, `mem.raw_not_empty` | `mem.full`, `mem.not_empty` |
+| `mem.transfer_zero_prefix`, `mem.drain_zero_prefix` | `mem.transfer_prefix` for any item size, `mem.clear` |
+| `map.equatable`, `map.hashable`, `sort.ordered` | `cmp.equatable`, `cmp.hashable`, `cmp.ordered`; import `core/cmp` |
+| the equality entry `eq`, `text.eq` | `equal`, `text.equal` |
+| `text.ordinal`, `text.at`, `text.written` | `text.offset`, `text.cursor`, `text.prefix` (which reports `past_end`) |
+| `diag.severity` as a `u8`, `warning` 0 and `error` 1 | the atom set `warning \| error`; compare or `match` it, there is no number |
+| `diag.note_at`, `diag.to`, `diag.stored` | `diag.get`, `diag.stream`, `diag.length` |
+| `pool.allocation_count`, `free_count`, `rejected_free_count` | `pool.allocations`, `frees`, `rejected_frees` |
+| `map.capacity` as the bucket count | `map.slots`; `map.capacity` is now the entries that fit before a rebuild |
+| the labels `map.insert(added_value:)`, `vec.get(at:)` | `added_item:`, `index:` |
+| `text.write_byte` and `text.write_u32` taking `inout into` | `into` by value; the slice is written through, not replaced |
+| a `heap.system` struct literal | `heap.host()`; the state is opaque |
+
+`text.valid` reports whether bytes are UTF-8 without making a view, and
+`mem.aligned_offset` is the bump arithmetic a provider of your own needs.
 
 ## Migrating container providers and indices
 

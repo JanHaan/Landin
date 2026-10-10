@@ -1,0 +1,6 @@
+import core/spill
+
+bad: () -> (result: []mut i32) =
+    mut value := spill.new(item: i32, inline_slots: 2)
+    result = spill.used(value)
+end bad

@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import core/mem
 import core/pool
 import core/tree
@@ -7,7 +7,7 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
          -> (okay: bool) =
     okay = false
     budget: usize = 10
-    mut state := failing.new(addr inner, budget)
+    mut state := fault.new(addr inner, budget)
     mut value := tree.new()
     name: utf8 = "kept"
     mut at: usize = 0
@@ -34,9 +34,9 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
     end
     _ = tree.ordinal(branch)
     return when not leaf_failed or not branch_failed or tree.length(value) <> 8
-      or failing.attempts(state) <> 3 or failing.successes(state) <> 1
-      or failing.inner_failures(state) <> 2 or failing.injected_failures(state) <> 0
-      or failing.live(state) <> 1 or failing.frees(state) <> 0
+      or fault.attempts(state) <> 3 or fault.successes(state) <> 1
+      or fault.inner_failures(state) <> 2 or fault.injected_failures(state) <> 0
+      or fault.live(state) <> 1 or fault.frees(state) <> 0
     at = 0
     while at < 8 do
         saved := tree.get(value, tree.id(at)) else (problem)
@@ -52,8 +52,8 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
         inc at
     end while
     tree.release(value, state)
-    okay = tree.length(value) == 0 and failing.frees(state) == 1
-      and failing.live(state) == 0
+    okay = tree.length(value) == 0 and fault.frees(state) == 1
+      and fault.live(state) == 0
 end exhaust
 
 reuse: (inout state: pool.provider) -> (okay: bool) =
@@ -103,9 +103,9 @@ public main: () -> (code: i32) =
     end
     pool_ok: bool = exhaust(state)
     return when not pool_ok or pool.live(state) <> 0
-      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 1
+      or pool.allocations(state) <> 1 or pool.frees(state) <> 1
     reuse_ok: bool = reuse(state)
-    if reuse_ok and pool.live(state) == 0 and pool.allocation_count(state) == 2
-      and pool.free_count(state) == 2 and pool.rejected_free_count(state) == 0
+    if reuse_ok and pool.live(state) == 0 and pool.allocations(state) == 2
+      and pool.frees(state) == 2 and pool.rejected_frees(state) == 0
     then code = 42 end if
 end main

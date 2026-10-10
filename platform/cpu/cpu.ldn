@@ -1,5 +1,6 @@
---  Cortex-M0 CPU operations. The saved mask is an ordinary explicit value.
---  Restore it in lexical reverse order; masking does not stop DMA or faults.
+--  M-profile CPU operations, from armv6-m up. The saved mask is an ordinary
+--  explicit value. Restore it in lexical reverse order; masking does not stop
+--  DMA or faults.
 compiler.assert(compiler.arch == cortex_m0)
 
 --- Disable maskable interrupts and return the previous PRIMASK. Save the
@@ -30,7 +31,7 @@ public wait_for_interrupt: () -> none =
     assembler.block("dsb sy\nwfi")
 end wait_for_interrupt
 
---- Issue a device memory barrier (DMB) to order memory accesses. This is not
+--- Issue a data memory barrier (DMB) to order memory accesses. This is not
 --- a proof that a device operation completed.
 public device_barrier: () -> none =
     compiler.device_barrier()

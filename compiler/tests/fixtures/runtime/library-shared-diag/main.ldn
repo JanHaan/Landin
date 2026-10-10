@@ -4,8 +4,8 @@ import core/mem
 exercise: () -> (ok: bool) ! mem.out_of_bounds =
     ok = false
     mut value := diag.new(capacity: 1)
-    return when diag.stored(addr value) <> 0 or diag.dropped(addr value) <> 0
-    _ = diag.note_at(addr value, usize(0)) else (problem)
+    return when diag.length(addr value) <> 0 or diag.dropped(addr value) <> 0
+    _ = diag.get(addr value, usize(0)) else (problem)
         ok = problem == mem.out_of_bounds
         return
     end

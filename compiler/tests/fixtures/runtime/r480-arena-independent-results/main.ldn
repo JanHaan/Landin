@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 
 --  Every retained value is read while real module backing is still alive.
@@ -114,7 +115,8 @@ public main: () -> (code: i32) =
         absent: false
         ptr (retained): retained.val == 37
     end match
-    mut counted := mem.failing_over(addr counted_backing[0], 8, 1)
+    mut counted_arena := mem.arena_over(addr counted_backing[0], 8)
+    mut counted := fault.new(addr counted_arena, usize(1))
     counted_block: ptr mut u8 =
         mem.allocate(counted, usize(1), usize(1)) else (problem)
         _ = problem
@@ -122,6 +124,6 @@ public main: () -> (code: i32) =
     end
     counted_block.val = 41
     code = if ok and matched and counted_block.val == 41
-          and mem.failing_allocations(counted) == 1
+          and fault.successes(counted) == 1
         then 42 else 1 end if
 end main

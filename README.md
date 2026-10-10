@@ -291,15 +291,18 @@ This is the maintained inventory of what the compiler does today:
   checked encoded fields. `compiler/tests/constructs.matrix` records every
   normative construct's state, targets and evidence, and `check.py` refuses a
   stale or unexplained row.
-- **The library.** The thirteen shared `core/*` modules thread arena, pool
-  and failing allocators as capabilities and supply raw memory, vectors,
-  small vectors, maps, trees, sorting, byte-oriented and validated text,
-  caller-backed I/O, bulk cleanup, panic dispatch and the `any`-dispatched
-  `core/diag.log`. I/O separates reader, writer, file and process capabilities;
-  a streaming log needs only a writer. Containers share construction and
-  release names, and vectors, small vectors and maps lend writable slots with
-  `at` alongside copying `get`. Integer keys and ordering, Boolean and byte
-  slice keys, and UTF-8 keys and ordering have library-supplied evidence.
+- **The library.** The fourteen shared `core/*` modules thread arena and pool
+  allocators and a failure injector as capabilities and supply raw memory,
+  vectors, inline-prefix spill lists, maps, trees, sorting, byte-oriented and
+  validated text, caller-backed I/O, bulk cleanup, panic dispatch and the
+  `any`-dispatched `core/diag.log`. I/O separates reader, writer, file and
+  process capabilities; a streaming log needs only a writer. Containers share
+  construction and release names, and vectors, spill lists and maps lend
+  writable slots with `at` alongside copying `get`. The comparison concepts
+  are a module of their own, `core/cmp`, with library-supplied evidence for
+  integer keys and ordering, Boolean and byte slice keys, and UTF-8 keys and
+  ordering. A closed set of named values, such as a diagnostic's severity, is
+  an atom set.
   `hosted/heap` and `hosted/io` supply the hosted heap and
   system I/O capabilities. `platform/c` supplies aliases for the supported
   LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
@@ -399,7 +402,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.30 — The hosted library (planned).**
+**Current roadmap work: R13.12 — Answer the first outside reading.**
 
 ## License
 

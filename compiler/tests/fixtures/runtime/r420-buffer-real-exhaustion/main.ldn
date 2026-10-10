@@ -138,8 +138,8 @@ fixed_case: () -> (ok: bool) =
         lenof view == 0
     end
     mem.delete_bytes(state, empty)
-    return when not empty_ok or pool.allocation_count(state) <> 0
-      or pool.free_count(state) <> 0
+    return when not empty_ok or pool.allocations(state) <> 0
+      or pool.frees(state) <> 0
 
     --  One occupied slot.
     mut first := mem.new_bytes(state, thirty_two) else (problem)
@@ -151,14 +151,14 @@ fixed_case: () -> (ok: bool) =
         view[0] = 61
         view[31] = 62
     end
-    return when pool.live(state) <> 1 or pool.allocation_count(state) <> 1
+    return when pool.live(state) <> 1 or pool.allocations(state) <> 1
 
     --  Full: the object takes the remaining slot.
     value: ptr mut node = mem.new(state, initial()) else (problem)
         _ = problem
         return
     end
-    return when pool.live(state) <> 2 or pool.allocation_count(state) <> 2
+    return when pool.live(state) <> 2 or pool.allocations(state) <> 2
       or value.val.value <> 42 or value.val.next.val <> 37
 
     --  Exhausted by slot count, and separately by slot width. Neither
@@ -169,15 +169,15 @@ fixed_case: () -> (ok: bool) =
         first
     end
     mem.delete_bytes(state, first)
-    return when pool.live(state) <> 1 or pool.free_count(state) <> 1
+    return when pool.live(state) <> 1 or pool.frees(state) <> 1
     mut width_refused: bool = false
     _ = mem.new_bytes(state, oversized) else (problem)
         width_refused = problem == mem.out_of_memory
         first
     end
     return when not count_refused or not width_refused
-      or pool.live(state) <> 1 or pool.allocation_count(state) <> 2
-      or pool.free_count(state) <> 1
+      or pool.live(state) <> 1 or pool.allocations(state) <> 2
+      or pool.frees(state) <> 1
 
     --  The exactly freed slot is available again.
     mut reused := mem.new_bytes(state, thirty_two) else (problem)
@@ -190,14 +190,14 @@ fixed_case: () -> (ok: bool) =
         view[31] = 63
         fresh and view[31] == 63
     end
-    counts_ok: bool = pool.allocation_count(state) == 3
+    counts_ok: bool = pool.allocations(state) == 3
                       and pool.live(state) == 2
 
     mem.delete_bytes(state, reused)
     mem.delete(state, value)
     ok = reused_ok and counts_ok and pool.live(state) == 0
-         and pool.free_count(state) == 3
-         and pool.rejected_free_count(state) == 0
+         and pool.frees(state) == 3
+         and pool.rejected_frees(state) == 0
 end fixed_case
 
 public main: () -> (code: i32) =

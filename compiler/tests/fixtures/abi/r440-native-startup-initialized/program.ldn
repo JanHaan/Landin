@@ -67,7 +67,7 @@ arguments_match: (state: ptr hosted.system) -> (ok: bool) =
         _ = problem
         return
     end
-    return when not text.eq(word, "alpha") or not text.eq(number, "42")
+    return when not text.equal(word, "alpha") or not text.equal(number, "42")
     -- Check the actual global snapshot as well as the already-minted world.
     -- This catches a callback prologue resetting hidden argc/argv cells.
     return when usize(first.data) <> usize(_landin_host_argument_at(0))

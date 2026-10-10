@@ -60,11 +60,12 @@ public writer: type = concept (provider: type)
 end writer
 
 --- Input capability. `read` fills at most the supplied slice and returns its
---- byte count; zero denotes end of input. The caller retains the destination
---- storage.
+--- byte count; zero into a nonempty destination denotes end of input. The
+--- caller retains the destination storage.
 public reader: type = concept (provider: type)
-    --- Read at most the destination length and return progress; zero is end
-    --- of input.
+    --- Read at most the destination length and return progress; zero into a
+    --- nonempty destination is end of input, and an empty one always reads
+    --- zero.
     read: (self: ptr mut provider, opened: file, into: []mut u8)
           -> (count: usize) ! io_failed
 end reader
@@ -81,7 +82,10 @@ public files: type = concept (provider: type)
     --- the provider contract.
     open_write: (self: ptr mut provider, path: ptr u8)
                 -> (opened: file) ! not_found | no_access | io_failed
-    --- Compare file identity for two NUL-terminated paths.
+    --- Report whether two NUL-terminated paths name the same file. The left
+    --- path is an existing input: if it names no file the provider can
+    --- examine, the call fails with `io_failed`. The right path may be an
+    --- output not yet created: if it does not exist, the answer is false.
     same_file: (self: ptr mut provider, left: ptr u8, right: ptr u8)
                -> (same: bool) ! io_failed
     --- Consume a file handle, including when closure reports a failure.
@@ -123,7 +127,8 @@ public lent_writer: type = lent
 --- Lend a writer adapter from an erased world. Keep the world and its
 --- underlying provider alive while the adapter is used; this does not
 --- transfer ownership.
-public writer_of: (erased: ptr any world) -> (adapter: lent from erased) =
+public writer_of: (erased: ptr any world)
+                  -> (adapter: lent_writer from erased) =
     adapter = (source: erased)
 end writer_of
 

@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/mem
 import core/pool
@@ -14,7 +14,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
     one: usize = 1
     eight: usize = 8
     mut value := tree.new()
-    mut state := failing.new(addr backing, zero)
+    mut state := fault.new(addr backing, zero)
     mut empty_refused: bool = false
     _ = tree.add_leaf(value, state, leaf_name) else (problem)
         _ = problem
@@ -22,7 +22,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         tree.id(0)
     end
     return when not empty_refused or tree.length(value) <> 0
-    failing.permit(state, one)
+    fault.permit(state, one)
     mut at: usize = 0
     while at < 8 do
         added: tree.node_id = tree.add_leaf(value, state, leaf_name)
@@ -47,7 +47,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
             tree.id(0)
         end
     return when not leaf_refused or not branch_refused
-    return when tree.length(value) <> 8 or failing.live(state) <> 1
+    return when tree.length(value) <> 8 or fault.live(state) <> 1
     at = 0
     while at < 8 do
         selected := tree.get(value, tree.id(at)) else (problem)
@@ -58,7 +58,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         return when lenof text <> 8 or text[0] <> 'r'
         inc at
     end while
-    failing.permit(state, one)
+    fault.permit(state, one)
     root: tree.node_id = tree.add_branch(value, state, branch_name,
                                          tree.id(0), eight) else (problem)
         _ = problem
@@ -70,10 +70,10 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
     end
     tree.release(value, state)
     okay = tree.ordinal(root) == 8 and leaves == 8
-        and tree.length(value) == 0 and failing.attempts(state) == 5
-        and failing.injected_failures(state) == 3
-        and failing.successes(state) == 2 and failing.frees(state) == 2
-        and failing.live(state) == 0
+        and tree.length(value) == 0 and fault.attempts(state) == 5
+        and fault.injected_failures(state) == 3
+        and fault.successes(state) == 2 and fault.frees(state) == 2
+        and fault.live(state) == 0
 end exercise
 
 public main: () -> (code: i32) =
@@ -92,8 +92,8 @@ public main: () -> (code: i32) =
     end
     pool_ok: bool = exercise(pool_state)
     if heap_ok and arena_ok and pool_ok and pool.live(pool_state) == 0
-       and pool.allocation_count(pool_state) == 2 and pool.free_count(pool_state) == 2
-       and pool.rejected_free_count(pool_state) == 0
+       and pool.allocations(pool_state) == 2 and pool.frees(pool_state) == 2
+       and pool.rejected_frees(pool_state) == 0
     then
         code = 42
     end if

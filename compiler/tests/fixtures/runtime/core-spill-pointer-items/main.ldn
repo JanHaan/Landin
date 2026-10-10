@@ -1,0 +1,55 @@
+import core/mem
+import core/spill
+
+--  No item needs a zero image: pointers and records holding an atom are
+--  stored inline and then spilled like any other item.
+node: type = struct
+    value: i32
+end node
+
+level: type = low | high
+low, high: atom
+
+reading: type = struct
+    at: level
+    value: i32
+end reading
+
+first: node = (value: 1)
+second: node = (value: 2)
+third: node = (value: 3)
+
+exercise: () -> (ok: bool) ! mem.out_of_memory | mem.out_of_bounds =
+    ok = false
+    mut backing: [256]u8 = zeroed
+    mut state := mem.arena_over_unchecked(addr backing[0], 256)
+
+    mut nodes := spill.new(item: ptr node, inline_slots: 2)
+    try spill.push(nodes, state, addr first)
+    try spill.push(nodes, state, addr second)
+    return when mem.arena_used(state) <> 0
+    try spill.push(nodes, state, addr third)
+    return when mem.arena_used(state) == 0 or spill.length(addr nodes) <> 3
+    spilled: ptr node = try spill.get(addr nodes, usize(2))
+    return when spilled.val.value <> 3
+
+    mut readings := spill.new(item: reading, inline_slots: 1)
+    quiet: reading = (at: low, value: 10)
+    loud: reading = (at: high, value: 20)
+    try spill.push(readings, state, quiet)
+    try spill.push(readings, state, loud)
+    later: reading = try spill.get(addr readings, usize(1))
+    return when later.at <> high or later.value <> 20
+
+    spill.release(readings, state)
+    spill.release(nodes, state)
+    ok = spill.length(addr nodes) == 0
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

@@ -1,7 +1,7 @@
 import core/io
 import hosted/heap
 import core/region
-import core/failing
+import core/fault
 import core/mem
 import core/vec
 import core/diag
@@ -107,11 +107,11 @@ clear_reuses_storage: () -> (ok: bool) =
     mut backing: [8]u8 = zeroed
     base: ptr mut u8 = addr backing[0]
     slots: usize = 8
-    mut storage := mem.reserve(item: u8, base: base, slots: slots)
+    mut storage := mem.storage_over(item: u8, base: base, slots: slots)
     first: usize = mem.admit(storage, u8(17)) else slots
     second: usize = mem.admit(storage, u8(29)) else slots
     mem.clear(storage)
-    retained: bool = mem.initialized(storage) == 0
+    retained: bool = mem.length(storage) == 0
                      and mem.capacity(storage) == slots
     missing: u8 = mem.get(storage, first) else u8(99)
     reused: usize = mem.admit(storage, u8(41)) else slots
@@ -283,7 +283,7 @@ failure_sweep: () -> (ok: bool) =
         mut world_state := io.memory_over(files[0..<2], args[0..<3], output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
         mut host := heap.host()
-        mut counted := failing.new(addr host, budget)
+        mut counted := fault.new(addr host, budget)
         mut program := region.new(addr counted)
         mut succeeded: bool = true
         _ = app.run(program, world, usize(3)) else (problem)
@@ -295,10 +295,10 @@ failure_sweep: () -> (ok: bool) =
             0
         end
         region.release(program)
-        return when failing.live(counted) <> 0 or files[0].opened or files[1].opened
-          or failing.successes(counted) <> failing.frees(counted)
+        return when fault.live(counted) <> 0 or files[0].opened or files[1].opened
+          or fault.successes(counted) <> fault.frees(counted)
         if succeeded then
-            ok = budget > 0 and budget == failing.attempts(counted)
+            ok = budget > 0 and budget == fault.attempts(counted)
             return
         end if
         inc budget
@@ -362,7 +362,7 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     world: any io.world = any(addr world_state)
     mut host := heap.host()
     maximum: usize = 100
-    mut counted := failing.new(addr host, maximum)
+    mut counted := fault.new(addr host, maximum)
     mut pending := app.new_message()
     defer app.drop_message(counted, pending)
     for at in usize(0)..<usize(700) do source[at] = u8(at % 251) end for
@@ -394,7 +394,7 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
       or world_state.write_calls <> 7
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     zero: usize = 0
-    failing.permit(counted, zero)
+    fault.permit(counted, zero)
     mut refused: bool = false
     retry_source: []u8 = source[0..<700]
     app.append(counted, pending, retry_source) else (problem)
@@ -408,7 +408,7 @@ end messages_in
 message_growth: () -> (ok: bool) =
     ok = false
     mut host := heap.host()
-    mut counted := failing.new(addr host, usize(100))
+    mut counted := fault.new(addr host, usize(100))
     mut pending := app.new_message()
     defer app.drop_message(counted, pending)
     source: []u8 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -420,7 +420,7 @@ message_growth: () -> (ok: bool) =
         end
         return when not message_matches(pending, source, length)
     end for
-    ok = failing.successes(counted) <= 5
+    ok = fault.successes(counted) <= 5
 end message_growth
 
 message_matches: (value: app.message, source: []u8, length: usize)
@@ -485,7 +485,7 @@ io_failures: () -> (ok: bool) =
         world: any io.world = any(addr world_state)
         mut host := heap.host()
         budget: usize = 500
-        mut counted := failing.new(addr host, budget)
+        mut counted := fault.new(addr host, budget)
         mut program := region.new(addr counted)
         mut chunk: usize = 3
         if scenario == 5 then chunk = 0 end if
@@ -496,7 +496,7 @@ io_failures: () -> (ok: bool) =
         end
         region.release(program)
         return when not refused or files[0].opened or files[1].opened
-          or failing.live(counted) <> 0
+          or fault.live(counted) <> 0
         if scenario == 3 then
             return when files[1].length <> 3 or world_state.write_calls <> 3
               or not app.equal(destination[0..<3], "DEB")
@@ -563,15 +563,15 @@ diagnostics: () -> (ok: bool) =
     kept: usize = app.run_logged(program, world, usize(3), log) else (problem) _ = problem
         return
     end
-    return when kept <> 3 or not log.failed() or diag.stored(addr logger) <> 3
+    return when kept <> 3 or not log.failed() or diag.length(addr logger) <> 3
       or diag.dropped(addr logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
-    first: diag.entry = diag.note_at(addr logger, usize(0)) else (problem) _ = problem
+    first: diag.entry = diag.get(addr logger, usize(0)) else (problem) _ = problem
         return
     end
-    second: diag.entry = diag.note_at(addr logger, usize(1)) else (problem) _ = problem
+    second: diag.entry = diag.get(addr logger, usize(1)) else (problem) _ = problem
         return
     end
-    third: diag.entry = diag.note_at(addr logger, usize(2)) else (problem) _ = problem
+    third: diag.entry = diag.get(addr logger, usize(2)) else (problem) _ = problem
         return
     end
     return when not exact_note(first, "--every argument is not UTF-8, using 1\n")

@@ -6,14 +6,15 @@ import core/io
 import core/mem
 import core/text
 
---- Byte carrier for diagnostic severity. Use the named `warning` and `error`
---- values.
-public severity: type = u8
 --- Warning severity; recording it does not by itself mark a log as failed.
-public warning: severity = 0
+public warning: atom
 --- Error severity; recording it marks the log as failed.
-public error: severity = 1
+public error: atom
+--- Diagnostic severity: `warning` or `error`.
+public severity: type = warning | error
 
+--  An array bound folds only literals and fixed formals (D136), so the
+--  message array spells `message_capacity` out; keep the two equal.
 entry_value: type = struct
     where: usize
     kind: severity
@@ -58,10 +59,9 @@ bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
     if self.val.stored < capacity and lenof what <= message_capacity then
         --  An erased producer may pass frame bytes.  Retain a copy rather
         --  than an address into the producer's storage.
-        mut saved: entry = zeroed
-        saved.where = text.ordinal(where)
-        saved.kind = kind
-        saved.what_length = lenof what
+        --  A severity has no zero image, so the entry is built whole.
+        mut saved: entry = (where: text.offset(where), kind: kind,
+                            what_bytes: zeroed, what_length: lenof what)
         mut index: usize = 0
         while index < lenof what do
             saved.what_bytes[index] = what[index]
@@ -87,14 +87,13 @@ public new: (fixed capacity: usize) -> (result: bounded(capacity)) =
     result = (notes: uninit, stored: 0, dropped: 0, errors: 0)
 end new
 
---- Return the number of retained diagnostic entries.
----
---- Read-only pointers let both mutable and immutable log owners query without
---- copying the bounded note array.
-public stored: (fixed capacity: usize, value: ptr bounded(capacity))
+--- Return the number of retained diagnostic entries. Read-only pointers let
+--- both mutable and immutable log owners query without copying the bounded
+--- note array.
+public length: (fixed capacity: usize, value: ptr bounded(capacity))
                -> (count: usize) =
     count = value.val.stored
-end stored
+end length
 
 --- Return the number of entries not retained because the log was full or the
 --- message exceeded `message_capacity`.
@@ -105,11 +104,11 @@ end dropped
 
 --- Copy a retained entry by index. Reports `mem.out_of_bounds` if the index
 --- is not stored.
-public note_at: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
-                -> (result: entry) ! mem.out_of_bounds =
+public get: (fixed capacity: usize, value: ptr bounded(capacity), index: usize)
+            -> (result: entry) ! mem.out_of_bounds =
     fail mem.out_of_bounds when index >= value.val.stored
     result = value.val.notes[index]
-end note_at
+end get
 
 --- Return the caller-supplied source position associated with an entry.
 public position_of: (value: entry) -> (where: usize) =
@@ -143,8 +142,10 @@ streaming_value: type = struct
     errors: usize
 end streaming_value
 
---- Diagnostic provider borrowing a writer and destination handle. Emits
---- severity-prefixed messages and propagates write failures to the caller.
+--- Diagnostic provider borrowing a writer and destination handle. Each note
+--- is written as `W:` or `E:`, the position's decimal byte offset, `:` and
+--- the message bytes as given, with no terminator; write failures propagate
+--- to the caller.
 public streaming: type = streaming_value
 
 warning_prefix: [2]u8 = [87, 58]
@@ -169,14 +170,13 @@ end write_position
 
 --- Create a streaming logger over an erased writer and file identifier. Keep
 --- both referenced bindings and the underlying provider alive while logging.
----
---- A streaming log needs only a writer.  A root holding an `any io.world`
---- builds the writer from the same provider pointer; the two erased values
---- do not convert.
-public to: (state: ptr any io.writer, where_to: ptr io.file)
-           -> (result: streaming from state, where_to) =
+--- A streaming log needs only a writer: a root holding an `any io.world`
+--- builds the writer from the same provider pointer, since the two erased
+--- values do not convert.
+public stream: (state: ptr any io.writer, where_to: ptr io.file)
+               -> (result: streaming from state, where_to) =
     result = streaming(state: state, where_to: where_to, errors: 0)
-end to
+end stream
 
 stream_note: (self: ptr mut streaming, where: text.position,
               kind: severity, what: []u8) -> none ! io.io_failed =
@@ -189,7 +189,7 @@ stream_note: (self: ptr mut streaming, where: text.position,
         try state.val.write(where_to.val, warning_prefix[0..<2])
     end if
 
-    try write_position(state.val, where_to.val, text.ordinal(where))
+    try write_position(state.val, where_to.val, text.offset(where))
     try state.val.write(where_to.val, separator[0..<1])
     try state.val.write(where_to.val, what)
 end stream_note

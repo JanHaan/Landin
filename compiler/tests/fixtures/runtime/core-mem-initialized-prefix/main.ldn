@@ -25,8 +25,8 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    mut source := mem.reserve(item: u32, base: base, slots: two)
-    mut target := mem.reserve(item: u32, base: other, slots: two)
+    mut source := mem.storage_over(item: u32, base: base, slots: two)
+    mut target := mem.storage_over(item: u32, base: other, slots: two)
     empty: bool = begin
         view := mem.used(source)
         lenof view == 0
@@ -47,7 +47,7 @@ public main: () -> (code: i32) =
         lenof view == 2 and view[0] == 11 and view[1] == 23
     end
     missing: usize = mem.transfer(source, two, target) else two
-    target_empty: bool = mem.initialized(target) == 0
+    target_empty: bool = mem.length(target) == 0
     c: usize = mem.transfer(source, zero, target) else two
     d: usize = mem.transfer(source, one, target) else two
     full: usize = mem.transfer(source, zero, target) else two

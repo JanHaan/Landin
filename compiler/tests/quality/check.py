@@ -417,7 +417,7 @@ def main() -> None:
             container_items = {
                 entry["item"] for entry in measured["items"]
                 if paths[entry["source"]].parent.name in
-                ("vec", "small", "map", "tree", "sort")
+                ("vec", "spill", "map", "tree", "sort")
                 and paths[entry["source"]].parent.parent.name == "core"
             }
             require(container_items, f"{key}: no core container source evidence")

@@ -20,7 +20,7 @@ public main: () -> (code: i32) =
     if first_value == 10 and lenof middle == 2
       and middle[0] == 20 and middle[1] == 30
       and text.at_end(source, cursor) and missing == 99
-      and text.ordinal(cursor) == five
+      and text.offset(cursor) == five
     then
         code = 42
     else

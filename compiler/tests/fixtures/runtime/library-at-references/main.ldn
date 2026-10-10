@@ -1,6 +1,6 @@
 import core/map
 import core/mem
-import core/small
+import core/spill
 import core/vec
 
 exercise: () -> (ok: bool)
@@ -30,23 +30,23 @@ exercise: () -> (ok: bool)
     end
     return when not refused
 
-    mut few := small.new(item: i32, inline_slots: 2)
-    try small.push(few, state, 5)
-    inline_slot: ptr mut i32 = try small.at(few, usize(0))
+    mut few := spill.new(item: i32, inline_slots: 2)
+    try spill.push(few, state, 5)
+    inline_slot: ptr mut i32 = try spill.at(few, usize(0))
     inline_slot.val = 50
-    inline_value: i32 = try small.get(addr few, usize(0))
+    inline_value: i32 = try spill.get(addr few, usize(0))
     return when inline_value <> 50
-    try small.push(few, state, 6)
-    try small.push(few, state, 7)
-    spilled_slot: ptr mut i32 = try small.at(few, usize(2))
+    try spill.push(few, state, 6)
+    try spill.push(few, state, 7)
+    spilled_slot: ptr mut i32 = try spill.at(few, usize(2))
     spilled_slot.val = 70
-    spilled_value: i32 = try small.get(addr few, usize(2))
-    return when spilled_value <> 70 or small.length(addr few) <> 3
+    spilled_value: i32 = try spill.get(addr few, usize(2))
+    return when spilled_value <> 70 or spill.length(addr few) <> 3
 
     mut table := map.new(key: u32, item: i32)
     try map.reserve(table, state, usize(10))
     reserved: usize = map.capacity(table)
-    return when reserved <> 16
+    return when reserved < 10 or map.slots(table) <> 16
     try map.insert(table, state, u32(7), 1)
     return when not map.contains(table, u32(7)) or map.contains(table, u32(8))
     stored: ptr mut i32 = try map.at(table, u32(7))
@@ -70,7 +70,7 @@ exercise: () -> (ok: bool)
     return when map.capacity(table) <> reserved
 
     map.release(table, state)
-    small.release(few, state)
+    spill.release(few, state)
     vec.release(numbers, state)
     ok = true
 end exercise

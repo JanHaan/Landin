@@ -1,8 +1,0 @@
-class: negative
-summary: a public wrapper cannot construct a private raw inline prefix
-expect: expected.txt
-args: --root=../.. ../tests/fixtures/negative/core-small-forged-storage
-codes: L0202
-status: 1
-constructs: 0540, 0710, 1350, 1420, 1770
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

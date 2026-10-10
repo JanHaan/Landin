@@ -1,3 +1,4 @@
+import core/fault
 import core/mem
 import core/vec
 
@@ -6,7 +7,8 @@ mut observed: u32 = 0
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut state := mem.failing_over(addr backing[0], lenof backing, 1)
+    mut state_arena := mem.arena_over(addr backing[0], lenof backing)
+    mut state := fault.new(addr state_arena, usize(1))
     mut values := vec.new(item: u32)
     try vec.reserve(values, state, usize(2))
     try vec.push(values, state, u32(17))
@@ -16,7 +18,7 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
         _ = problem
         failed = true
     end
-    return when not failed or mem.failing_allocations(state) <> 1 or mem.failing_frees(state) <> 0
+    return when not failed or fault.successes(state) <> 1 or fault.frees(state) <> 0
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
     saved: u32 = begin
         view := vec.used(values)
@@ -29,12 +31,12 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
         _ = problem
         failed = true
     end
-    return when not failed or mem.failing_allocations(state) <> 1
+    return when not failed or fault.successes(state) <> 1
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
     vec.release(values, state)
-    return when mem.failing_frees(state) <> 1 or vec.length(values) <> 0
+    return when fault.frees(state) <> 1 or vec.length(values) <> 0
     vec.release(values, state)
-    return when mem.failing_frees(state) <> 1
+    return when fault.frees(state) <> 1
     result = 42
 end exercise
 

@@ -10,7 +10,7 @@ public byte_buffer: type = buffer
 
 --- Lend the buffer's mutable initialized bytes. The buffer must remain
 --- allocated while the view is used.
-public bytes: (source: buffer) -> (view: []mut u8 from source) =
+public bytes: (source: byte_buffer) -> (view: []mut u8 from source) =
     view = used(source.values)
 end bytes
 
@@ -18,7 +18,7 @@ end bytes
 --- buffer without calling the provider; allocation failure reports
 --- `out_of_memory`.
 public new_bytes: (provider: type is allocator, inout state: provider,
-                   count: usize) -> (result: buffer) ! out_of_memory =
+                   count: usize) -> (result: byte_buffer) ! out_of_memory =
     zero: usize = 0
     if count == 0 then
         none_yet := empty_storage(item: u8)
@@ -26,7 +26,7 @@ public new_bytes: (provider: type is allocator, inout state: provider,
         return
     end if
     block: ptr mut u8 = try provider.alloc(state, count, alignof u8)
-    mut fresh := reserve(item: u8, base: block, slots: count)
+    mut fresh := storage_over(item: u8, base: block, slots: count)
     mut index: usize = 0
     initial: u8 = 0
     while index < count do
@@ -46,7 +46,7 @@ end new_bytes
 --- Free the buffer using its saved extent and reset it. Empty buffers require
 --- no provider call. End all byte views before deletion.
 public delete_bytes: (provider: type is allocator, inout state: provider,
-                      inout value: buffer) -> none =
+                      inout value: byte_buffer) -> none =
     return when value.extent == 0
     extent: usize = value.extent
     clear(value.values)

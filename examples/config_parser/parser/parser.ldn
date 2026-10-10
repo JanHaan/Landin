@@ -98,7 +98,7 @@ end lower_depth
 
 parse_digits: (source: []u8, cursor: text.position, ends: text.position,
                accumulated: u32) -> (result: u32) ! number_out_of_range =
-    if text.ordinal(cursor) == text.ordinal(ends) then
+    if text.offset(cursor) == text.offset(ends) then
         result = accumulated
         return
     end if

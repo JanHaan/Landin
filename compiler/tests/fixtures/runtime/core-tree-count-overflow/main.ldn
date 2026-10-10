@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/tree
 
@@ -8,7 +8,7 @@ public main: () -> (code: i32) =
     code = 1
     mut host := heap.host()
     budget: usize = 20
-    mut state := failing.new(addr host, budget)
+    mut state := fault.new(addr host, budget)
     mut value := tree.new()
     first: tree.node_id = tree.add_leaf(value, state, label) else (problem)
         _ = problem
@@ -78,7 +78,7 @@ public main: () -> (code: i32) =
     tree.release(value, state)
     if overflow and unchanged and invalid and wide_count and before_release == 94
        and final == 12200160415121876738 and small_count == 1
-       and failing.attempts(state) == failing.frees(state) and failing.live(state) == 0
+       and fault.attempts(state) == fault.frees(state) and fault.live(state) == 0
     then
         code = 42
     end if

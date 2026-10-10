@@ -44,7 +44,7 @@ public copy_arguments: (provider: type is mem.allocator, inout allocator: provid
         fail mem.out_of_memory when arg.length == maximum
         extent: usize = arg.length + 1
         block: ptr mut u8 = try mem.allocate(allocator, extent, alignof u8)
-        mut owner := mem.reserve(item: u8, base: block, slots: extent)
+        mut owner := mem.storage_over(item: u8, base: block, slots: extent)
         mut index: usize = 0
         while index < arg.length do
             current: ptr u8 = ptr(usize(arg.data) + index)
@@ -225,7 +225,7 @@ public build: (provider: type is mem.allocator, inout allocator: provider,
     stream: io.file = world.err()
     mut lent := io.writer_of(addr world)
     writer: any io.writer = any(addr lent)
-    mut logger := diag.to(addr writer, addr stream)
+    mut logger := diag.stream(addr writer, addr stream)
     log: any diag.log = any(addr logger)
     value = try build_logged(allocator, world, log)
 end build

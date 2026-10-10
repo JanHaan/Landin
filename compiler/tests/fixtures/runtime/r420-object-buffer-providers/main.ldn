@@ -1,4 +1,4 @@
-import core/failing
+import core/fault
 import hosted/heap
 import core/mem
 import core/pool
@@ -30,7 +30,7 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     one: usize = 1
     two: usize = 2
     three: usize = 3
-    mut state := failing.new(addr inner, zero)
+    mut state := fault.new(addr inner, zero)
     before: usize = evaluations
     mut empty := mem.new_bytes(state, zero) else (problem)
         _ = problem
@@ -41,15 +41,15 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
         lenof view
     end
     mem.delete_bytes(state, empty)
-    return when empty_size <> 0 or failing.attempts(state) <> 0
+    return when empty_size <> 0 or fault.attempts(state) <> 0
     mut refused: bool = false
     absent: object_result = mem.new(state, initial()) else (problem)
         refused = problem == mem.out_of_memory
         no_object
     end
     return when not refused or not is_absent(absent) or evaluations <> before + 1
-      or failing.live(state) <> 0 or failing.frees(state) <> 0
-    failing.permit(state, two)
+      or fault.live(state) <> 0 or fault.frees(state) <> 0
+    fault.permit(state, two)
     value: ptr mut node = mem.new(state, initial()) else (problem)
         _ = problem
         return
@@ -71,8 +71,8 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     mem.delete(state, value)
     mem.delete_bytes(state, bytes)
     mem.delete_bytes(state, bytes)
-    return when failing.live(state) <> 0 or failing.frees(state) <> 2
-    failing.permit(state, one)
+    return when fault.live(state) <> 0 or fault.frees(state) <> 2
+    fault.permit(state, one)
     mut retry := mem.new_bytes(state, three) else (problem)
         _ = problem
         return
@@ -83,9 +83,9 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     end
     mem.delete_bytes(state, retry)
     okay = content_ok and object_ok and retry_ok and evaluations == before + 2
-      and failing.attempts(state) == 4 and failing.successes(state) == 3
-      and failing.injected_failures(state) == 1 and failing.inner_failures(state) == 0
-      and failing.frees(state) == 3 and failing.live(state) == 0
+      and fault.attempts(state) == 4 and fault.successes(state) == 3
+      and fault.injected_failures(state) == 1 and fault.inner_failures(state) == 0
+      and fault.frees(state) == 3 and fault.live(state) == 0
 end exercise
 
 public main: () -> (code: i32) =
@@ -104,8 +104,8 @@ public main: () -> (code: i32) =
     end
     fixed_ok: bool = exercise(fixed_state)
     if heap_ok and arena_ok and fixed_ok and evaluations == 6
-      and mem.arena_used(arena) > 0 and pool.allocation_count(fixed_state) == 3
-      and pool.free_count(fixed_state) == 3 and pool.live(fixed_state) == 0
-      and pool.rejected_free_count(fixed_state) == 0
+      and mem.arena_used(arena) > 0 and pool.allocations(fixed_state) == 3
+      and pool.frees(fixed_state) == 3 and pool.live(fixed_state) == 0
+      and pool.rejected_frees(fixed_state) == 0
     then code = 42 end if
 end main
