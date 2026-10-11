@@ -247,7 +247,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R13.15 — The OS boundary in source.**
+**Next roadmap item: R13.16 — Linux without the C library (planned).**
 
 ---
 

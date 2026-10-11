@@ -1439,7 +1439,7 @@ debug information and SR-25's shell.
 
 ### R13.15 — The OS boundary in source
 
-Status: active
+Status: complete
 Depends on: R13.14
 
 The compiler owns the hosted operating-system boundary: fourteen
@@ -1461,6 +1461,20 @@ left in the compiler; Darwin arm64 variadic calls pinned against a C peer;
 every hosted fixture, the derived programs, the debugger sessions and the C
 ABI fixtures passing unchanged on every hosted target; and decisions
 superseding D153's scalar seam and D195's shim.
+
+Done: D276 leaves the compiler one hosted contract, the call to `hosted/io`'s
+argument initializer, and removes the fourteen helpers, their checker
+contract and every backend's libc bridge, about 1,180 lines of Ada.
+`hosted/libc` declares the C library with `open` variadic, and D277 moves the
+heap's over-allocation into source. Library source can now say a path must
+not run: D278's `compiler.unreachable()` raises `unreachable` at its own site,
+so startup misuse reports what the bridge did. Darwin arm64's variadic tail
+is pinned against a C peer. The mutation campaign now seeds each fixture
+alone, and the ten reporting defects that seeding exposed are fixed and
+pinned. All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38162781050)
+passed on `a0a4b8fc`, executing the moved boundary natively on Darwin,
+FreeBSD and RV64.
 
 ### R13.16 — Linux without the C library
 
@@ -1875,7 +1889,6 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-27 | Usability | Selecting from a call's result, `f().val`, is refused with L0103, so reading through a returned pointer needs a named temporary or a helper routine. | A consumer whose natural expression selects from a call. | Selection from a call result admitted, or the refusal's note naming the temporary it needs. | open |
 | SR-28 | Usability | `escaping` takes part in C-symbol compatibility, so an `extern(c)` import must repeat a definition's `escaping` to share its symbol, although C itself has no such qualifier. | The next item touching C imports of Landin-defined symbols. | `escaping` ignored when comparing C symbols, or the refusal saying it is the only difference. | open |
 | SR-29 | Usability | Indexing through a raw pointer keeps no origin, so `hosted/io`'s argument lookup goes through an integer address and its `from self` result is untracked. | A library routine that must index a C table and return a tracked view. | A pointer-offset form that keeps the base's origin, or the boundary recorded as a deliberate non-guarantee. | open |
-| SR-30 | Release readiness | The mutation campaign draws every mutant from one seed across the whole corpus, so adding any single-file positive fixture shifts every later mutant: a new fixture dropped the one-report share from 90% to 89% and exposed four existing repeated-secondary-report defects and one offered repair that does not parse. | Now: the defects are real. | The five defects fixed with fixtures, and mutants seeded per source so a new fixture cannot move another fixture's draws. | scheduled R13.15 |
 | SR-31 | Usability | A library check that traps takes three lines, `if … then compiler.unreachable() end if`, where `return when` gives a guarded return one. | The next library code that guards many contracts. | A guarded trap form, or the reason one is declined. | open |
 | SR-32 | Usability | L0331's note says that a call of a function returning `none` is not a value for every call that hands back nothing, including a `noreturn` call such as `compiler.unreachable()`, which never returns at all. | The next change to L0331's wording. | A note that names `noreturn` for a call that never returns, with a fixture. | open |
 | SR-33 | Usability | A runtime fixture cannot report a status from inside a panic handler, so the trap dispatch fixture shows the handler saw the right kind and site only by re-entering it on a match and spinning otherwise, which a missing dispatch would also satisfy as a trap. | The next panic or trap fixture. | A portable way for a handler to report, on firmware too, used to pin dispatch exactly. | open |
