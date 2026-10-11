@@ -2333,9 +2333,9 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--library=" & Named & " holds no core directory;"
-                     & " name the directory that holds core, hosted and"
-                     & " platform");
+                     "--library=" & Named & " holds no core, hosted or"
+                     & " platform directory; name the directory that"
+                     & " holds them");
                end if;
             end;
          end if;

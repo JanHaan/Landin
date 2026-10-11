@@ -231,7 +231,8 @@ package body Landin.Tests.Commands_Suite is
             "--library must name a library");
          Landin.Testing.Check
            (Item, Contains (US.To_String (Refused.Report),
-                            "--library=/empty holds no core directory"),
+                            "--library=/empty holds no core, hosted or"
+                            & " platform directory"),
             "the refusal says what is missing: "
             & US.To_String (Refused.Report));
       end;

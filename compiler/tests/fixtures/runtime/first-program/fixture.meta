@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the README's first program writes one line through the hosted world and exits zero; the README shows this source and this output
+constructs: 0260, 0940, 0960, 1410, 1420, 1650, 1660, 1970
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+status: 0
+stream: output
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -6170,6 +6170,61 @@ def check_unfenced_code(full_run):
     return out
 
 
+FIRST_PROGRAM = "compiler/tests/fixtures/runtime/first-program"
+
+
+def check_first_program(full_run):
+    """The README's first program is the fixture every hosted target runs.
+
+    A newcomer copies the listing and expects the output shown under it, so
+    both are held to the runtime fixture byte for byte.  The fixture, not
+    the README, is what the gate's outside-user lane reads: an edit confined
+    to the README may skip that lane, and this check runs on every push.
+    """
+    if not full_run:
+        return []
+
+    readme = os.path.join(ROOT, "README.md")
+    source = os.path.join(ROOT, FIRST_PROGRAM, "main.ldn")
+    output = os.path.join(ROOT, FIRST_PROGRAM, "output.txt")
+    missing = absent([readme, source, output])
+    if missing:
+        return missing
+
+    lines = io.open(readme, encoding="utf-8").read().splitlines()
+    heading = "## Your first program"
+    found = [at for at, line in enumerate(lines) if line == heading]
+    if len(found) != 1:
+        return [("README.md", 1, "%r has %d sections instead of one"
+                 % (heading, len(found)))]
+    start = found[0]
+    end = next((at for at in range(start + 1, len(lines))
+                if lines[at].startswith("## ")), len(lines))
+
+    def fenced(tag, after):
+        """The first `tag` fence in the section after line AFTER."""
+        opened = next((at for at in range(after, end)
+                       if lines[at] == "```" + tag), None)
+        if opened is None:
+            return None, end
+        closed = next((at for at in range(opened + 1, end)
+                       if lines[at] == "```"), end)
+        return "\n".join(lines[opened + 1:closed]) + "\n", closed
+
+    out = []
+    shown, after = fenced("landin", start + 1)
+    printed, _ = fenced("text", after)
+    if shown != io.open(source, encoding="utf-8").read():
+        out.append(("README.md", start + 1,
+                    "the first program's listing differs from %s/main.ldn"
+                    % FIRST_PROGRAM))
+    if printed != io.open(output, encoding="utf-8").read():
+        out.append(("README.md", start + 1,
+                    "the first program's shown output differs from"
+                    " %s/output.txt" % FIRST_PROGRAM))
+    return out
+
+
 def check_running_examples(full_run):
     """The examples page shows the runtime sources the gate actually runs.
 
@@ -7348,6 +7403,7 @@ def main(argv):
     extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
     extra += check_running_examples(full_run)
+    extra += check_first_program(full_run)
     extra += check_library_documentation(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)

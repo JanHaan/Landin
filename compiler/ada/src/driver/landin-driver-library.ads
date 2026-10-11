@@ -23,7 +23,9 @@ package Landin.Driver.Library is
    --  from the library root alone whenever there is one.
    function Is_Library_Import (Logical : String) return Boolean;
 
-   --  Whether Directory holds a library: it has a `core` directory.
+   --  Whether Directory holds a library: it has a `core`, `hosted` or
+   --  `platform` directory.  A build that stages only the modules it
+   --  reaches, as the firmware lanes do, still names a library.
    function Holds_Library
      (Host : Landin.Platform.Filesystem'Class; Directory : String)
       return Boolean;

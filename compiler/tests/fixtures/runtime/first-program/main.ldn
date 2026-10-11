@@ -1,0 +1,12 @@
+import core/io
+import hosted/io as hosted
+
+public main: () -> (code: i32) =
+    mut host := hosted.host()
+    io.write(host, io.out(host), "Hello from Landin\n") else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = 0
+end main

@@ -17448,7 +17448,10 @@ three namespaces in it; the flake's packages and the release archive are laid
 out so. `refine` asks the host for its own executable's directory, with links
 resolved, and takes the first of `../lib/landin` and, for a compiler built in
 a checkout, the checkout six directories up that holds `core`. `--library=DIR`
-names another, and a directory without `core` is refused as a bad root is.
+names another: a build that stages only the library modules it reaches, as
+the firmware lanes do, names its staged tree, so the sources it hashes and
+debugs are the ones compiled. A directory holding none of the three is
+refused as a bad root is.
 The library root follows every `--root`; an import of `core`, `hosted` or
 `platform` resolves from it alone, and one of anything else from the roots in
 their order. With no `--root`, the named files are still one module and reach

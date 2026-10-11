@@ -628,6 +628,13 @@
     "runtime/evaluation-order-is-left-then-right": {
       "mode": "execute"
     },
+    "runtime/first-program": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
+    },
     "runtime/fixed-array-any-shapes": {
       "mode": "execute"
     },

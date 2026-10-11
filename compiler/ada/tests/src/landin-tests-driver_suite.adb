@@ -5312,7 +5312,8 @@ package body Landin.Tests.Driver_Suite is
            (Item, Empty.Status = Landin.Driver.Status_Misuse
             and then Contains
               (Unbounded.To_String (Empty.Report),
-               "--library=/empty holds no core directory")
+               "--library=/empty holds no core, hosted or"
+               & " platform directory")
             and then Host.Write_Count = 0,
             "--library naming no library is refused before reading");
          Landin.Testing.Check

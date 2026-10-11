@@ -338,9 +338,9 @@ package body Landin.Commands is
          if Named /= ""
            and then not Landin.Driver.Library.Holds_Library (Host, Named)
          then
-            Refuse ("--library=" & Named & " holds no core directory;"
-              & " name the directory that holds core, hosted and"
-              & " platform");
+            Refuse ("--library=" & Named & " holds no core, hosted or"
+              & " platform directory; name the directory that holds"
+              & " them");
             return;
          end if;
          if Asked.Structured then

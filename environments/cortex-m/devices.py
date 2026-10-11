@@ -41,7 +41,11 @@ def build(run, refine, program, optimize, specialize):
               for p in sorted(source.rglob('*.ldn'))}
     (run.out / 'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')
     elf = run.out / 'core.elf'
-    run.command('compile', [refine, '--root=source', '--target=cortex-m0',
+    #  The staged tree is this build's library as well as its root: the
+    #  library namespaces resolve from the library alone (D275), and the
+    #  hashed, debugger-checked sources are the staged copies.
+    run.command('compile', [refine, '--root=source', '--library=source',
+        '--target=cortex-m0',
         '--firmware-entry=start', '--emit=exe',
         '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,

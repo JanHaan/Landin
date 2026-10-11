@@ -5,14 +5,17 @@
 
 PREFIX is an installed toolchain, as `scripts/package.sh` lays one out and
 the flake installs it: `bin/refine` with `lib/landin` beside it.  DIR is a
-scratch directory outside the checkout.  The README's first program and every
-program in `examples.md` are copied out of the documents as a reader would
-copy them, each into a project directory of its own, compiled there with
-`refine compile` and no option, and run.  The environment is PATH alone, so
-nothing the checkout or a developer's shell provides can stand in for what
-the installation lacks.  The answers each program must give are the
-documents' own: the first program's stated output, and each example's
-fixture status and output oracle.
+scratch directory outside the checkout.  The first program and every program
+in `examples.md` are copied out as a reader would copy them, each into a
+project directory of its own, compiled there with `refine compile` and no
+option, and run.  The environment is PATH alone, so nothing the checkout or
+a developer's shell provides can stand in for what the installation lacks.
+Each program is held to its fixture's status and output oracle.
+
+The first program is read from its runtime fixture, not from the README
+that shows it: the gate may skip this lane for an edit confined to the
+README, so the lane must not read it, and `check.py` holds the README's
+listing and output to the fixture instead.
 """
 
 import argparse
@@ -23,7 +26,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-FIRST_PROGRAM_HEADING = "## Your first program"
+FIRST_PROGRAM = ROOT / "compiler/tests/fixtures/runtime/first-program"
 
 
 def landin_block(text, start):
@@ -35,17 +38,9 @@ def landin_block(text, start):
 
 
 def first_program():
-    """The README's first program and the output it says the program prints."""
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-    at = text.find("\n" + FIRST_PROGRAM_HEADING + "\n")
-    if at < 0:
-        raise SystemExit("outside user: README.md has no %r section"
-                         % FIRST_PROGRAM_HEADING)
-    source, after = landin_block(text, at)
-    printed = re.compile(r"^```text\n(.*?)^```$", re.M | re.S).search(text, after)
-    if printed is None:
-        raise SystemExit("outside user: the first program's output is not shown")
-    return source, printed.group(1).encode("utf-8"), 0
+    """The first program, the output it prints and its status."""
+    return ((FIRST_PROGRAM / "main.ldn").read_text(encoding="utf-8"),
+            (FIRST_PROGRAM / "output.txt").read_bytes(), 0)
 
 
 def examples():

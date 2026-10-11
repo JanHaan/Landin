@@ -19,9 +19,15 @@ package body Landin.Driver.Library is
    function Holds_Library
      (Host : Landin.Platform.Filesystem'Class; Directory : String)
       return Boolean
-     is (Directory /= ""
-         and then Host.Is_Directory
-           (Landin.Driver.Loading.Joined_Path (Directory, "core")));
+   is
+      function Holds (Namespace : String) return Boolean
+        is (Host.Is_Directory
+              (Landin.Driver.Loading.Joined_Path (Directory, Namespace)));
+   begin
+      return Directory /= ""
+        and then (Holds ("core") or else Holds ("hosted")
+                  or else Holds ("platform"));
+   end Holds_Library;
 
    --  The directory Path is in, or "" when Path is the top of the
    --  filesystem or names no directory at all.
