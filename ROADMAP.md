@@ -1400,7 +1400,7 @@ the debugger workloads on every target.
 
 ### R13.14 — The compiler finds its library
 
-Status: active
+Status: complete
 Depends on: R13.13
 
 `core`, `hosted` and `platform` ship with no installed compiler: the flake's
@@ -1423,6 +1423,19 @@ gate job that installs the toolchain as the documentation says, outside the
 checkout, and compiles and runs the README's first program and every
 `examples.md` program with no option and no environment, on every hosted
 target the release publishes for.
+
+Done: D275 finds the library beside the executable, installed or in a
+checkout, with `--library` for a staged tree; `core`, `hosted` and `platform`
+resolve from it alone, also for named files, and `refine version` and the
+language server name it. `scripts/package.sh` lays out the flake's packages
+and the release archive as an installed prefix. The README's first program
+is `runtime/first-program`, held to the README by `check.py`, and each
+release job installs the archive outside the checkout and runs it and the
+eleven `examples.md` programs with no option. All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38123255895)
+passed on `13eb4918`. The path showed what a newcomer still meets: SR-22's
+linker driver name, SR-23's missing suggestion, SR-24's installed paths in
+debug information and SR-25's shell.
 
 ### R13.15 — The OS boundary in source
 
@@ -1847,8 +1860,6 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-15 | Broader standard library | `core/text` formats and parses decimals only as `u32`, and parses only `utf8`: a directory listing's sizes are `u64` over bytes, and six programs in the tree hand-roll their own. The process concept has no standard input, and `ENOTDIR` reports `io_failed` rather than `not_found`. | R13.30's file and directory consumer. | `u64` and `usize` decimal writing and `[]u8` parsing in `core/text`, used by `core/diag` and the derived programs; standard input; the errno mapping, each with a consumer on every hosted target. | scheduled R13.30 |
 | SR-16 | Release readiness | A debugger shows an atom as its carrier number, which differs between programs, so the derived parser's token kind stays a `u8` that the debugger sessions read as 1 and 6. | A debugger session that has to show an atom-set value. | DWARF describing an atom set as an enumeration on every debugger target, then the token kind an atom set with its sessions reading names. | open |
 | SR-17 | Usability | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
-| SR-18 | Usability | The standard library ships with no installed compiler, and a program outside the checkout compiles only with `--root` naming a clone of the repository; the README never says so. | R13.14. | The library installed beside `refine` and found without an option, held by R13.14's outside-user job. | scheduled R13.14 |
-| SR-19 | Usability | The README has no installation or first-program section: the nearest is how to build the compiler from source. | R13.14's outside-user job. | A first-program section that the job executes as written. | scheduled R13.14 |
 | SR-20 | Usability | An unknown name applied as a type, `shlf(item)`, is L0304 "targets a declared alias", where a bare unknown name is L0201 with the near names. | The next item that touches type application refusals. | L0201 with near-name repairs for an unknown applied name, plain and generic, with the fixtures that pin L0304 there moved. | open |
 | SR-21 | Usability | A runtime fixture cannot give its program standard input, only arguments. | R13.30's standard-input consumer. | A `stdin:` fixture key honoured by every runtime lane. | scheduled R13.30 |
 | SR-22 | Usability | On Linux `refine` links through a driver named for its exact GNU triplet, `x86_64-pc-linux-gnu-gcc` or `aarch64-unknown-linux-gnu-gcc`, and deliberately takes no bare `gcc`; Debian and Ubuntu name theirs `x86_64-linux-gnu-gcc` and Fedora `x86_64-redhat-linux-gcc`, so a release archive unpacked on a stock distribution refuses its first executable with L0500. The outside-user check puts the pinned GNAT's driver on `PATH` and so does not meet it. | R13.16's libc-free link, or the next item touching the toolchain adapter. | A driver choice a stock distribution satisfies, or an installation step that says exactly what to install, with the outside-user check run without the pinned toolchain on at least one Linux host. | open |
