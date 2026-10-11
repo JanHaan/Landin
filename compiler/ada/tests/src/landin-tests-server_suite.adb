@@ -1094,6 +1094,85 @@ package body Landin.Tests.Server_Suite is
       end;
    end Opening_A_Missing_Import_Refreshes_Its_Importer;
 
+   --  The server finds the library beside the compiler as `refine` does,
+   --  for a document under a root and for one under none, and an import
+   --  of it resolves from the library alone.
+   procedure The_Library_Is_Found_Beside_The_Server
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Library_Is_Found_Beside_The_Server
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "import core/answer" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = answer.answer()" & LF
+        & "end main" & LF;
+
+      procedure Session (Roots : String; URI : String);
+
+      procedure Session (Roots : String; URI : String) is
+         Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+         Channel : Landin.Testing.Fakes.Fake_Channel;
+         Script : Unbounded.Unbounded_String;
+         Status : Landin.Server.Sessions.Exit_Status;
+
+         procedure Send (Message : String);
+
+         procedure Send (Message : String) is
+         begin
+            Unbounded.Append (Script, Transport.Framed (Message));
+         end Send;
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Host.Add_Directory ("/opt/landin/lib/landin");
+         Host.Add_Directory ("/opt/landin/lib/landin/core");
+         Host.Add_Directory ("/opt/landin/lib/landin/core/answer");
+         Host.Add_File
+           ("/opt/landin/lib/landin/core/answer/answer.ldn",
+            "public answer: () -> (value: i32) =" & LF
+            & "    value = 7" & LF
+            & "end answer" & LF);
+         --  A stand-in the project holds is never what the import reads.
+         Host.Add_Directory ("/workspace");
+         Host.Add_Directory ("/workspace/core");
+         Host.Add_Directory ("/workspace/core/answer");
+         Host.Add_File ("/workspace/core/answer/answer.ldn", "@" & LF);
+         Host.Add_Directory ("/workspace/app");
+         Host.Add_Directory ("/else");
+         Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+               & """params"":{""capabilities"":{}"
+               & (if Roots = "" then ""
+                  else ",""initializationOptions"":{""roots"":["
+                       & Landin.Json.Quoted (Roots) & "]}")
+               & "}}");
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI)
+               & ",""version"":1,""text"":"
+               & Landin.Json.Quoted (Source) & "}}}");
+         Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+         Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+         Channel.Script_Unbounded (Script);
+         Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+         declare
+            Output : constant String := Landin.Testing.Fakes.Output (Channel);
+         begin
+            Landin.Testing.Check
+              (Item, Status = 0
+               and then Ada.Strings.Fixed.Count
+                 (Output, """uri"":" & Landin.Json.Quoted (URI)
+                          & ",""version"":1,""diagnostics"":[]") = 1,
+               "a document "
+               & (if Roots = "" then "under no root" else "under a root")
+               & " reads the library: " & Output);
+         end;
+      end Session;
+   begin
+      Session ("file:///workspace", "file:///workspace/app/main.ldn");
+      Session ("", "file:///else/main.ldn");
+   end The_Library_Is_Found_Beside_The_Server;
+
    procedure Root_URIs_Accept_Trailing_Slashes
      (Item : in out Landin.Testing.Context);
 
@@ -1809,6 +1888,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "root URIs accept trailing slashes",
          Root_URIs_Accept_Trailing_Slashes'Access);
+      Landin.Testing.Register
+        (Into, "server", "the library is found beside the server",
+         The_Library_Is_Found_Beside_The_Server'Access);
       Landin.Testing.Register
         (Into, "server", "navigation reuses checked modules",
          Navigation_Reuses_Checked_Modules'Access);

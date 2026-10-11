@@ -179,7 +179,7 @@ different responsibilities.
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
 | `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
-| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
+| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
@@ -207,7 +207,8 @@ different responsibilities.
 | `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
-| `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
+| `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
+| `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, and which imports name it | search any other default root, read a source, or acquire a package |
 | `Landin.Driver.Assembler_Sites` | placing an assembler's refusal of a `.s` line at the `assembler.block` whose text wrote it, by that text alone | change emitted assembly, or place a line two blocks share |
 | `Landin.Driver.Checking` | the stages a loaded program runs, in their one order, and the panic contract after them, for `refine` and a server alike | decide whether a stage runs past a refusal, or hold a compilation |
 | `Landin.Server` | the language server's namespace: the compiler's third client after `refine` and the test program | decide anything a stage decides |
@@ -1121,9 +1122,10 @@ hosts. The driver reads it through `Landin.Platform.Resource_Meter` only for
 `--stage-report=PATH`, which writes one row per stage (loading, which
 includes a rooted request's scanning and parsing, then each pipeline stage and
 emission) with its processor time and the peak resident set when it ended,
-plus the compilation's deterministic sizes. A refused program is measured up
-to the stage that refused it. No measurement reaches a decision, a diagnostic
-or an artifact; a host without a meter writes zeros.
+plus the compilation's deterministic sizes. Named files with a library root
+are parsed in loading too, to find the library modules they import. A refused
+program is measured up to the stage that refused it. No measurement reaches a
+decision, a diagnostic or an artifact; a host without a meter writes zeros.
 An incompatible `--debug` emission request is refused before loading. With
 explicit source files, it writes a requested stage report with no stage rows
 and zero sources if the report path does not overlap an input. With `--root`,

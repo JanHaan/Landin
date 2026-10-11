@@ -5191,6 +5191,245 @@ package body Landin.Tests.Driver_Suite is
          "the usage names it");
    end Lsp_Is_A_Subcommand;
 
+   --  The library beside the compiler: found from the executable's own
+   --  directory in either layout, or named by --library; an import of it
+   --  resolves from it alone, under every root and with none.
+   procedure Library_Is_Found_Beside_The_Compiler
+     (Item : in out Landin.Testing.Context);
+
+   procedure Library_Is_Found_Beside_The_Compiler
+     (Item : in out Landin.Testing.Context)
+   is
+      Answer : constant String :=
+        "public answer: () -> (value: i32) =" & LF
+        & "    value = 7" & LF
+        & "end answer" & LF;
+      Broken : constant String :=
+        "public answer: () -> (value: i32) =" & LF
+        & "    value = absent" & LF
+        & "end answer" & LF;
+      Uses_Answer : constant String :=
+        "import core/answer" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = answer.answer()" & LF
+        & "end main" & LF;
+
+      procedure Library_At
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         Root : String; Text : String := Answer);
+
+      procedure Library_At
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         Root : String; Text : String := Answer) is
+      begin
+         Host.Add_Directory (Root);
+         Host.Add_Directory (Root & "/core");
+         Host.Add_Directory (Root & "/core/answer");
+         Host.Add_File (Root & "/core/answer/answer.ldn", Text);
+      end Library_At;
+
+      function Run
+        (Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Args : Landin.Platform.Path_List) return Landin.Driver.Outcome;
+
+      function Run
+        (Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Args : Landin.Platform.Path_List) return Landin.Driver.Outcome
+      is
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         return Landin.Driver.Execute (Args, Host, Tools);
+      end Run;
+   begin
+      --  PREFIX/bin/refine finds PREFIX/lib/landin, with no option.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Library_At (Host, "/opt/landin/lib/landin", Broken);
+         Host.Add_File ("main.ldn", Uses_Answer);
+         Result := Run (Host, Arguments_Of ("main.ldn"));
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences
+              (Unbounded.To_String (Result.Report), "error[") = 1
+            and then Contains
+              (Unbounded.To_String (Result.Report),
+               "/opt/landin/lib/landin/core/answer/answer.ldn:2:"),
+            "an installed library is read beside the compiler: "
+            & Unbounded.To_String (Result.Report));
+      end;
+
+      --  REPO/compiler/ada/build/TAG/MODE/bin/refine finds REPO, and only
+      --  when REPO holds the compiler's own sources too.
+      for Is_Checkout in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Set_Executable_Directory
+              ("/repo/compiler/ada/build/tag/debug/bin");
+            Library_At (Host, "/repo");
+            if Is_Checkout then
+               Host.Add_Directory ("/repo/compiler/ada");
+            end if;
+            Host.Add_File ("main.ldn", Uses_Answer);
+            Result := Run (Host, Arguments_Of ("main.ldn"));
+            if Is_Checkout then
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "a checkout's library is found from its build: "
+                  & Unbounded.To_String (Result.Report));
+            else
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                  and then Contains
+                    (Unbounded.To_String (Result.Report),
+                     "no import root was given"),
+                  "a core six levels up is not a checkout's library");
+            end if;
+         end;
+      end loop;
+
+      --  --library names one where the compiler would find none, and is
+      --  refused unless it holds `core`.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Named, Empty, Absent : Landin.Driver.Outcome;
+      begin
+         Library_At (Host, "/lib");
+         Host.Add_Directory ("/empty");
+         Host.Add_File ("main.ldn", Uses_Answer);
+         Named := Run (Host, Both ("--library=/lib", "main.ldn"));
+         Empty := Run (Host, Both ("--library=/empty", "main.ldn"));
+         Absent := Run (Host, Both ("--library=", "main.ldn"));
+         Landin.Testing.Check_Equal
+           (Item, Named.Status, Landin.Driver.Status_Success,
+            "--library supplies the library: "
+            & Unbounded.To_String (Named.Report));
+         Landin.Testing.Check
+           (Item, Empty.Status = Landin.Driver.Status_Misuse
+            and then Contains
+              (Unbounded.To_String (Empty.Report),
+               "--library=/empty holds no core directory")
+            and then Host.Write_Count = 0,
+            "--library naming no library is refused before reading");
+         Landin.Testing.Check
+           (Item, Absent.Status = Landin.Driver.Status_Misuse
+            and then Contains
+              (Unbounded.To_String (Absent.Report),
+               "--library= names no directory"),
+            "an empty --library is refused");
+      end;
+
+      --  Under a root, an import of the library resolves from the
+      --  library alone: a project's stand-in `core` is not searched, and
+      --  any other import is still the roots' alone.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Library_At (Host, "/opt/landin/lib/landin");
+         Library_At (Host, "project", "@" & LF);
+         Host.Add_Directory ("project/app");
+         Host.Add_File ("project/app/main.ldn", Uses_Answer);
+         Args.Append ("--root=project");
+         Args.Append ("project/app");
+         Result := Run (Host, Args);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a library import ignores a project's stand-in: "
+            & Unbounded.To_String (Result.Report));
+      end;
+
+      --  A misspelt namespace is offered the library's, and nothing else
+      --  of the directory the library is in.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Library_At (Host, "/opt/landin/lib/landin");
+         Host.Add_Directory ("/opt/landin/lib/landin/cored");
+         Host.Add_Directory ("project");
+         Host.Add_Directory ("project/app");
+         Host.Add_File
+           ("project/app/main.ldn", "import cor/answer" & LF);
+         Args.Append ("--root=project");
+         Args.Append ("project/app");
+         Result := Run (Host, Args);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains
+              (Unbounded.To_String (Result.Report), "`core`")
+            and then not Contains
+              (Unbounded.To_String (Result.Report), "cored"),
+            "a misspelt library namespace is offered it: "
+            & Unbounded.To_String (Result.Report));
+      end;
+
+      --  Named files reach the library and nothing else: D262 still
+      --  refuses an import of anything a root would be needed for.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+         Report : Unbounded.Unbounded_String;
+      begin
+         Host.Set_Executable_Directory ("/opt/landin/bin");
+         Library_At (Host, "/opt/landin/lib/landin");
+         Host.Add_Directory ("geometry");
+         Host.Add_File ("geometry/shapes.ldn", "public x := 1" & LF);
+         Host.Add_File ("main.ldn", "import geometry" & LF & Uses_Answer);
+         Result := Run (Host, Arguments_Of ("main.ldn"));
+         Report := Result.Report;
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences (Unbounded.To_String (Report), "error[")
+              = 1
+            and then Contains
+              (Unbounded.To_String (Report),
+               "module `geometry` is not found: no import root was given"),
+            "named files still need a root for anything else: "
+            & Unbounded.To_String (Report));
+      end;
+
+      --  A root naming the library's own directory is searched once and
+      --  keeps the request's spelling, so every path a report or an
+      --  output carries is the one the request wrote.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Result : Landin.Driver.Outcome;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Set_Executable_Directory
+           ("/repo/compiler/ada/build/tag/debug/bin");
+         Library_At (Host, "/repo", Broken);
+         Host.Add_Directory ("/repo/compiler/ada");
+         Library_At (Host, "checkout", Broken);
+         Host.Add_Alias ("checkout", "/repo");
+         Host.Add_Directory ("checkout/app");
+         Host.Add_File ("checkout/app/main.ldn", Uses_Answer);
+         Args.Append ("--root=checkout");
+         Args.Append ("checkout/app");
+         Result := Run (Host, Args);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences
+              (Unbounded.To_String (Result.Report), "error[") = 1
+            and then Contains
+              (Unbounded.To_String (Result.Report),
+               "checkout/core/answer/answer.ldn:2:")
+            and then not Contains
+              (Unbounded.To_String (Result.Report), "/repo/"),
+            "a root that is the library keeps its spelling: "
+            & Unbounded.To_String (Result.Report));
+      end;
+   end Library_Is_Found_Beside_The_Compiler;
+
    procedure Namespace_Availability (Item : in out Landin.Testing.Context);
 
    procedure Namespace_Availability (Item : in out Landin.Testing.Context) is
@@ -5454,6 +5693,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "roots are searched in order",
          Roots_Are_Searched_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "the library is found beside the compiler",
+         Library_Is_Found_Beside_The_Compiler'Access);
       Landin.Testing.Register
         (Into, "driver", "unlistable import roots are reported",
          Unlistable_Import_Roots_Are_Reported'Access);

@@ -15,14 +15,13 @@ natural divide-and-conquer recursion.
 
 ## Compile and run
 
-After building `refine` and putting it on `PATH`, compile any source shown
-below. For example:
+With `refine` installed, as [the README](README.md#your-first-program)
+describes, copy any program below into a `main.ldn` of its own and compile
+it where it is. For FizzBuzz:
 
 ```sh
-refine --root=. --target=linux-x86-64 --emit=exe \
-  -o /tmp/landin-fizzbuzz \
-  compiler/tests/fixtures/runtime/fizzbuzz
-/tmp/landin-fizzbuzz
+refine compile main.ldn -o fizzbuzz
+./fizzbuzz
 test $? -eq 42
 ```
 
@@ -32,7 +31,7 @@ print nothing. Status 42 means the checks in `main` passed, and any other
 returned status makes the runtime fixture fail. The gate checks all four
 output oracles and all eleven programs on each full gate run, on Linux x86-64
 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
-exception. On a Mac, select `--target=darwin-arm64` in the command above.
+exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
 ## Sensors
 

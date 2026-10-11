@@ -13,6 +13,7 @@ with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Resolution;
 with Landin.Diagnostics.Suggestions;
+with Landin.Driver.Library;
 with Landin.Modules;
 with Landin.Modules.Availability;
 with Landin.Source;
@@ -216,17 +217,72 @@ package body Landin.Driver.Loading is
       end loop;
    end Load_Files;
 
-   procedure Load_Reachable_Program
+   --  Both loads' discovery.  Named_Files is Load_Library_Imports': the
+   --  entry module's sources are already read, it has no directory, and
+   --  only an import of the library is looked for.
+   procedure Discover
      (Context         : in out Landin.Stages.Compilation;
       Host            : Landin.Platform.Filesystem'Class;
       Roots           : Landin.Platform.Path_List;
+      Library         : String;
       Entry_Directory : String;
-      Missing_Directories : access Landin.Platform.Path_List := null;
-      Previous        : access Landin.Stages.Compilation := null;
-      Watch_Syntax    : access procedure (Name : String) := null;
-      Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
-      Dependency_Directories : access Landin.Platform.Path_List := null)
+      Named_Files     : Boolean;
+      Missing_Directories : access Landin.Platform.Path_List;
+      Previous        : access Landin.Stages.Compilation;
+      Watch_Syntax    : access procedure (Name : String);
+      Cache           : access Landin.Stages.Syntax.Parse_Cache;
+      Dependency_Directories : access Landin.Platform.Path_List);
+
+   procedure Discover
+     (Context         : in out Landin.Stages.Compilation;
+      Host            : Landin.Platform.Filesystem'Class;
+      Roots           : Landin.Platform.Path_List;
+      Library         : String;
+      Entry_Directory : String;
+      Named_Files     : Boolean;
+      Missing_Directories : access Landin.Platform.Path_List;
+      Previous        : access Landin.Stages.Compilation;
+      Watch_Syntax    : access procedure (Name : String);
+      Cache           : access Landin.Stages.Syntax.Parse_Cache;
+      Dependency_Directories : access Landin.Platform.Path_List)
    is
+      --  The roots in search order, the library's last unless a root
+      --  already names its directory, and where the library is among
+      --  them, or zero when there is none.  The roots a request named are
+      --  the first Named_Roots; an import of anything but the library
+      --  searches only those.
+      Named_Roots : constant Natural := Natural (Roots.Length);
+
+      function Library_Position return Natural;
+
+      function Library_Position return Natural is
+      begin
+         if Library = "" then
+            return 0;
+         end if;
+         for Index in 1 .. Named_Roots loop
+            if Host.Same_File (Roots.Element (Index), Library) then
+               return Index;
+            end if;
+         end loop;
+         return Named_Roots + 1;
+      end Library_Position;
+
+      Library_At : constant Natural := Library_Position;
+
+      function Search_Order return Landin.Platform.Path_List;
+
+      function Search_Order return Landin.Platform.Path_List is
+         Result : Landin.Platform.Path_List := Roots;
+      begin
+         if Library_At > Named_Roots then
+            Result.Append (Library);
+         end if;
+         return Result;
+      end Search_Order;
+
+      Searched : constant Landin.Platform.Path_List := Search_Order;
+
       type Directory_Listing is record
          Entries : Landin.Platform.Path_List;
          Status  : Landin.Platform.List_Status;
@@ -351,6 +407,19 @@ package body Landin.Driver.Loading is
          Root_At : out Natural;
          Unlistable : out Unbounded.Unbounded_String) return String;
 
+      --  The roots an import is searched under, as positions in Searched:
+      --  the library's alone for an import of the library when there is
+      --  one, and the named roots for any other.
+      function First_Root (Logical : String) return Natural
+        is (if Library_At /= 0
+              and then Landin.Driver.Library.Is_Library_Import (Logical)
+            then Library_At else 1);
+
+      function Last_Root (Logical : String) return Natural
+        is (if Library_At /= 0
+              and then Landin.Driver.Library.Is_Library_Import (Logical)
+            then Library_At else Named_Roots);
+
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id) return String
@@ -384,13 +453,15 @@ package body Landin.Driver.Loading is
          Root_At : out Natural;
          Unlistable : out Unbounded.Unbounded_String) return String
       is
+         Logical : constant String := Import_Path (Of_Tree, Node);
       begin
          Root_At := 0;
          Unlistable := Unbounded.Null_Unbounded_String;
-         for Root_Index in 1 .. Natural (Roots.Length) loop
+         for Root_Index in First_Root (Logical) .. Last_Root (Logical) loop
             declare
                Current : Unbounded.Unbounded_String :=
-                 Unbounded.To_Unbounded_String (Roots.Element (Root_Index));
+                 Unbounded.To_Unbounded_String
+                   (Searched.Element (Root_Index));
                Matched : Boolean := True;
             begin
                for Position in
@@ -455,7 +526,8 @@ package body Landin.Driver.Loading is
       is
          Count : constant Natural :=
            Landin.Syntax.Import_Segment_Count (Of_Tree, Node);
-         Reached : Landin.Platform.Path_List := Roots;
+         Logical : constant String := Import_Path (Of_Tree, Node);
+         Reached : Landin.Platform.Path_List;
 
          function Segment (Position : Positive) return String
            is (Landin.Source.Names.Spelling
@@ -470,7 +542,28 @@ package body Landin.Driver.Loading is
                and then Entry_Name (Entry_Name'First) in 'a' .. 'z'
                and then (for all C of Entry_Name =>
                            C in 'a' .. 'z' | '0' .. '9' | '_'));
+
+         --  A library no root named still offers its own namespaces to a
+         --  first segment that misspells one, and nothing else it holds.
+         procedure Offer_Library
+           (Offered : in out Landin.Diagnostics.Suggestions.Ranking;
+            Written : String;
+            Name    : String);
+
+         procedure Offer_Library
+           (Offered : in out Landin.Diagnostics.Suggestions.Ranking;
+            Written : String;
+            Name    : String) is
+         begin
+            if Host.Is_Directory (Joined_Path (Library, Name)) then
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Written, Name);
+            end if;
+         end Offer_Library;
       begin
+         for Index in First_Root (Logical) .. Last_Root (Logical) loop
+            Reached.Append (Searched.Element (Index));
+         end loop;
          for Position in 1 .. Count loop
             declare
                Written : constant String := Segment (Position);
@@ -499,6 +592,14 @@ package body Landin.Driver.Loading is
                      end if;
                   end;
                end loop;
+               if Position = 1 and then Library_At > Named_Roots
+                 and then not Landin.Driver.Library.Is_Library_Import
+                   (Logical)
+               then
+                  Offer_Library (Offered, Written, "core");
+                  Offer_Library (Offered, Written, "hosted");
+                  Offer_Library (Offered, Written, "platform");
+               end if;
 
                if Deeper.Is_Empty then
                   return Landin.Diagnostics.Fixes.Respellings
@@ -593,7 +694,8 @@ package body Landin.Driver.Loading is
          return Landin.Modules.No_Module;
       end Loaded_Directory;
    begin
-      if not Host.Is_Directory (Entry_Directory) then
+      if not Named_Files and then not Host.Is_Directory (Entry_Directory)
+      then
          declare
             Found : Landin.Diagnostics.Diagnostic_List;
          begin
@@ -615,11 +717,13 @@ package body Landin.Driver.Loading is
          return;
       end if;
 
-      Landin.Modules.Set_Entry_Directory
-        (Graph.all, Entry_Directory);
-      Remember_Directory
-        (Landin.Modules.Entry_Module,
-         Host.Existing_Identity (Entry_Directory));
+      if not Named_Files then
+         Landin.Modules.Set_Entry_Directory
+           (Graph.all, Entry_Directory);
+         Remember_Directory
+           (Landin.Modules.Entry_Module,
+            Host.Existing_Identity (Entry_Directory));
+      end if;
       Queue.Append (Landin.Modules.Entry_Module);
 
       while Next <= Natural (Queue.Length) loop
@@ -628,13 +732,20 @@ package body Landin.Driver.Loading is
               Queue.Element (Next);
             Directory : constant String :=
               Landin.Modules.Directory_Path (Graph.all, Module);
+            --  Named files are read already, and are the entry module.
+            Read_Already : constant Boolean :=
+              Named_Files and then Module = Landin.Modules.Entry_Module;
             Entries : Landin.Platform.Path_List;
-            Listed  : Landin.Platform.List_Status;
+            Listed  : Landin.Platform.List_Status :=
+              Landin.Platform.List_Ok;
             First_New : constant Natural :=
-              Landin.Stages.Source_Count (Context) + 1;
+              (if Read_Already then 1
+               else Landin.Stages.Source_Count (Context) + 1);
          begin
-            Remember_Dependency (Directory);
-            Host.List_Directory (Directory, Entries, Listed);
+            if not Read_Already then
+               Remember_Dependency (Directory);
+               Host.List_Directory (Directory, Entries, Listed);
+            end if;
             if Listed /= Landin.Platform.List_Ok then
                declare
                   Found : Landin.Diagnostics.Diagnostic_List;
@@ -737,10 +848,27 @@ package body Landin.Driver.Loading is
                           Landin.Modules.Find_Logical
                             (Graph.all, Logical);
                      begin
+                        --  Named files look for the library and nothing
+                        --  else, and leave every refusal to the stage that
+                        --  makes it when there is no library: a builtin or
+                        --  an unavailable import to configuration, and any
+                        --  other to resolution (D262).
+                        if Named_Files
+                          and then
+                            (Landin.Configuration.Is_Builtin_Import
+                               (Landin.Stages.Identities (Context).all,
+                                Tree.all, Import_Node)
+                             or else not Landin.Modules.Availability.Permitted
+                               (Logical, Landin.Stages.Target (Context))
+                             or else not Landin.Driver.Library
+                               .Is_Library_Import (Logical))
+                        then
+                           Target := Landin.Modules.No_Module;
+
                         --  Rooted discovery refuses builtins before
                         --  any host lookup. Configuration shares this
                         --  predicate for explicit-file requests.
-                        if Landin.Configuration.Is_Builtin_Import
+                        elsif Landin.Configuration.Is_Builtin_Import
                           (Landin.Stages.Identities (Context).all,
                            Tree.all, Import_Node)
                         then
@@ -816,9 +944,13 @@ package body Landin.Driver.Loading is
                                  end;
                               elsif Directory_Path = "" then
                                  if Missing_Directories /= null then
-                                    for Root of Roots loop
+                                    for Index in First_Root (Logical)
+                                      .. Last_Root (Logical)
+                                    loop
                                        Missing_Directories.Append
-                                         (Joined_Path (Root, Logical));
+                                         (Joined_Path
+                                            (Searched.Element (Index),
+                                             Logical));
                                     end loop;
                                  end if;
                                  declare
@@ -873,6 +1005,39 @@ package body Landin.Driver.Loading is
          end;
          Next := Next + 1;
       end loop;
+   end Discover;
+
+   procedure Load_Reachable_Program
+     (Context         : in out Landin.Stages.Compilation;
+      Host            : Landin.Platform.Filesystem'Class;
+      Roots           : Landin.Platform.Path_List;
+      Entry_Directory : String;
+      Missing_Directories : access Landin.Platform.Path_List := null;
+      Previous        : access Landin.Stages.Compilation := null;
+      Watch_Syntax    : access procedure (Name : String) := null;
+      Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Library         : String := "") is
+   begin
+      Discover
+        (Context, Host, Roots, Library, Entry_Directory, False,
+         Missing_Directories, Previous, Watch_Syntax, Cache,
+         Dependency_Directories);
    end Load_Reachable_Program;
+
+   procedure Load_Library_Imports
+     (Context      : in out Landin.Stages.Compilation;
+      Host         : Landin.Platform.Filesystem'Class;
+      Library      : String;
+      Previous     : access Landin.Stages.Compilation := null;
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
+      Dependency_Directories : access Landin.Platform.Path_List := null)
+   is
+   begin
+      Discover
+        (Context, Host, Landin.Platform.No_Arguments, Library, "", True,
+         null, Previous, Watch_Syntax, Cache, Dependency_Directories);
+   end Load_Library_Imports;
 
 end Landin.Driver.Loading;

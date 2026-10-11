@@ -44,6 +44,9 @@ package body Landin.Platform.Overlays is
    overriding function Working_Directory (Host : Overlay) return String
      is (Host.Under.Working_Directory);
 
+   overriding function Executable_Directory (Host : Overlay) return String
+     is (Host.Under.Executable_Directory);
+
    overriding function Paths_Overlap
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Paths_Overlap (Left, Right));

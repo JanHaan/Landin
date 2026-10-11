@@ -38,7 +38,8 @@ class NativeCLI(unittest.TestCase):
         self.assertEqual(self.run_cli('--version', '--json').stdout, machine.stdout)
         info = json.loads(machine.stdout)
         self.assertEqual(set(info), {'schema', 'compiler', 'version', 'revision',
-                                    'source_digest', 'dirty', 'mode', 'host_triplet'})
+                                    'source_digest', 'dirty', 'mode', 'host_triplet',
+                                    'library'})
         self.assertEqual(info['schema'], 1)
         self.assertEqual(info['compiler'], 'refine')
         self.assertIs(type(info['dirty']), bool)
@@ -49,6 +50,9 @@ class NativeCLI(unittest.TestCase):
         self.assertTrue(info['host_triplet'])
         if info['version'] is not None:
             self.assertRegex(info['version'], r'^[0-9]+(?:\.[0-9]+)+$')
+        # The library beside the compiler, or null when it has none.
+        if info['library'] is not None:
+            self.assertTrue(os.path.isdir(os.path.join(info['library'], 'core')))
         if expected is not None:
             self.assertEqual(info, expected)
         label = info['version'] if info['version'] is not None else 'dev'
@@ -59,7 +63,8 @@ class NativeCLI(unittest.TestCase):
             banner += ' (' + origin + (', dirty' if info['dirty'] else '') + ')'
         human = self.run_cli('version')
         self.assertEqual(human.stderr, '')
-        self.assertEqual(human.stdout, banner + '\n')
+        library = info['library'] if info['library'] is not None else 'none'
+        self.assertEqual(human.stdout, banner + '\nlibrary: ' + library + '\n')
         self.assertEqual(self.run_cli('--version').stdout, human.stdout)
         return info
 
@@ -114,7 +119,8 @@ class NativeCLI(unittest.TestCase):
             info = self.assert_version(dict(schema=1, compiler='refine', version=version,
                                            revision=known_revision, source_digest=digest,
                                            dirty=dirty, mode=mode,
-                                           host_triplet=host_triplet))
+                                           host_triplet=host_triplet,
+                                           library=str(checkout.resolve())))
             print('version probe:', json.dumps(info, sort_keys=True), flush=True)
             return digest
 

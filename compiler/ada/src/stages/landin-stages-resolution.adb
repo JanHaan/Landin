@@ -1946,9 +1946,10 @@ package body Landin.Stages.Resolution is
                   Where   => Syn.Where (Tree, Node),
                   Message => "module `" & Unbounded.To_String (Path)
                              & "` is not found: no import root was given",
-                  Note    => "[1420]: an import is found under the roots"
-                             & " --root names; compile the module's"
-                             & " directory with --root=DIR",
+                  Note    => "[1420]: an import outside the library is"
+                             & " found under the roots --root names;"
+                             & " compile the module's directory with"
+                             & " --root=DIR",
                   Into    => Found);
                --  Every name the import would have bound is refused.
                if Syn.Import_Selection_Count (Tree, Node) > 0 then

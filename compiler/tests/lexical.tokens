@@ -52071,34 +52071,32 @@ file negative/immutable-variant-runtime-array-payload/program.ldn tokens 79
   269 270 )
   271 274 end
   275 278 bad
-file negative/import-without-a-root-is-refused-there/program.ldn tokens 27
+file negative/import-without-a-root-is-refused-there/program.ldn tokens 25
   0 6 import
-  7 11 core
-  11 12 /
-  12 16 text
-  18 23 count
-  23 24 :
-  25 26 (
-  26 27 )
-  28 30 ->
+  7 15 geometry
+  15 16 /
+  16 22 shapes
+  24 29 count
+  29 30 :
   31 32 (
-  32 36 view
-  36 37 :
-  38 39 [
-  39 40 ]
-  40 42 u8
-  42 43 )
-  44 45 =
-  50 54 view
-  55 56 =
-  57 61 text
-  61 62 .
-  62 67 bytes
-  67 68 (
-  68 73 "abc"
-  73 74 )
-  75 78 end
-  79 84 count
+  32 33 )
+  34 36 ->
+  37 38 (
+  38 42 area
+  42 43 :
+  44 47 u32
+  47 48 )
+  49 50 =
+  55 59 area
+  60 61 =
+  62 68 shapes
+  68 69 .
+  69 73 area
+  73 74 (
+  74 75 3
+  75 76 )
+  77 80 end
+  81 86 count
 file negative/increment-unassigned-local-array-element/program.ldn tokens 21
   0 1 f
   1 2 :

@@ -23,6 +23,7 @@ with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Text;
 with Landin.Driver.Assembler_Sites;
 with Landin.Driver.Checking;
+with Landin.Driver.Library;
 with Landin.Driver.Loading;
 with Landin.Formatting;
 with Landin.IR;
@@ -183,6 +184,7 @@ package body Landin.Driver is
       & "  --stage-report=PATH write each stage's measured time and memory"
       & LF
       & "  --root=DIR          append an ordered module import root" & LF
+      & "  --library=DIR       find core, hosted and platform under DIR" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
       & "  -o=PATH             write to a path beginning with -" & LF
@@ -195,7 +197,11 @@ package body Landin.Driver is
       & LF
       & "module. With --root, pass one entry-module directory; its imports"
       & LF
-      & "are found under the roots in option order. Without --emit a program"
+      & "are found under the roots in option order. Either way core, hosted"
+      & LF
+      & "and platform are found beside this compiler unless --library names"
+      & LF
+      & "another. Without --emit a program"
       & LF
       & "that is accepted produces no"
       & LF
@@ -566,6 +572,8 @@ package body Landin.Driver is
       Toolchain_Seen, Linker_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
+      Library_Path : Unbounded.Unbounded_String;
+      Library_Seen : Boolean := False;
       Build_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Seen : Boolean := False;
@@ -715,6 +723,15 @@ package body Landin.Driver is
 
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
+
+            elsif Starts_With (Argument, "--library=") then
+               if Library_Seen then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Library_Seen := True;
+               Library_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--library="));
 
             elsif Starts_With (Argument, "--firmware-entry=") then
                if Firmware_Seen
@@ -922,8 +939,8 @@ package body Landin.Driver is
                      | "--option" | "--build-mode" | "--optimize"
                      | "--specialize" | "--panic-map" | "--debug"
                      | "--build-report" | "--stage-report" | "--root"
-                     | "--emit" | "-o" | "--toolchain" | "--linker"
-                     | "--firmware-entry");
+                     | "--library" | "--emit" | "-o" | "--toolchain"
+                     | "--linker" | "--firmware-entry");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -967,7 +984,8 @@ package body Landin.Driver is
               new String'("--optimize"), new String'("--specialize"),
               new String'("--panic-map"), new String'("--debug"),
               new String'("--build-report"), new String'("--stage-report"),
-              new String'("--root"), new String'("--emit"),
+              new String'("--root"), new String'("--library"),
+              new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
               new String'("--firmware-entry")];
 
@@ -2177,6 +2195,7 @@ package body Landin.Driver is
          for Path of Roots loop
             Check_Dependency_Path (Path);
          end loop;
+         Check_Dependency_Path (Unbounded.To_String (Library_Path));
          for Mode of Modes loop
             if Natural (Modes.Length) /= 1
               or else Mode not in "debug" | "release"
@@ -2297,6 +2316,29 @@ package body Landin.Driver is
                  (Code_Unknown_Option, "--root= names no directory");
             end if;
          end loop;
+
+         --  A library named on the command line replaces the one beside
+         --  the compiler, so it has to be one: a directory that holds
+         --  `core`.  Refused before anything is read, as a root is.
+         if Library_Seen then
+            declare
+               Named : constant String := Unbounded.To_String (Library_Path);
+            begin
+               if Named = "" then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option, "--library= names no directory");
+               elsif not Landin.Driver.Library.Holds_Library (Host, Named)
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--library=" & Named & " holds no core directory;"
+                     & " name the directory that holds core, hosted and"
+                     & " platform");
+               end if;
+            end;
+         end if;
 
          if Stage_Report_Seen
            and then
@@ -2439,17 +2481,39 @@ package body Landin.Driver is
          if not Skip_Compilation then
             Current_Stage := Unbounded.To_Unbounded_String ("loading");
             Stage_Began;
-            if Natural (Roots.Length) > 0 then
-               if Natural (Inputs.Length) = 1 then
-                  Loading.Load_Reachable_Program
-                    (Context, Host, Roots, Inputs.Element (1),
-                     Dependency_Directories =>
-                       (if Depfile /= ""
-                        then Dependency_Directories'Access else null));
+            declare
+               --  Asked for only now: a request refused before it reads a
+               --  source never needs to know where the library is.
+               Library_Root : constant String :=
+                 (if Library_Seen then Unbounded.To_String (Library_Path)
+                  else Landin.Driver.Library.Located (Host));
+            begin
+               if Natural (Roots.Length) > 0 then
+                  if Natural (Inputs.Length) = 1 then
+                     Loading.Load_Reachable_Program
+                       (Context, Host, Roots, Inputs.Element (1),
+                        Dependency_Directories =>
+                          (if Depfile /= ""
+                           then Dependency_Directories'Access else null),
+                        Library => Library_Root);
+                  end if;
+               else
+                  Loading.Load_Files (Context, Host, Inputs);
+                  --  Named files reach the library and nothing else, and
+                  --  are parsed here to say what they import, as a rooted
+                  --  request's modules are.
+                  if Library_Root /= ""
+                    and then Landin.Stages.Source_Count (Context) > 0
+                    and then not Landin.Stages.Failed (Context)
+                  then
+                     Loading.Load_Library_Imports
+                       (Context, Host, Library_Root,
+                        Dependency_Directories =>
+                          (if Depfile /= ""
+                           then Dependency_Directories'Access else null));
+                  end if;
                end if;
-            else
-               Loading.Load_Files (Context, Host, Inputs);
-            end if;
+            end;
 
             for Path of Dependency_Directories loop
                Check_Dependency_Path (Path);

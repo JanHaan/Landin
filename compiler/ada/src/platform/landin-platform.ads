@@ -42,6 +42,13 @@ package Landin.Platform is
    --  native adapters supply the absolute directory without rewriting inputs.
    function Working_Directory (Host : Filesystem) return String is abstract;
 
+   --  The directory the running compiler's executable is in, with every
+   --  link resolved, or "" when the host cannot say.  It is how the
+   --  compiler finds the library it was built with; a fake says where
+   --  it likes, and by default nowhere.
+   function Executable_Directory (Host : Filesystem) return String
+     is abstract;
+
    --  True for names of the same object, including links and relative paths,
    --  or when identity cannot safely be distinguished. Missing output leaves
    --  use actual parent identity and destination-filesystem name equivalence,

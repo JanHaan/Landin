@@ -157,13 +157,16 @@ Depends on: none
         conventions = headings["Library interface conventions"]
         reading = headings["Answer the first outside reading"]
         review = headings["Review the library"]
+        library = headings["The compiler finds its library"]
+        boundary = headings["The OS boundary in source"]
+        linux = headings["Linux without the C library"]
         hosted = headings["The hosted library"]
         devices = headings["Describe devices"]
         freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
         device_phase = devices.split(".")[0]
-        selected = [split, conventions, reading, review, hosted,
-                    freestanding] + [
+        selected = [split, conventions, reading, review, library, boundary,
+                    linux, hosted, freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
@@ -194,6 +197,12 @@ Depends on: none
         complete([reading])
         assert_next(review, "Review the library")
         complete([review])
+        assert_next(library, "The compiler finds its library")
+        complete([library])
+        assert_next(boundary, "The OS boundary in source")
+        complete([boundary])
+        assert_next(linux, "Linux without the C library")
+        complete([linux])
         assert_next(hosted, "The hosted library")
         complete([hosted])
         assert_next(devices, "Describe devices")

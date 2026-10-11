@@ -1,6 +1,7 @@
 with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.IO_Exceptions;
+with Ada.Strings.Fixed;
 with Ada.Streams.Stream_IO;
 with Interfaces;
 with Interfaces.C;
@@ -205,6 +206,37 @@ package body Landin.Platform.Native is
    begin
       return Directories.Current_Directory;
    end Working_Directory;
+
+   overriding function Executable_Directory
+     (Host : Native_Filesystem) return String
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Executable_Path
+        (Into : out Interfaces.C.char_array;
+         Length : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_executable_path";
+      Buffer_Size : constant Interfaces.C.size_t := 4096;
+      Buffer : Interfaces.C.char_array (0 .. 4095);
+   begin
+      if Executable_Path (Buffer, Buffer_Size) /= 0 then
+         return "";
+      end if;
+      declare
+         Path : constant String := Interfaces.C.To_Ada (Buffer);
+         Slash : constant Natural := Ada.Strings.Fixed.Index
+           (Path, "/", Ada.Strings.Backward);
+      begin
+         --  Only an absolute name says where the executable is.
+         if Path = "" or else Path (Path'First) /= '/' then
+            return "";
+         elsif Slash = Path'First then
+            return "/";
+         end if;
+         return Path (Path'First .. Slash - 1);
+      end;
+   end Executable_Directory;
 
    overriding function Is_Directory
      (Host : Native_Filesystem; Path : String) return Boolean

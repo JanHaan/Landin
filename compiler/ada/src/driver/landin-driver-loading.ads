@@ -5,7 +5,9 @@
 --  imports are found under ordered roots [1410]-[1420].  The loader is the
 --  driver's and a server's alike, so a buffer an editor holds open is read
 --  exactly as `refine` would read the file it will be saved as; which bytes
---  a path holds is the host's answer, never the loader's.
+--  a path holds is the host's answer, never the loader's.  Either way, an
+--  import of `core`, `hosted` or `platform` is found under the library
+--  root when there is one.
 --
 --  A rooted load scans and parses each module as it reaches it, because its
 --  imports are what name the next, and stops at the first that does not
@@ -29,6 +31,13 @@ package Landin.Driver.Loading is
    --  out, each loaded once.  Roots are searched in order and must be
    --  nonempty.  When requested, record every root-relative directory
    --  where an unresolved import could later become available.
+   --
+   --  Library, when not empty, is the library root
+   --  (`Landin.Driver.Library`), and follows every root.  An import of
+   --  the library resolves from it alone and any other from Roots alone,
+   --  so the rest of a checkout that holds the library is never a root
+   --  nobody named.  A root that names the library's own directory is
+   --  searched once, under the spelling the request gave it.
    procedure Load_Reachable_Program
      (Context         : in out Landin.Stages.Compilation;
       Host            : Landin.Platform.Filesystem'Class;
@@ -38,6 +47,24 @@ package Landin.Driver.Loading is
       Previous        : access Landin.Stages.Compilation := null;
       Watch_Syntax    : access procedure (Name : String) := null;
       Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Library         : String := "");
+
+   --  After Load_Files, for named files with a library root: what they
+   --  read is parsed, and every library module their imports reach is
+   --  loaded from Library as Load_Reachable_Program loads one, and every
+   --  module those reach.  The named files stay the one entry module.  An
+   --  import of anything else is left unresolved for resolution to refuse
+   --  (D262), and an import the target does not admit, or of the
+   --  toolchain, is left for configuration to refuse, as it is with no
+   --  library at all.
+   procedure Load_Library_Imports
+     (Context      : in out Landin.Stages.Compilation;
+      Host         : Landin.Platform.Filesystem'Class;
+      Library      : String;
+      Previous     : access Landin.Stages.Compilation := null;
+      Watch_Syntax : access procedure (Name : String) := null;
+      Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null);
 
    function Joined_Path (Directory, Child : String) return String;

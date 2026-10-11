@@ -32,14 +32,18 @@ preference:
 The three sources accept a folder URI with or without a trailing slash;
 both forms name the same root.
 
-For this repository the root is the checkout, which is how the examples and
-`core` are compiled: `refine --root=. examples/derived_hosted`.
+The library the server ships with, `core`, `hosted` and `platform`, follows
+those roots, found beside the executable as `refine` finds it, and imports of
+those three namespaces resolve from it alone. So an editor needs no root for
+the library, and a file analysed alone still reaches it. For this repository
+the root is the checkout, which is how the examples are compiled:
+`refine --root=. examples/derived_hosted`.
 
 A buffer the editor has not saved is read in place of the file: what the
 server checks is what is on the screen, and the files around it are what is
 on disk. A buffer with no file at all, such as an editor's untitled one, is
-analysed alone, as `refine FILE` would analyse it, and so is every file when
-there are no roots. `fixture.meta` means nothing to the server: a fixture
+analysed alone, as `refine FILE` would analyse it, with only the library to
+import from, and so is every file when there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
 the test program compiles.
 

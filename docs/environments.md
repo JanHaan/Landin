@@ -391,6 +391,12 @@ and the source build `.#refine` and gains the prebuilt compiler with the
 first release that publishes it. The aarch64-linux shell is evaluated on
 x86-64, not yet built on arm64 hardware; Nix CI stays deferred.
 
+Both packages install the standard library beside the compiler, as
+`lib/landin/{core,hosted,platform}` next to `bin/refine`, and `refine` finds
+it there from its own executable, so a program anywhere imports it with no
+option. A published archive from 0.2.7 or earlier holds `refine` alone, so
+`.#refine-bin` built from one has no library until the next release.
+
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
 therefore use separate object trees and locks, apart from the other

@@ -9,6 +9,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
 with Landin.Diagnostics.Warning_Policy;
+with Landin.Driver.Library;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
@@ -327,7 +328,21 @@ package body Landin.Commands is
       procedure Identify;
       procedure Identify is
          B : J.Builder;
+         --  Which library a compilation would use, so a person can see
+         --  which one is in use without compiling anything.
+         Named : constant String := Effective (C.Library, "");
+         Library_Root : constant String :=
+           (if Named /= "" then Named
+            else Landin.Driver.Library.Located (Host));
       begin
+         if Named /= ""
+           and then not Landin.Driver.Library.Holds_Library (Host, Named)
+         then
+            Refuse ("--library=" & Named & " holds no core directory;"
+              & " name the directory that holds core, hosted and"
+              & " platform");
+            return;
+         end if;
          if Asked.Structured then
             J.Begin_Object (B);
             J.Name (B, "schema");
@@ -347,6 +362,12 @@ package body Landin.Commands is
             J.Write_String (B, Landin.Build_Identity.Mode);
             J.Name (B, "host_triplet");
             J.Write_String (B, Built_For);
+            J.Name (B, "library");
+            if Library_Root = "" then
+               J.Write_Raw (B, "null");
+            else
+               J.Write_String (B, Library_Root);
+            end if;
             J.End_Object (B);
             Result.Output := US.To_Unbounded_String (J.Result (B) & LF);
          else
@@ -355,7 +376,9 @@ package body Landin.Commands is
                  (Landin.Build_Identity.Release_Version,
                   Landin.Build_Identity.Revision,
                   Landin.Build_Identity.Source_Digest,
-                  Landin.Build_Identity.Dirty) & LF);
+                  Landin.Build_Identity.Dirty) & LF
+               & "library: "
+               & (if Library_Root = "" then "none" else Library_Root) & LF);
          end if;
       end Identify;
       procedure List_Targets;

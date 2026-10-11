@@ -47,6 +47,7 @@ package body Landin.Commands.Catalogue is
          when Quiet => "--quiet", when Color => "--color",
          when Diagnostics => "--diagnostics", when Target => "--target",
          when Level => "--level", when Root => "--root",
+         when Library => "--library",
          when Build_Option => "--option", when Build_Mode => "--build-mode",
          when Optimize => "--optimize", when Specialize => "--specialize",
          when Emit => "--emit", when Output => "-o", when Debug => "--debug",
@@ -69,6 +70,8 @@ package body Landin.Commands.Catalogue is
          when Target => "Select a target; default is this compiler's host",
          when Level => "Select a CPU feature level; default is the baseline",
          when Root => "Append an ordered module import root (repeatable)",
+         when Library =>
+           "Where core, hosted and platform are; default beside refine",
          when Build_Option => "Override a declared NAME=VALUE build option",
          when Build_Mode => "Source configuration: debug (default), release",
          when Optimize =>
@@ -118,14 +121,15 @@ package body Landin.Commands.Catalogue is
    function Accepts (Command : Action; Flag : Option) return Boolean is
      (Shared (Flag) or else
       (case Command is
-          when Check => Flag in Target | Level | Root | Build_Option
-            | Build_Mode | Optimize | Specialize | Stage_Report
+          when Check => Flag in Target | Level | Root | Library
+            | Build_Option | Build_Mode | Optimize | Specialize | Stage_Report
             | Warnings | Warn | Allow | Deny,
           when Compile => Flag in Target .. Depfile
             or else Flag in Warnings .. Deny,
           when Format => Flag = Format_Check,
           when Server => Flag = Stdio,
-          when Version | Targets => Flag = JSON,
+          when Version => Flag in JSON | Library,
+          when Targets => Flag = JSON,
           when others => False));
 
    function Repeatable (Flag : Option) return Boolean is

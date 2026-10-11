@@ -409,6 +409,29 @@ package body Landin.Tests.Platform_Suite is
          "the replacement output repeats");
    end Set_Result_Replaces_A_Script;
 
+   --  Asks the real host, deliberately: the answer is where this test
+   --  program is, and the program is in the directory it names.
+   procedure Native_Names_Its_Executable_Directory
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Names_Its_Executable_Directory
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Directory : constant String := Host.Executable_Directory;
+   begin
+      Landin.Testing.Check
+        (Item, Directory'Length > 1
+         and then Directory (Directory'First) = '/'
+         and then Directory (Directory'Last) /= '/',
+         "an absolute directory without a trailing separator: "
+         & Directory);
+      Landin.Testing.Check
+        (Item, Host.Is_Directory (Directory)
+         and then Host.Exists (Directory & "/landin_tests"),
+         "it holds the running test program: " & Directory);
+   end Native_Names_Its_Executable_Directory;
+
    --  Touches the real filesystem, deliberately: this is the one adapter
    --  whose whole job is the host, so a fake here would test nothing.
    --  Everything it writes stays under compiler/ada/build.
@@ -1474,6 +1497,9 @@ package body Landin.Tests.Platform_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "native host names its executable directory",
+         Native_Names_Its_Executable_Directory'Access);
       Landin.Testing.Register
         (Into, "platform", "file removal preserves directories",
          File_Removal_Preserves_Directories'Access);

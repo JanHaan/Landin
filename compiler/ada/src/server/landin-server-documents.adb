@@ -308,12 +308,14 @@ package body Landin.Server.Documents is
          return (Entry_Directory =>
                    Unbounded.To_Unbounded_String (Directory_Of (Path)),
                  Roots => From.Roots,
+                 Library => From.Library,
                  Files => Landin.Platform.No_Arguments,
                  Options => Landin.Platform.No_Arguments,
                  Firmware_Entry => Unbounded.Null_Unbounded_String);
       end if;
       return (Entry_Directory => Unbounded.Null_Unbounded_String,
               Roots => Landin.Platform.No_Arguments,
+              Library => From.Library,
               Files => Landin.Platform.Arguments (Path),
               Options => Landin.Platform.No_Arguments,
               Firmware_Entry => Unbounded.Null_Unbounded_String);

@@ -150,6 +150,58 @@ section, WHAT WAS TRIED AND DROPPED, keeps
 the reversals, the things that were designed and then taken out again,
 because a reader who does not know them will propose them back.
 
+## Your first program
+
+Install the toolchain. With nix, either of these puts `refine` on your
+`PATH`, the first building it from source and the second fetching the
+published executable:
+
+```sh
+nix profile install github:JanHaan/Landin
+nix profile install github:JanHaan/Landin#refine-bin
+```
+
+A release archive unpacks into `bin/refine` with the library in
+`lib/landin` beside it; put its `bin` on your `PATH`. Archives up to 0.2.7
+hold `refine` alone. To build from source instead, see
+[Building](#building).
+
+Save this anywhere as `hello/main.ldn`:
+
+```landin
+import core/io
+import hosted/io as hosted
+
+public main: () -> (code: i32) =
+    mut host := hosted.host()
+    io.write(host, io.out(host), "Hello from Landin\n") else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = 0
+end main
+```
+
+Compile and run it from that directory:
+
+```sh
+refine compile main.ldn -o hello
+./hello
+```
+
+It prints
+
+```text
+Hello from Landin
+```
+
+`refine` finds its standard library, `core`, `hosted` and `platform`, beside
+its own executable, so importing it needs no option; `refine version` names
+the directory it uses. Your own modules are found under the roots you give
+with `--root` [1480]. [`examples.md`](examples.md) has larger programs, and
+[the tour](tour.md) teaches the language.
+
 ## Building
 
 ```sh
@@ -402,7 +454,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.14 — The compiler finds its library (planned).**
+**Current roadmap work: R13.14 — The compiler finds its library.**
 
 ## License
 

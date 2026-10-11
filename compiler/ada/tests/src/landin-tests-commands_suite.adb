@@ -116,12 +116,13 @@ package body Landin.Tests.Commands_Suite is
                US.Append (Expected, " (" & Origin
                           & (if Dirty then ", dirty" else "") & ")");
             end if;
-            US.Append (Expected, ASCII.LF);
+            --  A fake host has no executable directory, so no library.
+            US.Append (Expected, ASCII.LF & "library: none" & ASCII.LF);
             Landin.Testing.Check_Equal
               (Item, Human.Status, 0, "version succeeds");
             Landin.Testing.Check_Equal
               (Item, US.To_String (Human.Output), US.To_String (Expected),
-               "one-line banner");
+               "banner and library lines");
             Landin.Testing.Check_Equal
               (Item, US.To_String (Alias_Result.Output),
                US.To_String (Human.Output),
@@ -138,6 +139,10 @@ package body Landin.Tests.Commands_Suite is
                Text_Field ("source_digest", Source_Digest);
                Text_Field ("mode", Mode);
                Text_Field ("host_triplet", "test-host");
+               Landin.Testing.Check
+                 (Item, J.Is_Kind
+                    (Doc, J.Member (Doc, J.Root (Doc), "library"),
+                     J.Null_Value), "no library is JSON null");
                if Release_Version = "" then
                   Landin.Testing.Check
                     (Item, J.Is_Kind
@@ -168,6 +173,69 @@ package body Landin.Tests.Commands_Suite is
       Check_Identity
         (BI.Release_Version, BI.Revision, BI.Source_Digest, BI.Mode, BI.Dirty);
    end Version_Identity;
+
+   --  `refine version` says which library a compilation would use: the
+   --  one beside the executable, or the one --library names, which must
+   --  be one.
+   procedure Version_Library (Item : in out Landin.Testing.Context);
+   procedure Version_Library (Item : in out Landin.Testing.Context) is
+      package J renames Landin.Json;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      function Last_Line (Text : String) return String;
+      function Last_Line (Text : String) return String is
+         Ends : constant Natural :=
+           (if Text'Length > 0 and then Text (Text'Last) = ASCII.LF
+            then Text'Last - 1 else Text'Last);
+         Starts : constant Natural := Ada.Strings.Fixed.Index
+           (Text (Text'First .. Ends), [ASCII.LF], Ada.Strings.Backward);
+      begin
+         return Text (Starts + 1 .. Ends);
+      end Last_Line;
+   begin
+      Host.Set_Executable_Directory ("/opt/landin/bin");
+      Host.Add_Directory ("/opt/landin/lib/landin/core");
+      Host.Add_Directory ("/elsewhere/core");
+      Host.Add_Directory ("/empty");
+      declare
+         Human : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute (["version"], Host, Tools, Meter);
+         Machine : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute (["version", "--json"], Host, Tools, Meter);
+         Named : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["version", "--library=/elsewhere"], Host, Tools, Meter);
+         Refused : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["version", "--library=/empty"], Host, Tools, Meter);
+         Doc : J.Document;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Last_Line (US.To_String (Human.Output)),
+            "library: /opt/landin/lib/landin",
+            "the installed library is reported");
+         J.Parse (Doc, US.To_String (Machine.Output));
+         Landin.Testing.Check
+           (Item, J.Ok (Doc)
+            and then J.Is_Kind
+              (Doc, J.Member (Doc, J.Root (Doc), "library"), J.String_Value)
+            and then J.Text (Doc, J.Member (Doc, J.Root (Doc), "library"))
+              = "/opt/landin/lib/landin",
+            "the installed library is a JSON string");
+         Landin.Testing.Check_Equal
+           (Item, Last_Line (US.To_String (Named.Output)),
+            "library: /elsewhere", "--library replaces it");
+         Landin.Testing.Check_Equal
+           (Item, Refused.Status, Landin.Driver.Status_Misuse,
+            "--library must name a library");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Refused.Report),
+                            "--library=/empty holds no core directory"),
+            "the refusal says what is missing: "
+            & US.To_String (Refused.Report));
+      end;
+   end Version_Library;
 
    procedure Grammar (Item : in out Landin.Testing.Context);
    procedure Grammar (Item : in out Landin.Testing.Context) is
@@ -633,6 +701,9 @@ package body Landin.Tests.Commands_Suite is
    begin
       Landin.Testing.Register
         (Into, "commands", "version identity", Version_Identity'Access);
+      Landin.Testing.Register
+        (Into, "commands", "version names the library",
+         Version_Library'Access);
       Landin.Testing.Register
         (Into, "commands", "warning controls", Warning_Controls'Access);
       Landin.Testing.Register

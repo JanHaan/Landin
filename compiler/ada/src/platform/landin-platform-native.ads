@@ -38,6 +38,10 @@ package Landin.Platform.Native is
    overriding function Working_Directory
      (Host : Native_Filesystem) return String;
 
+   --  Through the host C adapter `landin_executable.c`.
+   overriding function Executable_Directory
+     (Host : Native_Filesystem) return String;
+
    overriding function Is_Directory
      (Host : Native_Filesystem; Path : String) return Boolean;
 

@@ -8,6 +8,7 @@ with Ada.Unchecked_Deallocation;
 
 with Landin.Configuration;
 with Landin.Diagnostics;
+with Landin.Driver.Library;
 with Landin.Formatting;
 with Landin.Json;
 with Landin.Server.Analysis;
@@ -772,6 +773,11 @@ package body Landin.Server.Sessions is
                Add_Root (J.Text (Message, Root_URI));
             end if;
          end;
+
+         --  The library beside this compiler follows them, found as
+         --  `refine` finds it.
+         Store.Library := Unbounded.To_Unbounded_String
+           (Landin.Driver.Library.Located (Host.all));
 
          declare
             Target : constant J.Value :=

@@ -59,6 +59,8 @@ package Landin.Server.Documents is
       Held       : Landin.Platform.Overlays.Overlay (Under);
       Active_URI : Ada.Strings.Unbounded.Unbounded_String;
       Roots      : Landin.Platform.Path_List;    --  in search order
+      --  The library root, which follows them, or empty for none.
+      Library    : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    overriding procedure Finalize (Into : in out Store);

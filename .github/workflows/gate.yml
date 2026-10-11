@@ -294,6 +294,24 @@ jobs:
           LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
+      #  The release toolchain installed as the README says, then used from
+      #  outside the checkout: the README's first program and every
+      #  examples.md program, compiled with no option and run with no
+      #  environment beyond PATH, against the documents' own oracles.  On
+      #  Linux that PATH holds the pinned GNAT, whose driver is the one
+      #  refine names; a stock distribution's is not yet found.
+      - name: An installed toolchain outside the checkout
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          outside="$RUNNER_TEMP/outside"
+          rm -rf "$outside"
+          mkdir -p "$outside/prefix"
+          ./scripts/package.sh "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" "$outside/landin.tar.gz"
+          tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
+          python3 scripts/outside_user.py --prefix "$outside/prefix" \
+            --work "$outside/work"
+
       - name: Object quality
         run: ./scripts/quality.sh
 
@@ -621,6 +639,23 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
+      #  The release toolchain installed as the README says, then used from
+      #  outside the checkout: the README's first program and every
+      #  examples.md program, compiled with no option and run with no
+      #  environment beyond PATH, against the documents' own oracles.  On
+      #  Linux that PATH holds the pinned GNAT, whose driver is the one
+      #  refine names; a stock distribution's is not yet found.
+      - name: An installed toolchain outside the checkout
+        run: |
+          set -eu
+          outside="$RUNNER_TEMP/outside"
+          rm -rf "$outside"
+          mkdir -p "$outside/prefix"
+          ./scripts/package.sh "$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine" "$outside/landin.tar.gz"
+          tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
+          python3 scripts/outside_user.py --prefix "$outside/prefix" \
+            --work "$outside/work"
+
   #  The shared hosted corpus executed natively, every source verdict with
   #  Darwin selected, end-to-end fixtures among them, and the regenerated
   #  bindings and archives, with the release compiler.
@@ -829,6 +864,24 @@ jobs:
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
+
+      #  The release toolchain installed as the README says, then used from
+      #  outside the checkout: the README's first program and every
+      #  examples.md program, compiled with no option and run with no
+      #  environment beyond PATH, against the documents' own oracles.  On
+      #  Linux that PATH holds the pinned GNAT, whose driver is the one
+      #  refine names; a stock distribution's is not yet found.
+      - name: An installed toolchain outside the checkout
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          outside="$RUNNER_TEMP/outside"
+          rm -rf "$outside"
+          mkdir -p "$outside/prefix"
+          ./scripts/package.sh "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" "$outside/landin.tar.gz"
+          tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
+          python3 scripts/outside_user.py --prefix "$outside/prefix" \
+            --work "$outside/work"
 
       - name: GDB source debugging
         run: |

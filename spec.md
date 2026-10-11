@@ -14468,12 +14468,14 @@ nothing and was never reported: every use of its name was then reported as
 "not declared in any scope", with [1860]'s note that it is a misspelling,
 which it is not.
 
-**Chosen:** with no root, an import that names a module is refused at the
-import, once, as the module not found, with a note saying to compile the
+**Chosen:** with no root, an import that names a module outside the
+compiler's library is refused at the import, once, as the module not found, with a note saying to compile the
 module's directory with `--root`. Its names are refused as D242 refuses a
 name an import could not supply, so no use of them is reported again. D202's
 `import compiler`, `import assembler` and `import linker` name the toolchain,
-need no root and are unchanged.
+need no root and are unchanged. Since D275 an import of `core`, `hosted` or
+`platform` needs none either: it resolves from the library the compiler found
+beside itself.
 
 **The alternatives:** searching the source's own directory as an implicit
 root, which makes a file's meaning depend on what sits beside it; leaving
@@ -14507,7 +14509,8 @@ feature levels, and refuses hosted architectures. Existing compiler.assert
 source guards remain. No generic package manifest is introduced.
 
 Availability is a property of the written source namespace, independent of
-project-first module selection. It is checked for rooted imports and
+module selection. Since D275 these namespaces resolve from the compiler's own
+library whenever it has one, so a project root no longer supplies them. It is checked for rooted imports and
 explicit-file compatibility requests before name resolution. An unavailable
 import reports L0015 once at the import, names the module and states its target
 requirement; checking stops without later missing-name errors. Names hosted and
@@ -17429,3 +17432,42 @@ and an arena would never get them back.
 `negative/core-text-prefix-frame`,
 `negative/generic-signature-applies-a-parameter` and
 `negative/generic-signature-names-nothing`.
+
+### D275 — The compiler finds its library beside itself
+
+**The tour said** [1480] that the roots are the project, then the user's
+landin home, then the system-wide one, and the bootstrap paragraph narrowed
+that to the roots `--root` names: the compiler neither consulted a home nor
+inserted a system root. No installed compiler carried `core`, `hosted` or
+`platform`, so a program outside the repository compiled only with `--root`
+naming a clone of it, and with no root at all, D262 refused every import.
+
+**Chosen:** the library ships with the compiler and the compiler finds it.
+An installation is a prefix holding `bin/refine` and `lib/landin` with the
+three namespaces in it; the flake's packages and the release archive are laid
+out so. `refine` asks the host for its own executable's directory, with links
+resolved, and takes the first of `../lib/landin` and, for a compiler built in
+a checkout, the checkout six directories up that holds `core`. `--library=DIR`
+names another, and a directory without `core` is refused as a bad root is.
+The library root follows every `--root`; an import of `core`, `hosted` or
+`platform` resolves from it alone, and one of anything else from the roots in
+their order. With no `--root`, the named files are still one module and reach
+the library and whatever it imports. A `--root` naming the library's own
+directory is searched once, under the user's spelling, so a build that names
+the checkout records the paths it always did. `refine version` and its JSON
+name the library, and the language server finds it the same way. A user's
+home root and every other default stay with the Companion tool and ecosystem.
+
+**The alternatives:** an environment variable or a configuration file gives
+the same answer a second place to be wrong; a compiler built with the
+library's path compiled in breaks when the installation moves; letting a
+project root keep overriding `core` lets a program pair one compiler with
+another revision's library, which the compiler's hosted contracts and
+availability rules are not written against; and the library as an ordinary
+last root would leave a project's `core` in front of it.
+
+**Pinned by** the driver case `the library is found beside the compiler`, the
+commands case `version identity`, the server case `the library is found
+beside the server`, `negative/import-without-a-root-is-refused-there` and
+`scripts/tests/test_outside_user.py`, whose script the gate runs against the
+packaged release compiler on Linux x86-64, Linux arm64 and Darwin.

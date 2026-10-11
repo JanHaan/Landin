@@ -1,5 +1,5 @@
-import core/text
+import geometry/shapes
 
-count: () -> (view: []u8) =
-    view = text.bytes("abc")
+count: () -> (area: u32) =
+    area = shapes.area(3)
 end count

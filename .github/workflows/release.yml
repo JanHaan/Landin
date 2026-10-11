@@ -107,8 +107,12 @@ jobs:
           fi
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
           "$binary" --identify
-          test "$("$binary" --version)" = "refine $version"
-          test "$("$binary" version)" = "refine $version"
+          #  The first line is the release; the second the library the
+          #  compiler found beside itself, here the checkout it was built in.
+          for asked in --version version; do
+            test "$("$binary" $asked | sed -n 1p)" = "refine $version"
+            test "$("$binary" $asked | sed -n 2p)" = "library: $(pwd -P)"
+          done
           "$binary" version --json > "$RUNNER_TEMP/version.json"
           python3 - "$version" "$(git rev-parse HEAD)" "$RUNNER_TEMP/version.json" <<'PY'
           import json, re, sys
@@ -119,6 +123,7 @@ jobs:
           assert identity["revision"] == revision, identity
           assert identity["dirty"] is False, identity
           assert identity["mode"] == "release", identity
+          assert identity["library"] == str(Path.cwd().resolve()), identity
           assert re.fullmatch(r"[0-9a-f]{64}", identity["source_digest"]), identity
           print(json.dumps(identity, sort_keys=True))
           PY
@@ -143,20 +148,10 @@ jobs:
           version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           asset="landin-$version-${{ matrix.platform }}.tar.gz"
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
-          test -x "$binary"
-          #  Portable across GNU tar and the bsdtar macOS ships, which
-          #  has no --sort, no --mtime and no --owner. The first attempt
-          #  used all three and built on Linux while failing on Darwin.
-          #  The members are named in a fixed order rather than sorted,
-          #  and a fixed mtime and gzip -n remove the two timestamps that
-          #  would otherwise differ per run.  The licence travels with the
-          #  compiler, because the archive is what a consumer receives.
-          stage=$(mktemp -d)
-          cp "$binary" "$stage/refine"
-          cp LICENSE LICENSE-MIT LICENSE-APACHE "$stage/"
-          touch -t 197001010000 "$stage"/*
-          tar -cf - -C "$stage" refine LICENSE LICENSE-MIT LICENSE-APACHE \
-            | gzip -n -9 > "$asset"
+          #  The archive is an installed prefix, refine and the library
+          #  it finds beside itself, built reproducibly by the same script
+          #  the gate's outside-user check installs from.
+          ./scripts/package.sh "$binary" "$asset"
           sum=$(shasum -a 256 "$asset" | cut -d' ' -f1)
           echo "$sum  $asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"

@@ -73,6 +73,14 @@ package Landin.Testing.Fakes is
    overriding function Working_Directory
      (Host : Fake_Filesystem) return String is ("/virtual/compile");
 
+   --  Nowhere until a case says where: every case that does not ask about
+   --  the library is compiled with none, as before there was one.
+   procedure Set_Executable_Directory
+     (Host : in out Fake_Filesystem; Directory : String);
+
+   overriding function Executable_Directory
+     (Host : Fake_Filesystem) return String;
+
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
@@ -332,6 +340,7 @@ private
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
       Aliases : Landin.Platform.Path_List;
+      Executable : Unbounded.Unbounded_String;
       Writes : Store_Owner;
    end record;
 

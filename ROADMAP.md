@@ -1400,7 +1400,7 @@ the debugger workloads on every target.
 
 ### R13.14 — The compiler finds its library
 
-Status: planned
+Status: active
 Depends on: R13.13
 
 `core`, `hosted` and `platform` ship with no installed compiler: the flake's
@@ -1851,6 +1851,10 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-19 | Usability | The README has no installation or first-program section: the nearest is how to build the compiler from source. | R13.14's outside-user job. | A first-program section that the job executes as written. | scheduled R13.14 |
 | SR-20 | Usability | An unknown name applied as a type, `shlf(item)`, is L0304 "targets a declared alias", where a bare unknown name is L0201 with the near names. | The next item that touches type application refusals. | L0201 with near-name repairs for an unknown applied name, plain and generic, with the fixtures that pin L0304 there moved. | open |
 | SR-21 | Usability | A runtime fixture cannot give its program standard input, only arguments. | R13.30's standard-input consumer. | A `stdin:` fixture key honoured by every runtime lane. | scheduled R13.30 |
+| SR-22 | Usability | On Linux `refine` links through a driver named for its exact GNU triplet, `x86_64-pc-linux-gnu-gcc` or `aarch64-unknown-linux-gnu-gcc`, and deliberately takes no bare `gcc`; Debian and Ubuntu name theirs `x86_64-linux-gnu-gcc` and Fedora `x86_64-redhat-linux-gcc`, so a release archive unpacked on a stock distribution refuses its first executable with L0500. The outside-user check puts the pinned GNAT's driver on `PATH` and so does not meet it. | R13.16's libc-free link, or the next item touching the toolchain adapter. | A driver choice a stock distribution satisfies, or an installation step that says exactly what to install, with the outside-user check run without the pinned toolchain on at least one Linux host. | open |
+| SR-23 | Usability | Named files that misspell a library namespace, `import cor/io`, get D262's refusal with no suggestion, where the same import under `--root` is offered `core`. | The next item touching import refusals. | The near-name repair offered from the library in the explicit-file mode too, with a fixture. | open |
+| SR-24 | Usability | A program that imports the library records the library's absolute installed path in its source paths, so its debug information and source maps depend on where Landin was installed. | A reproducible-build or debugger consumer outside the checkout. | Library sources recorded under a stable logical prefix, with the debugger sessions still finding them. | open |
+| SR-25 | Usability | Under `nix develop` the documented `scripts/tests/test_cli_native.py` fails its completion test, because the shell's bash has no `compgen`: a contributor running it sees a failure unrelated to their change. | The next change to the nix shell or the completion test. | The shell's bash with completion, or the test skipping with a reason where `compgen` is absent. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

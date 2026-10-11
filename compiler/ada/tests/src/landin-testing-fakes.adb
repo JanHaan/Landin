@@ -180,6 +180,16 @@ package body Landin.Testing.Fakes is
    function Same_File_Count (Host : Fake_Filesystem) return Natural
      is (Host.Writes.Data.Identity_Comparisons);
 
+   procedure Set_Executable_Directory
+     (Host : in out Fake_Filesystem; Directory : String) is
+   begin
+      Host.Executable := Unbounded.To_Unbounded_String (Directory);
+   end Set_Executable_Directory;
+
+   overriding function Executable_Directory
+     (Host : Fake_Filesystem) return String
+     is (Unbounded.To_String (Host.Executable));
+
    overriding function Existing_File_Key
      (Host : Fake_Filesystem; Path : String) return String
    is

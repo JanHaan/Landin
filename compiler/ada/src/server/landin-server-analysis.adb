@@ -192,18 +192,27 @@ package body Landin.Server.Analysis is
          Previous : access Landin.Stages.Compilation := null)
       is
          Outcome  : Landin.Stages.Stage_Outcome;
+         Library  : constant String := Unbounded.To_String (Asked.Library);
       begin
          if Rooted then
             Landin.Driver.Loading.Load_Reachable_Program
               (Context, From, Asked.Roots, Entry_Directory,
-               Missing'Access, Previous, Watch_Syntax, Cache);
+               Missing'Access, Previous, Watch_Syntax, Cache,
+               Library => Library);
          else
             Landin.Driver.Loading.Load_Files (Context, From, Asked.Files);
             if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               Landin.Stages.Syntax.Run_Using
-                 (Context, Outcome, Previous, Watch_Syntax, Cache);
+               --  Either parses what was read; with a library the named
+               --  file's imports of it are loaded too, as `refine` does.
+               if Library /= "" then
+                  Landin.Driver.Loading.Load_Library_Imports
+                    (Context, From, Library, Previous, Watch_Syntax, Cache);
+               else
+                  Landin.Stages.Syntax.Run_Using
+                    (Context, Outcome, Previous, Watch_Syntax, Cache);
+               end if;
             end if;
          end if;
       end Load;

@@ -38,6 +38,9 @@ package Landin.Server.Analysis is
       --  Rooted when nonempty: Entry_Directory is loaded under Roots.
       Entry_Directory : Ada.Strings.Unbounded.Unbounded_String;
       Roots           : Landin.Platform.Path_List;
+      --  The library root (`Landin.Driver.Library`), or empty for none.
+      --  It follows Roots, and named files reach it too.
+      Library         : Ada.Strings.Unbounded.Unbounded_String;
       --  Otherwise these files, as one module.
       Files           : Landin.Platform.Path_List;
       --  Each `name=value` a `--option=` would give.  Valid and distinct:

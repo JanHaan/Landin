@@ -3597,7 +3597,7 @@ hosted providers such as hosted/heap and hosted/io. platform holds scoped
 freestanding interfaces: platform/c currently requires an enabled LP64 C ABI,
 and platform/cpu requires an M-profile target, including supported higher
 feature levels. Imports outside those scopes are refused by name at target
-checking, even when project-first roots override their contents (D267).
+checking (D267).
 These source namespace names remain ordinary identifiers. landin
 holds the toolchain modules of [1560] — landin/compiler,
 landin/assembler, landin/linker — which are available
@@ -3610,10 +3610,13 @@ locally. The three compiler-owned modules retain their reserved identities.
 
 The bootstrap request spells that narrow seam as repeated `--root=DIR`
 options followed by one entry-module directory. With no root option it retains
-the earlier explicit-file compatibility mode as one synthetic module. Root
-defaults and environment policy remain the companion tool's work. The
-compiler keeps that explicit contract: it neither consults a user's home nor
-inserts a system root, and the supplied order alone decides precedence.
+the earlier explicit-file compatibility mode as one synthetic module. The
+compiler adds one root of its own, the library it ships with, found beside
+its executable: core, hosted and platform always resolve from it, after
+every root the request names (D275). Other root defaults and environment
+policy remain the companion tool's work. The compiler keeps that explicit
+contract: it neither consults a user's home nor inserts any other system
+root, and the supplied order alone decides precedence among the roots given.
 
 ## COMPILE TIME
 

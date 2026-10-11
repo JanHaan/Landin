@@ -1,5 +1,5 @@
 class: negative
-summary: [1420] an import is found under a root, and without --root one is refused at the import, once, and its name is not reported again where it is used
+summary: [1420] an import of anything but the library is found under a root, and without --root one is refused at the import, once, and its name is not reported again where it is used
 program: program.ldn
 codes: L0006
 constructs: 1420, 1440, 1860

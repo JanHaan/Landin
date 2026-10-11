@@ -308,7 +308,15 @@
 
             installPhase = ''
               runHook preInstall
-              install -Dm755 refine "$out/bin/refine"
+              #  An archive with the library is laid out as an installed
+              #  prefix; one from 0.2.7 or earlier holds refine alone.
+              if [ -d lib/landin ]; then
+                install -Dm755 bin/refine "$out/bin/refine"
+                mkdir -p "$out/lib"
+                cp -R lib/landin "$out/lib/landin"
+              else
+                install -Dm755 refine "$out/bin/refine"
+              fi
             ''
             + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               #  refine names its driver by GNU triplet and deliberately
@@ -377,6 +385,11 @@
             installPhase = ''
               runHook preInstall
               install -Dm755 build/nix/release/bin/refine "$out/bin/refine"
+              #  The library ships beside the compiler, which finds it
+              #  relative to its own executable.  The build ran in
+              #  compiler/ada, so the source tree is two levels up.
+              mkdir -p "$out/lib/landin"
+              cp -R ../../core ../../hosted ../../platform "$out/lib/landin/"
               #  refine names its assembler and linker by GNU triplet and
               #  deliberately will not fall back to a bare gcc, so the
               #  wrapped compiler has to be on its path: without this the
