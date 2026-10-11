@@ -109,6 +109,16 @@ class Comparison(unittest.TestCase):
             self.assertEqual(result.returncode, 0 if target == "cortex-m0" else 1,
                              result.stderr)
 
+    def test_every_expected_refusal_names_a_positive_fixture(self):
+        #  A retired fixture left in the list is never checked again, so its
+        #  successor's refusal is reported as unexpected only on the gate.
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import emit_manifest
+        positive = ROOT / "compiler/tests/fixtures/positive"
+        missing = sorted(fixture for fixture, _ in emit_manifest.REFUSAL_PAIRS
+                         if not (positive / fixture).is_dir())
+        self.assertEqual(missing, [])
+
     def test_all_expected_refusals_still_fail(self):
         refused = {"external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1"}
         result = compare(refused, dict(refused))

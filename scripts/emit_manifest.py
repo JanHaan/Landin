@@ -93,7 +93,7 @@ REFUSAL_PAIRS = {
     ("r440-c-aliases", "linux-rv64"),
     ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
-    ("r440-checker-helper-normalized-imports", "cortex-m0"),
+    ("hosted-initializer-normalized", "cortex-m0"),
     ("r440-checker-recursive-callback-contexts", "cortex-m0"),
     ("r440-checker-recursive-contexts", "cortex-m0"),
     ("r440-compatible-link-declarations", "cortex-m0"),
