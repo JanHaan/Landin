@@ -1,0 +1,6 @@
+spin: (limit: i32) -> (r: i32) =
+    r = 0
+    while r < limit
+        r += 1
+    end while
+end spin

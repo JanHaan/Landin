@@ -2,5 +2,9 @@ error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-missing-completion/program.ldn:2:12
   |
 2 |     code = while false do
-  |            ^^^^^^^^^^^^^^ this value-producing loop
+  |            ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-missing-completion/program.ldn:2:18
+  |
+2 |     code = while false do
+  |                  ^^^^^ the loop ends with no value when this is false
   = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression

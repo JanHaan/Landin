@@ -1,0 +1,10 @@
+error[L0301]: this is not an array, so it has no element to index
+  --> ../tests/fixtures/negative/index-of-a-non-array-names-the-indexing/program.ldn:2:14
+  |
+2 |     result = left[at]
+  |              ^^^^
+  --> ../tests/fixtures/negative/index-of-a-non-array-names-the-indexing/program.ldn:2:14
+  |
+2 |     result = left[at]
+  |              ^^^^^^^^ the indexing written here
+  = note: [1820]: the kernel indexes an array [0520] and nothing else

@@ -1,0 +1,9 @@
+class: negative
+summary: an end written before else is reported once and the branch goes on, so its own end if is not a second report
+program: program.ldn
+codes: L0110
+constructs: 1810
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/end-before-else-continues-the-branch/program.ldn
+expect: expected.txt
+status: 1

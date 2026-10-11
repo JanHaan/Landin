@@ -12563,6 +12563,29 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  `[]` where something other than a slice is wanted fails that
+         --  context, so the context is what the report names: the literal
+         --  on its own has nothing else to point at.
+         if Syn.Kind (Of_Tree, Node) = Syn.Empty_Slice_Literal
+           and then Wanted not in Ty.Slice_Value | Ty.No_Value
+             | Ty.Undecided | Ty.Ill_Typed | Ty.Not_Typed
+           and then Landin.Provenance.Is_Known (Site)
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "`[]` is an empty slice, and "
+                          & Shown (Wanted) & " belongs here",
+               Note    => "[0570]: an empty slice retains its element"
+                          & " type and reference permission",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          if Is_Value_Control (Of_Tree, Node)
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              = Ty.Undecided
@@ -12595,7 +12618,30 @@ package body Landin.Stages.Checking is
 
          --  [1880]: this is the only way a literal ever gets a type.
          if Got = Ty.Untyped_Integer then
-            if Wanted in Ty.Scalar_Name then
+            --  A number where a bool or a float is wanted fails that
+            --  context, which is what the report names.
+            if Wanted in Ty.Scalar_Name
+              and then Wanted not in Ty.Integer_Name
+              and then Syn.Kind (Of_Tree, Node) = Syn.Integer_Literal
+              and then Landin.Provenance.Is_Known (Site)
+            then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "this integer literal cannot take the "
+                             & Shown (Wanted) & " context required here",
+                  Note    =>
+                    (if Wanted in Ty.Float_Name
+                     then "[0210]: integer and float literals never slide"
+                          & " silently between classes"
+                     else "[1890]: a bool has no arithmetic and no"
+                          & " bitwise set"),
+                  Related => Site,
+                  Because => Because,
+                  Into    => Found);
+            elsif Wanted in Ty.Scalar_Name then
                Commit_To (Of_Tree, Node, Wanted);
             elsif Wanted not in Ty.Untyped_Integer | Ty.Untyped_Float then
                Landin.Checking.Refuse (Types.all, Of_Tree, Node);
@@ -20464,8 +20510,8 @@ package body Landin.Stages.Checking is
                                    & " element to index",
                         Note    => "[1820]: the kernel indexes an array"
                                    & " [0520] and nothing else",
-                        Related => Syn.Origin (Of_Tree, From),
-                        Because => "what it names",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "the indexing written here",
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -26723,7 +26769,28 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Declared_As_Node (Of_Tree, Node);
                begin
-                  if Value = Syn.No_Node or else Wants = Ty.Ill_Typed then
+                  --  `[]` initializing anything but a slice fails the
+                  --  declared type, which is what the report names: the
+                  --  literal on its own has nothing else to point at.
+                  if Value /= Syn.No_Node
+                    and then Syn.Kind (Of_Tree, Value)
+                      = Syn.Empty_Slice_Literal
+                    and then Wants not in Ty.Slice_Value | Ty.Undecided
+                      | Ty.Ill_Typed
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "`[]` is an empty slice, and "
+                                   & Shown (Wants) & " belongs here",
+                        Note    => "[0570]: an empty slice retains its"
+                                   & " element type and reference permission",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "the type declared here",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                  elsif Value = Syn.No_Node or else Wants = Ty.Ill_Typed then
                      --  The declaration has already explained why this value
                      --  form is refused; checking the initializer as another
                      --  whole-array value would only repeat L0304.
@@ -28902,6 +28969,29 @@ package body Landin.Stages.Checking is
          end if;
 
          if Nonreturning_Call (Of_Tree, Node) then
+            return;
+         end if;
+
+         --  `[]` where an array, a scalar or a record is wanted fails that
+         --  context, so the context is what the report names: the literal
+         --  on its own has nothing else to point at.
+         if Syn.Kind (Of_Tree, Node) = Syn.Empty_Slice_Literal
+           and then Expected.Kind not in Ty.Slice_Value | Ty.No_Value
+             | Ty.Undecided | Ty.Ill_Typed
+           and then Landin.Provenance.Is_Known (Site)
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "`[]` is an empty slice, and "
+                          & Shown (Expected.Kind) & " belongs here",
+               Note    => "[0570]: an empty slice retains its element"
+                          & " type and reference permission",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
             return;
          end if;
 

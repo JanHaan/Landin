@@ -1,0 +1,6 @@
+error[L0110]: this `end` comes before the `else` that continues this branch
+  --> ../tests/fixtures/negative/end-before-else-continues-the-branch/program.ldn:4:5
+  |
+4 |     end else
+  |     ^^^
+  = note: [1810]: `elsif` and `else` divide an `if` between its `then` and its `end if`

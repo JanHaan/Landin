@@ -1,0 +1,12 @@
+pair: (left: i32, right: i32) -> (sum: i32) =
+    sum = left + right
+end pair
+
+spin: () -> (r: i32) =
+    r = 0
+    mut total ) := pair(
+        1,
+        2
+    )
+    r = total
+end spin

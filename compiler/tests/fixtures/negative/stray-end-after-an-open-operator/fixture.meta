@@ -1,0 +1,9 @@
+class: negative
+summary: a stray end on the line after an open operator is reported there with no repair that leaves the end refused
+program: program.ldn
+codes: L0102
+constructs: 1810, 1820
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/stray-end-after-an-open-operator/program.ldn
+expect: expected.txt
+status: 1

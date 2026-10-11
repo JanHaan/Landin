@@ -1,0 +1,9 @@
+class: negative
+summary: end = loop closes the loop with one report, rather than opening a new loop that is never closed
+program: program.ldn
+codes: L0103
+constructs: 1130, 1810
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/misclosed-end-skips-one-stray-word/program.ldn
+expect: expected.txt
+status: 1

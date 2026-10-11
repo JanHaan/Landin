@@ -69,11 +69,30 @@ package body Landin.Tests.Mutation_Suite is
    ------------------------------------------------------------------
 
    --  Xorshift32, as the parser suite's campaign uses, with a seed of its
-   --  own: the two campaigns choose independently.
+   --  own: the two campaigns choose independently.  Each program draws
+   --  from a state of its own, so one program's mutants never depend on
+   --  which other programs the corpus holds.
    type Word is mod 2 ** 32;
    Seed : constant Word := 16#1126_0001#;
 
    function Draw (State : in out Word; Limit : Positive) return Positive;
+
+   --  The generator's state for one program, from the campaign's seed and
+   --  that program's own fixture name alone (FNV-1a over the name, folded
+   --  into the seed).  Adding, removing or reordering another fixture
+   --  changes no draw of this one's mutants.
+   function Seed_For (Label : String) return Word;
+
+   function Seed_For (Label : String) return Word is
+      Hash : Word := 16#811C_9DC5#;
+   begin
+      for Byte of Label loop
+         Hash := (Hash xor Word (Character'Pos (Byte))) * 16#0100_0193#;
+      end loop;
+      Hash := Hash xor Seed;
+      --  Xorshift has one fixed point, zero, which it never leaves.
+      return (if Hash = 0 then Seed else Hash);
+   end Seed_For;
 
    function Draw (State : in out Word; Limit : Positive) return Positive is
    begin
@@ -231,7 +250,7 @@ package body Landin.Tests.Mutation_Suite is
    is
       Real      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
-      State     : Word := Seed;
+      State     : Word := Seed;  --  reset from Seed_For for each program
       Counted   : Tally;
       Log       : Unbounded.Unbounded_String;
       Programs  : Natural := 0;
@@ -515,6 +534,7 @@ package body Landin.Tests.Mutation_Suite is
          Content : Unbounded.Unbounded_String;
          Status  : Landin.Platform.Read_Status;
       begin
+         State := Seed_For (Label);
          Real.Read_File (Path, Content, Status);
          if Status /= Landin.Platform.Read_Ok then
             Landin.Testing.Fail (Item, Path & " is unreadable");

@@ -489,6 +489,37 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : Assigned_Set;
          Report_Error : Boolean := True)
          return Boolean;
+
+      --  A `while` loop's condition, or a `for` loop's traversal from its
+      --  first bound to its last: what ends the loop when it runs out.
+      function Loop_Head
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Is_For : Boolean)
+         return Landin.Provenance.Origin;
+
+      function Loop_Head
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Is_For : Boolean)
+         return Landin.Provenance.Origin
+      is
+      begin
+         if not Is_For then
+            return Syn.Origin (Of_Tree, Syn.Condition_Of (Of_Tree, Node));
+         end if;
+         declare
+            Lower : constant Syn.Node_Id :=
+              Syn.Traversal_Lower (Of_Tree, Node);
+            Upper : constant Syn.Node_Id :=
+              Syn.Traversal_Upper (Of_Tree, Node);
+         begin
+            return
+              (Source => Syn.Source_Of (Of_Tree),
+               Where  =>
+                 (First => Syn.Where (Of_Tree, Lower).First,
+                  Last  => Syn.Where
+                    (Of_Tree,
+                     (if Upper = Syn.No_Node then Lower else Upper)).Last));
+         end;
+      end Loop_Head;
+
       procedure Flow_Expression
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -2379,6 +2410,12 @@ package body Landin.Stages.Checking.Flow is
                          (Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
                           or else Completion_Falls_Through)
                      then
+                        --  The label says where the value was left out: a
+                        --  `complete` that falls through for the loop it
+                        --  completes, and with none the condition or the
+                        --  traversal whose end leaves without one.  Naming
+                        --  the loop at its own span would only repeat the
+                        --  report.
                         Bad.Report
                           (Item    => Bad.Control_Value,
                            Source  => Syn.Source_Of (Of_Tree),
@@ -2393,8 +2430,20 @@ package body Landin.Stages.Checking.Flow is
                            Note    => "[1190]: `complete` must leave through"
                              & " `break with` when a finite loop is an"
                              & " expression",
-                           Related => Syn.Origin (Of_Tree, Node),
-                           Because => "this value-producing loop",
+                           Related =>
+                             (if Syn.Complete_Body (Of_Tree, Node)
+                                   /= Syn.No_Node
+                              then Syn.Origin (Of_Tree, Node)
+                              else Loop_Head (Of_Tree, Node, Is_For)),
+                           Because =>
+                             (if Syn.Complete_Body (Of_Tree, Node)
+                                   /= Syn.No_Node
+                              then "this value-producing loop"
+                              elsif Is_For
+                              then "the loop ends with no value when this"
+                                   & " is exhausted"
+                              else "the loop ends with no value when this"
+                                   & " is false"),
                            Into    => Sink.all);
                      end if;
 

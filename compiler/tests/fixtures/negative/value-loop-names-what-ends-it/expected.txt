@@ -1,0 +1,10 @@
+error[L0332]: this value-producing loop can finish without a value
+  --> ../tests/fixtures/negative/value-loop-names-what-ends-it/program.ldn:3:5
+  |
+3 |     for item in 0..<last do answer = item end for
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/value-loop-names-what-ends-it/program.ldn:3:17
+  |
+3 |     for item in 0..<last do answer = item end for
+  |                 ^^^^^^^^ the loop ends with no value when this is exhausted
+  = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression

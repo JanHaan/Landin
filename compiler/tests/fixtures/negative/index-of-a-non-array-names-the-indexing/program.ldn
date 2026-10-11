@@ -1,0 +1,3 @@
+pick: (left: u32, at: usize) -> (result: u32) =
+    result = left[at]
+end pick

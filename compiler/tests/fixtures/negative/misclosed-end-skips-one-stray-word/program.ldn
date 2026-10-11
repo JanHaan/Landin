@@ -1,0 +1,8 @@
+count: () -> (value: i32) =
+    mut seen: i32 = 0
+    loop do
+        seen += 1
+        break when seen > 3
+    end = loop
+    value = seen
+end count

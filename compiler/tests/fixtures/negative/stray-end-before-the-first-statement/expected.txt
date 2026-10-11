@@ -1,0 +1,6 @@
+error[L0110]: this `end` closes nothing that is open here
+  --> ../tests/fixtures/negative/stray-end-before-the-first-statement/program.ldn:2:5
+  |
+2 |     end result = value
+  |     ^^^
+  = note: [1810]: each `end` closes the construct it names, and the innermost open one first

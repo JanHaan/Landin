@@ -1,0 +1,3 @@
+f: (value: i32) -> (result: i32) =
+    end result = value
+end f

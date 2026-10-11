@@ -1984,6 +1984,10 @@ package body Landin.Syntax.Parser is
                return False;
             end Begins_Line;
 
+            --  Whether the token in hand is the first on its line.
+            function Here_Begins_Line return Boolean
+              is (Begins_Line (Index));
+
             --  Whether a bracket opened before token At_Index is still open
             --  at it, by the balance of the line it begins and the lines
             --  above it back to a line with nothing open.  A line inside an
@@ -2587,7 +2591,13 @@ package body Landin.Syntax.Parser is
                        and then (Peek = Tok.Identifier
                                  or else Peek in Tok.Kw_If | Tok.Kw_Loop
                                    | Tok.Kw_While | Tok.Kw_For
-                                   | Tok.Kw_Match | Tok.Kw_Unchecked)
+                                   | Tok.Kw_Match | Tok.Kw_Unchecked
+                                 --  `end = loop`: any one stray token
+                                 --  before this construct's own word.
+                                 or else (Ahead (1) = Closing_Word (Own)
+                                          and then Ahead (1) /= Tok.Identifier
+                                          and then not Begins_Line
+                                            (Index + 1)))
                      then
                         Advance;
                         --  `end let loop`: the closing word follows a stray
@@ -2860,13 +2870,33 @@ package body Landin.Syntax.Parser is
                            if Index = First and then Index < Last then
                               Advance;
                            end if;
-                           Complain
-                             (Item    => Syn.Stray_Token,
-                              Where   => Join (Start, Previous),
-                              Message => "this begins no declaration",
-                              Note    => "[1740]: a file is declarations,"
-                                         & " each a binding or a function",
-                              Gate    => False);
+                           --  Words after a bare `end` on the same line
+                           --  were the body that `end` cut short: the
+                           --  mistake is that `end`, not what follows it.
+                           if First > 1
+                             and then Tok.Kind (From, First - 1) = Tok.Kw_End
+                             and then not Begins_Line (First)
+                           then
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Tok.Where (From, First - 1),
+                                 Message => "this `end` closes the"
+                                            & " declaration before the rest"
+                                            & " of its line",
+                                 Note    => "[1740]: a file is"
+                                            & " declarations, each a binding"
+                                            & " or a function",
+                                 Gate    => False);
+                           else
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Join (Start, Previous),
+                                 Message => "this begins no declaration",
+                                 Note    => "[1740]: a file is"
+                                            & " declarations, each a binding"
+                                            & " or a function",
+                                 Gate    => False);
+                           end if;
                         end;
                      end if;
 
@@ -7435,6 +7465,12 @@ package body Landin.Syntax.Parser is
                                   and then Peek /= Tok.Kw_End
                                   and then Indent_Of (Index)
                                     > Integer (Item_Indent))
+                    --  A line that begins with a word only the middle of
+                    --  a construct takes is the rest of the refused one.
+                    and then not (Statement_Reported
+                                  and then Peek in Tok.Kw_Then | Tok.Kw_Do
+                                    | Tok.Kw_Complete | Tok.Right_Paren
+                                    | Tok.Right_Bracket)
                   then
                      Statement_Reported := False;
                   end if;
@@ -8144,7 +8180,10 @@ package body Landin.Syntax.Parser is
                else
                   Complain
                     (Item    => Syn.Token_Expected,
+                     --  A `do` left off a header's line is missing
+                     --  from that line, not from the body's first one.
                      Where   => (if Peek = Tok.End_Of_Input
+                                   or else Here_Begins_Line
                                  then After_Previous else Here),
                      Message => "a loop body opens with `do`",
                      Note    => (if Is_While
@@ -8359,7 +8398,10 @@ package body Landin.Syntax.Parser is
                else
                   Complain
                     (Item    => Syn.Token_Expected,
+                     --  A `do` left off a header's line is missing
+                     --  from that line, not from the body's first one.
                      Where   => (if Peek = Tok.End_Of_Input
+                                   or else Here_Begins_Line
                                  then After_Previous else Here),
                      Message => "a for loop body opens with `do`",
                      Note    => "[1150]: `for item in source do`",
@@ -8613,6 +8655,23 @@ package body Landin.Syntax.Parser is
                              Children => [Condition, Arm_Body]));
                   end;
 
+                  --  `end else`: an `end` written before this branch's
+                  --  own divider closes nothing, and the branch goes on.
+                  if Peek = Tok.Kw_End
+                    and then Ahead (1) in Tok.Kw_Else | Tok.Kw_Elsif
+                    and then not Begins_Line (Index + 1)
+                  then
+                     Complain
+                       (Item    => Syn.Stray_Token,
+                        Where   => Here,
+                        Message => "this `end` comes before the `"
+                                   & Tok.Spelling (Ahead (1))
+                                   & "` that continues this branch",
+                        Note    => "[1810]: `elsif` and `else` divide an"
+                                   & " `if` between its `then` and its"
+                                   & " `end if`");
+                     Advance;
+                  end if;
                   exit when Peek /= Tok.Kw_Elsif;
                end loop;
 

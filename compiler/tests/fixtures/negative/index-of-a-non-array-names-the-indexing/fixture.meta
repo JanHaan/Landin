@@ -1,0 +1,9 @@
+class: negative
+summary: indexing a value that is not an array names the indexing as well as the value
+program: program.ldn
+codes: L0301
+constructs: 0520, 1820
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/index-of-a-non-array-names-the-indexing/program.ldn
+expect: expected.txt
+status: 1

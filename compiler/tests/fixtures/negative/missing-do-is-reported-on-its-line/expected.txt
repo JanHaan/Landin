@@ -1,0 +1,10 @@
+error[L0103]: a loop body opens with `do`
+  --> ../tests/fixtures/negative/missing-do-is-reported-on-its-line/program.ldn:3:15
+  |
+3 |     while r < limit
+  |               ^^^^^
+  --> ../tests/fixtures/negative/missing-do-is-reported-on-its-line/program.ldn:3:5
+  |
+3 |     while r < limit
+  |     ^^^^^ this loop
+  = note: [1140]: `while condition do`

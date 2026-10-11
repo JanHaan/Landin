@@ -2,5 +2,9 @@ error[L0301]: this integer literal cannot take the `bool` context required here
   --> ../tests/fixtures/negative/loop-condition-not-bool/program.ldn:2:11
   |
 2 |     while 1 do
-  |           ^ written here
+  |           ^
+  --> ../tests/fixtures/negative/loop-condition-not-bool/program.ldn:2:5
+  |
+2 |     while 1 do
+  |     ^^^^^^^^^^ the condition of this loop
   = note: [1890]: a bool has no arithmetic and no bitwise set

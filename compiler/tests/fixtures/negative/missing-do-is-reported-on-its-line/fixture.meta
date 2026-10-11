@@ -1,0 +1,9 @@
+class: negative
+summary: a while header that leaves off do is reported on the header line, not on the body's first statement
+program: program.ldn
+codes: L0103
+constructs: 1140
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/missing-do-is-reported-on-its-line/program.ldn
+expect: expected.txt
+status: 1

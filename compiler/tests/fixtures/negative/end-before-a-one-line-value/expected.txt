@@ -1,0 +1,6 @@
+error[L0110]: this `end` closes the declaration before the rest of its line
+  --> ../tests/fixtures/negative/end-before-a-one-line-value/program.ldn:1:23
+  |
+1 | one: () -> (r: i32) = end 1 end
+  |                       ^^^
+  = note: [1740]: a file is declarations, each a binding or a function

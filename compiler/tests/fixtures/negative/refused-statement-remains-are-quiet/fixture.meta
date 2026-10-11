@@ -1,0 +1,9 @@
+class: negative
+summary: a refused statement reports once; the closing parenthesis its call left on a line of its own is what the mistake left, not another mistake
+program: program.ldn
+codes: L0103
+constructs: 1810, 1920
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/refused-statement-remains-are-quiet/program.ldn
+expect: expected.txt
+status: 1

@@ -1,0 +1,9 @@
+class: negative
+summary: a stray end on a body's first line is reported where it is written, with no repair written into the signature above it
+program: program.ldn
+codes: L0110
+constructs: 1800, 1810
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/stray-end-before-the-first-statement/program.ldn
+expect: expected.txt
+status: 1

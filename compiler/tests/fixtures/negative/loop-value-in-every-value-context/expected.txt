@@ -2,23 +2,39 @@ error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:15:30
    |
 15 |     g: () -> (result: i32) = for item in items do
-   |                              ^^^^^^^^^^^^^^^^^^^^ this value-producing loop
+   |                              ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:15:42
+   |
+15 |     g: () -> (result: i32) = for item in items do
+   |                                          ^^^^^ the loop ends with no value when this is exhausted
   = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression
 error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:20:13
    |
 20 |     found = for item in items do
-   |             ^^^^^^^^^^^^^^^^^^^^ this value-producing loop
+   |             ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:20:25
+   |
+20 |     found = for item in items do
+   |                         ^^^^^ the loop ends with no value when this is exhausted
   = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression
 error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:25:13
    |
 25 |     h: op = while c do
-   |             ^^^^^^^^^^ this value-producing loop
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:25:19
+   |
+25 |     h: op = while c do
+   |                   ^ the loop ends with no value when this is false
   = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression
 error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:30:15
    |
 30 |     g: pair = for item in items do
-   |               ^^^^^^^^^^^^^^^^^^^^ this value-producing loop
+   |               ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn:30:27
+   |
+30 |     g: pair = for item in items do
+   |                           ^^^^^ the loop ends with no value when this is exhausted
   = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression

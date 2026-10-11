@@ -293,6 +293,9 @@ negative/driver-unknown-option | linux-x86-64, linux-arm64, macos-arm64, freebsd
 negative/duplicate-in-a-body | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/duplicate-in-a-module | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/duplicate-parameter | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/empty-slice-names-the-declared-type | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/end-before-a-one-line-value | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/end-before-else-continues-the-branch | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/end-name-is-offered-the-declared-name | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/erased-typed-call-unhandled | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/error-set-needs-an-atom | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
@@ -438,6 +441,7 @@ negative/increment-unassigned-local-array-element | linux-x86-64, linux-arm64, m
 negative/index-a-scalar | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/index-is-not-a-number | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/index-is-not-usize | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/index-of-a-non-array-names-the-indexing | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/index-of-a-qualified-call-is-refused-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/index-outside-the-length | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/index-past-the-default-type | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -461,6 +465,7 @@ negative/inout-same-place-twice | linux-x86-64, linux-arm64, macos-arm64, synthe
 negative/inout-slice-is-exact | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-conversion-known-binding-out-of-range | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-conversion-known-out-of-range | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/integer-literal-names-its-bool-context | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/integer-literal-not-a-float | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-runs-into-a-name | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/integer-to-bool-known-out-of-range | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -513,8 +518,10 @@ negative/match-scalar-not-enabled | linux-x86-64, linux-arm64, macos-arm64, free
 negative/match-subject-left-unfinished-is-reported-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/measure-in-parentheses-is-written-bare | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/measuring-refused-types | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/misclosed-end-skips-one-stray-word | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/misplaced-mut-is-moved-to-the-front | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/missing-colon-is-written | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/missing-do-is-reported-on-its-line | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/missing-end | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/missing-right-operand-is-reported-at-its-operator | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/missing-then | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1068,6 +1075,7 @@ negative/reference-traversal-value-live-view | linux-x86-64, linux-arm64, macos-
 negative/refused-field-type-in-written-struct | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-result-beside-error-set | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-results-answered-by-control | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/refused-statement-remains-are-quiet | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/refused-struct-inline-argument | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-width-conversion | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-widths-name-their-owner | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1104,6 +1112,8 @@ negative/sink-repeated-by-while | linux-x86-64, linux-arm64, macos-arm64, freebs
 negative/sink-through-dereference | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/slice-comparison-refused | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/statement-where-a-value-belongs-is-named | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/stray-end-after-an-open-operator | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/stray-end-before-the-first-statement | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/stray-end-in-a-statement-is-removed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/struct-argument-unassigned | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/struct-array-field-clear-keeps-fields-separate | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1232,6 +1242,7 @@ negative/utf8-index-result-has-no-address | linux-x86-64, linux-arm64, macos-arm
 negative/utf8-index-result-is-not-a-place | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/value-left-out-before-a-line-break-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/value-left-out-before-a-multiline-statement-is-written-there | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/value-loop-names-what-ends-it | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/variant-case-declaration-duplicate-payload | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/variant-case-does-not-belong | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/variant-case-duplicate | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1367,6 +1378,7 @@ positive/function-valued-struct-fields | linux-x86-64, linux-arm64, macos-arm64,
 positive/generic-routine-formals | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/generic-structural-deduction | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/generic-zero-nominal-array-signatures | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/hosted-initializer-normalized | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 positive/identifier-underscore | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/if-elsif-else | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/if-one-line | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

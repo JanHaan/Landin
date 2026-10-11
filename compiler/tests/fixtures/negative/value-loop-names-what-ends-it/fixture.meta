@@ -1,0 +1,9 @@
+class: negative
+summary: a value-producing loop with no complete names the condition or traversal whose end leaves it without a value, not the loop a second time
+program: program.ldn
+codes: L0332
+constructs: 1180, 1190
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/value-loop-names-what-ends-it/program.ldn
+expect: expected.txt
+status: 1

@@ -1,0 +1,10 @@
+error[L0103]: a binding names its type after `:`, not `)`
+  --> ../tests/fixtures/negative/refused-statement-remains-are-quiet/program.ldn:7:15
+  |
+7 |     mut total ) := pair(
+  |               ^
+  --> ../tests/fixtures/negative/refused-statement-remains-are-quiet/program.ldn:7:9
+  |
+7 |     mut total ) := pair(
+  |         ^^^^^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression

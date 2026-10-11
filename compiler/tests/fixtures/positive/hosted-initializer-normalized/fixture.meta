@@ -1,0 +1,5 @@
+class: positive
+summary: Beside a hosted entry the argument initializer normalizes aliases and accepts an agreeing import; retired helper names are ordinary
+program: program.ldn
+constructs: 0780, 1610, 1650, 1975
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64

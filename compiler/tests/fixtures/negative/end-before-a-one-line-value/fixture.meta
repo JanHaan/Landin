@@ -1,0 +1,9 @@
+class: negative
+summary: an end written before a one-line routine's value is reported where it is written, not as a stray tail beginning no declaration
+program: program.ldn
+codes: L0110
+constructs: 1740, 1800
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/end-before-a-one-line-value/program.ldn
+expect: expected.txt
+status: 1

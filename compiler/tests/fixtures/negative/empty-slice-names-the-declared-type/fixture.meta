@@ -1,0 +1,9 @@
+class: negative
+summary: an empty slice initializing an array or a scalar names the declared type it fails, not itself a second time
+program: program.ldn
+codes: L0301
+constructs: 0570, 0590
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/empty-slice-names-the-declared-type/program.ldn
+expect: expected.txt
+status: 1

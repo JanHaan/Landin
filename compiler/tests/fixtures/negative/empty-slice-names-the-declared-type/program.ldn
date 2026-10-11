@@ -1,0 +1,4 @@
+count_of: () -> (count: u32) =
+    slots: [1]u32 = []
+    count = slots[0]
+end count_of

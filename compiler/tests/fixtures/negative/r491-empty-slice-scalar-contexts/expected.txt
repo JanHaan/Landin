@@ -1,14 +1,22 @@
-error[L0301]: `[]` needs a slice context
+error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:3:30
   |
 3 | result: () -> (value: i32) = [] end result
-  |                              ^^ the empty slice written here
+  |                              ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:3:15
+  |
+3 | result: () -> (value: i32) = [] end result
+  |               ^^^^^^^^^^^^ the returns this fills
   = note: [0570]: an empty slice retains its element type and reference permission
-error[L0301]: `[]` needs a slice context
+error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:5:18
   |
 5 |     value: i32 = []
-  |                  ^^ the empty slice written here
+  |                  ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:5:5
+  |
+5 |     value: i32 = []
+  |     ^^^^^^^^^^^^^^^ the type declared here
   = note: [0570]: an empty slice retains its element type and reference permission
 error[L0301]: `[]` needs a slice context
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:6:17
@@ -16,21 +24,33 @@ error[L0301]: `[]` needs a slice context
 6 |     inferred := []
   |                 ^^ the empty slice written here
   = note: [0570]: an empty slice retains its element type and reference permission
-error[L0301]: `[]` needs a slice context
+error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:7:12
   |
 7 |     accept([])
-  |            ^^ the empty slice written here
+  |            ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:2:10
+  |
+2 | accept: (value: i32) -> none = end accept
+  |          ^^^^^^^^^^ this parameter
   = note: [0570]: an empty slice retains its element type and reference permission
-error[L0301]: `[]` needs a slice context
+error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:8:27
   |
 8 |     stored: box = (value: [])
-  |                           ^^ the empty slice written here
+  |                           ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:8:20
+  |
+8 |     stored: box = (value: [])
+  |                    ^^^^^^^^^ the struct field named here
   = note: [0570]: an empty slice retains its element type and reference permission
-error[L0301]: `[]` needs a slice context
+error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:9:12
   |
 9 |     code = []
-  |            ^^ the empty slice written here
+  |            ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:9:5
+  |
+9 |     code = []
+  |     ^^^^ the place written here
   = note: [0570]: an empty slice retains its element type and reference permission

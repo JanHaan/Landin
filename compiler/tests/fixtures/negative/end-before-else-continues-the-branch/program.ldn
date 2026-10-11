@@ -1,0 +1,7 @@
+choose: (left: bool) -> (r: i32) =
+    if left then
+        r = 1
+    end else
+        r = 2
+    end if
+end choose

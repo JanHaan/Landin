@@ -1,0 +1,4 @@
+last_of: (last: usize) -> (answer: usize) =
+    answer =
+    for item in 0..<last do answer = item end for
+end last_of

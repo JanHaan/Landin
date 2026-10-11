@@ -1,0 +1,10 @@
+error[L0102]: an expression belongs after this operator
+  --> ../tests/fixtures/negative/stray-end-after-an-open-operator/program.ldn:4:5
+  |
+4 |     end b
+  |     ^^^
+  --> ../tests/fixtures/negative/stray-end-after-an-open-operator/program.ldn:3:13
+  |
+3 |     r = sum +
+  |             ^ the operator
+  = note: [1820]: every binary operator has a right operand

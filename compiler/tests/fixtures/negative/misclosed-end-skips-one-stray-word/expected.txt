@@ -1,0 +1,11 @@
+error[L0103]: an unconditional loop closes with `end loop`
+  --> ../tests/fixtures/negative/misclosed-end-skips-one-stray-word/program.ldn:6:5
+  |
+6 |     end = loop
+  |     ^^^^^^^^^^
+  --> ../tests/fixtures/negative/misclosed-end-skips-one-stray-word/program.ldn:3:5
+  |
+3 |     loop do
+  |     ^^^^ this loop
+  = note: [1130]: a loop closes with `end loop`
+  = help: close it with `end loop`

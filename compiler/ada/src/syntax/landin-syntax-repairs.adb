@@ -231,6 +231,8 @@ package body Landin.Syntax.Repairs is
       --  tried: a trial of that line would reach into the signature.
       Returns_Value : Boolean := False;
       Routine_First, Routine_Last, Body_First : Natural := 0;
+      --  The line the routine's name, and so its signature, begins on.
+      Name_Line : Natural := 0;
 
       function In_A_Body (Where : Landin.Source.Span) return Boolean;
 
@@ -345,6 +347,8 @@ package body Landin.Syntax.Repairs is
                   Routine_First := Natural (One.Whole.First) + 1;
                   Routine_Last := Natural (One.Whole.Last);
                   Body_First := Natural (One.Runs.First) + 1;
+                  Name_Line := Natural (Landin.Source.Position_Of
+                    (Snapshot, One.Name.First).Line);
                   return Landin.Source.Position_Of
                       (Snapshot, One.Name.First).Line
                     < Landin.Source.Position_Of
@@ -994,6 +998,16 @@ package body Landin.Syntax.Repairs is
                loop
                   Line_First := Line_First - 1;
                end loop;
+               --  A closer on the body's first line cut short no
+               --  statement: the line above it is the signature, and a
+               --  trial of a signature as a statement mends nothing.
+               if Natural (Landin.Source.Position_Of
+                    (Snapshot, Landin.Source.Byte_Offset (Line_First - 1))
+                      .Line) <= Name_Line
+               then
+                  Result.Append (Item);
+                  return;
+               end if;
             end if;
          end;
          if Line_Last < Line_First then
@@ -1004,6 +1018,16 @@ package body Landin.Syntax.Repairs is
          Line_Tokens (Line_First, Line_Last, Pieces, Clean);
          Value := Returns_Value and then Ends_Block (Line_Last);
          Errors_After := Errors_Between (Line_Last + 1, Routine_Last - 1);
+         --  The report being restated is the one a trial must mend, not
+         --  one it may leave: a closer's report moved to the line above
+         --  stands after that line, and counting it there would accept a
+         --  change that leaves the closer refused.
+         if Natural (Where.First) >= Line_Last + 1
+           and then Natural (Where.First) <= Routine_Last - 1
+           and then Errors_After > 0
+         then
+            Errors_After := Errors_After - 1;
+         end if;
          --  A report that spans more than one token was written for the
          --  construct it spans, and says more than a repair would.
          if Where.Last > Where.First

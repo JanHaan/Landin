@@ -1,0 +1,10 @@
+error[L0301]: `[]` is an empty slice, and an array belongs here
+  --> ../tests/fixtures/negative/empty-slice-names-the-declared-type/program.ldn:2:21
+  |
+2 |     slots: [1]u32 = []
+  |                     ^^
+  --> ../tests/fixtures/negative/empty-slice-names-the-declared-type/program.ldn:2:5
+  |
+2 |     slots: [1]u32 = []
+  |     ^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: [0570]: an empty slice retains its element type and reference permission

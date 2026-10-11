@@ -1,0 +1,5 @@
+total: (a: u32, b: u32) -> (r: u32) =
+    sum: u32 = a + b
+    r = sum +
+    end b
+end total
