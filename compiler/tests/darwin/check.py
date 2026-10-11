@@ -58,23 +58,12 @@ def large_image_outcome(meta, status, stdout, stderr, expected,
     return "platform-limited"
 
 
-# These bridges tail-forward without changing the caller's frame or link
-# register. Their complete instruction bodies, not just their names, are
-# checked before accepting the absence of a frame record.
-TAIL_BRIDGES = {
-    "__landin_host_text_length": ["b _strlen"],
-    "__landin_host_read": ["b _read"],
-    "__landin_host_write": ["b _write"],
-    "__landin_host_close": ["b _close"],
-    "__landin_host_open_read": ["mov w1, #0", "b _open"],
-    "__landin_host_heap_release": ["ldur x0, [x0, #-8]", "b _free"],
-}
 FUNCTION_LABEL = r"_[A-Za-z0-9_.$]+:"
-BRIDGE_METADATA = r"\.(?:p2align [0-9]+|(?:globl|private_extern) _[A-Za-z0-9_.$]+)"
 
 
 def assembly_contract(text):
-    """Check function frames, exact tail bridges, and the reserved register."""
+    """Check function frames and the reserved register.  Every routine is
+    Landin's own, the hosted library's included, so each keeps a frame."""
     require(not re.search(r"\b[wx]18\b", text), "reserved x18 used")
     in_code = False
     lines = text.splitlines()
@@ -85,21 +74,9 @@ def assembly_contract(text):
         elif line.strip() == ".data" or line.strip().startswith(".section"):
             in_code = False
         if in_code and re.fullmatch(FUNCTION_LABEL, line):
-            if line[:-1] in TAIL_BRIDGES:
-                body = []
-                for entry in lines[index + 1:]:
-                    entry = entry.strip()
-                    if (re.fullmatch(FUNCTION_LABEL, entry)
-                            or entry in (".text", ".data") or entry.startswith(".section")):
-                        break
-                    if entry and not re.fullmatch(BRIDGE_METADATA, entry):
-                        body.append(entry)
-                require(body == TAIL_BRIDGES[line[:-1]],
-                        "invalid tail bridge: " + line)
-            else:
-                require([entry.strip() for entry in lines[index + 1:index + 3]] ==
-                        ["stp x29, x30, [sp, #-16]!", "mov x29, sp"],
-                        "missing frame record: " + line)
+            require([entry.strip() for entry in lines[index + 1:index + 3]] ==
+                    ["stp x29, x30, [sp, #-16]!", "mov x29, sp"],
+                    "missing frame record: " + line)
             count += 1
     require(count > 0, "no emitted routine frames")
 

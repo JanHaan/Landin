@@ -12154,188 +12154,81 @@ package body Landin.Tests.Checking_Suite is
          "this is not an array of the type named by the struct field");
    end Array_Field_Copies_Compare_Complete_Children;
 
-   procedure Hosted_Helper_Source_Contracts
+   --  The hosted entry calls the program's argument initializer with C's
+   --  argc and argv, so with a hosted `main` every declaration carrying
+   --  that name must be `extern(c) (i32, ptr ptr u8) -> none`, read through
+   --  aliases.  Without one the name is an ordinary C routine, and the
+   --  retired `_landin_host_*` helper names are ordinary everywhere.
+   procedure Hosted_Initializer_Source_Contract
      (Item : in out Landin.Testing.Context);
 
-   procedure Hosted_Helper_Source_Contracts
+   procedure Hosted_Initializer_Source_Contract
      (Item : in out Landin.Testing.Context)
    is
-      function Helper (Index : Positive) return String;
+      Name : constant String := "_landin_host_initialize_arguments";
+      Main : constant String := "public main: () -> (code: i32) =" & LF
+        & "    code = 0" & LF & "end main" & LF;
+      Required : constant String :=
+        "the hosted entry calls `" & Name & "` as"
+        & " `extern(c) (count: i32, values: ptr ptr u8) -> none`";
 
-      function Helper (Index : Positive) return String
-        is ("_landin_host_" & (case Index is
-              when 1 => "initialize_arguments", when 2 => "argument_count",
-              when 3 => "argument_table", when 4 => "argument_at",
-              when 5 => "argument_at_from", when 6 => "text_length",
-              when 7 => "open_read", when 8 => "open_write",
-              when 9 => "read", when 10 => "write", when 11 => "close",
-              when 12 => "errno", when 13 => "heap_allocate",
-              when 14 => "heap_release", when others => "not_a_helper"));
+      procedure Refuse (Signature : String; Prefix : String := "");
 
-      procedure Refuse
-        (Index : Positive; Signature, Requirement : String;
-         Prefix : String := "");
-
-      procedure Refuse
-        (Index : Positive; Signature, Requirement : String;
-         Prefix : String := "") is
+      procedure Refuse (Signature : String; Prefix : String := "") is
       begin
          Check_C_Boundary_Source
-           (Item, Prefix & "extern(c) link(symbol: """ & Helper (Index)
-            & """) bridge: " & Signature & LF,
-            "compiler-owned helper `" & Helper (Index) & "` " & Requirement);
+           (Item, Prefix & Main & "extern(c) " & Name & ": " & Signature
+            & LF, Required, "L0347");
+         --  The same declaration is an ordinary C import without a
+         --  hosted entry.
+         Check_C_Boundary_Source
+           (Item, Prefix & "extern(c) " & Name & ": " & Signature & LF);
       end Refuse;
-
-      procedure Initializer (Argv : String; Prefix : String := "");
-
-      procedure Initializer (Argv : String; Prefix : String := "") is
-      begin
-         Refuse
-           (1, "(argc: i32, escaping argv: " & Argv & ") -> none",
-            "requires parameter 2 to be `ptr ptr u8`", Prefix);
-      end Initializer;
    begin
-      for Index in 1 .. 14 loop
-         for Form in 1 .. 3 loop
-            declare
-               Name : constant String :=
-                 (if Form = 2 then Helper (Index) else "bridge");
-               Prefix : constant String :=
-                 (if Form = 1 then "link(symbol: """ & Helper (Index) & """) "
-                  elsif Form = 2 then "public extern(c) "
-                  else "extern(c) link(symbol: """ & Helper (Index) & """) ");
-            begin
-               Check_C_Boundary_Source
-                 (Item, Prefix & Name & ": () -> none =" & LF
-                  & "end " & Name & LF,
-                  "compiler-owned helper `" & Helper (Index)
-                  & "` cannot be defined by source");
-            end;
-         end loop;
-         --  Source spelling alone is not a forced linker identity.
-         Check_C_Boundary_Source
-           (Item, Helper (Index) & ": () -> none =" & LF
-            & "end " & Helper (Index) & LF);
-         Check_C_Boundary_Source
-           (Item, "extern(c) " & Helper (Index) & ": () -> none =" & LF
-            & "end " & Helper (Index) & LF);
-      end loop;
-      Check_C_Boundary_Source
-        (Item, "link(symbol: ""_landin_host_not_a_helper"") local:"
-         & " () -> none =" & LF & "end local" & LF
-         & "extern(c) malloc: () -> none" & LF
-         & "extern(c) link(symbol: ""$foreign.entry"") odd: () -> none" & LF);
+      Refuse ("(count: usize, values: ptr ptr u8) -> none");
+      Refuse ("(count: i32, values: usize) -> none");
+      Refuse ("(count: i32, values: ptr u8) -> none");
+      Refuse ("(count: i32, values: ptr ptr u32) -> none");
+      Refuse ("(count: i32, values: ptr mut ptr u8) -> none");
+      Refuse ("(count: i32, values: ptr ptr mut u8) -> none");
       Refuse
-        (1, "(argc: i32, argv: ptr ptr u8) -> none",
-         "requires escaping argv");
-      Refuse
-        (1, "(argc: usize, escaping argv: ptr ptr u8) -> none",
-         "requires parameter 1 to be `i32`");
-      Refuse
-        (1, "(argc: i32, escaping argv: usize) -> none",
-         "requires parameter 2 to be `ptr ptr u8`");
-      Initializer ("ptr u8");
-      Initializer ("ptr ptr u32");
-      Initializer ("ptr mut ptr u8");
-      Initializer ("ptr ptr mut u8");
-      Initializer
-        ("maybe_table", "missing: atom" & LF
-         & "maybe_table: type = missing | ptr ptr u8" & LF);
-      Initializer
-        ("ptr maybe_byte", "missing: atom" & LF
-         & "maybe_byte: type = missing | ptr u8" & LF);
-      Initializer
-        ("ptr ptr byte_record", "byte_record: type = layout(c) struct" & LF
-         & "    value: u8" & LF & "end byte_record" & LF);
-      Refuse (1, "(argc: i32) -> none", "requires 2 parameters and no result");
-      Refuse
-        (1, "(argc: i32, escaping argv: ptr ptr u8) -> (value: i32)",
-         "requires 2 parameters and no result");
-      Refuse
-        (1, "(argc: i32, escaping argv: ptr ptr u8, ...) -> none",
-         "requires a fixed infallible C import");
-      Refuse (2, "() -> (count: u64)", "requires result `usize`");
-      Refuse (3, "() -> (table: ptr u8)", "requires result `ptr ptr u8`");
-      Refuse
-        (4, "(index: usize) -> (value: ptr mut u8)",
-         "requires result `ptr u8 or cstring`");
-      Refuse
-        (5, "(table: ptr ptr u8, index: usize) -> (value: ptr u8)",
-         "requires its result from parameter 1");
-      Refuse
-        (5, "(table: ptr ptr u8, index: usize)"
-         & " -> (value: ptr u8 from index)",
-         "requires its result from parameter 1");
-      Refuse
-        (5, "(table: ptr ptr u8, index: usize)"
-         & " -> (value: ptr u8 from table, index)",
-         "requires its result from parameter 1");
-      Refuse
-        (6, "(data: ptr u32) -> (length: usize)",
-         "requires parameter 1 to be `ptr u8`");
-      Refuse
-        (7, "(path: ptr mut u8) -> (fd: i32)",
-         "requires parameter 1 to be `ptr u8`");
-      Refuse
-        (8, "(path: ptr u8) -> (fd: u32)", "requires result `i32`");
-      Refuse
-        (9, "(fd: i32, data: ptr u8, length: usize) -> (count: usize)",
-         "requires parameter 2 to be `ptr mut u8`");
-      Refuse
-        (10, "(fd: i32, data: ptr u8, length: u64) -> (count: usize)",
-         "requires parameter 3 to be `usize`");
-      Refuse (11, "(fd: u32) -> (status: i32)",
-              "requires parameter 1 to be `i32`");
-      Refuse (12, "() -> (number: u32)", "requires result `i32`");
-      Refuse
-        (13, "(length: usize, alignment: usize) -> (data: ptr mut u8)",
-         "requires result `one atom | ptr mut u8`");
-      Refuse (14, "(data: ptr u8) -> none",
-              "requires parameter 1 to be `ptr mut u8`");
-      Check_C_Boundary_Source
-        (Item, "byte: type = u8" & LF & "size: type = usize" & LF
-         & "bytes: type = ptr byte" & LF & "table: type = ptr bytes" & LF
-         & "no_memory: atom" & LF
-         & "allocation: type = no_memory | ptr mut byte" & LF
-         & "extern(c) " & Helper (1)
-         & ": (escaping argc: i32, escaping argv: table) -> none" & LF
-         & "extern(c) " & Helper (2) & ": () -> (count: size)" & LF
-         & "extern(c) " & Helper (3) & ": () -> (argv: table)" & LF
-         & "extern(c) " & Helper (4) & ": (i: size) -> (data: bytes)" & LF
-         & "extern(c) " & Helper (5)
-         & ": (argv: table, i: size) -> (data: bytes from argv)" & LF
-         & "extern(c) " & Helper (6) & ": (p: bytes) -> (n: size)" & LF
-         & "extern(c) " & Helper (7) & ": (p: bytes) -> (fd: i32)" & LF
-         & "extern(c) " & Helper (8) & ": (p: bytes) -> (fd: i32)" & LF
-         & "extern(c) " & Helper (9)
-         & ": (fd: i32, p: ptr mut byte, n: size) -> (count: size)" & LF
-         & "extern(c) " & Helper (10)
-         & ": (fd: i32, p: bytes, n: size) -> (count: size)" & LF
-         & "extern(c) " & Helper (11) & ": (fd: i32) -> (status: i32)" & LF
-         & "extern(c) " & Helper (12) & ": () -> (error: i32)" & LF
-         & "extern(c) " & Helper (13)
-         & ": (n: size, a: size) -> (data: allocation)" & LF
-         & "extern(c) " & Helper (14) & ": (p: ptr mut byte) -> none" & LF
-         & "extern(c) link(symbol: """ & Helper (1) & """) initialize:"
-         & " (escaping count: i32, escaping pointers: ptr ptr u8) -> none"
+        ("(count: i32, values: maybe_table) -> none",
+         "missing: atom" & LF & "maybe_table: type = missing | ptr ptr u8"
          & LF);
+      Refuse
+        ("(count: i32, values: ptr maybe_byte) -> none",
+         "missing: atom" & LF & "maybe_byte: type = missing | ptr u8" & LF);
+      Refuse ("(count: i32) -> none");
+      Refuse ("(count: i32, values: ptr ptr u8) -> (status: i32)");
+      Refuse ("(count: i32, values: ptr ptr u8, ...) -> none");
+      --  A definition with a result is refused only beside a hosted entry.
       Check_C_Boundary_Source
-        (Item, "extern(c) " & Helper (4)
-         & ": (index: usize) -> (value: cstring)" & LF);
+        (Item, Main & "extern(c) link(symbol: """ & Name & """) start:"
+         & " (count: i32, values: ptr ptr u8) -> (ok: bool) =" & LF
+         & "    ok = count > 0" & LF & "end start" & LF, Required, "L0347");
+      --  The library's definition, through aliases, with an agreeing
+      --  import beside it, and with or without `escaping`.
       Check_C_Boundary_Source
-        (Item, "extern(c) " & Helper (4)
-         & ": (index: usize) -> (value: ptr u8)" & LF
-         & "extern(c) link(symbol: """ & Helper (4) & """) text:"
-         & " (index: usize) -> (value: cstring)" & LF,
-         "this C link symbol collides with another declaration or definition");
+        (Item, Main & "byte: type = u8" & LF & "text: type = ptr byte" & LF
+         & "table: type = ptr text" & LF
+         & "public extern(c) " & Name
+         & ": (count: i32, escaping values: table) -> none =" & LF
+         & "    _ = count" & LF & "    _ = values" & LF & "end " & Name & LF
+         & "extern(c) link(symbol: """ & Name & """) start:"
+         & " (count: i32, escaping values: ptr ptr u8) -> none" & LF);
       Check_C_Boundary_Source
-        (Item, "extern(c) " & Helper (1)
-         & ": (argc: i32, escaping argv: ptr ptr u8) -> none" & LF
-         & "forward: (argv: ptr ptr u8) -> none =" & LF
-         & "    " & Helper (1) & "(0, argv)" & LF & "end forward" & LF,
-         "this parameter is non-escaping, so its reference cannot be retained"
-         & " by the called function", "L0314");
-   end Hosted_Helper_Source_Contracts;
+        (Item, Main & "public extern(c) " & Name
+         & ": (count: i32, values: ptr ptr u8) -> none =" & LF
+         & "    _ = count" & LF & "    _ = values" & LF & "end " & Name & LF);
+      --  The retired helper names are ordinary C names now.
+      Check_C_Boundary_Source
+        (Item, Main & "public extern(c) _landin_host_errno: ()"
+         & " -> (number: i32) =" & LF & "    number = 0" & LF
+         & "end _landin_host_errno" & LF
+         & "extern(c) _landin_host_argument_count: () -> (count: u64)" & LF
+         & "link(symbol: ""_landin_host_heap_allocate"") allocate:"
+         & " () -> none =" & LF & "end allocate" & LF);
+   end Hosted_Initializer_Source_Contract;
 
    procedure Hosted_Main_Linkage
      (Item : in out Landin.Testing.Context);
@@ -15573,8 +15466,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "recursive C array source contexts",
          Recursive_C_Array_Source_Contexts'Access);
       Landin.Testing.Register
-        (Into, "checking", "hosted helper source contracts",
-         Hosted_Helper_Source_Contracts'Access);
+        (Into, "checking", "hosted initializer source contract",
+         Hosted_Initializer_Source_Contract'Access);
       Landin.Testing.Register
         (Into, "checking", "hosted main linkage",
          Hosted_Main_Linkage'Access);

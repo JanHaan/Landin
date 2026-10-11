@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a path ending in compiler.unreachable() needs no assignment, result or value, and the program runs past every unreached trap
+program: main.ldn
+status: 42
+constructs: 0080, 0930, 1560, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -34,6 +34,13 @@ package Landin.Configuration is
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return Landin.Memory.Operation;
 
+   --  Whether NODE calls `compiler.unreachable`, [1560]'s explicit trap: a
+   --  `() -> noreturn` builtin that raises `unreachable` at its own site.
+   --  Its arguments, however written, are the checker's to refuse.
+   function Unreachable_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean;
+
    type Table is private;
 
    type Build_Mode is (Debug, Release);

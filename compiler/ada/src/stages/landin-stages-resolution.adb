@@ -849,6 +849,17 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         --  [1560]'s explicit trap names no declaration.  Written arguments
+         --  still resolve, so the checker refuses them and not their names.
+         if Landin.Configuration.Unreachable_Call
+           (Spellings.all, Of_Tree, Node)
+         then
+            for I in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+               Resolve (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, I), Inside);
+            end loop;
+            return;
+         end if;
+
          declare
             use type Landin.Memory.Operation;
             Op : constant Landin.Memory.Operation :=

@@ -6,7 +6,7 @@
 #include <string.h>
 
 /* Each C worker calls an exported Landin routine, which reaches this wrapper
- * only through the compiler-emitted _landin_host_open_read bridge. */
+ * only through hosted/io's call to hosted/libc's open. */
 extern int32_t r440_errno_thread_probe(void *state, int32_t expected);
 
 struct worker {
@@ -75,8 +75,8 @@ int __wrap_open(const char *path, int flags, ...)
         local_fault = 2;
     }
 
-    /* Both threads assign their distinct real libc slots before either bridge
-     * can capture one.  The post-assignment rendezvous is lock-free C11 code,
+    /* Both threads assign their distinct real libc slots before either
+     * provider can capture one.  The post-assignment rendezvous is lock-free C11 code,
      * so no unrelated libc call occurs between this assignment and return. */
     errno = (int)local_expected;
     (void)atomic_fetch_add_explicit(&errno_ready, 1, memory_order_seq_cst);

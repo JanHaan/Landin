@@ -1,0 +1,11 @@
+-- [1560]: compiler.unreachable() is an explicit statement, not a check, so
+-- an `unchecked` region that drops compiler checks keeps it.  With no
+-- handler selected it stops at the terminal default trap.
+public main: () -> (code: i32) =
+    code = 1
+    unchecked begin
+        if code == 1 then
+            compiler.unreachable()
+        end if
+    end unchecked
+end main

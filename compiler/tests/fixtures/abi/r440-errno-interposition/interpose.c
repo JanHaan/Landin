@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 /*
- * GNU ld redirects the compiler-emitted bridge's undefined libc references to
- * these functions.  Landin therefore still calls _landin_host_open_read,
- * _landin_host_read, and their siblings; only the libc endpoint is scripted.
+ * The link resolves hosted/libc's undefined libc references to these
+ * functions.  Landin's hosted/io therefore still calls open, read and their
+ * siblings exactly as it calls the C library; only the endpoint is scripted.
  */
 
 enum scenario {

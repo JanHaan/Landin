@@ -3,28 +3,49 @@
 --  Import this module only at a hosted authority root.
 
 import core/io
+import hosted/libc
 
-extern(c) _landin_host_argument_count: () -> (count: usize)
-extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
-extern(c) _landin_host_argument_at_from: (table: ptr ptr u8, index: usize)
-                                         -> (data: ptr u8 from table)
-extern(c) _landin_host_text_length: (data: ptr u8) -> (length: usize)
-extern(c) _landin_host_open_read: (path: ptr u8) -> (descriptor: i32)
-extern(c) _landin_host_open_write: (path: ptr u8) -> (descriptor: i32)
-extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8,
-                              length: usize) -> (read_count: usize)
-extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
-                               length: usize) -> (write_count: usize)
-extern(c) _landin_host_close: (descriptor: i32) -> (status: i32)
-extern(c) _landin_host_errno: () -> (number: i32)
+--  A file open_write creates gets 0666, which the process umask filters.
+created_mode: i32 = 0o666
 
---  Values shared by Linux and Darwin (historical names). Kept at the only
---  provider that interprets libc errno, rather than leaking into its users.
-linux_eperm: i32 = 1
-linux_enoent: i32 = 2
-linux_eintr: i32 = 4
-linux_eacces: i32 = 13
-linux_erofs: i32 = 30
+word: usize = sizeof usize
+
+--  The argument root: C's argv and argc as the startup call established
+--  them, retained without copying.  Zero is absence; no C table is at
+--  address zero.
+mut root_values: usize
+mut root_count: i32
+
+--- Establish the process's argument root from C's `main` carriers.  The
+--- hosted entry calls this with its own `argc` and `argv` before its body
+--- runs; a C `main` that drives Landin exports calls it itself, before
+--- `host` and before starting a thread that may call `host`.
+---
+--- The first call needs a nonnegative count and a non-null table, and
+--- keeps that exact pair without copying: the caller keeps the table and
+--- its strings readable while any world or view derived from them is in
+--- use.  Repeating the identical pair changes nothing; a negative count, a
+--- null table or a different pair traps.  The published arguments omit
+--- `argv[0]`, so their count is `max(argc - 1, 0)`.
+public extern(c) _landin_host_initialize_arguments:
+    (count: i32, escaping values: ptr ptr u8) -> none =
+    --  Every misuse of the root stops at compiler.unreachable(), which a
+    --  selected panic handler sees as `unreachable` at that site [1560].
+    address: usize = usize(values)
+    if root_values <> 0 then
+        --  An identical repeat changes nothing; another pair would replace
+        --  a root that published worlds and views may still use.
+        if count <> root_count or address <> root_values then
+            compiler.unreachable()
+        end if
+        return
+    end if
+    if count < 0 or address == 0 then
+        compiler.unreachable()
+    end if
+    root_count = count
+    root_values = address
+end _landin_host_initialize_arguments
 
 system_value: type = struct
     arguments: ptr ptr u8
@@ -54,7 +75,7 @@ system_open_read: (self: ptr mut system, path: ptr u8)
                   -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
     self.val.failure_errno = 0
     loop do
-        descriptor: i32 = _landin_host_open_read(path)
+        descriptor: i32 = libc.open(path, libc.o_rdonly)
         if descriptor >= 0 then
             opened = io.file(descriptor)
             return
@@ -63,12 +84,12 @@ system_open_read: (self: ptr mut system, path: ptr u8)
         --  Nothing may call into the host between the failed operation and
         --  this capture.  Linux open reports EINTR before publishing a file
         --  descriptor, so retrying this same request is safe.
-        number: i32 = _landin_host_errno()
-        if number <> linux_eintr then
+        number: i32 = libc.current_errno()
+        if number <> libc.eintr then
             self.val.failure_errno = number
-            fail io.not_found when number == linux_enoent
-            fail io.no_access when number == linux_eperm or number == linux_eacces
-              or number == linux_erofs
+            fail io.not_found when number == libc.enoent
+            fail io.no_access when number == libc.eperm or number == libc.eacces
+              or number == libc.erofs
             fail io.io_failed
         end if
     end loop
@@ -79,21 +100,22 @@ system_open_write: (self: ptr mut system, path: ptr u8)
                    ! io.not_found | io.no_access | io.io_failed =
     self.val.failure_errno = 0
     loop do
-        descriptor: i32 = _landin_host_open_write(path)
+        descriptor: i32 = libc.open
+            (path, libc.o_wronly | libc.o_creat | libc.o_trunc, created_mode)
         if descriptor >= 0 then
             opened = io.file(descriptor)
             return
         end if
 
-        --  The bridge's write-open request is fixed across attempts.  An
+        --  The write-open request is fixed across attempts.  An
         --  interrupted open has not returned a descriptor, so retry it; every
         --  other errno is retained before mapping to the stable atom set.
-        number: i32 = _landin_host_errno()
-        if number <> linux_eintr then
+        number: i32 = libc.current_errno()
+        if number <> libc.eintr then
             self.val.failure_errno = number
-            fail io.not_found when number == linux_enoent
-            fail io.no_access when number == linux_eperm or number == linux_eacces
-              or number == linux_erofs
+            fail io.not_found when number == libc.enoent
+            fail io.no_access when number == libc.eperm or number == libc.eacces
+              or number == libc.erofs
             fail io.io_failed
         end if
     end loop
@@ -104,17 +126,17 @@ end system_open_write
 system_same_file: (self: ptr mut system, left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io.io_failed =
     self.val.failure_errno = 0
-    fail io.io_failed when alignof native_stat <> 8
-      or sizeof native_stat <> native_stat_size
-    mut first: native_stat = zeroed
-    mut second: native_stat = zeroed
-    if stat(left, addr first) <> 0 then
-        self.val.failure_errno = _landin_host_errno()
+    fail io.io_failed when alignof libc.file_status <> 8
+      or sizeof libc.file_status <> libc.file_status_size
+    mut first: libc.file_status = zeroed
+    mut second: libc.file_status = zeroed
+    if libc.stat(left, addr first) <> 0 then
+        self.val.failure_errno = libc.current_errno()
         fail io.io_failed
     end if
-    if stat(right, addr second) <> 0 then
-        number: i32 = _landin_host_errno()
-        if number == linux_enoent then
+    if libc.stat(right, addr second) <> 0 then
+        number: i32 = libc.current_errno()
+        if number == libc.enoent then
             same = false
             return
         end if
@@ -127,12 +149,12 @@ end system_same_file
 system_close: (self: ptr mut system, sink opened: io.file)
               -> none ! io.io_failed =
     self.val.failure_errno = 0
-    status: i32 = _landin_host_close(i32(opened))
+    status: i32 = libc.close(i32(opened))
     if status <> 0 then
         --  Capture first, then report.  A failed Linux close may already have
         --  released the descriptor; retrying could close an unrelated reused
         --  descriptor, so EINTR is deliberately terminal here.
-        self.val.failure_errno = _landin_host_errno()
+        self.val.failure_errno = libc.current_errno()
         fail io.io_failed
     end if
 end system_close
@@ -145,22 +167,21 @@ system_read: (self: ptr mut system, opened: io.file, into: []mut u8)
         return
     end if
     base: ptr mut u8 = addr into[0]
-    failed: usize = 0 -% 1
     loop do
-        read_count: usize = _landin_host_read
-            (i32(opened), base, lenof into)
-        if read_count <> failed then
-            fail io.io_failed when read_count > lenof into
+        read_count: isize = libc.read(i32(opened), base, lenof into)
+        if read_count <> -1 then
+            fail io.io_failed when read_count < 0
+              or usize(read_count) > lenof into
             --  Zero from a nonempty read is genuine EOF, not stalled progress.
-            count = read_count
+            count = usize(read_count)
             return
         end if
 
         --  Linux read returns EINTR only before transferring a byte, so the
         --  same buffer and extent may be retried.  A positive partial read is
         --  returned above and is never discarded by an unnecessary retry.
-        number: i32 = _landin_host_errno()
-        if number <> linux_eintr then
+        number: i32 = libc.current_errno()
+        if number <> libc.eintr then
             self.val.failure_errno = number
             fail io.io_failed
         end if
@@ -169,30 +190,29 @@ end system_read
 
 write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
            -> none ! io.io_failed =
-    failed: usize = 0 -% 1
     mut written: usize = 0
     while written < lenof bytes do
         remaining: []u8 = bytes[written..<lenof bytes]
         count: usize = lenof remaining
         base: ptr u8 = addr remaining[0]
-        mut accepted: usize = failed
+        mut accepted: isize = -1
         loop do
-            accepted = _landin_host_write(descriptor, base, count)
-            break when accepted <> failed
+            accepted = libc.write(descriptor, base, count)
+            break when accepted <> -1
 
             --  Linux reports EINTR only before this attempt transfers data.
             --  Retry the same remaining suffix; a preceding positive partial
             --  write has already advanced `written` and is never repeated.
-            number: i32 = _landin_host_errno()
-            if number <> linux_eintr then
+            number: i32 = libc.current_errno()
+            if number <> libc.eintr then
                 self.val.failure_errno = number
                 fail io.io_failed
             end if
         end loop
         --  A nonempty zero-progress success cannot complete write-all, and an
         --  oversized count violates the host seam.  Neither fabricates errno.
-        fail io.io_failed when accepted == 0 or accepted > count
-        written += accepted
+        fail io.io_failed when accepted <= 0 or usize(accepted) > count
+        written += usize(accepted)
     end while
 end write_all
 
@@ -210,22 +230,23 @@ system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
         count = 0
         return
     end if
-    failed: usize = 0 -% 1
     base: ptr u8 = addr bytes[0]
     --  Keep a single host request within a representable, bounded extent;
     --  the caller can send the remaining suffix after this progress.
     mut requested: usize = lenof bytes
     if requested > 65536 then requested = 65536 end if
     loop do
-        count = _landin_host_write(i32(opened), base, requested)
-        if count <> failed then
-            fail io.io_failed when count == 0 or count > requested
+        accepted: isize = libc.write(i32(opened), base, requested)
+        if accepted <> -1 then
+            fail io.io_failed when accepted <= 0
+              or usize(accepted) > requested
+            count = usize(accepted)
             return
         end if
         --  EINTR transfers nothing on this attempt. A positive short write
         --  returns immediately so its exact prefix reaches the caller.
-        number: i32 = _landin_host_errno()
-        if number <> linux_eintr then
+        number: i32 = libc.current_errno()
+        if number <> libc.eintr then
             self.val.failure_errno = number
             fail io.io_failed
         end if
@@ -255,9 +276,14 @@ system_argument: (self: ptr system, index: usize)
                  -> (value: io.argument from self) ! io.no_argument =
     fail io.no_argument when index >= self.val.argument_length
     table: ptr ptr u8 = system_argument_table(self)
-    data: ptr u8 = _landin_host_argument_at_from(table, index)
-    length: usize = _landin_host_text_length(data)
-    value = (data: data, length: length)
+    --  C promises a non-null string below argc; a null entry stops here
+    --  rather than being published.
+    entry: ptr usize = ptr(usize(table) + index * word)
+    if entry.val == 0 then
+        compiler.unreachable()
+    end if
+    data: ptr u8 = ptr(entry.val)
+    value = (data: data, length: libc.strlen(data))
 end system_argument
 
 system is io.reader (read: system_read)
@@ -273,8 +299,16 @@ system is io.world ()
 --- Create the hosted I/O provider and expose process arguments and standard
 --- streams. Regular open-write operations create or truncate files; close
 --- regular files explicitly.
+---
+--- The arguments are the root `_landin_host_initialize_arguments`
+--- established, which the hosted entry establishes before its body runs;
+--- calling this before any root exists traps.
 public host: () -> (state: system) =
-    state = (arguments: _landin_host_argument_table(),
-             argument_length: _landin_host_argument_count(),
+    if root_values == 0 then
+        compiler.unreachable()
+    end if
+    state = (arguments: ptr(root_values + word),
+             argument_length: if root_count > 0 then usize(root_count - 1)
+                              else usize(0) end if,
              failure_errno: 0)
 end host

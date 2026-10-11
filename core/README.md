@@ -17,8 +17,11 @@ The shared freestanding modules are `core/cmp`, `core/diag`, `core/fault`,
 `core/sort`, `core/spill`, `core/text`, `core/tree` and `core/vec`. Every public interface is
 available on every target. Their providers retain caller-supplied authority.
 
-`hosted/heap` and `hosted/io` require a hosted system. Import the I/O provider
-`as hosted` alongside the shared `core/io` protocol. `platform/c` holds the
+`hosted/heap`, `hosted/io` and `hosted/libc` require a hosted system. Import
+the I/O provider `as hosted` alongside the shared `core/io` protocol.
+`hosted/libc` declares the C library both providers call, with the facts that
+differ between systems selected by `compiler.os`; the compiler names none of
+it. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cpu` holds M-profile CPU operations and admits the
 armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
@@ -134,8 +137,8 @@ Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
 caller backing, and every `core/io` concept can be selected on Cortex-M0. The
-`hosted/io` provider, `hosted/heap` and the hosted C aliases in `platform/c`
-remain outside this consumer closure. Even unused hosted declarations in a
+`hosted/io` provider, `hosted/heap`, `hosted/libc` and the hosted C aliases in
+`platform/c` remain outside this consumer closure. Even unused hosted declarations in a
 selected module must meet target checks.
 
 `core/sort.sort` sorts a mutable initialized view in place with heapsort:

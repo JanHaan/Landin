@@ -9,12 +9,11 @@ with Landin.Packed;
 with Landin.Targets.Packed;
 with Ada.Strings.Fixed;
 
-with Landin.Hosted;
 with Landin.Targets.Capabilities;
 
 with Landin.Backend.C_ABI;
 with Landin.Backend.ELF;
-with Landin.Backend.Hosted_ABI;
+with Landin.Backend.Entry_Point;
 with Landin.Backend.Work_Arrays;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Dwarf;
@@ -64,9 +63,6 @@ package body Landin.Backend.X86_64 is
    --  same reason.
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
-
-   function Image (Value : Natural) return String
-     is (Trimmed (Natural'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -353,8 +349,6 @@ package body Landin.Backend.X86_64 is
       Link_Facts : constant Landin.Targets.Target_Facts :=
         (if Facts = Landin.Targets.Synthetic_32
          then Landin.Targets.Linux_X86_64 else Facts);
-      System : constant Hosted_ABI.Hosted_System :=
-        Landin.Targets.Capabilities.Hosted_System_Of (Link_Facts);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -467,7 +461,12 @@ package body Landin.Backend.X86_64 is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      Host_Bridge_Needed : Boolean := Hosted_Entry /= Landin.IR.No_Item;
+      --  The library's argument initializer the hosted entry calls with
+      --  C's argc and argv, when the program defines one.
+      Initializer : constant Landin.IR.Item_Id :=
+        (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
+         else Landin.Backend.Entry_Point.Argument_Initializer
+           (Of_Unit, Names));
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
@@ -477,32 +476,10 @@ package body Landin.Backend.X86_64 is
             and then Landin.IR.Signature_Uses_C_ABI
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
 
-      use Landin.Hosted;
-      --  A hosted main needs startup; an external import retains bridge
-      --  support for the Landin unit or its C-owned caller.
-      Needed_Bridges : array (Host_Helper range Initialize_Arguments
-        .. Heap_Release) of Boolean := [others => False];
-      subtype Hosted_Bridge is Host_Helper;
-      Not_A_Bridge : constant Hosted_Bridge := No_Host_Helper;
-      function Bridge_Of (Spelling : String) return Hosted_Bridge
-        renames Helper_Of;
-
-      function Bridge_Symbol (Helper : Host_Helper) return String
-        is (Landin.Targets.Capabilities.Link_Symbol
-              (Link_Facts, Helper_Name (Helper)));
-
-      procedure Begin_Bridge_Section (Helper : Host_Helper);
-
-      procedure Begin_Bridge_Section (Helper : Host_Helper) is
-      begin
-         Put (Character'Val (9) & ".section .text."
-              & Bridge_Symbol (Helper) & ",""ax"",@progbits");
-      end Begin_Bridge_Section;
-
       --  Every routine, datum and evidence table has its own input section,
       --  so the hosted link's --gc-sections keeps exactly what the entry, a
       --  C object or another retained item reaches.  A dead caller, or dead
-      --  data holding a routine's address, then keeps no hosted bridge.
+      --  data holding a routine's address, then keeps no library routine.
       procedure Begin_Item_Section
         (Prefix, Flags : String; Position : Positive);
 
@@ -513,23 +490,6 @@ package body Landin.Backend.X86_64 is
               & Trimmed (Positive'Image (Position)) & "," & Flags);
       end Begin_Item_Section;
 
-      function Is_Hosted_Dependency (Spelling : String) return Boolean
-        is (Bridge_Of (Spelling) /= Not_A_Bridge
-            or else Spelling = "strlen"
-            or else Spelling = "malloc"
-            or else Spelling = "free"
-            or else Spelling = "open"
-            or else Spelling = "read"
-            or else Spelling = "write"
-            or else Spelling = "close"
-            or else Spelling = Hosted_ABI.Errno_Function (System));
-
-      function Arguments_State_Needed return Boolean is
-        (Needed_Bridges (Initialize_Arguments)
-         or else Needed_Bridges (Argument_Count)
-         or else Needed_Bridges (Argument_Table)
-         or else Needed_Bridges (Argument_At));
-
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
               /= Landin.Source.Names.No_Name
@@ -537,8 +497,8 @@ package body Landin.Backend.X86_64 is
             or else Landin.IR.Is_External (Of_Unit, Item));
 
       --  Explicit ELF spellings may start with `.L` too.  Pick a disjoint
-      --  prefix for every generated local label (blocks, evidence, anonymous
-      --  data and bridge state), rather than reserving a new source-language
+      --  prefix for every generated local label (blocks, evidence and
+      --  anonymous data), rather than reserving a new source-language
       --  namespace.  Most units retain exactly the original `.L` spelling.
       function Unused_Local_Prefix return String;
 
@@ -700,97 +660,19 @@ package body Landin.Backend.X86_64 is
            (Names, Landin.Resolution.Name_Of (Meanings, Declared));
       end Source_Symbol;
 
-      --  This target owns the emitted bridges and sees actual linker
-      --  spellings; the target-neutral verifier sees only interned name IDs.
-      --  Refuse an override before returning any assembly, in release too.
-      --  Source linkage checking must diagnose these earlier, including the
-      --  pointer/retention distinctions erased from neutral scalar carriers.
+      --  This target sees actual linker spellings; the target-neutral
+      --  verifier sees only interned name IDs.  Refuse an override of the
+      --  hosted entry before returning any assembly, in release too.
+      --  Source linkage checking must diagnose these earlier.
       procedure Validate_Linkage;
 
       procedure Validate_Linkage is
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean;
-
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean
-         is
-            package Ty renames Landin.Types;
-            Signature : constant Landin.IR.Signature_Id :=
-              Landin.IR.Signature_Of (Of_Unit, Item);
-            type Kind_Array is array (Positive range <>) of Ty.Type_Kind;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean
-            is
-            begin
-               if Landin.IR.Signature_Parameter_Count (Of_Unit, Signature)
-                    /= Parameters'Length
-                 or else Landin.IR.Signature_Result_Count (Of_Unit, Signature)
-                    /= (if Result = Ty.No_Value then 0 else 1)
-               then
-                  return False;
-               end if;
-               for Index in Parameters'Range loop
-                  declare
-                     Part : constant Landin.IR.Signature_Part :=
-                       Landin.IR.Nth_Signature_Parameter
-                         (Of_Unit, Signature, Index);
-                  begin
-                     if Part.Kind /= Parameters (Index)
-                       or else Part.Convention /= Landin.IR.In_Value
-                       or else Part.Atoms /= Landin.IR.No_Atom_Set
-                     then
-                        return False;
-                     end if;
-                  end;
-               end loop;
-               return Result = Ty.No_Value
-                 or else Landin.IR.Nth_Signature_Result
-                   (Of_Unit, Signature, 1).Kind = Result;
-            end Matches;
-         begin
-            if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
-              or else Signature = Landin.IR.No_Signature
-              or else not Is_C_Item (Item)
-              or else Landin.IR.Signature_Is_Variadic (Of_Unit, Signature)
-              or else Landin.IR.Signature_Errors (Of_Unit, Signature)
-                /= Landin.IR.No_Atom_Set
-            then
-               return False;
-            end if;
-            case Bridge is
-               when Initialize_Arguments =>
-                  return Matches ([Ty.I32, Ty.Usize], Ty.No_Value);
-               when Argument_Count | Argument_Table =>
-                  return Matches ([], Ty.Usize);
-               when Argument_At | Text_Length =>
-                  return Matches ([Ty.Usize], Ty.Usize);
-               when Argument_At_From | Heap_Allocate =>
-                  return Matches ([Ty.Usize, Ty.Usize], Ty.Usize);
-               when Open_Read | Open_Write =>
-                  return Matches ([Ty.Usize], Ty.I32);
-               when Read_Bytes | Write_Bytes =>
-                  return Matches ([Ty.I32, Ty.Usize, Ty.Usize], Ty.Usize);
-               when Close_File =>
-                  return Matches ([Ty.I32], Ty.I32);
-               when Errno_Value =>
-                  return Matches ([], Ty.I32);
-               when Heap_Release =>
-                  return Matches ([Ty.Usize], Ty.No_Value);
-               when Not_A_Bridge =>
-                  return False;
-            end case;
-         end Import_Agrees;
       begin
          for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Spelling : constant String := Source_Symbol (Item);
-               Bridge : constant Hosted_Bridge := Bridge_Of (Spelling);
             begin
                if Item = Hosted_Entry then
                   if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
@@ -806,17 +688,6 @@ package body Landin.Backend.X86_64 is
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
-               end if;
-               if Is_Forced (Item) and then Bridge /= Not_A_Bridge then
-                  if not Landin.IR.Is_External (Of_Unit, Item) then
-                     raise Landin.Compiler_Defect with
-                       "a definition overrides compiler-owned symbol "
-                       & Spelling;
-                  elsif not Import_Agrees (Item, Bridge) then
-                     raise Landin.Compiler_Defect with
-                       "an import disagrees with compiler-owned symbol "
-                       & Spelling;
-                  end if;
                end if;
             end;
          end loop;
@@ -835,10 +706,6 @@ package body Landin.Backend.X86_64 is
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean
          is
          begin
-            if Host_Bridge_Needed and then Is_Hosted_Dependency (Candidate)
-            then
-               return False;
-            end if;
             --  Held by an item other than this one: every holder of the
             --  spelling, less this item's own allocated and source names.
             return Count (Allocated, Candidate)
@@ -5548,8 +5415,8 @@ package body Landin.Backend.X86_64 is
          --  frame-pointer push aligned the stack for this C call, before any
          --  body code can clobber argc/argv.  C-owned startup calls the same
          --  initializer explicitly; ordinary exports and callbacks never do.
-         if Item = Hosted_Entry then
-            Emit ("call " & Bridge_Symbol (Initialize_Arguments));
+         if Item = Hosted_Entry and then Initializer /= Landin.IR.No_Item then
+            Emit ("call " & Symbol (Initializer));
          end if;
 
          Reserve_Stack (Extent (Layout), "frame");
@@ -7019,22 +6886,6 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & ELF.Size (Symbol (Item), Bytes));
       end Emit_Datum;
 
-      --  Each bridge is one ELF function: typed before its label and sized
-      --  from it to its last instruction.
-      procedure Begin_Bridge (Helper : Host_Helper);
-      procedure End_Bridge (Helper : Host_Helper);
-
-      procedure Begin_Bridge (Helper : Host_Helper) is
-      begin
-         Put (Character'Val (9) & ELF.Function_Type (Bridge_Symbol (Helper)));
-         Put (Bridge_Symbol (Helper) & ":");
-      end Begin_Bridge;
-
-      procedure End_Bridge (Helper : Host_Helper) is
-      begin
-         Put (Character'Val (9) & ELF.Size_To_Here (Bridge_Symbol (Helper)));
-      end End_Bridge;
-
       Any_Written  : Boolean := False;
       Any_Reserved : Boolean := False;
       Any_Read_Only : Boolean := False;
@@ -7049,29 +6900,6 @@ package body Landin.Backend.X86_64 is
       then
          raise Compiler_Defect with "x86-64 emission needs x86-64 ELF facts";
       end if;
-      --  A C-owned main can drive Landin exports without asking refine to
-      --  synthesize a hosted entry.  Those exports still need the library's
-      --  fixed runtime bridges.  Discover them before choosing private names,
-      --  so a Landin `read` cannot capture a shim's libc dependency.
-      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-         declare
-            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
-         begin
-            if Landin.IR.Is_External (Of_Unit, Item) then
-               declare
-                  Name : constant String := Source_Symbol (Item);
-               begin
-                  if Helper_Of (Name) /= No_Host_Helper then
-                     Host_Bridge_Needed := True;
-                     Needed_Bridges (Helper_Of (Name)) := True;
-                  end if;
-               end;
-            end if;
-         end;
-      end loop;
-      --  [1975] exposes the hidden initializer with any hosted bridge
-      --  support: a C-owned main may establish the root before io.host.
-      Needed_Bridges (Initialize_Arguments) := Host_Bridge_Needed;
       Validate_Linkage;
       Allocate_Symbols;
       if Optimized then
@@ -7475,249 +7303,6 @@ package body Landin.Backend.X86_64 is
                end if;
             end;
          end loop;
-      end if;
-
-         --  Compiler-owned C ABI: void initialize_arguments
-         --  (int argc, char **argv).  Startup supplies the real C vector and
-         --  retains its backing for every world derived from it.  Initialize
-         --  before publishing capabilities or starting threads.  Identical
-         --  repeated calls are harmless; replacing a live root is a trap.
-         --  The nonzero argv cell is also the initialized-state guard: zero
-         --  is private absence, never a published Landin pointer or fake argv.
-      if Needed_Bridges (Initialize_Arguments) then
-         Begin_Bridge_Section (Initialize_Arguments);
-         Put (Character'Val (9)
-              & ".globl " & Bridge_Symbol (Initialize_Arguments));
-         Put (Character'Val (9)
-              & ELF.Hidden (Bridge_Symbol (Initialize_Arguments)));
-         Begin_Bridge (Initialize_Arguments);
-         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
-         Emit ("jne " & Local_Prefix & "landin_host_arguments_initialized");
-         Emit ("testl %edi, %edi");
-         Emit ("js " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("testq %rsi, %rsi");
-         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("movl %edi, " & Local_Prefix & "landin_host_argc(%rip)");
-         Emit ("movq %rsi, " & Local_Prefix & "landin_host_argv(%rip)");
-         Emit ("ret");
-         Put (Local_Prefix & "landin_host_arguments_initialized:");
-         Emit ("cmpl %edi, " & Local_Prefix & "landin_host_argc(%rip)");
-         Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("cmpq %rsi, " & Local_Prefix & "landin_host_argv(%rip)");
-         Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("ret");
-         End_Bridge (Initialize_Arguments);
-      end if;
-
-      if Needed_Bridges (Argument_Count) then
-         Begin_Bridge_Section (Argument_Count);
-         Begin_Bridge (Argument_Count);
-         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
-         Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
-         Emit ("subl $1, %eax");
-         Emit ("jns " & Local_Prefix & "landin_host_count_ready");
-         Emit ("xorl %eax, %eax");
-         Put (Local_Prefix & "landin_host_count_ready:");
-         Emit ("ret");
-         End_Bridge (Argument_Count);
-      end if;
-
-         --  Publish the user-argument table itself so core/io can retain the
-         --  real backing capability in its system value.  Indexed results
-         --  then derive from that stored table instead of from hidden global
-         --  state; argv[0] remains outside the published table.
-      if Needed_Bridges (Argument_Table) then
-         Begin_Bridge_Section (Argument_Table);
-         Begin_Bridge (Argument_Table);
-         Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
-         Emit ("testq %rax, %rax");
-         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("addq $8, %rax");
-         Emit ("ret");
-         End_Bridge (Argument_Table);
-      end if;
-
-      if Needed_Bridges (Argument_At) then
-         Begin_Bridge_Section (Argument_At);
-         Begin_Bridge (Argument_At);
-         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
-         Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
-         Emit ("subl $1, %eax");
-         Emit ("jle " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("cmpq %rax, %rdi");
-         Emit ("jae " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
-         Emit ("movq 8(%rax,%rdi,8), %rax");
-         Emit ("testq %rax, %rax");
-         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
-         Emit ("ret");
-         End_Bridge (Argument_At);
-      end if;
-
-         --  Keep the established one-index helper above for the existing
-         --  foreign-C boundary fixtures.  The capability-aware variant has a
-         --  distinct symbol and derives its result from the explicit table.
-      if Needed_Bridges (Argument_At_From) then
-         Begin_Bridge_Section (Argument_At_From);
-         Begin_Bridge (Argument_At_From);
-         Emit ("movq (%rdi,%rsi,8), %rax");
-         Emit ("ret");
-         End_Bridge (Argument_At_From);
-      end if;
-
-      if Needed_Bridges (Text_Length) then
-         Begin_Bridge_Section (Text_Length);
-         Begin_Bridge (Text_Length);
-         Emit ("jmp strlen");
-         End_Bridge (Text_Length);
-      end if;
-
-      if Needed_Bridges (Open_Read) then
-         Begin_Bridge_Section (Open_Read);
-         Begin_Bridge (Open_Read);
-         Emit ("xorl %esi, %esi");
-         Emit ("xorl %eax, %eax");
-         Emit ("jmp open");
-         End_Bridge (Open_Read);
-      end if;
-
-         --  A fixed Landin signature fronts libc's variadic open.  Linux
-         --  O_WRONLY | O_CREAT | O_TRUNC is 577; 0666 is filtered by the
-         --  process umask.  Clearing eax satisfies the SysV variadic ABI.
-      if Needed_Bridges (Open_Write) then
-         Begin_Bridge_Section (Open_Write);
-         Begin_Bridge (Open_Write);
-         Emit ("movl $" & Image (Hosted_ABI.Create_For_Writing (System))
-               & ", %esi");
-         Emit ("movl $" & Image (Hosted_ABI.Created_File_Mode) & ", %edx");
-         Emit ("xorl %eax, %eax");
-         Emit ("jmp open");
-         End_Bridge (Open_Write);
-      end if;
-
-      if Needed_Bridges (Read_Bytes) then
-         Begin_Bridge_Section (Read_Bytes);
-         Begin_Bridge (Read_Bytes);
-         Emit ("jmp read");
-         End_Bridge (Read_Bytes);
-      end if;
-
-      if Needed_Bridges (Write_Bytes) then
-         Begin_Bridge_Section (Write_Bytes);
-         Begin_Bridge (Write_Bytes);
-         Emit ("jmp write");
-         End_Bridge (Write_Bytes);
-      end if;
-
-      if Needed_Bridges (Close_File) then
-         Begin_Bridge_Section (Close_File);
-         Begin_Bridge (Close_File);
-         Emit ("jmp close");
-         End_Bridge (Close_File);
-      end if;
-
-      if Needed_Bridges (Errno_Value) then
-         Begin_Bridge_Section (Errno_Value);
-         Begin_Bridge (Errno_Value);
-         Emit ("subq $8, %rsp");
-         Emit ("call " & Hosted_ABI.Errno_Function (System));
-         Emit ("movl (%rax), %eax");
-         Emit ("addq $8, %rsp");
-         Emit ("ret");
-         End_Bridge (Errno_Value);
-      end if;
-
-         --  hosted/heap keeps allocation behind the same fixed scalar/pointer
-         --  bridge as hosted I/O.  Over-allocation leaves one pointer word
-         --  immediately before the aligned result so release can recover
-         --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks
-         --  are host-width work here, never constants in target-neutral IR.
-      if Needed_Bridges (Heap_Allocate) then
-         Begin_Bridge_Section (Heap_Allocate);
-         Begin_Bridge (Heap_Allocate);
-         Emit ("cmpq $1, %rsi");
-         Emit ("ja " & Local_Prefix & "landin_host_heap_alignment_ready");
-         Emit ("movl $1, %esi");
-         Put (Local_Prefix & "landin_host_heap_alignment_ready:");
-         Emit ("movq %rsi, %rax");
-         Emit ("subq $1, %rax");
-         Emit ("addq $8, %rax");
-         Emit ("jc " & Local_Prefix & "landin_host_heap_failed");
-         Emit ("addq %rdi, %rax");
-         Emit ("jc " & Local_Prefix & "landin_host_heap_failed");
-         Emit ("testq %rax, %rax");
-         Emit ("js " & Local_Prefix & "landin_host_heap_failed");
-         Emit ("subq $24, %rsp");
-         Emit ("movq %rsi, (%rsp)");
-         Emit ("movq %rax, %rdi");
-         Emit ("call malloc");
-         Emit ("testq %rax, %rax");
-         Emit ("jz " & Local_Prefix & "landin_host_heap_malloc_failed");
-         Emit ("movq %rax, 8(%rsp)");
-         Emit ("addq $8, %rax");
-         Emit ("xorl %edx, %edx");
-         Emit ("divq (%rsp)");
-         Emit ("movq 8(%rsp), %rax");
-         Emit ("addq $8, %rax");
-         Emit ("testq %rdx, %rdx");
-         Emit ("jz " & Local_Prefix & "landin_host_heap_aligned");
-         Emit ("movq (%rsp), %rcx");
-         Emit ("subq %rdx, %rcx");
-         Emit ("addq %rcx, %rax");
-         Put (Local_Prefix & "landin_host_heap_aligned:");
-         Emit ("movq 8(%rsp), %rcx");
-         Emit ("movq %rcx, -8(%rax)");
-         Emit ("addq $24, %rsp");
-         Emit ("ret");
-         Put (Local_Prefix & "landin_host_heap_malloc_failed:");
-         Emit ("addq $24, %rsp");
-         Put (Local_Prefix & "landin_host_heap_failed:");
-         Emit ("xorl %eax, %eax");
-         Emit ("ret");
-         End_Bridge (Heap_Allocate);
-      end if;
-
-      if Needed_Bridges (Heap_Release) then
-         Begin_Bridge_Section (Heap_Release);
-         Begin_Bridge (Heap_Release);
-         Emit ("movq -8(%rdi), %rdi");
-         Emit ("jmp free");
-         End_Bridge (Heap_Release);
-      end if;
-      if Arguments_State_Needed then
-         Put (Character'Val (9)
-              & ".section .text.landin_host_arguments_invalid,""ax"","
-              & "@progbits");
-         Put (Local_Prefix & "landin_host_arguments_invalid:");
-         if Panic /= null and then Landin.Panics.Handler (Panic.all)
-           /= Landin.IR.No_Item
-         then
-            --  This private C bridge arrives with its incoming return
-            --  address on the stack. Establish a conventional call frame.
-            Emit ("pushq %rbp");
-            Emit ("movq %rsp, %rbp");
-            Emit ("movl $" & Trimmed (Positive'Image (Landin.Panics.Code
-              (Panic.all, Landin.Panics.Unreachable))) & ", %edi");
-            Emit ("xorl %esi, %esi");
-            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
-         end if;
-         Emit ("ud2");
-      end if;
-
-      if Arguments_State_Needed then
-         --  Keep the two entry cells in the small initialized data section.
-         --  A program may own a multi-gigabyte zero-image datum in .bss;
-         --  placing these cells after that section would put RIP-relative
-         --  entry accesses outside x86-64's signed displacement.
-         Put (Character'Val (9) & ELF.Data_Section);
-         Put (Character'Val (9) & ".balign 8");
-         Put (Local_Prefix & "landin_host_argv:");
-         Emit (".zero 8");
-         Put (Character'Val (9) & ".balign 4");
-         Put (Local_Prefix & "landin_host_argc:");
-         Emit (".zero 4");
       end if;
 
       if Debug /= null then

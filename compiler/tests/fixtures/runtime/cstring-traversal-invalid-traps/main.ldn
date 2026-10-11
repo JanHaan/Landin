@@ -1,8 +1,11 @@
-extern(c) _landin_host_argument_at: (index: usize) -> (value: cstring)
+--  strdup's copy is foreign C text: writable, NUL-terminated and promised
+--  nothing about its encoding.
+extern(c) strdup: (text: ptr u8) -> (copy: cstring)
 
 public main: () -> (code: i32) =
     code = 1
-    source: cstring = _landin_host_argument_at(0)
+    seed: [5]u8 = [97, 98, 99, 100, 0]
+    source: cstring = strdup(addr seed[0])
     mut first: ptr mut u8 = ptr(usize(source))
     mut terminator: ptr mut u8 = ptr(usize(source) + 1)
     first.val = 194

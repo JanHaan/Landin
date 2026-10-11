@@ -6290,38 +6290,6 @@ item 7 ROUTINE exercise result f64 signature 8 params 0 slots 15 blocks 1 values
     49 STORE slot 1 <- 48
     50 LOAD f64 slot 1
     51 LEAVE <- 50
-file positive/r440-checker-helper-normalized-imports/program.ldn
-unit signatures 15 items 15
-signature 1 extern(c) (escaping in i32, escaping in usize) -> none
-signature 2 extern(c) () -> usize
-signature 3 extern(c) () -> usize
-signature 4 extern(c) (in usize) -> usize
-signature 5 extern(c) (in usize, in usize) -> usize from 1
-signature 6 extern(c) (in usize) -> usize
-signature 7 extern(c) (in usize) -> i32
-signature 8 extern(c) (in usize) -> i32
-signature 9 extern(c) (in i32, in usize, in usize) -> usize
-signature 10 extern(c) (in i32, in usize, in usize) -> usize
-signature 11 extern(c) (in i32) -> i32
-signature 12 extern(c) () -> i32
-signature 13 extern(c) (in usize, in usize) -> usize
-signature 14 extern(c) (in usize) -> none
-signature 15 extern(c) (escaping in i32, escaping in usize) -> none
-item 1 ROUTINE _landin_host_initialize_arguments result none signature 1 extern(c) link _landin_host_initialize_arguments params 0 slots 0 blocks 0 values 0
-item 2 ROUTINE _landin_host_argument_count result usize signature 2 extern(c) link _landin_host_argument_count params 0 slots 0 blocks 0 values 0
-item 3 ROUTINE _landin_host_argument_table result usize signature 3 extern(c) link _landin_host_argument_table params 0 slots 0 blocks 0 values 0
-item 4 ROUTINE _landin_host_argument_at result usize signature 4 extern(c) link _landin_host_argument_at params 0 slots 0 blocks 0 values 0
-item 5 ROUTINE _landin_host_argument_at_from result usize signature 5 extern(c) link _landin_host_argument_at_from params 0 slots 0 blocks 0 values 0
-item 6 ROUTINE _landin_host_text_length result usize signature 6 extern(c) link _landin_host_text_length params 0 slots 0 blocks 0 values 0
-item 7 ROUTINE _landin_host_open_read result i32 signature 7 extern(c) link _landin_host_open_read params 0 slots 0 blocks 0 values 0
-item 8 ROUTINE _landin_host_open_write result i32 signature 8 extern(c) link _landin_host_open_write params 0 slots 0 blocks 0 values 0
-item 9 ROUTINE _landin_host_read result usize signature 9 extern(c) link _landin_host_read params 0 slots 0 blocks 0 values 0
-item 10 ROUTINE _landin_host_write result usize signature 10 extern(c) link _landin_host_write params 0 slots 0 blocks 0 values 0
-item 11 ROUTINE _landin_host_close result i32 signature 11 extern(c) link _landin_host_close params 0 slots 0 blocks 0 values 0
-item 12 ROUTINE _landin_host_errno result i32 signature 12 extern(c) link _landin_host_errno params 0 slots 0 blocks 0 values 0
-item 13 ROUTINE _landin_host_heap_allocate result usize signature 13 extern(c) link _landin_host_heap_allocate params 0 slots 0 blocks 0 values 0
-item 14 ROUTINE _landin_host_heap_release result none signature 14 extern(c) link _landin_host_heap_release params 0 slots 0 blocks 0 values 0
-item 15 ROUTINE initialize result none signature 15 extern(c) link _landin_host_initialize_arguments params 0 slots 0 blocks 0 values 0
 file positive/r440-checker-recursive-callback-contexts/program.ldn
 unit signatures 4 items 5
 nominal 1 callbacks layout(c) struct ([2][2]usize signature 1)

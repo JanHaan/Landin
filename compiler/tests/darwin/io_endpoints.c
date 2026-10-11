@@ -1,6 +1,6 @@
 /* Fixture-only endpoints for Linux paths absent from Darwin. Ordinary paths
  * still reach libSystem; only the two named fault endpoints are scripted.
- * The shared Landin source, helper bridge, errno capture and output oracle
+ * The shared Landin source, hosted/libc calls, errno capture and output oracle
  * are unchanged. Native interposition cases separately cover all I/O edges. */
 #include <dlfcn.h>
 #include <errno.h>

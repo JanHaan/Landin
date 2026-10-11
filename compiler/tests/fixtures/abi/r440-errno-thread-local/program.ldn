@@ -1,6 +1,6 @@
 --  Two actual pthreads enter this exported routine concurrently.  Each owns a
 --  distinct system provider supplied by main, so the only shared failure
---  source is libc's real thread-local errno reached through the emitted bridge.
+--  source is libc's real thread-local errno, read through hosted/libc.
 
 import core/io
 import hosted/io as hosted

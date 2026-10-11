@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: C-owned startup can use startup-independent hosted service shims
+summary: C-owned startup can use the startup-independent hosted library, libc and the hosted heap, with no argument root
 program: program.ldn
 c-sources: peer.c
 c-args: -O2

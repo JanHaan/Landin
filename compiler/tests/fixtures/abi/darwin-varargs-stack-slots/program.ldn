@@ -1,0 +1,49 @@
+-- [1975]: under Apple's arm64 ABI every unnamed argument of a variadic call
+-- goes on the stack, after promotion, in its own eight-byte slot in argument
+-- order, and named ones keep their registers.  Twelve tails, more than any
+-- register bank holds, cover each promoted integer width, bool, f32 and f64,
+-- a 64-bit integer, a pointer and an empty optional pointer.  C's va_arg
+-- reads them, and an assembly observer reads where they arrived.
+missing: atom
+optional_cell: type = missing | ptr mut i32
+collector: type = extern(c) (count: i32, ...) -> (result: i32)
+fixed_collector: type = extern(c) (bias: f64, count: i32, ...) -> (result: i32)
+extern(c) c_collect: (count: i32, ...) -> (result: i32)
+extern(c) c_fixed: (bias: f64, count: i32, ...) -> (result: i32)
+extern(c) observe_slots: (count: i32, ...) -> (result: i32)
+
+public extern(c) landin_check: (cell: ptr mut i32) -> (result: i32) =
+    signed_byte: i8 = -7
+    unsigned_byte: u8 = 250
+    signed_half: i16 = -30000
+    unsigned_half: u16 = 60000
+    truth: bool = true
+    single: f32 = 0.5
+    wide: i64 = -5000000000
+    pattern: u64 = 0xfedcba9876543210
+    absent: optional_cell = missing
+    call: collector = c_collect
+    fixed_call: fixed_collector = c_fixed
+    observe: collector = observe_slots
+    direct := c_collect(12, signed_byte, unsigned_byte, signed_half,
+        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+    indirect := call(12, signed_byte, unsigned_byte, signed_half,
+        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+    fixed_direct := c_fixed(12.5, 12, signed_byte, unsigned_byte,
+        signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
+        absent, 9.25)
+    fixed_indirect := fixed_call(12.5, 12, signed_byte, unsigned_byte,
+        signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
+        absent, 9.25)
+    placed := observe_slots(12, signed_byte, unsigned_byte, signed_half,
+        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+    placed_indirect := observe(12, signed_byte, unsigned_byte, signed_half,
+        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+    result = 1
+    if direct == 42 and indirect == 42
+       and fixed_direct == 42 and fixed_indirect == 42
+       and placed == 42 and placed_indirect == 42
+    then
+        result = 42
+    end if
+end landin_check

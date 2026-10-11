@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: Apple's arm64 ABI places every promoted unnamed argument in its own eight-byte stack slot, in order, while named ones keep their registers
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600, 1975
+targets: macos-arm64

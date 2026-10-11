@@ -7,7 +7,7 @@
 --  wants `.subsections_via_symbols` and ELF a non-executable stack note.
 --  Each function here returns the directive or operand text alone, and the
 --  backend writes it with its own line discipline.  The operating system's
---  libc spellings are `Landin.Backend.Hosted_ABI`'s and the C transport is
+--  libc spellings are the library's `hosted/libc` and the C transport is
 --  `Landin.Backend.AAPCS64_ABI`'s; this is the object format only.
 
 with Landin.Targets.Capabilities;
@@ -41,10 +41,6 @@ package Landin.Backend.Arm64.Platform is
 
    --  A table of code addresses: read-only once relocated.
    function Relocated_Read_Only_Section (Format : Arm64_Format) return String;
-
-   --  Visibility for a bridge: linked against, never exported.
-   function Private_Extern (Format : Arm64_Format; Symbol : String)
-     return String;
 
    --  Directives that open and close a function or an object symbol.  Both
    --  are empty on Mach-O, which types and sizes nothing.

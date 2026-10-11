@@ -5,6 +5,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.Cleanup;
 with Landin.Diagnostics.Checking;
 with Landin.Provenance;
@@ -2821,6 +2822,8 @@ package body Landin.Stages.Checking.Flow is
                      end if;
                      if Landin.Checking.Signature_Never_Returns
                        (Types.all, Signature)
+                       or else Landin.Configuration.Unreachable_Call
+                         (Spellings.all, Of_Tree, Node)
                      then
                         Edges.Falls_Through := False;
                      end if;

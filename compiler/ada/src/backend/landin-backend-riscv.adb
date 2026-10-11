@@ -7,12 +7,11 @@ with Landin.Memory;
 with Landin.Targets.Packed;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
-with Landin.Hosted;
 with Landin.Targets.Capabilities;
 with Landin.Backend.RiscV_ABI;
 with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.ELF;
-with Landin.Backend.Hosted_ABI;
+with Landin.Backend.Entry_Point;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
@@ -32,7 +31,6 @@ package body Landin.Backend.RiscV is
    use type Landin.IR.Item_Id;
    use type Landin.IR.Value_Id;
    use type Landin.IR.Opcode;
-   use type Landin.IR.Parameter_Convention;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Element_Total;
@@ -434,8 +432,6 @@ package body Landin.Backend.RiscV is
       Level : Landin.Targets.Levels.Feature_Level :=
         Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_RV64))
    is
-      System : constant Hosted_ABI.Hosted_System :=
-        Landin.Targets.Capabilities.Hosted_System_Of (Facts);
       Output : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -795,7 +791,12 @@ package body Landin.Backend.RiscV is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      Host_Bridge_Needed : Boolean := Hosted_Entry /= Landin.IR.No_Item;
+      --  The library's argument initializer the hosted entry calls with
+      --  C's argc and argv, when the program defines one.
+      Initializer : constant Landin.IR.Item_Id :=
+        (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
+         else Landin.Backend.Entry_Point.Argument_Initializer
+           (Of_Unit, Names));
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
@@ -804,27 +805,6 @@ package body Landin.Backend.RiscV is
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
             and then Landin.IR.Signature_Uses_C_ABI
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
-
-      use Landin.Hosted;
-      subtype Hosted_Bridge is Host_Helper;
-      Not_A_Bridge : constant Hosted_Bridge := No_Host_Helper;
-      function Bridge_Of (Spelling : String) return Hosted_Bridge
-        renames Helper_Of;
-
-      function Bridge_Symbol (Helper : Host_Helper) return String
-        is (Landin.Targets.Capabilities.Link_Symbol
-              (Facts, Helper_Name (Helper)));
-
-      function Is_Hosted_Dependency (Spelling : String) return Boolean
-        is (Bridge_Of (Spelling) /= Not_A_Bridge
-            or else Spelling = "strlen"
-            or else Spelling = "malloc"
-            or else Spelling = "free"
-            or else Spelling = "open"
-            or else Spelling = "read"
-            or else Spelling = "write"
-            or else Spelling = "close"
-            or else Spelling = Hosted_ABI.Errno_Function (System));
 
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
@@ -910,97 +890,19 @@ package body Landin.Backend.RiscV is
            (Names, Landin.Resolution.Name_Of (Meanings, Declared));
       end Source_Symbol;
 
-      --  This target owns the emitted bridges and sees actual linker
-      --  spellings; the target-neutral verifier sees only interned name IDs.
-      --  Refuse an override before returning any assembly, in release too.
-      --  Source linkage checking must diagnose these earlier, including the
-      --  pointer/retention distinctions erased from neutral scalar carriers.
+      --  This target sees actual linker spellings; the target-neutral
+      --  verifier sees only interned name IDs.  Refuse an override of the
+      --  hosted entry before returning any assembly, in release too.
+      --  Source linkage checking must diagnose these earlier.
       procedure Validate_Linkage;
 
       procedure Validate_Linkage is
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean;
-
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean
-         is
-            package Ty renames Landin.Types;
-            Signature : constant Landin.IR.Signature_Id :=
-              Landin.IR.Signature_Of (Of_Unit, Item);
-            type Kind_Array is array (Positive range <>) of Ty.Type_Kind;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean
-            is
-            begin
-               if Landin.IR.Signature_Parameter_Count (Of_Unit, Signature)
-                    /= Parameters'Length
-                 or else Landin.IR.Signature_Result_Count (Of_Unit, Signature)
-                    /= (if Result = Ty.No_Value then 0 else 1)
-               then
-                  return False;
-               end if;
-               for Index in Parameters'Range loop
-                  declare
-                     Part : constant Landin.IR.Signature_Part :=
-                       Landin.IR.Nth_Signature_Parameter
-                         (Of_Unit, Signature, Index);
-                  begin
-                     if Part.Kind /= Parameters (Index)
-                       or else Part.Convention /= Landin.IR.In_Value
-                       or else Part.Atoms /= Landin.IR.No_Atom_Set
-                     then
-                        return False;
-                     end if;
-                  end;
-               end loop;
-               return Result = Ty.No_Value
-                 or else Landin.IR.Nth_Signature_Result
-                   (Of_Unit, Signature, 1).Kind = Result;
-            end Matches;
-         begin
-            if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
-              or else Signature = Landin.IR.No_Signature
-              or else not Is_C_Item (Item)
-              or else Landin.IR.Signature_Is_Variadic (Of_Unit, Signature)
-              or else Landin.IR.Signature_Errors (Of_Unit, Signature)
-                /= Landin.IR.No_Atom_Set
-            then
-               return False;
-            end if;
-            case Bridge is
-               when Initialize_Arguments =>
-                  return Matches ([Ty.I32, Ty.Usize], Ty.No_Value);
-               when Argument_Count | Argument_Table =>
-                  return Matches ([], Ty.Usize);
-               when Argument_At | Text_Length =>
-                  return Matches ([Ty.Usize], Ty.Usize);
-               when Argument_At_From | Heap_Allocate =>
-                  return Matches ([Ty.Usize, Ty.Usize], Ty.Usize);
-               when Open_Read | Open_Write =>
-                  return Matches ([Ty.Usize], Ty.I32);
-               when Read_Bytes | Write_Bytes =>
-                  return Matches ([Ty.I32, Ty.Usize, Ty.Usize], Ty.Usize);
-               when Close_File =>
-                  return Matches ([Ty.I32], Ty.I32);
-               when Errno_Value =>
-                  return Matches ([], Ty.I32);
-               when Heap_Release =>
-                  return Matches ([Ty.Usize], Ty.No_Value);
-               when Not_A_Bridge =>
-                  return False;
-            end case;
-         end Import_Agrees;
       begin
          for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Spelling : constant String := Source_Symbol (Item);
-               Bridge : constant Hosted_Bridge := Bridge_Of (Spelling);
             begin
                if Item = Hosted_Entry then
                   if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
@@ -1016,17 +918,6 @@ package body Landin.Backend.RiscV is
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
-               end if;
-               if Is_Forced (Item) and then Bridge /= Not_A_Bridge then
-                  if not Landin.IR.Is_External (Of_Unit, Item) then
-                     raise Landin.Compiler_Defect with
-                       "a definition overrides compiler-owned symbol "
-                       & Spelling;
-                  elsif not Import_Agrees (Item, Bridge) then
-                     raise Landin.Compiler_Defect with
-                       "an import disagrees with compiler-owned symbol "
-                       & Spelling;
-                  end if;
                end if;
             end;
          end loop;
@@ -1045,10 +936,6 @@ package body Landin.Backend.RiscV is
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean
          is
          begin
-            if Host_Bridge_Needed and then Is_Hosted_Dependency (Candidate)
-            then
-               return False;
-            end if;
             --  Held by an item other than this one: every holder of the
             --  spelling, less this item's own allocated and source names.
             return Count (Allocated, Candidate)
@@ -3334,8 +3221,10 @@ package body Landin.Backend.RiscV is
          if Debug /= null then
             Emit (".cfi_def_cfa x8, 0");
          end if;
-         if Item = Hosted_Entry then
-            Emit ("call " & Bridge_Symbol (Initialize_Arguments));
+         --  The library's initializer receives main's incoming argc and
+         --  argv in a0 and a1 before the body can clobber them.
+         if Item = Hosted_Entry and then Initializer /= Landin.IR.No_Item then
+            Emit ("call " & Symbol (Initializer));
          end if;
          Reserve (Extent (Layout));
          for Number in Saves'Range loop
@@ -4713,221 +4602,6 @@ package body Landin.Backend.RiscV is
          End_Object (Item);
       end Emit_Datum;
 
-      procedure Runtime;
-
-      procedure Runtime is
-         Argv : constant String := Local_Prefix & "host_argv";
-         Argc : constant String := Local_Prefix & "host_argc";
-         Invalid : constant String := Local_Prefix & "host_invalid";
-         Open_Frame : Boolean := False;
-         Open_Bridge : Host_Helper := No_Host_Helper;
-         procedure Close_Bridge;
-         procedure Start (Helper : Host_Helper; Framed : Boolean := True);
-         procedure Finish;
-
-         procedure Close_Bridge is
-         begin
-            if Debug /= null and then Open_Frame then
-               Emit (".cfi_endproc");
-            end if;
-            if Open_Bridge /= No_Host_Helper then
-               Platform_Directive (ELF_Spelling.Size_To_Here
-                 (Bridge_Symbol (Open_Bridge)));
-            end if;
-         end Close_Bridge;
-
-         procedure Start (Helper : Host_Helper; Framed : Boolean := True) is
-         begin
-            Close_Bridge;
-            Emit (".p2align 2");
-            Emit (".globl " & Bridge_Symbol (Helper));
-            Emit (ELF_Spelling.Hidden (Bridge_Symbol (Helper)));
-            Platform_Directive (ELF_Spelling.Function_Type
-              (Bridge_Symbol (Helper)));
-            Put (Bridge_Symbol (Helper) & ":");
-            Open_Bridge := Helper;
-            Open_Frame := True;
-            if Debug /= null then
-               Emit (".loc 1 0 0 is_stmt 0");
-               Emit (".cfi_startproc");
-            end if;
-            if Framed then
-               Emit ("addi sp, sp, -16");
-               Emit ("sd x8, 0(sp)");
-               Emit ("sd ra, 8(sp)");
-               if Debug /= null then
-                  Emit (".cfi_def_cfa_offset 16");
-                  Emit (".cfi_offset x8, -16");
-                  Emit (".cfi_offset x1, -8");
-               end if;
-               Emit ("addi x8, sp, 16");
-               if Debug /= null then
-                  Emit (".cfi_def_cfa x8, 0");
-               end if;
-               Emit ("addi sp, sp, -16");
-               Emit ("sd x26, 8(sp)");
-               if Debug /= null then
-                  Emit (".cfi_offset x26, -24");
-               end if;
-            end if;
-         end Start;
-
-         procedure Finish is
-         begin
-            if Debug /= null then
-               Emit (".cfi_remember_state");
-            end if;
-            Emit ("ld x26, -24(x8)");
-            Emit ("ld ra, -8(x8)");
-            Emit ("mv sp, x8");
-            Emit ("ld x8, -16(x8)");
-            if Debug /= null then
-               Emit (".cfi_def_cfa sp, 0");
-               Emit (".cfi_restore x8");
-               Emit (".cfi_restore x1");
-               Emit (".cfi_restore x26");
-            end if;
-            Emit ("ret");
-            if Debug /= null then
-               Emit (".cfi_restore_state");
-            end if;
-         end Finish;
-
-      begin
-         Emit (".text");
-         Start (Initialize_Arguments);
-         Address ("x5", Argv);
-         Emit ("ld x6, 0(x5)");
-         Emit ("bnez x6, " & Local_Prefix & "host_initialized");
-         Emit ("bltz a0, " & Invalid);
-         Emit ("beqz a1, " & Invalid);
-         Emit ("sd a1, 0(x5)");
-         Address ("x5", Argc);
-         Emit ("sw a0, 0(x5)");
-         Finish;
-         Put (Local_Prefix & "host_initialized:");
-         Emit ("bne x6, a1, " & Invalid);
-         Address ("x5", Argc);
-         Emit ("lw x6, 0(x5)");
-         Emit ("bne x6, a0, " & Invalid);
-         Finish;
-         Put (Invalid & ":");
-         if Panic /= null and then Landin.Panics.Handler (Panic.all)
-           /= Landin.IR.No_Item
-         then
-            Immediate ("x10", Pattern (Landin.Panics.Code
-              (Panic.all, Landin.Panics.Unreachable)));
-            Emit ("li a1, 0");
-            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
-         end if;
-         Emit ("unimp");
-         Start (Argument_Count);
-         Address ("x5", Argv);
-         Emit ("ld x5, 0(x5)");
-         Emit ("beqz x5, " & Invalid);
-         Address ("x5", Argc);
-         Emit ("lw a0, 0(x5)");
-         Emit ("addi a0, a0, -1");
-         Emit ("bgez a0, " & Local_Prefix & "argc_done");
-         Emit ("li a0, 0");
-         Put (Local_Prefix & "argc_done:");
-         Finish;
-         Start (Argument_Table);
-         Address ("x5", Argv);
-         Emit ("ld a0, 0(x5)");
-         Emit ("beqz a0, " & Invalid);
-         Emit ("addi a0, a0, 8");
-         Finish;
-         Start (Argument_At);
-         Address ("x5", Argv);
-         Emit ("ld x5, 0(x5)");
-         Emit ("beqz x5, " & Invalid);
-         Address ("x6", Argc);
-         Emit ("lw x6, 0(x6)");
-         Emit ("addi x6, x6, -1");
-         Emit ("blez x6, " & Invalid);
-         Emit ("bgeu a0, x6, " & Invalid);
-         Emit ("slli x6, a0, 3");
-         Emit ("add x5, x5, x6");
-         Emit ("ld a0, 8(x5)");
-         Emit ("beqz a0, " & Invalid);
-         Finish;
-         Start (Argument_At_From);
-         Emit ("slli x5, a1, 3");
-         Emit ("add x5, a0, x5");
-         Emit ("ld a0, 0(x5)");
-         Finish;
-         Start (Text_Length, Framed => False);
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "strlen"));
-         Start (Read_Bytes, Framed => False);
-         Emit ("sext.w a0, a0");
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "read"));
-         Start (Write_Bytes, Framed => False);
-         Emit ("sext.w a0, a0");
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "write"));
-         Start (Close_File, Framed => False);
-         Emit ("sext.w a0, a0");
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "close"));
-         Start (Open_Read, Framed => False);
-         Emit ("li a1, 0");
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "open"));
-         Start (Open_Write);
-         Emit ("li a1, " & Image (Hosted_ABI.Create_For_Writing (System)));
-         Emit ("li a2, " & Image (Hosted_ABI.Created_File_Mode));
-         Emit ("call " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "open"));
-         Finish;
-         Start (Errno_Value);
-         Emit ("call " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, Hosted_ABI.Errno_Function (System)));
-         Emit ("lwu a0, 0(a0)");
-         Finish;
-         Start (Heap_Allocate);
-         Emit ("bnez a1, " & Local_Prefix & "heap_alignment");
-         Emit ("li a1, 1");
-         Put (Local_Prefix & "heap_alignment:");
-         Emit ("addi x5, a1, 7");
-         Emit ("bltu x5, a1, " & Local_Prefix & "heap_failed");
-         Emit ("add x6, a0, x5");
-         Emit ("bltu x6, a0, " & Local_Prefix & "heap_failed");
-         Emit ("bltz x6, " & Local_Prefix & "heap_failed");
-         Emit ("mv a0, x6");
-         Emit ("addi sp, sp, -16");
-         Emit ("sd a1, 0(sp)");
-         Emit ("call " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "malloc"));
-         Emit ("beqz a0, " & Local_Prefix & "heap_failed");
-         Emit ("ld a1, 0(sp)");
-         Emit ("addi x5, a0, 8");
-         Emit ("remu x6, x5, a1");
-         Emit ("beqz x6, " & Local_Prefix & "heap_aligned");
-         Emit ("sub x7, a1, x6");
-         Emit ("add x5, x5, x7");
-         Put (Local_Prefix & "heap_aligned:");
-         Emit ("sd a0, -8(x5)");
-         Emit ("mv a0, x5");
-         Finish;
-         Put (Local_Prefix & "heap_failed:");
-         Emit ("li a0, 0");
-         Finish;
-         Start (Heap_Release, Framed => False);
-         Emit ("ld a0, -8(a0)");
-         Emit ("tail " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "free"));
-         Close_Bridge;
-         Emit (".data");
-         Emit (".balign 8");
-         Put (Argv & ":");
-         Emit (".quad 0");
-         Put (Argc & ":");
-         Emit (".long 0");
-      end Runtime;
-
 
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
@@ -4941,14 +4615,6 @@ package body Landin.Backend.RiscV is
       Emit (".attribute arch, """ & Landin.Targets.Levels.Name (Level) & """");
       Emit (".option norelax");
       Emit (".option pic");
-      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-         if Landin.IR.Is_External (Of_Unit, Landin.IR.Item_Id (Index))
-           and then Helper_Of (Source_Symbol (Landin.IR.Item_Id (Index))) /=
-             No_Host_Helper
-         then
-            Host_Bridge_Needed := True;
-         end if;
-      end loop;
       Validate_Linkage;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
@@ -5061,9 +4727,6 @@ package body Landin.Backend.RiscV is
                end if;
             end;
          end loop;
-      end if;
-      if Host_Bridge_Needed then
-         Runtime;
       end if;
       if Debug /= null then
          Unbounded.Append (Output,

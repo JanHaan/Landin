@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'highlight'))
 from landin_highlight import Scanner
 
 ROOTS = ('core', 'hosted', 'platform')
-PUBLIC = re.compile(r'^(\s*)public (\w+):\s*(.*)')
+PUBLIC = re.compile(r'^(\s*)public (extern\(c\)\s+(?:link\(symbol:[^)]*\)\s+)?)?'
+                    r'(\w+):\s*(.*)')
 DOC = re.compile(r'^\s*---(?: ?)(.*)$')
 
 
@@ -93,7 +94,7 @@ def read_items(text, source):
             if re.search(r'\bpublic\b', code):
                 raise ValueError(f'{source}:{i+1}: unsupported public declaration')
             continue
-        prefix, name, after = match.groups()
+        prefix, foreign, name, after = match.groups()
         after = after.strip()
         documentation = attached_docs(lines, i)
         if not documentation:
@@ -102,7 +103,34 @@ def read_items(text, source):
             ('not (' + ' or '.join(c[2]) + ')'
              + ('' if c[1] == 'otherwise' else ' and (' + c[1] + ')'))
             if c[2] else c[1] for c in conditions)
-        if after.startswith('('):
+        if foreign:
+            # A C routine: its signature may continue on more deeply
+            # indented lines, and a definition ends it with '=' at
+            # delimiter depth zero where an import simply stops.
+            depth = 0
+            j = i
+            while True:
+                for char in codes[j]:
+                    if char in '([':
+                        depth += 1
+                    elif char in ')]':
+                        depth -= 1
+                stripped_end = codes[j].rstrip()
+                following = codes[j + 1] if j + 1 < len(codes) else ''
+                if depth == 0 and stripped_end.endswith('='):
+                    signature = '\n'.join(
+                        lines[i:j] + [lines[j][:len(stripped_end) - 1]]).rstrip()
+                    break
+                if depth == 0 and (not following.strip()
+                                   or len(following) - len(following.lstrip())
+                                   <= len(prefix)):
+                    signature = '\n'.join(lines[i:j + 1]).rstrip()
+                    break
+                j += 1
+                if j == len(codes):
+                    raise ValueError(f'{source}:{i+1}: unterminated C routine')
+            kind = 'function'
+        elif after.startswith('('):
             # The implementation separator is the first standalone '=' at
             # delimiter depth zero. '=' inside defaults is not a separator.
             depth = 0

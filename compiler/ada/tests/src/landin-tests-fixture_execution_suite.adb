@@ -811,10 +811,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  this reason: accepted, emitted, executed.
    ------------------------------------------------------------------
 
-   procedure Hosted_Bridges_Link_And_Run
+   procedure Hosted_Library_Links_And_Runs
      (Item : in out Landin.Testing.Context);
 
-   procedure Hosted_Bridges_Link_And_Run
+   procedure Hosted_Library_Links_And_Runs
      (Item : in out Landin.Testing.Context)
    is
       Host    : Landin.Platform.Native.Native_Filesystem;
@@ -887,7 +887,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
                Landin.Testing.Check
                  (Item, Ada.Strings.Fixed.Index
                     (Unbounded.To_String (Symbols.Output), Required) > 0,
-                  Name & ": the reachable bridge remains linked");
+                  Name & ": the reachable routine remains linked");
             end if;
          end if;
 
@@ -904,69 +904,75 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Main : constant String :=
         "public main: () -> (code: i32) = code = 0 end main" & LF;
       Count : constant String :=
-        "extern(c) _landin_host_argument_count: () -> (n: usize)" & LF;
+        "extern(c) getpid: () -> (id: i32)" & LF;
       Absent : Landin.Platform.Path_List;
    begin
-      --  A declaration alone makes the bridge available to a C object,
-      --  not part of this program.
-      Absent.Append ("_landin_host_text_length");
-      Absent.Append ("strlen@");
-      Check_Linked
-        ("unused-host-bridge",
-         "extern(c) _landin_host_text_length:"
-         & " (data: ptr u8) -> (length: usize)" & LF & Main,
-         Absent);
+      --  A hosted program that never imports hosted/io defines no argument
+      --  root, so its entry calls no initializer.
+      Absent.Append ("_landin_host_initialize_arguments");
+      Check_Linked ("hosted-entry-without-io", Main, Absent);
 
-      --  A routine nothing reaches retains neither itself nor its bridge.
-      Absent.Clear;
-      Absent.Append ("dead_argument_reader");
-      Absent.Append ("_landin_host_argument_count");
+      --  Importing hosted/io brings the root, and the entry calls it.
       Check_Linked
-        ("dead-host-bridge-caller",
+        ("hosted-entry-with-io",
+         "import hosted/io as hosted" & LF & Main,
+         Landin.Platform.No_Arguments, "_landin_host_initialize_arguments");
+
+      --  A declaration alone links nothing from the C library.
+      Absent.Clear;
+      Absent.Append ("getpid");
+      Check_Linked ("unused-c-import", Count & Main, Absent);
+
+      --  A routine nothing reaches retains neither itself nor its import.
+      Absent.Clear;
+      Absent.Append ("dead_process_reader");
+      Absent.Append ("getpid");
+      Check_Linked
+        ("dead-c-import-caller",
          Count
-         & "dead_argument_reader: () -> (n: usize) ="
-         & " n = _landin_host_argument_count()"
-         & " end dead_argument_reader" & LF & Main,
+         & "dead_process_reader: () -> (n: i32) ="
+         & " n = getpid()"
+         & " end dead_process_reader" & LF & Main,
          Absent);
 
       --  Nor does an unreachable datum holding the caller's address.
       Absent.Clear;
       Absent.Append ("dead_holder");
-      Absent.Append ("held_argument_reader");
-      Absent.Append ("_landin_host_argument_count");
+      Absent.Append ("held_process_reader");
+      Absent.Append ("getpid");
       Check_Linked
-        ("dead-host-bridge-datum",
+        ("dead-c-import-datum",
          Count
-         & "counter: type = () -> (n: usize)" & LF
+         & "counter: type = () -> (n: i32)" & LF
          & "holder: type = struct" & LF
          & "    run: counter" & LF
          & "end holder" & LF
-         & "held_argument_reader: () -> (n: usize) ="
-         & " n = _landin_host_argument_count()"
-         & " end held_argument_reader" & LF
-         & "dead_holder: holder = (run: held_argument_reader)" & LF
+         & "held_process_reader: () -> (n: i32) ="
+         & " n = getpid()"
+         & " end held_process_reader" & LF
+         & "dead_holder: holder = (run: held_process_reader)" & LF
          & Main,
          Absent);
 
       --  Nor an erased conformance table only a dead routine builds.
       Absent.Clear;
       Absent.Append ("dead_erased_reader");
-      Absent.Append ("evidence_argument_reader");
-      Absent.Append ("_landin_host_argument_count");
+      Absent.Append ("evidence_process_reader");
+      Absent.Append ("getpid");
       Check_Linked
-        ("dead-host-bridge-evidence",
+        ("dead-c-import-evidence",
          Count
          & "counting: type = concept (t: type)" & LF
-         & "    count: (self: ptr t) -> (n: usize)" & LF
+         & "    count: (self: ptr t) -> (n: i32)" & LF
          & "end counting" & LF
          & "thing: type = struct" & LF
          & "    value: i32" & LF
          & "end thing" & LF
-         & "evidence_argument_reader: (self: ptr thing) -> (n: usize) =" & LF
-         & "    n = _landin_host_argument_count()" & LF
-         & "end evidence_argument_reader" & LF
-         & "thing is counting (count: evidence_argument_reader)" & LF
-         & "dead_erased_reader: () -> (n: usize) =" & LF
+         & "evidence_process_reader: (self: ptr thing) -> (n: i32) =" & LF
+         & "    n = getpid()" & LF
+         & "end evidence_process_reader" & LF
+         & "thing is counting (count: evidence_process_reader)" & LF
+         & "dead_erased_reader: () -> (n: i32) =" & LF
          & "    item: thing = (value: 1)" & LF
          & "    erased: any counting = any(addr item)" & LF
          & "    n = erased.count()" & LF
@@ -974,15 +980,15 @@ package body Landin.Tests.Fixture_Execution_Suite is
          & Main,
          Absent);
 
-      --  Collection must retain a reachable bridge. Every hosted lane
-      --  executes this call, whose count excludes the program name.
+      --  Collection must retain a reachable import. Every hosted lane
+      --  executes this call.
       Check_Linked
-        ("live-host-bridge-caller",
+        ("live-c-import-caller",
          Count & "public main: () -> (code: i32) =" & LF
-         & "    code = i32(_landin_host_argument_count())" & LF
+         & "    code = if getpid() > 0 then 0 else 1 end if" & LF
          & "end main" & LF,
-         Landin.Platform.No_Arguments, "_landin_host_argument_count");
-   end Hosted_Bridges_Link_And_Run;
+         Landin.Platform.No_Arguments, "getpid");
+   end Hosted_Library_Links_And_Runs;
 
    procedure Every_Positive_Fixture_Is_Emitted
      (Item : in out Landin.Testing.Context);
@@ -2390,8 +2396,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Recorded_Expectations_Hold'Access);
       if Include_Target_Workloads then
          Landin.Testing.Register
-           (Into, "fixture execution", "hosted bridges link and run",
-            Hosted_Bridges_Link_And_Run'Access);
+           (Into, "fixture execution", "hosted library links and runs",
+            Hosted_Library_Links_And_Runs'Access);
          Landin.Testing.Register
            (Into, "fixture execution", "every positive fixture is emitted",
             Every_Positive_Fixture_Is_Emitted'Access);

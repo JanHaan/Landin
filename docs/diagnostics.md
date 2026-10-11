@@ -1106,10 +1106,11 @@ end bad
 
 ### L0347
 
-A link symbol, helper import or firmware placement breaks [1610]'s or
-[1640]'s contract. A link symbol denotes one compatible function and at most
-one definition. A compiler-owned helper import keeps its source types,
-permissions and nullability. Only the entry module's hosted `main` takes the
+A link symbol, hosted initializer or firmware placement breaks [1610]'s,
+[1975]'s or [1640]'s contract. A link symbol denotes one compatible function
+and at most one definition. Beside a hosted entry, a declaration carrying
+`_landin_host_initialize_arguments` is exactly
+`extern(c) (count: i32, values: ptr ptr u8) -> none`. Only the entry module's hosted `main` takes the
 `main` symbol. Cortex data symbols and sections use the spellings,
 alignments and vectors [1640] lists. Rename the symbol or correct the
 declaration.

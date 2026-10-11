@@ -1,2 +1,0 @@
-link(symbol: "_landin_host_errno") bridge: () -> none =
-end bridge

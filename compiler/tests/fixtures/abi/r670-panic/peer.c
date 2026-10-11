@@ -40,8 +40,14 @@ int main(void)
         if (child == 0) { run_path(selected, values[selected]); _exit(99); }
         int status;
         if (waitpid(child, &status, 0) != child) return 4;
+        /* Mode 10 acquires hosted/io's argument world before any root
+           exists.  The library stops at its own compiler.unreachable(),
+           so the handler sees unreachable at a site in hosted/io's source
+           rather than this program's: only the kind and a real, nonzero
+           site are pinned here. */
         if (events[0] != 1 || events[1] != kinds[selected] ||
-            events[2] != sites[selected] || events[3] != 0) return 10 + selected;
+            (selected == 10 ? events[2] == 0 : events[2] != sites[selected])
+            || events[3] != 0) return 10 + selected;
         if (selected != 9) {
             if (!WIFEXITED(status) || WEXITSTATUS(status) != 42) return 5;
         } else {

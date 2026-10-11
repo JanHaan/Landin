@@ -1,0 +1,9 @@
+class: negative
+summary: compiler.unreachable() hands back nothing, so it is not a value of another type
+program: program.ldn
+codes: L0331
+constructs: 1560, 1920
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/compiler-unreachable-value/program.ldn
+expect: expected.txt
+status: 1

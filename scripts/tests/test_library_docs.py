@@ -43,6 +43,30 @@ end copy
         self.assertNotIn('result =', result[0].signature)
         self.assertIn('-> (result: i32)', result[0].signature)
 
+    def test_c_routines_end_at_their_signature(self):
+        text = '''--- Imported.
+public extern(c) read: (descriptor: i32, data: ptr mut u8, length: usize)
+                       -> (count: isize)
+--- Renamed.
+public extern(c) link(symbol: "__error") errno_cell:
+    () -> (cell: ptr mut i32)
+--- Defined.
+public extern(c) start:
+    (count: i32, values: ptr ptr u8) -> none =
+    result = count
+end start
+--- After.
+public value: i32 = 1
+'''
+        result = self.read(text)
+        self.assertEqual([i.name for i in result], ['read', 'errno_cell', 'start', 'value'])
+        self.assertEqual([i.kind for i in result], ['function'] * 3 + ['value'])
+        self.assertTrue(result[0].signature.endswith('-> (count: isize)'))
+        self.assertIn('link(symbol: "__error")', result[1].signature)
+        self.assertTrue(result[1].signature.endswith('() -> (cell: ptr mut i32)'))
+        self.assertTrue(result[2].signature.endswith('-> none'))
+        self.assertNotIn('result =', result[2].signature)
+
     def test_concept_entries_and_struct_fields_are_preserved(self):
         text = '''--- Input capability.
 public reader: type = concept (provider: type)
@@ -104,7 +128,9 @@ public real: atom
         self.assertTrue(all(i.documentation for items in modules.values() for i in items))
         for items in modules.values():
             for item in items:
-                self.assertIn('public ' + item.name + ':', sources[item.source].splitlines()[item.line-1])
+                self.assertRegex(sources[item.source].splitlines()[item.line-1],
+                                 r'public (?:extern\(c\) (?:link\(symbol: "[^"]*"\) )?)?'
+                                 + re.escape(item.name) + ':')
 
 
 class GeneratedReference(unittest.TestCase):

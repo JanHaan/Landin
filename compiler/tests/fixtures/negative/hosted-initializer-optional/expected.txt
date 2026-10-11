@@ -1,0 +1,10 @@
+error[L0347]: the hosted entry calls `_landin_host_initialize_arguments` as `extern(c) (count: i32, values: ptr ptr u8) -> none`
+  --> ../tests/fixtures/negative/hosted-initializer-optional/program.ldn:6:11
+  |
+6 | extern(c) _landin_host_initialize_arguments: (count: i32, values: ptr maybe_byte) -> none
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/hosted-initializer-optional/program.ldn:3:1
+  |
+3 | public main: () -> (code: i32) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the selected hosted entry
+  = note: [1650]/[1975]: the selected native main passes C's argc and argv to the program's argument initializer before its body runs

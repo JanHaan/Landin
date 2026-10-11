@@ -1,16 +1,11 @@
 import core/io
 import hosted/io as hosted
+import hosted/libc
 import core/text
 
--- The plain bridge receives file capabilities from the C root. Importing the
--- real io module also retains its unrelated host/argv routines in this unit.
-extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8,
-                              length: usize) -> (count: usize)
-extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
-                               length: usize) -> (count: usize)
-extern(c) _landin_host_argument_count: () -> (count: usize)
-extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
-extern(c) _landin_host_argument_at: (index: usize) -> (data: ptr u8)
+-- The plain C library receives file capabilities from the C root before any
+-- argument root exists. Importing hosted/io also retains its unrelated
+-- host/argv routines in this unit.
 
 read: () -> (value: i32) = value = 17 end read
 write: () -> (value: i32) = value = 19 end write
@@ -20,21 +15,21 @@ public extern(c) l_plain: (input: i32, output: i32) -> (ok: bool) =
     return when read() <> 17 or write() <> 19
     mut received: [4]u8 = zeroed
     mut copied: [4]u8 = zeroed
-    count: usize = _landin_host_read(input, addr received[0], 4)
+    count: isize = libc.read(input, addr received[0], 4)
     return when count <> 4
-    source: io.argument = (data: addr received[0], length: count)
+    source: io.argument = (data: addr received[0], length: usize(count))
     bytes: []u8 = io.copy_argument(source, copied[0..<4]) else (problem)
         _ = problem
         return
     end
-    ok = _landin_host_write(output, addr bytes[0], lenof bytes) == 4
+    ok = libc.write(output, addr bytes[0], lenof bytes) == 4
 end l_plain
 
 callback: type = extern(c) (state: ptr hosted.system, depth: i32) -> (ok: bool)
 extern(c) c_reenter: (state: ptr hosted.system, visit: callback, depth: i32)
                      -> (ok: bool)
-extern(c) c_argument_storage: (count: usize, table: ptr ptr u8,
-                               first: ptr u8) -> (ok: bool)
+extern(c) c_argument_storage: (count: usize, first: ptr u8, second: ptr u8)
+                              -> (ok: bool)
 
 arguments_match: (state: ptr hosted.system) -> (ok: bool) =
     ok = false
@@ -68,11 +63,17 @@ arguments_match: (state: ptr hosted.system) -> (ok: bool) =
         return
     end
     return when not text.equal(word, "alpha") or not text.equal(number, "42")
-    -- Check the actual global snapshot as well as the already-minted world.
-    -- This catches a callback prologue resetting hidden argc/argv cells.
-    return when usize(first.data) <> usize(_landin_host_argument_at(0))
-    ok = c_argument_storage(_landin_host_argument_count(),
-                            _landin_host_argument_table(), first.data)
+    -- Mint a fresh world from the root as well as using the one already
+    -- minted. This catches a callback prologue resetting the root.
+    fresh: hosted.system = hosted.host()
+    again: io.argument = io.argument_at(addr fresh, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    return when usize(first.data) <> usize(again.data)
+      or io.argument_count(fresh) <> 2
+    ok = c_argument_storage(io.argument_count(state.val), first.data,
+                            second.data)
 end arguments_match
 
 extern(c) visit: (state: ptr hosted.system, depth: i32) -> (ok: bool) =

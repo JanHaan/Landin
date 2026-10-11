@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: reaching compiler.unreachable() hands the selected panic handler `unreachable` at the call's own site
+program: main.ldn
+traps: yes
+constructs: 1560, 1670, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -5,7 +5,6 @@ with Landin.Backend;
 with Landin.Evidence;
 with Landin.Hosted;
 with Landin.Backend.C_ABI;
-with Landin.Backend.Hosted_ABI;
 with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.RiscV_ABI;
 with Landin.Backend.Toolchain;
@@ -1159,7 +1158,6 @@ package body Landin.Tests.Targets_Suite is
       package C renames Landin.Targets.Capabilities;
       use type C.Object_Format;
       use type C.Debug_Format;
-      use type Landin.Hosted.Host_Helper;
       Unit : Landin.IR.Unit;
    begin
       Landin.Testing.Check
@@ -1195,24 +1193,11 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, C.Link_Symbol (Linux_X86_64, "$entry.name"), "$entry.name",
          "ELF keeps the logical identity");
-      for Helper in Landin.Hosted.Initialize_Arguments
-        .. Landin.Hosted.Heap_Release
-      loop
-         declare
-            Name : constant String := Landin.Hosted.Helper_Name (Helper);
-         begin
-            Landin.Testing.Check
-              (Item, Landin.Hosted.Helper_Of (Name) = Helper,
-               "every reserved helper has one shared identity");
-            Landin.Testing.Check_Equal
-              (Item, C.Link_Symbol (Darwin_Arm64, Name), "_" & Name,
-               "hosted identities acquire the platform prefix once");
-         end;
-      end loop;
-      Landin.Testing.Check
-        (Item, Landin.Hosted.Helper_Of ("_landin_host_unknown")
-           = Landin.Hosted.No_Host_Helper,
-         "helper membership is exact, not a prefix namespace");
+      Landin.Testing.Check_Equal
+        (Item,
+         C.Link_Symbol (Darwin_Arm64, Landin.Hosted.Argument_Initializer),
+         "_" & Landin.Hosted.Argument_Initializer,
+         "the hosted argument initializer acquires the platform prefix once");
       Landin.Testing.Check
         (Item, C.C_Signatures (Linux_Arm64)
          and then C.C_Records (Linux_Arm64)
@@ -1228,16 +1213,6 @@ package body Landin.Tests.Targets_Suite is
            and then C.Hosted_System_Of (Cortex_M) = C.No_Hosted_System
            and then C.Hosted_System_Of (Synthetic_32) = C.No_Hosted_System,
          "a hosted system is stated per target, and freestanding has none");
-      Landin.Testing.Check
-        (Item, Landin.Backend.Hosted_ABI.Errno_Function (C.Linux)
-             = "__errno_location"
-           and then Landin.Backend.Hosted_ABI.Errno_Function (C.Darwin)
-             = "__error"
-           and then Landin.Backend.Hosted_ABI.Create_For_Writing (C.Linux)
-             = 577
-           and then Landin.Backend.Hosted_ABI.Create_For_Writing (C.Darwin)
-             = 1537,
-         "each system's libc spells errno and write-open its own way");
       declare
          Ignored : Landin.Backend.C_ABI.Classification;
       begin
@@ -1337,6 +1312,52 @@ package body Landin.Tests.Targets_Suite is
             and then Plan.Arguments (2).Stack_At = 0
             and then Plan.Arguments (3).Stack_At = 8,
             "Apple variadic tails consume eight-byte stack slots");
+      end;
+      --  Twelve promoted tails after a named f64 and a named i32: every
+      --  tail takes the next whole slot in order, whatever its width or
+      --  bank, while the standard AAPCS64 gives the same tails registers.
+      declare
+         Kinds : constant array (Positive range 1 .. 14) of
+           Landin.Types.Type_Kind :=
+           [Landin.Types.F64, Landin.Types.I32,
+            Landin.Types.I32, Landin.Types.I32, Landin.Types.I32,
+            Landin.Types.I32, Landin.Types.I32, Landin.Types.F64,
+            Landin.Types.F64, Landin.Types.I64, Landin.Types.U64,
+            Landin.Types.Usize, Landin.Types.Usize,
+            Landin.Types.F64];
+         Tails : Landin.IR.Signature_Part_Array (Kinds'Range);
+      begin
+         for Index in Kinds'Range loop
+            Tails (Index) := (Kind => Kinds (Index), others => <>);
+         end loop;
+         declare
+            Apple : constant ABI.Plan := ABI.Assign
+              (Unit, Tails, (Kind => Landin.Types.I32, others => <>),
+               Darwin_Arm64, Fixed_Count => 2);
+            Standard : constant ABI.Plan := ABI.Assign
+              (Unit, Tails, (Kind => Landin.Types.I32, others => <>),
+               Linux_Arm64, Fixed_Count => 2);
+            Ordered : Boolean := True;
+         begin
+            for Index in 3 .. 14 loop
+               Ordered := Ordered
+                 and then Apple.Arguments (Index).On_Stack
+                 and then Apple.Arguments (Index).Stack_At
+                   = Landin.Targets.Byte_Count (8 * (Index - 3));
+            end loop;
+            Landin.Testing.Check
+              (Item, Ordered and then Apple.Stack_Bytes = 96
+               and then Apple.FP_Used = 1 and then Apple.GP_Used = 1
+               and then Apple.Arguments (1).Registers (1) = 1
+               and then Apple.Arguments (2).Registers (1) = 1,
+               "Apple places every promoted tail in its own ordered slot");
+            Landin.Testing.Check
+              (Item, Standard.GP_Used = 8 and then Standard.FP_Used = 4
+               and then not Standard.Arguments (3).On_Stack
+               and then Standard.Arguments (13).On_Stack
+               and then Standard.Stack_Bytes = 16,
+               "the standard AAPCS64 assigns the same tails as named ones");
+         end;
       end;
       declare
          Ignored : ABI.Plan (11);

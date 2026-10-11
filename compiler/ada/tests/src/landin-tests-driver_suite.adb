@@ -3391,12 +3391,22 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Builtin_Imports_Never_Search_Roots;
 
-   procedure Hosted_Helper_Refusals_Have_No_Effects
+   procedure Hosted_Initializer_Refusals_Have_No_Effects
      (Item : in out Landin.Testing.Context);
 
-   procedure Hosted_Helper_Refusals_Have_No_Effects
+   --  The hosted entry's call to the program's argument initializer is
+   --  the one hosted contract left in the compiler: a declaration carrying
+   --  the name in a program with a hosted entry must take C's argc and
+   --  argv and nothing else, and the refusal touches no file or tool.
+   procedure Hosted_Initializer_Refusals_Have_No_Effects
      (Item : in out Landin.Testing.Context)
    is
+      Entry_Main : constant String := "public main: () -> (code: i32) =" & LF
+        & "    code = 0" & LF & "end main" & LF;
+      Required : constant String :=
+        "the hosted entry calls `_landin_host_initialize_arguments` as"
+        & " `extern(c) (count: i32, values: ptr ptr u8) -> none`";
+
       procedure Check (Source, Message : String; Executable : Boolean);
 
       procedure Check (Source, Message : String; Executable : Boolean) is
@@ -3420,13 +3430,13 @@ package body Landin.Tests.Driver_Suite is
          begin
             Landin.Testing.Check_Equal
               (Item, Result.Status, Landin.Driver.Status_Reported,
-               "helper source errors are reports, not backend defects");
+               "initializer source errors are reports, not backend defects");
             Landin.Testing.Check
               (Item, Occurrences (Report, "error[") = 1
                  and then Contains (Report, "error[L0347]: " & Message)
                  and then not Contains (Report, "L0502")
                  and then not Contains (Report, "internal compiler defect"),
-               "only the precise source helper contract owns the refusal");
+               "only the precise initializer contract owns the refusal");
             Landin.Testing.Check_Equal
               (Item, Tools.Run_Count, 0, "no assembler or linker is invoked");
             Landin.Testing.Check
@@ -3439,32 +3449,25 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
-           ("extern(c) _landin_host_initialize_arguments:"
-            & " (argc: i32, argv: ptr ptr u8) -> none" & LF,
-            "compiler-owned helper `_landin_host_initialize_arguments`"
-            & " requires escaping argv", Executable);
+           (Entry_Main & "public extern(c) link(symbol:"
+            & " ""_landin_host_initialize_arguments"") native:"
+            & " (count: i32, values: ptr ptr u8) -> (ok: bool) =" & LF
+            & "    ok = count > 0" & LF & "end native" & LF,
+            Required, Executable);
          Check
-           ("extern(c) _landin_host_initialize_arguments:"
-            & " (argc: i32, escaping argv: ptr ptr u32) -> none" & LF,
-            "compiler-owned helper `_landin_host_initialize_arguments`"
-            & " requires parameter 2 to be `ptr ptr u8`", Executable);
+           (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
+            & " (count: i32, values: ptr ptr u32) -> none" & LF,
+            Required, Executable);
          Check
-           ("extern(c) _landin_host_argument_at_from:"
-            & " (table: ptr ptr u8, index: usize) -> (data: ptr u8)" & LF,
-            "compiler-owned helper `_landin_host_argument_at_from`"
-            & " requires its result from parameter 1", Executable);
+           (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
+            & " (count: i32, values: ptr ptr mut u8) -> none" & LF,
+            Required, Executable);
          Check
-           ("extern(c) _landin_host_heap_allocate:"
-            & " (length: usize, alignment: usize) -> (data: ptr mut u8)" & LF,
-            "compiler-owned helper `_landin_host_heap_allocate`"
-            & " requires result `one atom | ptr mut u8`", Executable);
-         Check
-           ("link(symbol: ""_landin_host_errno"") replacement: () -> none ="
-            & LF & "end replacement" & LF,
-            "compiler-owned helper `_landin_host_errno`"
-            & " cannot be defined by source", Executable);
+           (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
+            & " (count: i32, values: ptr ptr u8, ...) -> none" & LF,
+            Required, Executable);
       end loop;
-   end Hosted_Helper_Refusals_Have_No_Effects;
+   end Hosted_Initializer_Refusals_Have_No_Effects;
 
    procedure Hosted_Main_Linkage_Has_No_Effects
      (Item : in out Landin.Testing.Context);
@@ -4700,6 +4703,79 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Panic_Contracts;
 
+   --  [1560]'s explicit trap takes a compiler check's site: one plus four
+   --  times its byte offset in its file's `--panic-map` space, plus the
+   --  unreachable family's three, handed to the selected handler.  An
+   --  `unchecked` region keeps it, because it is a statement, not a check.
+   procedure An_Explicit_Trap_Has_Its_Own_Panic_Site
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Explicit_Trap_Has_Its_Own_Panic_Site
+     (Item : in out Landin.Testing.Context)
+   is
+      Core : constant String :=
+        "public out_of_range: atom public overflow: atom "
+        & "public bad_conversion: atom public unreachable: atom "
+        & "public panic_kind: type = out_of_range | overflow | "
+        & "bad_conversion | unreachable" & LF;
+      Handler : constant String :=
+        "import core/panic" & LF
+        & "public panic_handler: (kind: panic.panic_kind, site: u32)"
+        & " -> noreturn = loop do end loop end panic_handler" & LF;
+   begin
+      for Unchecked in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Program : constant String := Handler
+              & "public main: () -> (code: i32) =" & LF
+              & "    code = 0" & LF
+              & (if Unchecked then "    unchecked begin" & LF else "")
+              & "    compiler.unreachable()" & LF
+              & (if Unchecked then "    end unchecked" & LF else "")
+              & "end main" & LF;
+            Offset : constant Natural :=
+              Ada.Strings.Fixed.Index (Program, "compiler.unreachable") - 1;
+            Site : constant String := Ada.Strings.Fixed.Trim
+              (Natural'Image (1 + 4 * Offset + 3), Ada.Strings.Both);
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Add_Directory ("app");
+            Host.Add_Directory ("root");
+            Host.Add_Directory ("root/core");
+            Host.Add_Directory ("root/core/panic");
+            Host.Add_File ("root/core/panic/panic.ldn", Core);
+            Host.Add_File ("app/main.ldn", Program);
+            Args.Append ("--root=root");
+            Args.Append ("--target=linux-x86-64");
+            Args.Append ("app");
+            Args.Append ("--emit=asm");
+            Args.Append ("--panic-map");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "the explicit trap compiles: "
+               & Unbounded.To_String (Result.Report));
+            Landin.Testing.Check
+              (Item, Contains
+                 (Host.Written ("a.s"),
+                  "movl $" & Site & ", %esi" & LF & HT
+                  & "call panic_handler" & LF),
+               "the handler receives the trap's own site " & Site);
+            Landin.Testing.Check
+              (Item, Contains
+                 (Host.Written ("a.s"),
+                  "movl $4, %edi" & LF & HT & "movl $" & Site & ", %esi"),
+               "and the unreachable kind");
+            Landin.Testing.Check
+              (Item, Contains (Host.Written ("a.s.sources.json"),
+                               """panic_base"": 1"),
+               "the panic map places the site in the entry file's space");
+         end;
+      end loop;
+   end An_Explicit_Trap_Has_Its_Own_Panic_Site;
+
    procedure Labelled_Block_Refusals
      (Item : in out Landin.Testing.Context);
 
@@ -5582,6 +5658,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "panic handler contracts", Panic_Contracts'Access);
       Landin.Testing.Register
+        (Into, "driver", "an explicit trap has its own panic site",
+         An_Explicit_Trap_Has_Its_Own_Panic_Site'Access);
+      Landin.Testing.Register
         (Into, "driver", "tool start failures keep their cause",
          Tool_Start_Failures_Keep_Their_Cause'Access);
       Landin.Testing.Register
@@ -5612,8 +5691,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "qualified import alias conversions",
          Qualified_Import_Alias_Conversions'Access);
       Landin.Testing.Register
-        (Into, "driver", "hosted helper refusals have no effects",
-         Hosted_Helper_Refusals_Have_No_Effects'Access);
+        (Into, "driver", "hosted initializer refusals have no effects",
+         Hosted_Initializer_Refusals_Have_No_Effects'Access);
       Landin.Testing.Register
         (Into, "driver", "hosted main linkage has no effects",
          Hosted_Main_Linkage_Has_No_Effects'Access);

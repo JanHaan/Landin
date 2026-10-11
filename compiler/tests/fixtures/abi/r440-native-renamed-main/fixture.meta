@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: A C callback named main in Landin never initializes or replaces the hosted argument root
+summary: A C callback named main in Landin never initializes or replaces the library's argument root, which C establishes through the library's initializer
 program: main.ldn
 c-sources: companion.c
 constructs: 1610, 1650, 1970, 1975

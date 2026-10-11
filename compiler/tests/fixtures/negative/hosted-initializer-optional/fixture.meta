@@ -1,0 +1,9 @@
+class: negative
+summary: beside a hosted entry an argument initializer table of optional pointers is not C's argv
+program: program.ldn
+codes: L0347
+constructs: 0780, 1610, 1650, 1975
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+args: ../tests/fixtures/negative/hosted-initializer-optional/program.ldn
+expect: expected.txt
+status: 1

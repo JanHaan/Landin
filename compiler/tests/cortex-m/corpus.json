@@ -15,6 +15,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-stack-composite-slots/fixture.meta"
     },
+    "abi/darwin-varargs-stack-slots": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
+    },
     "abi/lp64d-integer-extension": {
       "mode": "restriction",
       "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
@@ -373,6 +378,15 @@
       "mode": "execute"
     },
     "runtime/comparisons-exit-with-their-verdict": {
+      "mode": "execute"
+    },
+    "runtime/compiler-unreachable-dispatches": {
+      "mode": "execute"
+    },
+    "runtime/compiler-unreachable-ends-paths": {
+      "mode": "execute"
+    },
+    "runtime/compiler-unreachable-in-unchecked-traps": {
       "mode": "execute"
     },
     "runtime/compound-assignment": {

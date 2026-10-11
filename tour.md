@@ -3246,8 +3246,8 @@ across a reset budget. Because `free` has no result, its live count is exact
 under valid-free use and cannot discover an inner provider's rejection of a
 malformed free.
 
-The separately imported hosted `hosted/heap` provider reaches libc through
-[1975]'s hosted C bridge, returns independent aligned blocks, and
+The separately imported hosted `hosted/heap` provider allocates through
+`hosted/libc`'s `malloc` and `free`, returns independent aligned blocks, and
 really releases each block. It accepts every `usize` alignment, treats zero
 and one as byte alignment, gives a successful zero-byte request a distinct
 non-null freeable token, and reports an unrepresentable request or host refusal
@@ -3798,7 +3798,7 @@ else.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, CPU features, and the atomic, volatile and register intrinsics |
+| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, and `compiler.unreachable()`, a call that never returns and stops the program as a failed check does |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
@@ -4132,15 +4132,15 @@ Entry point. Hosted, `main` follows the system C ABI at the machine boundary.
 The no-argument Landin form is the ordinary one, because `argc` and `argv` in
 the C shape cannot be indexed without `slice_from`, which is not enabled — so
 the hosted world retains the argument table and offers bounded indexed
-pointer-and-length views instead. The selected Linux backend calls its emitted
-hidden C entry
+pointer-and-length views instead. When the program imports `hosted/io`, the
+hosted entry calls that module's C-callable
 `void _landin_host_initialize_arguments(int argc, char **argv);` with the real
 incoming carriers before that no-argument source body begins.
 
 A C-owned `main` that drives exported Landin routines calls the same entry
 explicitly before `hosted.host()` acquires an argument capability and before starting
-a thread that may acquire one. It need not do so for startup-independent bridge
-work merely because `core/io` is linked, and no ordinary export or callback
+a thread that may acquire one. It need not do so for file, stream and heap
+work, which needs no argument root, merely because `core/io` is linked, and no ordinary export or callback
 initializes or resets the root. Those views derive from the resulting world; a
 caller that must mutate the same backing-aware provider while retaining one
 first copies what it needs into its own storage. Freestanding there is no
@@ -4258,7 +4258,8 @@ world is not an erased writer, the two do not convert. A
 routine holding only the world lends its writer with
 `io.writer_of(addr world)` (D268).
 
-The system provider captures errno immediately after a libc failure and keeps
+The system provider captures errno immediately after a libc failure, reading
+it through `hosted/libc`, which names each system's accessor, and keeps
 the exact terminal value in explicit state, available through `hosted.last_errno`.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no

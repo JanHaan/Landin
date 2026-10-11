@@ -402,8 +402,8 @@ package body Landin.Backend.Toolchain is
          then
             List.Append ("-fno-integrated-as");
          end if;
-         --  Hosted bridges occupy separate input text sections.  Drop an
-         --  imported helper when no retained code or C object uses it.
+         --  Every routine and datum occupies its own input section.  Drop a
+         --  library routine when no retained code or C object uses it.
          Landin.Platform.Add (List, "-Wl,--gc-sections");
          Landin.Platform.Add
            (List, "-Wa,-march=" & X86_Assembler_Architecture (Level));

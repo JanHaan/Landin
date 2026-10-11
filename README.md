@@ -454,7 +454,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.15 — The OS boundary in source (planned).**
+**Current roadmap work: R13.15 — The OS boundary in source.**
 
 ## License
 

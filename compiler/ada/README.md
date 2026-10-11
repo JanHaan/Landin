@@ -98,7 +98,7 @@ different responsibilities.
 | --- | --- | --- |
 | `Landin` | the namespace and the three exceptions | contain any logic |
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
-| `Landin.Hosted` | exact logical compiler-owned hosted helper identities shared by checking and emission | encode target prefixes, libc names or machine signatures |
+| `Landin.Hosted` | the one hosted name the compiler owns: the argument initializer a hosted entry calls, shared by checking and emission | encode target prefixes, libc names or machine signatures |
 | `Landin.Packed` | bounded raw-image masks, field/index algebra, encoding membership and explicit register access plans | access hardware, validate source values or infer optimizer facts |
 | `Landin.Machine` | source machine conventions and checked placement metadata | infer target widths, perform host effects or reinterpret a calling convention |
 | `Landin.Memory` | D227 memory operation identities and ordering legality | select instructions, infer aliases or choose a target |
@@ -150,14 +150,13 @@ different responsibilities.
 | `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations, ELF assembly and line/function CFI from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or promise full variable/type debugging |
 | `Landin.Backend.AAPCS64_ABI` | arm64 C classification and argument/result placement from neutral shapes and target facts, under the standard AAPCS64 or Apple's variant of it as the description's C ABI says | infer layout from the host, choose a convention by architecture, reuse SysV transport or change source semantics |
 | `Landin.Backend.RiscV_ABI` | explicit LP64D C carrier classification and register/stack placement from neutral shapes and target layout, including mixed FP/integer aggregates, split carriers and variadic integer transport | infer the selected ABI from LP64 widths, put transport in IR or access the host |
-| `Landin.Backend.RiscV` | RV64 instruction selection, stack homes, frame records, native and LP64D calls, hosted runtime and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
+| `Landin.Backend.RiscV` | RV64 instruction selection, stack homes, frame records, native and LP64D calls, the hosted entry's initializer call and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
 | `Landin.Backend.RiscV_Instructions` | native XLEN-parametric integer immediate, memory and indexed-address instruction selection, with independent Zba and XTheadBa capabilities | infer a width from the host, rank extension sets, choose an ABI, access files or invoke tools |
-| `Landin.Backend.Arm64` | arm64 instruction selection, stack homes, frame records, native/C calls, the hosted runtime and data images, for every arm64 description | parse/check source, put physical transport in IR, spell an object format's directives, write files or run tools |
-| `Landin.Backend.Arm64.Platform` | what arm64 assembly spells per object format: page relocations, read-only sections, bridge visibility, symbol types and sizes, the local-label seed and the unit's trailer | select instructions, choose a C convention or name a libc function |
-| `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, hidden visibility, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
-| `Landin.Backend.Hosted_ABI` | each hosted system's libc spellings beneath the runtime bridge: its errno function and its write-open flags | choose a system from a description, name a helper, or encode a platform symbol prefix |
+| `Landin.Backend.Arm64` | arm64 instruction selection, stack homes, frame records, native/C calls, the hosted entry's initializer call and data images, for every arm64 description | parse/check source, put physical transport in IR, spell an object format's directives, write files or run tools |
+| `Landin.Backend.Arm64.Platform` | what arm64 assembly spells per object format: page relocations, read-only sections, symbol types and sizes, the local-label seed and the unit's trailer | select instructions, choose a C convention or name a libc function |
+| `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
-| `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
+| `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry's initializer call, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
@@ -190,7 +189,7 @@ different responsibilities.
 | `Landin.Targets.RiscV_ISA` | supported RV64GC ISA strings and independent standard/vendor extension sets | rank levels, select an ABI, ask the host what executes or admit unimplemented ISA strings |
 | `Landin.Targets.Levels` | CPU feature levels per family, each level's feature set, each target's default level, and the spelling of every level and feature | change layout, a calling convention or a C ABI, or be read by checking or the IR |
 | `Landin.Targets.Selection` | the one mapping from a target name to the description it selects, shared by the driver and the server | accept a triplet, a fixture label or a second spelling |
-| `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability, the hosted system a runtime bridge runs on, and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
+| `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability, the hosted system a target runs on, and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation, and keeping each source's tree and space in it | keep anything of its own, or decide reporting policy |
@@ -494,12 +493,10 @@ Darwin. The existing SysV classifier retains its runtime target guard.
 
 Logical link names stay in checking and IR. `Targets.Capabilities.Link_Symbol`
 adds Darwin's underscore before assembly quoting; ELF leaves the name intact.
-Compiler-local labels are separate. `Landin.Hosted` supplies the exact helper
-names to both checking and emission; each backend owns its physical
-signatures, and `Backend.Hosted_ABI` the libc spellings that differ by
-operating system, asked by `Hosted_System_Of` rather than by comparing
-descriptions. `Backend.ELF` holds the directive spellings every ELF backend
-shares. See [target contracts](../../docs/targets.md).
+Compiler-local labels are separate. `Landin.Hosted` supplies the argument
+initializer's name to both checking and emission; the C library's spellings
+that differ by operating system are the library's own, in `hosted/libc`.
+`Backend.ELF` holds the directive spellings every ELF backend shares. See [target contracts](../../docs/targets.md).
 
 A compilation owns everything its stages build and frees it when it ends.
 The tables are aliased components of `Landin.Stages.Compilation`, the forest
@@ -934,13 +931,14 @@ prefix. The separately pinned Clang C-header frontend does not establish
 LLVM assembler compatibility for every permitted ELF spelling.
 Declared whole-program symbols keep their readable short spelling when it is
 unique. Repeated short names across modules receive deterministic declaration
-prefixes, as do non-external declarations named like one of the hosted
-bridge's private libc dependencies. The selected `main`, C imports and public
+prefixes, as do non-external declarations named like a C import of the same
+program. The selected `main`, C imports and public
 C definitions retain their ABI spelling unless an explicit C symbol override
 selects another; private C definitions without overrides keep collision-safe
 internal names. Checking decodes and validates overrides and refuses
 incompatible same-symbol declarations or multiple definitions. Thus an ordinary
-lexer function named `open` cannot interpose on the bridge's call to libc `open`.
+lexer function named `open` cannot interpose on `hosted/libc`'s call to libc
+`open`.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The gate's Linux corpus therefore proves the scalar
@@ -1229,7 +1227,7 @@ general C support. Routine debugger-risk policy covers both native backends;
 Cortex has the explicit line/function source-debugging contract.
 
 The FreeBSD x86-64 and arm64 descriptions share the existing ELF backends and
-C ABI planners. Hosted libc spelling remains in `Hosted_ABI`, target identity
+C ABI planners. Hosted libc spelling is the library's `hosted/libc`, target identity
 and availability in `Targets` and `Targets.Capabilities`, and Clang/sysroot
 argument policy in `Backend.Toolchain`. `compiler.os` selects libc records
 without changing C transport facts. The FreeBSD supervisor emits on Linux;

@@ -1,0 +1,29 @@
+-- [1560]: reaching compiler.unreachable() raises `unreachable` through the
+-- selected panic handler at the call's own site (D232).  The handler enters
+-- itself again only when it receives exactly that kind and site, and a
+-- second entry stops at the terminal default trap; any other report spins,
+-- and a spin never satisfies `traps: yes`.
+import core/panic
+
+-- The call's site in this file: one, plus four times the byte offset of
+-- `compiler.unreachable()` below, plus the unreachable family's three.
+expected_site: u32 = 3356
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    if kind == panic.unreachable and site == expected_site then
+        compiler.unreachable()
+    end if
+    loop do
+    end loop
+end panic_handler
+
+stop: (reached: bool) -> (code: i32) =
+    code = 1
+    if reached then
+        compiler.unreachable()
+    end if
+end stop
+
+public main: () -> (code: i32) =
+    code = stop(true)
+end main

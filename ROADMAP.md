@@ -1439,7 +1439,7 @@ debug information and SR-25's shell.
 
 ### R13.15 — The OS boundary in source
 
-Status: planned
+Status: active
 Depends on: R13.14
 
 The compiler owns the hosted operating-system boundary: fourteen
@@ -1447,15 +1447,20 @@ The compiler owns the hosted operating-system boundary: fourteen
 each of the x86-64, arm64 and RV64 backends emits as libc trampolines, with
 the libc facts per OS in the compiler and `strlen`, `open`, `read` and their
 neighbours reserved from source. Move that boundary into the library as
-ordinary source, on libc for every hosted target as now: `extern(c)`
-declarations and per-OS records in modules under `platform`, as
-`hosted/io/stat.ldn` already does, with errno read through the C library's
-own accessor. What stays in the compiler is the hosted entry and the link.
+ordinary source, on libc for every hosted target as now: one public
+`hosted/libc` module holds the `extern(c)` declarations and per-OS records,
+as `hosted/io/stat.ldn` already does, with errno read through the C
+library's own accessor, and `hosted/io` and `hosted/heap` import it. The
+argument root's startup function is library source the hosted entry calls.
+`open` is variadic, and Darwin arm64 passes every variadic argument on the
+stack, where no outgoing variadic call is pinned yet, so that comes first.
+What stays in the compiler is the hosted entry and the link.
 
 Exit evidence: no hosted helper, helper contract, bridge emitter or libc fact
-left in the compiler; every hosted fixture, the derived programs, the
-debugger sessions and the C ABI fixtures passing unchanged on every hosted
-target; and decisions superseding D153's scalar seam and D195's shim.
+left in the compiler; Darwin arm64 variadic calls pinned against a C peer;
+every hosted fixture, the derived programs, the debugger sessions and the C
+ABI fixtures passing unchanged on every hosted target; and decisions
+superseding D153's scalar seam and D195's shim.
 
 ### R13.16 — Linux without the C library
 
@@ -1866,6 +1871,14 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-23 | Usability | Named files that misspell a library namespace, `import cor/io`, get D262's refusal with no suggestion, where the same import under `--root` is offered `core`. | The next item touching import refusals. | The near-name repair offered from the library in the explicit-file mode too, with a fixture. | open |
 | SR-24 | Usability | A program that imports the library records the library's absolute installed path in its source paths, so its debug information and source maps depend on where Landin was installed. | A reproducible-build or debugger consumer outside the checkout. | Library sources recorded under a stable logical prefix, with the debugger sessions still finding them. | open |
 | SR-25 | Usability | Under `nix develop` the documented `scripts/tests/test_cli_native.py` fails its completion test, because the shell's bash has no `compgen`: a contributor running it sees a failure unrelated to their change. | The next change to the nix shell or the completion test. | The shell's bash with completion, or the test skipping with a reason where `compgen` is absent. | open |
+| SR-26 | Usability | Every public Landin declaration is a global C symbol and every public constant global data, so a library name can collide with the C library's own: a public `errno` in `hosted/libc` would have shadowed glibc's thread-local `errno`, and was named `current_errno` instead. Nothing warns of the collision. | The next item that touches link names or a second library module meeting a C name. | A rule for which public names reach the C namespace, or a refusal of a public name that collides with the selected C library, with a fixture. | open |
+| SR-27 | Usability | Selecting from a call's result, `f().val`, is refused with L0103, so reading through a returned pointer needs a named temporary or a helper routine. | A consumer whose natural expression selects from a call. | Selection from a call result admitted, or the refusal's note naming the temporary it needs. | open |
+| SR-28 | Usability | `escaping` takes part in C-symbol compatibility, so an `extern(c)` import must repeat a definition's `escaping` to share its symbol, although C itself has no such qualifier. | The next item touching C imports of Landin-defined symbols. | `escaping` ignored when comparing C symbols, or the refusal saying it is the only difference. | open |
+| SR-29 | Usability | Indexing through a raw pointer keeps no origin, so `hosted/io`'s argument lookup goes through an integer address and its `from self` result is untracked. | A library routine that must index a C table and return a tracked view. | A pointer-offset form that keeps the base's origin, or the boundary recorded as a deliberate non-guarantee. | open |
+| SR-30 | Release readiness | The mutation campaign draws every mutant from one seed across the whole corpus, so adding any single-file positive fixture shifts every later mutant: a new fixture dropped the one-report share from 90% to 89% and exposed four existing repeated-secondary-report defects and one offered repair that does not parse. | Now: the defects are real. | The five defects fixed with fixtures, and mutants seeded per source so a new fixture cannot move another fixture's draws. | open |
+| SR-31 | Usability | A library check that traps takes three lines, `if … then compiler.unreachable() end if`, where `return when` gives a guarded return one. | The next library code that guards many contracts. | A guarded trap form, or the reason one is declined. | open |
+| SR-32 | Usability | L0331's note says that a call of a function returning `none` is not a value for every call that hands back nothing, including a `noreturn` call such as `compiler.unreachable()`, which never returns at all. | The next change to L0331's wording. | A note that names `noreturn` for a call that never returns, with a fixture. | open |
+| SR-33 | Usability | A runtime fixture cannot report a status from inside a panic handler, so the trap dispatch fixture shows the handler saw the right kind and site only by re-entering it on a match and spinning otherwise, which a missing dispatch would also satisfy as a trap. | The next panic or trap fixture. | A portable way for a handler to report, on firmware too, used to pin dispatch exactly. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

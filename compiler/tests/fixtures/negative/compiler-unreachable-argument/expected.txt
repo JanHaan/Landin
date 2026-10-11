@@ -1,0 +1,10 @@
+error[L0327]: this call gives 1 argument and compiler.unreachable takes none
+  --> ../tests/fixtures/negative/compiler-unreachable-argument/program.ldn:2:5
+  |
+2 |     compiler.unreachable(code)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/compiler-unreachable-argument/program.ldn:2:5
+  |
+2 |     compiler.unreachable(code)
+  |     ^^^^^^^^^^^^^^^^^^^^ this builtin trap
+  = note: [1560]: compiler.unreachable() takes no arguments and never returns

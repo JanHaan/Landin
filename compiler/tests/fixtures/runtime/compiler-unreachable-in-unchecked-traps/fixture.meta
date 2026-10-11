@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an unchecked region keeps compiler.unreachable(), which traps with no handler selected
+program: main.ldn
+traps: yes
+constructs: 1560, 1950, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

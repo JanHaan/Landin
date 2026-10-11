@@ -62,7 +62,6 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Text.Problem;
    use type Landin.Tokens.Assignment_Operator;
-   use Landin.Hosted;
    use type Landin.Source.Span;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Reference_View;
@@ -20948,6 +20947,22 @@ package body Landin.Stages.Checking is
                   end if;
 
                   Held := Synthesise (Of_Tree, Operand);
+                  if Landin.Configuration.Unreachable_Call
+                    (Spellings.all, Of_Tree, Operand)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Error_Contract_Violated,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "this call cannot fail, so `try` has"
+                                   & " no error to propagate",
+                        Note    => "[0960]: `try` is for the declared"
+                                   & " error outcome of a call",
+                        Related => Syn.Origin (Of_Tree, Operand),
+                        Because => "this call never returns",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
                   declare
                      use type Landin.Memory.Operation;
                   begin
@@ -21236,6 +21251,45 @@ package body Landin.Stages.Checking is
                         return Kept (Answer);
                      end;
                   end;
+               end if;
+
+               --  [1560]'s explicit trap is a call of a `() -> noreturn`
+               --  routine, refused as one would be when misused.
+               if Landin.Configuration.Unreachable_Call
+                 (Spellings.all, Of_Tree, Node)
+               then
+                  if Syn.Argument_Count (Of_Tree, Node) /= 0 then
+                     Bad.Report
+                       (Item    => Bad.Call_Argument_Match,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "this call gives "
+                                   & Counted (Syn.Argument_Count
+                                                (Of_Tree, Node), "argument")
+                                   & " and compiler.unreachable takes none",
+                        Note    => "[1560]: compiler.unreachable() takes no"
+                                   & " arguments and never returns",
+                        Related => Syn.Origin
+                          (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                        Because => "this builtin trap",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+                     Bad.Report
+                       (Item    => Bad.Error_Contract_Violated,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where
+                          (Of_Tree, Syn.Recovery_Of (Of_Tree, Node)),
+                        Message => "this call cannot fail, so it has no"
+                                   & " error for `else` to handle",
+                        Note    => "[1030]: call-site `else` handles only"
+                                   & " the declared error channel",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this call never returns",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+                  return Kept (Ty.No_Value);
                end if;
 
                declare
@@ -28210,6 +28264,10 @@ package body Landin.Stages.Checking is
          Got := Synthesise (Of_Tree, Node);
          if Got /= Ty.No_Value then
             return False;
+         elsif Landin.Configuration.Unreachable_Call
+           (Spellings.all, Of_Tree, Node)
+         then
+            return True;
          end if;
          Target := Landin.Checking.Routine_Target_Of
            (Types.all, Of_Tree, Node);
@@ -34635,8 +34693,6 @@ package body Landin.Stages.Checking is
             raise;
       end Check_Routine_Body;
 
-      --  Check before lowering: neutral pointer carriers erase referent,
-      --  permission, nullability and retention information.
       procedure Check_External_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -34666,251 +34722,6 @@ package body Landin.Stages.Checking is
                Because => "this linked declaration", Into => Found);
          end Reject;
 
-         procedure Reject_Helper
-           (Requirement : String;
-            Site : Landin.Provenance.Origin := Syn.Origin (Of_Tree, Node));
-
-         procedure Reject_Helper
-           (Requirement : String;
-            Site : Landin.Provenance.Origin := Syn.Origin (Of_Tree, Node)) is
-         begin
-            Bad.Report
-              (Item => Bad.Linkage_Contract,
-               Source => Syn.Source_Of (Of_Tree),
-               Where => (if Explicit = Landin.Source.Empty_Span
-                         then Syn.Anchor (Of_Tree, Node) else Explicit),
-               Message => "compiler-owned helper `" & Spelled (Symbol)
-                          & "` " & Requirement,
-               Note => "[1610]/[1975]: a helper import must preserve its"
-                       & " source types, pointer permissions and nullability;"
-                       & " [0780] retains argv and [0790] preserves from",
-               Related => Site, Because => "this helper contract",
-               Into => Found);
-         end Reject_Helper;
-
-         type Helper_Part is
-           (Nothing, Signed_Count, Size_Value, Byte_Pointer, Mutable_Bytes,
-            Table_Pointer, Optional_Bytes, Argument_Pointer);
-         type Helper_Parts is array (Positive range <>) of Helper_Part;
-
-         function Part_Name (Part : Helper_Part) return String
-           is (case Part is
-                 when Nothing => "none",
-                 when Signed_Count => "i32",
-                 when Size_Value => "usize",
-                 when Byte_Pointer => "ptr u8",
-                 when Mutable_Bytes => "ptr mut u8",
-                 when Table_Pointer => "ptr ptr u8",
-                 when Optional_Bytes => "one atom | ptr mut u8",
-                 when Argument_Pointer => "ptr u8 or cstring");
-
-         function Pointer_Agrees
-           (Reference : Landin.Checking.Reference_Id;
-            Mutable : Boolean := False;
-            Depth : Positive := 1;
-            Optional : Boolean := False;
-            Text : Boolean := False) return Boolean;
-
-         function Pointer_Agrees
-           (Reference : Landin.Checking.Reference_Id;
-            Mutable : Boolean := False;
-            Depth : Positive := 1;
-            Optional : Boolean := False;
-            Text : Boolean := False) return Boolean
-         is
-         begin
-            if not Landin.Checking.Holds (Types.all, Reference) then
-               return False;
-            end if;
-            declare
-               Part : constant Landin.Checking.Reference_Descriptor :=
-                 Landin.Checking.Descriptor_Of (Types.all, Reference);
-            begin
-               if Part.Kind /= Ty.Pointer_Value
-                 or else Part.Mutable /= Mutable
-                 or else (Part.Empty_Atom /= Res.No_Declaration) /= Optional
-                 or else (Part.View /= Ty.Ordinary_View
-                          and then (not Text or else Part.View
-                                      /= Ty.C_String_View))
-               then
-                  return False;
-               elsif Depth > 1 then
-                  return Part.Referent = Ty.Pointer_Value
-                    and then Pointer_Agrees
-                      (Part.Reference, Depth => Depth - 1);
-               end if;
-               return Part.Referent = Ty.U8;
-            end;
-         end Pointer_Agrees;
-
-         function Part_Agrees
-           (Part : Landin.Checking.Signature_Part; Expected : Helper_Part)
-            return Boolean;
-
-         function Part_Agrees
-           (Part : Landin.Checking.Signature_Part; Expected : Helper_Part)
-            return Boolean is
-         begin
-            case Expected is
-               when Nothing =>
-                  return False;
-               when Signed_Count =>
-                  return Part.Kind = Ty.I32;
-               when Size_Value =>
-                  return Part.Kind = Ty.Usize;
-               when Byte_Pointer | Mutable_Bytes | Table_Pointer
-                  | Optional_Bytes | Argument_Pointer =>
-                  return Part.Kind = Ty.Pointer_Value
-                    and then Pointer_Agrees
-                      (Part.Reference,
-                       Mutable => Expected in Mutable_Bytes | Optional_Bytes,
-                       Depth => (if Expected = Table_Pointer then 2 else 1),
-                       Optional => Expected = Optional_Bytes,
-                       Text => Expected = Argument_Pointer);
-            end case;
-         end Part_Agrees;
-
-         function Check_Contract
-           (Parameters : Helper_Parts; Result : Helper_Part) return Boolean;
-
-         function Check_Contract
-           (Parameters : Helper_Parts; Result : Helper_Part) return Boolean is
-         begin
-            if Landin.Checking.Signature_Parameter_Count (Types.all, Signature)
-                 /= Parameters'Length
-              or else Landin.Checking.Signature_Result_Count
-                (Types.all, Signature) /= (if Result = Nothing then 0 else 1)
-            then
-               Reject_Helper
-                 ("requires " & Counted (Parameters'Length, "parameter")
-                  & " and " & (if Result = Nothing then "no result"
-                               else "one result"));
-               return False;
-            end if;
-            for Index in Parameters'Range loop
-               declare
-                  Part : constant Landin.Checking.Signature_Part :=
-                    Landin.Checking.Nth_Signature_Parameter
-                      (Types.all, Signature, Index);
-               begin
-                  if not Part_Agrees (Part, Parameters (Index)) then
-                     Reject_Helper
-                       ("requires parameter " & Written (Ty.Folded (Index))
-                        & " to be `" & Part_Name (Parameters (Index)) & "`",
-                        Part.Site);
-                     return False;
-                  end if;
-               end;
-            end loop;
-            if Result /= Nothing then
-               declare
-                  Part : constant Landin.Checking.Signature_Part :=
-                    Landin.Checking.Nth_Signature_Result
-                      (Types.all, Signature, 1);
-               begin
-                  if not Part_Agrees (Part, Result) then
-                     Reject_Helper
-                       ("requires result `" & Part_Name (Result) & "`",
-                        Part.Site);
-                     return False;
-                  end if;
-               end;
-            end if;
-            return True;
-         end Check_Contract;
-
-         function Check_Helper (Helper : Host_Helper) return Boolean;
-
-         function Check_Helper (Helper : Host_Helper) return Boolean is
-            Valid : Boolean;
-         begin
-            if Helper = No_Host_Helper then
-               return True;
-            elsif not Syn.Is_External (Of_Tree, Node) then
-               Reject_Helper ("cannot be defined by source");
-               return False;
-            elsif not Landin.Checking.Signature_Uses_C_ABI
-              (Types.all, Signature)
-              or else Landin.Checking.Signature_Is_Variadic
-                (Types.all, Signature)
-              or else Landin.Checking.Signature_Error_Form
-                (Types.all, Signature) /= Landin.Checking.Infallible
-            then
-               Reject_Helper ("requires a fixed infallible C import");
-               return False;
-            end if;
-            case Helper is
-               when Initialize_Arguments =>
-                  Valid := Check_Contract
-                    ([Signed_Count, Table_Pointer], Nothing);
-               when Argument_Count =>
-                  Valid := Check_Contract ([], Size_Value);
-               when Argument_Table =>
-                  Valid := Check_Contract ([], Table_Pointer);
-               when Argument_At =>
-                  Valid := Check_Contract ([Size_Value], Argument_Pointer);
-               when Argument_At_From =>
-                  Valid := Check_Contract
-                    ([Table_Pointer, Size_Value], Byte_Pointer);
-               when Text_Length =>
-                  Valid := Check_Contract ([Byte_Pointer], Size_Value);
-               when Open_Read | Open_Write =>
-                  Valid := Check_Contract ([Byte_Pointer], Signed_Count);
-               when Read_Bytes =>
-                  Valid := Check_Contract
-                    ([Signed_Count, Mutable_Bytes, Size_Value], Size_Value);
-               when Write_Bytes =>
-                  Valid := Check_Contract
-                    ([Signed_Count, Byte_Pointer, Size_Value], Size_Value);
-               when Close_File =>
-                  Valid := Check_Contract ([Signed_Count], Signed_Count);
-               when Errno_Value =>
-                  Valid := Check_Contract ([], Signed_Count);
-               when Heap_Allocate =>
-                  Valid := Check_Contract
-                    ([Size_Value, Size_Value], Optional_Bytes);
-               when Heap_Release =>
-                  Valid := Check_Contract ([Mutable_Bytes], Nothing);
-               when No_Host_Helper =>
-                  raise Landin.Compiler_Defect;
-            end case;
-            if not Valid then
-               return False;
-            elsif Helper = Initialize_Arguments then
-               declare
-                  Argv : constant Landin.Checking.Signature_Part :=
-                    Landin.Checking.Nth_Signature_Parameter
-                      (Types.all, Signature, 2);
-               begin
-                  if not Argv.Escaping then
-                     Reject_Helper ("requires escaping argv", Argv.Site);
-                     return False;
-                  end if;
-               end;
-            elsif Landin.Checking.Signature_Result_Count
-              (Types.all, Signature) = 1
-            then
-               declare
-                  Count : constant Natural :=
-                    Landin.Checking.Signature_Return_Source_Count
-                      (Types.all, Signature, 1);
-               begin
-                  if Helper = Argument_At_From then
-                     if Count /= 1
-                       or else Landin.Checking.Nth_Signature_Return_Source
-                         (Types.all, Signature, 1, 1) /= 1
-                     then
-                        Reject_Helper ("requires its result from parameter 1");
-                        return False;
-                     end if;
-                  elsif Count /= 0 then
-                     Reject_Helper ("requires an independent result");
-                     return False;
-                  end if;
-               end;
-            end if;
-            return True;
-         end Check_Helper;
       begin
          if Syn.Generic_Formal_Count (Of_Tree, Node) /= 0 then
             Reject ("a linked or C declaration cannot have generic formals");
@@ -34958,10 +34769,6 @@ package body Landin.Stages.Checking is
             Reject ("this symbol belongs to compiler firmware startup");
             return;
          end if;
-         if not Check_Helper (Helper_Of (Spelled (Symbol))) then
-            return;
-         end if;
-
          for Prior in Res.Declaration_Id'(1)
            .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
          loop
@@ -34997,6 +34804,71 @@ package body Landin.Stages.Checking is
 
       procedure Check_Hosted_Main_Linkage is
          Selected : Res.Declaration_Id := Res.No_Declaration;
+
+         --  A read-only pointer with no empty atom and an ordinary view.
+         function Plain_Pointer
+           (Reference : Landin.Checking.Reference_Id;
+            Referent  : Ty.Type_Kind) return Boolean;
+
+         function Plain_Pointer
+           (Reference : Landin.Checking.Reference_Id;
+            Referent  : Ty.Type_Kind) return Boolean
+         is
+         begin
+            if not Landin.Checking.Holds (Types.all, Reference) then
+               return False;
+            end if;
+            declare
+               Part : constant Landin.Checking.Reference_Descriptor :=
+                 Landin.Checking.Descriptor_Of (Types.all, Reference);
+            begin
+               return Part.Kind = Ty.Pointer_Value
+                 and then not Part.Mutable
+                 and then Part.Empty_Atom = Res.No_Declaration
+                 and then Part.View = Ty.Ordinary_View
+                 and then Part.Referent = Referent;
+            end;
+         end Plain_Pointer;
+
+         --  `extern(c) (i32, ptr ptr u8) -> none`, fixed and infallible.
+         function Initializer_Agrees (Id : Res.Declaration_Id) return Boolean;
+
+         function Initializer_Agrees (Id : Res.Declaration_Id) return Boolean
+         is
+            Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Signature_Of (Types.all, Id);
+         begin
+            if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Function
+              or else not Landin.Checking.Holds (Types.all, Signature)
+              or else not Landin.Checking.Signature_Uses_C_ABI
+                (Types.all, Signature)
+              or else Landin.Checking.Signature_Is_Variadic
+                (Types.all, Signature)
+              or else Landin.Checking.Signature_Error_Form
+                (Types.all, Signature) /= Landin.Checking.Infallible
+              or else Landin.Checking.Signature_Parameter_Count
+                (Types.all, Signature) /= 2
+              or else Landin.Checking.Signature_Result_Count
+                (Types.all, Signature) /= 0
+            then
+               return False;
+            end if;
+            declare
+               Count : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, 1);
+               Values : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, 2);
+            begin
+               return Count.Kind = Ty.I32
+                 and then Values.Kind = Ty.Pointer_Value
+                 and then Plain_Pointer (Values.Reference, Ty.Pointer_Value)
+                 and then Plain_Pointer
+                   (Landin.Checking.Descriptor_Of
+                      (Types.all, Values.Reference).Reference, Ty.U8);
+            end;
+         end Initializer_Agrees;
       begin
          --  Existing signature/link errors own their diagnostics.  In
          --  particular an explicitly linked main may already have collided.
@@ -35086,6 +34958,50 @@ package body Landin.Stages.Checking is
                      Note => "[1610]/[1975]: only the entry module's public"
                              & " native main():code:i32 retaining main linkage"
                              & " selects hosted startup",
+                     Related => Syn.Origin
+                       (Main_Tree.all, Res.Node_Of (Meanings.all, Selected)),
+                     Because => "the selected hosted entry", Into => Found);
+               end;
+            end if;
+         end loop;
+
+         --  The selected entry calls the program's definition of the
+         --  argument initializer with C's argc and argv before its body.
+         --  That call is the one hosted contract left in the compiler, so
+         --  every declaration carrying the name must take exactly those
+         --  carriers.  Without a hosted entry it is an ordinary C routine.
+         for Id in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Checking.Link_Symbol (Types.all, Id)
+                 /= Landin.Source.Names.No_Name
+              and then Spelled (Landin.Checking.Link_Symbol (Types.all, Id))
+                = Landin.Hosted.Argument_Initializer
+              and then not Initializer_Agrees (Id)
+            then
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Id));
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Id);
+                  Explicit : constant Landin.Source.Span :=
+                    Syn.Link_Symbol_Span (Of_Tree.all, Node);
+                  Main_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Selected));
+               begin
+                  Bad.Report
+                    (Item => Bad.Linkage_Contract,
+                     Source => Syn.Source_Of (Of_Tree.all),
+                     Where => (if Explicit = Landin.Source.Empty_Span
+                               then Syn.Anchor (Of_Tree.all, Node)
+                               else Explicit),
+                     Message => "the hosted entry calls `"
+                                & Landin.Hosted.Argument_Initializer
+                                & "` as `extern(c) (count: i32, values:"
+                                & " ptr ptr u8) -> none`",
+                     Note => "[1650]/[1975]: the selected native main passes"
+                             & " C's argc and argv to the program's argument"
+                             & " initializer before its body runs",
                      Related => Syn.Origin
                        (Main_Tree.all, Res.Node_Of (Meanings.all, Selected)),
                      Because => "the selected hosted entry", Into => Found);

@@ -1,0 +1,3 @@
+stop: (code: i32) -> none =
+    compiler.unreachable(code)
+end stop

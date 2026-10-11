@@ -1,3 +1,4 @@
+with Landin.Hosted;
 with Landin.Machine;
 with Landin.Types;
 
@@ -69,6 +70,44 @@ package body Landin.Backend.Entry_Point is
 
       return Landin.IR.No_Item;
    end Hosted_Main;
+
+   function Argument_Initializer
+     (Of_Unit : Landin.IR.Unit;
+      Names   : Landin.Source.Names.Table) return Landin.IR.Item_Id
+   is
+   begin
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            Link : constant Landin.Source.Names.Name_Id :=
+              Landin.IR.Link_Symbol (Of_Unit, Item);
+            Signature : constant Landin.IR.Signature_Id :=
+              Landin.IR.Signature_Of (Of_Unit, Item);
+         begin
+            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+              and then not Landin.IR.Is_External (Of_Unit, Item)
+              and then Link /= Landin.Source.Names.No_Name
+              and then Landin.Source.Names.Spelling (Names, Link)
+                = Landin.Hosted.Argument_Initializer
+            then
+               if Signature = Landin.IR.No_Signature
+                 or else not Landin.IR.Signature_Uses_C_ABI
+                   (Of_Unit, Signature)
+                 or else Landin.IR.Signature_Parameter_Count
+                   (Of_Unit, Signature) /= 2
+                 or else Landin.IR.Signature_Result_Count
+                   (Of_Unit, Signature) /= 0
+               then
+                  raise Compiler_Defect with
+                    "an unchecked hosted argument initializer reached the"
+                    & " backend";
+               end if;
+               return Item;
+            end if;
+         end;
+      end loop;
+      return Landin.IR.No_Item;
+   end Argument_Initializer;
 
    function Firmware_Start
      (Of_Unit  : Landin.IR.Unit;

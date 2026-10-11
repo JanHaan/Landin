@@ -36,12 +36,6 @@ package body Landin.Backend.Arm64.Platform is
             when Formats.ELF => Spelling.Relocated_Read_Only_Section,
             when Formats.Mach_O => ".section __DATA_CONST,__const");
 
-   function Private_Extern (Format : Arm64_Format; Symbol : String)
-     return String
-     is (case Format is
-            when Formats.ELF => Spelling.Hidden (Symbol),
-            when Formats.Mach_O => ".private_extern " & Symbol);
-
    function Begin_Function (Format : Arm64_Format; Symbol : String)
      return String
      is (case Format is

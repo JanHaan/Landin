@@ -133,7 +133,7 @@ Checked range, arithmetic and conversion faults, and an unreachable path, use th
 
 An explicit allocator over the host runtime heap.
 
-`host` creates a provider state. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place.
+`host` creates a provider state. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place. Every `usize` alignment is honoured by over-allocating through `hosted/libc`'s `malloc` and keeping the address it returned in the word before the block.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
 
@@ -141,9 +141,17 @@ An explicit allocator over the host runtime heap.
 
 Hosted file, stream and process operations through libc.
 
-`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams. Open-write creates or truncates regular files. `last_errno` captures the terminal failing call as provider-specific detail; it is not a portable error type.
+`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams, from the root the hosted entry establishes through `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Open-write creates or truncates regular files. `last_errno` captures the terminal failing call as provider-specific detail; it is not a portable error type.
 
 [Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
+
+## hosted/libc
+
+The C library's declarations beneath the hosted providers, as ordinary `extern(c)` imports.
+
+`hosted/io` and `hosted/heap` reach the operating system only through this module; the compiler links the C library and names none of it. `open` is declared variadic, as C declares it, and takes its mode as the one unnamed argument. Facts that differ between systems are chosen by `compiler.os`: the errno accessor, `__errno_location` on Linux and `__error` on Darwin and FreeBSD, and the `open` flags; `stat`'s record follows the system and the C ABI. Read `current_errno` immediately after a failing call. A `malloc` result is the `allocation` union, so the null pointer is `no_allocation` rather than a pointer.
+
+[Executable example](../compiler/tests/fixtures/abi/r440-native-hosted/program.ldn)
 
 ## platform/c
 

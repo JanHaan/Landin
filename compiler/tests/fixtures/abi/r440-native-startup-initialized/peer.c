@@ -35,10 +35,10 @@ static bool plain_io(void)
     return ok && memcmp(copied, "pipe", 4) == 0;
 }
 
-bool c_argument_storage(size_t count, char *const *table, const char *first)
+bool c_argument_storage(size_t count, const char *first, const char *second)
 {
     return count == (size_t)(original_argc - 1)
-        && table == original_argv + 1 && first == original_argv[1];
+        && first == original_argv[1] && second == original_argv[2];
 }
 
 bool c_reenter(const void *state, callback visit, int32_t depth)
@@ -55,7 +55,7 @@ int main(int argc, char **argv)
     if (argc != 3 || strcmp(argv[1], "alpha") || strcmp(argv[2], "42"))
         return 1;
     /* Genuine read/write plus core/io copying before any argv initialization.
-       Merely retaining core/io's unused argument routines must still link. */
+       Merely retaining hosted/io's unused argument routines must still link. */
     if (!plain_io())
         return 2;
     original_argc = argc;

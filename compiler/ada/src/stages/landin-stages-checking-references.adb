@@ -5,6 +5,7 @@ with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.Cleanup;
 with Landin.Diagnostics.Checking;
 with Landin.Provenance;
@@ -2582,6 +2583,8 @@ package body Landin.Stages.Checking.References is
                      Check_Borrows (Tree, Node, Known);
                      if Landin.Checking.Signature_Never_Returns
                        (Types.all, Called)
+                       or else Landin.Configuration.Unreachable_Call
+                         (Landin.Stages.Identities (Context).all, Tree, Node)
                      then
                         Falls_Through := False;
                         return No_Value_Edge;

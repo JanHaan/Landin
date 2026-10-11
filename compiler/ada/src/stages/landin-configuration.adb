@@ -130,6 +130,16 @@ package body Landin.Configuration is
       return Landin.Memory.No_Operation;
    end Memory_Call;
 
+   function Unreachable_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean
+   is (Node /= Landin.Syntax.No_Node
+       and then Landin.Syntax.Kind (Of_Tree, Node)
+         in Landin.Syntax.Call | Landin.Syntax.Labeled_Application
+       and then Compiler_Member
+         (Names, Of_Tree, Landin.Syntax.Callee_Of (Of_Tree, Node))
+           = "unreachable");
+
    function Is_Builtin_Import
      (Names : Landin.Source.Names.Table;
       Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
@@ -162,6 +172,9 @@ package body Landin.Configuration is
          --  duplicate the element-wise operators D209 implements.
          return "[0590]/D240: compiler." & Member
            & " is withdrawn; fixed arrays take element-wise operators";
+      elsif Namespace = "compiler" and then Member = "unreachable" then
+         return "[1560]: compiler.unreachable is a call that never returns;"
+           & " write compiler.unreachable()";
       elsif Namespace = "linker" and then Member in "section" | "entry" then
          return "[1640]/D229: use link(section: ...) or "
            & "--firmware-entry; linker." & Member

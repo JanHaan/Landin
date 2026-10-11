@@ -11,8 +11,8 @@ extern void r440_explicit_start(int argc, char **argv);
 extern size_t r440_retained_count(void);
 extern int r440_call_renamed(void);
 
-/* An explicit foreign identity cannot alias the compiler's private argv
-   storage, even though its spelling used to be that generated data label. */
+/* An explicit foreign identity spelled like a compiler-local label stays
+   the foreign symbol; the compiler picks a disjoint prefix for its own. */
 int r440_foreign_state(void) __asm__(OBJECT_NAME(".Llandin_host_argv"));
 int r440_foreign_state(void) { return 42; }
 

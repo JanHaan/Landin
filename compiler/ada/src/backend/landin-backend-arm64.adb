@@ -9,12 +9,11 @@ with Landin.Memory;
 with Landin.Targets.Packed;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
-with Landin.Hosted;
 with Landin.Targets.Capabilities;
 with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.Arm64.Platform;
 with Landin.Backend.ELF;
-with Landin.Backend.Hosted_ABI;
+with Landin.Backend.Entry_Point;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
@@ -35,7 +34,6 @@ package body Landin.Backend.Arm64 is
    use type Landin.IR.Item_Id;
    use type Landin.IR.Value_Id;
    use type Landin.IR.Opcode;
-   use type Landin.IR.Parameter_Convention;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Element_Total;
@@ -47,7 +45,6 @@ package body Landin.Backend.Arm64 is
 
    use type Landin.Targets.Target_Facts;
    use type Landin.Layouts.Policy;
-   use type Landin.Targets.C_ABI_Kind;
 
    LF : constant Character := Character'Val (10);
 
@@ -56,9 +53,6 @@ package body Landin.Backend.Arm64 is
    --  same reason.
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
-
-   function Image (Value : Natural) return String
-     is (Trimmed (Natural'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -608,8 +602,6 @@ package body Landin.Backend.Arm64 is
       --  system decide only the text around it.
       Format : constant Platform.Arm64_Format :=
         Landin.Targets.Capabilities.Object_Format_Of (Facts);
-      System : constant Hosted_ABI.Hosted_System :=
-        Landin.Targets.Capabilities.Hosted_System_Of (Facts);
       type Line_Entry is record
          Text : Unbounded.Unbounded_String;
          Offset : Long_Long_Integer;
@@ -1029,7 +1021,12 @@ package body Landin.Backend.Arm64 is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      Host_Bridge_Needed : Boolean := Hosted_Entry /= Landin.IR.No_Item;
+      --  The library's argument initializer the hosted entry calls with
+      --  C's argc and argv, when the program defines one.
+      Initializer : constant Landin.IR.Item_Id :=
+        (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
+         else Landin.Backend.Entry_Point.Argument_Initializer
+           (Of_Unit, Names));
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
@@ -1038,27 +1035,6 @@ package body Landin.Backend.Arm64 is
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
             and then Landin.IR.Signature_Uses_C_ABI
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
-
-      use Landin.Hosted;
-      subtype Hosted_Bridge is Host_Helper;
-      Not_A_Bridge : constant Hosted_Bridge := No_Host_Helper;
-      function Bridge_Of (Spelling : String) return Hosted_Bridge
-        renames Helper_Of;
-
-      function Bridge_Symbol (Helper : Host_Helper) return String
-        is (Landin.Targets.Capabilities.Link_Symbol
-              (Facts, Helper_Name (Helper)));
-
-      function Is_Hosted_Dependency (Spelling : String) return Boolean
-        is (Bridge_Of (Spelling) /= Not_A_Bridge
-            or else Spelling = "strlen"
-            or else Spelling = "malloc"
-            or else Spelling = "free"
-            or else Spelling = "open"
-            or else Spelling = "read"
-            or else Spelling = "write"
-            or else Spelling = "close"
-            or else Spelling = Hosted_ABI.Errno_Function (System));
 
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
@@ -1147,97 +1123,19 @@ package body Landin.Backend.Arm64 is
            (Names, Landin.Resolution.Name_Of (Meanings, Declared));
       end Source_Symbol;
 
-      --  This target owns the emitted bridges and sees actual linker
-      --  spellings; the target-neutral verifier sees only interned name IDs.
-      --  Refuse an override before returning any assembly, in release too.
-      --  Source linkage checking must diagnose these earlier, including the
-      --  pointer/retention distinctions erased from neutral scalar carriers.
+      --  This target sees actual linker spellings; the target-neutral
+      --  verifier sees only interned name IDs.  Refuse an override of the
+      --  hosted entry before returning any assembly, in release too.
+      --  Source linkage checking must diagnose these earlier.
       procedure Validate_Linkage;
 
       procedure Validate_Linkage is
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean;
-
-         function Import_Agrees
-           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean
-         is
-            package Ty renames Landin.Types;
-            Signature : constant Landin.IR.Signature_Id :=
-              Landin.IR.Signature_Of (Of_Unit, Item);
-            type Kind_Array is array (Positive range <>) of Ty.Type_Kind;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean;
-
-            function Matches
-              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean
-            is
-            begin
-               if Landin.IR.Signature_Parameter_Count (Of_Unit, Signature)
-                    /= Parameters'Length
-                 or else Landin.IR.Signature_Result_Count (Of_Unit, Signature)
-                    /= (if Result = Ty.No_Value then 0 else 1)
-               then
-                  return False;
-               end if;
-               for Index in Parameters'Range loop
-                  declare
-                     Part : constant Landin.IR.Signature_Part :=
-                       Landin.IR.Nth_Signature_Parameter
-                         (Of_Unit, Signature, Index);
-                  begin
-                     if Part.Kind /= Parameters (Index)
-                       or else Part.Convention /= Landin.IR.In_Value
-                       or else Part.Atoms /= Landin.IR.No_Atom_Set
-                     then
-                        return False;
-                     end if;
-                  end;
-               end loop;
-               return Result = Ty.No_Value
-                 or else Landin.IR.Nth_Signature_Result
-                   (Of_Unit, Signature, 1).Kind = Result;
-            end Matches;
-         begin
-            if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
-              or else Signature = Landin.IR.No_Signature
-              or else not Is_C_Item (Item)
-              or else Landin.IR.Signature_Is_Variadic (Of_Unit, Signature)
-              or else Landin.IR.Signature_Errors (Of_Unit, Signature)
-                /= Landin.IR.No_Atom_Set
-            then
-               return False;
-            end if;
-            case Bridge is
-               when Initialize_Arguments =>
-                  return Matches ([Ty.I32, Ty.Usize], Ty.No_Value);
-               when Argument_Count | Argument_Table =>
-                  return Matches ([], Ty.Usize);
-               when Argument_At | Text_Length =>
-                  return Matches ([Ty.Usize], Ty.Usize);
-               when Argument_At_From | Heap_Allocate =>
-                  return Matches ([Ty.Usize, Ty.Usize], Ty.Usize);
-               when Open_Read | Open_Write =>
-                  return Matches ([Ty.Usize], Ty.I32);
-               when Read_Bytes | Write_Bytes =>
-                  return Matches ([Ty.I32, Ty.Usize, Ty.Usize], Ty.Usize);
-               when Close_File =>
-                  return Matches ([Ty.I32], Ty.I32);
-               when Errno_Value =>
-                  return Matches ([], Ty.I32);
-               when Heap_Release =>
-                  return Matches ([Ty.Usize], Ty.No_Value);
-               when Not_A_Bridge =>
-                  return False;
-            end case;
-         end Import_Agrees;
       begin
          for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Spelling : constant String := Source_Symbol (Item);
-               Bridge : constant Hosted_Bridge := Bridge_Of (Spelling);
             begin
                if Item = Hosted_Entry then
                   if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
@@ -1253,17 +1151,6 @@ package body Landin.Backend.Arm64 is
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
-               end if;
-               if Is_Forced (Item) and then Bridge /= Not_A_Bridge then
-                  if not Landin.IR.Is_External (Of_Unit, Item) then
-                     raise Landin.Compiler_Defect with
-                       "a definition overrides compiler-owned symbol "
-                       & Spelling;
-                  elsif not Import_Agrees (Item, Bridge) then
-                     raise Landin.Compiler_Defect with
-                       "an import disagrees with compiler-owned symbol "
-                       & Spelling;
-                  end if;
                end if;
             end;
          end loop;
@@ -1282,10 +1169,6 @@ package body Landin.Backend.Arm64 is
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean
          is
          begin
-            if Host_Bridge_Needed and then Is_Hosted_Dependency (Candidate)
-            then
-               return False;
-            end if;
             --  Held by an item other than this one: every holder of the
             --  spelling, less this item's own allocated and source names.
             return Count (Allocated, Candidate)
@@ -3587,8 +3470,10 @@ package body Landin.Backend.Arm64 is
          if Debug /= null then
             Emit (".cfi_def_cfa_register w29");
          end if;
-         if Item = Hosted_Entry then
-            Emit ("bl " & Bridge_Symbol (Initialize_Arguments));
+         --  The library's initializer receives main's incoming argc and
+         --  argv in w0 and x1 before the body can clobber them.
+         if Item = Hosted_Entry and then Initializer /= Landin.IR.No_Item then
+            Emit ("bl " & Symbol (Initializer));
          end if;
          Reserve (Extent (Layout));
          for Number in Saves'Range loop
@@ -4964,219 +4849,6 @@ package body Landin.Backend.Arm64 is
          End_Object (Item);
       end Emit_Datum;
 
-      procedure Runtime;
-
-      procedure Runtime is
-         Argv : constant String := Local_Prefix & "host_argv";
-         Argc : constant String := Local_Prefix & "host_argc";
-         Invalid : constant String := Local_Prefix & "host_invalid";
-         Open_Frame : Boolean := False;
-         --  A bridge ends where the next one starts, since its failure
-         --  paths follow its last return.
-         Open_Bridge : Host_Helper := No_Host_Helper;
-         procedure Close_Bridge;
-         procedure Start (Helper : Host_Helper; Framed : Boolean := True);
-         procedure Finish;
-
-         procedure Close_Bridge is
-         begin
-            if Debug /= null and then Open_Frame then
-               Emit (".cfi_endproc");
-            end if;
-            if Open_Bridge /= No_Host_Helper then
-               Platform_Directive (Platform.End_Function
-                 (Format, Bridge_Symbol (Open_Bridge)));
-            end if;
-         end Close_Bridge;
-
-         procedure Start (Helper : Host_Helper; Framed : Boolean := True) is
-         begin
-            Close_Bridge;
-            Emit (".p2align 2");
-            Emit (".globl " & Bridge_Symbol (Helper));
-            Emit (Platform.Private_Extern (Format, Bridge_Symbol (Helper)));
-            Platform_Directive (Platform.Begin_Function
-              (Format, Bridge_Symbol (Helper)));
-            Put (Bridge_Symbol (Helper) & ":");
-            Open_Bridge := Helper;
-            if Debug /= null then
-               Emit (".loc 1 0 0 is_stmt 0");
-               Emit (".cfi_startproc");
-               Open_Frame := True;
-            end if;
-            if Framed then
-               Emit ("stp x29, x30, [sp, #-16]!");
-               if Debug /= null then
-                  Emit (".cfi_def_cfa_offset 16");
-                  Emit (".cfi_offset w29, -16");
-                  Emit (".cfi_offset w30, -8");
-               end if;
-               Emit ("mov x29, sp");
-               if Debug /= null then
-                  Emit (".cfi_def_cfa_register w29");
-               end if;
-            end if;
-         end Start;
-
-         procedure Finish is
-         begin
-            if Debug /= null then
-               Emit (".cfi_remember_state");
-            end if;
-            Emit ("mov sp, x29");
-            Emit ("ldp x29, x30, [sp], #16");
-            if Debug /= null then
-               Emit (".cfi_def_cfa sp, 0");
-               Emit (".cfi_restore w29");
-               Emit (".cfi_restore w30");
-            end if;
-            Emit ("ret");
-            if Debug /= null then
-               Emit (".cfi_restore_state");
-            end if;
-         end Finish;
-
-      begin
-         Emit (".text");
-         Start (Initialize_Arguments);
-         Address ("x9", Argv);
-         Emit ("ldr x10, [x9]");
-         Emit ("cbnz x10, " & Local_Prefix & "host_initialized");
-         Emit ("tbnz w0, #31, " & Invalid);
-         Emit ("cbz x1, " & Invalid);
-         Emit ("str x1, [x9]");
-         Address ("x9", Argc);
-         Emit ("str w0, [x9]");
-         Finish;
-         Put (Local_Prefix & "host_initialized:");
-         Emit ("cmp x10, x1");
-         Emit ("b.ne " & Invalid);
-         Address ("x9", Argc);
-         Emit ("ldr w10, [x9]");
-         Emit ("cmp w10, w0");
-         Emit ("b.ne " & Invalid);
-         Finish;
-         Put (Invalid & ":");
-         if Panic /= null and then Landin.Panics.Handler (Panic.all)
-           /= Landin.IR.No_Item
-         then
-            Immediate ("x0", Pattern (Landin.Panics.Code
-              (Panic.all, Landin.Panics.Unreachable)));
-            Emit ("mov w1, #0");
-            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
-         end if;
-         Emit ("brk #1");
-         Start (Argument_Count);
-         Address ("x9", Argv);
-         Emit ("ldr x9, [x9]");
-         Emit ("cbz x9, " & Invalid);
-         Address ("x9", Argc);
-         Emit ("ldr w0, [x9]");
-         Emit ("subs w0, w0, #1");
-         Emit ("csel w0, w0, wzr, ge");
-         Finish;
-         Start (Argument_Table);
-         Address ("x9", Argv);
-         Emit ("ldr x0, [x9]");
-         Emit ("cbz x0, " & Invalid);
-         Emit ("add x0, x0, #8");
-         Finish;
-         Start (Argument_At);
-         Address ("x9", Argv);
-         Emit ("ldr x9, [x9]");
-         Emit ("cbz x9, " & Invalid);
-         Address ("x10", Argc);
-         Emit ("ldr w10, [x10]");
-         Emit ("subs w10, w10, #1");
-         Emit ("b.le " & Invalid);
-         Emit ("cmp x0, x10");
-         Emit ("b.hs " & Invalid);
-         Emit ("add x9, x9, #8");
-         Emit ("ldr x0, [x9, x0, lsl #3]");
-         Emit ("cbz x0, " & Invalid);
-         Finish;
-         Start (Argument_At_From);
-         Emit ("ldr x0, [x0, x1, lsl #3]");
-         Finish;
-         Start (Text_Length, Framed => False);
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "strlen"));
-         Start (Read_Bytes, Framed => False);
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "read"));
-         Start (Write_Bytes, Framed => False);
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "write"));
-         Start (Close_File, Framed => False);
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "close"));
-         Start (Open_Read, Framed => False);
-         Emit ("mov w1, #0");
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "open"));
-         Start (Open_Write);
-         --  O_WRONLY | O_CREAT | O_TRUNC, and the mode 0666 that libc's
-         --  umask filters, as open's first unnamed argument: on Apple's
-         --  variadic stack, and in the next register under the standard.
-         Emit ("mov w1, #" & Image (Hosted_ABI.Create_For_Writing (System)));
-         if Landin.Targets.C_ABI_Of (Facts)
-           = Landin.Targets.Darwin_AAPCS64_LP64
-         then
-            Emit ("sub sp, sp, #16");
-            Emit ("mov w9, #" & Image (Hosted_ABI.Created_File_Mode));
-            Emit ("str x9, [sp]");
-         else
-            Emit ("mov w2, #" & Image (Hosted_ABI.Created_File_Mode));
-         end if;
-         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "open"));
-         Finish;
-         Start (Errno_Value);
-         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, Hosted_ABI.Errno_Function (System)));
-         Emit ("ldr w0, [x0]");
-         Finish;
-         Start (Heap_Allocate);
-         Emit ("cmp x1, #1");
-         Emit ("mov x9, #1");
-         Emit ("csel x1, x1, x9, hi");
-         Emit ("adds x9, x1, #7");
-         Emit ("b.cs " & Local_Prefix & "heap_failed");
-         Emit ("adds x0, x0, x9");
-         Emit ("b.cs " & Local_Prefix & "heap_failed");
-         Emit ("tbnz x0, #63, " & Local_Prefix & "heap_failed");
-         Emit ("sub sp, sp, #16");
-         Emit ("str x1, [sp]");
-         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "malloc"));
-         Emit ("cbz x0, " & Local_Prefix & "heap_failed");
-         Emit ("ldr x1, [sp]");
-         Emit ("add x9, x0, #8");
-         Emit ("udiv x10, x9, x1");
-         Emit ("msub x10, x10, x1, x9");
-         Emit ("sub x11, x1, x10");
-         Emit ("cmp x10, #0");
-         Emit ("csel x11, xzr, x11, eq");
-         Emit ("add x9, x9, x11");
-         Emit ("stur x0, [x9, #-8]");
-         Emit ("mov x0, x9");
-         Finish;
-         Put (Local_Prefix & "heap_failed:");
-         Emit ("mov x0, #0");
-         Finish;
-         Start (Heap_Release, Framed => False);
-         Emit ("ldur x0, [x0, #-8]");
-         Emit ("b " & Landin.Targets.Capabilities.Link_Symbol
-           (Facts, "free"));
-         Close_Bridge;
-         Emit (".data");
-         Emit (".balign 8");
-         Put (Argv & ":");
-         Emit (".quad 0");
-         Put (Argc & ":");
-         Emit (".long 0");
-      end Runtime;
-
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
           not in Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
@@ -5189,14 +4861,6 @@ package body Landin.Backend.Arm64 is
       --  Name the architecture even at the default: Apple's implicit
       --  assembler level admits instructions above armv8-a (D255).
       Emit (".arch " & Landin.Targets.Levels.Name (Level));
-      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-         if Landin.IR.Is_External (Of_Unit, Landin.IR.Item_Id (Index))
-           and then Helper_Of (Source_Symbol (Landin.IR.Item_Id (Index))) /=
-             No_Host_Helper
-         then
-            Host_Bridge_Needed := True;
-         end if;
-      end loop;
       Validate_Linkage;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
@@ -5316,9 +4980,6 @@ package body Landin.Backend.Arm64 is
                end if;
             end;
          end loop;
-      end if;
-      if Host_Bridge_Needed then
-         Runtime;
       end if;
       if Debug /= null then
          Unbounded.Append (Debug_Text,

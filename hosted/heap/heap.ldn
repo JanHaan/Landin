@@ -1,15 +1,10 @@
 --  The hosted heap is separate from core/mem's freestanding allocator
---  protocol and caller-backed providers.  These fixed scalar/pointer
---  routines are supplied by the selected hosted runtime [1975].
+--  protocol and caller-backed providers.  It allocates through the C
+--  library's malloc and free, over-allocating so that every usize alignment
+--  is honoured: posix_memalign and aligned_alloc admit only powers of two.
 
 import core/mem
-
-no_allocation: atom
-allocation: type = no_allocation | ptr mut u8
-
-extern(c) _landin_host_heap_allocate:
-    (size: usize, alignment: usize) -> (block: allocation)
-extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
+import hosted/libc
 
 --  The state carries no information; it is opaque so that only `host` makes
 --  one.
@@ -17,32 +12,70 @@ system_value: type = struct
     reserved: u8
 end system_value
 
---- Host-heap allocator capability. Allocates and frees through runtime
---- helpers; does not grow allocations in place. Available only on hosted
---- targets.
+--- Host-heap allocator capability. Allocates and frees through the C
+--- library's malloc and free; does not grow allocations in place.
+--- Available only on hosted targets.
 ---
 --- Every usize alignment is accepted.  Zero and one mean no stricter than
 --- byte alignment.  A zero-byte request still returns a distinct, non-null,
---- freeable token on success.  The host shim reserves one pointer word plus
+--- freeable token on success.  The provider reserves one pointer word plus
 --- at most alignment - 1 bytes and refuses an overflow or an extent above
---- the host's PTRDIFF_MAX before calling libc.  Any other libc failure is
---- reported through mem.out_of_memory.
+--- the host's PTRDIFF_MAX before calling malloc.  Any other malloc failure
+--- is reported through mem.out_of_memory.
 public system: type = system_value
+
+--  The word before every block holds the address malloc returned, so that
+--  free can hand back exactly that.  It is written and read a byte at a
+--  time: for an alignment that is not a multiple of the word, the word
+--  itself is not aligned.
+word: usize = sizeof usize
+
+store_origin: (block: usize, origin: usize) -> none =
+    mut value: usize = origin
+    for at in usize(0)..<word do
+        cell: ptr mut u8 = ptr(block - word + at)
+        cell.val = u8(value & 255)
+        value = value >> 8
+    end for
+end store_origin
+
+load_origin: (block: usize) -> (origin: usize) =
+    origin = 0
+    for at in usize(0)..<word do
+        cell: ptr u8 = ptr(block - at - 1)
+        origin = (origin << 8) | usize(cell.val)
+    end for
+end load_origin
 
 system_alloc: (inout state: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
     _ = state.reserved
-    allocated: allocation = _landin_host_heap_allocate(size, alignment)
+    unit: usize = if alignment > 1 then alignment else 1 end if
+    --  The C library takes no request above PTRDIFF_MAX, and neither
+    --  addition may wrap: refuse both before calling it.
+    largest: usize = (0 -% 1) >> 1
+    fail mem.out_of_memory when unit - 1 > largest - word
+    padding: usize = unit - 1 + word
+    fail mem.out_of_memory when size > largest - padding
+    allocated: libc.allocation = libc.malloc(size + padding)
     match allocated
-        no_allocation: fail mem.out_of_memory
-        ptr (address): block = address
+        libc.no_allocation: fail mem.out_of_memory
+        ptr (origin): begin
+            first: usize = usize(origin) + word
+            over: usize = first % unit
+            aligned: usize = if over == 0 then first
+                             else first + (unit - over) end if
+            store_origin(aligned, usize(origin))
+            block = ptr(aligned)
+        end
     end match
 end system_alloc
 
 system_free: (inout state: system, block: ptr mut u8, size: usize) -> none =
     _ = state.reserved
     _ = size
-    _landin_host_heap_release(block)
+    origin: ptr mut u8 = ptr(load_origin(usize(block)))
+    libc.free(origin)
 end system_free
 
 system_grow: (inout state: system, block: ptr mut u8,

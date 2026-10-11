@@ -636,14 +636,16 @@ package body Landin.Diagnostics.Explanations is
                & "alue array or other unsupported aggregate, or change the"
                & " type or layout to one C represents.",
             when Catalogue.Linkage_Contract =>
-               "A link symbol, helper import or firmware placement break"
-               & "s [1610]'s or [1640]'s contract. A link symbol denotes o"
-               & "ne compatible function and at most one definition. A com"
-               & "piler-owned helper import keeps its source types, permis"
-               & "sions and nullability. Only the entry module's hosted `m"
-               & "ain` takes the `main` symbol. Cortex data symbols and se"
-               & "ctions use the spellings, alignments and vectors [1640] "
-               & "lists. Rename the symbol or correct the declaration.",
+               "A link symbol, hosted initializer or firmware placement "
+               & "breaks [1610]'s, [1975]'s or [1640]'s contract. A link s"
+               & "ymbol denotes one compatible function and at most one de"
+               & "finition. Beside a hosted entry, a declaration carrying "
+               & "`_landin_host_initialize_arguments` is exactly `extern(c"
+               & ") (count: i32, values: ptr ptr u8) -> none`. Only the en"
+               & "try module's hosted `main` takes the `main` symbol. Cort"
+               & "ex data symbols and sections use the spellings, alignmen"
+               & "ts and vectors [1640] lists. Rename the symbol or correc"
+               & "t the declaration.",
             when Catalogue.Traversal_Source =>
                "A `for` source is not something the loop can traverse [1"
                & "150]. A range traversal runs over integers, an array or "

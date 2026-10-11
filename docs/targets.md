@@ -14,10 +14,10 @@ explains the package boundaries, not a second work list.
 | RV32/RV64 instruction selection primitives | `Landin.Backend.RiscV_Instructions` |
 | arm64 object-format spelling | `Landin.Backend.Arm64.Platform` |
 | ELF directive spelling shared by ELF backends | `Landin.Backend.ELF` |
-| each hosted system's libc spelling under the runtime bridge | `Landin.Backend.Hosted_ABI` |
 | frame preflight and emission selection | `Landin.Backend.Dispatch` |
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
-| logical hosted helper identities | `Landin.Hosted`, shared by checker and backend |
+| the hosted entry's argument initializer name | `Landin.Hosted`, shared by checker and backend |
+| each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `hosted/libc`, selected by `compiler.os` |
 | native driver, archive resolution and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
@@ -52,7 +52,7 @@ eight-byte stack slots. Narrow integer arguments are extended by the
 caller. The native C differential corpus covers both call directions, bank
 exhaustion, partial chunks, nested arrays, callbacks and large results.
 
-Every emitted routine and hosted helper keeps an x29/x30 frame record; sp is
+Every emitted routine keeps an x29/x30 frame record; sp is
 sixteen-byte aligned and x18 is unused. Native Landin calls use eight integer
 bit carriers then stack slots, address-based aggregate transport and a separate
 w8 declared-error carrier. The backend emits already verified cleanup edges.
@@ -65,22 +65,22 @@ followed by `b`; that branch still requires the architecture's 128-MiB reach.
 The recorded broader resource/scaling limitations remain; this adds no
 recovery guarantee for arbitrary exhaustion.
 
-Darwin's minimal hosted bridge supplies argument access, malloc-backed aligned
-allocation, open/read/write/close and immediate errno capture through `__error`.
-It uses Apple's open flags and variadic placement. The platform's ordinary
-startup and libSystem come from the native Apple driver.
+Darwin's hosted providers reach libSystem through `hosted/libc`: argument
+access, malloc-backed aligned allocation, open/read/write/close and immediate
+errno capture through `__error`, with Apple's open flags. `open` is called as
+the variadic function it is, so its mode takes Apple's variadic placement,
+every unnamed argument in its own eight-byte stack slot. The platform's
+ordinary startup and libSystem come from the native Apple driver.
 
-Linux x86-64 emits each routine, datum, conformance table and hosted bridge
-in its own ELF input section and links with `-Wl,--gc-sections`. An
-executable keeps only what the entry, a C object or another kept section
-reaches: a bridge that is declared but never called, or reached only from an
-unreachable routine or datum, is absent along with its libc dependency. The
-hidden argument initializer is emitted with any bridge support ([1975]), so a
-C-owned startup can still call it. Linux arm64 and Darwin arm64 do not yet
-perform this per-item section collection; unreferenced hosted bridges and
-consumers may remain in their executables. The native bridge controls use
-the selected hosted lane, with symbol-absence assertions on Linux x86-64
-and a reachable-bridge execution control whenever the case runs.
+Linux x86-64 emits each routine, datum and conformance table in its own ELF
+input section and links with `-Wl,--gc-sections`. An executable keeps only
+what the entry, a C object or another kept section reaches: a library routine
+that is declared but never called, or reached only from an unreachable
+routine or datum, is absent along with its libc dependency. The hosted entry
+calls `hosted/io`'s C-callable argument initializer when the program defines
+it, and a C-owned startup can call it by the same name. Linux arm64 and
+Darwin arm64 do not yet perform this per-item section collection;
+unreferenced library routines may remain in their executables.
 
 Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
 and GNU build-id arguments. Darwin queries the selected driver with
@@ -94,7 +94,7 @@ A logical external name such as `_entry` stays unchanged in checking and IR.
 The target mapping yields `_entry` on ELF and `__entry` on Darwin. Quoting an
 assembly operand is a later rendering step, and a leading underscore in source
 does not escape the platform prefix. The same mapping applies to explicit
-native names, C imports/exports and compiler-owned hosted helpers. Local labels
+native names and C imports/exports, the argument initializer among them. Local labels
 are allocated separately. Existing ELF spelling and golden records remain valid.
 
 ## Linux arm64
@@ -116,9 +116,10 @@ driver's default, which the arm64 addressing already is. Linux's archive
 spelling and build identity apply as on x86-64. The assembler is held to the
 level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
-reserved for assembly blocks, as on Darwin. The bridge, the hosted entry and
-the panic edges are Darwin's instructions with the Linux libc spellings; the
-write-open bridge passes its mode in w2 rather than on Apple's variadic stack.
+reserved for assembly blocks, as on Darwin. The hosted entry and the panic
+edges are Darwin's instructions; `hosted/libc` selects the Linux libc
+spellings, and `open`'s variadic mode travels in w2 under the standard
+AAPCS64 rather than on Apple's variadic stack.
 
 ## C aliases and generated bindings
 
@@ -248,7 +249,7 @@ remapped using LLDB's `target.source-map` setting.
 Each backend supplies the same placement plan it uses to emit instructions.
 Darwin's frame base is DWARF register 29 (x29), with negative frame-relative
 homes and dereferences for indirect bindings. CFI describes x29/x30 saves,
-the CFA at x29+16 and each return's restoration, including hosted helpers.
+the CFA at x29+16 and each return's restoration.
 The frame pointer remains present with debugging disabled. No Darwin fact
 enters parsing, checking or neutral IR semantics.
 

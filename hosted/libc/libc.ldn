@@ -1,0 +1,215 @@
+--  The C library beneath the hosted providers, declared as ordinary
+--  extern(c) imports on every hosted target.  hosted/io and hosted/heap
+--  reach the operating system only through these declarations; the compiler
+--  links the C library and knows none of its names.  Facts that differ
+--  between systems are selected by `compiler.os`, record layouts by the C
+--  ABI as well, and the native C headers of each system check them: the
+--  `stat` record in abi/core-io-file-identity, the rest in the hosted
+--  runtime and ABI fixtures.
+
+compiler.assert(compiler.os == linux or compiler.os == darwin
+                or compiler.os == freebsd)
+
+--- Open the file at the NUL-terminated `path` and return its descriptor, or
+--- -1 with the reason in errno.  `flags` is `o_rdonly` or `o_wronly`, or'd
+--- with `o_creat` and `o_trunc`; with `o_creat` the one variadic argument
+--- is the new file's permission bits as an `i32`, which the process umask
+--- filters.
+public extern(c) open: (path: ptr u8, flags: i32, ...) -> (descriptor: i32)
+
+--- Read at most `length` bytes from `descriptor` into `data`.  The count
+--- read, zero at end of file, or -1 with the reason in errno.  EINTR means
+--- nothing was transferred.
+public extern(c) read: (descriptor: i32, data: ptr mut u8, length: usize)
+                       -> (count: isize)
+
+--- Write at most `length` bytes from `data` to `descriptor`.  The count
+--- accepted, which may be short, or -1 with the reason in errno.  EINTR
+--- means nothing was transferred.
+public extern(c) write: (descriptor: i32, data: ptr u8, length: usize)
+                        -> (count: isize)
+
+--- Close `descriptor`: 0, or -1 with the reason in errno.  The descriptor
+--- may be released even when this fails, so a failed close is never
+--- retried.
+public extern(c) close: (descriptor: i32) -> (status: i32)
+
+--- The number of bytes before the first NUL at `text`.
+public extern(c) strlen: (text: ptr u8) -> (length: usize)
+
+--- What `malloc` returns when it cannot allocate: C's null pointer.
+public no_allocation: atom
+
+--- A `malloc` result: a block, or `no_allocation`.
+public allocation: type = no_allocation | ptr mut u8
+
+--- Allocate `size` bytes aligned for any C object, or `no_allocation`.
+--- `malloc(0)` may return either; a caller that needs a distinct block for
+--- an empty request asks for a nonzero size.
+public extern(c) malloc: (size: usize) -> (block: allocation)
+
+--- Give a block from `malloc` back to the C library.
+public extern(c) free: (block: ptr mut u8) -> none
+
+fixed if compiler.os == linux then
+    --- The calling thread's errno cell, `__errno_location` on Linux and
+    --- `__error` on Darwin and FreeBSD.  Read it immediately after the
+    --- failing call, before any other call that may set it.
+    public extern(c) link(symbol: "__errno_location") errno_cell:
+        () -> (cell: ptr mut i32)
+else
+    --- The calling thread's errno cell, `__errno_location` on Linux and
+    --- `__error` on Darwin and FreeBSD.  Read it immediately after the
+    --- failing call, before any other call that may set it.
+    public extern(c) link(symbol: "__error") errno_cell:
+        () -> (cell: ptr mut i32)
+end if
+
+--- The calling thread's errno: the reason the last failing C call gave.
+--- Read it immediately after that call, before any other call that may set
+--- it.
+public current_errno: () -> (number: i32) =
+    cell: ptr mut i32 = errno_cell()
+    number = cell.val
+end current_errno
+
+--- errno: the operation is not permitted.  The same on every hosted
+--- system.
+public eperm: i32 = 1
+--- errno: no such file or directory.
+public enoent: i32 = 2
+--- errno: interrupted by a signal before anything was transferred.
+public eintr: i32 = 4
+--- errno: permission denied.
+public eacces: i32 = 13
+--- errno: the file system is read-only.
+public erofs: i32 = 30
+
+--- `open` flag: read only.  The same on every hosted system.
+public o_rdonly: i32 = 0
+--- `open` flag: write only.  The same on every hosted system.
+public o_wronly: i32 = 1
+
+fixed if compiler.os == linux then
+    --- `open` flag: create the file if it does not exist.  Linux keeps one
+    --- value on every architecture; Darwin and FreeBSD share the BSD one.
+    public o_creat: i32 = 64
+    --- `open` flag: truncate an existing regular file to length zero.
+    public o_trunc: i32 = 512
+else
+    --- `open` flag: create the file if it does not exist.  Linux keeps one
+    --- value on every architecture; Darwin and FreeBSD share the BSD one.
+    public o_creat: i32 = 512
+    --- `open` flag: truncate an existing regular file to length zero.
+    public o_trunc: i32 = 1024
+end if
+
+--- C's `struct timespec`: whole seconds and the nanoseconds after them.
+public timespec: type = struct
+    seconds: i64
+    nanoseconds: i64
+end timespec
+
+--  Full records rather than guessed opaque storage, selected by hosted
+--  system and C ABI.  Darwin arm64 uses the ordinary stat symbol with its
+--  64-bit inode ABI.
+
+fixed if compiler.os == freebsd then
+    --- `sizeof (struct stat)` in the native C headers.
+    public file_status_size: usize = 224
+    --- C's `struct stat`, as `stat` fills it on this system.
+    public file_status: type = struct
+        device: u64
+        inode: u64
+        links: u64
+        mode: u16
+        bsdflags: i16
+        uid: u32
+        gid: u32
+        padding: i32
+        special_device: u64
+        accessed: timespec
+        modified: timespec
+        changed: timespec
+        born: timespec
+        bytes: i64
+        blocks: i64
+        block_size: i32
+        flags: u32
+        generation: u64
+        revision: u64
+        spare: [9]u64
+    end file_status
+elsif compiler.c_sysv_lp64 then
+    --- `sizeof (struct stat)` in the native C headers.
+    public file_status_size: usize = 144
+    --- C's `struct stat`, as `stat` fills it on this system.
+    public file_status: type = struct
+        device: u64
+        inode: u64
+        links: u64
+        mode: u32
+        uid: u32
+        gid: u32
+        padding: i32
+        special_device: u64
+        bytes: i64
+        block_size: i64
+        blocks: i64
+        accessed: timespec
+        modified: timespec
+        changed: timespec
+        reserved: [3]i64
+    end file_status
+elsif compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d then
+    --- `sizeof (struct stat)` in the native C headers.
+    public file_status_size: usize = 128
+    --- C's `struct stat`, as `stat` fills it on this system.
+    public file_status: type = struct
+        device: u64
+        inode: u64
+        mode: u32
+        links: u32
+        uid: u32
+        gid: u32
+        special_device: u64
+        padding1: u64
+        bytes: i64
+        block_size: i32
+        padding2: i32
+        blocks: i64
+        accessed: timespec
+        modified: timespec
+        changed: timespec
+        reserved: [2]u32
+    end file_status
+else
+    --- `sizeof (struct stat)` in the native C headers.
+    public file_status_size: usize = 144
+    --- C's `struct stat`, as `stat` fills it on this system.
+    public file_status: type = struct
+        device: i32
+        mode: u16
+        links: u16
+        inode: u64
+        uid: u32
+        gid: u32
+        special_device: i32
+        accessed: timespec
+        modified: timespec
+        changed: timespec
+        created: timespec
+        bytes: i64
+        blocks: i64
+        block_size: i32
+        flags: u32
+        generation: u32
+        spare: i32
+        reserved: [2]i64
+    end file_status
+end if
+
+--- Fill `result` with the status of the file `path` names, following
+--- symbolic links: 0, or -1 with the reason in errno.
+public extern(c) stat: (path: ptr u8, result: ptr mut file_status)
+                       -> (status: i32)

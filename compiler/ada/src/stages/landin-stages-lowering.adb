@@ -5107,6 +5107,18 @@ package body Landin.Stages.Lowering is
               "a lowered written argument has no source parameter";
          end Nth_Written_Parameter;
       begin
+         --  [1560]'s explicit trap ends its block exactly as a call of a
+         --  `() -> noreturn` routine does: D232 reports `unreachable` at
+         --  this call's own site.  It is a statement, not a check, so no
+         --  `unchecked` region removes it.
+         if Landin.Configuration.Unreachable_Call
+           (Spellings.all, Of_Tree, Node)
+         then
+            IR.Emit_Halt (Unit.all, Filling, Syn.Origin (Of_Tree, Node));
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            return IR.No_Value;
+         end if;
          if Landin.Configuration.Assembly_Call
            (Spellings.all, Of_Tree, Node)
          then

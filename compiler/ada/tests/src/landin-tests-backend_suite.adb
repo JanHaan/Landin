@@ -20,6 +20,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Backend.Arm64;
+with Landin.Backend.Dispatch;
 with Landin.Backend.Dwarf;
 with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
@@ -6444,13 +6445,14 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Cortex_Evidence_Tables_Have_Separate_Sections;
 
-   --  D195 keeps host-width allocation policy out of neutral IR.  The shim
-   --  must reject either overflowing addition and totals above PTRDIFF_MAX
-   --  before libc, then retain the original malloc pointer for real release.
-   procedure A_Hosted_Heap_Shim_Checks_Before_Libc
+   --  The C library's names belong to their imports.  A private routine
+   --  spelled `malloc` or `free` takes a mangled local name, so the hosted
+   --  heap's calls reach the C library and not the program's routine; no
+   --  libc name is reserved from source beyond what a program imports.
+   procedure C_Imports_Keep_Their_Names
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Hosted_Heap_Shim_Checks_Before_Libc
+   procedure C_Imports_Keep_Their_Names
      (Item : in out Landin.Testing.Context)
    is
       Work : Landin.Stages.Compilation :=
@@ -6461,127 +6463,88 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "no_allocation: atom" & LF
          & "allocation: type = no_allocation | ptr mut u8" & LF
-         & "extern(c) _landin_host_heap_allocate:"
-         & " (size: usize, alignment: usize) -> (block: allocation)" & LF
-         & "extern(c) _landin_host_heap_release:"
+         & "extern(c) link(symbol: ""malloc"") allocate:"
+         & " (size: usize) -> (block: allocation)" & LF
+         & "extern(c) link(symbol: ""free"") release:"
          & " (block: ptr mut u8) -> none" & LF
          & "malloc: () -> none = end malloc" & LF
          & "free: () -> none = end free" & LF
          & "public main: () -> (code: i32) =" & LF
          & "    malloc()" & LF
          & "    free()" & LF
-         & "    code = 0" & LF
+         & "    match allocate(16)" & LF
+         & "        no_allocation: code = 1" & LF
+         & "        ptr (block): begin" & LF
+         & "            release(block)" & LF
+         & "            code = 0" & LF
+         & "        end" & LF
+         & "    end match" & LF
          & "end main" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
       declare
-         Hosted : constant Landin.IR.Item_Id :=
-           Landin.Backend.Entry_Point.Hosted_Main
-             (Landin.Stages.Code (Work).all,
-              Landin.Stages.Meanings (Work).all,
-              Landin.Stages.Modules (Work).all,
-              Landin.Stages.Identities (Work).all);
-         Text : constant String :=
-           Landin.Backend.X86_64.Text
-             (Landin.Stages.Code (Work).all,
-              Landin.Stages.Meanings (Work).all,
-              Landin.Stages.Identities (Work).all,
-              Landin.Targets.Linux_X86_64,
-              Hosted_Entry => Hosted);
-         First_Check : constant Natural :=
-           Index (Text, "jc .Llandin_host_heap_failed");
-         Host_Call : constant Natural := Index (Text, "call malloc");
+         Text : constant String := Emitted (Work);
       begin
-         Landin.Testing.Check
-           (Item,
-            First_Check > 0 and then Host_Call > First_Check
-              and then Contains
-                (Text, "js .Llandin_host_heap_failed"),
-            "overflow and PTRDIFF_MAX are checked before malloc");
-         Landin.Testing.Check
-           (Item,
-            Contains (Text, "divq (%rsp)")
-              and then Contains (Text, "movq %rcx, -8(%rax)"),
-            "arbitrary alignment retains the original allocation");
-         Landin.Testing.Check
-           (Item,
-            Contains
-              (Text, "_landin_host_heap_release:" & LF
-                 & HT & "movq -8(%rdi), %rdi" & LF
-                 & HT & "jmp free" & LF),
-            "release passes the recovered pointer to libc free");
          Landin.Testing.Check
            (Item,
             not Contains (Text, HT & ".type malloc, @function")
               and then not Contains (Text, HT & ".type free, @function")
-              and then Occurrences (Text, "call malloc") = 1
-              and then Occurrences (Text, "jmp free") = 1,
+              and then Occurrences (Text, "call malloc" & LF) = 1
+              and then Occurrences (Text, "call free" & LF) = 1,
             "ordinary same-named routines cannot interpose on libc");
          Landin.Testing.Check
-           (Item, Contains
-              (Text, "main:" & LF & HT & "pushq %rbp" & LF
-               & HT & "movq %rsp, %rbp" & LF
-               & HT & "call _landin_host_initialize_arguments" & LF)
-            and then Occurrences
-              (Text, HT & "call _landin_host_initialize_arguments" & LF) = 1
-            and then Occurrences
-              (Text, "movl %edi, .Llandin_host_argc(%rip)") = 1
-            and then Occurrences
-              (Text, "movq %rsi, .Llandin_host_argv(%rip)") = 1,
-            "only main calls the same aligned C argument initializer");
+           (Item, not Contains (Text, "_landin_host_"),
+            "no hosted helper or bridge is emitted");
       end;
-   end A_Hosted_Heap_Shim_Checks_Before_Libc;
+   end C_Imports_Keep_Their_Names;
 
-   procedure Hosted_Bridges_Emit_Only_Requested_Helpers
+   --  The hosted entry's one contract: when the program defines the
+   --  argument initializer, `main` calls it with its incoming argc and argv
+   --  before anything can clobber them, on every hosted backend.  A
+   --  program that defines none, or only imports one, calls nothing.
+   procedure Hosted_Entry_Calls_A_Defined_Initializer
      (Item : in out Landin.Testing.Context);
 
-   procedure Hosted_Bridges_Emit_Only_Requested_Helpers
+   procedure Hosted_Entry_Calls_A_Defined_Initializer
      (Item : in out Landin.Testing.Context)
    is
-      procedure Check_Import
-        (Declaration, Present, Absent : String);
+      Main : constant String :=
+        "public main: () -> (code: i32) = code = 0 end main" & LF;
+      Definition : constant String :=
+        "mut seen: i32" & LF
+        & "public extern(c) _landin_host_initialize_arguments:"
+        & " (count: i32, values: ptr ptr u8) -> none =" & LF
+        & "    _ = values" & LF
+        & "    seen = count" & LF
+        & "end _landin_host_initialize_arguments" & LF;
+      Import : constant String :=
+        "extern(c) _landin_host_initialize_arguments:"
+        & " (count: i32, values: ptr ptr u8) -> none" & LF;
 
-      procedure Check_Import
-        (Declaration, Present, Absent : String)
+      function Text_For
+        (Source : String; Facts : Landin.Targets.Target_Facts)
+         return String;
+
+      function Text_For
+        (Source : String; Facts : Landin.Targets.Target_Facts)
+         return String
       is
-         Work : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Ran : Natural;
       begin
-         Lower (Work, Declaration & LF, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 5, "import lowered");
-         if Landin.Stages.Failed (Work) then
-            return;
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            "the hosted program lowers");
+         if Ran /= 5 or else Landin.Stages.Failed (Work) then
+            return "";
          end if;
-         declare
-            Text : constant String := Emitted (Work);
-         begin
-            Landin.Testing.Check
-              (Item, Contains (Text, Present & ":" & LF)
-               and then not Contains (Text, Absent & ":" & LF)
-               and then Contains
-                 (Text, "_landin_host_initialize_arguments:" & LF)
-               and then Occurrences
-                 (Text, HT & ".type _landin_host_") = 2,
-               "the initializer and imported helper receive bodies");
-            Landin.Testing.Check
-              (Item, Contains (Text, ".Llandin_host_argv:" & LF),
-               "retained bridge support exposes startup state");
-         end;
-      end Check_Import;
-
-      Work : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-      Ran : Natural;
-   begin
-      Lower
-        (Work, "public main: () -> (code: i32) = code = 0 end main" & LF,
-         Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 5, "main lowered");
-      if not Landin.Stages.Failed (Work) then
          declare
             Hosted : constant IR.Item_Id :=
               Landin.Backend.Entry_Point.Hosted_Main
@@ -6589,34 +6552,75 @@ package body Landin.Tests.Backend_Suite is
                  Landin.Stages.Meanings (Work).all,
                  Landin.Stages.Modules (Work).all,
                  Landin.Stages.Identities (Work).all);
-            Text : constant String := Landin.Backend.X86_64.Text
+            Assembly : Ada.Strings.Unbounded.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Landin.Backend.Dispatch.Emit
               (Landin.Stages.Code (Work).all,
                Landin.Stages.Meanings (Work).all,
                Landin.Stages.Identities (Work).all,
-               Landin.Stages.Target (Work), Hosted_Entry => Hosted);
+               Facts, Landin.Targets.Levels.Default_Level (Facts),
+               Landin.Optimization.Reference_Options, Assembly, Report,
+               Hosted_Entry => Hosted);
+            return Ada.Strings.Unbounded.To_String (Assembly);
+         end;
+      end Text_For;
+
+      type Target_Case is record
+         Facts : Landin.Targets.Target_Facts;
+         Call : access constant String;
+         Prologue : access constant String;
+      end record;
+
+      X86_Call : aliased constant String :=
+        HT & "call _landin_host_initialize_arguments" & LF;
+      X86_Prologue : aliased constant String :=
+        "main:" & LF & HT & "pushq %rbp" & LF & HT & "movq %rsp, %rbp" & LF;
+      ELF_Arm64_Call : aliased constant String :=
+        HT & "bl _landin_host_initialize_arguments" & LF;
+      Darwin_Call : aliased constant String :=
+        HT & "bl __landin_host_initialize_arguments" & LF;
+      Arm64_Prologue : aliased constant String :=
+        HT & "stp x29, x30, [sp, #-16]!" & LF & HT & "mov x29, sp" & LF;
+      RV64_Call : aliased constant String :=
+        HT & "call _landin_host_initialize_arguments" & LF;
+      RV64_Prologue : aliased constant String :=
+        HT & "addi x8, sp, 16" & LF;
+      Cases : constant array (Positive range <>) of Target_Case :=
+        [(Landin.Targets.Linux_X86_64, X86_Call'Access,
+          X86_Prologue'Access),
+         (Landin.Targets.Linux_Arm64, ELF_Arm64_Call'Access,
+          Arm64_Prologue'Access),
+         (Landin.Targets.Darwin_Arm64, Darwin_Call'Access,
+          Arm64_Prologue'Access),
+         (Landin.Targets.Linux_RV64, RV64_Call'Access,
+          RV64_Prologue'Access)];
+   begin
+      for Target of Cases loop
+         declare
+            Alone : constant String := Text_For (Main, Target.Facts);
+            Defined : constant String :=
+              Text_For (Definition & Main, Target.Facts);
+            Imported : constant String :=
+              Text_For (Import & Main, Target.Facts);
          begin
             Landin.Testing.Check
+              (Item,
+               Alone /= "" and then not Contains (Alone, "_landin_host"),
+               "a program with no argument root calls nothing");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Defined, Target.Call.all), 1,
+               "main calls the program's initializer exactly once");
+            Landin.Testing.Check
               (Item, Contains
-                 (Text, "_landin_host_initialize_arguments:" & LF)
-               and then Occurrences
-                 (Text, HT & ".type _landin_host_") = 1
-               and then not Contains
-                 (Text, "_landin_host_argument_count:" & LF)
-               and then not Contains
-                 (Text, "_landin_host_heap_allocate:" & LF)
-               and then not Contains (Text, "jmp open" & LF),
-               "hosted startup retains only its initializer");
+                 (Defined, Target.Prologue.all & Target.Call.all),
+               "the call follows the frame record, before the body");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Imported, Target.Call.all), 0,
+               "an import alone defines no root to call");
          end;
-      end if;
-
-      Check_Import
-        ("extern(c) _landin_host_text_length: (data: ptr u8)"
-         & " -> (length: usize)",
-         "_landin_host_text_length", "_landin_host_heap_allocate");
-      Check_Import
-        ("extern(c) _landin_host_argument_count: () -> (n: usize)",
-         "_landin_host_argument_count", "_landin_host_text_length");
-   end Hosted_Bridges_Emit_Only_Requested_Helpers;
+      end loop;
+   end Hosted_Entry_Calls_A_Defined_Initializer;
 
    procedure C_Classification_And_Assignment_Agree
      (Item : in out Landin.Testing.Context);
@@ -6869,61 +6873,19 @@ package body Landin.Tests.Backend_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Initializer : constant String := "_landin_host_initialize_arguments";
-
-      procedure Reject_Definition (Spelling : String);
-      procedure Check_Import (Signature : String; Compatible : Boolean);
-
-      procedure Reject_Definition (Spelling : String) is
-      begin
-         for Hosted in Boolean loop
-            declare
-               Work : Landin.Stages.Compilation :=
-                 Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-               Ran : Natural;
-            begin
-               Lower
-                 (Work,
-                  "public extern(c) callback: () -> none = end callback"
-                  & LF & (if Hosted then
-                    "public main: () -> (code: i32) = code = 0 end main"
-                    & LF else ""), Ran);
-               Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
-               IR.Set_Link_Symbol
-                 (Landin.Stages.Code (Work).all, 1,
-                  Landin.Source.Names.Intern
-                    (Landin.Stages.Identities (Work).all, Spelling));
-               begin
-                  declare
-                     Text : constant String := Landin.Backend.X86_64.Text
-                       (Landin.Stages.Code (Work).all,
-                        Landin.Stages.Meanings (Work).all,
-                        Landin.Stages.Identities (Work).all,
-                        Landin.Stages.Target (Work),
-                        Hosted_Entry => (if Hosted then 2 else IR.No_Item));
-                  begin
-                     Landin.Testing.Fail
-                       (Item,
-                        "an override emitted " & Natural'Image (Text'Length)
-                        & " bytes instead of refusing " & Spelling);
-                  end;
-               exception
-                  when Problem : Landin.Compiler_Defect =>
-                     Landin.Testing.Check_Equal
-                       (Item, Ada.Exceptions.Exception_Message (Problem),
-                        "a definition overrides compiler-owned symbol "
-                        & Spelling,
-                        "explicit definitions cannot replace runtime bridges");
-               end;
-            end;
-         end loop;
-      end Reject_Definition;
-
-      procedure Check_Import (Signature : String; Compatible : Boolean) is
+   begin
+      --  A routine checking never held to the initializer's signature
+      --  cannot become the hosted entry's call.
+      declare
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
          Ran : Natural;
       begin
-         Lower (Work, "extern(c) imported: " & Signature & LF, Ran);
+         Lower
+           (Work,
+            "public other: () -> none = end other" & LF
+            & "public main: () -> (code: i32) = code = 0 end main" & LF,
+            Ran);
          Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          IR.Set_Link_Symbol
            (Landin.Stages.Code (Work).all, 1,
@@ -6931,39 +6893,25 @@ package body Landin.Tests.Backend_Suite is
               (Landin.Stages.Identities (Work).all, Initializer));
          begin
             declare
-               Text : constant String := Emitted (Work);
+               Text : constant String := Landin.Backend.X86_64.Text
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Hosted_Entry => 2);
             begin
-               Landin.Testing.Check
-                 (Item, Compatible,
-                  "an incompatible initializer import refused");
-               Landin.Testing.Check_Equal
-                 (Item, Occurrences (Text, LF & Initializer & ":" & LF), 1,
-                  "a compatible bodyless import receives exactly one bridge");
-               Landin.Testing.Check_Equal
-                 (Item, Occurrences (Text, HT & "call " & Initializer & LF), 0,
-                  "retaining the bridge does not call it implicitly");
+               Landin.Testing.Fail
+                 (Item, "an unchecked initializer emitted "
+                  & Natural'Image (Text'Length) & " bytes");
             end;
          exception
             when Problem : Landin.Compiler_Defect =>
-               Landin.Testing.Check
-                 (Item, not Compatible, "compatible initializer imports work");
                Landin.Testing.Check_Equal
                  (Item, Ada.Exceptions.Exception_Message (Problem),
-                  "an import disagrees with compiler-owned symbol "
-                  & Initializer, "the guard identifies the bridge mismatch");
+                  "an unchecked hosted argument initializer reached the"
+                  & " backend",
+                  "the backend refuses a native initializer");
          end;
-      end Check_Import;
-   begin
-      Reject_Definition (Initializer);
-      Reject_Definition ("_landin_host_argument_count");
-      Reject_Definition ("_landin_host_text_length");
-      Reject_Definition ("_landin_host_heap_release");
-      Check_Import ("(argc: i32, escaping argv: ptr ptr u8) -> none", True);
-      Check_Import ("(argc: i64, argv: ptr ptr u8) -> none", False);
-      Check_Import ("(argc: f64, argv: ptr ptr u8) -> none", False);
-      Check_Import ("(argc: i32) -> none", False);
-      Check_Import ("(argc: i32, argv: ptr ptr u8) -> (r: i32)", False);
-      Check_Import ("(argc: i32, argv: ptr ptr u8, ...) -> none", False);
+      end;
       for Imported in Boolean loop
          declare
             Work : Landin.Stages.Compilation :=
@@ -7181,7 +7129,11 @@ package body Landin.Tests.Backend_Suite is
             begin
                Lower
                  (Work,
-                  "public " & (if C_Convention then "extern(c) " else "")
+                  "public extern(c) _landin_host_initialize_arguments:"
+                  & " (count: i32, values: ptr ptr u8) -> none =" & LF
+                  & "    _ = count" & LF & "    _ = values" & LF
+                  & "end _landin_host_initialize_arguments" & LF
+                  & "public " & (if C_Convention then "extern(c) " else "")
                   & (case Linkage is
                        when 0 => "",
                        when 1 => "link(symbol: ""main"") ",
@@ -7231,10 +7183,13 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end Only_A_Native_Main_Receives_Hosted_Startup;
 
-   procedure C_Exports_Keep_Helpers_And_Link_Names
+   --  A C-owned main calls the library's argument initializer itself:
+   --  without a hosted entry it is an ordinary public C definition that
+   --  nothing calls implicitly, beside other renamed C exports.
+   procedure C_Exports_Keep_Their_Link_Names
      (Item : in out Landin.Testing.Context);
 
-   procedure C_Exports_Keep_Helpers_And_Link_Names
+   procedure C_Exports_Keep_Their_Link_Names
      (Item : in out Landin.Testing.Context)
    is
       Work : Landin.Stages.Compilation :=
@@ -7243,19 +7198,17 @@ package body Landin.Tests.Backend_Suite is
    begin
       Lower
         (Work,
-         "extern(c) _landin_host_text_length: (data: ptr u8)"
-         & " -> (length: usize)" & LF
-         & "extern(c) _landin_host_argument_count: () -> (n: usize)" & LF
-         & "extern(c) _landin_host_argument_table: ()"
-         & " -> (table: ptr ptr u8)" & LF
-         & "extern(c) _landin_host_argument_at: (index: usize)"
-         & " -> (data: ptr u8)" & LF
-         & "_landin_host_initialize_arguments: () -> none ="
-         & " end _landin_host_initialize_arguments" & LF
-         & "strlen: () -> (r: usize) = r = 99 end strlen" & LF
+         "extern(c) strlen: (data: ptr u8) -> (length: usize)" & LF
+         & "mut seen: i32" & LF
+         & "public extern(c) _landin_host_initialize_arguments:"
+         & " (count: i32, values: ptr ptr u8) -> none =" & LF
+         & "    _ = values" & LF
+         & "    seen = count" & LF
+         & "end _landin_host_initialize_arguments" & LF
+         & "length_of: () -> (r: usize) = r = 99 end length_of" & LF
          & "public extern(c) length: (data: ptr u8) -> (r: usize) =" & LF
-         & "    _ = strlen()" & LF
-         & "    r = _landin_host_text_length(data)" & LF
+         & "    _ = length_of()" & LF
+         & "    r = strlen(data)" & LF
          & "end length" & LF
          & "public extern(c) link(symbol: ""r440_first"")"
          & " first: (x: i32) -> (r: i32) = r = x + 1 end first" & LF
@@ -7272,67 +7225,18 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
       begin
          Landin.Testing.Check
-           (Item, Contains (Text, "_landin_host_text_length:" & LF)
-            and then Contains (Text, HT & "jmp strlen" & LF)
+           (Item, Contains (Text, HT & "call strlen" & LF)
             and then not Contains (Text, HT & ".type strlen, @function")
             and then not Contains (Text, HT & ".globl main" & LF),
-            "startup-independent helpers need no Landin main or libc alias");
+            "a C import needs no Landin main");
          Landin.Testing.Check
            (Item, Contains
               (Text, HT & ".globl _landin_host_initialize_arguments" & LF)
-            and then Contains
-              (Text, HT & ".hidden _landin_host_initialize_arguments" & LF)
             and then Occurrences
               (Text, HT & ".type _landin_host_initialize_arguments,") = 1
             and then not Contains
               (Text, HT & "call _landin_host_initialize_arguments" & LF),
-            "C startup gets one hidden initializer, never a callback hook");
-         Landin.Testing.Check
-           (Item, Contains
-              (Text, "_landin_host_initialize_arguments:" & LF
-               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
-               & HT & "jne .Llandin_host_arguments_initialized" & LF
-               & HT & "testl %edi, %edi" & LF
-               & HT & "js .Llandin_host_arguments_invalid" & LF
-               & HT & "testq %rsi, %rsi" & LF
-               & HT & "jz .Llandin_host_arguments_invalid" & LF
-               & HT & "movl %edi, .Llandin_host_argc(%rip)" & LF
-               & HT & "movq %rsi, .Llandin_host_argv(%rip)" & LF
-               & HT & "ret" & LF)
-            and then Contains
-              (Text, ".Llandin_host_arguments_invalid:" & LF
-               & HT & "ud2" & LF),
-            "first initialization validates and stores the C carriers");
-         Landin.Testing.Check
-           (Item, Contains
-              (Text, "_landin_host_argument_count:" & LF
-               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
-               & HT & "je .Llandin_host_arguments_invalid" & LF)
-            and then Contains
-              (Text, "_landin_host_argument_table:" & LF
-               & HT & "movq .Llandin_host_argv(%rip), %rax" & LF
-               & HT & "testq %rax, %rax" & LF
-               & HT & "jz .Llandin_host_arguments_invalid" & LF)
-            and then Contains
-              (Text, "_landin_host_argument_at:" & LF
-               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
-               & HT & "je .Llandin_host_arguments_invalid" & LF),
-            "every global argument API guards real initialization");
-         Landin.Testing.Check
-           (Item, Occurrences
-              (Text, "movl %edi, .Llandin_host_argc(%rip)") = 1
-            and then Occurrences
-              (Text, "movq %rsi, .Llandin_host_argv(%rip)") = 1
-            and then Contains
-              (Text, ".Llandin_host_arguments_initialized:" & LF
-               & HT & "cmpl %edi, .Llandin_host_argc(%rip)" & LF
-               & HT & "jne .Llandin_host_arguments_invalid" & LF
-               & HT & "cmpq %rsi, .Llandin_host_argv(%rip)" & LF
-               & HT & "jne .Llandin_host_arguments_invalid" & LF
-               & HT & "ret" & LF)
-            and then Contains (Text, ".Llandin_host_argv:" & LF)
-            and then Contains (Text, ".Llandin_host_argc:" & LF),
-            "only first initialization stores the persistent argument root");
+            "C startup gets one initializer, never a callback hook");
          Landin.Testing.Check
            (Item, Contains (Text, HT & ".globl r440_first" & LF)
             and then Contains (Text, HT & ".globl r440_second" & LF)
@@ -7340,7 +7244,7 @@ package body Landin.Tests.Backend_Suite is
             and then Contains (Text, HT & ".type r440_second, @function"),
             "both explicit public link symbols retain function visibility");
       end;
-   end C_Exports_Keep_Helpers_And_Link_Names;
+   end C_Exports_Keep_Their_Link_Names;
 
    procedure A_C_Stack_Area_Must_Be_Addressable
      (Item : in out Landin.Testing.Context);
@@ -7458,7 +7362,7 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, "call _landin_host_unknown")
             and then not Contains
               (Text, ".globl _landin_host_initialize_arguments"),
-            "an unknown helper prefix does not enable the hosted bridge");
+            "a retired helper name is an ordinary C import");
       end;
       declare
          Text : Ada.Strings.Unbounded.Unbounded_String;
@@ -7521,6 +7425,105 @@ package body Landin.Tests.Backend_Suite is
             "read and write preserve the complete target byte offset");
       end;
    end Darwin_Wide_Parts_Keep_Target_Offsets;
+
+   --  [1975]: Apple's arm64 ABI places every promoted unnamed argument in
+   --  its own eight-byte stack slot in argument order, whatever its bank,
+   --  and touches no argument register for it; the named count stays in
+   --  w0.  `abi/darwin-varargs-stack-slots` runs the same placement against
+   --  C's va_arg and an assembly observer on a Mac.
+   procedure Darwin_Variadic_Tails_Take_Ordered_Slots
+     (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Variadic_Tails_Take_Ordered_Slots
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "extern(c) collect: (count: i32, ...) -> (result: i32)" & LF
+         & "public extern(c) check: (cell: ptr mut i32) -> (result: i32) ="
+         & LF
+         & "    narrow: i8 = -7" & LF
+         & "    single: f32 = 0.5" & LF
+         & "    wide: i64 = -5000000000" & LF
+         & "    result = collect(12, narrow, narrow, narrow, narrow, narrow,"
+         & " single, 1.5, wide, wide, cell, cell, 9.25)" & LF
+         & "end check" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "variadic call lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         Area : constant Natural := Index (Text, HT & "sub sp, sp, #96" & LF);
+         Call : constant Natural := Index (Text, HT & "bl _collect" & LF);
+         Previous : Natural := Area;
+         In_Order : Boolean := Area > 0 and then Call > Area;
+      begin
+         Landin.Testing.Check
+           (Item, In_Order, "twelve slots are reserved before the call");
+         if not In_Order then
+            return;
+         end if;
+         declare
+            Segment : constant String := Text (Area .. Call);
+         begin
+            for Slot in 0 .. 11 loop
+               declare
+                  Store : constant String :=
+                    (if Slot = 0 then HT & "mov x9, sp" & LF
+                     else HT & "add x9, sp, #"
+                       & Ada.Strings.Fixed.Trim
+                           (Natural'Image (8 * Slot), Ada.Strings.Both)
+                       & LF);
+                  At_Slot : constant Natural := Index (Segment, Store);
+               begin
+                  In_Order := In_Order and then At_Slot > Previous - Area;
+                  Previous := Area + At_Slot;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, In_Order,
+               "each promoted tail is copied to the next slot in order");
+            for Number in 1 .. 7 loop
+               declare
+                  Digit : constant String := Ada.Strings.Fixed.Trim
+                    (Natural'Image (Number), Ada.Strings.Both);
+               begin
+                  Landin.Testing.Check
+                    (Item, not Contains (Segment, " x" & Digit & ",")
+                     and then not Contains (Segment, " w" & Digit & ","),
+                     "no unnamed argument reaches x" & Digit);
+               end;
+            end loop;
+            for Number in 0 .. 7 loop
+               declare
+                  Digit : constant String := Ada.Strings.Fixed.Trim
+                    (Natural'Image (Number), Ada.Strings.Both);
+               begin
+                  Landin.Testing.Check
+                    (Item, not Contains (Segment, " d" & Digit & ",")
+                     and then not Contains (Segment, " s" & Digit & ","),
+                     "no unnamed argument reaches v" & Digit);
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Contains (Segment, HT & "ldr w0, [x13]" & LF),
+               "the named count keeps w0");
+         end;
+      end;
+   end Darwin_Variadic_Tails_Take_Ordered_Slots;
 
    procedure Arm64_Immediates_Use_The_Shorter_Move_Sequence
      (Item : in out Landin.Testing.Context);
@@ -8965,6 +8968,9 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
       Landin.Testing.Register
+        (Into, "backend", "Darwin variadic tails take ordered slots",
+         Darwin_Variadic_Tails_Take_Ordered_Slots'Access);
+      Landin.Testing.Register
         (Into, "backend", "arm64 immediates use shorter move sequences",
          Arm64_Immediates_Use_The_Shorter_Move_Sequence'Access);
       Landin.Testing.Register
@@ -9007,8 +9013,8 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "only a native main receives hosted startup",
          Only_A_Native_Main_Receives_Hosted_Startup'Access);
       Landin.Testing.Register
-        (Into, "backend", "C exports keep helpers and link names",
-         C_Exports_Keep_Helpers_And_Link_Names'Access);
+        (Into, "backend", "C exports keep their link names",
+         C_Exports_Keep_Their_Link_Names'Access);
       Landin.Testing.Register
         (Into, "backend", "a C stack area must be addressable",
          A_C_Stack_Area_Must_Be_Addressable'Access);
@@ -9016,11 +9022,11 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "C classification and assignment agree",
          C_Classification_And_Assignment_Agree'Access);
       Landin.Testing.Register
-        (Into, "backend", "a hosted heap shim checks before libc",
-         A_Hosted_Heap_Shim_Checks_Before_Libc'Access);
+        (Into, "backend", "C imports keep their names",
+         C_Imports_Keep_Their_Names'Access);
       Landin.Testing.Register
-        (Into, "backend", "hosted bridges emit only requested helpers",
-         Hosted_Bridges_Emit_Only_Requested_Helpers'Access);
+        (Into, "backend", "the hosted entry calls a defined initializer",
+         Hosted_Entry_Calls_A_Defined_Initializer'Access);
       Landin.Testing.Register
         (Into, "backend", "any dispatch uses a flattened real table",
          Any_Dispatch_Uses_A_Flattened_Real_Table'Access);

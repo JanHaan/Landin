@@ -1848,23 +1848,30 @@ ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
 for already absent backing; a successful release clears backing to its atom.
 
 Foreign failure detail is ordinary explicit state. After a documented libc
-failure indication, `hosted/io` captures errno before any other host call and
+failure indication, `hosted/io` captures errno through `hosted/libc`'s
+`current_errno` before any other host call and
 retains the exact terminal value in its system provider, exposed by
 `hosted.last_errno`. Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a process-global Landin variable.
 
-On both hosted paths, the compiler-owned bridge emits the hidden external entry
-`void _landin_host_initialize_arguments(int argc, char **argv);` (with the
-platform symbol prefix) whenever
-hosted bridge support is retained. An executable's selected no-argument Landin
-entry calls it with the actual incoming C carriers before its source body runs.
-A C-owned startup that drives public C-convention Landin routines calls it
-explicitly before `hosted.host()` can mint an argument-table capability and before
-starting any thread that may do so. Merely importing `core/io` does not perform
-initialization, and startup-independent bridge services may run without it.
-Ordinary exports and callbacks never initialize, replace or reset this state.
+The hosted argument root belongs to `hosted/io`, which defines the public
+C-convention routine `_landin_host_initialize_arguments` with the signature
+`(count: i32, escaping values: ptr ptr u8) -> none`, which C declares as
+`void _landin_host_initialize_arguments(int argc, char **argv);` under the
+platform symbol prefix. When a hosted entry is
+selected and the program defines a C routine with that link symbol, the
+selected no-argument Landin entry calls it with the actual incoming C carriers
+before its source body runs; a program that defines none calls nothing. Beside
+a hosted entry every declaration carrying that symbol must be exactly
+`extern(c) (i32, ptr ptr u8) -> none`, whatever its `escaping` marker, or it is
+refused. A C-owned startup that drives public C-convention Landin routines
+calls it explicitly before `hosted.host()` can mint an argument-table
+capability and before starting any thread that may do so. Merely importing
+`core/io` does not perform initialization, and file, stream and heap work,
+which needs no argument root, may run without it. Ordinary exports and
+callbacks never initialize, replace or reset this state.
 
 The host I/O and heap constructors are public, zero-argument library routines.
 Any ordinary hosted routine can call them; hosted argument services still
@@ -1882,27 +1889,30 @@ exact pair as the one argument root. It allocates and copies nothing: the C
 owner must keep the `argv` table and every argument it names readable for the
 whole lifetime of every Landin world, view and callback derived from them. A
 later call with the identical count and pointer is harmless; a negative count,
-null table or attempt to replace either part of the established root traps. The
-retained-state count, table and indexed services trap before initialization.
-The published user table begins at `argv + 1`, its count is
-`max(argc - 1, 0)`, and the retained-state indexed compatibility lookup traps
-on an out-of-range index or null entry.
+null table or attempt to replace either part of the established root traps.
+`hosted.host()` traps before initialization. The published user table begins
+at `argv + 1`, its count is `max(argc - 1, 0)`, and indexed lookup traps on a
+null entry within that count.
 
-The remaining repository-owned runtime bridge exposes fixed wrappers for
-`strlen`, read-only and write-create-truncate `open`, `read`, `write`, `close`,
-`errno`, and hosted heap allocation and release; those wrappers call libc. This
-is a compiler/runtime ABI used by `hosted/io` and `hosted/heap`, not a set of
-privileged language operations. `hosted/io` turns descriptors and
-pointer-and-length argument views into ordinary values, maps foreseeable host
-failures onto declared atoms, and threads its `world(provider)` concept as the
-authority for opening files and touching streams [1660] [1680]. Direct Linux
-syscalls are not part of this route. The required `world.write_some` reports
-counted progress for one attempt, with no transfer on failure and no host
-call for an empty slice. `world.same_file` follows path aliases and compares
-file identity before any destructive output open; a missing output returns
-false, while failed input lookup or other output lookup failures refuse.
-It assumes stable names, rather than providing race-safe output opening.
-D153 states these ordinary library contracts and their provider obligations.
+The compiler names no other host routine. The public module `hosted/libc`
+declares the C library beneath the hosted providers as ordinary `extern(c)`
+imports: `open`, `read`, `write`, `close`, `strlen`, `malloc`, `free`, `stat`
+and the calling thread's errno cell, with the constants and records whose
+values differ between systems selected by `compiler.os` and the C ABI. These
+are library declarations, not privileged language operations, and the
+compiler reserves none of their names. `hosted/io` and `hosted/heap` reach the
+host only through them. `hosted/io` turns descriptors and pointer-and-length
+argument views into ordinary values, maps foreseeable host failures onto
+declared atoms, and threads its `world(provider)` concept as the authority for
+opening files and touching streams [1660] [1680]. Direct Linux syscalls are
+not part of this route. The required `world.write_some` reports counted
+progress for one attempt, with no transfer on failure and no host call for an
+empty slice. `world.same_file` follows path aliases and compares file identity
+before any destructive output open; a missing output returns false, while
+failed input lookup or other output lookup failures refuse. It assumes stable
+names, rather than providing race-safe output opening. D153 states these
+ordinary library contracts and their provider obligations, and D276 the
+boundary that replaced its compiler-emitted bridge.
 
 ### [1990] Firmware and machine directives have explicit target contracts
 
@@ -12540,7 +12550,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0339 rejects an invalid site type, L0301 a different signature, L0327 an extra positional argument or invalid forwarding source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0346 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, L0347 refuses an assembly expression, incompatible declarations or multiple definitions, and L0301 refuses treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
-| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
+| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry calls `hosted/io`'s initializer, when the program defines it, to establish the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and file, stream and heap work needs no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -14499,7 +14509,8 @@ its interface or introduce hosted authority. The memory-backed I/O provider
 remains part of core/io; importing it does not select hosted I/O or allocation.
 
 `hosted/*` is available only where the target has a hosted system. The current
-modules are hosted/heap and hosted/io. The latter is ordinarily imported
+modules are hosted/heap, hosted/io and hosted/libc, which declares the C
+library beneath the other two (D276). hosted/io is ordinarily imported
 `as hosted` when a consumer also imports core/io. `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
 AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
@@ -14667,8 +14678,11 @@ prototype 4's replaceable world both need detail without a second error system.
 
 **Chosen:** [1975]'s immediate errno capture, explicit system state and
 `hosted.last_errno` preserve the exact terminal libc detail while ordinary
-`not_found`, `no_access` and `io_failed` remain payload-free atoms. A successful
-operation clears the remembered detail; a local refusal invents no errno.
+`not_found`, `no_access` and `io_failed` remain payload-free atoms. The
+provider reads errno through `hosted/libc`'s `current_errno`, which loads the
+calling thread's `errno_cell`, immediately after the failing call and before
+any other host call (D276). A successful operation clears the remembered
+detail; a local refusal invents no errno.
 Interrupted open/read/write attempts retry only under the selected platform's
 no-progress guarantee, and writes resume after the completed prefix. Close
 consumes its handle once even if it fails; EINTR does not authorize retry.
@@ -14692,13 +14706,13 @@ table and that C's `argc`/`argv` entry remains available, and at [1660] that the
 entry point mints the host capability. It did not say how a C-owned entry starts
 Landin exports, when the argument root exists, or how long its backing lives.
 
-**Chosen:** [1975]'s compiler/runtime ABI emits the global hidden ELF entry
-`void _landin_host_initialize_arguments(int argc, char **argv);` with hosted
-bridge support. The ordinary no-argument Landin `main` calls it before its body;
-a C-owned startup calls it with its real carriers before `hosted.host()` or any thread
-that may acquire the argument capability. Exports and callbacks never call it
-implicitly. Startup-independent bridge operations need no argument root, and
-retaining `core/io` alone does not initialize one.
+**Chosen:** `hosted/io` defines the public C entry
+`void _landin_host_initialize_arguments(int argc, char **argv);` in source, and
+under D276 the ordinary no-argument Landin `main` calls it before its body when
+the program defines it. A C-owned startup calls it with its real carriers before
+`hosted.host()` or any thread that may acquire the argument capability. Exports
+and callbacks never call it implicitly. File, stream and heap work needs no
+argument root, and retaining `core/io` alone does not initialize one.
 
 The first nonnegative-count, non-null-table call establishes one exact
 `(argc, argv)` root without copying or allocation. An identical later call is a
@@ -14710,7 +14724,8 @@ lookup checks both the bound and selected pointer.
 
 **The alternatives:** initialize every export or callback, fabricate an empty
 argument table, copy the vector into hidden allocated storage, permit root
-replacement, or gate every hosted bridge operation on argument startup. The
+replacement, or gate every hosted file, stream and heap operation on argument
+startup. The
 first has no authentic carriers and breaks reentrant callbacks; the second
 mints a false capability; the third adds an allocator and an unstated release
 lifetime; the fourth can dangle already published views; and the last prevents
@@ -15212,7 +15227,8 @@ The complete enabled check disposition is:
 | Integer, bool, float and pointer-address conversion fit; nonnull pointer construction; malformed text decoding | `bad_conversion` at the conversion/decoding operation, with D187's existing exceptions unchanged. Ordinary floating arithmetic retains its existing IEEE behavior. |
 | Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
 | A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
-| Compiler-owned firmware entry returns; invalid/uninitialized hosted argument-root bridge or legacy bridge contract | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
+| `compiler.unreachable()` [1560] | `unreachable` at the call, including inside `unchecked` (D278). |
+| Compiler-owned firmware entry returns | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
 | Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
 | Naked assembly fallthrough | Terminal default instruction: the programmer has not supplied the required machine transfer or a safe ordinary-call frame. |
 
@@ -15630,9 +15646,10 @@ plain `char` and reserved x18. `compiler.os` is a fixed configuration value
 in its own equality domain, with `linux`, `darwin`, `freebsd` and
 `freestanding` as compiler-owned values. It names the target's hosted system,
 never the compiler host, and is available only in fixed configuration.
-`hosted/io` uses it to select FreeBSD's native libc record; calling
-conventions remain selected by C ABI facts. The hosted bridge uses `__error`
-and `O_WRONLY | O_CREAT | O_TRUNC = 0x601`. The selected FreeBSD driver is
+`hosted/libc` uses it to select FreeBSD's native libc record; calling
+conventions remain selected by C ABI facts. By the same fact `hosted/libc`
+links its errno cell to `__error` and gives
+`O_WRONLY | O_CREAT | O_TRUNC = 0x601` (D276). The selected FreeBSD driver is
 Clang with an explicit FreeBSD sysroot and ELF linker; x86-64 assembly uses
 GNU as so the selected level constrains user assembly too. FreeBSD executable
 feature levels make no loader-refusal promise: the execution lane confirms
@@ -15798,6 +15815,9 @@ exactly one ABI and `compiler.arch == arm64` is what the two arm64 targets
 share. [1975] states the transport: Darwin's banks, homogeneous floating
 aggregates, sixteen-byte indirect bound and x8 result, with unnamed arguments
 assigned as named ones are and every stack argument in whole eight-byte slots.
+Darwin's unnamed variadic tail instead places every promoted argument in its
+own eight-byte stack slot in argument order, which
+`abi/darwin-varargs-stack-slots` pins against a C peer reading it.
 `platform/c`'s `c_char` is the selected ABI's plain `char`, `u8` under
 `compiler.c_aapcs64_lp64` and `i8` otherwise, chosen by a `fixed if` on that
 fact. x18 stays reserved, so one register rule, and one rule for assembly
@@ -15837,9 +15857,10 @@ aliases as those same registers, without reserving caller floating registers;
 [1990] lists the saved floating registers that integer operands cannot declare.
 `platform/c` exposes
 the LP64 aliases and unsigned plain `c_char`; [1975]'s existing C subset,
-including callbacks and outgoing variadic calls, is enabled. The Linux
-hosted bridge uses libc's `__errno_location`, Linux open flags, and the
-128-byte generic `stat` layout, separately checked against C headers.
+including callbacks and outgoing variadic calls, is enabled. On Linux,
+`hosted/libc` selects libc's `__errno_location`, Linux open flags and the
+128-byte generic `stat` layout by `compiler.os` and the C ABI, separately
+checked against C headers.
 D255's supported ISA strings are exactly `rv64gc`, `rv64gc_zba`,
 `rv64gc_xtheadba` and `rv64gc_zba_xtheadba`. They all keep LP64D and the same
 layout. Unknown, foreign, incompatible or unimplemented strings are L0009;
@@ -16134,7 +16155,10 @@ D203--D208 supersede the narrow C signature limit and complete [1975]'s
 selected-boundary contract. D208 refines this decision's original executable-
 owned argument capture into the shared Landin- or C-owned startup contract. The
 original bridge decision below remains the basis of the hosted authority path,
-not today's complete C admissibility rule.
+not today's complete C admissibility rule. D276 supersedes its compiler-emitted
+bridge: the libc route it chose is now the ordinary `extern(c)` declarations of
+`hosted/libc`, and the argument root is `hosted/io` source. The provider
+contracts below are unchanged.
 
 **The tour and prototypes said** that hosted arguments begin in C `argc` and
 `argv` form [1650], that the entry is where a root capability is minted
@@ -16169,9 +16193,10 @@ file value remains one scalar descriptor whose interpretation belongs to its
 provider; `sink` on close consumes only the named handle place, so an earlier
 copy can still attempt a second close.
 
-The bridge uses libc rather than direct syscalls because the hosted executable
+The bridge used libc rather than direct syscalls because the hosted executable
 already uses the C runtime and libc supplies the smallest stable host contract
-for this workload. File descriptors remain private library representation.
+for this workload. That premise still holds for Darwin and FreeBSD, whose libc
+is the supported system interface; a later item revisits it for Linux. File descriptors remain private library representation.
 Arguments exclude `argv[0]`; a runtime fixture's new `run_args` metadata pins
 the distinction. Reads expose EOF as count zero and host failure as
 `io_failed`. `world.write` completes the whole slice by iterating over the
@@ -16216,11 +16241,12 @@ cleanup cannot replace it.
 
 The `core/io` module contains the target-neutral `world` concept, adapters and
 caller-backed `memory` provider. The libc-backed `system` provider and its
-`extern(c)` bridge live in `hosted/io`; hosted roots import that module
-explicitly and call `hosted.host()`. Selecting `core/io` alone does not select
-foreign declarations, so the same world API can be used by Cortex-M0
-consumers. The hosted provider still conforms to `io.world`, and the bridge
-and errno contract above remain unchanged.
+argument root live in `hosted/io`, over the `extern(c)` declarations of
+`hosted/libc`; hosted roots import `hosted/io` explicitly and call
+`hosted.host()`. Selecting `core/io` alone does not select foreign
+declarations, so the same world API can be used by Cortex-M0 consumers. The
+hosted provider still conforms to `io.world`, and the errno contract above
+remains unchanged.
 
 The bounded `core/io.memory` provider implements the same capability from
 caller-supplied file descriptors, content buffers, argument descriptors and
@@ -16268,14 +16294,15 @@ then be validated by
 pointer-to-slice operation is introduced. Both provider argument sequences
 contain only user arguments and exclude `argv[0]`.
 
-The backend's calls to `strlen`, `open`, `read`, `write`, `close` and
-`__errno_location` are private runtime dependencies, not names reserved from
-Landin source. A non-external Landin declaration with one of those spellings is
-therefore given a deterministic whole-program assembler name, just as two
-reached module declarations with the same short name are. The selected hosted
-entry and an `extern(c)` declaration retain their required ABI spellings. This
-prevents a public Landin `open` from interposing on the bridge while preserving
-the explicit foreign-symbol contract.
+The C library names `hosted/libc` declares, `strlen`, `open`, `read`,
+`write`, `close`, `malloc`, `free`, `stat` and the errno accessor, are ordinary
+`extern(c)` imports, not names reserved from Landin source. A non-external
+Landin declaration with one of those spellings is given a deterministic
+whole-program assembler name, just as two reached module declarations with the
+same short name are. The selected hosted entry and an `extern(c)` declaration
+retain their required ABI spellings. Ordinary symbol allocation therefore keeps
+a private Landin `read` or `malloc` from capturing the C import of that name
+while preserving the explicit foreign-symbol contract.
 
 **The alternatives:** direct Linux syscalls would couple the first hosted
 library to kernel numbers and conventions without reducing the already-linked
@@ -16691,6 +16718,10 @@ and `runtime/core-vec-pointer-storage`.
 
 ### D195 — The hosted heap over-allocates through a fixed libc shim
 
+D277 supersedes the shim below: `hosted/heap` now performs the same
+over-allocation in source over `hosted/libc`'s `malloc` and `free`, and the
+contract this decision states is unchanged.
+
 **The tour and prototype said** that one allocator concept serves heap, arena
 and fixed-buffer providers [1360], that an allocator result is an independent
 origin [0790], and that cleanup errors hidden by a monotonic arena need a real
@@ -16737,8 +16768,8 @@ importing the freestanding protocol must not import hosted authority. Direct
 syscalls, a general C binding, and storing the allocator in a container remain
 outside this slice.
 
-**Pinned by** `runtime/hosted-heap-provider`, the backend case `a hosted heap
-shim checks before libc`, and the `allocation.failure` guarantee row. The
+**Pinned by** `runtime/hosted-heap-provider` and the `allocation.failure`
+guarantee row; the backend case that checked the shim left with it (D277). The
 runtime audit sees two differently aligned live blocks, exact requested
 extents, a non-null empty allocation, the old and replacement allocations
 coexisting during `vec.list(ptr node)` growth, and no live block after release.
@@ -17474,3 +17505,144 @@ commands case `version identity`, the server case `the library is found
 beside the server`, `negative/import-without-a-root-is-refused-there` and
 `scripts/tests/test_outside_user.py`, whose script the gate runs against the
 packaged release compiler on Linux x86-64, Linux arm64 and Darwin.
+
+### D276 — The hosted operating-system boundary is library source
+
+**The tour said** at [1650] that the hosted world keeps the C argument table,
+at [1660] that the entry mints host authority, and [1975] chose a selected C
+boundary rather than privileged host operations. D153 implemented that path as
+a compiler-emitted bridge: fixed `_landin_host_*` wrappers over libc emitted by
+each backend, a checker contract holding their source declarations to fixed
+types, argument cells the entry wrote, and the errno accessor's name, the open
+flags and the creation mode as facts in every backend.
+
+**Chosen:** the compiler names no host routine but one. The public module
+`hosted/libc` declares the C library beneath the hosted providers as ordinary
+`extern(c)` imports: `open`, variadic as C declares it, `read` and `write`
+returning `isize`, `close`, `strlen`, `malloc` returning an `allocation`
+union whose empty arm is the atom `no_allocation`, `free`, `stat`, and
+`errno_cell`, linked to `__errno_location` on Linux and to `__error` on Darwin
+and FreeBSD by `fixed if compiler.os`, which `current_errno` reads. The errno
+constants `eperm`, `enoent`, `eintr`, `eacces` and `erofs`, the flags
+`o_rdonly` and `o_wronly`, the per-system `o_creat` and `o_trunc`, `timespec`,
+the per-system `file_status` record and `file_status_size` are source
+declarations selected by `compiler.os` and the C ABI and checked against each
+system's C headers. Like every hosted module it is refused on firmware (D267).
+`hosted/io` and `hosted/heap` reach the host only through it; the 0666
+creation mode stays in `hosted/io` as provider policy.
+
+`hosted/io` holds the argument root in two module cells and defines in source
+the public C routine `_landin_host_initialize_arguments`, whose signature is
+`(count: i32, escaping values: ptr ptr u8) -> none`. D208's rules are unchanged: the first
+nonnegative-count, non-null-table call establishes the root without copying;
+an identical repeat is a no-op; an invalid call, use before initialization or
+replacement traps; the published count is `max(argc - 1, 0)` without
+`argv[0]`. Indexed lookup reads the `argv` entry by address and traps on a
+null entry. Each of these traps is the library's own `compiler.unreachable()`
+(D278), so a panic handler receives `unreachable` at a site in `hosted/io`
+where the bridge reported it at a synthetic site zero.
+
+The compiler's one hosted contract is that call. When a hosted entry is
+selected and the program defines a C routine with the link symbol
+`_landin_host_initialize_arguments`, the hosted `main` calls it with its
+incoming `argc` and `argv` before its body. A program that defines none calls
+nothing, so a hosted program that never imports `hosted/io` links without it.
+Beside a hosted entry every declaration carrying that symbol must be exactly
+`extern(c) (i32, ptr ptr u8) -> none`, with `escaping` immaterial, or it is
+refused with L0347. The symbol is an ordinary default-visibility global rather
+than a hidden one, and a C-owned `main` still calls it explicitly. The names
+`strlen`, `malloc`, `free`, `open`, `read`, `write`, `close` and the errno
+accessor are no longer set aside for the backend: they are `hosted/libc`'s
+imports, and ordinary symbol allocation keeps a private Landin definition of
+the same spelling from capturing them.
+
+**The alternatives:** keeping the bridge, which leaves the compiler owning
+libc's names, flags and errno spelling in three backends and a checker
+contract for each wrapper. Always calling the initializer as an import that
+may be undefined, which makes every hosted program link against `hosted/io`
+or fail to link. Keeping the argument root in `hosted/libc`, which would put
+Landin policy in the module whose purpose is to transcribe C. Linux system
+calls in place of libc, which is a later item's subject and changes nothing
+here for Darwin and FreeBSD, whose supported interface is libc. Declaring
+libc privately in each provider, declined because one module gives each
+per-system fact one place.
+
+**Pinned by** `negative/hosted-initializer-referent`,
+`negative/hosted-initializer-permission`,
+`negative/hosted-initializer-optional`, `negative/hosted-initializer-result`,
+`abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`,
+`abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced`,
+`abi/r440-native-hosted`, `abi/r440-native-renamed-main`,
+`abi/r440-errno-interposition`, `abi/r440-errno-thread-local`,
+`runtime/r440-errno-detail`, `abi/core-io-file-identity` and
+`abi/darwin-varargs-stack-slots`; the checking case `hosted initializer
+source contract`; the driver case `hosted initializer refusals have no
+effects`; the backend cases `the hosted entry calls a defined initializer`,
+`C imports keep their names`, `C exports keep their link names`,
+`compiler-owned linkage is guarded` and `Darwin variadic tails take ordered
+slots`; and the fixture execution case `hosted library links and runs`.
+
+### D277 — The hosted heap over-allocates in source
+
+**The tour said** at [1360] that one allocator concept serves heap, arena and
+fixed-buffer providers. D195 gave the hosted provider its alignment and
+zero-size contract and implemented it as a fixed libc shim each backend
+emitted, holding the pointer-word width, the `PTRDIFF_MAX` test and the hidden
+header layout as backend facts.
+
+**Chosen:** `hosted/heap` performs the same over-allocation in source over
+`hosted/libc`'s `malloc` and `free` (D276). It asks `malloc` for the request
+plus `alignment - 1` bytes and one `usize` word, refusing with
+`mem.out_of_memory` before the call an addition that would overflow or a total
+above `(0 -% 1) >> 1`, the host's `PTRDIFF_MAX`. It aligns within the block
+and writes the address `malloc` returned into the word before the aligned
+block a byte at a time, because for an alignment that is not a multiple of the
+word the word is unaligned; release reads it back the same way and passes it
+to `free`. A `no_allocation` result is `mem.out_of_memory`. D195's contract is
+unchanged: every `usize` alignment is accepted, zero and one meaning byte
+alignment, and a zero-byte request returns a distinct non-null token.
+
+**The alternatives:** keeping the shim in the backends, which keeps a host
+allocator in the compiler; `posix_memalign` and `aligned_alloc`, declined as
+D195 declined them, because they admit only powers of two and the contract
+admits every alignment.
+
+**Pinned by** `runtime/hosted-heap-provider`, `abi/r440-native-hosted` and the
+`allocation.failure` guarantee row.
+
+### D278 — An explicit trap is a `compiler` builtin
+
+**The tour said** [1670] that a failed check calls a fixed, never-returning
+symbol, and [1960] that a trap stops at the operation. Only the compiler's
+own checks reached that path: library source had no way to say that a path
+must not run, so when `hosted/io` took over the argument root's startup
+contract (D276) it could stop only at an unrelated check, which reported
+`bad_conversion` where the bridge had reported `unreachable`.
+
+**Chosen:** `compiler.unreachable()` on the toolchain module [1560], with no
+import and no keyword. It types as a call of a `() -> noreturn` routine: a
+statement, the value of an `if` or `match` arm, or the end of any path, and
+definite assignment, named results and `noreturn` bodies treat it as not
+returning. It takes no arguments; misuse is refused as the same misuse of such
+a routine would be, L0327 for an argument, L0331 for a value and L0329 for
+`try` or `else`, and naming it without calling it is L0203. Reaching it raises
+`unreachable` through D232 at its own numbered site, with the panic map entry
+a compiler check has, or the terminal default trap when no handler is
+selected. It is a statement and not a check, so `unchecked` never removes it.
+It is available on every target, firmware included. `hosted/io` stops on every
+misuse of the argument root with it.
+
+**The alternatives:** an `unreachable` keyword statement would take a word
+from [1760]'s reserved set for a construct most programs never write; a
+`core/panic` routine backed by a hidden intrinsic puts a compiler privilege
+behind a library name and makes trapping need an import, in `core` too; and
+trapping through an ordinary check, a nonnull conversion of zero, reports
+`bad_conversion` at a site that names the trick rather than the contract.
+
+**Pinned by** `runtime/compiler-unreachable-dispatches`,
+`runtime/compiler-unreachable-ends-paths`,
+`runtime/compiler-unreachable-in-unchecked-traps`,
+`negative/compiler-unreachable-argument`,
+`negative/compiler-unreachable-value`, the driver case `an explicit trap has
+its own panic site`, `abi/r670-panic`'s startup modes and the Cortex-M corpus
+rows for the three runtime fixtures.

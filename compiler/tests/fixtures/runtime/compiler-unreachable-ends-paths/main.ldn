@@ -1,0 +1,36 @@
+-- [1560]: compiler.unreachable() never returns, so a path that ends in it
+-- needs no assignment and no value: definite assignment, a function's
+-- named result, an `if` value and a `noreturn` body all treat it as the
+-- end of the path.  Nothing here reaches it.
+choose: (n: i32) -> (x: i32) =
+    mut chosen: i32
+    if n > 0 then
+        chosen = n
+    else
+        compiler.unreachable()
+    end if
+    x = chosen
+end choose
+
+positive: (n: i32) -> (x: i32) =
+    if n > 0 then
+        x = n
+        return
+    end if
+    compiler.unreachable()
+end positive
+
+halve: (n: i32) -> (x: i32) =
+    x = if n % 2 == 0 then n / 2 else compiler.unreachable() end if
+end halve
+
+never: () -> noreturn =
+    compiler.unreachable()
+end never
+
+public main: () -> (code: i32) =
+    code = choose(20) + positive(12) + halve(20)
+    if code <> 42 then
+        never()
+    end if
+end main

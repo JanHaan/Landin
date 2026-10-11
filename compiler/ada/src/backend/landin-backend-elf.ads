@@ -28,10 +28,6 @@ package Landin.Backend.ELF is
    function Size (Symbol, Bytes : String) return String
      is (".size " & Symbol & ", " & Bytes);
 
-   --  Visible to the link but not exported from the image.
-   function Hidden (Symbol : String) return String
-     is (".hidden " & Symbol);
-
    Read_Only_Section : constant String := ".section .rodata";
 
    --  Read-only once the loader has applied its relocations, which is what
