@@ -267,6 +267,28 @@ checksum mode; source inventory or project-file changes still force a clean
 tree. A compiler-only build records `refine` as current without claiming that
 `landin_tests` is current; the next full build still builds the test program.
 
+## Friction is a finding
+
+Landin is meant to be used by people who have not read its source, and
+everyone working here works inside the checkout with the roots, toolchain
+and conventions already in hand, which is exactly where usability problems
+go unseen. So whoever works on the repository, a person or an agent, records
+a finding whenever they meet one of these:
+
+- something a newcomer could not guess: a flag, an environment variable, a
+  path or an order of steps the documentation does not lead to;
+- a workaround: routing around a tool or the compiler instead of using it;
+- a refusal that does not say what to do, or says something misleading;
+- having to read the source to learn how to use something;
+- documentation that disagrees with what the tool does.
+
+A finding is a row in `ROADMAP.md`'s register under the Usability family,
+never a separate list: the symptom as it was met, what the person was doing,
+and an activation, usually the next item that touches the area. Merge it
+into an existing row when one already says the same. An agent names every
+row it adds in its report, so the finding reaches a maintainer as it is
+made rather than when the register is next read.
+
 ## Sources of truth
 
 Use the repository documents in this order:

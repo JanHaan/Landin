@@ -402,7 +402,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.30 — The hosted library (planned).**
+**Next roadmap item: R13.14 — The compiler finds its library (planned).**
 
 ## License
 

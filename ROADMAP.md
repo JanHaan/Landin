@@ -74,7 +74,7 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.30, R12, R13.20, R14, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.30, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
 R12.10 depends on R13.30 to hold the first boundary. The freestanding
@@ -1398,6 +1398,76 @@ fixed and pinned. All 42 jobs in
 passed on `759dbb7e`, with every renamed consumer, the derived programs and
 the debugger workloads on every target.
 
+### R13.14 — The compiler finds its library
+
+Status: planned
+Depends on: R13.13
+
+`core`, `hosted` and `platform` ship with no installed compiler: the flake's
+two packages and the release asset hold `refine` alone, and a program outside
+the checkout compiles only with `--root` naming a clone of the repository.
+These namespaces are not packages. The compiler names them, decides their
+availability by target (D267) and matches its hosted contracts against them,
+so a compiler and a library from different revisions are a fault, not a
+choice. The compiler finds its own library relative to its executable, as
+Go, Zig and rustc find theirs, through a host interface the test program can
+fake; the library root follows every `--root`, and the repository-owned
+namespaces resolve from it alone. An explicit option replaces it for an
+unusual installation, `refine version` reports which root is in use, and
+the language server finds it the same way. The user's home root and every
+other default root stay the Companion tool and ecosystem family's.
+
+Exit evidence: a decision amending [1480]'s bootstrap paragraph; the flake's
+packages and the release asset installing the library beside `refine`; and a
+gate job that installs the toolchain as the documentation says, outside the
+checkout, and compiles and runs the README's first program and every
+`examples.md` program with no option and no environment, on every hosted
+target the release publishes for.
+
+### R13.15 — The OS boundary in source
+
+Status: planned
+Depends on: R13.14
+
+The compiler owns the hosted operating-system boundary: fourteen
+`_landin_host_*` helpers that the checker holds to a special contract, that
+each of the x86-64, arm64 and RV64 backends emits as libc trampolines, with
+the libc facts per OS in the compiler and `strlen`, `open`, `read` and their
+neighbours reserved from source. Move that boundary into the library as
+ordinary source, on libc for every hosted target as now: `extern(c)`
+declarations and per-OS records in modules under `platform`, as
+`hosted/io/stat.ldn` already does, with errno read through the C library's
+own accessor. What stays in the compiler is the hosted entry and the link.
+
+Exit evidence: no hosted helper, helper contract, bridge emitter or libc fact
+left in the compiler; every hosted fixture, the derived programs, the
+debugger sessions and the C ABI fixtures passing unchanged on every hosted
+target; and decisions superseding D153's scalar seam and D195's shim.
+
+### R13.16 — Linux without the C library
+
+Status: planned
+Depends on: R13.15
+
+Linux promises its system-call interface, so a Linux program needs no C
+library to reach it. Darwin's system calls change between releases and
+FreeBSD documents its C library as the interface, so both stay on libc, and
+a Windows target would use kernel32. Write the Linux provider as system calls
+in source on x86-64, arm64 and RV64, using the `*at` calls and `statx` so the
+three share one layout, with a program-owned `_start` that reads the
+arguments, environment and auxiliary vector from the initial stack, a static
+executable and an `mmap` heap provider. A program that links C objects keeps
+the C runtime's startup and libc, with the same provider beneath it. RV64's
+assembly checker refuses `ecall` as a control transfer while x86-64 admits
+`syscall` and arm64 `svc`; a decision gives the system-call instruction one
+standing on every hosted target first.
+
+Exit evidence: decisions for the system-call instruction, the two Linux link
+modes, and the replacements of D207's errno capture and D208's startup root;
+static Linux executables with no dynamic dependency running the whole hosted
+corpus, the derived programs and the debugger sessions on all three
+architectures; and the C ABI fixtures passing in the C-linked mode.
+
 ### R13.20 — The freestanding library
 
 Status: planned
@@ -1419,11 +1489,16 @@ adapters.
 ### R13.30 — The hosted library
 
 Status: planned
-Depends on: R13.10, R13.11
+Depends on: R13.10, R13.11, R13.13, R13.16
 
-Files and directories, processes, the environment, time and sockets, each
-driven by a complete consumer, with the operating system reached through the
-same capabilities as now. This takes R551-34's hosted part, and with it B5's.
+Files and directories, processes, the environment, time with sleeping, and
+blocking sockets, each driven by a complete consumer, with the operating
+system reached through the same capabilities as now. Each facility is a
+narrow concept beside D268's four, with a caller-backed fake in `core/io`,
+written once over R13.16's Linux system calls and once over the C library
+for Darwin and FreeBSD. Standard input reaches a runtime fixture through a
+`stdin:` key that every runtime lane honours. This takes R551-34's hosted
+part, and with it B5's.
 
 Exit evidence: each consumer running on every hosted target with failure
 oracles.
@@ -1441,6 +1516,9 @@ oracles.
 
 - The library's concepts, names and shipped evidence follow R13.11's
   conventions, and every later facility is held to them.
+
+- A reader with no project context has done a realistic task from the
+  published documentation alone, and what they met is in the register.
 
 ## R14 — Concurrency
 
@@ -1671,8 +1749,8 @@ in `tour.md` under WHAT WAS TRIED AND DROPPED.
 
 ## Successor families
 
-The first roadmap named six families as destinations for what it did not do.
-They are kept as the owners of register records, not as roadmaps of their
+The first roadmap named six families as destinations for what it did not do,
+and this one added Usability. They are kept as the owners of register records, not as roadmaps of their
 own; a record that an item here takes on says so, and one that none does
 waits for its activation.
 
@@ -1691,6 +1769,10 @@ waits for its activation.
   triggers have not fired.
 - **Release readiness:** distribution, production claims and every release or
   version decision.
+- **Usability:** what a person meets using Landin from its documentation
+  alone: knowledge a newcomer cannot guess, workarounds, refusals that do
+  not say what to do, and documentation that disagrees with the tool.
+  `AGENTS.md` makes recording it everyone's job.
 
 ## Register
 
@@ -1764,7 +1846,11 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-14 | Broader standard library | R13.13's review left interface points no consumer has yet asked for: the map is a public composition with a seven-part invariant and a cursor whose start and end are sentinel slot numbers; a tree node cannot be asked for its leaf count, kind or children; a spill list has no `clear`, `last` or `reserve`; `io.out`, `err` and `argument_count` take the provider by value while `argument_at` takes a pointer; `host()` constructs where D269 says `new`; the memory file's two flags encode three states; a saved PRIMASK is a bare `u32`; `pool.over` reports misconfiguration as `out_of_memory`; `text.nowhere` cannot be told from offset zero; a bounded diagnostic entry lends its message only byte by byte; an arena has no reset; `grow_storage` trusts three separately passed extents; the fault injector and the region refuse in-place growth, so a container tested through them never takes that path; byte slices have no shipped order. | A consumer that needs one of them, or the next whole reading of the library. | Each changed with the fixtures that pin it, or retired with the reason it stands. | open |
 | SR-15 | Broader standard library | `core/text` formats and parses decimals only as `u32`, and parses only `utf8`: a directory listing's sizes are `u64` over bytes, and six programs in the tree hand-roll their own. The process concept has no standard input, and `ENOTDIR` reports `io_failed` rather than `not_found`. | R13.30's file and directory consumer. | `u64` and `usize` decimal writing and `[]u8` parsing in `core/text`, used by `core/diag` and the derived programs; standard input; the errno mapping, each with a consumer on every hosted target. | scheduled R13.30 |
 | SR-16 | Release readiness | A debugger shows an atom as its carrier number, which differs between programs, so the derived parser's token kind stays a `u8` that the debugger sessions read as 1 and 6. | A debugger session that has to show an atom-set value. | DWARF describing an atom set as an enumeration on every debugger target, then the token kind an atom set with its sessions reading names. | open |
-| SR-17 | Release readiness | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
+| SR-17 | Usability | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
+| SR-18 | Usability | The standard library ships with no installed compiler, and a program outside the checkout compiles only with `--root` naming a clone of the repository; the README never says so. | R13.14. | The library installed beside `refine` and found without an option, held by R13.14's outside-user job. | scheduled R13.14 |
+| SR-19 | Usability | The README has no installation or first-program section: the nearest is how to build the compiler from source. | R13.14's outside-user job. | A first-program section that the job executes as written. | scheduled R13.14 |
+| SR-20 | Usability | An unknown name applied as a type, `shlf(item)`, is L0304 "targets a declared alias", where a bare unknown name is L0201 with the near names. | The next item that touches type application refusals. | L0201 with near-name repairs for an unknown applied name, plain and generic, with the fixtures that pin L0304 there moved. | open |
+| SR-21 | Usability | A runtime fixture cannot give its program standard input, only arguments. | R13.30's standard-input consumer. | A `stdin:` fixture key honoured by every runtime lane. | scheduled R13.30 |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |
