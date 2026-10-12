@@ -67,6 +67,11 @@ def main():
             # order (D251), and a diagnostic's level and code begin its line.
             codes = re.findall(rb'(?m)^(?:error|warning)\[(L[0-9]{4})\]', actual)
             expected_codes = [c.strip().encode() for c in meta.get('codes', '').split(',') if c.strip()]
+            # An end-to-end fixture pins its whole report through `expect`
+            # rather than `codes`, so its codes are the ones that report holds.
+            if meta['class'] == 'end-to-end' and 'codes' not in meta and 'expect' in meta:
+                expected_report = (ROOT / 'compiler/tests/fixtures' / name / meta['expect']).read_bytes()
+                expected_codes = re.findall(rb'(?m)^(?:error|warning)\[(L[0-9]{4})\]', expected_report)
             require(codes == expected_codes, f'{name}: diagnostic codes differ: {codes!r}')
             if 'expect' in meta:
                 expected = (ROOT / 'compiler/tests/fixtures' / name / meta['expect']).read_bytes()

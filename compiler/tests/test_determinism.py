@@ -341,10 +341,19 @@ def caller_mapped_paths(refine: Path, source: Path, target: str, area: Path):
             panic_map = map_path.read_bytes()
             check_map_binds_assembly(panic_map, assembly, label)
             parsed = json.loads(panic_map)
-            require(len(parsed["files"]) == 1 and
+            #  The caller's file leads under its own spelling.  A static
+            #  Linux link also maps the library's entry module, which is the
+            #  same file in both runs and nowhere under the caller's
+            #  directory.
+            require(parsed["files"] and
                     parsed["files"][0]["path_hex"] ==
                     str(directory / "main.ldn").encode().hex(),
                     label + ": map lost the caller-spelled source path")
+            for library_file in parsed["files"][1:]:
+                spelled = bytes.fromhex(library_file["path_hex"]).decode(
+                    "utf-8", "surrogateescape")
+                require(not spelled.startswith(str(area)),
+                        label + ": map holds a second caller file " + spelled)
             require(parsed["build_id"].encode() in assembly,
                     label + ": assembly lost its map identity")
             normalized, count = re.subn(
@@ -368,6 +377,9 @@ def caller_mapped_paths(refine: Path, source: Path, target: str, area: Path):
         for field in ("file_id", "source_sha256"):
             require(left[2]["files"][0][field] == right[2]["files"][0][field],
                     label + ": map " + field + " changed with source-path spelling")
+        require(left[2]["files"][1:] == right[2]["files"][1:],
+                label + ": the library's mapped files changed with the caller's"
+                " spelling")
 
 
 def linked_image(refine: Path, source, target: str, area: Path, label: str):

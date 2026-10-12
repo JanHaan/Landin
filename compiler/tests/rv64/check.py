@@ -92,9 +92,13 @@ class Lane(SHARED.Lane):
         sources = (['--root=' + str((base / meta['root']).resolve()), str(source.parent)]
                    if 'root' in meta else [str(source)])
         sources += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
+        # A program linked with C peers, or one whose fixture asks for it,
+        # takes C's startup and libc; every other one links statically.
+        libc = bool(meta.get('c-sources')) or meta.get('link') == 'libc'
         argv = [self.args.refine.resolve(), '--target=' + TARGET,
                 '--optimize=' + optimize, '--specialize=' + specialize,
-                *(['--level=' + level] if level else []), *shlex.split(meta.get('args', '')), *sources]
+                *(['--level=' + level] if level else []), *(['--link=libc'] if libc else []),
+                *shlex.split(meta.get('args', '')), *sources]
         assembly = Path(str(executable) + '.s')
         self.command([*argv, '--emit=asm', '-o', assembly], label + '-emit')
         objects, peers = [], []

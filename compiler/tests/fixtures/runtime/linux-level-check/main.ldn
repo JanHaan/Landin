@@ -87,8 +87,14 @@ same: (left: []u8, right: []u8) -> (equal: bool) =
     equal = true
 end same
 
+--  The level changes code in this same program: an atomic add is one LSE
+--  instruction at armv8.1-a and an exclusive-monitor loop below it, which
+--  is what the harness holds an arm64 level's image to.
+mut entries: u32 = 0
+
 public main: () -> (code: i32) =
     code = 1
+    return when compiler.atomic_add(addr entries, 1, compiler.acq_rel) <> 0
     return when not same(linux.level(), level_name)
     code = 2
     nothing: linux.cpu_words = zeroed
