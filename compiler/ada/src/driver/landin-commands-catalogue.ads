@@ -15,7 +15,7 @@ package Landin.Commands.Catalogue is
    type Option is
      (Help_Flag, Verbose, Quiet, Color, Diagnostics,
       Target, Level, Root, Library, Build_Option, Build_Mode, Optimize,
-      Specialize, Emit, Output, Debug, Panic_Map, Toolchain, Linker,
+      Specialize, Emit, Output, Debug, Panic_Map, Toolchain, Linker, Link,
       Firmware_Entry, Build_Report, Stage_Report, Dry_Run, Depfile,
       Format_Check, Stdio, JSON, Warnings, Warn, Allow, Deny);
 

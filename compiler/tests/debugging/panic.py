@@ -105,7 +105,7 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
             script = output / (key+'.gdb')
             script.write_text('\n'.join([
                 'set pagination off', 'set confirm off', 'set disable-randomization off',
-                'set width 0', 'set height 0',
+                'set width 0', 'set height 0', 'set backtrace past-main on',
                 f'break {SOURCE}:{operation_line}', f'break {SOURCE}:{handler_line}', 'run',
                 'printf "PANIC_INPUT %u %u\\n", value, high',
                 'delete 1', 'continue',
@@ -122,6 +122,12 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
                 assert re.search(rf'^#{index}\s+.*\b{name}\b', stack, re.M), stack
             for index, line in ((0, handler_line), (1, operation_line)):
                 assert re.search(rf'^#{index}\s+.*main.ldn:{line}\s*$', stack, re.M), stack
+            #  A static Linux executable starts at hosted/linux's
+            #  `_landin_start`, which calls `_landin_start_main`, which calls
+            #  `main`; the entry's undefined return address ends the stack.
+            assert re.search(r'^#5\s+.*\b_landin_start_main\b', stack, re.M), stack
+            assert re.search(r'^#6\s+.*\b_landin_start\b', stack, re.M), stack
+            assert not re.search(r'^#7\b', stack, re.M), stack
         mapped = run(key+'-map', ['python3', ROOT / 'scripts/source-location.py',
             str(executable)+'.sources.json', '--panic-site', site,
             '--assembly', str(executable)+'.s'])

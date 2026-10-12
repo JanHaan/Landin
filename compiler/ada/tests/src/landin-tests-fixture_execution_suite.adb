@@ -851,6 +851,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
          Args.Append (Source);
          Args.Append ("--emit=exe");
+         --  These consumers call the C library, which a static Linux link
+         --  does not have.
+         Args.Append ("--link=libc");
          Args.Append ("-o");
          Args.Append (Built);
          if Lanes.Toolchain /= "" then
@@ -1437,6 +1440,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Landin.Platform.Add (Args, "--level=" & Level);
       end if;
       Landin.Platform.Add (Args, "--emit=exe");
+      if Link_Mode (Case_Item) /= ""
+        and then Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+          /= Landin.Targets.Capabilities.No_Hosted_System
+      then
+         Landin.Platform.Add (Args, "--link=" & Link_Mode (Case_Item));
+      end if;
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
       if Lanes.Toolchain /= "" then
@@ -1471,10 +1480,18 @@ package body Landin.Tests.Fixture_Execution_Suite is
                Args.Append ("-n");
                Args.Append (Built);
                Runner.Run ("readelf", Args, Note, Landin.Platform.Merged);
+               --  The C runtime's objects add the baseline to a libc
+               --  link's note; a static link has none of them.  The
+               --  static image carries the note all the same, though no
+               --  loader reads it: hosted/linux's entry is what refuses
+               --  a processor below the level there.
                Landin.Testing.Check
                  (Item, Ada.Strings.Fixed.Index
                     (Unbounded.To_String (Note.Output),
-                     "x86 ISA needed: x86-64-baseline, " & Level) > 0,
+                     "x86 ISA needed: x86-64-baseline, " & Level) > 0
+                  or else Ada.Strings.Fixed.Index
+                    (Unbounded.To_String (Note.Output),
+                     "x86 ISA needed: " & Level & ASCII.LF) > 0,
                   Label & ": the executable needs " & Level);
             end;
          end if;
@@ -1573,6 +1590,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Refine_Arguments, "--target=" & Landin.Targets.Name (Facts));
       Append_Profile (Refine_Arguments, Profile);
       Landin.Platform.Add (Refine_Arguments, "--emit=asm");
+      --  The C driver below links the assembly with its C peers and with
+      --  the C runtime, which starts the program: the libc link mode.
+      if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+        /= Landin.Targets.Capabilities.No_Hosted_System
+      then
+         Landin.Platform.Add (Refine_Arguments, "--link=libc");
+      end if;
       Landin.Platform.Add (Refine_Arguments, "-o");
       Landin.Platform.Add (Refine_Arguments, Assembly);
 

@@ -297,6 +297,10 @@ package body Landin.Commands is
       Forwarded : Landin.Platform.Path_List := Asked.Forwarded;
       Transcript : aliased US.Unbounded_String;
       function Effective (Flag : C.Option; Default : String) return String;
+
+      --  A Linux executable links static by default and every
+      --  other hosted one through its C library; firmware has neither.
+      function Default_Link return String;
       function Effective (Flag : C.Option; Default : String) return String is
          Prefix : constant String := C.Name (Flag) & "=";
       begin
@@ -310,6 +314,33 @@ package body Landin.Commands is
          end loop;
          return Default;
       end Effective;
+
+      function Default_Link return String is
+         Named : constant String := Effective (C.Target, "");
+         package Caps renames Landin.Targets.Capabilities;
+         use type Caps.Hosted_System;
+      begin
+         if Named = "" and then not Landin.Targets.Selection.Has_Host_Default
+           (Built_For)
+         then
+            return "unknown";
+         end if;
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Named = ""
+               then Landin.Targets.Selection.Host_Default (Built_For)
+               else Landin.Targets.Selection.Described (Named));
+         begin
+            return
+              (case Caps.Hosted_System_Of (Facts) is
+                  when Caps.Linux => "static",
+                  when Caps.No_Hosted_System => "none",
+                  when others => "libc");
+         end;
+      exception
+         when others =>
+            return "unknown";
+      end Default_Link;
       procedure Refuse (Message : String);
       procedure Refuse (Message : String) is
          None : Landin.Source.Sets.Source_Set;
@@ -517,7 +548,10 @@ package body Landin.Commands is
                     & "; build-mode=" & Effective (C.Build_Mode, "debug")
                     & "; optimize=" & Effective (C.Optimize, "size")
                     & "; specialize=" & Effective (C.Specialize, "auto")
-                    & "; debug=" & Effective (C.Debug, "none") & LF);
+                    & "; debug=" & Effective (C.Debug, "none")
+                    & (if Asked.Command = C.Compile
+                       then "; link=" & Effective (C.Link, Default_Link)
+                       else "") & LF);
                   for Text of Asked.Forwarded loop
                      US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                   end loop;

@@ -1,0 +1,7 @@
+--  A static Linux link links no C library, so a request for one is refused
+--  before the linker is asked.
+linker.library("m")
+
+public main: () -> (code: i32) =
+    code = 0
+end main

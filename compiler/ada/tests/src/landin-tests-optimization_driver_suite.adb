@@ -286,6 +286,7 @@ package body Landin.Tests.Optimization_Driver_Suite is
                 else Landin.Platform.Exited));
             Args.Append ("main.ldn");
             Args.Append ("--emit=exe");
+            Args.Append ("--link=libc");
             Args.Append ("-o");
             Args.Append ("program");
             Args.Append ("--build-report=report.json");

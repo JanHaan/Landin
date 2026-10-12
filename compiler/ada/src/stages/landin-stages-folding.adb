@@ -368,6 +368,13 @@ package body Landin.Stages.Folding is
                                else Ty.Folded (Means));
                      Known := True;
                   elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+                    and then Reads_Run_Time
+                    and then Syn.Is_Mutable
+                      (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                       Res.Node_Of (Meanings.all, Means))
+                  then
+                     null;
+                  elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
                   then
                      if Global_View and then Final_Values.Contains (Means)
                      then

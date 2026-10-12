@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a static Linux link refuses linker.library, before linking, naming --link=libc
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-arm64
+expect: expected.txt
+args: compile --target=linux-arm64 --emit=exe --dry-run ../tests/fixtures/end-to-end/link-static-linker-library/main.ldn
+status: 1

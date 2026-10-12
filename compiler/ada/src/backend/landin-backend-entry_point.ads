@@ -25,6 +25,7 @@
 
 with Landin.IR;
 with Landin.Modules;
+with Landin.Platform;
 with Landin.Resolution;
 with Landin.Source.Names;
 
@@ -47,6 +48,16 @@ package Landin.Backend.Entry_Point is
    function Argument_Initializer
      (Of_Unit : Landin.IR.Unit;
       Names   : Landin.Source.Names.Table) return Landin.IR.Item_Id;
+
+   --  The link names of the bodyless imports the program's code
+   --  calls, takes the address of, or holds in data or evidence, that no
+   --  routine or datum of the program defines.  A static Linux link has no
+   --  C library to satisfy them.  Every routine the program holds counts,
+   --  whether or not the entry reaches it, in item order, each name once.
+   function Unsatisfied_Imports
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table) return Landin.Platform.Path_List;
 
    function Firmware_Start
      (Of_Unit  : Landin.IR.Unit;

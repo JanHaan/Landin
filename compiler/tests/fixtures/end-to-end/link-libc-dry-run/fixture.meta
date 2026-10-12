@@ -1,0 +1,9 @@
+class: end-to-end
+summary: --link=libc keeps the C runtime's link of a Linux executable
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --link=libc --emit=exe --dry-run -o out ../tests/fixtures/end-to-end/link-libc-dry-run/main.ldn
+status: 0
+stream: output

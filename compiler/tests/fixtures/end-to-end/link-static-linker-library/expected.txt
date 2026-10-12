@@ -1,0 +1,2 @@
+error[L0500]: a static link of linux-arm64 cannot link the C library `m` the program asks for with linker.library
+  = note: link with --link=libc, which keeps C's runtime and library

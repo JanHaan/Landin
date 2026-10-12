@@ -16,7 +16,8 @@ package body Landin.Build_Reports.Sources is
       Context : in out Landin.Stages.Compilation;
       Options : Landin.Optimization.Options;
       Firmware : String := "";
-      Digests : access Landin.Source_Digests.Cache := null) return String
+      Digests : access Landin.Source_Digests.Cache := null;
+      Link : String := "") return String
    is
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : US.Unbounded_String;
@@ -26,6 +27,7 @@ package body Landin.Build_Reports.Sources is
           (Of_Report, Landin.Stages.Target (Context),
            Landin.Stages.Level (Context), Options)
         & (if Firmware = "" then "" else ",""firmware"":" & Firmware)
+        & (if Link = "" then "" else ",""link"":""" & Link & """")
         & ",""sources"":[" & LF);
       for Index in 1 .. Landin.Stages.Source_Count (Context) loop
          declare

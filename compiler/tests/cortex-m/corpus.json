@@ -20,6 +20,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
     },
+    "abi/linux-file-identity": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/linux-file-identity/fixture.meta"
+    },
     "abi/lp64d-integer-extension": {
       "mode": "restriction",
       "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
@@ -957,6 +962,41 @@
     },
     "runtime/line-end-continues-expression": {
       "mode": "execute"
+    },
+    "runtime/linux-heap-size-classes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
+    },
+    "runtime/linux-level-check": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/linux, a Linux module, on the freestanding target before checking declarations."
+    },
+    "runtime/linux-process-entry": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io and hosted/linux on the freestanding target before checking declarations."
+    },
+    "runtime/linux-process-entry-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io and hosted/linux on the freestanding target before checking declarations."
+    },
+    "runtime/linux-system-calls": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/linux, a Linux module, on the freestanding target before checking declarations."
     },
     "runtime/literal-conditions-select-flow": {
       "mode": "execute"

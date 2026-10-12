@@ -1,0 +1,110 @@
+import core/mem
+import hosted/heap
+
+--  On Linux hosted/heap keeps size classes over memory it maps
+--  itself.  A freed slot is the next one its class hands out, a request
+--  above the largest class is a mapping of its own, every alignment is
+--  honoured, and a refusal leaves the free lists as they were.
+
+mut blocks: [1500]usize
+
+take: (inout state: heap.system, size: usize, alignment: usize)
+      -> (address: usize) =
+    block: ptr mut u8 = mem.allocate(state, size, alignment) else (problem)
+        _ = problem
+        address = 0
+        return
+    end
+    address = usize(block)
+end take
+
+give: (inout state: heap.system, address: usize, size: usize) -> none =
+    block: ptr mut u8 = ptr(address)
+    mem.free(state, block, size)
+end give
+
+refused: (inout state: heap.system, size: usize, alignment: usize)
+         -> (yes: bool) =
+    yes = false
+    block: ptr mut u8 = mem.allocate(state, size, alignment) else (problem)
+        yes = problem == mem.out_of_memory
+        return
+    end
+    mem.free(state, block, size)
+end refused
+
+public main: () -> (code: i32) =
+    mut state: heap.system = heap.host()
+
+    --  A freed slot is reused before anything else in its class.
+    code = 1
+    first: usize = take(state, 24, 8)
+    second: usize = take(state, 24, 8)
+    return when first == 0 or second == 0 or first == second
+    give(state, first, 24)
+    return when take(state, 24, 8) <> first
+
+    --  A refusal changes nothing: the slot freed before it is still the
+    --  next one handed out.
+    code = 2
+    give(state, second, 24)
+    return when not refused(state, 0 -% 8, 8)
+    return when not refused(state, 8, 0 -% 1)
+    return when take(state, 24, 8) <> second
+
+    --  Every alignment, including ones that are not powers of two.
+    code = 3
+    for alignment in usize(1)..<usize(65) do
+        at: usize = take(state, 10, alignment)
+        return when at == 0 or at % alignment <> 0
+        give(state, at, 10)
+    end for
+    code = 4
+    paged: usize = take(state, 5, 4096)
+    return when paged == 0 or paged % 4096 <> 0
+    odd: usize = take(state, 3, 3000)
+    return when odd == 0 or odd % 3000 <> 0
+    give(state, paged, 5)
+    give(state, odd, 3)
+
+    --  A zero-byte request is a distinct, freeable token.
+    code = 5
+    empty: usize = take(state, 0, 1)
+    other: usize = take(state, 0, 1)
+    return when empty == 0 or other == 0 or empty == other
+    give(state, empty, 0)
+    give(state, other, 0)
+
+    --  Above the largest class a block is a mapping of its own, writable
+    --  to its last byte.
+    code = 6
+    large: usize = take(state, 1048576, 16)
+    return when large == 0 or large % 16 <> 0
+    low: ptr mut u8 = ptr(large)
+    high: ptr mut u8 = ptr(large + 1048575)
+    low.val = 7
+    high.val = 9
+    return when low.val <> 7 or high.val <> 9
+    give(state, large, 1048576)
+
+    --  More blocks than one chunk holds, none overlapping another.
+    code = 7
+    for index in usize(0)..<usize(1500) do
+        at: usize = take(state, 40, 8)
+        return when at == 0
+        blocks[index] = at
+        for offset in usize(0)..<usize(40) do
+            cell: ptr mut u8 = ptr(at + offset)
+            cell.val = u8(index & 255)
+        end for
+    end for
+    code = 8
+    for index in usize(0)..<usize(1500) do
+        for offset in usize(0)..<usize(40) do
+            cell: ptr u8 = ptr(blocks[index] + offset)
+            return when cell.val <> u8(index & 255)
+        end for
+        give(state, blocks[index], 40)
+    end for
+    code = 42
+end main

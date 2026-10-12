@@ -113,8 +113,12 @@ package Landin.Targets.Assembly is
    --  [1990]'s uniform text rules on a hosted target, or the empty string:
    --  at most 4096 ASCII bytes in LF lines, instructions and no directive,
    --  comment, statement separator or label, and straight-line control.
-   --  Which instructions exist is the platform assembler's to say.
-   function Text_Error (Facts : Target_Facts; Text : String) return String
+   --  A naked body's text may transfer control, since it owns its entry
+   --  and its exit.  Which instructions exist is the platform assembler's
+   --  to say.
+   function Text_Error
+     (Facts : Target_Facts; Text : String; Naked : Boolean := False)
+      return String
      with Pre => Architecture_Of (Facts) in X86_64 | Arm64 | RV64;
 
 end Landin.Targets.Assembly;

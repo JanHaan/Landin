@@ -1726,6 +1726,17 @@ package body Landin.Tests.Targets_Suite is
            and then Asm.Text_Error (Linux_RV64, "c.beqz x5,label") /= ""
            and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1 #comment") /= "",
          "RV64 width spelling and straight-line admission are stated");
+      --  The system call returns to the next instruction on every hosted
+      --  architecture, so each admits its own; RV64's breakpoint, like
+      --  every other control transfer, stays refused.
+      Landin.Testing.Check
+        (Item, Asm.Text_Error (Linux_RV64, "ecall") = ""
+           and then Asm.Text_Error (Linux_X86_64, "syscall") = ""
+           and then Asm.Text_Error (Linux_Arm64, "svc #0") = ""
+           and then Asm.Text_Error (Linux_RV64, "ebreak") /= ""
+           and then Asm.Text_Error (Linux_RV64, "c.ebreak") /= ""
+           and then Asm.Text_Error (Linux_RV64, "mret") /= "",
+         "the system call has one standing on every hosted architecture");
    end Assembly_Registers;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

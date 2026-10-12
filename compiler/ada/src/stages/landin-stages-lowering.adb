@@ -16249,6 +16249,9 @@ package body Landin.Stages.Lowering is
             end if;
          end Leave_Fold;
 
+         --  Lowering folds module images, never a body's reads.
+         function Image_Folding return Boolean is (False);
+
          package Folder is new Landin.Stages.Folding
            (Types              => Types,
             Meanings           => Meanings,
@@ -16261,7 +16264,8 @@ package body Landin.Stages.Lowering is
             Float_Special_Bits => Float_Special_At,
             Enter              => Enter_Fold,
             Leave              => Leave_Fold,
-            Is_Final           => No_Final_Fold);
+            Is_Final           => No_Final_Fold,
+            Reads_Run_Time     => Image_Folding);
 
          procedure Fold_Constant
            (Of_Tree : Syn.Tree;

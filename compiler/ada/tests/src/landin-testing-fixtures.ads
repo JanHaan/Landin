@@ -131,6 +131,11 @@ package Landin.Testing.Fixtures is
    function C_Sources (Item : Fixture) return String;
    function C_Args    (Item : Fixture) return String;
 
+   --  How a runtime fixture's hosted executable is linked, `static`
+   --  or `libc`, or "" for the target's default.  A program that calls the
+   --  C library names `libc`, because a static Linux link has none.
+   function Link_Mode (Item : Fixture) return String;
+
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
    --  `merged` accepts either, and is only right where a fixture does not
@@ -220,6 +225,7 @@ private
       Fixed     : Ada.Strings.Unbounded.Unbounded_String;
       C_Files   : Ada.Strings.Unbounded.Unbounded_String;
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
+      Link      : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;
       Levels    : Ada.Strings.Unbounded.Unbounded_String;

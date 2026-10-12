@@ -1,0 +1,35 @@
+import core/io
+import hosted/io as hosted
+import hosted/linux
+
+--  Under --link=libc the C runtime starts the program, so
+--  hosted/linux's entry never runs: it has no environment or auxiliary
+--  vector to report, and the page size falls back to 4 KiB.  hosted/io
+--  still reaches the kernel through hosted/linux's system calls and the
+--  arguments still reach its world.
+public main: () -> (code: i32) =
+    code = 1
+    mut state: hosted.system = hosted.host()
+    return when io.argument_count(state) <> 1
+    code = 2
+    table: linux.environment_table = linux.environment()
+    match table
+        linux.no_environment: begin
+        end
+        ptr (entries): begin
+            _ = entries
+            return
+        end
+    end match
+    code = 3
+    (found, value) := linux.auxiliary(6)
+    return when found or value <> 0
+    return when linux.page_size() <> 4096
+    code = 4
+    out: io.file = io.out(state)
+    io.write(state, out, "libc entry\n") else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

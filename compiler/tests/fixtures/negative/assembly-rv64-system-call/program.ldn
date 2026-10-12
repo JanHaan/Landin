@@ -1,0 +1,13 @@
+--  The RV64 system call returns to the next instruction, as x86-64's
+--  syscall and arm64's svc do, so an ordinary block admits it.  The
+--  instructions that enter a debugger or leave a trap handler stay refused.
+pid: () -> (result: i64) =
+    result = assembler.block("ecall", inout r: i64 at x10 = 0,
+                             in n: i64 at x17 = 172)
+end pid
+
+f: (value: u64) -> none =
+    assembler.block("ebreak", in v: u64 at x10 = value)
+    assembler.block("c.ebreak", in v: u64 at x10 = value)
+    assembler.block("mret", in v: u64 at x10 = value)
+end f

@@ -1,11 +1,14 @@
---  The C library beneath the hosted providers, declared as ordinary
---  extern(c) imports on every hosted target.  hosted/io and hosted/heap
---  reach the operating system only through these declarations; the compiler
---  links the C library and knows none of its names.  Facts that differ
---  between systems are selected by `compiler.os`, record layouts by the C
---  ABI as well, and the native C headers of each system check them: the
---  `stat` record in abi/core-io-file-identity, the rest in the hosted
---  runtime and ABI fixtures.
+--  The C library, declared as ordinary extern(c) imports on every hosted
+--  target.  On Darwin and FreeBSD, whose C library is their system
+--  interface, hosted/io and hosted/heap reach the operating system only
+--  through these declarations; on Linux they use hosted/linux, and this
+--  module serves a program linked with --link=libc.  Every declaration
+--  here is bodyless, so a program that names none of them needs no C
+--  library.  Facts that differ between systems are selected by
+--  `compiler.os`, record layouts by the C ABI as well, and the native C
+--  headers of each system check them: the `stat` record in
+--  abi/core-io-file-identity, the rest in the hosted runtime and ABI
+--  fixtures.
 
 compiler.assert(compiler.os == linux or compiler.os == darwin
                 or compiler.os == freebsd)
@@ -64,14 +67,6 @@ else
     public extern(c) link(symbol: "__error") errno_cell:
         () -> (cell: ptr mut i32)
 end if
-
---- The calling thread's errno: the reason the last failing C call gave.
---- Read it immediately after that call, before any other call that may set
---- it.
-public current_errno: () -> (number: i32) =
-    cell: ptr mut i32 = errno_cell()
-    number = cell.val
-end current_errno
 
 --- errno: the operation is not permitted.  The same on every hosted
 --- system.

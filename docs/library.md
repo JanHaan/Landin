@@ -133,25 +133,33 @@ Checked range, arithmetic and conversion faults, and an unreachable path, use th
 
 An explicit allocator over the host runtime heap.
 
-`host` creates a provider state. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place. Every `usize` alignment is honoured by over-allocating through `hosted/libc`'s `malloc` and keeping the address it returned in the word before the block.
+`host` creates a provider state. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place. Every `usize` alignment is honoured by over-allocating and keeping a header before the block. On Linux the provider keeps eight size classes, of 32 to 4096 bytes, over chunks it maps through `hosted/linux`: a freed slot goes back on its class's list and is the next one handed out, and a larger request is a mapping of its own, unmapped when it is freed. That provider is single-threaded. On Darwin and FreeBSD it allocates through `hosted/libc`'s `malloc` and `free`. Either way a refusal comes before any state changes.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
 
 ## hosted/io
 
-Hosted file, stream and process operations through libc.
+Hosted file, stream and process operations, through `hosted/linux`'s system calls on Linux and through `hosted/libc` on Darwin and FreeBSD.
 
-`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams, from the root the hosted entry establishes through `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Open-write creates or truncates regular files. `last_errno` captures the terminal failing call as provider-specific detail; it is not a portable error type.
+`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams, from the root the hosted entry establishes through `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Open-write creates or truncates regular files. `last_errno` captures the terminal failing call as provider-specific detail, minus a system call's negative result on Linux and C's errno elsewhere; it is not a portable error type.
 
 [Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
 
 ## hosted/libc
 
-The C library's declarations beneath the hosted providers, as ordinary `extern(c)` imports.
+The C library's declarations, as ordinary `extern(c)` imports.
 
-`hosted/io` and `hosted/heap` reach the operating system only through this module; the compiler links the C library and names none of it. `open` is declared variadic, as C declares it, and takes its mode as the one unnamed argument. Facts that differ between systems are chosen by `compiler.os`: the errno accessor, `__errno_location` on Linux and `__error` on Darwin and FreeBSD, and the `open` flags; `stat`'s record follows the system and the C ABI. Read `current_errno` immediately after a failing call. A `malloc` result is the `allocation` union, so the null pointer is `no_allocation` rather than a pointer.
+On Darwin and FreeBSD, whose C library is their system interface, `hosted/io` and `hosted/heap` reach the operating system only through this module; on Linux they use `hosted/linux`, and this module serves a program linked with `--link=libc`. Every declaration is bodyless, so a program that names none of them needs no C library. `open` is declared variadic, as C declares it, and takes its mode as the one unnamed argument. Facts that differ between systems are chosen by `compiler.os`: the errno accessor `errno_cell`, `__errno_location` on Linux and `__error` on Darwin and FreeBSD, and the `open` flags; `stat`'s record follows the system and the C ABI. Read the errno cell immediately after a failing call. A `malloc` result is the `allocation` union, so the null pointer is `no_allocation` rather than a pointer.
 
 [Executable example](../compiler/tests/fixtures/abi/r440-native-hosted/program.ldn)
+
+## hosted/linux
+
+Linux's system calls with no C library beneath them, and the process entry of a static Linux executable.
+
+Every declaration is Linux-only; on Darwin and FreeBSD the module declares nothing, which lets `hosted/io` and `hosted/heap` import it on every hosted system. Each call is one assembly block on x86-64, arm64 and RV64, and a failure comes back in its result as minus the errno; there is no errno cell. The `*at` calls take `at_fdcwd` for a path relative to the working directory, and `statx`'s `file_status` is the kernel's one record on every architecture. Every public routine has a link name of its own, `_landin_linux_` and the routine's name, so none of them replaces the C library's function of the same name under `--link=libc`. `_landin_start` is where a static executable starts: it reads `argc`, `argv`, the environment and the auxiliary vector from the initial stack and calls `main` as C's runtime would. Before `main` it holds the processor to the executable's CPU feature level, as a loader holds an x86-64 executable to its ISA note: `cpuid` and the operating system's enabled state on x86-64, AT_HWCAP on arm64 and `riscv_hwprobe` on RV64. A processor without a feature of the level ends the process with status 127 and one line on standard error naming the level and the missing feature; the baseline checks nothing. `level`, `read_cpu_words` and `missing_feature` expose the check. No C library initialisation runs and there is no thread-local storage. `environment` and `auxiliary` report what that entry found, and nothing when the C runtime started the program instead.
+
+[Executable example](../compiler/tests/fixtures/runtime/linux-system-calls/main.ldn)
 
 ## platform/c
 

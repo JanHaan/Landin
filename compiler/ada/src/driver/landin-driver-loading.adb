@@ -230,6 +230,7 @@ package body Landin.Driver.Loading is
       Missing_Directories : access Landin.Platform.Path_List;
       Previous        : access Landin.Stages.Compilation;
       Watch_Syntax    : access procedure (Name : String);
+      Implicit        : String;
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List);
 
@@ -243,6 +244,7 @@ package body Landin.Driver.Loading is
       Missing_Directories : access Landin.Platform.Path_List;
       Previous        : access Landin.Stages.Compilation;
       Watch_Syntax    : access procedure (Name : String);
+      Implicit        : String;
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List)
    is
@@ -1004,6 +1006,29 @@ package body Landin.Driver.Loading is
             end loop;
          end;
          Next := Next + 1;
+         --  The implicit module comes after everything the imports reach,
+         --  from the library, unless an import already brought it.
+         if Next > Natural (Queue.Length)
+           and then Implicit /= "" and then Library /= ""
+           and then Library_Position /= 0
+           and then not Landin.Stages.Failed (Context)
+           and then Landin.Modules.Find_Logical (Graph.all, Implicit)
+             = Landin.Modules.No_Module
+           and then Host.Is_Directory (Joined_Path (Library, Implicit))
+         then
+            declare
+               Directory : constant String :=
+                 Joined_Path (Library, Implicit);
+               Added : constant Landin.Modules.Module_Id :=
+                 Landin.Modules.Add_Module
+                   (Graph.all, Implicit, Directory,
+                    Positive (Library_Position));
+            begin
+               Remember_Directory
+                 (Added, Host.Existing_Identity (Directory));
+               Queue.Append (Added);
+            end;
+         end if;
       end loop;
    end Discover;
 
@@ -1017,11 +1042,12 @@ package body Landin.Driver.Loading is
       Watch_Syntax    : access procedure (Name : String) := null;
       Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
-      Library         : String := "") is
+      Library         : String := "";
+      Implicit        : String := "") is
    begin
       Discover
         (Context, Host, Roots, Library, Entry_Directory, False,
-         Missing_Directories, Previous, Watch_Syntax, Cache,
+         Missing_Directories, Previous, Watch_Syntax, Implicit, Cache,
          Dependency_Directories);
    end Load_Reachable_Program;
 
@@ -1032,12 +1058,14 @@ package body Landin.Driver.Loading is
       Previous     : access Landin.Stages.Compilation := null;
       Watch_Syntax : access procedure (Name : String) := null;
       Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
-      Dependency_Directories : access Landin.Platform.Path_List := null)
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Implicit     : String := "")
    is
    begin
       Discover
         (Context, Host, Landin.Platform.No_Arguments, Library, "", True,
-         null, Previous, Watch_Syntax, Cache, Dependency_Directories);
+         null, Previous, Watch_Syntax, Implicit, Cache,
+         Dependency_Directories);
    end Load_Library_Imports;
 
 end Landin.Driver.Loading;

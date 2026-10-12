@@ -67,6 +67,11 @@ private generic
    --  query, and is worked out once.
    with function Is_Final (Means : Landin.Resolution.Declaration_Id)
      return Boolean;
+
+   --  Whether the expression folded runs in a routine body, where a `mut`
+   --  module binding holds what was last written rather than its image,
+   --  so its value is not known.
+   with function Reads_Run_Time return Boolean;
 package Landin.Stages.Folding is
 
    --  Completed module-binding values are shared within this query.  A

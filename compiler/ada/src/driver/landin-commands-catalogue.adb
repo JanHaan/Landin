@@ -52,7 +52,8 @@ package body Landin.Commands.Catalogue is
          when Optimize => "--optimize", when Specialize => "--specialize",
          when Emit => "--emit", when Output => "-o", when Debug => "--debug",
          when Panic_Map => "--panic-map", when Toolchain => "--toolchain",
-         when Linker => "--linker", when Firmware_Entry => "--firmware-entry",
+         when Linker => "--linker", when Link => "--link",
+         when Firmware_Entry => "--firmware-entry",
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
          when Depfile => "--depfile", when Format_Check => "--check",
@@ -84,6 +85,8 @@ package body Landin.Commands.Catalogue is
          when Panic_Map => "Emit an off-target runtime check-site map",
          when Toolchain => "Override the target's native compiler driver",
          when Linker => "Select the native linker through that driver",
+         when Link =>
+           "Linux link: static (default) alone, or libc with C's runtime",
          when Firmware_Entry => "Select the Cortex-M firmware entry routine",
          when Build_Report => "Write deterministic build evidence JSON",
          when Stage_Report => "Write stage CPU time and peak memory JSON",
@@ -109,7 +112,8 @@ package body Landin.Commands.Catalogue is
          when Build_Mode => "debug|release",
          when Optimize => "none|size|speed",
          when Specialize => "off|auto|all", when Emit => "asm|exe",
-         when Debug => "none|full|lines", when others => "");
+         when Debug => "none|full|lines", when Link => "static|libc",
+         when others => "");
 
    function Takes_Value (Flag : Option) return Boolean is
      (Flag not in Help_Flag | Verbose | Quiet | Panic_Map | Dry_Run
@@ -149,6 +153,7 @@ package body Landin.Commands.Catalogue is
          when Specialize => return Text in "off" | "auto" | "all";
          when Emit => return Text in "asm" | "exe";
          when Debug => return Text in "none" | "full" | "lines";
+         when Link => return Text in "static" | "libc";
          when others => return Text /= "";
       end case;
    end Valid_Value;

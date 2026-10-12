@@ -129,7 +129,8 @@ public real: atom
         for items in modules.values():
             for item in items:
                 self.assertRegex(sources[item.source].splitlines()[item.line-1],
-                                 r'public (?:extern\(c\) (?:link\(symbol: "[^"]*"\) )?)?'
+                                 r'public (?:extern\((?:c|naked)\) )?'
+                                 r'(?:link\(symbol: "[^"]*"\) )?'
                                  + re.escape(item.name) + ':')
 
 

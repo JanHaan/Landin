@@ -62,6 +62,23 @@ package body Landin.Tests.Driver_Suite is
       return Result;
    end Both;
 
+   --  A source and an executable linked as C links one, with C's runtime:
+   --  the tool-invocation cases below are about the invocation, and a
+   --  static Linux link would need hosted/linux from a library these fake
+   --  hosts do not hold.
+   function Libc_Executable
+     (First : String) return Landin.Platform.Path_List;
+
+   function Libc_Executable (First : String) return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+   begin
+      Result.Append (First);
+      Result.Append ("--emit=exe");
+      Result.Append ("--link=libc");
+      return Result;
+   end Libc_Executable;
+
    function Arguments_Of (First : String) return Landin.Platform.Path_List is
       Result : Landin.Platform.Path_List;
    begin
@@ -1322,6 +1339,7 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--level=" & Level);
          end if;
          Args.Append ("--emit=exe");
+         Args.Append ("--link=libc");
          Args.Append ("--build-report=build.json");
          Args.Append ("main.ldn");
          Result := Landin.Driver.Execute (Args, Host, Tools);
@@ -1441,6 +1459,7 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--level=" & Level);
          end if;
          Args.Append ("--emit=exe");
+         Args.Append ("--link=libc");
          Args.Append ("--build-report=build.json");
          Args.Append ("-o");
          Args.Append ("app");
@@ -1812,7 +1831,7 @@ package body Landin.Tests.Driver_Suite is
         & " value = where.line end capture" & LF
         & "public main: () -> (code: i32) =" & LF
         & " code = i32(capture() + capture()) end main" & LF;
-      Args : Landin.Platform.Path_List := Both (Path, "--emit=exe");
+      Args : Landin.Platform.Path_List := Libc_Executable (Path);
       Result : Landin.Driver.Outcome;
       Original : Unbounded.Unbounded_String;
       Original_Assembly : Unbounded.Unbounded_String;
@@ -2035,7 +2054,7 @@ package body Landin.Tests.Driver_Suite is
                declare
                   Result : constant Landin.Driver.Outcome :=
                     Landin.Driver.Execute
-                      (Both ("main.ldn", "--emit=exe"), Host, Tools);
+                      (Libc_Executable ("main.ldn"), Host, Tools);
                   Report : constant String :=
                     Unbounded.To_String (Result.Report);
                begin
@@ -2164,6 +2183,7 @@ package body Landin.Tests.Driver_Suite is
       Args.Append ("--target=linux-x86-64");
       Args.Append ("main.ldn");
       Args.Append ("--emit=exe");
+      Args.Append ("--link=libc");
       Args.Append ("-o");
       Args.Append ("main");
 
@@ -2205,6 +2225,7 @@ package body Landin.Tests.Driver_Suite is
       Host.Add_File ("main.ldn", Entry_Program);
       Args.Append ("main.ldn");
       Args.Append ("--emit=exe");
+      Args.Append ("--link=libc");
       Args.Append ("-o");
       Args.Append ("main");
       Args.Append ("--toolchain=x86_64-unknown-linux-gnu-gcc");
@@ -2233,6 +2254,104 @@ package body Landin.Tests.Driver_Suite is
             "and the linker rides through as one more argument");
       end;
    end A_Named_Linker_Reaches_The_Driver;
+
+   --  A static Linux executable starts at hosted/linux's `_landin_start`,
+   --  which the driver loads from the library beside the program's own
+   --  modules.  With no library to load it from, the link would enter at
+   --  an undefined symbol, so the request is refused before any tool runs
+   --  and before anything is written.
+   procedure A_Static_Link_Needs_Hosted_Linux
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Static_Link_Needs_Hosted_Linux
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Args.Append ("--target=linux-x86-64");
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=exe");
+      Args.Append ("-o");
+      Args.Append ("main");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 1, "the static link is refused");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report),
+                            "error[L0500]: a static link of linux-x86-64"
+                            & " starts at hosted/linux's `_landin_start`")
+              and then Contains (Unbounded.To_String (Result.Report),
+                                 "--link=libc"),
+            "it names the missing entry and the libc link");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "no tool runs");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, "nothing is written");
+      end;
+   end A_Static_Link_Needs_Hosted_Linux;
+
+   --  The default Linux link is static: the library's hosted/linux joins
+   --  the program unasked, and the driver links the assembly alone,
+   --  entered at `_landin_start`, with no C runtime, library or loader.
+   procedure A_Static_Link_Starts_At_Hosted_Linux
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Static_Link_Starts_At_Hosted_Linux
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Host.Add_Directory ("lib");
+      Host.Add_Directory ("lib/hosted");
+      Host.Add_Directory ("lib/hosted/linux");
+      Host.Add_File
+        ("lib/hosted/linux/linux.ldn",
+         "fixed if compiler.os == linux then" & LF
+         & "    public extern(naked) _landin_start: () -> none =" & LF
+         & "        assembler.block(""ud2"")" & LF
+         & "    end _landin_start" & LF
+         & "end if" & LF);
+      Args.Append ("--target=linux-x86-64");
+      Args.Append ("--library=lib");
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=exe");
+      Args.Append ("-o");
+      Args.Append ("main");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "the static link is accepted: "
+            & Unbounded.To_String (Result.Report));
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 1, "one invocation and no more");
+         if Tools.Run_Count = 1 then
+            Landin.Testing.Check_Equal
+              (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
+               "-nostdlib" & LF & "-static" & LF & "-no-pie" & LF
+               & "-Wl,-e,_landin_start" & LF & "main.s" & LF & "-o" & LF
+               & "main" & LF & "-Wl,--gc-sections" & LF
+               & "-Wa,-march=generic64" & LF,
+               "the driver links the assembly alone, entered at"
+               & " _landin_start");
+         end if;
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("main.s"), "_landin_start:")
+              and then Contains (Host.Written ("main.s"), ".globl main"),
+            "the assembly holds the entry and the program's main");
+      end;
+   end A_Static_Link_Starts_At_Hosted_Linux;
 
    --  [1970] is required before anything is written, so a program that
    --  could never be linked leaves no file behind on the way to saying so.
@@ -2340,7 +2459,7 @@ package body Landin.Tests.Driver_Suite is
             declare
                Result : constant Landin.Driver.Outcome :=
                  Landin.Driver.Execute
-                   (Both ("main.ldn", "--emit=exe"), Host, Tools);
+                   (Libc_Executable ("main.ldn"), Host, Tools);
                Report : constant String := Unbounded.To_String (Result.Report);
             begin
                Landin.Testing.Check
@@ -2359,7 +2478,7 @@ package body Landin.Tests.Driver_Suite is
             declare
                Result : constant Landin.Driver.Outcome :=
                  Landin.Driver.Execute
-                   (Both ("main.ldn", "--emit=exe"), Host, Tools);
+                   (Libc_Executable ("main.ldn"), Host, Tools);
             begin
                Landin.Testing.Check
                  (Item, Result.Status = Landin.Driver.Status_Success
@@ -2386,7 +2505,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("main.ldn", "--emit=exe"), Host, Tools);
+             (Libc_Executable ("main.ldn"), Host, Tools);
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -2413,7 +2532,7 @@ package body Landin.Tests.Driver_Suite is
             Host  : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args  : Landin.Platform.Path_List :=
-              Both ("main.ldn", "--emit=exe");
+              Libc_Executable ("main.ldn");
          begin
             Host.Add_File ("main.ldn", Entry_Program);
             if Case_Kind /= Missing then
@@ -2490,7 +2609,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("main.ldn", "--emit=exe"), Host, Tools);
+             (Libc_Executable ("main.ldn"), Host, Tools);
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -2830,7 +2949,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("fine.ldn", "--emit=exe"), Host, Tools);
+             (Libc_Executable ("fine.ldn"), Host, Tools);
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -3053,6 +3172,7 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--panic-map");
             Args.Append
               (if Executable then "--emit=exe" else "--emit=asm");
+            Args.Append ("--link=libc");
             Args.Append ("-o");
             Args.Append ("out");
             declare
@@ -3279,6 +3399,7 @@ package body Landin.Tests.Driver_Suite is
       Args.Append ("--target=linux-x86-64");
       Args.Append ("--root=root");
       Args.Append ("--emit=exe");
+      Args.Append ("--link=libc");
       Args.Append ("entry");
       Tools.Set_Result (0, "");
       declare
@@ -4454,6 +4575,7 @@ package body Landin.Tests.Driver_Suite is
          Args.Append (if Darwin then "--target=darwin-arm64"
                       else "--target=linux-x86-64");
          Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         Args.Append ("--link=libc");
          if Debug then
             Args.Append ("--debug=full");
          end if;
@@ -5821,6 +5943,12 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a named linker reaches the driver",
          A_Named_Linker_Reaches_The_Driver'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a static link needs hosted/linux",
+         A_Static_Link_Needs_Hosted_Linux'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a static link starts at hosted/linux",
+         A_Static_Link_Starts_At_Hosted_Linux'Access);
       Landin.Testing.Register
         (Into, "driver", "a hosted program needs its entry",
          A_Hosted_Program_Needs_Its_Entry'Access);

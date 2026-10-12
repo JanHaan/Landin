@@ -32,7 +32,13 @@ package body Landin.Diagnostics.Explanations is
                & "xe`: checking and assembly emission do not run a linker."
                & " They are also incompatible with `--help` and `--identif"
                & "y`, which do not compile. Each selection must have a non"
-               & "empty value and may be given only once.",
+               & "empty value and may be given only once."
+               & LF
+               & LF
+               & "`--link=static|libc` chooses how a hosted executable is "
+               & "linked and requires `--emit=exe` or `--emit=asm`; `stati"
+               & "c` needs a Linux target, and a target with no hosted sys"
+               & "tem takes neither.",
             when Catalogue.Unreadable_Source =>
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",
@@ -684,12 +690,15 @@ package body Landin.Diagnostics.Explanations is
                & "rget, settings or available toolchain [1550]. The diagno"
                & "stic and its note identify the cause: the target has no "
                & "backend, its source debug mode is unsupported, firmware "
-               & "forbids `linker.library`, no toolchain is selected, or t"
-               & "he named tool is unavailable. Choose a target with a bac"
-               & "kend, change the debug or firmware configuration, or sel"
-               & "ect or install a toolchain as the note directs. `--toolc"
-               & "hain=` only helps when a toolchain is absent or unavaila"
-               & "ble.",
+               & "forbids `linker.library`, a static Linux link cannot be "
+               & "made (no library holding `hosted/linux` was found, or th"
+               & "e program asks for `linker.library` or refers to C symbo"
+               & "ls nothing in it defines), no toolchain is selected, or "
+               & "the named tool is unavailable. Choose a target with a ba"
+               & "ckend, change the debug or firmware configuration, link "
+               & "with `--link=libc`, or select or install a toolchain as "
+               & "the note directs. `--toolchain=` only helps when a toolc"
+               & "hain is absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"

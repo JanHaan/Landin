@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: hosted/linux makes write, openat, read, close and statx directly and returns each failure as minus its errno
+program: main.ldn
+root: ../../../../..
+run_expect: expected.txt
+stream: output
+status: 42
+constructs: 1560, 1630, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64

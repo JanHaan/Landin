@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a static Linux link refuses a C import the program does not define, before linking, naming --link=libc
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=exe --dry-run ../tests/fixtures/end-to-end/link-static-unsatisfied-c-import/main.ldn
+status: 1

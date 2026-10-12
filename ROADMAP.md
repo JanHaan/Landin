@@ -1478,7 +1478,7 @@ FreeBSD and RV64.
 
 ### R13.16 — Linux without the C library
 
-Status: planned
+Status: active
 Depends on: R13.15
 
 Linux promises its system-call interface, so a Linux program needs no C
@@ -1486,10 +1486,12 @@ library to reach it. Darwin's system calls change between releases and
 FreeBSD documents its C library as the interface, so both stay on libc, and
 a Windows target would use kernel32. Write the Linux provider as system calls
 in source on x86-64, arm64 and RV64, using the `*at` calls and `statx` so the
-three share one layout, with a program-owned `_start` that reads the
-arguments, environment and auxiliary vector from the initial stack, a static
-executable and an `mmap` heap provider. A program that links C objects keeps
-the C runtime's startup and libc, with the same provider beneath it. RV64's
+three share one layout, in a `hosted/linux` module scoped to Linux, with a
+program-owned entry that reads the arguments, environment and auxiliary
+vector from the initial stack, a static executable and a heap of size classes
+over `mmap`. `--link=static` is the default on Linux; `--link=libc` keeps the
+C runtime's startup and libc for a program that links C, with the same
+provider beneath it, and a static link that meets a C symbol says so. RV64's
 assembly checker refuses `ecall` as a control transfer while x86-64 admits
 `syscall` and arm64 `svc`; a decision gives the system-call instruction one
 standing on every hosted target first.
@@ -1894,6 +1896,19 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-33 | Usability | A runtime fixture cannot report a status from inside a panic handler, so the trap dispatch fixture shows the handler saw the right kind and site only by re-entering it on a match and spinning otherwise, which a missing dispatch would also satisfy as a trap. | The next panic or trap fixture. | A portable way for a handler to report, on firmware too, used to pin dispatch exactly. | open |
 | SR-34 | Usability | Checks that know nothing of their context, such as the literal check and the empty-slice fallback, still label a refusal with a secondary on its own span when reached without a context site; the paths the mutation campaign reaches now name their context, the class remains. | The next refusal found repeating its own span. | Every such report given a context site, so a same-span secondary cannot be built, with the campaign's repeated-secondary counter held at zero. | open |
 | SR-35 | Usability | The mutation campaign's one-report-on-the-line share is 90.5% against a 90% bar. The largest misses are reports one line from the mistake: a deleted `end` or value reported on the next line, and missing tokens the parser meets on the next line, some genuinely ambiguous. | A frontend change that moves the share, or the next work on the parser's recovery. | The share raised with margin, or the bar's meaning restated for the ambiguous cases. | watch |
+| SR-36 | Usability | A module value's initializer cannot read another module's values: `interrupted: i32 = linux.eintr` and `alignof libc.file_status` at module level are L0305, so `hosted/io` repeats the system's errno literals. | The next library module that needs another's constants at module level. | Imported fixed values admitted in module initializers, or the refusal saying why they cannot be. | open |
+| SR-37 | Usability | `ptr(integer)` needs a declared pointer context and is L0301 as a call argument, so a pointer made from an address takes a named local first. | A consumer passing a made pointer straight to a call. | The parameter's type accepted as the context, with a fixture. | open |
+| SR-38 | Usability | `fixed if` is refused inside a routine body (L0110), so behaviour that differs by system needs a wrapper routine per system at module level. | The next per-system routine in the library. | Fixed selection inside bodies, or the refusal's note pointing at the module-level form. | open |
+| SR-39 | Usability | A line beginning with `(` or an operator continues the previous line, so `fail … when x` followed by `(a, b) := f()` parses as a call and is L0105; the same continuation produced a checker crash the server fuzz round found. | The next change to line continuation. | A statement-start rule that does not join such lines, or a refusal that names the continuation. | open |
+| SR-40 | Usability | There is no conditional import, so a module that only one system needs, `hosted/linux`, is imported everywhere and must be empty off Linux instead of being scoped by an assertion. | A second system-specific module. | A conditional import, or the empty-module shape recorded as the way. | open |
+| SR-41 | Usability | There is no NUL-terminated string literal, so a system-call path in a program is spelled as a byte array. | The next consumer passing literal paths to the system. | A terminated literal form, or `io.terminate_path` documented as the way. | open |
+| SR-42 | Usability | A routine's results destructure by name only, so a wrapper writes `(result: descriptor, number) := …` to take two results. | The next routine with several results used positionally. | Positional destructuring, or the reason it is refused. | open |
+| SR-43 | Usability | GDB stops a backtrace at `main` by default, so a session must `set backtrace past-main on` to show `_landin_start`. | The next debugger documentation change. | The setting documented beside the debugger sessions, or the frames named so GDB shows them by default. | open |
+| SR-44 | Usability | `lenof` refuses a call's result (L0110, "this begins no statement"), so a length of a returned slice takes a named local. | The next consumer measuring a returned slice. | `lenof` admitted on a call result, or a refusal that says so. | open |
+| SR-45 | Usability | `compiler.feature` facts work only in fixed configuration contexts: a module value such as `baseline: bool = not compiler.feature.popcnt` is L0203, so each level's arm declares its own items. | The next library code that branches on a feature outside `fixed if`. | Feature facts admitted in module values, or the refusal's note naming `fixed if`. | open |
+| SR-46 | Competitive optimization | An immutable module `bool` is loaded from memory rather than folded, so `return when baseline` kept a whole check routine in a baseline image until the check was split per level. | A measured image or hot path holding a foldable module constant. | Immutable scalar module values folded at their uses, with an image comparison. | open |
+| SR-47 | Usability | The formatter's continuation rules turn a multi-line `if` expression into extra locals, and the library reference requires a public routine's name on its `public` line, which forces a long first line. | The next change to the layout or the reference generator. | A continuation layout for `if` expressions and a reference that reads a wrapped signature. | open |
+| SR-48 | Usability | No compiler fact names the selected CPU feature level, so `hosted/linux` mirrors D255's level-to-feature table in source to check the processor; the two can drift. | A new feature level, or a second consumer of the level's name. | A level fact or a check that the library's table matches D255's, with a fixture. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

@@ -1,0 +1,10 @@
+--  A static Linux link has no C library, so a C import nothing in the
+--  program defines is refused before the linker is asked, by name.
+extern(c) puts: (text: ptr u8) -> (result: i32)
+
+greeting: [3]u8 = [104, 105, 0]
+
+public main: () -> (code: i32) =
+    _ = puts(addr greeting[0])
+    code = 0
+end main

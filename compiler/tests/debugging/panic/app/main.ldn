@@ -1,6 +1,15 @@
 import core/panic
+import hosted/linux
 
-link(symbol: "_exit") extern(c) stop: (status: i32) -> noreturn
+fixed if compiler.os == linux then
+    --  A static Linux executable has no C library: the process ends with
+    --  the kernel's exit_group, as C's `_exit` would end it.
+    stop: (status: i32) -> noreturn =
+        linux.exit_group(status)
+    end stop
+else
+    link(symbol: "_exit") extern(c) stop: (status: i32) -> noreturn
+end if
 mut later: u32 = 0
 mut observed_site: u32 = 0
 

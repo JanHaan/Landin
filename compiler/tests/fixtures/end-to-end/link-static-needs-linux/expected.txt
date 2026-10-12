@@ -1,0 +1,1 @@
+error[L0002]: --link=static needs a Linux target; darwin-arm64 reaches its system only through its C library, so it links with --link=libc, the default there

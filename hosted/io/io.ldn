@@ -1,9 +1,123 @@
---  The libc-backed provider of every core/io concept on hosted targets:
---  reader, writer, files and process, and so of their composition, world.
---  Import this module only at a hosted authority root.
+--  The provider of every core/io concept on hosted targets: reader,
+--  writer, files and process, and so of their composition, world.  On
+--  Linux it reaches the kernel through hosted/linux's system calls; on
+--  Darwin and FreeBSD, whose C library is their system interface, through
+--  hosted/libc.  Import this module only at a hosted authority root.
 
 import core/io
 import hosted/libc
+import hosted/linux
+
+--  The errno values this provider tells apart are the same on every hosted
+--  system: hosted/linux's and hosted/libc's own constants agree.  A module
+--  value cannot read another module's, so they are written here.
+interrupted: i32 = 4
+missing: i32 = 2
+not_permitted: i32 = 1
+denied: i32 = 13
+read_only_system: i32 = 30
+
+--  Each system call or C call below returns its result, negative for a
+--  failure, with the errno that failure gave, captured before any other
+--  host call; zero when it succeeded.
+fixed if compiler.os == linux then
+    host_open_read: (path: ptr u8) -> (result: i32, number: i32) =
+        result = linux.openat(linux.at_fdcwd, path, linux.o_rdonly, 0)
+        number = if result < 0 then -result else 0 end if
+    end host_open_read
+
+    host_open_write: (path: ptr u8) -> (result: i32, number: i32) =
+        result = linux.openat(linux.at_fdcwd, path,
+                              linux.o_wronly | linux.o_creat | linux.o_trunc,
+                              u32(created_mode))
+        number = if result < 0 then -result else 0 end if
+    end host_open_write
+
+    host_close: (descriptor: i32) -> (result: i32, number: i32) =
+        result = linux.close(descriptor)
+        number = if result < 0 then -result else 0 end if
+    end host_close
+
+    host_read: (descriptor: i32, data: ptr mut u8, length: usize)
+               -> (result: isize, number: i32) =
+        result = linux.read(descriptor, data, length)
+        number = if result < 0 then i32(-result) else 0 end if
+    end host_read
+
+    host_write: (descriptor: i32, data: ptr u8, length: usize)
+                -> (result: isize, number: i32) =
+        result = linux.write(descriptor, data, length)
+        number = if result < 0 then i32(-result) else 0 end if
+    end host_write
+
+    --  The device and inode `path` names, following symbolic links;
+    --  statx's record is the kernel's own on every architecture.
+    host_identity: (path: ptr u8)
+                   -> (device: u64, inode: u64, number: i32) =
+        mut status: linux.file_status = zeroed
+        result: i32 = linux.statx(linux.at_fdcwd, path, 0, linux.statx_ino,
+                                  addr status)
+        device = (u64(status.device_major) << 32) | u64(status.device_minor)
+        inode = status.inode
+        number = if result < 0 then -result else 0 end if
+    end host_identity
+else
+    --  errno, read immediately after the failing call.
+    errno: () -> (number: i32) =
+        cell: ptr mut i32 = libc.errno_cell()
+        number = cell.val
+    end errno
+
+    host_open_read: (path: ptr u8) -> (result: i32, number: i32) =
+        result = libc.open(path, libc.o_rdonly)
+        number = if result < 0 then errno() else 0 end if
+    end host_open_read
+
+    host_open_write: (path: ptr u8) -> (result: i32, number: i32) =
+        result = libc.open(path, libc.o_wronly | libc.o_creat | libc.o_trunc,
+                           created_mode)
+        number = if result < 0 then errno() else 0 end if
+    end host_open_write
+
+    host_close: (descriptor: i32) -> (result: i32, number: i32) =
+        result = libc.close(descriptor)
+        number = if result <> 0 then errno() else 0 end if
+    end host_close
+
+    host_read: (descriptor: i32, data: ptr mut u8, length: usize)
+               -> (result: isize, number: i32) =
+        result = libc.read(descriptor, data, length)
+        number = if result == -1 then errno() else 0 end if
+    end host_read
+
+    host_write: (descriptor: i32, data: ptr u8, length: usize)
+                -> (result: isize, number: i32) =
+        result = libc.write(descriptor, data, length)
+        number = if result == -1 then errno() else 0 end if
+    end host_write
+
+    --  The device and inode `path` names, following symbolic links.  The
+    --  record's layout is checked against the header's before it is used:
+    --  a disagreement is number -1, which is no errno.
+    host_identity: (path: ptr u8)
+                   -> (device: u64, inode: u64, number: i32) =
+        device = 0
+        inode = 0
+        number = 0
+        if alignof libc.file_status <> 8
+          or sizeof libc.file_status <> libc.file_status_size then
+            number = -1
+            return
+        end if
+        mut status: libc.file_status = zeroed
+        if libc.stat(path, addr status) <> 0 then
+            number = errno()
+            return
+        end if
+        device = u64(status.device)
+        inode = u64(status.inode)
+    end host_identity
+end if
 
 --  A file open_write creates gets 0666, which the process umask filters.
 created_mode: i32 = 0o666
@@ -47,6 +161,16 @@ public extern(c) _landin_host_initialize_arguments:
     root_values = address
 end _landin_host_initialize_arguments
 
+--  The bytes before the first NUL at `data`.
+text_length: (data: ptr u8) -> (length: usize) =
+    length = 0
+    loop do
+        at: ptr u8 = ptr(usize(data) + length)
+        break when at.val == 0
+        length += 1
+    end loop
+end text_length
+
 system_value: type = struct
     arguments: ptr ptr u8
     argument_length: usize
@@ -54,8 +178,9 @@ system_value: type = struct
 end system_value
 
 --- Hosted implementation of all four I/O capabilities and `io.world`, backed
---- by libc. File identifiers belong to this provider; borrowed arguments
---- refer to process storage.
+--- by Linux's system calls on Linux and by libc on Darwin and FreeBSD. File
+--- identifiers belong to this provider; borrowed arguments refer to process
+--- storage.
 public system: type = system_value
 
 --- Return errno captured for the terminal failing provider call. Read it
@@ -75,21 +200,20 @@ system_open_read: (self: ptr mut system, path: ptr u8)
                   -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
     self.val.failure_errno = 0
     loop do
-        descriptor: i32 = libc.open(path, libc.o_rdonly)
+        (result: descriptor, number) := host_open_read(path)
         if descriptor >= 0 then
             opened = io.file(descriptor)
             return
         end if
 
-        --  Nothing may call into the host between the failed operation and
-        --  this capture.  Linux open reports EINTR before publishing a file
-        --  descriptor, so retrying this same request is safe.
-        number: i32 = libc.current_errno()
-        if number <> libc.eintr then
+        --  The host call captured errno before any other.  open reports
+        --  EINTR before publishing a file descriptor, so retrying this
+        --  same request is safe.
+        if number <> interrupted then
             self.val.failure_errno = number
-            fail io.not_found when number == libc.enoent
-            fail io.no_access when number == libc.eperm or number == libc.eacces
-              or number == libc.erofs
+            fail io.not_found when number == missing
+            fail io.no_access when number == not_permitted
+              or number == denied or number == read_only_system
             fail io.io_failed
         end if
     end loop
@@ -100,8 +224,7 @@ system_open_write: (self: ptr mut system, path: ptr u8)
                    ! io.not_found | io.no_access | io.io_failed =
     self.val.failure_errno = 0
     loop do
-        descriptor: i32 = libc.open
-            (path, libc.o_wronly | libc.o_creat | libc.o_trunc, created_mode)
+        (result: descriptor, number) := host_open_write(path)
         if descriptor >= 0 then
             opened = io.file(descriptor)
             return
@@ -110,12 +233,11 @@ system_open_write: (self: ptr mut system, path: ptr u8)
         --  The write-open request is fixed across attempts.  An
         --  interrupted open has not returned a descriptor, so retry it; every
         --  other errno is retained before mapping to the stable atom set.
-        number: i32 = libc.current_errno()
-        if number <> libc.eintr then
+        if number <> interrupted then
             self.val.failure_errno = number
-            fail io.not_found when number == libc.enoent
-            fail io.no_access when number == libc.eperm or number == libc.eacces
-              or number == libc.erofs
+            fail io.not_found when number == missing
+            fail io.no_access when number == not_permitted
+              or number == denied or number == read_only_system
             fail io.io_failed
         end if
     end loop
@@ -126,21 +248,20 @@ end system_open_write
 system_same_file: (self: ptr mut system, left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io.io_failed =
     self.val.failure_errno = 0
-    fail io.io_failed when alignof libc.file_status <> 8
-      or sizeof libc.file_status <> libc.file_status_size
-    mut first: libc.file_status = zeroed
-    mut second: libc.file_status = zeroed
-    if libc.stat(left, addr first) <> 0 then
-        self.val.failure_errno = libc.current_errno()
+    first := host_identity(left)
+    if first.number <> 0 then
+        --  A negative number is a record this provider cannot read, which
+        --  no errno describes.
+        if first.number > 0 then self.val.failure_errno = first.number end if
         fail io.io_failed
     end if
-    if libc.stat(right, addr second) <> 0 then
-        number: i32 = libc.current_errno()
-        if number == libc.enoent then
+    second := host_identity(right)
+    if second.number <> 0 then
+        if second.number == missing then
             same = false
             return
         end if
-        self.val.failure_errno = number
+        if second.number > 0 then self.val.failure_errno = second.number end if
         fail io.io_failed
     end if
     same = first.device == second.device and first.inode == second.inode
@@ -149,12 +270,12 @@ end system_same_file
 system_close: (self: ptr mut system, sink opened: io.file)
               -> none ! io.io_failed =
     self.val.failure_errno = 0
-    status: i32 = libc.close(i32(opened))
+    (result: status, number) := host_close(i32(opened))
     if status <> 0 then
-        --  Capture first, then report.  A failed Linux close may already have
+        --  Captured first, then reported.  A failed close may already have
         --  released the descriptor; retrying could close an unrelated reused
         --  descriptor, so EINTR is deliberately terminal here.
-        self.val.failure_errno = libc.current_errno()
+        self.val.failure_errno = number
         fail io.io_failed
     end if
 end system_close
@@ -168,8 +289,8 @@ system_read: (self: ptr mut system, opened: io.file, into: []mut u8)
     end if
     base: ptr mut u8 = addr into[0]
     loop do
-        read_count: isize = libc.read(i32(opened), base, lenof into)
-        if read_count <> -1 then
+        (result: read_count, number) := host_read(i32(opened), base, lenof into)
+        if number == 0 then
             fail io.io_failed when read_count < 0
               or usize(read_count) > lenof into
             --  Zero from a nonempty read is genuine EOF, not stalled progress.
@@ -177,11 +298,10 @@ system_read: (self: ptr mut system, opened: io.file, into: []mut u8)
             return
         end if
 
-        --  Linux read returns EINTR only before transferring a byte, so the
-        --  same buffer and extent may be retried.  A positive partial read is
+        --  read returns EINTR only before transferring a byte, so the same
+        --  buffer and extent may be retried.  A positive partial read is
         --  returned above and is never discarded by an unnecessary retry.
-        number: i32 = libc.current_errno()
-        if number <> libc.eintr then
+        if number <> interrupted then
             self.val.failure_errno = number
             fail io.io_failed
         end if
@@ -197,14 +317,14 @@ write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
         base: ptr u8 = addr remaining[0]
         mut accepted: isize = -1
         loop do
-            accepted = libc.write(descriptor, base, count)
-            break when accepted <> -1
+            (result: sent, number) := host_write(descriptor, base, count)
+            accepted = sent
+            break when number == 0
 
-            --  Linux reports EINTR only before this attempt transfers data.
+            --  write reports EINTR only before this attempt transfers data.
             --  Retry the same remaining suffix; a preceding positive partial
             --  write has already advanced `written` and is never repeated.
-            number: i32 = libc.current_errno()
-            if number <> libc.eintr then
+            if number <> interrupted then
                 self.val.failure_errno = number
                 fail io.io_failed
             end if
@@ -236,8 +356,8 @@ system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
     mut requested: usize = lenof bytes
     if requested > 65536 then requested = 65536 end if
     loop do
-        accepted: isize = libc.write(i32(opened), base, requested)
-        if accepted <> -1 then
+        (result: accepted, number) := host_write(i32(opened), base, requested)
+        if number == 0 then
             fail io.io_failed when accepted <= 0
               or usize(accepted) > requested
             count = usize(accepted)
@@ -245,8 +365,7 @@ system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
         end if
         --  EINTR transfers nothing on this attempt. A positive short write
         --  returns immediately so its exact prefix reaches the caller.
-        number: i32 = libc.current_errno()
-        if number <> libc.eintr then
+        if number <> interrupted then
             self.val.failure_errno = number
             fail io.io_failed
         end if
@@ -283,7 +402,7 @@ system_argument: (self: ptr system, index: usize)
         compiler.unreachable()
     end if
     data: ptr u8 = ptr(entry.val)
-    value = (data: data, length: libc.strlen(data))
+    value = (data: data, length: text_length(data))
 end system_argument
 
 system is io.reader (read: system_read)

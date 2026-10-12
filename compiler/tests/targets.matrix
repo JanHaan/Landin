@@ -8,15 +8,16 @@ prototype-2 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64
 prototype-3 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
-abi/core-io-file-identity | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/core-io-file-identity | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/darwin-varargs-stack-slots | macos-arm64
+abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
 abi/lp64d-main-return | linux-rv64
 abi/lp64d-varargs | linux-rv64
 abi/r440-bindings-generated | linux-x86-64, freebsd-x86-64
-abi/r440-errno-interposition | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/r440-errno-thread-local | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/r440-errno-interposition | macos-arm64, freebsd-x86-64, freebsd-arm64
+abi/r440-errno-thread-local | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/r440-native-aggregates | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-banks | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-bounds | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -57,6 +58,12 @@ end-to-end/feature-level-linux-arm64-armv8-a-selects-without-lse | linux-arm64
 end-to-end/feature-level-linux-arm64-default-lacks-lse | linux-arm64
 end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
+end-to-end/link-libc-dry-run | linux-x86-64
+end-to-end/link-needs-hosted-system | cortex-m
+end-to-end/link-static-dry-run | linux-x86-64
+end-to-end/link-static-linker-library | linux-arm64
+end-to-end/link-static-needs-linux | macos-arm64
+end-to-end/link-static-unsatisfied-c-import | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, macos-arm64, linux-rv64
@@ -140,6 +147,7 @@ negative/assembly-reserved-registers-arm64 | macos-arm64
 negative/assembly-reserved-registers-cortex | cortex-m
 negative/assembly-reserved-registers-linux-arm64 | linux-arm64
 negative/assembly-reserved-registers-x86-64 | linux-x86-64
+negative/assembly-rv64-system-call | linux-rv64
 negative/assembly-shorthand-after-operand | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assembly-shorthand-hosted | linux-x86-64
 negative/assembly-synthetic-target | synthetic-32
@@ -1808,6 +1816,11 @@ runtime/library-shared-text | linux-x86-64, linux-arm64, linux-rv64, macos-arm64
 runtime/library-shared-tree | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-vec | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/line-end-continues-expression | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/linux-heap-size-classes | linux-x86-64, linux-arm64, linux-rv64
+runtime/linux-level-check | linux-x86-64, linux-arm64, linux-rv64
+runtime/linux-process-entry | linux-x86-64, linux-arm64, linux-rv64
+runtime/linux-process-entry-libc | linux-x86-64, linux-arm64, linux-rv64
+runtime/linux-system-calls | linux-x86-64, linux-arm64, linux-rv64
 runtime/literal-conditions-select-flow | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/local-array-computed-index-reads-and-writes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/local-array-computed-index-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

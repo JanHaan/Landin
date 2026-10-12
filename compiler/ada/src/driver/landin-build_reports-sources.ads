@@ -9,5 +9,6 @@ package Landin.Build_Reports.Sources is
       Context : in out Landin.Stages.Compilation;
       Options : Landin.Optimization.Options;
       Firmware : String := "";
-      Digests : access Landin.Source_Digests.Cache := null) return String;
+      Digests : access Landin.Source_Digests.Cache := null;
+      Link : String := "") return String;
 end Landin.Build_Reports.Sources;

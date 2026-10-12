@@ -276,11 +276,12 @@ package body Landin.Backend.Toolchain is
       Libraries : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
-      Full_Debug : Boolean := False)
+      Full_Debug : Boolean := False;
+      Static : Boolean := False)
       return Landin.Platform.Path_List
      is (Link_Arguments
            (Assembly, Output, Linker, Build_Id, Libraries, Facts, Full_Debug,
-            Levels.Default_Level (Facts)));
+            Levels.Default_Level (Facts), Static));
 
    function Link_Arguments
      (Assembly : String;
@@ -291,7 +292,8 @@ package body Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
-      Level : Landin.Targets.Levels.Feature_Level)
+      Level : Landin.Targets.Levels.Feature_Level;
+      Static : Boolean := False)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -354,6 +356,20 @@ package body Landin.Backend.Toolchain is
             Landin.Platform.Add (List, "assembler");
             Landin.Platform.Add (List, "-save-temps=obj");
          end if;
+      end if;
+      --  A static Linux executable is the program alone.  No C
+      --  runtime object, no C library and no dynamic loader: the process
+      --  starts at hosted/linux's `_landin_start`, at a fixed address.
+      if Static then
+         if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+           /= Landin.Targets.Capabilities.Linux
+         then
+            raise Compiler_Defect with "a static link outside Linux";
+         end if;
+         Landin.Platform.Add (List, "-nostdlib");
+         Landin.Platform.Add (List, "-static");
+         Landin.Platform.Add (List, "-no-pie");
+         Landin.Platform.Add (List, "-Wl,-e,_landin_start");
       end if;
       Landin.Platform.Add (List, File_Operand (Assembly));
       if Full_Debug and then
@@ -425,6 +441,9 @@ package body Landin.Backend.Toolchain is
       then
          --  The GNU assembler takes Arm's own level names.  An arm64
          --  executable carries no level note for the loader to check.
+         if Static then
+            Landin.Platform.Add (List, "-Wl,--gc-sections");
+         end if;
          Landin.Platform.Add
            (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
                        = Landin.Targets.Capabilities.FreeBSD

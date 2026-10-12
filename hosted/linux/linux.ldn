@@ -1,0 +1,736 @@
+--  Linux's system-call interface, on x86-64, arm64 and RV64, with no C
+--  library beneath it.  Linux promises this interface, so a Linux program
+--  reaches the kernel directly: each call is one assembly block, and a
+--  failure comes back in the result as minus the errno, with no errno cell.
+--  The `*at` calls and `statx` keep one record layout on all three
+--  architectures.  The module also holds the program-owned process entry,
+--  `_landin_start`, which a static Linux executable starts at.
+--
+--  Every public routine carries a link name of its own, so none of them is
+--  mistaken for, or replaces, the C library's function of the same name in
+--  a program that also links libc.
+--
+--  Everything here is declared on Linux only.  Landin has no conditional
+--  import, so hosted/io and hosted/heap import this module on every hosted
+--  system, and on Darwin and FreeBSD it declares nothing.
+
+fixed if compiler.os == linux then
+    fixed if compiler.arch == x86_64 then
+        --  rax names the call and carries its result; rdi, rsi, rdx, r10,
+        --  r8 and r9 carry its arguments; the kernel overwrites rcx and
+        --  r11.
+        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
+                f: i64) -> (result: i64) =
+            result = assembler.block("syscall", inout n: i64 at rax = number,
+                                     in p: i64 at rdi = a,
+                                     in q: i64 at rsi = b,
+                                     in r: i64 at rdx = c,
+                                     in s: i64 at r10 = d,
+                                     in t: i64 at r8 = e,
+                                     in u: i64 at r9 = f, out _ at rcx,
+                                     out _ at r11)
+        end call6
+
+        read_number: i64 = 0
+        write_number: i64 = 1
+        close_number: i64 = 3
+        mmap_number: i64 = 9
+        munmap_number: i64 = 11
+        exit_group_number: i64 = 231
+        openat_number: i64 = 257
+        statx_number: i64 = 332
+
+        --- The process entry: the kernel starts a static Linux executable
+        --- here, with argc on top of the stack and no return address.  It
+        --- clears the frame pointer so a debugger stops at this frame,
+        --- aligns the stack to sixteen bytes and calls
+        --- `_landin_start_main` with the initial stack's address.
+        public extern(naked) _landin_start: () -> none =
+            assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rdi\nandq $-16, %rsp\ncall _landin_start_main")
+        end _landin_start
+    elsif compiler.arch == arm64 then
+        --  x8 names the call; x0 to x5 carry its arguments and x0 its
+        --  result.
+        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
+                f: i64) -> (result: i64) =
+            result = assembler.block("svc #0", in n: i64 at x8 = number,
+                                     inout p: i64 at x0 = a,
+                                     in q: i64 at x1 = b,
+                                     in r: i64 at x2 = c,
+                                     in s: i64 at x3 = d,
+                                     in t: i64 at x4 = e,
+                                     in u: i64 at x5 = f)
+        end call6
+
+        read_number: i64 = 63
+        write_number: i64 = 64
+        close_number: i64 = 57
+        mmap_number: i64 = 222
+        munmap_number: i64 = 215
+        exit_group_number: i64 = 94
+        openat_number: i64 = 56
+        statx_number: i64 = 291
+
+        --- The process entry: the kernel starts a static Linux executable
+        --- here, with argc at the sixteen-byte-aligned stack pointer and no
+        --- return address.  It clears the frame and link registers so a
+        --- debugger stops at this frame and calls `_landin_start_main` with
+        --- the initial stack's address.
+        public extern(naked) _landin_start: () -> none =
+            assembler.block("mov x29, #0\nmov x30, #0\nmov x0, sp\nbl _landin_start_main")
+        end _landin_start
+    else
+        --  a7 names the call; a0 to a5 carry its arguments and a0 its
+        --  result.
+        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
+                f: i64) -> (result: i64) =
+            result = assembler.block("ecall", in n: i64 at x17 = number,
+                                     inout p: i64 at x10 = a,
+                                     in q: i64 at x11 = b,
+                                     in r: i64 at x12 = c,
+                                     in s: i64 at x13 = d,
+                                     in t: i64 at x14 = e,
+                                     in u: i64 at x15 = f)
+        end call6
+
+        read_number: i64 = 63
+        write_number: i64 = 64
+        close_number: i64 = 57
+        mmap_number: i64 = 222
+        munmap_number: i64 = 215
+        exit_group_number: i64 = 94
+        openat_number: i64 = 56
+        statx_number: i64 = 291
+
+        --- The process entry: the kernel starts a static Linux executable
+        --- here, with argc on top of the stack and no return address.  It
+        --- clears the frame pointer and return address so a debugger stops
+        --- at this frame, aligns the stack to sixteen bytes and calls
+        --- `_landin_start_main` with the initial stack's address.
+        public extern(naked) _landin_start: () -> none =
+            assembler.block("li x8, 0\nli ra, 0\nmv a0, sp\nandi sp, sp, -16\ncall _landin_start_main")
+        end _landin_start
+    end if
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -100
+
+    --- `openat` flag: read only.
+    public o_rdonly: i32 = 0
+    --- `openat` flag: write only.
+    public o_wronly: i32 = 1
+    --- `openat` flag: create the file if it does not exist.
+    public o_creat: i32 = 64
+    --- `openat` flag: truncate an existing regular file to length zero.
+    public o_trunc: i32 = 512
+
+    --- errno: the operation is not permitted.
+    public eperm: i32 = 1
+    --- errno: no such file or directory.
+    public enoent: i32 = 2
+    --- errno: interrupted by a signal before anything was transferred.
+    public eintr: i32 = 4
+    --- errno: permission denied.
+    public eacces: i32 = 13
+    --- errno: a path component is not a directory.
+    public enotdir: i32 = 20
+    --- errno: the file system is read-only.
+    public erofs: i32 = 30
+
+    --- `mmap` protection: the pages may be read.
+    public prot_read: i32 = 1
+    --- `mmap` protection: the pages may be written.
+    public prot_write: i32 = 2
+    --- `mmap` flag: the mapping is private to this process.
+    public map_private: i32 = 2
+    --- `mmap` flag: the mapping is backed by no file and starts zeroed.
+    public map_anonymous: i32 = 32
+
+    --- `statx` mask: the inode number, beside the basic fields every call
+    --- fills.
+    public statx_ino: u32 = 256
+
+    --- A `statx` time: whole seconds and the nanoseconds after them.
+    public statx_time: type = struct
+        seconds: i64
+        nanoseconds: u32
+        reserved: i32
+    end statx_time
+
+    --- The kernel's `struct statx`, one layout on every architecture.  The
+    --- device is `device_major` and `device_minor`; `mask` says which other
+    --- fields the call filled.
+    public file_status: type = struct
+        mask: u32
+        block_size: u32
+        attributes: u64
+        links: u32
+        uid: u32
+        gid: u32
+        mode: u16
+        spare0: u16
+        inode: u64
+        size: u64
+        blocks: u64
+        attributes_mask: u64
+        accessed: statx_time
+        born: statx_time
+        changed: statx_time
+        modified: statx_time
+        special_device_major: u32
+        special_device_minor: u32
+        device_major: u32
+        device_minor: u32
+        mount_id: u64
+        spare: [13]u64
+    end file_status
+
+    --- Read at most `length` bytes from `descriptor` into `data`: the
+    --- count read, zero at end of file, or minus the errno.
+    public link(symbol: "_landin_linux_read") read:
+        (descriptor: i32, data: ptr mut u8, length: usize) -> (result: isize) =
+        result = isize(call6(read_number, i64(descriptor),
+                             i64(usize(data)), i64(length), 0, 0, 0))
+    end read
+
+    --- Write at most `length` bytes from `data` to `descriptor`: the count
+    --- accepted, which may be short, or minus the errno.
+    public link(symbol: "_landin_linux_write") write:
+        (descriptor: i32, data: ptr u8, length: usize) -> (result: isize) =
+        result = isize(call6(write_number, i64(descriptor),
+                             i64(usize(data)), i64(length), 0, 0, 0))
+    end write
+
+    --- Open `path`, relative to `directory` (or `at_fdcwd`), with `flags`
+    --- and, for `o_creat`, the permission bits `mode`: the new descriptor,
+    --- or minus the errno.
+    public link(symbol: "_landin_linux_openat") openat:
+        (directory: i32, path: ptr u8, flags: i32, mode: u32)
+        -> (result: i32) =
+        result = i32(call6(openat_number, i64(directory), i64(usize(path)),
+                           i64(flags), i64(mode), 0, 0))
+    end openat
+
+    --- Close `descriptor`: zero, or minus the errno.  The descriptor is
+    --- released even when this fails, so a failed close is never retried.
+    public link(symbol: "_landin_linux_close") close:
+        (descriptor: i32) -> (result: i32) =
+        result = i32(call6(close_number, i64(descriptor), 0, 0, 0, 0, 0))
+    end close
+
+    --- Fill `into` with the status of `path`, relative to `directory`:
+    --- zero, or minus the errno.  `flags` zero follows symbolic links;
+    --- `mask` asks for fields beyond the basic ones.
+    public link(symbol: "_landin_linux_statx") statx:
+        (directory: i32, path: ptr u8, flags: i32, mask: u32,
+         into: ptr mut file_status) -> (result: i32) =
+        result = i32(call6(statx_number, i64(directory), i64(usize(path)),
+                           i64(flags), i64(mask), i64(usize(into)), 0))
+    end statx
+
+    --- Map `length` bytes: the mapping's address, or minus the errno.
+    --- With `map_anonymous` the descriptor is -1 and the offset zero.
+    public link(symbol: "_landin_linux_mmap") mmap:
+        (address: usize, length: usize, protection: i32, flags: i32,
+         descriptor: i32, offset: i64) -> (result: i64) =
+        result = call6(mmap_number, i64(address), i64(length),
+                       i64(protection), i64(flags), i64(descriptor), offset)
+    end mmap
+
+    --- Unmap the `length` bytes at `address`: zero, or minus the errno.
+    public link(symbol: "_landin_linux_munmap") munmap:
+        (address: usize, length: usize) -> (result: i32) =
+        result = i32(call6(munmap_number, i64(address), i64(length), 0, 0,
+                           0, 0))
+    end munmap
+
+    --- End every thread of the process with `status`.  It does not return.
+    public link(symbol: "_landin_linux_exit_group") exit_group:
+        (status: i32) -> noreturn =
+        _ = call6(exit_group_number, i64(status), 0, 0, 0, 0, 0)
+        compiler.unreachable()
+    end exit_group
+
+    word: usize = sizeof usize
+
+    --  The environment and the auxiliary vector as the process entry found
+    --  them, or zero when the C runtime started the program instead.
+    mut environment_root: usize
+    mut auxiliary_root: usize
+
+    --- What `environment` returns when the C runtime, not
+    --- `_landin_start`, started the program.
+    public no_environment: atom
+
+    --- The environment table: NUL-terminated `NAME=value` strings ending
+    --- at a null entry, or `no_environment`.
+    public environment_table: type = no_environment | ptr ptr u8
+
+    --- The environment `_landin_start` found on the initial stack.
+    public link(symbol: "_landin_linux_environment") environment:
+        () -> (table: environment_table) =
+        if environment_root == 0 then
+            table = no_environment
+        else
+            first: ptr ptr u8 = ptr(environment_root)
+            table = first
+        end if
+    end environment
+
+    --- The auxiliary-vector entry tagged `tag` (`6` is the page size), as
+    --- `_landin_start` found it: whether there is one, and its value.
+    public link(symbol: "_landin_linux_auxiliary") auxiliary:
+        (tag: u64) -> (found: bool, value: u64) =
+        found = false
+        value = 0
+        return when auxiliary_root == 0
+        mut at: usize = auxiliary_root
+        loop do
+            key: ptr u64 = ptr(at)
+            break when key.val == 0
+            if key.val == tag then
+                datum: ptr u64 = ptr(at + word)
+                found = true
+                value = datum.val
+                return
+            end if
+            at += 2 * word
+        end loop
+    end auxiliary
+
+    --- The page size the kernel reported, or 4096 when it reported none.
+    public link(symbol: "_landin_linux_page_size") page_size:
+        () -> (bytes: usize) =
+        (found, value) := auxiliary(6)
+        bytes = if found then usize(value) else usize(4096) end if
+    end page_size
+
+    --  The CPU feature level (D255) the executable was built for is a
+    --  compile-time fact, `compiler.feature.NAME` for each of its features.
+    --  The process entry holds the processor to that level before `main`
+    --  runs, as a dynamic loader holds it to an x86-64 executable's ISA
+    --  note: each check below exists only at a level that needs it, and the
+    --  baseline's check does nothing.  The checks read words the processor
+    --  or the kernel gives and test constant masks against them, so they
+    --  use no instruction the level adds.
+    fixed if compiler.arch == x86_64 then
+        --- What the processor says of itself: `cpuid` leaf 1's ecx, leaf
+        --- 7's ebx, leaf 0x80000001's ecx, and the state the operating
+        --- system enables, XCR0's low half, which is zero unless both the
+        --- level needs AVX state and `cpuid` reports OSXSAVE.  A leaf the
+        --- processor does not have reads as zero.
+        public cpu_words: type = struct
+            standard_ecx: u32
+            structured_ebx: u32
+            extended_ecx: u32
+            enabled_state: u32
+        end cpu_words
+
+        --  `cpuid`'s ebx, ecx or eax for `leaf`, subleaf zero.
+        cpuid_b: (leaf: u32) -> (word: u32) =
+            (a, b, c, d) :=
+                assembler.block("cpuid", inout a: u32 at rax = leaf,
+                                out b: u32 at rbx, inout c: u32 at rcx = 0,
+                                out d: u32 at rdx)
+            _ = a
+            _ = c
+            _ = d
+            word = b
+        end cpuid_b
+
+        cpuid_c: (leaf: u32) -> (word: u32) =
+            (a, b, c, d) :=
+                assembler.block("cpuid", inout a: u32 at rax = leaf,
+                                out b: u32 at rbx, inout c: u32 at rcx = 0,
+                                out d: u32 at rdx)
+            _ = a
+            _ = b
+            _ = d
+            word = c
+        end cpuid_c
+
+        cpuid_a: (leaf: u32) -> (word: u32) =
+            (a, b, c, d) :=
+                assembler.block("cpuid", inout a: u32 at rax = leaf,
+                                out b: u32 at rbx, inout c: u32 at rcx = 0,
+                                out d: u32 at rdx)
+            _ = b
+            _ = c
+            _ = d
+            word = a
+        end cpuid_a
+
+        --  OSXSAVE in leaf 1's ecx: the system enabled XGETBV and XCR0.
+        osxsave: u32 = 0x08000000
+
+        fixed if compiler.feature.avx then
+            --  `xgetbv` is XSAVE's, which only an AVX level assembles.
+            enabled_state: (standard_ecx: u32) -> (state: u32) =
+                state = 0
+                return when (standard_ecx & osxsave) == 0
+                (low, high) := assembler.block("xgetbv",
+                                               in c: u32 at rcx = 0,
+                                               out low: u32 at rax,
+                                               out high: u32 at rdx)
+                _ = high
+                state = low
+            end enabled_state
+        else
+            enabled_state: (standard_ecx: u32) -> (state: u32) =
+                _ = standard_ecx
+                state = 0
+            end enabled_state
+        end if
+
+        --- The words this processor gives.
+        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+            () -> (words: cpu_words) =
+            top: u32 = cpuid_a(0)
+            extended_top: u32 = cpuid_a(0x80000000)
+            standard: u32 = if top >= 1 then cpuid_c(1) else 0 end if
+            structured: u32 = if top >= 7 then cpuid_b(7) else 0 end if
+            reach: bool = extended_top >= 0x80000001
+            extended: u32 = if reach then cpuid_c(0x80000001) else 0 end if
+            words = (standard_ecx: standard, structured_ebx: structured,
+                     extended_ecx: extended,
+                     enabled_state: enabled_state(standard))
+        end read_cpu_words
+
+        --  x86-64-v2's features, in D255's order, or "" when all are there.
+        missing_v2: (words: cpu_words) -> (name: []u8) =
+            ecx: u32 = words.standard_ecx
+            name = if (ecx & 0x00002000) == 0 then "cmpxchg16b"
+                   elsif (words.extended_ecx & 0x00000001) == 0 then "lahf"
+                   elsif (ecx & 0x00800000) == 0 then "popcnt"
+                   elsif (ecx & 0x00000001) == 0 then "sse3"
+                   elsif (ecx & 0x00000200) == 0 then "ssse3"
+                   elsif (ecx & 0x00080000) == 0 then "sse4_1"
+                   elsif (ecx & 0x00100000) == 0 then "sse4_2"
+                   else "" end if
+        end missing_v2
+
+        --  x86-64-v3's, then the AVX state the system must save: XCR0's
+        --  SSE and AVX bits.
+        missing_v3: (words: cpu_words) -> (name: []u8) =
+            ecx: u32 = words.standard_ecx
+            ebx: u32 = words.structured_ebx
+            state: u32 = words.enabled_state
+            saved: bool = (ecx & osxsave) <> 0 and (state & 0x06) == 0x06
+            name = if (ecx & 0x10000000) == 0 then "avx"
+                   elsif (ebx & 0x00000020) == 0 then "avx2"
+                   elsif (ebx & 0x00000008) == 0 then "bmi1"
+                   elsif (ebx & 0x00000100) == 0 then "bmi2"
+                   elsif (ecx & 0x20000000) == 0 then "f16c"
+                   elsif (ecx & 0x00001000) == 0 then "fma"
+                   elsif (words.extended_ecx & 0x00000020) == 0 then "lzcnt"
+                   elsif (ecx & 0x00400000) == 0 then "movbe"
+                   elsif (ecx & 0x04000000) == 0 then "xsave"
+                   elsif not saved then "avx state"
+                   else "" end if
+        end missing_v3
+
+        --  x86-64-v4's, then the AVX-512 state: XCR0's opmask and upper
+        --  ZMM bits beside SSE and AVX.
+        missing_v4: (words: cpu_words) -> (name: []u8) =
+            ebx: u32 = words.structured_ebx
+            name = if (ebx & 0x00010000) == 0 then "avx512f"
+                   elsif (ebx & 0x40000000) == 0 then "avx512bw"
+                   elsif (ebx & 0x10000000) == 0 then "avx512cd"
+                   elsif (ebx & 0x00020000) == 0 then "avx512dq"
+                   elsif (ebx & 0x80000000) == 0 then "avx512vl"
+                   elsif (words.enabled_state & 0xE6) <> 0xE6 then
+                       "avx512 state"
+                   else "" end if
+        end missing_v4
+
+        fixed if compiler.feature.avx512f then
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "x86-64-v4"
+            end level
+
+            --  Hold the processor to this level before `main` runs.
+            check_level: () -> none =
+                hold_level()
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                name = missing_v2(words)
+                return when lenof name <> 0
+                name = missing_v3(words)
+                return when lenof name <> 0
+                name = missing_v4(words)
+            end missing_feature
+        elsif compiler.feature.avx then
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "x86-64-v3"
+            end level
+
+            --  Hold the processor to this level before `main` runs.
+            check_level: () -> none =
+                hold_level()
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                name = missing_v2(words)
+                return when lenof name <> 0
+                name = missing_v3(words)
+            end missing_feature
+        elsif compiler.feature.popcnt then
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "x86-64-v2"
+            end level
+
+            --  Hold the processor to this level before `main` runs.
+            check_level: () -> none =
+                hold_level()
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                name = missing_v2(words)
+            end missing_feature
+        else
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "x86-64-v1"
+            end level
+
+            --  The family's baseline needs no check, and runs none.
+            check_level: () -> none =
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                _ = words
+                name = ""
+            end missing_feature
+        end if
+
+    elsif compiler.arch == arm64 then
+        --- What the kernel says of the processor: the auxiliary vector's
+        --- AT_HWCAP, as `_landin_start` found it, or zero.
+        public cpu_words: type = struct
+            hwcap: u64
+        end cpu_words
+
+        --- The words this processor gives.
+        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+            () -> (words: cpu_words) =
+            (found, value) := auxiliary(16)
+            words = (hwcap: if found then value else 0 end if)
+        end read_cpu_words
+
+        fixed if compiler.feature.lse then
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "armv8.1-a"
+            end level
+
+            --  Hold the processor to this level before `main` runs.
+            check_level: () -> none =
+                hold_level()
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there: HWCAP_ATOMICS, HWCAP_CRC32 and
+            --- HWCAP_ASIMDRDM.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                hwcap: u64 = words.hwcap
+                name = if (hwcap & 0x100) == 0 then "lse"
+                       elsif (hwcap & 0x80) == 0 then "crc32"
+                       elsif (hwcap & 0x1000) == 0 then "rdm"
+                       else "" end if
+            end missing_feature
+        else
+            --- The level this executable was built for.
+            public link(symbol: "_landin_linux_level") level:
+                () -> (name: []u8) =
+                name = "armv8-a"
+            end level
+
+            --  The family's baseline needs no check, and runs none.
+            check_level: () -> none =
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                _ = words
+                name = ""
+            end missing_feature
+        end if
+
+    else
+        --- What the kernel says of the processor: `riscv_hwprobe`'s
+        --- RISCV_HWPROBE_KEY_IMA_EXT_0, or zero when the kernel cannot
+        --- answer.  Neither it nor AT_HWCAP reports a vendor extension, so
+        --- XTheadBa is not among what an executable is held to.
+        public cpu_words: type = struct
+            extensions: u64
+        end cpu_words
+
+        probe_pair: type = struct
+            key: i64
+            value: u64
+        end probe_pair
+
+        hwprobe_number: i64 = 258
+
+        --- The words this processor gives.
+        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+            () -> (words: cpu_words) =
+            mut pair: probe_pair = (key: 4, value: 0)
+            result: i64 = call6(hwprobe_number, i64(usize(addr pair)), 1, 0,
+                                0, 0, 0)
+            answered: bool = result == 0 and pair.key == 4
+            words = (extensions: if answered then pair.value else 0 end if)
+        end read_cpu_words
+
+        fixed if compiler.feature.zba then
+            fixed if compiler.feature.xtheadba then
+                --- The level this executable was built for.
+                public link(symbol: "_landin_linux_level") level:
+                    () -> (name: []u8) =
+                    name = "rv64gc_zba_xtheadba"
+                end level
+            else
+                --- The level this executable was built for.
+                public link(symbol: "_landin_linux_level") level:
+                    () -> (name: []u8) =
+                    name = "rv64gc_zba"
+                end level
+            end if
+
+            --  Hold the processor to this level before `main` runs.
+            check_level: () -> none =
+                hold_level()
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there: RISCV_HWPROBE_EXT_ZBA.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                name = if (words.extensions & 0x8) == 0 then "zba"
+                       else "" end if
+            end missing_feature
+        else
+            fixed if compiler.feature.xtheadba then
+                --- The level this executable was built for.
+                public link(symbol: "_landin_linux_level") level:
+                    () -> (name: []u8) =
+                    name = "rv64gc_xtheadba"
+                end level
+            else
+                --- The level this executable was built for.
+                public link(symbol: "_landin_linux_level") level:
+                    () -> (name: []u8) =
+                    name = "rv64gc"
+                end level
+            end if
+
+            --  The family's baseline needs no check, and runs none.
+            check_level: () -> none =
+            end check_level
+
+            --- The first feature of this executable's level that `words`
+            --- lacks, by the name `compiler.feature` gives it, or "" when
+            --- the level is all there.
+            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+                (words: cpu_words) -> (name: []u8) =
+                _ = words
+                name = ""
+            end missing_feature
+        end if
+
+    end if
+
+    --  The status a dynamic loader exits with when it refuses to start a
+    --  program, which glibc's loader gives an executable whose x86-64 ISA
+    --  note this processor does not meet: so a libc-linked and a static
+    --  build of one program end alike on one machine.
+    refused_status: i32 = 127
+
+    write_all: (text: []u8) -> none =
+        mut sent: usize = 0
+        while sent < lenof text do
+            data: ptr u8 = ptr(usize(addr text[0]) + sent)
+            result: isize = write(2, data, lenof text - sent)
+            return when result <= 0
+            sent += usize(result)
+        end while
+    end write_all
+
+    --  Hold the processor to the executable's level, or say which feature
+    --  it lacks on standard error and end the process.
+    hold_level: () -> none =
+        missing: []u8 = missing_feature(read_cpu_words())
+        return when lenof missing == 0
+        write_all("landin: this executable needs ")
+        write_all(level())
+        write_all(", and the processor lacks ")
+        write_all(missing)
+        write_all("\n")
+        exit_group(refused_status)
+    end hold_level
+
+    --  C's view of the program's hosted entry: the process entry calls it
+    --  as C's runtime would.
+    extern(c) link(symbol: "main") program_main:
+        (count: i32, values: ptr ptr u8, environment: ptr ptr u8)
+        -> (code: i32)
+
+    --- What `_landin_start` runs: it reads argc, argv, the environment and
+    --- the auxiliary vector from the initial stack at `stack`, keeps the
+    --- environment and the vector, holds the processor to the executable's
+    --- CPU feature level, calls the program's `main` with them as C's
+    --- runtime would, and ends the process with main's result.  A processor
+    --- without a feature of the level ends the process with status 127 and
+    --- one line on standard error before `main` runs.  No C library
+    --- initialisation runs and no thread-local storage exists.
+    public extern(c) _landin_start_main: (stack: ptr usize) -> none =
+        count: usize = stack.val
+        values: usize = usize(stack) + word
+        environment_first: usize = values + (count + 1) * word
+        mut at: usize = environment_first
+        loop do
+            entry: ptr usize = ptr(at)
+            at += word
+            break when entry.val == 0
+        end loop
+        environment_root = environment_first
+        auxiliary_root = at
+        check_level()
+        arguments: ptr ptr u8 = ptr(values)
+        variables: ptr ptr u8 = ptr(environment_first)
+        code: i32 = program_main(i32(count), arguments, variables)
+        exit_group(code)
+    end _landin_start_main
+end if

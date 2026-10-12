@@ -1,0 +1,81 @@
+import core/io
+import hosted/io as hosted
+import hosted/linux
+
+--  A static Linux executable starts at hosted/linux's
+--  `_landin_start`, which reads argc, argv, the environment and the
+--  auxiliary vector from the initial stack and calls `main` as C's runtime
+--  would.  The arguments reach hosted/io's world; the environment and the
+--  vector stay with hosted/linux.
+
+--  Whether `value` is the NUL-terminated `expected`.
+same_text: (value: io.argument, expected: []u8) -> (same: bool) =
+    same = false
+    return when value.length <> lenof expected
+    for at in usize(0)..<lenof expected do
+        byte: ptr u8 = ptr(usize(value.data) + at)
+        return when byte.val <> expected[at]
+    end for
+    same = true
+end same_text
+
+--  Whether the NUL-terminated `entry` holds an `=`.
+has_equals: (entry: ptr u8) -> (found: bool) =
+    found = false
+    mut at: usize = 0
+    loop do
+        byte: ptr u8 = ptr(usize(entry) + at)
+        break when byte.val == 0
+        if byte.val == 61 then
+            found = true
+            return
+        end if
+        at += 1
+    end loop
+end has_equals
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: hosted.system = hosted.host()
+    return when io.argument_count(state) <> 2
+    code = 2
+    first: io.argument = io.argument_at(addr state, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    return when not same_text(first, "first")
+    second: io.argument = io.argument_at(addr state, usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    return when not same_text(second, "second")
+
+    --  The environment ends at a null entry, and every entry is a
+    --  `NAME=value` string.
+    code = 3
+    table: linux.environment_table = linux.environment()
+    match table
+        linux.no_environment: return
+        ptr (entries): begin
+            mut at: usize = 0
+            loop do
+                entry: ptr usize = ptr(usize(entries) + at * sizeof usize)
+                break when entry.val == 0
+                text: ptr u8 = ptr(entry.val)
+                return when not has_equals(text)
+                at += 1
+            end loop
+        end
+    end match
+
+    --  The kernel's auxiliary vector gives the page size, a power of two
+    --  of at least 4 KiB, and AT_RANDOM's sixteen bytes.
+    code = 4
+    (found, value) := linux.auxiliary(6)
+    return when not found or value < 4096 or (value & (value - 1)) <> 0
+    return when linux.page_size() <> usize(value)
+    code = 5
+    (found: random, value: bytes) := linux.auxiliary(25)
+    return when not random or bytes == 0
+    code = 42
+end main

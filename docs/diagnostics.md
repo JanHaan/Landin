@@ -87,6 +87,10 @@ assembly emission do not run a linker. They are also incompatible with
 `--help` and `--identify`, which do not compile. Each selection must have a
 nonempty value and may be given only once.
 
+`--link=static|libc` chooses how a hosted executable is linked and requires
+`--emit=exe` or `--emit=asm`; `static` needs a Linux target, and a target
+with no hosted system takes neither.
+
 ### L0003
 
 A source named on the command line is missing or cannot be read. Check the
@@ -1203,9 +1207,12 @@ end unused
 The requested output cannot be made with the selected target, settings or
 available toolchain [1550]. The diagnostic and its note identify the cause:
 the target has no backend, its source debug mode is unsupported, firmware
-forbids `linker.library`, no toolchain is selected, or the named tool is
-unavailable. Choose a target with a backend, change the debug or firmware
-configuration, or select or install a toolchain as the note directs.
+forbids `linker.library`, a static Linux link cannot be made (no library
+holding `hosted/linux` was found, or the program asks for `linker.library` or
+refers to C symbols nothing in it defines), no toolchain is selected, or the
+named tool is unavailable. Choose a target with a backend,
+change the debug or firmware configuration, link with `--link=libc`, or
+select or install a toolchain as the note directs.
 `--toolchain=` only helps when a toolchain is absent or unavailable.
 
 ### L0501

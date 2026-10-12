@@ -15,7 +15,8 @@
     "examples/config_parser/lexer/lexer.ldn",
     "examples/config_parser/parser/parser.ldn",
     "hosted/io/io.ldn",
-    "hosted/libc/libc.ldn"
+    "hosted/libc/libc.ldn",
+    "hosted/linux/linux.ldn"
   ],
   "containers": [
     "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
@@ -34,7 +35,8 @@
     "core/vec/vec.ldn",
     "examples/derived_containers/workload/workload.ldn",
     "hosted/heap/heap.ldn",
-    "hosted/libc/libc.ldn"
+    "hosted/libc/libc.ldn",
+    "hosted/linux/linux.ldn"
   ],
   "hosted": [
     "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
@@ -59,6 +61,7 @@
     "examples/derived_hosted/app/reader.ldn",
     "hosted/heap/heap.ldn",
     "hosted/io/io.ldn",
-    "hosted/libc/libc.ldn"
+    "hosted/libc/libc.ldn",
+    "hosted/linux/linux.ldn"
   ]
 }

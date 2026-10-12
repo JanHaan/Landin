@@ -80,6 +80,10 @@ package Landin.Backend.Toolchain is
    --  Relative file operands beginning with '-' or '@' gain './' so the
    --  driver reads the named file rather than an option or response file.
    --
+   --  `Static` (Linux only) links the program alone: no C runtime
+   --  object or library, no dynamic loader and no position independence,
+   --  starting at hosted/linux's `_landin_start`.
+   --
    --  `Linker` is a pass-through and not a second driver.  mold, the linker
    --  this exists for, documents three ways to be used and every one of
    --  them goes *through* a compiler driver, for the reason the header
@@ -110,7 +114,8 @@ package Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
-      Level : Landin.Targets.Levels.Feature_Level)
+      Level : Landin.Targets.Levels.Feature_Level;
+      Static : Boolean := False)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
 
@@ -123,7 +128,8 @@ package Landin.Backend.Toolchain is
       Libraries : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
-      Full_Debug : Boolean := False)
+      Full_Debug : Boolean := False;
+      Static : Boolean := False)
       return Landin.Platform.Path_List;
 
    --  The GNU assembler's `-march=` for an x86-64 level: `generic64`, the

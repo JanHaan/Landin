@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: _landin_start reads argc, argv, the environment and the auxiliary vector from the initial stack and calls main as C's runtime would
+program: main.ldn
+root: ../../../../..
+run_args: first second
+status: 42
+constructs: 1630, 1660, 1970
+targets: linux-x86-64, linux-arm64, linux-rv64

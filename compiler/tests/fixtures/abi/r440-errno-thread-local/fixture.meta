@@ -8,4 +8,8 @@ c-args: -pthread -Wl,--wrap=open
 run_expect: expected.txt
 status: 42
 constructs: 0940, 1570, 1580, 1600, 1660, 1975
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: macos-arm64, freebsd-x86-64, freebsd-arm64
+# On Linux hosted/io makes system calls through hosted/linux,
+# which no C function stands between, so these C peers cannot replace
+# them there; abi/linux-file-identity and runtime/linux-system-calls hold
+# the Linux path.

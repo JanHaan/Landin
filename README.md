@@ -356,7 +356,10 @@ This is the maintained inventory of what the compiler does today:
   ordering. A closed set of named values, such as a diagnostic's severity, is
   an atom set.
   `hosted/heap` and `hosted/io` supply the hosted heap and
-  system I/O capabilities. `platform/c` supplies aliases for the supported
+  system I/O capabilities over `hosted/libc` on Darwin and FreeBSD and
+  `hosted/linux` on Linux. `hosted/linux` supplies Linux's system calls and
+  the static process entry; Linux executables link with no C library by
+  default (`--link=libc` keeps it). `platform/c` supplies aliases for the supported
   LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
   outside a module's target scope is refused by name, including through a
   project-root override. D212 withdraws the former builtin arena syntax in
@@ -454,7 +457,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.16 — Linux without the C library (planned).**
+**Current roadmap work: R13.16 — Linux without the C library.**
 
 ## License
 

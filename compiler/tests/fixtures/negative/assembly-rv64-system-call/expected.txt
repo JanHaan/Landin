@@ -1,0 +1,18 @@
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-rv64-system-call/program.ldn:10:5
+   |
+10 |     assembler.block("ebreak", in v: u64 at x10 = value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-rv64-system-call/program.ldn:11:5
+   |
+11 |     assembler.block("c.ebreak", in v: u64 at x10 = value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: ordinary assembly is straight-line and transfers no control
+  --> ../tests/fixtures/negative/assembly-rv64-system-call/program.ldn:12:5
+   |
+12 |     assembler.block("mret", in v: u64 at x10 = value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

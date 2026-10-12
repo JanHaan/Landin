@@ -1334,6 +1334,19 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     compile_timeout = WORKLOAD_COMPILE_TIMEOUT if workload else 120
     run(compiler_args, cwd=ROOT, timeout=compile_timeout)
     run(assembly_args, cwd=ROOT, timeout=compile_timeout)
+    if not workload:
+        #  A static Linux link adds hosted/linux, whose `_landin_start` is
+        #  where the process starts, after the named sources: the library
+        #  module is found under the located library, by its full path.
+        inventory = json.loads(report.read_text())["sources"]
+        reported = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
+                         for entry in inventory)
+        implicit = (str(ROOT / "hosted/linux/linux.ldn"),)
+        require(reported == source_args + implicit,
+                f"the build's sources are not the named ones and hosted/linux:"
+                f" {reported!r}")
+        source_args = reported
+        sources = tuple((ROOT / path).resolve() for path in source_args)
     if workload:
         inventory = json.loads(report.read_text())["sources"]
         source_args = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))

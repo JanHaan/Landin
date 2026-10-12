@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'highlight'))
 from landin_highlight import Scanner
 
 ROOTS = ('core', 'hosted', 'platform')
-PUBLIC = re.compile(r'^(\s*)public (extern\(c\)\s+(?:link\(symbol:[^)]*\)\s+)?)?'
+PUBLIC = re.compile(r'^(\s*)public ((?:extern\((?:c|naked)\)\s+)?'
+                    r'(?:link\(symbol:[^)]*\)\s+)?)'
                     r'(\w+):\s*(.*)')
 DOC = re.compile(r'^\s*---(?: ?)(.*)$')
 

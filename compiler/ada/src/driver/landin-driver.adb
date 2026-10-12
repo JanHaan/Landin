@@ -73,6 +73,7 @@ package body Landin.Driver is
    use type Landin.Platform.File_Identity;
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Targets.Capabilities.Debug_Format;
+   use type Landin.Targets.Capabilities.Hosted_System;
 
 
    Code_Unknown_Level : constant Landin.Diagnostics.Code_String :=
@@ -190,6 +191,8 @@ package body Landin.Driver is
       & "  -o=PATH             write to a path beginning with -" & LF
       & "  --toolchain=NAME    driver to run with --emit=exe" & LF
       & "  --linker=NAME       pass -fuse-ld=NAME with --emit=exe" & LF
+      & "  --link=static|libc  Linux link: static (default) or with libc"
+      & LF
       & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
       & LF
       & LF
@@ -570,6 +573,13 @@ package body Landin.Driver is
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
       Toolchain_Seen, Linker_Seen : Boolean := False;
+      --  How a hosted executable is linked.  Static on Linux,
+      --  where the program's own `_landin_start` and system calls need no
+      --  C library; libc, with C's runtime and library, everywhere else
+      --  and when asked for.
+      type Link_Kind is (Link_Default, Link_Static, Link_Libc);
+      Link_Mode : Link_Kind := Link_Default;
+      Link_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
       Library_Path : Unbounded.Unbounded_String;
@@ -768,6 +778,25 @@ package body Landin.Driver is
                  Unbounded.To_Unbounded_String
                    (After (Argument, "--linker="));
 
+            elsif Starts_With (Argument, "--link=") then
+               if Link_Seen then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Link_Seen := True;
+               declare
+                  Mode : constant String := After (Argument, "--link=");
+               begin
+                  if Mode = "static" then
+                     Link_Mode := Link_Static;
+                  elsif Mode = "libc" then
+                     Link_Mode := Link_Libc;
+                  else
+                     Unknowns.Append (Argument);
+                     Bad_Use := True;
+                  end if;
+               end;
+
             elsif Starts_With (Argument, "--emit=") then
                if Emit_Seen then
                   Unknowns.Append (Argument);
@@ -894,6 +923,21 @@ package body Landin.Driver is
          Target_Option_Refused : Boolean := False;
          Policy_Denied : Boolean := False;
 
+         --  A Linux executable links static unless --link=libc asks for C's
+         --  runtime; every other hosted system links through its libc.
+         function Static_Link return Boolean
+           is (Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                 = Landin.Targets.Capabilities.Linux
+               and then Link_Mode /= Link_Libc);
+
+         --  What a static link starts at is library source: the program
+         --  holds hosted/linux, whose `_landin_start` is the process entry,
+         --  whether or not its own imports reach it, as C's startup object
+         --  is linked into every C program.
+         function Implicit_Module return String
+           is (if Static_Link and then Emit /= Emit_Nothing
+               then "hosted/linux" else "");
+
          function Policy_Report return Landin.Diagnostics.Diagnostic_List;
          function Policy_Report return Landin.Diagnostics.Diagnostic_List is
            (Landin.Diagnostics.Warning_Policy.Apply
@@ -940,7 +984,7 @@ package body Landin.Driver is
                      | "--specialize" | "--panic-map" | "--debug"
                      | "--build-report" | "--stage-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
-                     | "--linker" | "--firmware-entry");
+                     | "--linker" | "--link" | "--firmware-entry");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -966,6 +1010,7 @@ package body Landin.Driver is
                elsif Stem = "--debug" then
                  "; it takes none, full or lines"
                elsif Stem = "--emit" then "; it takes asm or exe"
+               elsif Stem = "--link" then "; it takes static or libc"
                else "");
 
          type Spelling_Access is access constant String;
@@ -987,7 +1032,7 @@ package body Landin.Driver is
               new String'("--root"), new String'("--library"),
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
-              new String'("--firmware-entry")];
+              new String'("--link"), new String'("--firmware-entry")];
 
          --  Why the options given cannot be one request.
          function Incompatible_Action return String
@@ -1426,7 +1471,13 @@ package body Landin.Driver is
                     (Report_Path,
                      Landin.Build_Reports.Sources.JSON
                        (Evidence, Context, Optimization,
-                        Unbounded.To_String (Firmware), Digests'Access),
+                        Unbounded.To_String (Firmware), Digests'Access,
+                        Link =>
+                          (if Landin.Targets.Capabilities.Hosted_System_Of
+                                (Facts)
+                                = Landin.Targets.Capabilities.No_Hosted_System
+                           then ""
+                           elsif Static_Link then "static" else "libc")),
                       Written);
                   if Written /= Landin.Platform.Write_Ok then
                      Note_Failure
@@ -1698,6 +1749,64 @@ package body Landin.Driver is
                end if;
             end;
 
+            --  A static Linux link has no C library, so a program
+            --  that needs one is refused here, by name, rather than by the
+            --  linker's undefined references.
+            if Emit = Emit_Executable and then Static_Link then
+               declare
+                  Needed : constant Landin.Platform.Path_List :=
+                    Landin.Backend.Entry_Point.Unsatisfied_Imports
+                      (Landin.Stages.Code (Context).all,
+                       Landin.Stages.Meanings (Context).all,
+                       Landin.Stages.Identities (Context).all);
+                  Requests : constant Natural :=
+                    Landin.Configuration.Library_Count
+                      (Landin.Stages.Configurations (Context).all);
+               begin
+                  if Landin.Modules.Find_Logical
+                       (Landin.Stages.Modules (Context).all, "hosted/linux")
+                     = Landin.Modules.No_Module
+                  then
+                     Note_No_Toolchain
+                       ("a static link of " & Landin.Targets.Name (Facts)
+                        & " starts at hosted/linux's `_landin_start`, and"
+                        & " no library holding hosted/linux was found",
+                        "name the library with --library=PATH, or link"
+                        & " with --link=libc, which keeps C's runtime");
+                     return;
+                  elsif Requests > 0 then
+                     Note_No_Toolchain
+                       ("a static link of " & Landin.Targets.Name (Facts)
+                        & " cannot link the C library `"
+                        & Landin.Configuration.Library_Name
+                            (Landin.Stages.Configurations (Context).all, 1)
+                        & "` the program asks for with linker.library",
+                        "link with --link=libc, which keeps C's runtime"
+                        & " and library");
+                     return;
+                  elsif not Needed.Is_Empty then
+                     declare
+                        Listed : Unbounded.Unbounded_String;
+                     begin
+                        for Name of Needed loop
+                           Unbounded.Append
+                             (Listed,
+                              (if Unbounded.Length (Listed) = 0 then ""
+                               else ", ") & "`" & Name & "`");
+                        end loop;
+                        Note_No_Toolchain
+                          ("a static link of " & Landin.Targets.Name (Facts)
+                           & " has no C library to define "
+                           & Unbounded.To_String (Listed)
+                           & ", which the program refers to",
+                           "link with --link=libc, which keeps C's runtime"
+                           & " and library");
+                     end;
+                     return;
+                  end if;
+               end;
+            end if;
+
             declare
                Emitted : Unbounded.Unbounded_String;
                Debug : aliased Landin.Debugging.Information
@@ -1830,7 +1939,8 @@ package body Landin.Driver is
                               Libraries => Libraries, Facts => Facts,
                               Full_Debug => Debug_Enabled,
                               Build_Id => Unbounded.To_String (Map_Id),
-                              Level => Landin.Stages.Level (Context)));
+                              Level => Landin.Stages.Level (Context),
+                              Static => Static_Link));
                         end if;
                      end;
                   end if;
@@ -2073,7 +2183,8 @@ package body Landin.Driver is
                           Build_Id => Unbounded.To_String (Map_Id),
                           Full_Debug => Debug_Enabled,
                           Libraries => Libraries, Facts => Facts,
-                          Level => Landin.Stages.Level (Context)),
+                          Level => Landin.Stages.Level (Context),
+                          Static => Static_Link),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -2278,6 +2389,13 @@ package body Landin.Driver is
             Note_Failure (Code_Unknown_Option, Option_Problem (Option));
          end loop;
 
+         if Link_Seen and then Emit = Emit_Nothing then
+            Bad_Use := True;
+            Note_Failure
+              (Code_Unknown_Option,
+               "--link requires --emit=exe or --emit=asm");
+         end if;
+
          if Emit /= Emit_Executable then
             if Toolchain_Seen then
                Bad_Use := True;
@@ -2402,6 +2520,28 @@ package body Landin.Driver is
                     (Code_Unknown_Option,
                      "--firmware-entry requires --target=cortex-m0");
                   Target_Option_Refused := True;
+               elsif Link_Seen
+                 and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                   = Landin.Targets.Capabilities.No_Hosted_System
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--link chooses how a hosted executable is linked, and "
+                     & Landin.Targets.Name (Facts) & " has no hosted system");
+                  Target_Option_Refused := True;
+               elsif Link_Mode = Link_Static
+                 and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                   /= Landin.Targets.Capabilities.Linux
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--link=static needs a Linux target; "
+                     & Landin.Targets.Name (Facts) & " reaches its system"
+                     & " only through its C library, so it links with"
+                     & " --link=libc, the default there");
+                  Target_Option_Refused := True;
                end if;
             end;
          end if;
@@ -2495,7 +2635,8 @@ package body Landin.Driver is
                         Dependency_Directories =>
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
-                        Library => Library_Root);
+                        Library => Library_Root,
+                        Implicit => Implicit_Module);
                   end if;
                else
                   Loading.Load_Files (Context, Host, Inputs);
@@ -2510,7 +2651,8 @@ package body Landin.Driver is
                        (Context, Host, Library_Root,
                         Dependency_Directories =>
                           (if Depfile /= ""
-                           then Dependency_Directories'Access else null));
+                           then Dependency_Directories'Access else null),
+                        Implicit => Implicit_Module);
                   end if;
                end if;
             end;

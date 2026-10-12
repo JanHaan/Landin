@@ -232,6 +232,9 @@ package body Landin.Testing.Fixtures is
    function C_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.C_Options));
 
+   function Link_Mode (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Link));
+
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
    function Count (In_Catalogue : Catalogue) return Natural
@@ -447,6 +450,7 @@ package body Landin.Testing.Fixtures is
       Seen_Fixed   : Boolean := False;
       Seen_C_Sources : Boolean := False;
       Seen_C_Args  : Boolean := False;
+      Seen_Link    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
       Seen_Levels : Boolean := False;
@@ -815,6 +819,21 @@ package body Landin.Testing.Fixtures is
                   end if;
                end;
 
+            elsif Key = "link" then
+               if Seen_Link then
+                  Complain ("duplicate key: link");
+                  return;
+               end if;
+               Seen_Link := True;
+
+               if Expected /= Runtime then
+                  Complain ("link belongs only to a runtime fixture");
+               elsif Value not in "static" | "libc" then
+                  Complain ("link is not static or libc: " & Value);
+               else
+                  Item.Link := Unbounded.To_Unbounded_String (Value);
+               end if;
+
             elsif Key = "constructs" then
                if Seen_Constructs then
                   Complain ("duplicate key: constructs");
@@ -920,6 +939,7 @@ package body Landin.Testing.Fixtures is
                Fixed   => Unbounded.Null_Unbounded_String,
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
+               Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
                Profiles => Standard,
                Levels  => Unbounded.Null_Unbounded_String);

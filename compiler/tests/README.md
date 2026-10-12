@@ -510,6 +510,7 @@ emits assembly text.
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |
 | `c-sources` | yes for ABI | comma-separated, ordered C companion sources relative to the fixture directory |
 | `c-args` | no | whitespace-separated C compiler and linker arguments for an ABI fixture |
+| `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `run_args` | no | the arguments handed to a compiled runtime or ABI program |
@@ -618,7 +619,8 @@ belong only to ABI fixtures, duplicate keys or C source paths are faults, and C
 source files in `with` are faults.
 
 The ABI harness runs `refine` for Linux x86-64 with the Landin inputs followed
-by `--target=linux-x86-64 --emit=asm -o <assembly>`. It then selects
+by `--target=linux-x86-64 --emit=asm --link=libc -o <assembly>`, because the
+driver links that assembly with the C runtime and its C peers. It then selects
 `Driver_For (Linux_X86_64, "")` and invokes that driver once with arguments in
 this exact order:
 

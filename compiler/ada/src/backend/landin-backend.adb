@@ -1,4 +1,5 @@
 with Ada.Containers;
+with Ada.Containers.Generic_Array_Sort;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
 
@@ -16,6 +17,32 @@ package body Landin.Backend is
    package IR renames Landin.IR;
    package Targets renames Landin.Targets;
    package Layout renames Landin.Targets.Layouts;
+
+   function Smallest_First
+     (Items : Item_Array; Extents : Extent_Array) return Item_Array
+   is
+      type Position_Array is array (Positive range <>) of Positive;
+
+      function Before (Left, Right : Positive) return Boolean
+      is (Extents (Left) < Extents (Right)
+          or else (Extents (Left) = Extents (Right) and then Left < Right));
+
+      procedure Sort is new Ada.Containers.Generic_Array_Sort
+        (Index_Type => Positive, Element_Type => Positive,
+         Array_Type => Position_Array, "<" => Before);
+
+      Order : Position_Array (Items'Range);
+      Result : Item_Array (Items'Range);
+   begin
+      for Index in Order'Range loop
+         Order (Index) := Index;
+      end loop;
+      Sort (Order);
+      for Index in Order'Range loop
+         Result (Index) := Items (Order (Index));
+      end loop;
+      return Result;
+   end Smallest_First;
 
    function Shares_Evidence_Table
      (Of_Unit : IR.Unit; Direct, Erased : IR.Evidence_Id) return Boolean

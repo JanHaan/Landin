@@ -401,6 +401,7 @@ package body Landin.Tests.Host_Reports_Suite is
                   Args.Append ("--target=linux-x86-64");
                   Args.Append
                     (if Executable then "--emit=exe" else "--emit=asm");
+                  Args.Append ("--link=libc");
                   Args.Append ("-o");
                   Args.Append ("out");
                   Args.Append ("--build-report=" & Report);

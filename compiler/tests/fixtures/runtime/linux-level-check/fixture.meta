@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: a static Linux executable's entry holds the processor to its CPU feature level, and each level names the first feature injected words lack
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1500, 1510, 1630
+targets: linux-x86-64, linux-arm64, linux-rv64
+levels: x86-64-v2, x86-64-v3, armv8.1-a

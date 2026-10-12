@@ -3,6 +3,7 @@ with Ada.Containers.Vectors;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 with Landin.Layouts;
+with Landin.Machine;
 with Landin.IR.Shape_Measurement;
 with Landin.Memory;
 with Landin.Packed;
@@ -24,6 +25,7 @@ with Landin.Types;
 package body Landin.Backend.X86_64 is
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Machine.Convention;
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Layouts.Policy;
 
@@ -436,6 +438,25 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & Instruction);
       end Emit_Verbatim;
 
+      --  A naked body's text, one instruction per line, as written.
+      procedure Emit_Naked_Text (Text : String);
+
+      procedure Emit_Naked_Text (Text : String) is
+         First : Positive := Text'First;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = Character'Val (10) then
+               if Index > First then
+                  Emit_Verbatim (Text (First .. Index - 1));
+               end if;
+               First := Index + 1;
+            end if;
+         end loop;
+         if First <= Text'Last then
+            Emit_Verbatim (Text (First .. Text'Last));
+         end if;
+      end Emit_Naked_Text;
+
       procedure Emit (Instruction : String) is
          Selected : constant String :=
            (if Optimized then Machine.Selected (Instruction) else Instruction);
@@ -685,6 +706,16 @@ package body Landin.Backend.X86_64 is
                elsif Is_Forced (Item)
                  and then Hosted_Entry /= Landin.IR.No_Item
                  and then Spelling = "main"
+                 --  C's view of the entry, which a process entry calls:
+                 --  an import of C's (argc, argv, envp) -> int.
+                 and then not (Landin.IR.Is_External (Of_Unit, Item)
+                               and then Is_C_Item (Item)
+                               and then Landin.IR.Signature_Parameter_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 3
+                               and then Landin.IR.Signature_Result_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 1)
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
@@ -5400,6 +5431,54 @@ package body Landin.Backend.X86_64 is
             Emit (".cfi_startproc");
          end if;
 
+         --  A naked routine is its text and nothing else: no frame record
+         --  and no saved register.  It is a process's own entry, which no
+         --  caller entered, so its return address is undefined; text that
+         --  falls off its end traps.
+         if Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+             = Landin.Machine.Naked_Routine
+         then
+            if Debug /= null then
+               Emit (".cfi_undefined %rip");
+            end if;
+            for Position in 1 .. Landin.IR.Length (Of_Unit, Item, 1) loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value (Of_Unit, Item, 1, Position);
+               begin
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "value", Item, Natural (Value)) & ":");
+                     Put (Dwarf.Source_Line
+                       (Debug.all, Landin.IR.Origin_Of
+                          (Of_Unit, Item, Value)));
+                  end if;
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    = Landin.IR.Assembly
+                  then
+                     Emit_Naked_Text
+                       (Landin.Source.Names.Spelling
+                          (Names, Landin.IR.Assembly_Text
+                             (Of_Unit, Item, Value)));
+                  end if;
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "after", Item, Natural (Value)) & ":");
+                  end if;
+               end;
+            end loop;
+            Emit_Verbatim ("ud2");
+            if Debug /= null then
+               Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
+               Emit (".cfi_endproc");
+            end if;
+            Capturing := Landin.IR.No_Item;
+            Statistics (Positive (Item)) := (Item => Item, others => <>);
+            Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));
+            return;
+         end if;
+
          --  [1550]'s frame pointer, set up before anything reads a cell.
          Emit ("pushq %rbp");
          if Debug /= null then
@@ -6704,6 +6783,40 @@ package body Landin.Backend.X86_64 is
       --  multiplication and its alignment is the element's own.  A length
       --  of zero takes no room and aligns to a byte, having no element to
       --  be aligned as.
+      --  The extent the zero-image emitters below reserve for `Item`.
+      function Reserved_Extent
+        (Item : Landin.IR.Item_Id) return Landin.Targets.Byte_Count;
+
+      function Reserved_Extent
+        (Item : Landin.IR.Item_Id) return Landin.Targets.Byte_Count is
+      begin
+         case Landin.IR.Result_Of (Of_Unit, Item) is
+            when Landin.Types.Aggregate =>
+               declare
+                  Placed  : Landin.Targets.Placement;
+                  Ignored : Landin.Targets.Byte_Count;
+               begin
+                  Place_Fields (Item, Placed, 0, Ignored);
+                  return Landin.Targets.Size_Of (Placed);
+               end;
+            when Landin.Types.Fixed_Array =>
+               declare
+                  Size : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Landin.IR.Array_Element_Shape (Of_Unit, Item),
+                     Facts, Size, Alignment);
+                  return Landin.Targets.Byte_Count
+                    (Landin.IR.Array_Length (Of_Unit, Item)) * Size;
+               end;
+            when others =>
+               return Landin.Targets.Byte_Count
+                 (Landin.Targets.Bytes
+                    (Size_Of (Landin.IR.Result_Of (Of_Unit, Item), Facts)));
+         end case;
+      end Reserved_Extent;
+
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
          Length : constant Landin.IR.Element_Total :=
            Landin.IR.Array_Length (Of_Unit, Item);
@@ -7266,18 +7379,42 @@ package body Landin.Backend.X86_64 is
          end loop;
       end if;
 
+      --  Reserved data are laid out smallest first (Smallest_First), so
+      --  the one object as large as RIP-relative reach admits sits last.
       if Any_Reserved then
-         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            function Reserved (Index : Positive) return Boolean
+            is (Landin.IR.Kind_Of (Of_Unit, Landin.IR.Item_Id (Index))
+                  = Landin.IR.Datum
+                and then not Landin.IR.Is_Read_Only
+                  (Of_Unit, Landin.IR.Item_Id (Index))
+                and then Is_All_Zero (Landin.IR.Item_Id (Index)));
+
+            Count : Natural := 0;
+         begin
+            for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               if Reserved (Index) then
+                  Count := Count + 1;
+               end if;
+            end loop;
             declare
-               Item : constant Landin.IR.Item_Id :=
-                 Landin.IR.Item_Id (Index);
+               Items : Landin.Backend.Item_Array (1 .. Count);
+               Extents : Landin.Backend.Extent_Array (1 .. Count);
+               Next : Natural := 0;
             begin
-               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
-                 and then not Landin.IR.Is_Read_Only (Of_Unit, Item)
-                 and then Is_All_Zero (Item)
-               then
+               for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+                  if Reserved (Index) then
+                     Next := Next + 1;
+                     Items (Next) := Landin.IR.Item_Id (Index);
+                     Extents (Next) :=
+                       Reserved_Extent (Landin.IR.Item_Id (Index));
+                  end if;
+               end loop;
+               for Item of Landin.Backend.Smallest_First (Items, Extents)
+               loop
                   Begin_Item_Section
-                    (".bss.landin_datum_", """aw"",@nobits", Index);
+                    (".bss.landin_datum_", """aw"",@nobits",
+                     Positive (Item));
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then
@@ -7300,9 +7437,9 @@ package body Landin.Backend.X86_64 is
                              (Landin.IR.Result_Of (Of_Unit, Item),
                               Facts)));
                   end if;
-               end if;
+               end loop;
             end;
-         end loop;
+         end;
       end if;
 
       if Debug /= null then

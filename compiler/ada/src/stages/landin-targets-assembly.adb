@@ -464,7 +464,10 @@ package body Landin.Targets.Assembly is
       return Ada.Strings.Unbounded.To_String (Result);
    end Substituted;
 
-   function Text_Error (Facts : Target_Facts; Text : String) return String is
+   function Text_Error
+     (Facts : Target_Facts; Text : String; Naked : Boolean := False)
+      return String
+   is
       Start : Integer := Text'First;
       Seen : Boolean := False;
 
@@ -509,7 +512,9 @@ package body Landin.Targets.Assembly is
                     (Mnemonic'First .. Mnemonic'First + Prefix'Length - 1)
                       = Prefix);
          begin
-            if (case Architecture_Of (Facts) is
+            --  A naked body owns its control flow: it is how a process
+            --  entry reaches the routine it runs.
+            if not Naked and then (case Architecture_Of (Facts) is
                   when X86_64 =>
                      Starts ("j") or else Starts ("call")
                      or else Starts ("ret") or else Starts ("iret")
@@ -524,7 +529,10 @@ package body Landin.Targets.Assembly is
                   when RV64 =>
                      Starts ("b") or else Starts ("j")
                      or else Starts ("c.b") or else Starts ("c.j")
-                     or else Mnemonic in "call" | "tail" | "ret" | "ecall"
+                     --  `ecall` is the system call, which x86-64's
+                     --  `syscall` and arm64's `svc` already are: the
+                     --  kernel returns to the next instruction.
+                     or else Mnemonic in "call" | "tail" | "ret"
                        | "ebreak" | "sret" | "mret" | "uret" | "dret"
                        | "wfi" | "c.ebreak",
                   when others => False)

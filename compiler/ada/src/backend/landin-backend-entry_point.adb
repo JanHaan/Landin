@@ -8,6 +8,7 @@ package body Landin.Backend.Entry_Point is
 
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Atom_Set_Id;
+   use type Landin.IR.Item_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
@@ -108,6 +109,101 @@ package body Landin.Backend.Entry_Point is
       end loop;
       return Landin.IR.No_Item;
    end Argument_Initializer;
+
+   function Unsatisfied_Imports
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table) return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+
+      --  The name the linker sees, before any platform prefix.
+      function Link_Name (Item : Landin.IR.Item_Id) return String;
+
+      function Link_Name (Item : Landin.IR.Item_Id) return String is
+         Link : constant Landin.Source.Names.Name_Id :=
+           Landin.IR.Link_Symbol (Of_Unit, Item);
+         Declared : constant Landin.IR.Declaration_Id :=
+           Landin.IR.Declares (Of_Unit, Item);
+      begin
+         if Link /= Landin.Source.Names.No_Name then
+            return Landin.Source.Names.Spelling (Names, Link);
+         elsif Declared = Landin.IR.No_Declaration then
+            return "";
+         end if;
+         return Landin.Source.Names.Spelling
+           (Names, Landin.Resolution.Name_Of (Meanings, Declared));
+      end Link_Name;
+
+      function Defined (Name : String) return Boolean;
+
+      function Defined (Name : String) return Boolean is
+      begin
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            begin
+               if not Landin.IR.Is_External (Of_Unit, Item)
+                 and then Link_Name (Item) = Name
+               then
+                  return True;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Defined;
+
+      procedure Note (Target : Landin.IR.Item_Id);
+
+      procedure Note (Target : Landin.IR.Item_Id) is
+      begin
+         if Target = Landin.IR.No_Item
+           or else not Landin.IR.Is_External (Of_Unit, Target)
+         then
+            return;
+         end if;
+         declare
+            Name : constant String := Link_Name (Target);
+         begin
+            if Name /= "" and then not Result.Contains (Name)
+              and then not Defined (Name)
+            then
+               Result.Append (Name);
+            end if;
+         end;
+      end Note;
+   begin
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+         begin
+            Note (Landin.IR.Function_Target (Of_Unit, Item));
+            if not Landin.IR.Is_External (Of_Unit, Item) then
+               for Position in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+                  declare
+                     Value : constant Landin.IR.Value_Id :=
+                       Landin.IR.Value_Id (Position);
+                  begin
+                     if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                       in Landin.IR.Function_Address | Landin.IR.Call
+                     then
+                        Note (Landin.IR.Callee_Of (Of_Unit, Item, Value));
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+      for Id in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+         for Position in 1 .. Landin.IR.Evidence_Entry_Count
+           (Of_Unit, Landin.IR.Evidence_Id (Id))
+         loop
+            Note (Landin.IR.Evidence_Entry_Target
+              (Of_Unit, Landin.IR.Evidence_Id (Id), Position));
+         end loop;
+      end loop;
+      return Result;
+   end Unsatisfied_Imports;
 
    function Firmware_Start
      (Of_Unit  : Landin.IR.Unit;

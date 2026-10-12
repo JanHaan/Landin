@@ -3246,11 +3246,12 @@ across a reset budget. Because `free` has no result, its live count is exact
 under valid-free use and cannot discover an inner provider's rejection of a
 malformed free.
 
-The separately imported hosted `hosted/heap` provider allocates through
-`hosted/libc`'s `malloc` and `free`, returns independent aligned blocks, and
-really releases each block. It accepts every `usize` alignment, treats zero
-and one as byte alignment, gives a successful zero-byte request a distinct
-non-null freeable token, and reports an unrepresentable request or host refusal
+The separately imported hosted `hosted/heap` provider keeps size classes over
+memory it maps through `hosted/linux` on Linux, and allocates through
+`hosted/libc`'s `malloc` and `free` on Darwin and FreeBSD; it returns
+independent aligned blocks and really releases each block. It accepts every
+`usize` alignment, treats zero and one as byte alignment, gives a successful
+zero-byte request a distinct non-null freeable token, and reports an unrepresentable request or host refusal
 as `out_of_memory`.
 `core/vec.list(t)` stores an
 honest `mem.storage(t)`: reserve copies its initialized prefix into a private
@@ -3848,7 +3849,8 @@ converted as ordinary/C routines. Interrupt handlers use an ordinary Landin
 frame on top of the hardware exception frame and return through EXC_RETURN.
 Naked bodies are one assembly block with no compiler prologue; the programmer
 owns stack, registers, calls and return instructions. Falling off that block
-traps. Neither convention implies `keep`.
+traps. Neither convention implies `keep`. Naked routines are also admitted on
+hosted x86-64, arm64 and RV64, where `hosted/linux`'s process entry is one.
 
 ### [1580] Importing from C
 
@@ -3927,7 +3929,9 @@ ASCII letters, digits, underscore, hyphen and dot, are nonempty, do not begin
 with a hyphen, and cannot consist only of dots. Active directives reach the
 platform driver after the program assembly in canonical source/declaration
 order, including repetitions. The Linux adapter selects archives for these
-libraries while leaving the hosted runtime's linkage to the driver. Darwin
+libraries while leaving the hosted runtime's linkage to the driver; an archive
+links beside the C library, so a Linux build asking for one links with
+`--link=libc`, and the default static link [1650] refuses it. Darwin
 asks the selected driver to resolve `libNAME.a` and passes that existing file;
 a missing archive fails even when a dylib exists. With Apple's default driver,
 a returned bare filename must exist in the invocation directory. An inactive
@@ -4058,7 +4062,8 @@ the language reserves no register of its own. Every block is opaque to the
 compiler: memory knowledge is invalidated and memory accesses cannot be
 reordered across it, which is exactly what a critical section wants. It is not
 itself a hardware barrier. An ordinary block is straight-line code with no
-labels or calls. [1990] gives each target's registers, the text rules and the
+labels or calls; a system call returns to the next instruction, so it is
+straight-line too. [1990] gives each target's registers, the text rules and the
 programmer's obligations; D248 records the design.
 
 The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
@@ -4135,7 +4140,10 @@ the hosted world retains the argument table and offers bounded indexed
 pointer-and-length views instead. When the program imports `hosted/io`, the
 hosted entry calls that module's C-callable
 `void _landin_host_initialize_arguments(int argc, char **argv);` with the real
-incoming carriers before that no-argument source body begins.
+incoming carriers before that no-argument source body begins. A Linux
+executable needs no C library: it starts at `hosted/linux`'s `_landin_start`,
+which calls `main` with the process's arguments, and `--link=libc` links the
+C runtime instead.
 
 A C-owned `main` that drives exported Landin routines calls the same entry
 explicitly before `hosted.host()` acquires an argument capability and before starting
@@ -4258,8 +4266,9 @@ world is not an erased writer, the two do not convert. A
 routine holding only the world lends its writer with
 `io.writer_of(addr world)` (D268).
 
-The system provider captures errno immediately after a libc failure, reading
-it through `hosted/libc`, which names each system's accessor, and keeps
+The system provider captures the errno of a failing call immediately, as
+minus a Linux system call's result, or as C's errno through `hosted/libc`,
+which names each system's accessor, on Darwin and FreeBSD, and keeps
 the exact terminal value in explicit state, available through `hosted.last_errno`.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no

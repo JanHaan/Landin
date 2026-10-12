@@ -1131,8 +1131,19 @@ package body Landin.Stages.Checking is
          if Syn.Machine_Convention (Of_Tree, Node)
            /= Landin.Machine.Ordinary
          then
-            Supported := Landin.Targets.Architecture_Of (Facts)
-              = Landin.Targets.Cortex_M0
+            --  Interrupt routines are Cortex-M0's.  A naked routine is a
+            --  machine entry on every target with registers: firmware's
+            --  vectors, and a hosted program's process entry, which no
+            --  caller enters with a frame.
+            Supported :=
+              (Landin.Targets.Architecture_Of (Facts)
+                 = Landin.Targets.Cortex_M0
+               or else
+                 (Syn.Machine_Convention (Of_Tree, Node)
+                    = Landin.Machine.Naked_Routine
+                  and then Landin.Targets.Architecture_Of (Facts)
+                    in Landin.Targets.X86_64 | Landin.Targets.Arm64
+                     | Landin.Targets.RV64))
               and then Parameters'Length = 0 and then Results'Length = 0
               and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
               and then not Syn.Is_Variadic (Of_Tree, Node);
@@ -1726,6 +1737,9 @@ package body Landin.Stages.Checking is
       Checked_Recovery_Calls : Selection_Lists.Vector;
       Contextual_Recovery_Calls : Selection_Lists.Vector;
       Checking_Routine_Body : Boolean := False;
+      --  Whether a routine body is being checked: a `mut` module binding
+      --  read there holds whatever was last written, not its image.
+      In_Routine_Body : Boolean := False;
       Blocked_Error_Calls : Selection_Lists.Vector;
       type Discovery_Parent is record
          Child, Parent : Landin.Checking.Routine_Instance_Id;
@@ -6173,7 +6187,8 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
-         if not Faulted then
+         --  A naked body owns every register, so its text may name any.
+         if not Faulted and then not Naked then
             Check_Text;
          end if;
 
@@ -21252,7 +21267,7 @@ package body Landin.Stages.Checking is
                              (Landin.Targets.Assembly.Text_Error
                                 (Facts, Landin.Configuration.Fixed_Text
                                    (Source (Context, Syn.Source_Of (Of_Tree)),
-                                    Of_Tree, Argument)));
+                                    Of_Tree, Argument), Naked));
                         end if;
                      end if;
                      if Ada.Strings.Unbounded.Length (Fault) = 0
@@ -31028,6 +31043,50 @@ package body Landin.Stages.Checking is
               "a selected result local has no destructuring owner";
          end if;
 
+         --  A match binding has no initializer either: its match's header
+         --  settles it.  A control value's first-arm search can reach a
+         --  call that uses the binding before any walk has checked that
+         --  header, so check the header now.
+         if Syn.Kind (Of_Tree.all, Node) = Syn.Match_Binding then
+            for Candidate in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+            loop
+               if Syn.Kind (Of_Tree.all, Candidate) = Syn.Match_Statement
+               then
+                  for Position in
+                    1 .. Syn.Match_Arm_Count (Of_Tree.all, Candidate)
+                  loop
+                     declare
+                        Arm : constant Syn.Node_Id :=
+                          Syn.Nth_Match_Arm (Of_Tree.all, Candidate, Position);
+                     begin
+                        for Binding in
+                          1 .. Syn.Match_Binding_Count (Of_Tree.all, Arm)
+                        loop
+                           if Syn.Nth_Match_Binding
+                                (Of_Tree.all, Arm, Binding) = Node
+                           then
+                              Check_Match
+                                (Of_Tree.all, Candidate, Ty.No_Value,
+                                 Discover_Only => True);
+                              if Landin.Checking.State_Of (Types.all, Id)
+                                /= Landin.Checking.Settled
+                              then
+                                 --  A refused subject already owns the
+                                 --  diagnostic.
+                                 Landin.Checking.Settle
+                                   (Types.all, Id, Ty.Ill_Typed);
+                              end if;
+                              return;
+                           end if;
+                        end loop;
+                     end;
+                  end loop;
+               end if;
+            end loop;
+            raise Landin.Compiler_Defect with
+              "a match binding has no match";
+         end if;
+
          Value := Syn.Value_Of (Of_Tree.all, Node);
          --  An inferred body local can request a traversal binding before
          --  the statement walk reaches its header. Settle that header now,
@@ -32329,6 +32388,8 @@ package body Landin.Stages.Checking is
         is (Means in Checked_Binding'Range
             and then Checked_Binding (Means));
 
+      function Folding_A_Body return Boolean is (In_Routine_Body);
+
       package Folder is new Landin.Stages.Folding
         (Types              => Types,
          Meanings           => Meanings,
@@ -32341,7 +32402,8 @@ package body Landin.Stages.Checking is
          Float_Special_Bits => Float_Special_Bits_At,
          Enter              => Enter_Fold,
          Leave              => Leave_Fold,
-         Is_Final           => Final_Fold);
+         Is_Final           => Final_Fold,
+         Reads_Run_Time     => Folding_A_Body);
 
       function Pointer_Is_Known_Zero
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -34654,6 +34716,7 @@ package body Landin.Stages.Checking is
            Landin.Checking.Signature_Of (Types.all, Of_Tree, Node);
          Expected : Value_Context := (Kind => Gives, others => <>);
          Previous_Body_Check : constant Boolean := Checking_Routine_Body;
+         Previous_In_Body : constant Boolean := In_Routine_Body;
          Result_Site : constant Landin.Provenance.Origin :=
            (if Syn.Returns_Of (Of_Tree, Node) = Syn.No_Node
             then Syn.Origin (Of_Tree, Node)
@@ -34732,6 +34795,7 @@ package body Landin.Stages.Checking is
          end if;
 
          Checking_Routine_Body := True;
+         In_Routine_Body := True;
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
             if Gives = Ty.No_Value then
                Check_Block (Of_Tree, Runs, Gives);
@@ -34777,11 +34841,84 @@ package body Landin.Stages.Checking is
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
          Checking_Routine_Body := Previous_Body_Check;
+         In_Routine_Body := Previous_In_Body;
       exception
          when others =>
             Checking_Routine_Body := Previous_Body_Check;
+            In_Routine_Body := Previous_In_Body;
             raise;
       end Check_Routine_Body;
+
+      --  A bodyless C import of `main` as C's runtime calls it, `(argc,
+      --  argv, envp) -> int`: the hosted entry seen from a program-owned
+      --  process entry (hosted/linux's `_landin_start`), not a second `main`.
+      function Is_C_Entry_View (Id : Res.Declaration_Id) return Boolean;
+
+      function Is_C_Entry_View (Id : Res.Declaration_Id) return Boolean is
+         Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Signature_Of (Types.all, Id);
+
+         function Text_Table (Part : Landin.Checking.Signature_Part)
+           return Boolean;
+
+         function Text_Table (Part : Landin.Checking.Signature_Part)
+           return Boolean is
+         begin
+            if Part.Kind /= Ty.Pointer_Value
+              or else not Landin.Checking.Holds (Types.all, Part.Reference)
+            then
+               return False;
+            end if;
+            declare
+               Outer : constant Landin.Checking.Reference_Descriptor :=
+                 Landin.Checking.Descriptor_Of (Types.all, Part.Reference);
+            begin
+               if Outer.Mutable or else Outer.Referent /= Ty.Pointer_Value
+                 or else not Landin.Checking.Holds
+                   (Types.all, Outer.Reference)
+               then
+                  return False;
+               end if;
+               declare
+                  Inner : constant Landin.Checking.Reference_Descriptor :=
+                    Landin.Checking.Descriptor_Of
+                      (Types.all, Outer.Reference);
+               begin
+                  return not Inner.Mutable and then Inner.Referent = Ty.U8;
+               end;
+            end;
+         end Text_Table;
+      begin
+         if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Function
+           or else not Landin.Checking.Holds (Types.all, Signature)
+           or else not Landin.Checking.Signature_Uses_C_ABI
+             (Types.all, Signature)
+           or else Landin.Checking.Signature_Is_Variadic (Types.all, Signature)
+           or else Landin.Checking.Signature_Error_Form (Types.all, Signature)
+             /= Landin.Checking.Infallible
+           or else Landin.Checking.Signature_Parameter_Count
+             (Types.all, Signature) /= 3
+           or else Landin.Checking.Signature_Result_Count
+             (Types.all, Signature) /= 1
+         then
+            return False;
+         end if;
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+         begin
+            return Syn.Is_External
+                (Of_Tree.all, Res.Node_Of (Meanings.all, Id))
+              and then Landin.Checking.Nth_Signature_Parameter
+                (Types.all, Signature, 1).Kind = Ty.I32
+              and then Text_Table (Landin.Checking.Nth_Signature_Parameter
+                (Types.all, Signature, 2))
+              and then Text_Table (Landin.Checking.Nth_Signature_Parameter
+                (Types.all, Signature, 3))
+              and then Landin.Checking.Nth_Signature_Result
+                (Types.all, Signature, 1).Kind = Ty.I32;
+         end;
+      end Is_C_Entry_View;
 
       procedure Check_External_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
@@ -34873,7 +35010,20 @@ package body Landin.Stages.Checking is
                   Prior_Signature : constant Landin.Checking.Signature_Id :=
                     Landin.Checking.Signature_Of (Types.all, Prior);
                begin
-                  if Syn.Kind (Prior_Tree.all, Prior_Node)
+                  --  C's view of the native hosted entry shares its name.
+                  if Spelled (Symbol) = "main"
+                    and then Syn.Kind (Prior_Tree.all, Prior_Node)
+                      = Syn.Function_Declaration
+                    and then (Is_C_Entry_View (Id)
+                              or else Is_C_Entry_View (Prior))
+                    and then not (Landin.Checking.Signature_Uses_C_ABI
+                                    (Types.all, Signature)
+                                  and then Landin.Checking
+                                    .Signature_Uses_C_ABI
+                                      (Types.all, Prior_Signature))
+                  then
+                     null;
+                  elsif Syn.Kind (Prior_Tree.all, Prior_Node)
                     /= Syn.Function_Declaration
                     or else not Signatures_Agree (Signature, Prior_Signature)
                     or else (not Syn.Is_External (Of_Tree, Node)
@@ -35026,6 +35176,7 @@ package body Landin.Stages.Checking is
                 /= Landin.Source.Names.No_Name
               and then Spelled (Landin.Checking.Link_Symbol (Types.all, Id))
                 = "main"
+              and then not Is_C_Entry_View (Id)
             then
                declare
                   Of_Tree : constant not null access constant Syn.Tree :=

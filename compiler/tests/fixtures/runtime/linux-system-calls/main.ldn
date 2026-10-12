@@ -1,0 +1,82 @@
+import hosted/linux
+
+--  hosted/linux's system calls, made directly with no C library
+--  beneath them, on every Linux architecture.  Each failure comes back as
+--  minus its errno.  The paths are NUL-terminated: /dev/zero and /dev/null
+--  exist everywhere; a missing parent gives ENOENT, a path through a
+--  character device ENOTDIR, and a read-only sysctl, which refuses a writer
+--  whoever it is, EACCES.
+zero_name: [10]u8 =
+    [47, 100, 101, 118, 47, 122, 101, 114, 111, 0]
+null_name: [10]u8 =
+    [47, 100, 101, 118, 47, 110, 117, 108, 108, 0]
+null_again: [17]u8 =
+    [47, 100, 101, 118, 47, 46, 46, 47, 100, 101, 118, 47, 110, 117, 108,
+     108, 0]
+missing: [30]u8 =
+    [47, 108, 97, 110, 100, 105, 110, 45, 97, 98, 115, 101, 110, 116, 45,
+     100, 105, 114, 101, 99, 116, 111, 114, 121, 47, 102, 105, 108, 101,
+     0]
+not_directory: [15]u8 =
+    [47, 100, 101, 118, 47, 110, 117, 108, 108, 47, 102, 105, 108, 101, 0]
+sysctl: [27]u8 =
+    [47, 112, 114, 111, 99, 47, 115, 121, 115, 47, 107, 101, 114, 110,
+     101, 108, 47, 111, 115, 114, 101, 108, 101, 97, 115, 101, 0]
+
+--  A character device's file type in a statx mode.
+type_mask: u16 = 0o170000
+character_device: u16 = 0o020000
+
+public main: () -> (code: i32) =
+    code = 1
+    message: []u8 = "system calls\n"
+    sent: isize = linux.write(1, addr message[0], lenof message)
+    return when sent <> isize(lenof message)
+
+    code = 2
+    zero: i32 = linux.openat(linux.at_fdcwd, addr zero_name[0],
+                             linux.o_rdonly, 0)
+    return when zero < 0
+    mut buffer: [8]u8 = [8 of 255]
+    count: isize = linux.read(zero, addr buffer[0], 8)
+    return when count <> 8
+    for at in usize(0)..<usize(8) do
+        return when buffer[at] <> 0
+    end for
+
+    code = 3
+    return when linux.close(zero) <> 0
+    --  EBADF: the descriptor was released.
+    return when linux.close(zero) <> -9
+
+    code = 4
+    return when linux.openat(linux.at_fdcwd, addr missing[0],
+                             linux.o_rdonly, 0) <> -linux.enoent
+    code = 5
+    return when linux.openat(linux.at_fdcwd, addr not_directory[0],
+                             linux.o_rdonly, 0) <> -linux.enotdir
+    code = 6
+    return when linux.openat(linux.at_fdcwd, addr sysctl[0],
+                             linux.o_wronly, 0) <> -linux.eacces
+
+    code = 7
+    mut first: linux.file_status = zeroed
+    return when linux.statx(linux.at_fdcwd, addr null_name[0], 0,
+                            linux.statx_ino, addr first) <> 0
+    return when (first.mask & linux.statx_ino) == 0
+    return when (first.mode & type_mask) <> character_device
+
+    code = 8
+    mut second: linux.file_status = zeroed
+    return when linux.statx(linux.at_fdcwd, addr null_again[0], 0,
+                            linux.statx_ino, addr second) <> 0
+    return when second.inode <> first.inode
+      or second.device_major <> first.device_major
+      or second.device_minor <> first.device_minor
+
+    code = 9
+    mut absent: linux.file_status = zeroed
+    return when linux.statx(linux.at_fdcwd, addr missing[0], 0,
+                            linux.statx_ino, addr absent) <> -linux.enoent
+    code = 42
+end main

@@ -1,0 +1,1 @@
+error[L0002]: --link chooses how a hosted executable is linked, and cortex-m0 has no hosted system

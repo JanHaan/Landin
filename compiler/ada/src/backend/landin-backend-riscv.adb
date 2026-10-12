@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 with Landin.Provenance;
 with Landin.Layouts;
+with Landin.Machine;
 with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
@@ -41,6 +42,7 @@ package body Landin.Backend.RiscV is
    use type Landin.Types.Type_Kind;
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Machine.Convention;
    use type Landin.Layouts.Policy;
 
    LF : constant Character := Character'Val (10);
@@ -915,6 +917,16 @@ package body Landin.Backend.RiscV is
                elsif Is_Forced (Item)
                  and then Hosted_Entry /= Landin.IR.No_Item
                  and then Spelling = "main"
+                 --  C's view of the entry, which a process entry calls:
+                 --  an import of C's (argc, argv, envp) -> int.
+                 and then not (Landin.IR.Is_External (Of_Unit, Item)
+                               and then Is_C_Item (Item)
+                               and then Landin.IR.Signature_Parameter_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 3
+                               and then Landin.IR.Signature_Result_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 1)
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
@@ -3209,6 +3221,70 @@ package body Landin.Backend.RiscV is
               (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
             Emit (".cfi_startproc");
          end if;
+         --  A naked routine is its text and nothing else: no frame record
+         --  and no saved register.  It is a process's own entry, which no
+         --  caller entered, so its return address is undefined; text that
+         --  falls off its end traps.
+         if Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+             = Landin.Machine.Naked_Routine
+         then
+            if Debug /= null then
+               Emit (".cfi_undefined ra");
+            end if;
+            for Position in 1 .. Landin.IR.Length (Of_Unit, Item, 1) loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value (Of_Unit, Item, 1, Position);
+               begin
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "value", Item, Natural (Value)) & ":");
+                     Put (Dwarf.Source_Line
+                       (Debug.all, Landin.IR.Origin_Of
+                          (Of_Unit, Item, Value)));
+                  end if;
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    = Landin.IR.Assembly
+                  then
+                     declare
+                        Text : constant String :=
+                          Landin.Source.Names.Spelling
+                            (Names, Landin.IR.Assembly_Text
+                               (Of_Unit, Item, Value));
+                        First : Positive := Text'First;
+                     begin
+                        for Index in Text'Range loop
+                           if Text (Index) = LF then
+                              if Index > First then
+                                 Put (Character'Val (9)
+                                      & Text (First .. Index - 1));
+                              end if;
+                              First := Index + 1;
+                           end if;
+                        end loop;
+                        if First <= Text'Last then
+                           Put (Character'Val (9) & Text (First .. Text'Last));
+                        end if;
+                     end;
+                  end if;
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "after", Item, Natural (Value)) & ":");
+                  end if;
+               end;
+            end loop;
+            Emit ("unimp");
+            if Debug /= null then
+               Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
+               Emit (".cfi_endproc");
+            end if;
+            Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
+            Landin.Build_Reports.Append (Report,
+              Landin.Build_Reports.Routine_Statistics'
+                (Item => Item, others => <>));
+            return;
+         end if;
          Emit ("addi sp, sp, -16");
          Emit ("sd x8, 0(sp)");
          Emit ("sd ra, 8(sp)");
@@ -4426,6 +4502,40 @@ package body Landin.Backend.RiscV is
          Emit (ELF_Spelling.Data_Section);
       end Emit_Reserved;
 
+      --  The extent the zero-image emitters below reserve for `Item`.
+      function Reserved_Extent
+        (Item : Landin.IR.Item_Id) return Landin.Targets.Byte_Count;
+
+      function Reserved_Extent
+        (Item : Landin.IR.Item_Id) return Landin.Targets.Byte_Count is
+      begin
+         case Landin.IR.Result_Of (Of_Unit, Item) is
+            when Landin.Types.Aggregate =>
+               declare
+                  Placed  : Landin.Targets.Placement;
+                  Ignored : Landin.Targets.Byte_Count;
+               begin
+                  Place_Fields (Item, Placed, 0, Ignored);
+                  return Landin.Targets.Size_Of (Placed);
+               end;
+            when Landin.Types.Fixed_Array =>
+               declare
+                  Size : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Landin.IR.Array_Element_Shape (Of_Unit, Item),
+                     Facts, Size, Alignment);
+                  return Landin.Targets.Byte_Count
+                    (Landin.IR.Array_Length (Of_Unit, Item)) * Size;
+               end;
+            when others =>
+               return Landin.Targets.Byte_Count
+                 (Landin.Targets.Bytes
+                    (Size_Of (Landin.IR.Result_Of (Of_Unit, Item), Facts)));
+         end case;
+      end Reserved_Extent;
+
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
          Length : constant Landin.IR.Element_Total :=
            Landin.IR.Array_Length (Of_Unit, Item);
@@ -4643,6 +4753,9 @@ package body Landin.Backend.RiscV is
             end if;
          end;
       end loop;
+      --  Data with an image first, in item order; then the reserved data,
+      --  smallest first (Smallest_First), so that the one object as large
+      --  as auipc's reach admits sits last.
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
@@ -4651,27 +4764,11 @@ package body Landin.Backend.RiscV is
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
                   Emit (ELF_Spelling.Read_Only_Section);
                   Emit_Array_Image_Datum (Item);
+               elsif Is_All_Zero (Item) then
+                  null;
                else
                   Emit (".data");
-                  if Is_All_Zero (Item) then
-                     if Landin.IR.Result_Of (Of_Unit, Item) =
-                       Landin.Types.Aggregate
-                     then
-                        Emit_Aggregate_Datum (Item);
-                     elsif Landin.IR.Result_Of (Of_Unit, Item) =
-                       Landin.Types.Fixed_Array
-                     then
-                        Emit_Array_Datum (Item);
-                     else
-                        Emit_Reserved (Item, Landin.Targets.Byte_Count
-                          (Landin.Targets.Bytes
-                          (Size_Of (Landin.IR.Result_Of (Of_Unit, Item),
-                            Facts))),
-                          Landin.Targets.Alignment_Of (Facts,
-                            Size_Of (Landin.IR.Result_Of (Of_Unit, Item),
-                              Facts)));
-                     end if;
-                  elsif Landin.IR.Result_Of (Of_Unit, Item) =
+                  if Landin.IR.Result_Of (Of_Unit, Item) =
                     Landin.Types.Aggregate
                   then
                      Emit_Recursive_Image_Datum (Item);
@@ -4688,6 +4785,56 @@ package body Landin.Backend.RiscV is
             end if;
          end;
       end loop;
+      declare
+         function Reserved (Index : Positive) return Boolean
+         is (Landin.IR.Kind_Of (Of_Unit, Landin.IR.Item_Id (Index))
+               = Landin.IR.Datum
+             and then not Landin.IR.Is_Read_Only
+               (Of_Unit, Landin.IR.Item_Id (Index))
+             and then Is_All_Zero (Landin.IR.Item_Id (Index)));
+
+         Count : Natural := 0;
+      begin
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            if Reserved (Index) then
+               Count := Count + 1;
+            end if;
+         end loop;
+         declare
+            Items : Landin.Backend.Item_Array (1 .. Count);
+            Extents : Landin.Backend.Extent_Array (1 .. Count);
+            Next : Natural := 0;
+         begin
+            for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               if Reserved (Index) then
+                  Next := Next + 1;
+                  Items (Next) := Landin.IR.Item_Id (Index);
+                  Extents (Next) :=
+                    Reserved_Extent (Landin.IR.Item_Id (Index));
+               end if;
+            end loop;
+            for Item of Landin.Backend.Smallest_First (Items, Extents) loop
+               Emit (".data");
+               if Landin.IR.Result_Of (Of_Unit, Item) =
+                 Landin.Types.Aggregate
+               then
+                  Emit_Aggregate_Datum (Item);
+               elsif Landin.IR.Result_Of (Of_Unit, Item) =
+                 Landin.Types.Fixed_Array
+               then
+                  Emit_Array_Datum (Item);
+               else
+                  Emit_Reserved (Item, Landin.Targets.Byte_Count
+                    (Landin.Targets.Bytes
+                    (Size_Of (Landin.IR.Result_Of (Of_Unit, Item),
+                      Facts))),
+                    Landin.Targets.Alignment_Of (Facts,
+                      Size_Of (Landin.IR.Result_Of (Of_Unit, Item),
+                        Facts)));
+               end if;
+            end loop;
+         end;
+      end;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
          Emit (ELF_Spelling.Relocated_Read_Only_Section);
          for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop

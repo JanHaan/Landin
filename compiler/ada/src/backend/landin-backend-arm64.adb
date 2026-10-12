@@ -3,6 +3,7 @@ with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;
 with Landin.Provenance;
 with Landin.Layouts;
+with Landin.Machine;
 with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
@@ -44,6 +45,7 @@ package body Landin.Backend.Arm64 is
    use type Landin.Types.Type_Kind;
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Machine.Convention;
    use type Landin.Layouts.Policy;
 
    LF : constant Character := Character'Val (10);
@@ -1148,6 +1150,16 @@ package body Landin.Backend.Arm64 is
                elsif Is_Forced (Item)
                  and then Hosted_Entry /= Landin.IR.No_Item
                  and then Spelling = "main"
+                 --  C's view of the entry, which a process entry calls:
+                 --  an import of C's (argc, argv, envp) -> int.
+                 and then not (Landin.IR.Is_External (Of_Unit, Item)
+                               and then Is_C_Item (Item)
+                               and then Landin.IR.Signature_Parameter_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 3
+                               and then Landin.IR.Signature_Result_Count
+                                 (Of_Unit, Landin.IR.Signature_Of
+                                    (Of_Unit, Item)) = 1)
                then
                   raise Landin.Compiler_Defect with
                     "a link symbol overrides the hosted main entry";
@@ -3459,6 +3471,70 @@ package body Landin.Backend.Arm64 is
             Put (Dwarf.Source_Line
               (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
             Emit (".cfi_startproc");
+         end if;
+         --  A naked routine is its text and nothing else: no frame record
+         --  and no saved register.  It is a process's own entry, which no
+         --  caller entered, so its return address is undefined; text that
+         --  falls off its end traps.
+         if Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+             = Landin.Machine.Naked_Routine
+         then
+            if Debug /= null then
+               Emit (".cfi_undefined x30");
+            end if;
+            for Position in 1 .. Landin.IR.Length (Of_Unit, Item, 1) loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value (Of_Unit, Item, 1, Position);
+               begin
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "value", Item, Natural (Value)) & ":");
+                     Put (Dwarf.Source_Line
+                       (Debug.all, Landin.IR.Origin_Of
+                          (Of_Unit, Item, Value)));
+                  end if;
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    = Landin.IR.Assembly
+                  then
+                     declare
+                        Text : constant String :=
+                          Landin.Source.Names.Spelling
+                            (Names, Landin.IR.Assembly_Text
+                               (Of_Unit, Item, Value));
+                        First : Positive := Text'First;
+                     begin
+                        for Index in Text'Range loop
+                           if Text (Index) = LF then
+                              if Index > First then
+                                 Put (Character'Val (9)
+                                      & Text (First .. Index - 1));
+                              end if;
+                              First := Index + 1;
+                           end if;
+                        end loop;
+                        if First <= Text'Last then
+                           Put (Character'Val (9) & Text (First .. Text'Last));
+                        end if;
+                     end;
+                  end if;
+                  if Debug /= null then
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "after", Item, Natural (Value)) & ":");
+                  end if;
+               end;
+            end loop;
+            Emit ("brk #1");
+            if Debug /= null then
+               Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
+               Emit (".cfi_endproc");
+            end if;
+            Platform_Directive (Platform.End_Function (Format, Symbol (Item)));
+            Landin.Build_Reports.Append (Report,
+              Landin.Build_Reports.Routine_Statistics'
+                (Item => Item, others => <>));
+            return;
          end if;
          Emit ("stp x29, x30, [sp, #-16]!");
          if Debug /= null then

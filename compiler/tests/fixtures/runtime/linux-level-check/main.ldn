@@ -1,0 +1,107 @@
+import hosted/linux
+
+--  The process entry holds the processor to the executable's CPU feature
+--  level before `main` runs; this program reaching `main` is that check
+--  passing on the processor that runs it.  The words below are injected,
+--  so each level's refusal is decided without a processor that lacks the
+--  feature: no words at all lack the level's first feature, and words that
+--  have one level lack the next one's.
+
+fixed if compiler.arch == x86_64 then
+    --  Every bit set: every feature and all the state.
+    everything: linux.cpu_words =
+        (standard_ecx: 0xFFFFFFFF, structured_ebx: 0xFFFFFFFF,
+         extended_ecx: 0xFFFFFFFF, enabled_state: 0xFFFFFFFF)
+    --  x86-64-v2's features and nothing above them.
+    second: linux.cpu_words =
+        (standard_ecx: 0x00982201, structured_ebx: 0,
+         extended_ecx: 0x00000001, enabled_state: 0)
+    --  Every feature, but no state the system saves.
+    stateless: linux.cpu_words =
+        (standard_ecx: 0xFFFFFFFF, structured_ebx: 0xFFFFFFFF,
+         extended_ecx: 0xFFFFFFFF, enabled_state: 0)
+
+    fixed if compiler.feature.avx then
+        level_name: []u8 = "x86-64-v3"
+        first_missing: []u8 = "cmpxchg16b"
+        after_second: []u8 = "avx"
+        without_state: []u8 = "avx state"
+    elsif compiler.feature.popcnt then
+        level_name: []u8 = "x86-64-v2"
+        first_missing: []u8 = "cmpxchg16b"
+        after_second: []u8 = ""
+        without_state: []u8 = ""
+    else
+        level_name: []u8 = "x86-64-v1"
+        first_missing: []u8 = ""
+        after_second: []u8 = ""
+        without_state: []u8 = ""
+    end if
+elsif compiler.arch == arm64 then
+    everything: linux.cpu_words = (hwcap: 0xFFFFFFFFFFFFFFFF)
+    --  HWCAP_ATOMICS alone.
+    second: linux.cpu_words = (hwcap: 0x100)
+    stateless: linux.cpu_words = (hwcap: 0xFFFFFFFFFFFFFFFF)
+
+    fixed if compiler.feature.lse then
+        level_name: []u8 = "armv8.1-a"
+        first_missing: []u8 = "lse"
+        after_second: []u8 = "crc32"
+        without_state: []u8 = ""
+    else
+        level_name: []u8 = "armv8-a"
+        first_missing: []u8 = ""
+        after_second: []u8 = ""
+        without_state: []u8 = ""
+    end if
+else
+    everything: linux.cpu_words = (extensions: 0xFFFFFFFFFFFFFFFF)
+    --  RISCV_HWPROBE_EXT_ZBA alone.
+    second: linux.cpu_words = (extensions: 0x8)
+    stateless: linux.cpu_words = (extensions: 0xFFFFFFFFFFFFFFFF)
+
+    --  XTheadBa is named but not checked: no kernel interface reports it.
+    fixed if compiler.feature.zba and compiler.feature.xtheadba then
+        level_name: []u8 = "rv64gc_zba_xtheadba"
+        first_missing: []u8 = "zba"
+    elsif compiler.feature.zba then
+        level_name: []u8 = "rv64gc_zba"
+        first_missing: []u8 = "zba"
+    elsif compiler.feature.xtheadba then
+        level_name: []u8 = "rv64gc_xtheadba"
+        first_missing: []u8 = ""
+    else
+        level_name: []u8 = "rv64gc"
+        first_missing: []u8 = ""
+    end if
+    after_second: []u8 = ""
+    without_state: []u8 = ""
+end if
+
+same: (left: []u8, right: []u8) -> (equal: bool) =
+    equal = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    equal = true
+end same
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not same(linux.level(), level_name)
+    code = 2
+    nothing: linux.cpu_words = zeroed
+    return when not same(linux.missing_feature(nothing), first_missing)
+    code = 3
+    return when not same(linux.missing_feature(everything), "")
+    code = 4
+    return when not same(linux.missing_feature(second), after_second)
+    code = 5
+    return when not same(linux.missing_feature(stateless), without_state)
+    --  This processor has the level, or the entry would not have run
+    --  `main`.
+    code = 6
+    return when not same(linux.missing_feature(linux.read_cpu_words()), "")
+    code = 42
+end main

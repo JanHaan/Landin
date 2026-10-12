@@ -363,6 +363,21 @@ private
       Held : Spelling_Maps.Map;
    end record;
 
+   --  Module data with an all-zero image are laid out smallest first,
+   --  ties in item order.  Every hosted backend reaches a datum through a
+   --  bounded PC-relative distance, and an object as large as that reach
+   --  admits would otherwise push every datum after it out of reach: the
+   --  hosted/linux roots a static Linux link adds after the program's own
+   --  among them.  Extents (N) is Items (N)'s target extent.
+   type Item_Array is array (Positive range <>) of Landin.IR.Item_Id;
+   type Extent_Array is
+     array (Positive range <>) of Landin.Targets.Byte_Count;
+
+   function Smallest_First
+     (Items : Item_Array; Extents : Extent_Array) return Item_Array
+   with Pre => Items'First = 1 and then Extents'First = 1
+     and then Items'Length = Extents'Length;
+
    --  Shared checked stack arithmetic. The limit is never exceeded even
    --  transiently; invalid alignment is not a budget failure.
    function Stack_Add

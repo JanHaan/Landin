@@ -1,0 +1,9 @@
+class: end-to-end
+summary: a Linux executable links statically by default, entered at _landin_start with no C runtime
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=exe --dry-run -o out ../tests/fixtures/end-to-end/link-static-dry-run/main.ldn
+status: 0
+stream: output

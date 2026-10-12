@@ -1,0 +1,9 @@
+class: negative
+summary: RV64's ecall returns to the next instruction and is admitted in an ordinary block, while ebreak, c.ebreak and mret stay refused
+program: program.ldn
+expect: expected.txt
+args: --target=linux-rv64 ../tests/fixtures/negative/assembly-rv64-system-call/program.ldn
+codes: L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: linux-rv64

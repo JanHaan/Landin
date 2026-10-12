@@ -407,7 +407,8 @@ package body Landin.Tests.Commands_Suite is
       Host.Add_File ("main.ldn", Source);
       declare
          Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
-           (["compile", "--target=linux-x86-64", "--dry-run", "main.ldn",
+           (["compile", "--target=linux-x86-64", "--link=libc", "--dry-run",
+             "main.ldn",
              "--stage-report=stages.json", "--build-report=build.json",
              "--depfile=out.d"], Host, Tools, Meter);
       begin

@@ -3871,11 +3871,19 @@ package body Landin.IR.Verifier is
          declare
             Signature : constant Signature_Id := Signature_Id (Position);
          begin
+            --  Interrupt routines are Cortex-M0's; a naked routine is a
+            --  machine entry wherever a backend has registers.
             if Signature_Machine (Of_Unit, Signature)
               /= Landin.Machine.Ordinary
               and then ((Check_Image and then
                 Landin.Targets.Architecture_Of (Facts)
-                  /= Landin.Targets.Cortex_M0)
+                  /= Landin.Targets.Cortex_M0
+                and then
+                  (Signature_Machine (Of_Unit, Signature)
+                     /= Landin.Machine.Naked_Routine
+                   or else Landin.Targets.Architecture_Of (Facts)
+                     not in Landin.Targets.X86_64 | Landin.Targets.Arm64
+                          | Landin.Targets.RV64))
                 or else Signature_Uses_C_ABI (Of_Unit, Signature)
                 or else Signature_Is_Variadic (Of_Unit, Signature)
                 or else Signature_Parameter_Count (Of_Unit, Signature) /= 0

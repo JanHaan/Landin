@@ -1660,6 +1660,10 @@ error.
 In a rooted program, only a declaration in the designated entry module
 can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
+Beside the selected entry, a bodyless `extern(c) link(symbol: "main")` of
+`(i32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's view of the same
+symbol; it is how `hosted/linux`'s process entry calls `main` under a static
+Linux link, which passes the returned code to `exit_group` (D279).
 
 ### [1975] The selected hosted C boundaries
 
@@ -1848,8 +1852,9 @@ ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
 for already absent backing; a successful release clears backing to its atom.
 
 Foreign failure detail is ordinary explicit state. After a documented libc
-failure indication, `hosted/io` captures errno through `hosted/libc`'s
-`current_errno` before any other host call and
+failure indication on Darwin and FreeBSD, `hosted/io` reads errno through
+`hosted/libc`'s `errno_cell` before any other host call; on Linux it takes
+the errno from the failing system call's negative result (D279). It
 retains the exact terminal value in its system provider, exposed by
 `hosted.last_errno`. Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
@@ -1894,18 +1899,23 @@ null table or attempt to replace either part of the established root traps.
 at `argv + 1`, its count is `max(argc - 1, 0)`, and indexed lookup traps on a
 null entry within that count.
 
-The compiler names no other host routine. The public module `hosted/libc`
-declares the C library beneath the hosted providers as ordinary `extern(c)`
-imports: `open`, `read`, `write`, `close`, `strlen`, `malloc`, `free`, `stat`
+The compiler names no other host routine, except that a static Linux link
+enters the program at `hosted/linux`'s `_landin_start` (D280). The public
+module `hosted/libc` declares the C library beneath the hosted providers as
+ordinary `extern(c)` imports: `open`, `read`, `write`, `close`, `strlen`, `malloc`, `free`, `stat`
 and the calling thread's errno cell, with the constants and records whose
 values differ between systems selected by `compiler.os` and the C ABI. These
 are library declarations, not privileged language operations, and the
-compiler reserves none of their names. `hosted/io` and `hosted/heap` reach the
-host only through them. `hosted/io` turns descriptors and pointer-and-length
+compiler reserves none of their names. On Darwin and FreeBSD, `hosted/io` and
+`hosted/heap` reach the host only through them. On Linux they reach it through
+the public module `hosted/linux`, which declares Linux's system calls in
+source as ordinary assembly blocks and owns the process entry `_landin_start`
+(D279); a hosted Linux executable links statically by default, with no C
+runtime or library, and `--link=libc` links C's runtime instead (D280).
+`hosted/io` turns descriptors and pointer-and-length
 argument views into ordinary values, maps foreseeable host failures onto
 declared atoms, and threads its `world(provider)` concept as the authority for
-opening files and touching streams [1660] [1680]. Direct Linux syscalls are
-not part of this route. The required `world.write_some` reports counted
+opening files and touching streams [1660] [1680]. The required `world.write_some` reports counted
 progress for one attempt, with no transfer on failure and no host call for an
 empty slice. `world.same_file` follows path aliases and compares file identity
 before any destructive output open; a missing output returns false, while
@@ -2090,9 +2100,9 @@ PRIMASK at every level and may change FAULTMASK at `armv7-m` or `armv7e-m`;
 barrier operands are `sy` or omitted. BASEPRI and FAULTMASK system registers
 are available at those higher levels. Unsupported system registers remain
 refused. On hosted x86-64, arm64 and RV64 the checker refuses control transfer
-by mnemonic
-and leaves which instructions exist to the platform
-assembler. Unencodable operands and instructions remain explicit assembler
+by mnemonic and leaves which instructions exist to the platform assembler.
+The system call, x86-64 `syscall`, arm64 `svc` and RV64 `ecall`, returns to
+the next instruction and is not a control transfer there (D281). Unencodable operands and instructions remain explicit assembler
 failures under the pinned flags, never a target upgrade. Assembly must not
 overwrite compiler spill or frame storage, saved registers or immutable
 source storage through an indirect address, leave the stack pointer changed,
@@ -2101,7 +2111,10 @@ effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
 Arbitrary machine text cannot prove those obligations.
 
 This compiler lowers ordinary assembly on every implemented architecture.
-The machine-only naked and shorthand forms retain their Cortex-M contracts.
+The shorthand form retains its Cortex-M contract, and naked routines retain
+theirs on Cortex-M. Naked routines are admitted on hosted x86-64, arm64 and
+RV64 as well: their text is verbatim, keeps the uniform text rules but may
+transfer control, takes no operands and is followed by a trap (D279).
 The synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
@@ -14509,8 +14522,10 @@ its interface or introduce hosted authority. The memory-backed I/O provider
 remains part of core/io; importing it does not select hosted I/O or allocation.
 
 `hosted/*` is available only where the target has a hosted system. The current
-modules are hosted/heap, hosted/io and hosted/libc, which declares the C
-library beneath the other two (D276). hosted/io is ordinarily imported
+modules are hosted/heap, hosted/io, hosted/libc, which declares the C
+library beneath the first two on Darwin and FreeBSD (D276), and hosted/linux,
+which declares Linux's system calls and the static process entry beneath them
+on Linux and declares nothing elsewhere (D279). hosted/io is ordinarily imported
 `as hosted` when a consumer also imports core/io. `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
 AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
@@ -14678,10 +14693,11 @@ prototype 4's replaceable world both need detail without a second error system.
 
 **Chosen:** [1975]'s immediate errno capture, explicit system state and
 `hosted.last_errno` preserve the exact terminal libc detail while ordinary
-`not_found`, `no_access` and `io_failed` remain payload-free atoms. The
-provider reads errno through `hosted/libc`'s `current_errno`, which loads the
-calling thread's `errno_cell`, immediately after the failing call and before
-any other host call (D276). A successful operation clears the remembered
+`not_found`, `no_access` and `io_failed` remain payload-free atoms. On
+Darwin and FreeBSD the provider reads the calling thread's `errno_cell`
+through `hosted/libc` immediately after the failing call and before any other
+host call (D276); on Linux a system call's result is minus its errno, so the
+detail is captured from the result itself (D279). A successful operation clears the remembered
 detail; a local refusal invents no errno.
 Interrupted open/read/write attempts retry only under the selected platform's
 no-progress guarantee, and writes resume after the completed prefix. Close
@@ -14695,9 +14711,10 @@ rather than preserving foreign detail. All are declined.
 
 **Pinned by** `runtime/r440-errno-detail` and
 `runtime/r440-io-partial-progress` for the explicit-state and progress
-contracts, and by `abi/r440-errno-interposition` and
-`abi/r440-errno-thread-local`, which hold errno and the partial-I/O policy
-under C interposition and across threads.
+contracts; by `abi/r440-errno-interposition` and
+`abi/r440-errno-thread-local` on Darwin and FreeBSD, which hold errno and the
+partial-I/O policy under C interposition and across threads; and by
+`runtime/linux-system-calls` and `abi/linux-file-identity` on Linux.
 
 ### D208 — Hosted argument capabilities retain one C startup root
 
@@ -14712,7 +14729,10 @@ under D276 the ordinary no-argument Landin `main` calls it before its body when
 the program defines it. A C-owned startup calls it with its real carriers before
 `hosted.host()` or any thread that may acquire the argument capability. Exports
 and callbacks never call it implicitly. File, stream and heap work needs no
-argument root, and retaining `core/io` alone does not initialize one.
+argument root, and retaining `core/io` alone does not initialize one. Under a
+static Linux link, `hosted/linux`'s `_landin_start` is the process entry
+(D279, D280); it calls the hosted `main` as C's runtime would, so `main` still
+initializes the root as here.
 
 The first nonnegative-count, non-null-table call establishes one exact
 `(argc, argv)` root without copying or allocation. An identical later call is a
@@ -15351,7 +15371,9 @@ ASCII, lines, no directive, comment, separator or label, and straight-line
 control in an ordinary block except for Cortex-M0's `svc` exception entry. The instruction allowlist is an `armv6-m`
 implementation limit; at higher M-profile levels and on hosted targets the
 checker refuses control transfer by mnemonic and leaves which instructions
-exist to the assembler.
+exist to the assembler. Each hosted architecture's system call returns to the
+next instruction and is admitted (D281); a hosted naked body may transfer
+control (D279).
 Implicit register effects and indirect writes into compiler storage remain
 programmer obligations that no check can prove.
 
@@ -16158,7 +16180,9 @@ original bridge decision below remains the basis of the hosted authority path,
 not today's complete C admissibility rule. D276 supersedes its compiler-emitted
 bridge: the libc route it chose is now the ordinary `extern(c)` declarations of
 `hosted/libc`, and the argument root is `hosted/io` source. The provider
-contracts below are unchanged.
+contracts below are unchanged. On Linux, D279 replaces the libc route:
+`hosted/io` makes system calls through `hosted/linux`, and D280 links no C
+library by default.
 
 **The tour and prototypes said** that hosted arguments begin in C `argc` and
 `argv` form [1650], that the entry is where a root capability is minted
@@ -16196,7 +16220,7 @@ copy can still attempt a second close.
 The bridge used libc rather than direct syscalls because the hosted executable
 already uses the C runtime and libc supplies the smallest stable host contract
 for this workload. That premise still holds for Darwin and FreeBSD, whose libc
-is the supported system interface; a later item revisits it for Linux. File descriptors remain private library representation.
+is the supported system interface; D279 revisits it for Linux. File descriptors remain private library representation.
 Arguments exclude `argv[0]`; a runtime fixture's new `run_args` metadata pins
 the distinction. Reads expose EOF as count zero and host failure as
 `io_failed`. `world.write` completes the whole slice by iterating over the
@@ -17522,14 +17546,16 @@ flags and the creation mode as facts in every backend.
 returning `isize`, `close`, `strlen`, `malloc` returning an `allocation`
 union whose empty arm is the atom `no_allocation`, `free`, `stat`, and
 `errno_cell`, linked to `__errno_location` on Linux and to `__error` on Darwin
-and FreeBSD by `fixed if compiler.os`, which `current_errno` reads. The errno
-constants `eperm`, `enoent`, `eintr`, `eacces` and `erofs`, the flags
+and FreeBSD by `fixed if compiler.os`, which `hosted/io` reads on Darwin and
+FreeBSD. The errno constants `eperm`, `enoent`, `eintr`, `eacces` and `erofs`, the flags
 `o_rdonly` and `o_wronly`, the per-system `o_creat` and `o_trunc`, `timespec`,
 the per-system `file_status` record and `file_status_size` are source
 declarations selected by `compiler.os` and the C ABI and checked against each
 system's C headers. Like every hosted module it is refused on firmware (D267).
 `hosted/io` and `hosted/heap` reach the host only through it; the 0666
-creation mode stays in `hosted/io` as provider policy.
+creation mode stays in `hosted/io` as provider policy. On Linux `hosted/io`
+and `hosted/heap` use `hosted/linux` instead (D279, D282); every `hosted/libc` declaration is
+bodyless, so a program naming none of them needs no C library.
 
 `hosted/io` holds the argument root in two module cells and defines in source
 the public C routine `_landin_host_initialize_arguments`, whose signature is
@@ -17561,9 +17587,7 @@ libc's names, flags and errno spelling in three backends and a checker
 contract for each wrapper. Always calling the initializer as an import that
 may be undefined, which makes every hosted program link against `hosted/io`
 or fail to link. Keeping the argument root in `hosted/libc`, which would put
-Landin policy in the module whose purpose is to transcribe C. Linux system
-calls in place of libc, which is a later item's subject and changes nothing
-here for Darwin and FreeBSD, whose supported interface is libc. Declaring
+Landin policy in the module whose purpose is to transcribe C. Declaring
 libc privately in each provider, declined because one module gives each
 per-system fact one place.
 
@@ -17600,7 +17624,8 @@ block a byte at a time, because for an alignment that is not a multiple of the
 word the word is unaligned; release reads it back the same way and passes it
 to `free`. A `no_allocation` result is `mem.out_of_memory`. D195's contract is
 unchanged: every `usize` alignment is accepted, zero and one meaning byte
-alignment, and a zero-byte request returns a distinct non-null token.
+alignment, and a zero-byte request returns a distinct non-null token. On
+Linux, D282 replaces this provider; Darwin and FreeBSD keep it.
 
 **The alternatives:** keeping the shim in the backends, which keeps a host
 allocator in the compiler; `posix_memalign` and `aligned_alloc`, declined as
@@ -17646,3 +17671,204 @@ trapping through an ordinary check, a nonnull conversion of zero, reports
 `negative/compiler-unreachable-value`, the driver case `an explicit trap has
 its own panic site`, `abi/r670-panic`'s startup modes and the Cortex-M corpus
 rows for the three runtime fixtures.
+
+### D279 — Linux's system interface is `hosted/linux`, with no C library
+
+**The tour said** at [1660] that the entry mints host authority, and [1975]
+chose a selected C boundary for the hosted world. D276 put that boundary in
+library source over libc on every hosted system. Linux, unlike Darwin and
+FreeBSD, promises its system-call interface itself, so a Linux program needs
+no C library to reach its kernel.
+
+**Chosen:** the public module `hosted/linux` declares Linux's system calls in
+source, inside `fixed if compiler.os == linux`. It declares nothing on Darwin
+and FreeBSD, and because Landin has no conditional import, `hosted/io` and
+`hosted/heap` import it on every hosted system. Each call is one ordinary
+assembly block: x86-64 `syscall` with the number in rax, arguments in rdi,
+rsi, rdx, r10, r8 and r9, and rcx and r11 overwritten; arm64 `svc #0` with
+the number in x8 and arguments in x0–x5; RV64 `ecall` with the number in x17
+(a7) and arguments in x10–x15 (a0–a5). rax, x0 or a0 carries the result.
+Its wrappers are `read`, `write`, `openat`, `close`,
+`statx`, `mmap`, `munmap` and the `noreturn` `exit_group`. A failure is
+minus its errno in the result; there is no errno cell. The `*at` calls take
+`at_fdcwd`, and `statx`'s `file_status` is the kernel's one 256-byte record
+on every architecture. Every public routine has the link name
+`_landin_linux_` followed by its own name, so none of them replaces the C
+library's function of the same spelling when a program also links libc.
+
+The module owns the process entry. `_landin_start` is a naked routine that
+clears the frame pointer (and the link register on arm64 and RV64), aligns
+the stack where the ABI requires it and calls `_landin_start_main` with the
+initial stack's address. That routine reads argc, argv, envp and the
+auxiliary vector after envp's terminator, keeps the environment and auxiliary
+roots for `environment()` and `auxiliary(tag)`, and calls C's view of the
+program's entry: a bodyless `extern(c) link(symbol: "main")` of
+`(i32, ptr ptr u8, ptr ptr u8) -> i32`, which the checker admits beside the
+native hosted `main` as the same symbol. It ends the process with
+`exit_group` and main's result. No C library initialisation runs and no
+thread-local storage exists. Under `--link=libc` (D280) the C runtime starts
+the program instead: `environment()` is `no_environment`, `auxiliary` finds
+nothing and `page_size()` falls back to 4096.
+
+Naked routines are admitted on hosted x86-64, arm64 and RV64 for this entry.
+Their text is the routine's whole body followed by a trap, keeps [1990]'s
+uniform text rules except that it may transfer control, and takes no
+operands. Their CFI marks the return address undefined, so a debugger's stack
+ends at `_landin_start`.
+
+**The alternatives:** keeping libc on Linux, a dynamic dependency and a
+runtime the language does not need. Writing the entry in the compiler, which
+repeats the bridge D276 removed. A target assertion to scope the module,
+which without conditional imports breaks `hosted/io` on Darwin and FreeBSD.
+Public wrappers under their C names, which would interpose on libc's `read`,
+`write` and `close` in a libc-linked program. All are declined.
+
+**Pinned by** `runtime/linux-system-calls`, `runtime/linux-process-entry`,
+`runtime/linux-process-entry-libc`, `abi/linux-file-identity`,
+`runtime/r440-errno-detail` and the bottom frames of the Linux panic debugger
+sessions.
+
+### D280 — A hosted Linux executable links statically by default
+
+**The tour said** at [1650] that hosted `main` follows the system C ABI and at
+[1590] that the platform driver owns the hosted runtime's linkage. It left how
+a hosted executable is linked, and whether a C runtime starts it, unsaid.
+
+**Chosen:** `--link=static|libc` chooses how a hosted executable is linked.
+Linux defaults to `static`: the driver loads `hosted/linux` from the
+compiler's library (D275) and links with `-nostdlib -static -no-pie
+-Wl,-e,_landin_start` and `-Wl,--gc-sections`, with no C runtime object, no C
+library and no dynamic loader. `--link=libc` keeps the C runtime's link.
+Darwin and FreeBSD reach their systems only through their C libraries and
+link with `libc`, their only mode; `--link=static` there is a usage error, as
+is `--link` on a target with no hosted system or without `--emit=exe` or
+`--emit=asm`. A static request is refused with L0500 before any tool runs,
+naming `--link=libc`, when no library holding `hosted/linux` was found, when
+the program asks for `linker.library`, or when it refers to a bodyless
+external symbol no program item defines. The refusal counts a reference from
+any routine, reached or not, because only x86-64 collects per-item sections.
+`-v`, `--dry-run` and the build report name the mode. An emitted `.s` under
+static mode includes `hosted/linux` and still links under a C driver.
+
+**The alternatives:** libc as the default, which leaves every Linux
+executable a dynamic dependency it does not use. Letting the linker report
+undefined C symbols, whose message names neither cause nor remedy, and for
+which a missing entry symbol is only a warning. Inferring the mode from what
+the program imports, which silently changes a program's link when an import
+changes; the maintainer chose the explicit option for this reason.
+
+**Pinned by** `end-to-end/link-static-dry-run`,
+`end-to-end/link-libc-dry-run`, `end-to-end/link-static-unsatisfied-c-import`,
+`end-to-end/link-static-linker-library`, `end-to-end/link-static-needs-linux`
+and `end-to-end/link-needs-hosted-system`; the toolchain case `a static Linux
+link has no C runtime`; and the driver cases `a static link needs
+hosted/linux` and `a static link starts at hosted/linux`.
+
+### D281 — RV64's system call has the standing of `syscall` and `svc`
+
+**The tour said** at [1630] that an ordinary block is straight-line code with
+no labels or calls, and [1990] and D248 refuse control transfer by mnemonic
+on hosted x86-64, arm64 and RV64. x86-64's `syscall` and arm64's `svc` were
+never control transfers there, while RV64 counted `ecall` among them, so RV64
+alone could not reach its kernel from an ordinary block.
+
+**Chosen:** an ordinary RV64 assembly block admits `ecall`. Like x86-64's
+`syscall` and arm64's `svc`, it enters the kernel and returns to the next
+instruction, so the block stays straight-line. `ebreak`, `c.ebreak`, `mret`
+and the other control transfers stay refused.
+
+**The alternatives:** a dedicated system-call builtin, a compiler privilege
+the assembly form already expresses; keeping `ecall` refused, which leaves
+RV64 alone unable to reach its kernel. Both are declined.
+
+**Pinned by** `negative/assembly-rv64-system-call` and the targets case
+`assembly registers are spelled and chosen`, whose check that the system call
+has one standing on every hosted architecture admits all three and refuses
+RV64's breakpoints and `mret`.
+
+### D282 — The Linux heap keeps size classes over its own mappings
+
+**The tour said** at [1360] that one allocator concept serves heap, arena and
+fixed-buffer providers, and D277 had the hosted heap over-allocate through
+libc's `malloc` on every hosted system.
+
+**Chosen:** on Linux `hosted/heap` maps its own memory through `hosted/linux`
+(D279). It keeps eight size classes from 32 to 4096 bytes. A class with no
+free slot maps a 64 KiB chunk and links its slots into a free list; a freed
+slot returns to its class's list and is handed out before any new chunk is
+mapped; chunks are never unmapped. A request whose extent exceeds 4096 bytes
+is a mapping of its own, rounded to the page size and unmapped when freed.
+Two words precede every block, the slot's or mapping's start and its extent,
+written a byte at a time, so every `usize` alignment works, a power of two or
+not, and a zero-byte request is a distinct token. An addition that would
+overflow, or an extent above `PTRDIFF_MAX` less the page rounding, is
+`mem.out_of_memory` before any state changes, as is a failed mapping. The
+provider is single-threaded. Darwin and FreeBSD keep D277's `malloc`
+provider.
+
+**The alternatives:** one mapping per allocation, which spends a page on
+every small object; a general-purpose allocator with coalescing, more code
+than the current single-threaded consumers need, to be revisited with
+threads. Both are declined.
+
+**Pinned by** `runtime/linux-heap-size-classes` and
+`runtime/hosted-heap-provider`.
+
+### D283 — Zero-image data are laid out smallest first
+
+**The tour said** at [1550] that the compiler emits assembly for the
+platform's assembler and linker, and left where module data are placed to
+the backend; D18 admits an array as large as the target's `usize`.
+
+**Chosen:** zero-image module data are laid out smallest first, ties in item
+order, on x86-64 and RV64, so one object as large as RIP-relative or `auipc`
+addressing reaches cannot push another datum out of reach. arm64's ±4 GiB
+reach is unchanged. The implicit `hosted/linux` roots of a static link
+(D280) exposed it.
+
+**The alternatives:** item order, in which a 2 GiB object placed first
+pushed later data out of reach; a large-model addressing sequence, which
+lengthens the code of every access. Both are declined.
+
+**Pinned by** `runtime/large-array-offset-is-addressed` under a static link.
+
+### D284 — A static Linux executable holds the processor to its level in the entry
+
+**The tour said** at [1500] and [1510] that a build assumes a CPU feature
+level, and D255 that an x86-64 level above the baseline is written into the
+executable's GNU property note, which glibc's loader refuses on a processor
+without it. A static Linux executable (D280) has no loader, the kernel reads
+no such note, and arm64 and RV64 executables carry none.
+
+**Chosen:** `hosted/linux`'s `_landin_start_main` holds the processor to the
+executable's level before `main` runs. The level is the compile-time
+`compiler.feature` facts: `fixed if` selects, for each level, its name, its
+checks and its `check_level`, and the baseline's `check_level` is empty, so a
+baseline executable runs no check. On x86-64 the check reads `cpuid` leaves 1,
+7 and 0x80000001 for D255's v2, v3 and v4 features in D255's order, and above
+v2 requires the system to save the state the level uses: OSXSAVE and XCR0's
+SSE and AVX bits for v3, and the opmask and ZMM bits for v4, read with
+`xgetbv`. On arm64 it reads AT_HWCAP for armv8.1-a's atomics, CRC32 and RDM.
+On RV64 it asks `riscv_hwprobe` for Zba, and a kernel that cannot answer does
+not confirm the level; no Linux interface reports XTheadBa, so it is not
+checked. A processor without a feature writes one line to standard error,
+`landin: this executable needs LEVEL, and the processor lacks FEATURE`, and
+ends the process with status 127, the status glibc's loader gives when it
+refuses an executable's ISA level, so a static and a libc build of one
+program end alike on one machine. Under `--link=libc` the C runtime starts
+the program, the loader's note applies on x86-64, and the entry check does
+not run. `level`, `read_cpu_words` and `missing_feature` are public, so the
+check can be tested on injected words.
+
+**The alternatives:** no check, so a processor below the level faults with
+SIGILL wherever the first level instruction happens to run; a runtime table
+of levels, which duplicates D255 in data the baseline would carry; a compiler
+fact naming the level, which the feature facts already decide, at the cost
+that the library mirrors D255's level-to-feature table; a vendor-ID test for
+XTheadBa, which would refuse compatible implementations and accept T-Head
+cores without the extension; and status 132, SIGILL's, which reads as a
+crash rather than a refusal.
+
+**Pinned by** `runtime/linux-level-check` at the default level,
+`x86-64-v2`, `x86-64-v3` and `armv8.1-a`.
+

@@ -48,7 +48,8 @@ package Landin.Driver.Loading is
       Watch_Syntax    : access procedure (Name : String) := null;
       Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
-      Library         : String := "");
+      Library         : String := "";
+      Implicit        : String := "");
 
    --  After Load_Files, for named files with a library root: what they
    --  read is parsed, and every library module their imports reach is
@@ -65,7 +66,13 @@ package Landin.Driver.Loading is
       Previous     : access Landin.Stages.Compilation := null;
       Watch_Syntax : access procedure (Name : String) := null;
       Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
-      Dependency_Directories : access Landin.Platform.Path_List := null);
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Implicit     : String := "");
+
+   --  Implicit, in either load, names one library module the program holds
+   --  whether or not an import reaches it: hosted/linux, whose process
+   --  entry a static Linux executable starts at.  It is loaded from the
+   --  library after everything the imports reach, unless one already did.
 
    function Joined_Path (Directory, Child : String) return String;
 

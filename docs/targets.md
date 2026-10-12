@@ -17,7 +17,8 @@ explains the package boundaries, not a second work list.
 | frame preflight and emission selection | `Landin.Backend.Dispatch` |
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
 | the hosted entry's argument initializer name | `Landin.Hosted`, shared by checker and backend |
-| each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `hosted/libc`, selected by `compiler.os` |
+| each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `hosted/libc`, selected by `compiler.os` (Darwin and FreeBSD providers; Linux under `--link=libc` only) |
+| Linux system calls, the static entry `_landin_start` and the Linux heap's mappings | ordinary `hosted/linux` |
 | native driver, archive resolution and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
@@ -97,6 +98,29 @@ does not escape the platform prefix. The same mapping applies to explicit
 native names and C imports/exports, the argument initializer among them. Local labels
 are allocated separately. Existing ELF spelling and golden records remain valid.
 
+## Linux link modes
+
+`--link=static|libc` chooses how a hosted executable is linked (D280), and
+Linux is the one hosted system with a choice. The default, `static`, links
+the program alone: the driver adds `hosted/linux` from the library beside the
+compiler as an implicit root, and passes `-nostdlib -static -no-pie
+-Wl,-e,_landin_start` and `-Wl,--gc-sections` to the target's driver, so no C
+runtime object, C library or dynamic loader is linked and the process starts
+at `hosted/linux`'s `_landin_start` (D279). `--link=libc` keeps the C runtime's
+link, `main` called by C's startup, archive requests and libc among them.
+Darwin and FreeBSD reach their systems only through their C libraries, so
+`libc` is their only mode and `--link=static` there is L0002, as is `--link`
+for a target with no hosted system or without `--emit=exe` or `--emit=asm`.
+
+A static request is refused with L0500 before any tool runs, and the note
+names `--link=libc`, when no library holding `hosted/linux` was found, when the
+program asks for `linker.library`, or when it refers to a bodyless external
+symbol that no program item defines. That last check counts a reference from
+any routine, reached or not: only x86-64 collects per-item sections, so on
+arm64 and RV64 an unreached reference would still reach the linker. `-v`,
+`--dry-run` and the build report name the mode. An emitted `.s` under static
+mode includes `hosted/linux`, and it still links under an ordinary C driver.
+
 ## Linux arm64
 
 `--target=linux-arm64` is the arm64 backend's second description. Instruction
@@ -108,18 +132,18 @@ rather than by comparing it with Darwin's:
 |---|---|---|
 | object format (`Object_Format_Of`) | Mach-O: `@PAGE`/`@PAGEOFF`, `@GOTPAGE`, `__TEXT,__const`, `__DATA_CONST,__const`, `.zerofill`, `.private_extern`, `.subsections_via_symbols`, `L` labels, the underscore prefix, dSYM DWARF | ELF: `:lo12:`, `:got:`/`:got_lo12:`, `.rodata`, `.data.rel.ro.local`, `.bss`, `.hidden`, `.type`/`.size`, `.note.GNU-stack`, `.L` labels, no prefix, ELF DWARF |
 | C ABI (`C_ABI_Of`) | Apple's AAPCS64: variadic tails on the stack, named stack scalars and HFAs packed | the standard AAPCS64: variadic arguments assigned as named ones, every stack argument in whole eight-byte slots |
-| hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | `__errno_location`, `open` flags 577 |
+| hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | system calls through `hosted/linux`; under `--link=libc`, `__errno_location` and `open` flags 577 |
 
 The driver is `aarch64-linux-gnu-gcc`, the name the pinned aarch64 GNAT
-installs, and the program links as a position-independent executable, the
-driver's default, which the arm64 addressing already is. Linux's archive
+installs. Under `--link=libc` the program links as a position-independent
+executable, the driver's default, which the arm64 addressing already is; the
+default static link is fixed-address, as on x86-64. Linux's archive
 spelling and build identity apply as on x86-64. The assembler is held to the
 level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
 reserved for assembly blocks, as on Darwin. The hosted entry and the panic
-edges are Darwin's instructions; `hosted/libc` selects the Linux libc
-spellings, and `open`'s variadic mode travels in w2 under the standard
-AAPCS64 rather than on Apple's variadic stack.
+edges are Darwin's instructions; `hosted/io` makes Linux system calls through
+`hosted/linux`.
 
 ## C aliases and generated bindings
 
@@ -170,10 +194,13 @@ directive. The pinned
 GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
 so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
-property note, and glibc's loader refuses an executable whose level the
-processor lacks. Linux arm64 emits no ISA-level note and supplies no
-corresponding loader-refusal protection; its execution environment must
-support the selected level.
+property note. A libc-linked executable is refused by glibc's loader when
+the processor lacks its level; a static Linux executable carries the same
+note, which no loader reads, and `hosted/linux`'s entry refuses it instead,
+before `main`, with status 127 and one line on standard error (D284). Linux
+arm64 and RV64 executables carry no note: a static build is held to its
+level by the entry, through AT_HWCAP and `riscv_hwprobe` (XTheadBa
+excepted), and a libc build is not held to it.
 Darwin's lowest processor, Apple's M1, has more than `armv8-a`; the default
 assumes less than any Mac has, which is sound, and a build for Apple silicon
 may select `armv8.1-a`. Each test lane runs the levels a runtime fixture's

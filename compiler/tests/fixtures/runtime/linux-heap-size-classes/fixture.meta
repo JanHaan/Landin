@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: The Linux host heap reuses freed size-class slots, maps large blocks directly, honours every alignment and refuses before any state change
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64

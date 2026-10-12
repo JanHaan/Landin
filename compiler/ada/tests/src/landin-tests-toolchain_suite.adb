@@ -190,6 +190,53 @@ package body Landin.Tests.Toolchain_Suite is
          "a named linker becomes -fuse-ld= and nothing else moves");
    end A_Linker_Is_Passed_Through_The_Driver;
 
+   --  A static Linux link names no C runtime object, no C library
+   --  and no dynamic loader, and enters at hosted/linux's `_landin_start`;
+   --  every Linux architecture spells it alike before the assembly operand,
+   --  and the libc link keeps the invocation it had.
+   procedure A_Static_Linux_Link_Has_No_C_Runtime
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Static_Linux_Link_Has_No_C_Runtime
+     (Item : in out Landin.Testing.Context)
+   is
+      Prefix : constant String :=
+        "-nostdlib" & LF & "-static" & LF & "-no-pie" & LF
+        & "-Wl,-e,_landin_start" & LF & "main.s" & LF & "-o" & LF
+        & "main" & LF;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", Facts => Landin.Targets.Linux_X86_64,
+               Static => True)),
+         Prefix & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
+         "x86-64 links statically and collects unused sections");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", Facts => Landin.Targets.Linux_Arm64,
+               Static => True)),
+         Prefix & "-Wl,--gc-sections" & LF & "-Wa,-march=armv8-a" & LF,
+         "arm64 links statically and collects unused sections too");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", Facts => Landin.Targets.Linux_RV64,
+               Static => True)),
+         Prefix & "-march=rv64gc" & LF & "-mabi=lp64d" & LF
+         & "-Wa,--fatal-warnings" & LF & "-Wl,--gc-sections" & LF,
+         "RV64 links statically with its own ABI options");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", Facts => Landin.Targets.Linux_Arm64,
+               Static => False)),
+         "main.s" & LF & "-o" & LF & "main" & LF
+         & "-Wa,-march=armv8-a" & LF,
+         "the libc link of arm64 is unchanged");
+   end A_Static_Linux_Link_Has_No_C_Runtime;
+
    ------------------------------------------------------------------
    --  [1970]'s entry
    ------------------------------------------------------------------
@@ -367,6 +414,9 @@ package body Landin.Tests.Toolchain_Suite is
       Landin.Testing.Register
         (Into, "toolchain", "a linker is passed through the driver",
          A_Linker_Is_Passed_Through_The_Driver'Access);
+      Landin.Testing.Register
+        (Into, "toolchain", "a static Linux link has no C runtime",
+         A_Static_Linux_Link_Has_No_C_Runtime'Access);
       Landin.Testing.Register
         (Into, "toolchain", "the hosted entry is one shape",
          The_Hosted_Entry_Is_One_Shape'Access);
