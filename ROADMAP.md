@@ -74,10 +74,10 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.30, R12, R13.20, R14, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.31, R13.32, R13.33, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
-R12.10 depends on R13.30 to hold the first boundary. The freestanding
+R12.10 depends on R13.33 to hold the first boundary. The freestanding
 facilities retain R12.30's prerequisite and also depend on R12.60 to hold
 the boundary after the whole microcontroller phase. R12 stays in scope, and
 its gates and R13's gate retain their requirements, and no identity is renumbered. Each new R12 target repeats
@@ -1010,7 +1010,7 @@ R12.40 and R12.50 each apply this rule to any profile they first admit.
 ### R12.10 — Describe devices
 
 Status: planned
-Depends on: R11.10, R13.30
+Depends on: R11.10, R13.33
 
 A general SVD generator, memory profiles, linker configuration and firmware
 vector mappings selected per device instead of the fixed constrained profile,
@@ -1533,22 +1533,98 @@ includes generating bindings from a pinned device C header for the Cortex-M0
 ABI and running a firmware consumer through those generated declarations and
 adapters.
 
-### R13.30 — The hosted library
+### R13.17 — Services are handles
+
+Status: active
+Depends on: R13.16
+
+A program shares its services: a logger and the program write through one
+Io, and several containers allocate from one heap. Taken `inout`, a service
+is locked while anything derived from it lives, so a second argument, a
+query beside an erased view or a region beside its parent is refused, and
+the library routes around it with integer addresses and hand-held parent
+pointers. A value that is edited stays `inout`; a service becomes a handle,
+a small copyable value passed `in` that refers to its state, whose lifetime
+is checked once where the handle is made. The allocator and the four I/O
+concepts take their handle by value, every provider in `core` and `hosted`
+gives one, and the containers take theirs `in`. Process-wide state, the
+argument root, the last error and the Linux heap's classes, belongs to the
+process, so its handles borrow nothing.
+
+Exit evidence: no `inout` or `ptr` provider parameter left in `core` or
+`hosted`; fixtures pinning two lent results at once, a query and a direct
+write beside an erased view, a region and its parent used together, and a
+handle refused past its state; and the hosted and firmware corpora passing
+on every target.
+
+### R13.30 — Standard input, files and directories
 
 Status: planned
-Depends on: R13.10, R13.11, R13.13, R13.16
+Depends on: R13.10, R13.11, R13.13, R13.17
 
-Files and directories, processes, the environment, time with sleeping, and
-blocking sockets, each driven by a complete consumer, with the operating
-system reached through the same capabilities as now. Each facility is a
-narrow concept beside D268's four, with a caller-backed fake in `core/io`,
-written once over R13.16's Linux system calls and once over the C library
-for Darwin and FreeBSD. Standard input reaches a runtime fixture through a
-`stdin:` key that every runtime lane honours. This takes R551-34's hosted
-part, and with it B5's.
+The first of four hosted items, R13.30 to R13.33, which share these rules.
+Each facility is a narrow concept beside D268's four, with a caller-backed
+fake in `core/io`, written once over R13.16's Linux system calls and once
+over the C library for Darwin and FreeBSD, and reached through the same
+capabilities as now. Each is driven by a complete consumer published in
+`examples.md`, decided in `spec.md`'s register, documented in
+`docs/library.md` and `core/README.md`, and refused by name on firmware
+where it is hosted-only. Together they take R551-34's hosted part, and with
+it B5's.
 
-Exit evidence: each consumer running on every hosted target with failure
-oracles.
+This item lays the ground and adds files and directories. `core/text`
+writes `u64` and `usize` decimals and parses them from `[]u8`, replacing the
+tree's hand-written copies, and `ENOTDIR` maps to `not_found`. Standard
+input joins the process concept, which takes SR-14's by-pointer `out`, `err`
+and `argument_count` with it, and reaches a runtime fixture through a
+`stdin:` key that every runtime lane honours. A counting consumer reads
+standard input. A listing consumer builds a scratch tree, reads its names
+as bytes, validates them through `core/text` and prints `u64` sizes and
+kinds.
+
+Exit evidence: both consumers running on every hosted target with failure
+oracles: a missing path, a file used as a directory, a name that is not
+UTF-8 with each system's own outcome, and a directory larger than one read
+buffer.
+
+### R13.31 — The environment and processes
+
+Status: planned
+Depends on: R13.30
+
+Under R13.30's rules: the environment, read from the initial stack on Linux
+and through the C library elsewhere, and processes spawned by explicit path
+with explicit arguments and environment, waited for, and reported as exited
+with a code or ended by a signal. A consumer runs a shell with an explicit
+environment and reports what the child saw and how it ended.
+
+Exit evidence: the consumer running on every hosted target with failure
+oracles: a missing program and a child ended by a signal.
+
+### R13.32 — Time
+
+Status: planned
+Depends on: R13.31
+
+Under R13.30's rules: monotonic and wall clocks, and sleeping. On Linux the
+clock is read through the vDSO the auxiliary vector names, falling back to
+the system call. The process consumer times its child.
+
+Exit evidence: the consumer's timing running on every hosted target, with
+monotonic order and a sleep's lower bound as oracles.
+
+### R13.33 — Blocking sockets
+
+Status: planned
+Depends on: R13.32
+
+Under R13.30's rules: blocking TCP sockets that listen, accept, connect,
+read and write, with each system's address layouts. An echo client and
+server run over loopback in one process. Sockets under an event-driven Io
+are R14.30's.
+
+Exit evidence: the echo consumer running on every hosted target with
+failure oracles: a refused connection and an address already in use.
 
 ### R13 gate
 
@@ -1628,7 +1704,7 @@ missing answer, overlap, trap or timeout fails the run.
 ### R14.30 — A second Io
 
 Status: planned
-Depends on: R14.20, R13.30
+Depends on: R14.20, R13.33
 
 An event-driven Io that runs fibres over epoll on Linux and kqueue on
 Darwin/FreeBSD. Windows is outside this item's scope.
@@ -1854,7 +1930,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
 | R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R14.40 |
+| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.30, R13.31, R13.32, R13.33, R14.40 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
 | R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
@@ -1868,7 +1944,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R730-24 | Competitive optimization | Build-report counters are filled differently per backend, so a cross-target comparison from them is unsafe. | Before any cross-target code-quality comparison from the report. | Every declared counter filled on every backend, or the report saying which it does not measure. | scheduled R16.10 |
 | B3 | Scale and self-hosting | Separate compilation: whole-program checking is done; stable interfaces are R551-32's. | As R551-32. | As R551-32. | open |
 | B4 | Companion tool and ecosystem | Package, build and generators beyond the thin pieces the compiler owns; R551-33's. | As R551-33. | As R551-33. | open |
-| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20, R13.30, R14.40 |
+| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20, R13.30, R13.31, R13.32, R13.33, R14.40 |
 | B6 | Companion tool and ecosystem | Package naming authority, keeping the project-first override [1480]. | Before acquisition or a naming authority is offered. | A naming policy that keeps the project-first override. | open |
 | D6 | Companion tool and ecosystem | One version of a package name per program [1470]; the compiler's first-root rule is done and arranging roots is the tool's. | Before acquisition or root arrangement is offered. | Roots arranged so one version is reachable, a conflict a hard error. | open |
 | C1 | Language evolution | Affine values, which would change [0910]'s non-ownership `sink`. Merged: R730-10, the derived driver's device authority, descriptor linearity and stop are manual obligations. | A peripheral or resource program unpleasant without them. | [0910] amended with a register decision answering R730-10's obligations, on every target. | open |
@@ -1893,7 +1969,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-14 | Broader standard library | R13.13's review left interface points no consumer has yet asked for: the map is a public composition with a seven-part invariant and a cursor whose start and end are sentinel slot numbers; a tree node cannot be asked for its leaf count, kind or children; a spill list has no `clear`, `last` or `reserve`; `io.out`, `err` and `argument_count` take the provider by value while `argument_at` takes a pointer; `host()` constructs where D269 says `new`; the memory file's two flags encode three states; a saved PRIMASK is a bare `u32`; `pool.over` reports misconfiguration as `out_of_memory`; `text.nowhere` cannot be told from offset zero; a bounded diagnostic entry lends its message only byte by byte; an arena has no reset; `grow_storage` trusts three separately passed extents; the fault injector and the region refuse in-place growth, so a container tested through them never takes that path; byte slices have no shipped order. | A consumer that needs one of them, or the next whole reading of the library. | Each changed with the fixtures that pin it, or retired with the reason it stands. | open |
 | SR-15 | Broader standard library | `core/text` formats and parses decimals only as `u32`, and parses only `utf8`: a directory listing's sizes are `u64` over bytes, and six programs in the tree hand-roll their own. The process concept has no standard input, and `ENOTDIR` reports `io_failed` rather than `not_found`. | R13.30's file and directory consumer. | `u64` and `usize` decimal writing and `[]u8` parsing in `core/text`, used by `core/diag` and the derived programs; standard input; the errno mapping, each with a consumer on every hosted target. | scheduled R13.30 |
 | SR-16 | Release readiness | A debugger shows an atom as its carrier number, which differs between programs, so the derived parser's token kind stays a `u8` that the debugger sessions read as 1 and 6. | A debugger session that has to show an atom-set value. | DWARF describing an atom set as an enumeration on every debugger target, then the token kind an atom set with its sessions reading names. | open |
-| SR-17 | Usability | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
+| SR-17 | Usability | `refine fmt` cannot replace a file for an unprivileged Linux user: before replacing it, it proves the `trusted.*` attribute namespace is visible by setting one on the temporary file, which only a privileged process may, and refuses with L0005 otherwise, under `/tmp` as anywhere else. `--check` works. | A user formatting on Linux without privileges. | A visibility proof that needs no privilege, or a replacement that copies every attribute it cannot see, held by a native case run unprivileged. | open |
 | SR-20 | Usability | An unknown name applied as a type, `shlf(item)`, is L0304 "targets a declared alias", where a bare unknown name is L0201 with the near names. | The next item that touches type application refusals. | L0201 with near-name repairs for an unknown applied name, plain and generic, with the fixtures that pin L0304 there moved. | open |
 | SR-21 | Usability | A runtime fixture cannot give its program standard input, only arguments. | R13.30's standard-input consumer. | A `stdin:` fixture key honoured by every runtime lane. | scheduled R13.30 |
 | SR-22 | Usability | On Linux `refine` links through a driver named for its exact GNU triplet, `x86_64-pc-linux-gnu-gcc` or `aarch64-unknown-linux-gnu-gcc`, and deliberately takes no bare `gcc`; Debian and Ubuntu name theirs `x86_64-linux-gnu-gcc` and Fedora `x86_64-redhat-linux-gcc`, so a release archive unpacked on a stock distribution refuses its first executable with L0500. The outside-user check puts the pinned GNAT's driver on `PATH` and so does not meet it. | R13.16's libc-free link, or the next item touching the toolchain adapter. | A driver choice a stock distribution satisfies, or an installation step that says exactly what to install, with the outside-user check run without the pinned toolchain on at least one Linux host. | open |
@@ -1924,12 +2000,34 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-48 | Usability | No compiler fact names the selected CPU feature level, so `hosted/linux` mirrors D255's level-to-feature table in source to check the processor; the two can drift. | A new feature level, or a second consumer of the level's name. | A level fact or a check that the library's table matches D255's, with a fixture. | open |
 | SR-49 | Usability | An outside program listing a directory had no library facility for it, so it went down to its own system calls; nothing it could read said that directories were missing or what route to take instead. | R13.30. | `docs/library.md` naming what the library does not yet cover, with the route for each gap. | scheduled R13.30 |
 | SR-50 | Usability | `hosted/linux` keeps `call6` private and wraps eight calls, so a Linux program that needs any other call, `getdents64` for one, writes its own assembly block and system-call numbers. | R13.30. | A register decision on whether `hosted/linux` offers a public, documented route to an unwrapped call. | scheduled R13.30 |
-| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. | R13.30. | R13.30's consumers published in `examples.md` and run by the outside-user lane. | scheduled R13.30 |
+| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. | R13.30 to R13.33. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | scheduled R13.30, R13.31, R13.32, R13.33 |
 | SR-52 | Broader standard library | An outside directory listing read its entries correctly until a directory outgrew one read buffer, where a slice running past the last record trapped; a small directory cannot see that class of fault. | R13.30. | The listing consumer's oracles include a directory larger than one read buffer on every hosted target. | scheduled R13.30 |
 | SR-53 | Usability | A C record ending in a flexible array, `dirent64`'s name, has no Landin form: L0346 points at `struct` rather than the field and offers no route, and with no offset query an outside program hand-computed the name's offset as 19. | The next program reading a C record with a trailing array, or the next change to L0346. | L0346 labelling the offending field with a note naming the route, and a register decision on an offset query or a trailing-bytes field. | open |
 | SR-54 | Usability | Assembly operands are integers, so a system-call wrapper passes storage as `i64(addr …)`, and the conversion drops the binding's mutability and permission: an outside program handed the kernel an immutable module buffer to write, and nothing could object. Beside SR-29, which is the same loss when indexing a C table. | The next wrapper passing storage to an assembly block. | A pointer or slice operand that keeps its permission, or the documented idiom with the reason operands stay integers. | open |
 | SR-55 | Usability | With no panic handler a hosted program ends a trap with D232's bare terminal instruction, which a shell reports as "Illegal instruction": nothing names the kind or the site, so a newcomer cannot tell an index error from a processor fault. | The next change to D232's terminal default or to hosted startup. | The hosted default reporting the trap's kind and site before ending, or the reason it stays silent. | open |
 | SR-56 | Usability | The documentation teaches Landin from nothing, and a C programmer's habits have no stated counterparts: an outside program carried over integer addresses, header constants, a hand-computed `offsetof` and an `exit` from inside `main`. | Before the next outside reading, or release readiness. | A page mapping errno, `void *`, `offsetof`, flexible arrays, `printf` and `exit` to their Landin forms, naming those Landin has no answer for yet. | open |
+| SR-57 | Usability | Inside an `if` arm, a call's `else` is taken as the `if`'s: `x = f() else (problem) ... end` is L0110 at `(problem)`, which does not say to parenthesize the call. The grammar in [1810] derives the program, so the rule and its repair live only in a parser comment. | The next change to call recovery or to L0110. | The refusal naming the repair at that site, or the grammar stating the rule, with a fixture. | open |
+| SR-58 | Usability | An inline union of two atoms as a parameter's type is L0103 "the parameter list is never closed" at the bar, with no hint to declare an alias. | The next parser diagnostics item. | A refusal that names the alias as the route, or inline unions admitted there. | open |
+| SR-59 | Usability | One missing `process` entry, L0341, also produced L0318, L0342 and an unrelated L0301 "something unknown, not a struct" at a later call, so the one mistake read as four. | The next change to conformance diagnostics. | One report for a missing entry, with a fixture. | open |
+| SR-60 | Usability | A fixture's `run_args` paths are relative to `compiler/ada`, the harness's directory, while every other path key, `stdin:` among them, is relative to the fixture; the difference is now documented but remains. | The next change to the fixture format. | One base for every path key, or the reason `run_args` keeps its own. | open |
+| SR-61 | Usability | On Cortex-M0, calling `io.close` keeps the whole `files` conformance, about 7 KiB, and the overflow it causes reads only "assemble-link failed; inspect retained log" in the corpus line. A firmware consumer of the memory provider avoided `io.close` to fit. | R13.20, or the next Cortex image item. | Unused conformance entries left out of a firmware image, and an overflow reported with its size in the corpus line. | open |
+| SR-62 | Usability | `--root` does not override the library beside the compiler (D275, by design), and a program checked against an older `core` under `--root` was refused at the bundled `core/io` with nothing naming `--library` as the route. | The next change to D275's diagnostics. | A note naming `--library` when a project root holds a reserved namespace. | open |
+| SR-63 | Usability | L0315's note says "take the view again after mutating its source" when the use it refuses mutates nothing: an `inout` query such as `io.argument_count` beside a lent argument was refused by its convention alone, and the note sent the reader looking for a mutation. | The next change to L0315 or to the parameter conventions. | A note naming the convention that locks and the live view, with the route, held by a fixture. | open |
+| SR-64 | Usability | A parameter named after the concept it is constrained by, `allocator` in `core/mem`, shadows the concept in its own signature, and L0341 "does not name a concept" points at the parameter rather than at the shadowing. | The next name-resolution or diagnostics item. | The refusal naming the shadowing parameter, or the concept still visible in its own constraint. | open |
+| SR-65 | Usability | `zeroed` refuses a record holding a pointer, slice or pointer union (L0328), and nothing says that a service's references belong in its handle while its state keeps scalars; a library author learns it by refusal. | R13.30's first new caller-owned service. | L0328's note naming the route, and the state-and-handle split stated in `core/README.md`. | open |
+| SR-66 | Usability | `lenof` takes only an identifier, and a field path is refused with a message about something else: `lenof host.records` as "a branch's condition is followed by `then`, not `.`", and `lenof value.bytes` in an argument as L0103 "a call's arguments are never closed"; neither names `lenof`'s operand rule or the repair. | The next parser diagnostics item. | `lenof` admitted on a field path, or a refusal that says what it takes. | open |
+| SR-67 | Usability | A pointer made from an integer (L0301) and a struct literal (L0334) cannot be generic arguments without a named local first. Beside SR-37, the same need at a call argument. | The next generics item. | Both admitted as generic arguments, or refusals naming the local as the route. | open |
+| SR-68 | Usability | `dev-test` silently rebuilds from clean after an interrupted build, and while any build runs `refine` is absent for other tools, which fail with ENOENT rather than waiting or saying a build is in progress. | The next developer-tooling change. | The rebuild announced with its reason, and tools waiting on the build lock or saying why `refine` is absent. | open |
+| SR-69 | Usability | `refine fmt --check` stops at the first difference and has no standard-output mode, so a source is fixed by hand one difference at a time on a host where `fmt` cannot rewrite. Beside SR-17. | The next formatter change. | Every difference reported, or a mode that prints the formatted source. | open |
+| SR-70 | Usability | `refine check --root` refuses a single file (L0007), and `check` has no `--firmware-entry`, so a Cortex-M probe cannot be checked as one file the way it is compiled. | The next command-line change. | `check` accepting what `compile` accepts. | open |
+| SR-71 | Usability | A `mut` binding whose only use is `any(addr …)` gets no L0326 for its unneeded `mut`, so the warning that finds the others misses it. | The next change to D251's binding rules. | L0326 counting an erased view's address as a read. | open |
+| SR-72 | Usability | `dev-test --fixture` on a fixture whose targets exclude the host's, a Darwin- or FreeBSD-only one, fails rather than saying it does not apply here. | The next harness change. | The run saying the fixture does not apply to this host's target, and naming the lane that runs it. | open |
+| SR-73 | Usability | The fuzzer depends on one negative fixture's exact code and line, and nothing in that fixture's metadata says so; changing the fixture breaks the fuzzer's own test. | The next fuzzer change. | The dependency stated where the fixture is, or removed. | open |
+| SR-74 | Usability | L0342 does not say that an erased view built from a read-only address cannot supply a concept's mutable `self`. | The next change to erased conformance diagnostics. | The refusal naming the address's permission and the receiver it needs. | open |
+| SR-75 | Usability | Once a Cortex-M image overflows, the corpus reports only "assemble-link failed" and the overflow, so learning the image's `.text` size means relinking by hand with an enlarged copy of the probe's linker script. | The next Cortex code-size item. | The corpus line giving each section's size against its region, overflowing or not. | open |
+| SR-76 | Usability | `nix develop` supplies neither `qemu-aarch64` and `qemu-riscv64` nor the cross compilers that `AGENTS.md`'s cross-lane command names, so a NixOS host finds unpinned copies in the store by hand, and those lack a static `libm`. | The next item touching the environments or the cross lanes. | The development shell providing the pinned cross lane, or the command saying where it comes from. | open |
+| SR-77 | Usability | The RV64 cross lane builds `runtime/assembly-held-to-its-level` at `armv8.1-a` and fails with "unknown level for linux-rv64", though the fixture documentation says each lane runs only its own family's levels. | The next item touching `levels:` or the cross lanes. | Each lane selecting only its family's levels, with a test. | open |
+| SR-78 | Usability | Run without `--tools` on a host whose locked Cortex-M tools are elsewhere, the corpus fails every profile with "No such file or directory" for `arm-none-eabi-gcc` under the default path, rather than saying the tools are not installed there and naming `--tools`. | The next change to the Cortex-M lanes. | A refusal before any build that names the path looked in and the option. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

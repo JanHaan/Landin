@@ -1050,13 +1050,22 @@ def once(old, new):
 
 
 def restate(work, old, new):
-    """An edit giving one item's status line another status."""
+    """An edit giving one item's own status line another status."""
     def edit(text):
         at = text.index("\n### %s — " % work)
+        own = text.index("\nStatus: ", at)
         line = "\nStatus: %s\n" % old
-        assert line in text[at:], (work, old)
-        return text[:at] + text[at:].replace(line, "\nStatus: %s\n" % new, 1)
+        assert text.startswith(line, own), (work, old)
+        return text[:own] + "\nStatus: %s\n" % new + text[own + len(line):]
     return edit
+
+
+def status_of(work):
+    """The status the real roadmap gives WORK."""
+    text = real_roadmap()
+    at = text.index("\n### %s — " % work)
+    own = text.index("\nStatus: ", at) + len("\nStatus: ")
+    return text[own:text.index("\n", own)]
 
 
 def real_roadmap():
@@ -1186,7 +1195,7 @@ class RoadmapStructure(unittest.TestCase):
                                        later, CLOSED, 1) + " |"))
         self.assertTrue(any("scheduled on " + CLOSED in why for why in said))
 
-        said = roadmap_faults(restate(later, "planned", "complete"))
+        said = roadmap_faults(restate(later, status_of(later), "complete"))
         self.assertTrue(any("still scheduled on finished " + later in why
                             for why in said))
 

@@ -160,13 +160,16 @@ Depends on: none
         library = headings["The compiler finds its library"]
         boundary = headings["The OS boundary in source"]
         linux = headings["Linux without the C library"]
-        hosted = headings["The hosted library"]
+        handles = headings["Services are handles"]
+        hosted = [headings["Standard input, files and directories"],
+                  headings["The environment and processes"],
+                  headings["Time"], headings["Blocking sockets"]]
         devices = headings["Describe devices"]
         freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
         device_phase = devices.split(".")[0]
         selected = [split, conventions, reading, review, library, boundary,
-                    linux, hosted, freestanding] + [
+                    linux, handles, *hosted, freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
@@ -203,8 +206,14 @@ Depends on: none
         complete([boundary])
         assert_next(linux, "Linux without the C library")
         complete([linux])
-        assert_next(hosted, "The hosted library")
-        complete([hosted])
+        assert_next(handles, "Services are handles")
+        complete([handles])
+        for identity, title in zip(hosted, (
+                "Standard input, files and directories",
+                "The environment and processes", "Time",
+                "Blocking sockets")):
+            assert_next(identity, title)
+            complete([identity])
         assert_next(devices, "Describe devices")
         complete([devices, headings["The first board"],
                   headings["Thumb-2, Cortex-M33 and M4F"]])
