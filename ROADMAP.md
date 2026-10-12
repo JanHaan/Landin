@@ -1478,7 +1478,7 @@ FreeBSD and RV64.
 
 ### R13.16 — Linux without the C library
 
-Status: active
+Status: complete
 Depends on: R13.15
 
 Linux promises its system-call interface, so a Linux program needs no C
@@ -1501,6 +1501,19 @@ modes, and the replacements of D207's errno capture and D208's startup root;
 static Linux executables with no dynamic dependency running the whole hosted
 corpus, the derived programs and the debugger sessions on all three
 architectures; and the C ABI fixtures passing in the C-linked mode.
+
+Done: D279's `hosted/linux` makes Linux's system calls in source on all
+three architectures, and its `_landin_start` reads the initial stack, holds
+the processor to the executable's level (D284) and calls `main`; D281 gives
+RV64's `ecall` the standing of `syscall` and `svc`. D280 links Linux
+executables statically by default, with `--link=libc` for a program that
+links C and a refusal that names it, and D282 gives the Linux heap size
+classes over its own mappings. Two older defects surfaced and are fixed: a
+mutable module binding folded to its zero image, and data placed out of
+reach after a 2 GiB object (D283). All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38221083205)
+passed on `ae0b3eaf`, running static executables natively on Linux x86-64,
+arm64 and physical RV64.
 
 ### R13.20 — The freestanding library
 

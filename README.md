@@ -457,7 +457,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Current roadmap work: R13.16 — Linux without the C library.**
+**Next roadmap item: R13.30 — The hosted library (planned).**
 
 ## License
 
