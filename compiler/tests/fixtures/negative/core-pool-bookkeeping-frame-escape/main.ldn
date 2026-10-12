@@ -3,20 +3,21 @@ import core/pool
 
 pool_state: type = pool.provider
 
-forward: (base: ptr mut u8, bookkeeping: []mut pool.slot)
-         -> (state: pool_state from base, bookkeeping)
-            ! mem.out_of_memory =
+forward: (inout space: pool.space, base: ptr mut u8,
+          bookkeeping: []mut pool.slot)
+         -> (slab: pool_state from space, base, bookkeeping)
+         ! mem.out_of_memory =
     extent: usize = 64
     slot_size: usize = 64
     slot_count: usize = 1
     alignment: usize = 1
-    state = try pool.over
-        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+    slab = try pool.over
+        (space, base, extent, slot_size, slot_count, alignment, bookkeeping)
 end forward
 
-bad: (base: ptr mut u8)
-     -> (state: pool_state from base) ! mem.out_of_memory =
+bad: (inout space: pool.space, base: ptr mut u8)
+     -> (slab: pool_state from space, base) ! mem.out_of_memory =
     mut records: [1]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    state = try forward(base, bookkeeping)
+    slab = try forward(space, base, bookkeeping)
 end bad

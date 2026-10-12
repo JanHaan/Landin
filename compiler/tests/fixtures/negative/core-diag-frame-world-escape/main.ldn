@@ -6,9 +6,9 @@ retain: (escaping value: diag.streaming) -> none =
 end retain
 
 bad: () -> none =
-    mut host := hosted.host()
+    host := hosted.host()
     writer: any io.writer = any(addr host)
     stream := io.err(host)
-    logger := diag.stream(addr writer, addr stream)
+    logger := diag.stream(writer, stream)
     retain(logger)
 end bad

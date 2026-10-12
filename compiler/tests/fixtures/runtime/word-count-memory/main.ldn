@@ -1,0 +1,154 @@
+--  The published word count's counting routine, unchanged, over the
+--  caller-backed core/io.memory world instead of a hosted standard input:
+--  the routine names only a reader, so the same code runs on every target,
+--  firmware included.  Short reads split words between buffers, input ends
+--  with and without a newline, a read fails at an injected call, and a closed
+--  input refuses; render's decimal totals are held to their exact bytes.
+--  The input is closed through the provider's public flag rather than
+--  io.close, whose files evidence would not fit the 32 KiB firmware image
+--  beside everything else.
+import core/io
+import core/text
+
+counts: type = struct
+    lines: u64
+    words: u64
+    bytes: u64
+end counts
+
+--  White space as C's isspace has it: space, tab, newline, vertical tab,
+--  form feed and carriage return.  Every other byte belongs to a word.
+blank: (byte: u8) -> (yes: bool) =
+    yes = byte == 32 or (byte >= 9 and byte <= 13)
+end blank
+
+--  Read to end of input a buffer at a time.  A line is counted at its
+--  newline, so a last line without one adds no line; a word is counted at
+--  its first byte, and may run on from one buffer into the next.
+count: (provider: type is io.reader, source: provider,
+        opened: io.file, buffer: []mut u8)
+       -> (totals: counts) ! io.io_failed =
+    totals = (lines: 0, words: 0, bytes: 0)
+    mut inside: bool = false
+    loop do
+        got: usize = try io.read(source, opened, buffer)
+        break when got == 0
+        totals.bytes += u64(got)
+        for byte in buffer[0..<got] do
+            if byte == 10 then inc totals.lines end if
+            if blank(byte) then
+                inside = false
+            elsif not inside then
+                inside = true
+                inc totals.words
+            end if
+        end for
+    end loop
+end count
+
+--  The three totals in decimal, separated by spaces and ended by a newline.
+render: (totals: counts, into: []mut u8) -> (used: usize) ! text.no_space =
+    used = try text.write_u64(into, 0, totals.lines)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.words)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.bytes)
+    used = try text.write_byte(into, used, 10)
+end render
+
+unlimited: usize = 0 -% 1
+mut unused: [1]u8 = zeroed
+mut output: [1]u8 = zeroed
+mut errors: [1]u8 = zeroed
+
+--  Count INPUT as the standard input of a fresh memory world whose reads
+--  return at most LIMIT bytes into a buffer of ROOM, failing at the
+--  FAIL_AT'th read unless that is zero, and closing the input first when
+--  CLOSED says so.
+counted: (input: []u8, limit: usize, room: usize, fail_at: usize,
+          closed: bool) -> (totals: counts) ! io.io_failed =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: []io.argument = []
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<1], no_arguments, input,
+                             output[0..<1], errors[0..<1])
+    state.read_limit = limit
+    state.fail_read_at = fail_at
+    state.input_open = not closed
+    stream: io.file = io.input(memory)
+    mut buffer: [8]u8 = zeroed
+    totals = try count(memory, stream, buffer[0..<room])
+end counted
+
+totals_are: (totals: counts, lines: u64, words: u64, bytes: u64)
+            -> (yes: bool) =
+    yes = totals.lines == lines and totals.words == words
+          and totals.bytes == bytes
+end totals_are
+
+same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    yes = true
+end same
+
+counting: () -> (ok: bool) ! io.io_failed =
+    ok = false
+    split := try counted("one two\nthree\n", 3, 8, 0, false)
+    return when not totals_are(split, 2, 3, 14)
+    empty := try counted("", unlimited, 8, 0, false)
+    return when not totals_are(empty, 0, 0, 0)
+    unended := try counted(" a  b", unlimited, 2, 0, false)
+    return when not totals_are(unended, 0, 2, 5)
+    larger := try counted("alpha beta\tgamma\r\ndelta\n\nepsilon zeta",
+                          unlimited, 8, 0, false)
+    return when not totals_are(larger, 3, 6, 37)
+    ok = true
+end counting
+
+failing: () -> (ok: bool) =
+    ok = false
+    _ = counted("one two\nthree\n", 4, 8, 2, false) else (problem)
+        return when problem <> io.io_failed
+        _ = counted("one", unlimited, 8, 0, true) else (closed)
+            ok = closed == io.io_failed
+            return
+        end
+        return
+    end
+end failing
+
+rendering: () -> (ok: bool) =
+    ok = false
+    mut line: [64]u8 = zeroed
+    small: counts = (lines: 2, words: 3, bytes: 14)
+    used: usize = render(small, line[0..<64]) else 0
+    return when not same(line[0..<used], "2 3 14\n")
+    mut cramped: [5]u8 = [33, 33, 33, 33, 33]
+    _ = render(small, cramped[0..<5]) else (problem)
+        --  The byte total does not fit: what went before it is written,
+        --  and the refused total wrote nothing.
+        ok = problem == text.no_space and cramped[3] == 32
+             and cramped[4] == 33
+        return
+    end
+end rendering
+
+public main: () -> (code: i32) =
+    code = 1
+    counted_ok := counting() else false
+    return when not counted_ok
+    code = 2
+    return when not failing()
+    code = 3
+    return when not rendering()
+    code = 42
+end main

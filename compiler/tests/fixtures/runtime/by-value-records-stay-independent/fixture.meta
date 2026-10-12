@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D94 gives an in record or array parameter independent storage: a write to the original through another path during the call, or to a local copy in the callee, never reaches the value the callee was given, at word, odd and multi-word extents
+program: main.ldn
+status: 42
+constructs: 0410, 0430, 0520, 0900
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

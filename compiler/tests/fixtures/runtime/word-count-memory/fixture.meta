@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the published word count's counting routine, unchanged, counts core/io.memory's standard input on every target with words split between short reads, input with and without a final newline and larger than its buffer, an injected read failure and a closed input, and renders its u64 totals to exact bytes
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0670, 0900, 0940, 0960, 1030, 1150, 1290, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

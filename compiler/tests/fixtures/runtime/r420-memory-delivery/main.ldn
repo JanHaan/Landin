@@ -95,9 +95,11 @@ public main: () -> (code: i32) =
     mut files: [1]io.memory_file
     files[0] = configured
     no_arguments: []io.argument = []
-    mut memory := io.memory_over(
-        files[0..<1], no_arguments, output_bytes[0..<8], error_bytes[0..<8])
-    memory.write_limit = 2
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(
+        state, files[0..<1], no_arguments, "", output_bytes[0..<8],
+        error_bytes[0..<8])
+    state.write_limit = 2
     world: any io.world = any(addr memory)
 
     file_handle: io.file = world.open_write(addr delivery_path[0])
@@ -117,7 +119,7 @@ public main: () -> (code: i32) =
     mut selected: any delivery = file_target
 
     first: []u8 = "ABCDE"
-    memory.fail_write_at = 2
+    state.fail_write_at = 2
     mut partial_failed: bool = false
     selected.emit(world, first) else (problem)
         partial_failed = problem == io.io_failed
@@ -126,7 +128,7 @@ public main: () -> (code: i32) =
       or delivered_bytes[0] <> 65 or delivered_bytes[1] <> 66
       or delivered_bytes[2] <> 0
 
-    memory.fail_write_at = 0
+    state.fail_write_at = 0
     selected = count_target
     first_counted: []u8 = "cat"
     selected.emit(world, first_counted) else (problem)
@@ -146,7 +148,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    memory.fail_close_at = 2
+    state.fail_close_at = 2
     selected.finish(world) else (problem)
         _ = problem
         return
@@ -160,7 +162,7 @@ public main: () -> (code: i32) =
 
     diagnostic_stream: io.file = world.err()
     writer: any io.writer = any(addr memory)
-    mut streaming := diag.stream(addr writer, addr diagnostic_stream)
+    mut streaming := diag.stream(writer, diagnostic_stream)
     mut logger: any diag.log = any(addr streaming)
     message: []u8 = "bad"
     where: text.position = text.cursor(message, 7)
@@ -189,15 +191,15 @@ public main: () -> (code: i32) =
       and file_state.closed
       and count_state.messages == 2 and count_state.bytes == 7
       and count_state.finish_calls == 1 and count_state.closed
-      and memory.open_calls == 1 and memory.write_calls == 11
-      and memory.close_calls == 2 and memory.output_used == 3
-      and memory.errors_used == 7
+      and state.open_calls == 1 and state.write_calls == 11
+      and state.close_calls == 2 and state.output_used == 3
+      and state.errors_used == 7
       and error_bytes[0] == 69 and error_bytes[1] == 58
       and error_bytes[2] == 55 and error_bytes[3] == 58
       and error_bytes[4] == 98 and error_bytes[5] == 97
       and error_bytes[6] == 100 and error_bytes[7] == 0
-      and not memory.output_open
-      and memory.errors_open
+      and not state.output_open
+      and state.errors_open
     then
         code = 42
     end if

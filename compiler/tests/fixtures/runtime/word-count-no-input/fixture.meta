@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: a runtime fixture with no stdin key gives its program an empty standard input on every lane, so the published word count prints three zero totals rather than waiting on the harness's own input
+program: ../word-count/main.ldn
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1650, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

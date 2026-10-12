@@ -240,6 +240,35 @@ class RV64Controls(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'expected 43'):
                     LANE.execute(args, manifest)
 
+    def test_a_fixture_input_is_the_program_standard_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = base / 'source'
+            (root / 'compiler/ada').mkdir(parents=True)
+            fixture = root / 'compiler/tests/fixtures/runtime/reads-input'
+            fixture.mkdir(parents=True)
+            (fixture / 'given.txt').write_bytes(b'line one\nno newline')
+            output = base / 'evidence'
+            bundle = output / 'bundle'
+            bundle.mkdir(parents=True)
+            program = bundle / 'reads-input'
+            program.write_text('#!' + sys.executable + '\nimport sys\n'
+                               'data = sys.stdin.buffer.read()\n'
+                               'sys.stdout.write(str(len(data)) + "\\n")\n'
+                               'raise SystemExit(42)\n')
+            program.chmod(0o755)
+            fed = {'case': 'runtime/reads-input', 'label': program.name,
+                   'meta': {'status': '42', 'stdin': 'given.txt',
+                            'stdout': '19\n'}}
+            #  No `stdin:` key is an empty input, never this script's own.
+            empty = {'case': 'runtime/reads-input', 'label': program.name,
+                     'meta': {'status': '42', 'stdout': '0\n'}}
+            with patch.object(LANE, 'ROOT', root):
+                LANE.execute(SimpleNamespace(kind='runtime', output=output),
+                             {'results': [fed, empty]})
+            self.assertEqual(fed['status'], 'passed')
+            self.assertEqual(empty['status'], 'passed')
+
     def test_merged_stream_preserves_cross_descriptor_order(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)

@@ -3,8 +3,8 @@ error[L0302]: this place was consumed by `sink` and has not been assigned again
   |
 8 |     _ = try io.read(state, opened, byte[0..<1])
   |                            ^^^^^^
-  --> ../tests/fixtures/negative/core-io-file-use-after-close/main.ldn:4:35
+  --> ../tests/fixtures/negative/core-io-file-use-after-close/main.ldn:4:29
   |
-4 | bad: (inout state: hosted.system, opened: io.file)
-  |                                   ^^^^^^^^^^^^^^^ the binding containing the consumed place
+4 | bad: (state: hosted.system, opened: io.file)
+  |                             ^^^^^^^^^^^^^^^ the binding containing the consumed place
   = note: [0910]: a sunk place is dead until assignment

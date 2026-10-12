@@ -160,7 +160,7 @@ end byte_extent
 
 free_empty: (value: type, provider: type is mem.allocator,
              inout storage: mem.storage(value),
-             inout state: provider) -> none =
+             memory: provider) -> none =
     slots: usize = mem.capacity(storage)
     return when slots == 0
     extent: usize = slots * sizeof value
@@ -168,14 +168,14 @@ free_empty: (value: type, provider: type is mem.allocator,
         _ = problem
         return
     end
-    provider.free(state, block, extent)
+    provider.free(memory, block, extent)
 end free_empty
 
 discard_storage: (value: type, provider: type is mem.allocator,
                   inout storage: mem.storage(value),
-                  inout state: provider) -> none =
+                  memory: provider) -> none =
     mem.clear(storage)
-    free_empty(storage, state)
+    free_empty(storage, memory)
 end discard_storage
 
 replace_value: (value: type, inout storage: mem.storage(value),
@@ -430,7 +430,7 @@ end place_absent
 
 rehash: (key: type is cmp.hashable, item: type,
          provider: type is mem.allocator,
-         inout value: map(key, item), inout state: provider, want: usize)
+         inout value: map(key, item), memory: provider, want: usize)
         -> none ! mem.out_of_memory =
     fail mem.out_of_memory when want == 0 or want < value.count
 
@@ -440,10 +440,10 @@ rehash: (key: type is cmp.hashable, item: type,
     value_extent: usize = try byte_extent(value: item, slots: want)
 
     bucket_block: ptr mut u8 = try provider.alloc
-        (state, bucket_extent, alignof bucket)
+        (memory, bucket_extent, alignof bucket)
     mut new_buckets := mem.storage_over
         (item: bucket, base: bucket_block, slots: want)
-    undo discard_storage(new_buckets, state)
+    undo discard_storage(new_buckets, memory)
 
     mut initialized: usize = 0
     while initialized < want do
@@ -461,14 +461,14 @@ rehash: (key: type is cmp.hashable, item: type,
     end while
 
     key_block: ptr mut u8 = try provider.alloc
-        (state, key_extent, alignof key)
+        (memory, key_extent, alignof key)
     mut new_keys := mem.storage_over(item: key, base: key_block, slots: want)
-    undo discard_storage(new_keys, state)
+    undo discard_storage(new_keys, memory)
 
     value_block: ptr mut u8 = try provider.alloc
-        (state, value_extent, alignof item)
+        (memory, value_extent, alignof item)
     mut new_values := mem.storage_over(item: item, base: value_block, slots: want)
-    undo discard_storage(new_values, state)
+    undo discard_storage(new_values, memory)
 
     old_slots: usize = slots(value)
     mut old_at: usize = value.first_used
@@ -541,9 +541,9 @@ rehash: (key: type is cmp.hashable, item: type,
 
     --  Migration has succeeded. Everything below is infallible: retire all
     --  three old extents exactly once and publish the replacement last.
-    discard_storage(value.values, state)
-    discard_storage(value.keys, state)
-    discard_storage(value.buckets, state)
+    discard_storage(value.values, memory)
+    discard_storage(value.keys, memory)
+    discard_storage(value.buckets, memory)
     value.buckets = new_buckets
     value.keys = new_keys
     value.values = new_values
@@ -558,7 +558,7 @@ end rehash
 --- failure preserves the previous map. Growth can invalidate views.
 public insert: (key: type is cmp.hashable, item: type,
                 provider: type is mem.allocator,
-                inout value: map(key, item), inout state: provider,
+                inout value: map(key, item), memory: provider,
                 escaping added_key: key, escaping added_item: item)
                -> none ! mem.out_of_memory =
     position: insert_search = try search_for_insert
@@ -584,7 +584,7 @@ public insert: (key: type is cmp.hashable, item: type,
                 want = old_slots * 2
             end if
         end if
-        try rehash(value, state, want)
+        try rehash(value, memory, want)
         inserted: bool = place_absent(value, added_key, added_item)
         fail mem.out_of_memory when not inserted
         return
@@ -747,10 +747,10 @@ end remove
 public release: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item),
-                 inout state: provider) -> none =
-    discard_storage(value.values, state)
-    discard_storage(value.keys, state)
-    discard_storage(value.buckets, state)
+                 memory: provider) -> none =
+    discard_storage(value.values, memory)
+    discard_storage(value.keys, memory)
+    discard_storage(value.buckets, memory)
     value = new(key: key, item: item)
 end release
 
@@ -784,7 +784,7 @@ end clear
 --- preserves every entry; success can invalidate pointers and cursors.
 public reserve: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
-                 inout value: map(key, item), inout state: provider,
+                 inout value: map(key, item), memory: provider,
                  want: usize) -> none ! mem.out_of_memory =
     return when want == 0
     maximum: usize = 0 -% 1
@@ -794,5 +794,5 @@ public reserve: (key: type is cmp.hashable, item: type,
         want_slots = want_slots * 2
     end while
     return when want_slots <= slots(value)
-    try rehash(value, state, want_slots)
+    try rehash(value, memory, want_slots)
 end reserve

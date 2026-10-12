@@ -150,6 +150,32 @@ class FreeBSDControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'cached checksum'):
                 vm.download('https://example.invalid/never-fetched', path, '0' * 64)
 
+    def test_a_fixture_input_is_redirected_from_the_guest_copy(self):
+        lane = LANE.Lane.__new__(LANE.Lane)
+        lane.source_root = Path('/home/runner/work/Landin/Landin')
+        lane.remote_prefix = '/tmp/landin-control'
+        lane.remote_bundle = Path(lane.remote_prefix) / 'bundle'
+        results = [
+            {'case': 'runtime/word-count', 'label': 'fed',
+             'meta': {'stdin': 'input.txt', 'stream': 'output'}},
+            {'case': 'runtime/word-count-no-input', 'label': 'empty',
+             'meta': {'stream': 'output'}}]
+        written = []
+
+        class Stop(Exception):
+            pass
+
+        def checked(command, **keywords):
+            written.append(keywords.get('input', b'').decode())
+            raise Stop()
+        with self.assertRaises(Stop):
+            lane.execute(SimpleNamespace(checked=checked), results)
+        script = written[0]
+        self.assertIn(' </home/runner/work/Landin/Landin/compiler/tests/fixtures/'
+                      'runtime/word-count/input.txt >', script)
+        #  No `stdin:` key is an empty input, never the guest shell's own.
+        self.assertIn('/tmp/landin-control/bundle/empty </dev/null >', script)
+
     def test_guest_failure_cannot_supply_a_feature_verdict(self):
         guest = vm.Guest(1)
         with patch.object(guest, 'run', return_value=type('Result', (), {

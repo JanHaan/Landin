@@ -23,7 +23,7 @@ in_set: (real_coordinate: f64, imaginary_coordinate: f64)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
+render: (host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
     coordinate_size: f64 = f64(size)
     bytes_per_row: usize = size / 8
@@ -58,7 +58,7 @@ render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
 end render
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     members := render(host) else (problem)
         _ = problem
         code = 1

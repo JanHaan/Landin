@@ -29,7 +29,7 @@ mut right: two = (sentinel: 123, value: 23)
 mut other: one = (value: 37)
 node_ptr: type = ptr mut one
 
-exercise: (provider: type is mem.allocator, inout inner: provider,
+exercise: (provider: type is mem.allocator, inner: provider,
            escaping a: any counter, escaping b: any counter)
           -> (okay: bool) =
     okay = false
@@ -38,7 +38,8 @@ exercise: (provider: type is mem.allocator, inout inner: provider,
     zero: usize = 0
     six: usize = 6
     two: usize = 2
-    mut allocator := fault.new(addr inner, zero)
+    mut space: fault.space = zeroed
+    allocator := fault.over(space, inner, zero)
     mut pointers := vec.new(item: node_ptr)
     mut erased := vec.new(item: any counter)
     mut pointer_failed: bool = false
@@ -135,21 +136,23 @@ public main: () -> (code: i32) =
     code = 1
     a: any counter = any(addr left)
     b: any counter = any(addr right)
-    mut host := heap.host()
+    host := heap.host()
     heap_ok: bool = exercise(host, a, b)
     mut arena_bytes: [8192]u8 = zeroed
-    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 8192)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 8192)
     arena_ok: bool = exercise(arena, a, b)
     mut pool_bytes: [4096]u8 = zeroed
     mut slots: [3]pool.slot = zeroed
-    mut fixed_state := pool.over(addr pool_bytes[0], 4096, 1024, 3, 16,
-                           slots[0..<3]) else (problem)
+    mut pool_space: pool.space = zeroed
+    slab := pool.over(pool_space, addr pool_bytes[0], 4096, 1024, 3, 16,
+                      slots[0..<3]) else (problem)
         _ = problem
         return
     end
-    fixed_ok: bool = exercise(fixed_state, a, b)
+    fixed_ok: bool = exercise(slab, a, b)
     if heap_ok and arena_ok and fixed_ok and mem.arena_used(arena) > 0
-      and pool.live(fixed_state) == 0 and pool.allocations(fixed_state) == 8
-      and pool.frees(fixed_state) == 8 and pool.rejected_frees(fixed_state) == 0
+      and pool.live(slab) == 0 and pool.allocations(slab) == 8
+      and pool.frees(slab) == 8 and pool.rejected_frees(slab) == 0
     then code = 42 end if
 end main

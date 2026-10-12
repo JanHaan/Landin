@@ -112,7 +112,7 @@ path_rules_code: () -> (code: i32) =
     code = 42
 end path_rules_code
 
-text_path_rules_code: (inout state: hosted.system) -> (code: i32) =
+text_path_rules_code: (state: hosted.system) -> (code: i32) =
     mut scratch: [4]u8 = [91, 92, 93, 94]
     mut opened: io.file = io.out(state)
     code = 32
@@ -209,14 +209,13 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut host := hosted.host()
+    host := hosted.host()
     code = 2
     if io.argument_count(host) <> 1 then
         return
     end if
-    source_state: ptr hosted.system = addr host
     direct_index: usize = 0
-    direct_source := io.argument_at(source_state, direct_index) else (problem)
+    direct_source := io.argument_at(host, direct_index) else (problem)
         _ = problem
         return
     end
@@ -229,7 +228,7 @@ public main: () -> (code: i32) =
         code = text_path_code
         return
     end if
-    mut world: any io.world = any(addr host)
+    world: any io.world = any(addr host)
     code = 4
     if world.argument_count() <> 1 then
         return
@@ -287,7 +286,7 @@ public main: () -> (code: i32) =
     end
     code = 17
 
-    mut generic_host := hosted.host()
+    generic_host := hosted.host()
     mut path_scratch: [30]u8 = zeroed
     code = 18
     output := io.open_write_text(generic_host,

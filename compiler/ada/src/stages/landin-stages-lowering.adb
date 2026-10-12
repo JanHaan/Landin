@@ -1250,6 +1250,14 @@ package body Landin.Stages.Lowering is
       function Has_Reference_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  Whether evaluating an expression could change any storage.  Only
+      --  the forms listed in the body are known not to: reads, address and
+      --  value formation, literals, arithmetic, comparisons and scalar
+      --  conversions, which produce a value or trap.  Every other form,
+      --  a call or a statement-bearing expression above all, may write.
+      function May_Write
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       --  Evaluate every computed index in a storage chain from its root
       --  outward, bounds-check it immediately, and retain the reached
       --  aggregate element as an unspellable address slot.  Known indexes
@@ -2696,6 +2704,42 @@ package body Landin.Stages.Lowering is
          end loop;
          return False;
       end Has_Computed_Index;
+
+      function May_Write
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         if Node = Syn.No_Node then
+            return False;
+         end if;
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.Name_Reference | Syn.Member_Selection
+               | Syn.Element_Index | Syn.Inclusive_Slice
+               | Syn.Half_Open_Slice | Syn.Array_Literal
+               | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
+               | Syn.Struct_Literal | Syn.Literal_Kind
+               | Syn.Size_Of | Syn.Align_Of | Syn.Unary_Kind
+               | Syn.Binary_Kind
+               | Syn.Field_Value | Syn.Call_Argument
+               | Syn.Type_Name .. Syn.Function_Type
+            =>
+               null;
+            when Syn.Call =>
+               --  A scalar conversion is lowered as one value operation
+               --  on its operand; any other call may write.
+               if Conversion_Scalar (Of_Tree, Node) not in Ty.Scalar_Name
+               then
+                  return True;
+               end if;
+            when others =>
+               return True;
+         end case;
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            if May_Write (Of_Tree, Syn.Slot (Of_Tree, Node, Position)) then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end May_Write;
 
       --  A `.val` reached inside a selection chain changes the root from named
       --  storage to a runtime address.  Scalar loads already recognize that
@@ -5067,6 +5111,10 @@ package body Landin.Stages.Lowering is
 
          function Has_Runtime_After (Written : Natural) return Boolean;
 
+         --  Whether a written argument after WRITTEN may change storage
+         --  while it is evaluated, which is May_Write's question.
+         function Has_Writing_After (Written : Natural) return Boolean;
+
          function Nth_Written_Parameter (Index : Positive) return Positive;
 
          function Has_Runtime_After (Written : Natural) return Boolean is
@@ -5086,6 +5134,18 @@ package body Landin.Stages.Lowering is
             end loop;
             return False;
          end Has_Runtime_After;
+
+         function Has_Writing_After (Written : Natural) return Boolean is
+         begin
+            for Later in Written + 1 .. Written_Count loop
+               if May_Write
+                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Later))
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Has_Writing_After;
 
          function Nth_Written_Parameter (Index : Positive) return Positive is
             Seen : Natural := 0;
@@ -5490,7 +5550,7 @@ package body Landin.Stages.Lowering is
                               Site_Of (Of_Tree, Argument));
                         end if;
                      end;
-                  elsif Has_Runtime_After (Written)
+                  elsif Has_Writing_After (Written)
                     and then Type_At (Of_Tree, Argument)
                                in Ty.Aggregate | Ty.Fixed_Array
                   then
@@ -5499,7 +5559,10 @@ package body Landin.Stages.Lowering is
                      --  identity across the later arguments but not its
                      --  bytes, so a later argument's side effect reached
                      --  the callee.  A caller temporary takes the bytes
-                     --  now; `inout` keeps naming the place.
+                     --  now; `inout` keeps naming the place.  Later
+                     --  arguments that only read, form values or trap
+                     --  cannot change those bytes before the callee copies
+                     --  them at entry, so the address alone suffices.
                      declare
                         Reached : constant Stored_Place :=
                           Lower_Stored_Place (Of_Tree, Argument, Scope);

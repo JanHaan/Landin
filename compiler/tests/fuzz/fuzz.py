@@ -334,11 +334,11 @@ def check_imports(server):
             "textDocument": {"uri": uri},
             "position": {"line": 9, "character": 48}})
         if not any(report.get("uri") == uri and any(
-                diagnostic.get("code") == "L0340" and
+                diagnostic.get("code") == "L0303" and
                 diagnostic.get("range", {}).get("start", {}).get("line") == 9
                 for diagnostic in report.get("diagnostics", []))
                 for report in server.diagnostics):
-            raise Broken("import check did not reach L0340 at line 10")
+            raise Broken("import check did not reach L0303 at line 10")
     finally:
         server.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 

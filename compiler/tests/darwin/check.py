@@ -130,6 +130,11 @@ def workers():
     return int(value)
 
 
+def standard_input(base, meta):
+    """The file a fixture's `stdin:` names below BASE, or an empty input."""
+    return base / meta["stdin"] if meta.get("stdin") else os.devnull
+
+
 class Run:
     def __init__(self, directory):
         self.directory = directory
@@ -138,14 +143,18 @@ class Run:
         #  commands.json are one step, or two workers interleave the file.
         self.lock = threading.Lock()
 
-    def command(self, argv, name, cwd, *, expected=0, timeout=180, merged=False):
+    def command(self, argv, name, cwd, *, expected=0, timeout=180, merged=False,
+                stdin=os.devnull):
         def limits():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         started = time.monotonic()
         stdout = self.directory / (name + ".stdout")
         stderr = self.directory / (name + ".stderr")
-        with stdout.open("wb") as out, stderr.open("wb") as err:
-            process = subprocess.Popen(list(map(str, argv)), cwd=cwd, stdout=out,
+        #  A program reads the file its fixture names, or an empty input;
+        #  never this script's own, which may be a terminal.
+        with stdout.open("wb") as out, stderr.open("wb") as err, \
+                open(stdin, "rb") as given:
+            process = subprocess.Popen(list(map(str, argv)), cwd=cwd, stdin=given, stdout=out,
                                        stderr=subprocess.STDOUT if merged else err,
                                        start_new_session=True, preexec_fn=limits)
             expired = False
@@ -284,7 +293,8 @@ def main(argv=None):
                 require(b"Mach-O 64-bit executable arm64" in file_output, "wrong executable target")
                 status, stdout, stderr = run.command([executable, *shlex.split(meta.get("run_args", ""))],
                                                      label + "-execute", cwd, expected=None, timeout=30,
-                                                     merged=meta.get("stream") == "merged")
+                                                     merged=meta.get("stream") == "merged",
+                                                     stdin=standard_input(base, meta))
                 expected = ((base / meta["run_expect"]).read_bytes() if "run_expect" in meta
                             else meta["stdout"].encode() if "stdout" in meta else None)
                 verdict = "passed"

@@ -1,0 +1,114 @@
+--  An `in` aggregate is a value [0900].  The caller passes no snapshot when
+--  every later argument only reads, so these calls rely on the callee's own
+--  copy: the original changes through a pointer or a module binding while
+--  the callee runs, and the callee still reads what it was given.  The
+--  shapes cover a two-word handle, a byte-aligned odd extent, a record past
+--  every backend's unrolled limit, a fixed array and a zeroed argument.
+
+pair: type = struct
+    left: u32
+    right: u32
+end pair
+
+handle: type = struct
+    state: ptr mut u32
+    bytes: []u8
+end handle
+
+odd: type = struct
+    first: u8
+    middle: [3]u8
+    last: u8
+end odd
+
+wide: type = struct
+    head: u64
+    rows: [18]u32
+    tail: u64
+end wide
+
+mut global: pair = (left: 1, right: 2)
+
+clobber_global: () -> none =
+    global = (left: 70, right: 80)
+end clobber_global
+
+pair_through: (value: pair, original: ptr mut pair) -> (seen: u32) =
+    original.val = (left: 50, right: 60)
+    seen = value.left * 10 + value.right
+end pair_through
+
+pair_global: (value: pair) -> (seen: u32) =
+    clobber_global()
+    seen = value.left * 10 + value.right
+end pair_global
+
+--  The callee's own mutable copy is a third, separate value.
+pair_own: (value: pair) -> (seen: u32) =
+    mut own: pair = value
+    own.left = 9
+    seen = own.left * 100 + value.left * 10 + value.right
+end pair_own
+
+--  A by-value parameter has its own address.
+pair_apart: (value: pair, original: ptr pair) -> (apart: bool) =
+    apart = usize(addr value) <> usize(original)
+end pair_apart
+
+handle_through: (value: handle, original: ptr mut handle) -> (seen: u32) =
+    original.val.bytes = original.val.bytes[0..<1]
+    given: []u8 = value.bytes
+    seen = value.state.val + u32(lenof given)
+end handle_through
+
+odd_through: (value: odd, original: ptr mut odd) -> (seen: u32) =
+    original.val = (first: 0, middle: [0, 0, 0], last: 0)
+    seen = u32(value.first) + u32(value.middle[2]) + u32(value.last)
+end odd_through
+
+wide_through: (value: wide, original: ptr mut wide) -> (seen: u64) =
+    original.val.head = 0
+    original.val.rows[17] = 0
+    original.val.tail = 0
+    seen = value.head + u64(value.rows[17]) + value.tail
+end wide_through
+
+rows_through: (value: [4]u32, original: ptr mut [4]u32) -> (seen: u32) =
+    original.val[3] = 0
+    seen = value[0] + value[3]
+end rows_through
+
+wide_zeroed: (value: wide) -> (seen: u64) =
+    seen = value.head + u64(value.rows[0]) + u64(value.rows[17]) + value.tail
+end wide_zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    mut a: pair = (left: 3, right: 4)
+    return when pair_through(a, addr a) <> 34 or a.left <> 50
+    return when pair_global(global) <> 12 or global.left <> 70
+    return when pair_own(a) <> 1460 or a.left <> 50
+    return when not pair_apart(a, addr a)
+
+    mut count: u32 = 5
+    text: []u8 = "abc"
+    mut h: handle = (state: addr count, bytes: text)
+    return when handle_through(h, addr h) <> 8
+    left: []u8 = h.bytes
+    return when lenof left <> 1
+
+    mut o: odd = (first: 1, middle: [2, 3, 4], last: 5)
+    return when odd_through(o, addr o) <> 10 or o.last <> 0
+
+    mut w: wide = zeroed
+    w.head = 100
+    w.rows[17] = 20
+    w.tail = 3
+    return when wide_through(w, addr w) <> 123 or w.tail <> 0
+
+    mut r: [4]u32 = [1, 2, 3, 40]
+    return when rows_through(r, addr r) <> 41 or r[3] <> 0
+
+    return when wide_zeroed(zeroed) <> 0
+    code = 42
+end main

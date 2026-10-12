@@ -105,7 +105,25 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.ldn"),
     ("Benchmark Game FASTA",
      "compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn"),
+    ("Word count",
+     "compiler/tests/fixtures/runtime/word-count/main.ldn"),
 ]
+
+#  A running example returns 42 once its own checks pass.  One that reads
+#  its standard input is a tool rather than a test: it returns 0, and its
+#  oracle is the output its fixture expects for the input its fixture names.
+READING_EXAMPLES = {"Word count"}
+
+#  A routine a published example shares with the fixtures that run it where
+#  the example cannot: the same declarations, byte for byte, in each.
+SHARED_ROUTINES = {
+    "compiler/tests/fixtures/runtime/word-count/main.ldn": {
+        "compiler/tests/fixtures/runtime/word-count-memory/main.ldn":
+            ("counts", "blank", "count", "render"),
+        "compiler/tests/fixtures/runtime/word-count-closed-input/main.ldn":
+            ("counts", "blank", "count"),
+    },
+}
 
 #  These are the official small-input output files linked by the Benchmark
 #  Game descriptions.  The runtime harness proves that Landin produces the
@@ -3437,6 +3455,37 @@ def third_party_notices():
     return out
 
 
+def shared_routine_witnesses():
+    """A published example's routine is the one its other fixtures run.
+
+    The word count is copied out as one file, so the fixtures that run its
+    counting where the example cannot, on firmware through core/io.memory
+    and over a closed standard input, carry the routine themselves; this
+    holds every copy to the published text.
+    """
+    out = []
+    for published, copies in SHARED_ROUTINES.items():
+        missing = absent([os.path.join(ROOT, published)]
+                         + [os.path.join(ROOT, copy) for copy in copies])
+        if missing:
+            out.extend(missing)
+            continue
+        source = io.open(os.path.join(ROOT, published),
+                         encoding="utf-8").read()
+        for copy, names in sorted(copies.items()):
+            text = io.open(os.path.join(ROOT, copy), encoding="utf-8").read()
+            for name in names:
+                found = re.search(r"^" + name + r": .*?^end " + name + r"$",
+                                  source, re.M | re.S)
+                if not found:
+                    out.append((published, 1, "the shared routine %s is "
+                                "not declared here" % name))
+                elif found.group() not in text:
+                    out.append((copy, 1, "%s differs from %s's"
+                                % (name, published)))
+    return out
+
+
 def tour_example_witnesses():
     """The allocator examples retain their compiled source witnesses."""
     tour = io.open(os.path.join(ROOT, "tour.md"), encoding="utf-8").read()
@@ -3699,7 +3748,7 @@ def fixture_sources():
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
             for key in ("program", "with", "c-sources", "expect",
-                        "run_expect"):
+                        "run_expect", "stdin"):
                 named = re.search(r"^%s: (.+)$" % key, text, re.M)
                 if not named:
                     continue
@@ -4739,7 +4788,7 @@ def prototype_row_evidence(name, fields):
         if fields.get("root"):
             inputs.append("rooted")
         for label, field in (("args", "args"), ("run_args", "run_args"),
-                             ("peer", "c-sources")):
+                             ("stdin", "stdin"), ("peer", "c-sources")):
             if fields.get(field):
                 inputs.append("%s %s" % (label, fields[field]))
         status = fields.get("status")
@@ -6296,11 +6345,22 @@ def check_running_examples(full_run):
         metadata = io.open(
             os.path.join(ROOT, os.path.dirname(source), "fixture.meta"),
             encoding="utf-8").read().splitlines()
-        for required in ("class: runtime", "program: main.ldn", "status: 42"):
-            if required not in metadata:
+        reads = title in READING_EXAMPLES
+        required = ["class: runtime", "program: main.ldn",
+                    "status: 0" if reads else "status: 42"]
+        for line in required:
+            if line not in metadata:
                 out.append((source, 1,
                             "%s is showcased as running but its metadata "
-                            "does not say %r" % (title, required)))
+                            "does not say %r" % (title, line)))
+        if reads and not (any(line.startswith("stdin: ")
+                              for line in metadata)
+                          and any(line.startswith("run_expect: ")
+                                  for line in metadata)):
+            out.append((source, 1,
+                        "%s reads its input, so its metadata names the "
+                        "input it is given and the output expected"
+                        % title))
 
     return out
 
@@ -7429,6 +7489,7 @@ def main(argv):
         extra += compiler_package_inventory()
         extra += decision_status_references()
         extra += tour_example_witnesses()
+        extra += shared_routine_witnesses()
         extra += third_party_notices()
         extra += fixture_sources()
         extra += pinned_fixtures()

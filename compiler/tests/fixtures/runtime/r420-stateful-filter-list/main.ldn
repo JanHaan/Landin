@@ -30,9 +30,10 @@ mut alternate: alternating = (sentinel: 917, calls: 0, total: 0)
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
+    host := heap.host()
     budget: usize = 3
-    mut allocator := fault.new(addr host, budget)
+    mut space: fault.space = zeroed
+    allocator := fault.over(space, host, budget)
     mut filters := vec.new(item: any filter)
     first: any filter = any(addr low)
     second: any filter = any(addr alternate)

@@ -35,7 +35,8 @@ public main: () -> (code: i32) =
     --  The first eight-slot table and its sixteen-slot replacement fit. The
     --  next bucket extent does not, even before its key and value extents.
     mut backing: [1600]u8 = zeroed
-    mut arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
     mut value := map.new(key: arena_key, item: i32)
 
     map.insert(value, arena, key(1), 101) else 0

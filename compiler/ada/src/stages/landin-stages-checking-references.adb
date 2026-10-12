@@ -679,6 +679,11 @@ package body Landin.Stages.Checking.References is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      --  Set while the cleanups of an edge that leaves the function run:
+      --  after a return or a propagated failure nothing in this body runs
+      --  but the cleanups still pending, so no later statement is a use.
+      Leaving_Function : Boolean := False;
+
       --  One loop being analysed.  Its `break` edges are joined into
       --  Exit_State and its `continue` edges into Back_State; the loop
       --  handler joins the latter with the body's fallthrough to form the
@@ -1785,6 +1790,9 @@ package body Landin.Stages.Checking.References is
                return True;
             end if;
          end loop;
+         if Leaving_Function then
+            return False;
+         end if;
          if Positions.Is_Empty then
             --  An expression body: whatever follows the call is in it.
             return Reads_In (Body_Node, After);
@@ -1795,10 +1803,59 @@ package body Landin.Stages.Checking.References is
             Top : constant Position_Frame := Positions.Last_Element;
          begin
             if Top.Index in 1 .. Syn.Statement_Count (Of_Tree, Top.Block)
-              and then Reads_In
-                (Syn.Nth_Statement (Of_Tree, Top.Block, Top.Index), After)
             then
-               return True;
+               declare
+                  Current : constant Syn.Node_Id :=
+                    Syn.Nth_Statement (Of_Tree, Top.Block, Top.Index);
+
+                  --  Whether a `break` or `continue` lies anywhere below
+                  --  Node: a recovery holding one can leave the statement
+                  --  without completing its replacement.
+                  function Transfers (Node : Syn.Node_Id) return Boolean;
+
+                  function Transfers (Node : Syn.Node_Id) return Boolean is
+                  begin
+                     if Node = Syn.No_Node then
+                        return False;
+                     elsif Syn.Kind (Of_Tree, Node)
+                       in Syn.Break_Statement | Syn.Continue_Statement
+                     then
+                        return True;
+                     end if;
+                     for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+                        if Transfers (Syn.Slot (Of_Tree, Node, Slot)) then
+                           return True;
+                        end if;
+                     end loop;
+                     if Syn.Kind (Of_Tree, Node)
+                          in Syn.Call | Syn.Labeled_Application
+                     then
+                        return Transfers (Syn.Recovery_Of (Of_Tree, Node));
+                     end if;
+                     return False;
+                  end Transfers;
+               begin
+                  if Reads_In (Current, After) then
+                     return True;
+                  end if;
+                  --  [0830]: taking the view again replaces the borrower
+                  --  once the call returns, so the old view ends at this
+                  --  statement even when the new one is taken through the
+                  --  same storage's `inout`.
+                  if ((Syn.Kind (Of_Tree, Current) = Syn.Assignment
+                       and then Is_Replacement
+                         (Syn.Target_Of (Of_Tree, Current))
+                       and then Syn.Assignment_Operation (Of_Tree, Current)
+                         = Landin.Tokens.Plain_Assignment)
+                      or else
+                        (Syn.Kind (Of_Tree, Current) = Syn.Binding
+                         and then Declaration_At (Of_Tree, Current)
+                           = Borrower))
+                    and then not Transfers (Syn.Value_Of (Of_Tree, Current))
+                  then
+                     return False;
+                  end if;
+               end;
             end if;
          end;
 
@@ -2840,6 +2897,46 @@ package body Landin.Stages.Checking.References is
                   --  [0480]/D189: an empty result has no reference whose
                   --  sources could disagree.  A present or unknown result
                   --  still owes exact agreement, even with no origin bits.
+                  --  A source whose written type is a type formal can
+                  --  supply no origin where this instance gives it a type
+                  --  holding no reference, as a copied handle that borrows
+                  --  nothing does; the clause still binds every instance
+                  --  where it can.
+                  for Source in Expected'Range loop
+                     if Expected (Source)
+                       and then not Fact.From (Source)
+                       and then Source <= Syn.Parameter_Count
+                         (Of_Tree, Function_Node)
+                       and then Source <= Landin.Checking
+                         .Signature_Parameter_Count (Types.all, Signature)
+                       and then not Landin.Checking.Contains_References
+                         (Types.all,
+                          Landin.Checking.Nth_Signature_Parameter
+                            (Types.all, Signature, Source))
+                     then
+                        declare
+                           Written : constant Syn.Node_Id :=
+                             Syn.Declared_Type
+                               (Of_Tree,
+                                Syn.Nth_Parameter
+                                  (Of_Tree, Function_Node, Source));
+                        begin
+                           if Written /= Syn.No_Node
+                             and then Syn.Kind (Of_Tree, Written)
+                               in Syn.Type_Reference | Syn.Name_Reference
+                             and then Res.Verdict_Of
+                               (Meanings.all, Of_Tree, Written) = Res.Bound
+                             and then Res.Sort_Of
+                               (Meanings.all,
+                                Res.Bound_To
+                                  (Meanings.all, Of_Tree, Written))
+                                 = Res.Type_Parameter
+                           then
+                              Expected (Source) := False;
+                           end if;
+                        end;
+                     end if;
+                  end loop;
                   for Source in Expected'Range loop
                      Same := Same
                        and then Expected (Source) = Fact.From (Source);
@@ -3022,10 +3119,14 @@ package body Landin.Stages.Checking.References is
       is
          Last : constant Natural := Natural (Cleanup_Stack.Length);
          Disabled : array (1 .. Last) of Boolean := [others => False];
+         Was_Leaving : constant Boolean := Leaving_Function;
       begin
          if First = 0 or else First > Last then
             return;
          end if;
+         Leaving_Function := Was_Leaving
+           or else On_Exit in Landin.Cleanup.Successful_Return
+                            | Landin.Cleanup.Failure_Propagation;
 
          --  Active is cleared while an entry runs so a transfer from one
          --  of its arguments unwinds the still-pending entries without
@@ -3061,6 +3162,7 @@ package body Landin.Stages.Checking.References is
                end;
             end if;
          end loop;
+         Leaving_Function := Was_Leaving;
       end Run_Cleanups;
 
       function Transfer_Loop

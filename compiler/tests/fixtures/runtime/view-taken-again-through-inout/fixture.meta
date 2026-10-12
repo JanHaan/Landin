@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a view taken again through an inout call and assigned to the same binding ends the old view at that assignment
+program: main.ldn
+status: 42
+constructs: 0790, 0800, 0830, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

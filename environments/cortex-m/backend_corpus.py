@@ -38,6 +38,11 @@ def inventory():
                 'unreviewed counterpart change: ' + name)
     for name, row in rows.items():
         require(row['mode'] in ('execute', 'refuse', 'restriction'), 'unknown corpus disposition')
+        #  Firmware has no standard input to give a program, so one that
+        #  reads it is refused by name or restricted, never executed.
+        meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
+        require(row['mode'] != 'execute' or not meta.get('stdin'),
+                'a fixture reading standard input cannot execute on firmware: ' + name)
         if row['mode'] != 'execute' or 'profile_limit' in row:
             require(bool(row.get('reason')), 'unexplained corpus exclusion: ' + name)
         if row['mode'] == 'restriction':

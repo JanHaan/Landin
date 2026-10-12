@@ -10,7 +10,8 @@ in `examples.md` are copied out as a reader would copy them, each into a
 project directory of its own, compiled there with `refine compile` and no
 option, and run.  The environment is PATH alone, so nothing the checkout or
 a developer's shell provides can stand in for what the installation lacks.
-Each program is held to its fixture's status and output oracle.
+Each program is held to its fixture's status and output oracle, and reads the
+file its fixture's `stdin:` names as its standard input, or an empty one.
 
 The first program is read from its runtime fixture, not from the README
 that shows it: the gate may skip this lane for an edit confined to the
@@ -38,13 +39,14 @@ def landin_block(text, start):
 
 
 def first_program():
-    """The first program, the output it prints and its status."""
+    """The first program, the output it prints, its status and its input."""
     return ((FIRST_PROGRAM / "main.ldn").read_text(encoding="utf-8"),
-            (FIRST_PROGRAM / "output.txt").read_bytes(), 0)
+            (FIRST_PROGRAM / "output.txt").read_bytes(), 0, b"")
 
 
 def examples():
-    """Each example's source as examples.md shows it, with its oracles."""
+    """Each example's source as examples.md shows it, with its oracles and
+    the bytes its standard input reads."""
     text = (ROOT / "examples.md").read_text(encoding="utf-8")
     for named in re.finditer(r"^Fixture source: `([^`]+)/main\.ldn`\.$", text,
                              re.M):
@@ -56,13 +58,18 @@ def examples():
         expected = None
         if "run_expect" in meta:
             expected = (fixture / meta["run_expect"]).read_bytes()
-        yield fixture.name, source, expected, int(meta.get("status", "0"))
+        given = b""
+        if "stdin" in meta:
+            given = (fixture / meta["stdin"]).read_bytes()
+        yield (fixture.name, source, expected, int(meta.get("status", "0")),
+               given)
 
 
-def run(argv, cwd, env, what):
-    """Run ARGV, keeping its output as bytes, since some oracles are images."""
+def run(argv, cwd, env, what, given=b""):
+    """Run ARGV with GIVEN as its standard input, keeping its output as
+    bytes, since some oracles are images."""
     ran = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
-                         timeout=600)
+                         input=given, timeout=600)
     shown = (ran.stdout[-2000:] + ran.stderr[-2000:]).decode(
         "utf-8", "replace")
     return ran, "%s: %s exited %d\n%s" % (what, " ".join(argv),
@@ -91,9 +98,8 @@ def main():
         failures.append("refine does not report %r\n%s" % (library, report))
 
     programs = [("first-program",) + first_program()]
-    programs += [(name, source, expected, status)
-                 for name, source, expected, status in examples()]
-    for name, source, expected, status in programs:
+    programs += list(examples())
+    for name, source, expected, status, given in programs:
         project = work / name
         project.mkdir(exist_ok=True)
         (project / "main.ldn").write_text(source, encoding="utf-8")
@@ -102,7 +108,8 @@ def main():
         if built.returncode != 0:
             failures.append(report)
             continue
-        ran, report = run([str(project / "prog")], project, env, name)
+        ran, report = run([str(project / "prog")], project, env, name,
+                          given)
         if ran.returncode != status:
             failures.append("expected status %d\n%s" % (status, report))
         elif expected is not None and ran.stdout != expected:

@@ -1,7 +1,10 @@
-import hosted/heap
+import core/mem
 import core/region
 
-bad: () -> (value: region.region(heap.system)) =
-    mut provider := heap.host()
-    value = region.new(addr provider)
+bad: (inout ledger: region.space(0))
+     -> (value: region.region(mem.arena) from ledger) =
+    mut backing: [64]u8 = zeroed
+    mut space: mem.arena_space = zeroed
+    provider := mem.arena_over_unchecked(space, addr backing[0], 64)
+    value = region.over(ledger, provider)
 end bad

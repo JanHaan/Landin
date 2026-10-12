@@ -229,6 +229,12 @@
     "runtime/any-argument-save": {
       "mode": "execute"
     },
+    "runtime/any-allocator-handle": {
+      "mode": "execute"
+    },
+    "runtime/any-by-value-self": {
+      "mode": "execute"
+    },
     "runtime/any-compiler-constraint": {
       "mode": "execute"
     },
@@ -344,6 +350,9 @@
       "mode": "execute"
     },
     "runtime/break-in-value-block": {
+      "mode": "execute"
+    },
+    "runtime/by-value-records-stay-independent": {
       "mode": "execute"
     },
     "runtime/c-aliases-unsigned-char": {
@@ -497,6 +506,9 @@
     "runtime/core-text-byte-positions": {
       "mode": "execute"
     },
+    "runtime/core-text-decimal-widths": {
+      "mode": "execute"
+    },
     "runtime/core-text-runtime-helpers": {
       "mode": "execute",
       "profile_limit": "selected-image",
@@ -571,6 +583,9 @@
       "mode": "execute"
     },
     "runtime/deep-nested-struct-leaves": {
+      "mode": "execute"
+    },
+    "runtime/defer-at-return-edge": {
       "mode": "execute"
     },
     "runtime/defer-call-shapes": {
@@ -773,6 +788,9 @@
     "runtime/generic-fixed-array-deduction": {
       "mode": "execute"
     },
+    "runtime/generic-from-reference-free-source": {
+      "mode": "execute"
+    },
     "runtime/generic-identity-deduction": {
       "mode": "execute"
     },
@@ -818,6 +836,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
+    },
+    "runtime/hosted-io-not-a-directory": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/hosted-io-reads-parser-input": {
       "codes": [
@@ -878,6 +903,12 @@
       "mode": "execute"
     },
     "runtime/integer-to-float-conversions": {
+      "mode": "execute"
+    },
+    "runtime/io-handle-beside-erased-view": {
+      "mode": "execute"
+    },
+    "runtime/io-handle-lends-two-arguments": {
       "mode": "execute"
     },
     "runtime/large-array-offset-is-addressed": {
@@ -1886,6 +1917,9 @@
     "runtime/reference-place-updates": {
       "mode": "execute"
     },
+    "runtime/region-beside-parent": {
+      "mode": "execute"
+    },
     "runtime/region-bounded-pool": {
       "mode": "execute",
       "profile_limit": "selected-image",
@@ -2196,11 +2230,45 @@
     "runtime/variant-zeroed-storage-is-distinct": {
       "mode": "execute"
     },
+    "runtime/view-taken-again-through-inout": {
+      "mode": "execute"
+    },
     "runtime/whole-array-elements": {
       "mode": "execute"
     },
     "runtime/whole-arrays-copy-between-storage": {
       "mode": "execute"
+    },
+    "runtime/word-count": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+    },
+    "runtime/word-count-closed-input": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+    },
+    "runtime/word-count-empty": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+    },
+    "runtime/word-count-memory": {
+      "mode": "execute"
+    },
+    "runtime/word-count-no-input": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/wrapping-add-and-subtract-cross-the-boundaries": {
       "mode": "execute"

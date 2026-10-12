@@ -135,6 +135,9 @@ package body Landin.Testing.Fixtures is
    function Run_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Run_Args));
 
+   function Standard_Input (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Stdin));
+
    function Run_Expect (Item : Fixture) return String
      is (Unbounded.To_String (Item.Run_Expect));
 
@@ -360,6 +363,7 @@ package body Landin.Testing.Fixtures is
      is (In_Catalogue.Problems.Element (Index));
 
    function Is_Relative_C_Source (Name : String) return Boolean;
+   function Is_Below_Directory (Name : String) return Boolean;
 
    function Trimmed (Text : String) return String is
       First : Integer := Text'First;
@@ -381,12 +385,19 @@ package body Landin.Testing.Fixtures is
    --  Keep them below the fixture directory on every host, and require the
    --  extension that says which inputs the C driver should compile.
    function Is_Relative_C_Source (Name : String) return Boolean is
+   begin
+      return Name'Length >= 3
+        and then Name (Name'Last - 1 .. Name'Last) = ".c"
+        and then Is_Below_Directory (Name);
+   end Is_Relative_C_Source;
+
+   --  A slash-separated relative path with no empty, `.` or `..` component,
+   --  no backslash and no colon: the same file below the fixture directory
+   --  on every host, whichever lane opens it.
+   function Is_Below_Directory (Name : String) return Boolean is
       First : Integer := Name'First;
    begin
-      if Name'Length < 3
-        or else Name (Name'Last - 1 .. Name'Last) /= ".c"
-        or else Name (Name'First) in '/' | '\'
-      then
+      if Name'Length = 0 or else Name (Name'First) in '/' | '\' then
          return False;
       end if;
 
@@ -405,7 +416,7 @@ package body Landin.Testing.Fixtures is
 
       return First <= Name'Last
         and then Name (First .. Name'Last) not in "." | "..";
-   end Is_Relative_C_Source;
+   end Is_Below_Directory;
 
    ---------------------------------------------------------------------
    --  Read_Metadata
@@ -441,6 +452,7 @@ package body Landin.Testing.Fixtures is
       Seen_Targets : Boolean := False;
       Seen_Args    : Boolean := False;
       Seen_Run_Args : Boolean := False;
+      Seen_Stdin   : Boolean := False;
       Seen_Run_Expect : Boolean := False;
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
@@ -648,6 +660,21 @@ package body Landin.Testing.Fixtures is
                end if;
                Seen_Run_Args := True;
                Item.Run_Args := Unbounded.To_Unbounded_String (Value);
+
+            elsif Key = "stdin" then
+               if Seen_Stdin then
+                  Complain ("duplicate key: stdin");
+                  return;
+               end if;
+               Seen_Stdin := True;
+
+               if not Is_Below_Directory (Value) then
+                  Complain ("stdin is not a file below the fixture"
+                            & " directory: "
+                            & (if Value = "" then "<empty>" else Value));
+               else
+                  Item.Stdin := Unbounded.To_Unbounded_String (Value);
+               end if;
 
             elsif Key = "run_expect" then
                if Seen_Run_Expect then
@@ -929,6 +956,7 @@ package body Landin.Testing.Fixtures is
                Targets => Unbounded.Null_Unbounded_String,
                Args    => Unbounded.Null_Unbounded_String,
                Run_Args => Unbounded.Null_Unbounded_String,
+               Stdin    => Unbounded.Null_Unbounded_String,
                Run_Expect => Unbounded.Null_Unbounded_String,
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
@@ -1022,6 +1050,13 @@ package body Landin.Testing.Fixtures is
                   or else Item.Class not in Runtime | Abi)
       then
          Complain ("run_args belong only to a runtime or ABI fixture");
+      end if;
+
+      if Seen_Stdin
+        and then (not Seen_Class
+                  or else Item.Class not in Runtime | Abi)
+      then
+         Complain ("stdin belongs only to a runtime or ABI fixture");
       end if;
 
       if Seen_Run_Expect

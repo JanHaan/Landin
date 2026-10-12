@@ -21,25 +21,26 @@ counted is cmp.ordered (less: less_counted)
 
 public main: () -> (code: i32) =
     code = 1
-    mut heap_state := heap.host()
+    heap := heap.host()
     budget: usize = 10
-    mut state := fault.new(addr heap_state, budget)
+    mut space: fault.space = zeroed
+    limited := fault.over(space, heap, budget)
     mut numbers := vec.new(item: i32)
     sort.sort(vec.used(numbers))
-    vec.push(numbers, state, 20) else (problem)
+    vec.push(numbers, limited, 20) else (problem)
         _ = problem
         return
     end
     sort.sort(vec.used(numbers))
     mut n: i32 = 19
     while n > 0 do
-        vec.push(numbers, state, n) else (problem)
+        vec.push(numbers, limited, n) else (problem)
             _ = problem
             return
         end
         dec n
     end while
-    before: usize = fault.attempts(state)
+    before: usize = fault.attempts(limited)
     sort.sort(vec.used(numbers))
     sort.sort(vec.used(numbers))
     sorted: bool = begin
@@ -57,7 +58,7 @@ public main: () -> (code: i32) =
         squares += value * value
     end for
     duplicate: i32 = 7
-    vec.push(numbers, state, duplicate) else (problem)
+    vec.push(numbers, limited, duplicate) else (problem)
         _ = problem
         return
     end
@@ -90,11 +91,11 @@ public main: () -> (code: i32) =
         large_sorted = large_sorted and large[at].value == i32(at + 1)
         inc at
     end while
-    after: usize = fault.attempts(state)
-    vec.release(numbers, state)
+    after: usize = fault.attempts(limited)
+    vec.release(numbers, limited)
     if sorted and squares == 2870 and duplicates and selection_ok
       and scalable_count and large_sorted and before == after
-      and fault.live(state) == 0 and fault.frees(state) == 3
+      and fault.live(limited) == 0 and fault.frees(limited) == 3
     then
         code = 42
     end if

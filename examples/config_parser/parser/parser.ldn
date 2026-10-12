@@ -122,8 +122,8 @@ end parse_digits
 
 parse_entry: (source: []u8, inout parser: parser_state,
               inout logger: any diag.log,
-              escaping inout arena: mem.arena)
-             -> (item: entry from arena)
+              arena: mem.arena)
+             -> (item: entry)
              ! entry_failure =
     if parser.look.what <> lexer.identifier then
         try report(logger, parser.look.begins, expected_name[0..<16])
@@ -216,7 +216,7 @@ end recover_entry_failure
 
 parse_and_append: (source: []u8, inout parser: parser_state,
                    inout logger: any diag.log,
-                   escaping inout arena: mem.arena,
+                   arena: mem.arena,
                    inout items: vec.list(ptr mut value))
                   -> none ! mem.out_of_memory | io.io_failed =
     parsed := parse_entry(source, parser, logger, arena) else (problem)
@@ -232,7 +232,7 @@ end parse_and_append
 
 parse_sequence: (source: []u8, inout parser: parser_state,
                  inout logger: any diag.log,
-                 escaping inout arena: mem.arena,
+                 arena: mem.arena,
                  inout items: vec.list(ptr mut value),
                  nested: bool)
                 -> none ! mem.out_of_memory | io.io_failed =
@@ -269,7 +269,7 @@ public empty: () -> (result: document) =
 end empty
 
 public parse_file: (source: []u8, inout logger: any diag.log,
-                    escaping inout arena: mem.arena, inout result: document)
+                    arena: mem.arena, inout result: document)
                    -> none ! mem.out_of_memory | io.io_failed =
     mut scanning := lexer.open()
     first: lexer.token = lexer.next(source, scanning)

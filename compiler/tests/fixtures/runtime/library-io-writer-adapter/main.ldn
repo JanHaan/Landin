@@ -2,19 +2,24 @@ import core/io
 
 --  A small world with one writable stream. Unsupported services refuse;
 --  the adapter must preserve partial progress and failures on that stream.
-device: type = struct
+device_state: type = struct
     byte: u8
     calls: usize
+end device_state
+
+--  The provider is a handle on the caller's state.
+device: type = struct
+    state: ptr mut device_state
 end device
 
-write: (self: ptr mut device, opened: io.file, bytes: []u8)
+write: (self: device, opened: io.file, bytes: []u8)
        -> none ! io.io_failed =
     fail io.io_failed when i32(opened) <> 1 or lenof bytes <> 1
-    self.val.byte = bytes[0]
-    inc self.val.calls
+    self.state.val.byte = bytes[0]
+    inc self.state.val.calls
 end write
 
-write_some: (self: ptr mut device, opened: io.file, bytes: []u8)
+write_some: (self: device, opened: io.file, bytes: []u8)
             -> (count: usize) ! io.io_failed =
     count = 0
     return when lenof bytes == 0
@@ -22,7 +27,7 @@ write_some: (self: ptr mut device, opened: io.file, bytes: []u8)
     count = 1
 end write_some
 
-read: (self: ptr mut device, opened: io.file, into: []mut u8)
+read: (self: device, opened: io.file, into: []mut u8)
       -> (count: usize) ! io.io_failed =
     _ = self
     _ = opened
@@ -30,14 +35,14 @@ read: (self: ptr mut device, opened: io.file, into: []mut u8)
     fail io.io_failed
 end read
 
-open: (self: ptr mut device, path: ptr u8)
+open: (self: device, path: ptr u8)
       -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
     _ = self
     _ = path
     fail io.no_access
 end open
 
-same_file: (self: ptr mut device, left: ptr u8, right: ptr u8)
+same_file: (self: device, left: ptr u8, right: ptr u8)
            -> (same: bool) ! io.io_failed =
     _ = self
     _ = left
@@ -45,23 +50,23 @@ same_file: (self: ptr mut device, left: ptr u8, right: ptr u8)
     fail io.io_failed
 end same_file
 
-close: (self: ptr mut device, sink opened: io.file) -> none ! io.io_failed =
+close: (self: device, sink opened: io.file) -> none ! io.io_failed =
     _ = self
     _ = opened
     fail io.io_failed
 end close
 
-out: (self: ptr device) -> (stream: io.file) =
+out: (self: device) -> (stream: io.file) =
     _ = self
     stream = io.file(1)
 end out
 
-argument_count: (self: ptr device) -> (count: usize) =
+argument_count: (self: device) -> (count: usize) =
     _ = self
     count = 0
 end argument_count
 
-argument: (self: ptr device, index: usize)
+argument: (self: device, index: usize)
           -> (value: io.argument from self) ! io.no_argument =
     _ = self
     _ = index
@@ -72,15 +77,16 @@ device is io.writer (write: write, write_some: write_some)
 device is io.reader (read: read)
 device is io.files (open_read: open, open_write: open,
                     same_file: same_file, close: close)
-device is io.process (out: out, err: out, argument_count: argument_count,
-                      argument: argument)
+device is io.process (input: out, out: out, err: out,
+                      argument_count: argument_count, argument: argument)
 device is io.world ()
 
 exercise: () -> (ok: bool) ! io.io_failed =
     ok = false
-    mut state: device = (byte: 0, calls: 0)
-    world: any io.world = any(addr state)
-    mut lent := io.writer_of(addr world)
+    mut state: device_state = (byte: 0, calls: 0)
+    host: device = (state: addr state)
+    world: any io.world = any(addr host)
+    lent := io.writer_of(world)
     writer: any io.writer = any(addr lent)
     try writer.write(world.out(), "A")
     return when state.byte <> 65 or state.calls <> 1

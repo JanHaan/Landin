@@ -1,0 +1,31 @@
+--  Assigning a view taken again ends the old one only on the edges that
+--  reach the assignment. A recovery that breaks out of the loop keeps the
+--  old view, which is read after the loop, so the `inout` call still
+--  conflicts with it.
+slots: type = struct
+    values: [2]i32
+end slots
+
+slot_at: (inout source: slots, index: usize) -> (slot: ptr mut i32 from source)
+         ! out_of_range =
+    fail out_of_range when index > 1
+    slot = addr source.values[index]
+end slot_at
+
+out_of_range: atom
+
+public main: () -> (code: i32) =
+    code = 1
+    mut table: slots = (values: [0, 0])
+    mut slot := slot_at(table, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    for index in usize(1)..<usize(3) do
+        slot = slot_at(table, index) else (problem)
+            _ = problem
+            break
+        end
+    end for
+    code = slot.val
+end main

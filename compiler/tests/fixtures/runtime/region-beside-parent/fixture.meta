@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a region and its parent allocator are used together while the region lives, and releasing the region's ledger returns only the region's payloads
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0790, 0800, 0820, 1360, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

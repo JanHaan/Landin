@@ -54,6 +54,11 @@ package Landin.Testing.Fixtures is
    --  Arguments handed to a compiled runtime or ABI program, separately from
    --  the `args` used to invoke refine for recorded command-line fixtures.
    function Run_Args (Item : Fixture) return String;
+   --  The file, relative to the fixture directory and below it, whose bytes
+   --  a compiled runtime or ABI program reads as its standard input, or ""
+   --  when the fixture names none.  Every lane gives a program without one
+   --  an empty standard input, never the harness's own.
+   function Standard_Input (Item : Fixture) return String;
    --  Bytes expected from the compiled program on its selected Stream.
    --  This is separate from `expect`, which records refine's own output.
    function Run_Expect (Item : Fixture) return String;
@@ -215,6 +220,7 @@ private
       Targets : Unbounded.Unbounded_String;
       Args    : Unbounded.Unbounded_String;
       Run_Args : Unbounded.Unbounded_String;
+      Stdin    : Unbounded.Unbounded_String;
       Run_Expect : Unbounded.Unbounded_String;
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;

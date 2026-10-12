@@ -2,8 +2,9 @@ import hosted/heap
 import core/region
 
 public main: () -> (code: i32) =
-    mut provider := heap.host()
-    value := region.new(addr provider)
-    _ = value.allocations
+    provider := heap.host()
+    mut ledger: region.space(0) = zeroed
+    value := region.over(ledger, provider)
+    _ = value.records
     code = 0
 end main

@@ -19,7 +19,7 @@ Their fixture metadata and target lanes determine where they execute.
 
 Memory providers and typed storage: the foundation for allocation, initialized prefixes and caller-owned backing.
 
-Use `allocator` evidence to supply storage explicitly. `arena` is monotonic and has no reset: its allocations end with its backing. `aligned_offset` is the arithmetic a bump provider of your own needs. Typed storage over caller bytes comes from `storage_over`; it does not establish ownership or prove alias lifetimes. Use the same provider and extent when freeing a block. Deterministic failure injection over any provider is `core/fault`.
+Use `allocator` evidence to supply storage explicitly. A provider is a handle passed by value, `memory` in every signature, so several containers share one without locking it. `arena` is monotonic and has no reset: its allocations end with its backing. `arena_over` fills the caller's `arena_space`, declared `zeroed` beside the backing, and returns the handle from it. `aligned_offset` is the arithmetic a bump provider of your own needs. Typed storage over caller bytes comes from `storage_over`; it does not establish ownership or prove alias lifetimes. Use the same provider and extent when freeing a block. Deterministic failure injection over any provider is `core/fault`.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-mem/main.ldn)
 
@@ -27,7 +27,7 @@ Use `allocator` evidence to supply storage explicitly. `arena` is monotonic and 
 
 A growable contiguous list with explicit allocation and rollback on failed growth.
 
-`new` starts without allocating; `reserve` and `push` receive the provider. `get` copies, `at` lends a writable pointer, and `used` lends the initialized slice. End views before relocation or release. Clearing or releasing a container never frees resources referenced by its items.
+`new` starts without allocating; `reserve` and `push` receive the provider's handle. `get` copies, `at` lends a writable pointer, and `used` lends the initialized slice. End views before relocation or release. Clearing or releasing a container never frees resources referenced by its items.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-vec/main.ldn)
 
@@ -71,13 +71,15 @@ Byte cursors, validated UTF-8 views, byte search and bounded decimal conversion.
 
 Cursors advance by bytes. `from_bytes` validates bytes as UTF-8 and reports `invalid_text` when they are not, and `valid` answers the same question without a view; the `utf8(bytes)` conversion validates too but traps on malformed input. A `text.position` indexes `utf8` by byte offset, while a `usize` index into `utf8` counts scalars, so do not index with `offset(position)`. This module does not turn byte offsets into validated character boundaries. UTF-8 equality, hashing and ordering use encoded bytes, with no normalization or locale collation. Views borrow their input.
 
+Decimals are unsigned. `write_u32`, `write_u64` and `write_usize` append one to caller bytes at a `used` count and return the next, checking room for the whole number before the first byte, so `no_space` leaves the buffer as it was; twenty bytes hold any `u64`. `parse_u32`, `parse_u64` and `parse_usize` read nonempty ASCII digits from a byte slice, which need not be UTF-8, refusing anything else, a sign or a space included, with `invalid_number` and a value above the type's maximum with `number_overflow`, whichever comes first. `usize` is the target's, 32 bits on Cortex-M. `to_u32` is `parse_u32` over a `utf8` view.
+
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-text/main.ldn)
 
 ## core/io
 
 Reader, writer, file and process capabilities, their world composition, and an in-memory provider.
 
-Use the smallest concept a consumer needs. An erased world can lend `writer_of` to a writer-only consumer. Providers retain authority over handles and arguments. Byte-path helpers terminate paths in caller scratch before invoking file operations; `memory` keeps all storage with the caller.
+Use the smallest concept a consumer needs. A provider is a handle passed by value, `host` in every signature, and an erased capability is built from the address of a handle binding, `any(addr host)`; using a handle locks nothing, so a program and its logger write through one, and two lent arguments and a query are live at once. An erased world can lend `writer_of` to a writer-only consumer. Providers retain authority over files and arguments. `process` lends the three standard streams, `input`, `out` and `err`, and the argument table, `io.out(host)`; standard input is read through `reader` like any file, and a read of zero bytes into a nonempty buffer is its end. Byte-path helpers terminate paths in caller scratch before invoking file operations; `memory_over` fills the caller's `memory_space`, whose limits and counters stay readable and settable, and keeps all storage with the caller, the bytes its standard input reads among them.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-io/main.ldn)
 
@@ -85,7 +87,7 @@ Use the smallest concept a consumer needs. An erased world can lend `writer_of` 
 
 Bounded diagnostic storage and streaming diagnostics through a writer capability.
 
-Severity is the atom set `warning | error`, so a `match` over it is checked for both. A bounded log stores at most its fixed number of entries and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. A streaming log from `stream` borrows a writer and file binding, writes each note as `W:` or `E:`, the decimal byte offset, `:` and the message, and propagates I/O failure.
+Severity is the atom set `warning | error`, so a `match` over it is checked for both. A bounded log stores at most its fixed number of entries and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. A streaming log from `stream` holds a copy of an erased writer and a file, writes each note as `W:` or `E:`, the decimal byte offset, `:` and the message, and propagates I/O failure.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-diag/main.ldn)
 
@@ -101,15 +103,15 @@ A branch names a contiguous range of previously published nodes. Leaf totals are
 
 A reclaiming allocator over fixed-size slots and caller-supplied bookkeeping.
 
-The pool allocates no backing storage of its own. It reuses the lowest free slot and rejects malformed frees without reclaiming a slot. A zero-byte allocation still occupies one slot. Keep both payload backing and metadata alive while allocations exist.
+`over` fills the caller's `pool.space` and returns the pool's handle; the pool allocates no backing storage of its own. It reuses the lowest free slot and rejects malformed frees without reclaiming a slot. A zero-byte allocation still occupies one slot. Keep both payload backing and metadata alive while allocations exist.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-pool/main.ldn)
 
 ## core/region
 
-An allocator scope that records allocations through a borrowed parent and releases them together.
+An allocator scope that records allocations through a parent and releases them together.
 
-Choose a dynamically grown ledger with `new` or a fixed caller ledger with `over`. Individual frees do nothing; every allocation consumes a ledger entry until region release, whether or not its payload is still live. Release frees payloads in reverse order. End all payload uses before releasing the region.
+`over` makes a region's handle over the caller's ledger, `space(capacity)`, and a copy of the parent's handle; a capacity of zero grows the ledger through the parent, and a positive one is a fixed caller ledger. Individual frees do nothing; every allocation consumes a ledger entry until release, whether or not its payload is still live. `release` takes the ledger and the same parent, frees payloads in reverse order and is refused while the region's handle is still used. End all payload uses before releasing the region.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-region/main.ldn)
 
@@ -117,7 +119,7 @@ Choose a dynamically grown ledger with `new` or a fixed caller ledger with `over
 
 Deterministic allocation-failure injection over any allocator, with cumulative counters.
 
-`new` wraps a provider in an `injector`. The budget counts delegated attempts, including attempts the inner provider refuses, so wrapping an arena counts both injected failures and the arena's own. `permit` replaces that budget without resetting evidence. Free calls delegate to the parent; in-place growth is refused so allocation-failure tests remain predictable.
+`over` wraps a copy of a provider's handle in an `injector` over the caller's `space`. The budget counts delegated attempts, including attempts the inner provider refuses, so wrapping an arena counts both injected failures and the arena's own. `permit` replaces that budget without resetting evidence. Free calls delegate to the parent; in-place growth is refused so allocation-failure tests remain predictable.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
@@ -133,7 +135,7 @@ Checked range, arithmetic and conversion faults, and an unreachable path, use th
 
 An explicit allocator over the host runtime heap.
 
-`host` creates a provider state. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place. Every `usize` alignment is honoured by over-allocating and keeping a header before the block. On Linux the provider keeps eight size classes, of 32 to 4096 bytes, over chunks it maps through `hosted/linux`: a freed slot goes back on its class's list and is the next one handed out, and a larger request is a mapping of its own, unmapped when it is freed. That provider is single-threaded. On Darwin and FreeBSD it allocates through `hosted/libc`'s `malloc` and `free`. Either way a refusal comes before any state changes.
+`host` returns a handle that borrows nothing: the heap belongs to the process. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. Blocks are not grown in place. Every `usize` alignment is honoured by over-allocating and keeping a header before the block. On Linux the provider keeps eight size classes, of 32 to 4096 bytes, over chunks it maps through `hosted/linux`: a freed slot goes back on its class's list and is the next one handed out, and a larger request is a mapping of its own, unmapped when it is freed. That provider is single-threaded. On Darwin and FreeBSD it allocates through `hosted/libc`'s `malloc` and `free`. Either way a refusal comes before any state changes.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
 
@@ -141,7 +143,7 @@ An explicit allocator over the host runtime heap.
 
 Hosted file, stream and process operations, through `hosted/linux`'s system calls on Linux and through `hosted/libc` on Darwin and FreeBSD.
 
-`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams, from the root the hosted entry establishes through `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Open-write creates or truncates regular files. `last_errno` captures the terminal failing call as provider-specific detail, minus a system call's negative result on Linux and C's errno elsewhere; it is not a portable error type.
+`system` supplies the shared I/O concepts. `host` exposes process arguments and standard streams, from the root the hosted entry establishes through `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Standard input, output and error are descriptors 0, 1 and 2. Open-write creates or truncates regular files. A path that names nothing is `not_found`, whether a component is missing or one before the last is not a directory, ENOENT or ENOTDIR; `same_file` answers false for such an output path. `host` returns a handle that borrows nothing, since the root, the descriptors and its last-error cell belong to the process; `over` makes a handle that keeps its last errno in a `space` the caller declares, for a C thread or a library that must not share the process's. `last_errno` captures the terminal failing call as provider-specific detail, minus a system call's negative result on Linux and C's errno elsewhere; it is not a portable error type.
 
 [Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
 

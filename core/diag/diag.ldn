@@ -137,61 +137,57 @@ end message_byte
     (note: bounded_note, failed: bounded_failed)
 
 streaming_value: type = struct
-    state: ptr any io.writer
-    where_to: ptr io.file
+    host: any io.writer
+    where_to: io.file
     errors: usize
 end streaming_value
 
---- Diagnostic provider borrowing a writer and destination handle. Each note
---- is written as `W:` or `E:`, the position's decimal byte offset, `:` and
---- the message bytes as given, with no terminator; write failures propagate
---- to the caller.
+--- Diagnostic provider holding an erased writer and destination handle. Each
+--- note is written as `W:` or `E:`, the position's decimal byte offset, `:`
+--- and the message bytes as given, with no terminator; write failures
+--- propagate to the caller.
 public streaming: type = streaming_value
 
 warning_prefix: [2]u8 = [87, 58]
 error_prefix: [2]u8 = [69, 58]
 separator: [1]u8 = [58]
 
-write_position: (state: any io.writer, where_to: io.file, value: usize)
+write_position: (host: any io.writer, where_to: io.file, value: usize)
                 -> none ! io.io_failed =
-    --  Twenty bytes hold every decimal digit of a 64-bit usize.  Build
-    --  backwards so the provider receives exactly one position slice.
+    --  Twenty bytes hold every decimal digit of a 64-bit usize, so the
+    --  writer has room and the provider receives one position slice.
     mut digits: [20]u8 = zeroed
-    mut start: usize = lenof digits
-    mut remaining: usize = value
-    loop do
-        dec start
-        digits[start] = u8(remaining % 10) + 48
-        remaining /= 10
-        break when remaining == 0
-    end loop
-    try state.write(where_to, digits[start..<lenof digits])
+    used: usize = text.write_usize(digits[0..<20], 0, value) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    try host.write(where_to, digits[0..<used])
 end write_position
 
---- Create a streaming logger over an erased writer and file identifier. Keep
---- both referenced bindings and the underlying provider alive while logging.
---- A streaming log needs only a writer: a root holding an `any io.world`
---- builds the writer from the same provider pointer, since the two erased
---- values do not convert.
-public stream: (state: ptr any io.writer, where_to: ptr io.file)
-               -> (result: streaming from state, where_to) =
-    result = streaming(state: state, where_to: where_to, errors: 0)
+--- Create a streaming logger over an erased writer and file identifier. The
+--- logger holds a copy of both; keep the writer's handle and its state alive
+--- while logging. A streaming log needs only a writer: a root holding an
+--- `any io.world` builds the writer from the same handle, since the two
+--- erased values do not convert.
+public stream: (host: any io.writer, where_to: io.file)
+               -> (result: streaming from host) =
+    result = streaming(host: host, where_to: where_to, errors: 0)
 end stream
 
 stream_note: (self: ptr mut streaming, where: text.position,
               kind: severity, what: []u8) -> none ! io.io_failed =
-    state: ptr any io.writer = self.val.state
-    where_to: ptr io.file = self.val.where_to
+    host: any io.writer = self.val.host
+    where_to: io.file = self.val.where_to
     if kind == error then
         inc self.val.errors
-        try state.val.write(where_to.val, error_prefix[0..<2])
+        try host.write(where_to, error_prefix[0..<2])
     else
-        try state.val.write(where_to.val, warning_prefix[0..<2])
+        try host.write(where_to, warning_prefix[0..<2])
     end if
 
-    try write_position(state.val, where_to.val, text.offset(where))
-    try state.val.write(where_to.val, separator[0..<1])
-    try state.val.write(where_to.val, what)
+    try write_position(host, where_to, text.offset(where))
+    try host.write(where_to, separator[0..<1])
+    try host.write(where_to, what)
 end stream_note
 
 stream_failed: (self: ptr streaming) -> (yes: bool) =

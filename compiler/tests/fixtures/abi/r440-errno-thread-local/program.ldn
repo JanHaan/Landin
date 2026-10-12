@@ -1,19 +1,20 @@
 --  Two actual pthreads enter this exported routine concurrently.  Each owns a
---  distinct system provider supplied by main, so the only shared failure
---  source is libc's real thread-local errno, read through hosted/libc.
+--  handle over its own last-error cell, made by `hosted.over`, so the only
+--  shared failure source is libc's real thread-local errno, read through
+--  hosted/libc.
 
 import core/io
 import hosted/io as hosted
 
-extern(c) r440_run_errno_threads: (first: ptr mut hosted.system,
-                                    second: ptr mut hosted.system)
+extern(c) r440_run_errno_threads: (first: ptr hosted.system,
+                                    second: ptr hosted.system)
                                    -> (result: i32)
 
 thread_path: [12]u8 =
     [114, 52, 52, 48, 45, 116, 104, 114, 101, 97, 100, 0]
 
 public extern(c) link(symbol: "r440_errno_thread_probe") thread_probe:
-    (state: ptr mut hosted.system, expected: i32) -> (result: i32) =
+    (state: ptr hosted.system, expected: i32) -> (result: i32) =
     result = 1
     opened: io.file = io.open_read(state.val, addr thread_path[0])
         else (problem)
@@ -31,8 +32,10 @@ end thread_probe
 
 public main: () -> (code: i32) =
     code = 1
-    mut first: hosted.system = hosted.host()
-    mut second: hosted.system = hosted.host()
+    mut first_cell: hosted.space = zeroed
+    mut second_cell: hosted.space = zeroed
+    first: hosted.system = hosted.over(first_cell)
+    second: hosted.system = hosted.over(second_cell)
     code = r440_run_errno_threads(addr first, addr second)
     return when code <> 42
     code = 1

@@ -1,0 +1,39 @@
+--  An I/O provider is a handle passed by value, so lending one argument
+--  from it locks nothing: two lent arguments and the count are live at
+--  once, and every one is read after the others were taken.
+import core/io
+
+first_bytes: [5]u8 = [97, 108, 112, 104, 97]
+second_bytes: [2]u8 = [52, 50]
+
+public main: () -> (code: i32) =
+    code = 1
+    arguments: [2]io.argument = [
+        (data: addr first_bytes[0], length: 5),
+        (data: addr second_bytes[0], length: 2)]
+    files: []mut io.memory_file = []
+    mut output: [1]u8 = zeroed
+    mut errors: [1]u8 = zeroed
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files, arguments[0..<2], "",
+                             output[0..<1], errors[0..<1])
+    first := io.argument_at(memory, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    second := io.argument_at(memory, usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    count := io.argument_count(memory)
+    mut scratch: [8]u8 = zeroed
+    copied := io.copy_argument(first, scratch[0..<8]) else (problem)
+        _ = problem
+        return
+    end
+    return when count <> 2 or lenof copied <> 5 or copied[4] <> 97
+    return when second.length <> 2
+    tens: ptr u8 = second.data
+    units: ptr u8 = ptr(usize(second.data) + 1)
+    code = i32(tens.val - 48) * 10 + i32(units.val - 48)
+end main

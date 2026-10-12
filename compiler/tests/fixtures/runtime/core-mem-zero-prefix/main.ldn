@@ -4,7 +4,7 @@ import core/mem
 empty: type = [0]u8
 public main: () -> (code: i32) =
     code = 1
-    mut allocator := heap.host()
+    allocator := heap.host()
     zero: usize = 0
     one: usize = 1
     two: usize = 2

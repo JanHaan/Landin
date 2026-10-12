@@ -1,5 +1,5 @@
 class: negative
-summary: a frame-backed library arena cannot satisfy the derived parser's escaping capability contract
+summary: a frame-backed library arena cannot come from the checked constructor, whose allocations outlive their frame as the derived parser's parse tree does
 program: program.ldn
 root: ../../../../..
 constructs: 0480, 0770, 0780, 0790, 1650

@@ -87,11 +87,11 @@ end missing_value
 --  type is inferred from the map field, so this also exercises composition
 --  without naming map's private bucket type.
 resize_storage: (item: type, provider: type is mem.allocator,
-                 inout storage: mem.storage(item), inout state: provider,
+                 inout storage: mem.storage(item), memory: provider,
                  slots: usize) -> none ! mem.out_of_memory =
     old_slots: usize = mem.capacity(storage)
     count: usize = mem.length(storage)
-    block: ptr mut u8 = try provider.alloc(state, slots * sizeof item,
+    block: ptr mut u8 = try provider.alloc(memory, slots * sizeof item,
                                            alignof item)
     mut replacement := mem.storage_over(item: item, base: block, slots: slots)
     mut at: usize = 0
@@ -112,12 +112,12 @@ resize_storage: (item: type, provider: type is mem.allocator,
         _ = problem
         fail mem.out_of_memory
     end
-    provider.free(state, old_block, old_slots * sizeof item)
+    provider.free(memory, old_block, old_slots * sizeof item)
     storage = replacement
 end resize_storage
 
 composed_seven_buckets: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut value := map.new(key: collision_key, item: i32)
     empty_get: bool = missing_value(value, 1, 4294967299)
     mut empty_remove: bool = false
@@ -226,7 +226,7 @@ composed_seven_buckets: () -> (ok: bool) =
 end composed_seven_buckets
 
 tombstone_update: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut value := map.new(key: collision_key, item: i32)
     a: collision_key = (identity: 1, home: 6)
     b: collision_key = (identity: 2, home: 6)
@@ -251,7 +251,7 @@ tombstone_update: () -> (ok: bool) =
 end tombstone_update
 
 wrap_rehash_and_churn: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut value := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
@@ -307,7 +307,7 @@ wrap_rehash_and_churn: () -> (ok: bool) =
 end wrap_rehash_and_churn
 
 bounded_full_and_tombstone_probes: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut full := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
@@ -368,7 +368,7 @@ bounded_full_and_tombstone_probes: () -> (ok: bool) =
 end bounded_full_and_tombstone_probes
 
 empty_tombstone_misses: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut value := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 0)
     k2: collision_key = (identity: 2, home: 0)
@@ -409,7 +409,7 @@ empty_tombstone_misses: () -> (ok: bool) =
 end empty_tombstone_misses
 
 pointer_key_and_value: () -> (ok: bool) =
-    mut provider := heap.host()
+    provider := heap.host()
     mut value := map.new(key: ptr node, item: ptr node)
     map.insert(value, provider, addr n1, addr n2) else 0
     map.insert(value, provider, addr n3, addr n4) else 0

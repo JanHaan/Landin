@@ -3,8 +3,8 @@ error[L0314]: this returned reference still has frame origin
   |
 2 | bad: () -> (value: io.argument) ! io.no_argument =
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:10:5
+  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:11:5
    |
-10 |     mut state := io.memory_over(files, args[0..<1], output, errors)
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+11 |     memory := io.memory_over(space, files, args[0..<1], "", output, errors)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

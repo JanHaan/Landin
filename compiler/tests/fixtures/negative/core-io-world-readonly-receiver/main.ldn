@@ -2,8 +2,8 @@ import core/io
 import hosted/io as hosted
 
 public main: () -> (code: i32) =
-    state := hosted.host()
-    world: any io.world = any(addr state)
+    host := hosted.host()
+    world: any io.world = any(host)
     _ = world.argument_count()
     code = 0
 end main

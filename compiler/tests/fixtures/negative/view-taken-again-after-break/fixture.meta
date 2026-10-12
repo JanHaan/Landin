@@ -1,0 +1,7 @@
+class: negative
+summary: a view taken again through an inout call does not end the old view on a recovery edge that breaks past the assignment
+program: main.ldn
+status: 1
+codes: L0315
+constructs: 0800, 0830, 1030, 1180
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -21,10 +21,12 @@ public main: () -> (code: i32) =
     files[0] = first
     files[1] = second
     no_arguments: []io.argument = []
-    mut state := io.memory_over(files[0..<lenof files], no_arguments, output[0..<lenof output], errors[0..<lenof errors])
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<lenof files], no_arguments, "",
+                             output[0..<lenof output], errors[0..<lenof errors])
     state.read_limit = 2
     state.write_limit = 2
-    world: any io.world = any(addr state)
+    world: any io.world = any(addr memory)
     if world.argument_count() <> 0 then return end if
     if not missing_argument(world) then return end if
     path_in := addr path_in_bytes[0]
@@ -100,7 +102,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    output_view := io.written(state)
+    output_view := io.written(memory)
     if lenof output_view == 7 and output_view[6] == 103
       and files[1].length == 7 and not files[1].opened
       and destination[0] == 97 and destination[6] == 103

@@ -35,12 +35,13 @@ has: (value: map.map(node_ptr, ptr node), key: node_ptr, wanted: i32)
     ok = found.val.payload == wanted
 end has
 
-failure_case: (provider: type is mem.allocator, inout inner: provider,
+failure_case: (provider: type is mem.allocator, memory: provider,
                allowed: usize) -> (ok: bool) =
     rollback_frees: usize = allowed
     three: usize = 3
-    mut state := fault.new
-        (inner_provider: provider, inner: addr inner,
+    mut space: fault.space = zeroed
+    budget := fault.over
+        (inner_provider: provider, state: space, inner: memory,
          allowed_attempts: three)
     mut value := map.new(key: node_ptr, item: ptr node)
     k1: node_ptr = addr n1
@@ -50,18 +51,18 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
     k5: node_ptr = addr n5
     k6: node_ptr = addr n6
     k7: node_ptr = addr n7
-    map.insert(value, state, k1, addr n1) else 0
-    map.insert(value, state, k2, addr n2) else 0
-    map.insert(value, state, k3, addr n3) else 0
-    map.insert(value, state, k4, addr n4) else 0
-    map.insert(value, state, k5, addr n5) else 0
-    map.insert(value, state, k6, addr n6) else 0
+    map.insert(value, budget, k1, addr n1) else 0
+    map.insert(value, budget, k2, addr n2) else 0
+    map.insert(value, budget, k3, addr n3) else 0
+    map.insert(value, budget, k4, addr n4) else 0
+    map.insert(value, budget, k5, addr n5) else 0
+    map.insert(value, budget, k6, addr n6) else 0
 
     mut initial: bool = map.length(value) == 6
-                        and fault.attempts(state) == 3
-                        and fault.successes(state) == 3
-                        and fault.frees(state) == 0
-                        and fault.live(state) == 3
+                        and fault.attempts(budget) == 3
+                        and fault.successes(budget) == 3
+                        and fault.frees(budget) == 0
+                        and fault.live(budget) == 3
 
     --  Six occupied records are already at the 8-slot pressure threshold.
     --  Removing the first colliding key leaves a preceding tombstone, which
@@ -69,8 +70,8 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
     --  must still search, update, and return without consulting the provider.
     map.remove(value, k1) else 0
     zero: usize = 0
-    fault.permit(state, zero)
-    map.insert(value, state, k6, addr n7) else (problem)
+    fault.permit(budget, zero)
+    map.insert(value, budget, k6, addr n7) else (problem)
         _ = problem
         initial = false
     end
@@ -82,22 +83,22 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
     updated_without_allocation: bool = map.length(value) == 5
                                        and has(value, k6, 77)
                                        and first_missing
-                                       and fault.attempts(state) == 3
-                                       and fault.injected_failures(state) == 0
-                                       and fault.frees(state) == 0
-                                       and fault.live(state) == 3
+                                       and fault.attempts(budget) == 3
+                                       and fault.injected_failures(budget) == 0
+                                       and fault.frees(budget) == 0
+                                       and fault.live(budget) == 3
 
     --  Reuse that tombstone without allocation, restoring growth pressure.
-    map.insert(value, state, k1, addr n1) else (problem)
+    map.insert(value, budget, k1, addr n1) else (problem)
         _ = problem
         initial = false
     end
     reused: bool = map.length(value) == 6 and value.tombstones == 0
-                   and fault.attempts(state) == 3 and has(value, k1, 11)
+                   and fault.attempts(budget) == 3 and has(value, k1, 11)
 
-    fault.permit(state, allowed)
+    fault.permit(budget, allowed)
     mut failed: bool = false
-    map.insert(value, state, k7, addr n7) else (problem)
+    map.insert(value, budget, k7, addr n7) else (problem)
         _ = problem
         failed = true
     end
@@ -107,8 +108,8 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
     mut preserved: bool = failed and map.length(value) == 6
                           and has(value, k2, 22) and has(value, k3, 33)
                           and has(value, k6, 77)
-                          and fault.frees(state) == rollback_frees
-                          and fault.live(state) == 3
+                          and fault.frees(budget) == rollback_frees
+                          and fault.live(budget) == 3
     mut seventh_missing: bool = false
     _ = map.get(value, k7) else (problem)
         _ = problem
@@ -118,59 +119,61 @@ failure_case: (provider: type is mem.allocator, inout inner: provider,
 
     --  The rollback releases every temporary extent. A three-call
     --  retry can therefore coexist with all three unchanged old allocations.
-    fault.permit(state, three)
-    map.insert(value, state, k7, addr n7) else (problem)
+    fault.permit(budget, three)
+    map.insert(value, budget, k7, addr n7) else (problem)
         _ = problem
         preserved = false
     end
     retried: bool = map.length(value) == 7 and has(value, k2, 22)
                    and has(value, k4, 44) and has(value, k7, 77)
-                   and fault.frees(state) == rollback_frees + 3
-                   and fault.live(state) == 3
+                   and fault.frees(budget) == rollback_frees + 3
+                   and fault.live(budget) == 3
 
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
-    counts: bool = fault.attempts(state) == expected_attempts
-                   and fault.delegated(state) == expected_allocations
-                   and fault.successes(state) == expected_allocations
-                   and fault.injected_failures(state) == 1
-                   and fault.inner_failures(state) == 0
+    counts: bool = fault.attempts(budget) == expected_attempts
+                   and fault.delegated(budget) == expected_allocations
+                   and fault.successes(budget) == expected_allocations
+                   and fault.injected_failures(budget) == 1
+                   and fault.inner_failures(budget) == 0
 
-    map.release(value, state)
+    map.release(value, budget)
     released: bool = map.length(value) == 0
-                     and fault.frees(state) == rollback_frees + 6
-                     and fault.live(state) == 0
+                     and fault.frees(budget) == rollback_frees + 6
+                     and fault.live(budget) == 0
     ok = initial and updated_without_allocation and reused and preserved
          and retried and counts and released
 end failure_case
 
-series: (provider: type is mem.allocator, inout inner: provider)
+series: (provider: type is mem.allocator, memory: provider)
         -> (okay: bool) =
     zero: usize = 0
     one: usize = 1
     two: usize = 2
-    okay = failure_case(inner, zero) and failure_case(inner, one)
-           and failure_case(inner, two)
+    okay = failure_case(memory, zero) and failure_case(memory, one)
+           and failure_case(memory, two)
 end series
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
-    heap_ok: bool = series(host)
+    heap := heap.host()
+    heap_ok: bool = series(heap)
     mut arena_bytes: [16384]u8 = zeroed
-    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 16384)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 16384)
     arena_ok: bool = series(arena)
     mut pool_bytes: [4096]u8 = zeroed
     mut records: [6]pool.slot = zeroed
-    mut fixed_state := pool.over(addr pool_bytes[0], 4096, 512, 6, 16,
-                                 records[0..<6]) else (problem)
+    mut pool_space: pool.space = zeroed
+    slab := pool.over(pool_space, addr pool_bytes[0], 4096, 512, 6, 16,
+                      records[0..<6]) else (problem)
         _ = problem
         return
     end
-    fixed_ok: bool = series(fixed_state)
+    fixed_ok: bool = series(slab)
     if heap_ok and arena_ok and fixed_ok and mem.arena_used(arena) > 0
-      and pool.allocations(fixed_state) == 21
-      and pool.frees(fixed_state) == 21
-      and pool.live(fixed_state) == 0 and pool.rejected_frees(fixed_state) == 0
+      and pool.allocations(slab) == 21
+      and pool.frees(slab) == 21
+      and pool.live(slab) == 0 and pool.rejected_frees(slab) == 0
     then code = 42 end if
 end main

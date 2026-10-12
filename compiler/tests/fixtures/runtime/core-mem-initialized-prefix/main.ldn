@@ -12,7 +12,7 @@ end is_absent
 
 public main: () -> (code: i32) =
     code = 1
-    mut allocator := heap.host()
+    allocator := heap.host()
     two: usize = 2
     zero: usize = 0
     one: usize = 1

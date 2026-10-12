@@ -7,17 +7,17 @@ import core/spill
 pool_provider: type = pool.provider
 
 heap_path: () -> (ok: bool) =
-    mut state := heap.host()
+    host := heap.host()
     mut values := spill.new(item: i32, inline_slots: 0)
-    spill.push(values, state, 1) else 0
-    spill.push(values, state, 2) else 0
-    spill.push(values, state, 3) else 0
-    spill.push(values, state, 4) else 0
-    spill.push(values, state, 5) else 0
-    spill.push(values, state, 6) else 0
-    spill.push(values, state, 7) else 0
-    spill.push(values, state, 8) else 0
-    spill.push(values, state, 9) else 0
+    spill.push(values, host, 1) else 0
+    spill.push(values, host, 2) else 0
+    spill.push(values, host, 3) else 0
+    spill.push(values, host, 4) else 0
+    spill.push(values, host, 5) else 0
+    spill.push(values, host, 6) else 0
+    spill.push(values, host, 7) else 0
+    spill.push(values, host, 8) else 0
+    spill.push(values, host, 9) else 0
     begin
         view := spill.used(values)
         view[0] = 11
@@ -30,29 +30,30 @@ heap_path: () -> (ok: bool) =
              and spill.capacity(addr values) == 16
              and view[0] == 11 and view[7] == 8
     end
-    spill.release(values, state)
-    spill.release(values, state)
+    spill.release(values, host)
+    spill.release(values, host)
     ok = ok and spill.length(addr values) == 0 and spill.capacity(addr values) == 0
 end heap_path
 
 arena_path: () -> (ok: bool) =
     mut words: [32]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
-    mut state := mem.arena_over_unchecked
-        (base, lenof words * sizeof u64)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked
+        (space, base, lenof words * sizeof u64)
     mut values := spill.new(item: i32, inline_slots: 2)
-    spill.push(values, state, 21) else 0
-    spill.push(values, state, 22) else 0
-    mut inline_free: bool = mem.arena_used(state) == 0
-    spill.push(values, state, 23) else 0
-    spill_extent: usize = mem.arena_used(state)
+    spill.push(values, arena, 21) else 0
+    spill.push(values, arena, 22) else 0
+    mut inline_free: bool = mem.arena_used(arena) == 0
+    spill.push(values, arena, 23) else 0
+    spill_extent: usize = mem.arena_used(arena)
     mut spill_address: usize = 0
     begin
         view := spill.used(values)
         spill_address = usize(addr view[0])
     end
-    spill.push(values, state, 24) else 0
-    spill.push(values, state, 25) else 0
+    spill.push(values, arena, 24) else 0
+    spill.push(values, arena, 25) else 0
     begin
         view := spill.used(values)
         ok = inline_free and spill.length(addr values) == 5
@@ -62,12 +63,12 @@ arena_path: () -> (ok: bool) =
              --  grows to eight in place, without retaining another block.
              and spill_extent == 4 * sizeof i32
              and usize(addr view[0]) == spill_address
-             and mem.arena_used(state) == 8 * sizeof i32
+             and mem.arena_used(arena) == 8 * sizeof i32
     end
-    spill.release(values, state)
+    spill.release(values, arena)
     ok = ok and spill.length(addr values) == 0
          and spill.capacity(addr values) == 2
-         and mem.arena_used(state) == 8 * sizeof i32
+         and mem.arena_used(arena) == 8 * sizeof i32
 end arena_path
 
 fixed_path: () -> (ok: bool) =
@@ -75,8 +76,9 @@ fixed_path: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [2]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over
-        (base, lenof words * sizeof u64,
+    mut space: pool.space = zeroed
+    slab := pool.over
+        (space, base, lenof words * sizeof u64,
          64, 2, 8, bookkeeping)
         else (problem)
         _ = problem
@@ -84,19 +86,19 @@ fixed_path: () -> (ok: bool) =
         return
     end
     mut values := spill.new(item: i32, inline_slots: 1)
-    spill.push(values, state, 31) else 0
-    spill.push(values, state, 32) else 0
-    spill.push(values, state, 33) else 0
+    spill.push(values, slab, 31) else 0
+    spill.push(values, slab, 32) else 0
+    spill.push(values, slab, 33) else 0
     begin
         view := spill.used(values)
         view[1] = 42
         ok = spill.length(addr values) == 3 and spill.capacity(addr values) == 4
              and view[0] == 31 and view[1] == 42 and view[2] == 33
     end
-    spill.release(values, state)
-    ok = ok and pool.allocations(state) == 2
-         and pool.frees(state) == 2 and pool.live(state) == 0
-         and pool.rejected_frees(state) == 0
+    spill.release(values, slab)
+    ok = ok and pool.allocations(slab) == 2
+         and pool.frees(slab) == 2 and pool.live(slab) == 0
+         and pool.rejected_frees(slab) == 0
 end fixed_path
 
 failing_path: () -> (ok: bool) =
@@ -104,8 +106,9 @@ failing_path: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [2]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut inner := pool.over
-        (base, lenof words * sizeof u64,
+    mut inner_space: pool.space = zeroed
+    inner := pool.over
+        (inner_space, base, lenof words * sizeof u64,
          64, 2, 8, bookkeeping)
         else (problem)
         _ = problem
@@ -114,14 +117,15 @@ failing_path: () -> (ok: bool) =
     end
     zero: usize = 0
     one: usize = 1
-    mut state := fault.new
-        (inner_provider: pool_provider, inner: addr inner,
+    mut space: fault.space = zeroed
+    counted := fault.over
+        (inner_provider: pool_provider, state: space, inner: inner,
          allowed_attempts: zero)
     mut values := spill.new(item: i32, inline_slots: 1)
-    spill.push(values, state, 51) else 0
+    spill.push(values, counted, 51) else 0
 
     mut first_failed: bool = false
-    spill.push(values, state, 52) else (problem)
+    spill.push(values, counted, 52) else (problem)
         _ = problem
         first_failed = true
     end
@@ -129,14 +133,14 @@ failing_path: () -> (ok: bool) =
         view := spill.used(values)
         ok = first_failed and spill.length(addr values) == 1
              and spill.capacity(addr values) == 1 and view[0] == 51
-             and fault.delegated(state) == 0
+             and fault.delegated(counted) == 0
              and pool.allocations(inner) == 0
     end
 
-    fault.permit(state, one)
-    spill.push(values, state, 52) else 0
+    fault.permit(counted, one)
+    spill.push(values, counted, 52) else 0
     mut growth_failed: bool = false
-    spill.push(values, state, 53) else (problem)
+    spill.push(values, counted, 53) else (problem)
         _ = problem
         growth_failed = true
     end
@@ -145,25 +149,25 @@ failing_path: () -> (ok: bool) =
         ok = ok and growth_failed and spill.length(addr values) == 2
              and spill.capacity(addr values) == 2
              and view[0] == 51 and view[1] == 52
-             and fault.successes(state) == 1
-             and fault.frees(state) == 0
+             and fault.successes(counted) == 1
+             and fault.frees(counted) == 0
              and pool.live(inner) == 1
     end
 
-    fault.permit(state, one)
-    spill.push(values, state, 53) else 0
+    fault.permit(counted, one)
+    spill.push(values, counted, 53) else 0
     begin
         view := spill.used(values)
         ok = ok and spill.length(addr values) == 3
              and spill.capacity(addr values) == 4 and view[2] == 53
     end
-    spill.release(values, state)
-    ok = ok and fault.attempts(state) == 4
-         and fault.delegated(state) == 2
-         and fault.successes(state) == 2
-         and fault.injected_failures(state) == 2
-         and fault.inner_failures(state) == 0
-         and fault.frees(state) == 2 and fault.live(state) == 0
+    spill.release(values, counted)
+    ok = ok and fault.attempts(counted) == 4
+         and fault.delegated(counted) == 2
+         and fault.successes(counted) == 2
+         and fault.injected_failures(counted) == 2
+         and fault.inner_failures(counted) == 0
+         and fault.frees(counted) == 2 and fault.live(counted) == 0
          and pool.allocations(inner) == 2
          and pool.frees(inner) == 2 and pool.live(inner) == 0
          and pool.rejected_frees(inner) == 0

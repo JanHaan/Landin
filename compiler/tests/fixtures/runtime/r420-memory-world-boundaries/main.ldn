@@ -47,9 +47,10 @@ public main: () -> (code: i32) =
     args[0] = first
     args[1] = second
     args[2] = empty
-    mut state := io.memory_over(files[0..<1], args[0..<3],
-                                output[0..<3], errors[0..<1])
-    world: any io.world = any(addr state)
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<1], args[0..<3], "",
+                             output[0..<3], errors[0..<1])
+    world: any io.world = any(addr memory)
     return when not arguments_ok(world)
     missing_ok: bool = missing_file(world)
     denied_ok: bool = denied_file(world)

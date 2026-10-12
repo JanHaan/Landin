@@ -1,0 +1,48 @@
+--  A deferred call that takes a state `inout` runs on every exit edge. On
+--  an edge that returns, nothing after the return runs, so a handle made
+--  from that state and used later on the fall-through path is not in use
+--  there.
+tally: type = struct
+    count: u32
+end tally
+
+handle: type = struct
+    state: ptr mut tally
+end handle
+
+over: (inout state: tally) -> (result: handle from state) =
+    state.count = 0
+    result = (state: addr state)
+end over
+
+bump: (self: handle, limit: u32) -> none ! too_many =
+    fail too_many when self.state.val.count >= limit
+    inc self.state.val.count
+end bump
+
+clear_tally: (inout state: tally) -> none =
+    state.count = 0
+end clear_tally
+
+too_many: atom
+
+run: (limit: u32) -> (seen: u32) =
+    mut state: tally = (count: 0)
+    counter := over(state)
+    defer clear_tally(state)
+    seen = 0
+    bump(counter, limit) else (problem)
+        _ = problem
+        return
+    end
+    bump(counter, limit) else (problem)
+        _ = problem
+        seen = 1
+        return
+    end
+    seen = counter.state.val.count
+end run
+
+public main: () -> (code: i32) =
+    code = i32(run(0) + run(1) * 10 + run(2) * 20)
+end main

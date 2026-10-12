@@ -24,32 +24,32 @@ button is clickable (click: button_click)
 button is widget (focus: button_focus)
 
 new_buffers: (provider: type is mem.allocator,
-              inout state: provider, count: usize)
+              memory: provider, count: usize)
              -> (first: mem.byte_buffer, second: mem.byte_buffer,
                  third: mem.byte_buffer) ! mem.out_of_memory =
-    first = try mem.new_bytes(state: state, count: count)
-    undo mem.delete_bytes(state, first)
+    first = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, first)
 
-    second = try mem.new_bytes(state: state, count: count)
-    undo mem.delete_bytes(state, second)
+    second = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, second)
 
-    third = try mem.new_bytes(state: state, count: count)
+    third = try mem.new_bytes(memory: memory, count: count)
     -- All three owners are published by the successful return.
 end new_buffers
 
-make_widget: (provider: type is mem.allocator, inout a: provider)
+make_widget: (provider: type is mem.allocator, memory: provider)
              -> (item: any widget) ! mem.out_of_memory =
     initial: button = (text: "OK")
-    b := try mem.new(state: a, value: initial)
+    b := try mem.new(memory: memory, value: initial)
     item = any(b)
 end make_widget
 
-probe: (inout state: mem.arena) -> none ! mem.out_of_memory =
-    mut buffers := try new_buffers(state, usize(2))
-    chosen := try make_widget(state)
+probe: (memory: mem.arena) -> none ! mem.out_of_memory =
+    mut buffers := try new_buffers(memory, usize(2))
+    chosen := try make_widget(memory)
     mut target: canvas = (marker: 0)
     chosen.draw(addr target)
-    mem.delete_bytes(state, buffers.first)
-    mem.delete_bytes(state, buffers.second)
-    mem.delete_bytes(state, buffers.third)
+    mem.delete_bytes(memory, buffers.first)
+    mem.delete_bytes(memory, buffers.second)
+    mem.delete_bytes(memory, buffers.third)
 end probe

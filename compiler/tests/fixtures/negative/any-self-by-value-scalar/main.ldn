@@ -1,0 +1,19 @@
+--  A by-value `self` is copied from the erased data pointer, which is the
+--  address carrier of a record and of nothing else: a scalar provider
+--  taken by value has no erased table.
+counter: type = concept (provider: type)
+    total: (self: provider) -> (sum: u32)
+end counter
+
+scalar_total: (self: u32) -> (sum: u32) =
+    sum = self
+end scalar_total
+
+u32 is counter (total: scalar_total)
+
+public main: () -> (code: i32) =
+    item: u32 = 42
+    direct: u32 = scalar_total(item)
+    erased: any counter = any(addr item)
+    code = i32(direct) + i32(erased.total())
+end main

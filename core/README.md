@@ -49,13 +49,32 @@ Every module spells the same operations the same way (D269):
 
 | Operation | Spelling | Examples |
 |---|---|---|
-| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `region.new(addr heap)`, `diag.new(capacity: 4)`, `fault.new(addr inner, 3)` |
-| View over caller-supplied bytes or records | `over` | `mem.arena_over`, `mem.storage_over`, `pool.over`, `region.over`, `io.memory_over` |
+| Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over` |
+| A provider's caller-owned state | `space`, declared `zeroed` | `mem.arena_space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
 | A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is locked while the slot lives [0800] |
 | Count and room | `length`, `capacity` | `mem`, `vec`, `spill`, `map`, `diag`'s `length`; a map's `capacity` is the entries that fit before the next new key rebuilds it |
 | Initialized view | `used` | `mem.used`, `vec.used`, `spill.used` |
+
+A value that is edited, a list, a map, a buffer or raw storage, is passed
+`inout`. A service, an allocator or an I/O provider, is a handle: a small
+copyable value passed `in` that refers to its state, so a program, its logger
+and several containers share one without locking it. Its lifetime is checked
+once, where `over` makes it `from` the state; the state's type is the
+module's `space`, which the caller declares `zeroed` beside its backing bytes
+and keeps alive while any handle is used. Giving the state back, as
+`region.release` does, takes it `inout` and is refused while a handle made
+from it is still in use. Process-wide state, the argument root, the last
+errno and the Linux heap's classes, belongs to the process, so
+`hosted.host()` and `heap.host()` make handles that borrow nothing. Code
+that must keep its own last errno, a C thread calling into Landin among
+them, declares a `hosted.space` and takes its handle with `hosted.over`. A
+provider stacked on another, a region, an injector, the lent writer or a
+streaming log, holds a copy of its parent's handle. One parameter name serves
+each role: `memory` is an allocator handle, `host` an I/O handle, `state` a
+provider's caller-owned state and `self` a concept entry's receiver.
 
 `core/mem` keeps `new`/`delete` for one allocated item and `new_bytes`/
 `delete_bytes` for a byte buffer; its raw-storage pop is `withdraw`, so that
@@ -74,9 +93,19 @@ is not a bad index.
 `core/io` is four narrow concepts over one provider type, `reader`, `writer`,
 `files` and `process`, with `world` their composition and `writer_of` lending
 a world's writer; a sink implements `writer`'s two entries and `core/diag`
-streams through `any io.writer` (D268). The comparison concepts `equatable`,
-`hashable` and `ordered` live in `core/cmp`, apart from the map and the sort
-that consume them (D273). It ships `equatable` and `hashable` for the integer
+streams through `any io.writer` (D268). Every entry takes the provider's
+handle by value, and an erased capability is built from the address of a
+handle binding, `any(addr host)`; dispatch copies the handle from there.
+`process` lends the standard streams `input`, `out` and `err` and the argument
+table, and its free functions take the handle `in`, as `read` and `write` do,
+so two lent arguments, the count and a write through an erased world made
+from the same handle are live at once. `in` is reserved [1760], so the
+standard-input entry is the noun `input`, which reads beside `out` and `err`
+without C's `std` prefix.
+`core/text` writes `u32`, `u64` and `usize` decimals and parses them from
+`[]u8`; a program does not write its own digit loop. The comparison concepts
+`equatable`, `hashable` and `ordered` live in `core/cmp`, apart from the map
+and the sort that consume them (D273). It ships `equatable` and `hashable` for the integer
 scalars, `bool` and `[]u8` and `ordered` for the integer scalars, and
 `core/text` all three for `utf8` (D270); another reading goes on a `distinct`
 wrapper with its own evidence [1280]. A closed set of named values, such as
@@ -89,9 +118,9 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator` with `alloc`/`grow`/`free`, `allocate`/`free`, the caller-backed `arena` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
+| `core/mem` | `allocator` with `alloc`/`grow`/`free` taking the handle by value, `allocate`/`free`, the caller-backed `arena` over an `arena_space` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing, the arena's state and their lifetime belong to the caller. |
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
-| `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
+| `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
@@ -148,14 +177,17 @@ explicit choice for tiny or swap-expensive views: exactly n(n-1)/2 comparisons
 and at most n-1 swaps. Both take the caller's strict ordering and neither
 promises stability.
 
-`core/region.new` grows its allocation ledger through the parent.
-`core/region.over` instead takes caller-owned initialized
-`region.allocation` records. Every allocation takes one record until release,
-because an individual free returns nothing to the ledger; a full
-ledger reports `out_of_memory` and returns the just-allocated payload to the
-parent. Release frees payloads in reverse order, resets the record count, and
-leaves the caller's ledger available for reuse. The caller keeps that storage
-alive through the region's last use.
+`core/region.over(ledger, parent)` makes a region's handle over the caller's
+`region.space(capacity)` and a copy of the parent's handle. A ledger of
+capacity zero grows its records through the parent; a positive capacity holds
+that many `region.allocation` records in the caller's state and no more.
+Every allocation takes one record until release, because an individual free
+returns nothing to the ledger; a full ledger reports `out_of_memory` and
+returns the just-allocated payload to the parent. `region.release(ledger,
+parent)` takes the ledger `inout` and the same parent, frees payloads in
+reverse order, gives a growing ledger's block back, and leaves the ledger
+available to `over` again. It is refused while the region's handle is still
+used. The caller keeps the ledger alive through the region's last use.
 
 The [probe runner](../environments/cortex-m/freestanding.py) copies only its
 declared import closure and records every source hash. Each link accepts the
@@ -249,9 +281,51 @@ Rename as follows; behaviour is unchanged except where noted.
 `text.valid` reports whether bytes are UTF-8 without making a view, and
 `mem.aligned_offset` is the bump arithmetic a provider of your own needs.
 
+## Migrating to standard input
+
+Standard input joined the process concept. Behaviour is unchanged except
+where noted.
+
+| Was | Now |
+|---|---|
+| `io.argument_at(addr host, index)` | `io.argument_at(host, index)`; the argument is lent `from` the handle, see services as handles below |
+| a `process` conformance of `out`, `err`, `argument_count` and `argument` | the same with `input`, the standard-input handle |
+| `io.memory_over(files, arguments, output, errors)` | `io.memory_over(state, files, arguments, input, output, errors)`; `""` is an empty standard input, and `fail_read_at` and `read_limit` count its reads |
+| a digit loop of your own | `text.write_u64`, `text.write_usize`, and `text.parse_u32`, `parse_u64`, `parse_usize` over `[]u8` |
+| `text.number_overflow` as a value above `u32` | a value above the type parsed into |
+| `hosted/io` reporting ENOTDIR, a path through a file, as `io_failed` | `not_found`, as ENOENT is; `last_errno` still tells them apart |
+
+## Migrating to services as handles
+
+An allocator and an I/O provider are handles passed by value; a provider's
+mutable state is the caller's `space`, which `over` fills. Behaviour is
+unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `alloc: (inout state: provider, ...)`, `grow`, `free` | `alloc: (self: provider, ...)`, `grow`, `free`; a conformance's functions take the handle by value and change its state through it |
+| `write: (self: ptr mut provider, ...)` and every `reader`, `files` and `process` entry by pointer | the same entries with `self: provider`; a by-value `self` is a record, which `any` dispatch copies from the erased pointer |
+| `inout state: provider` in `mem.allocate`, `mem.new`, `vec.push`, `map.insert`, `tree.add_leaf`, `spill.push` and every other container operation | `memory: provider`, passed `in`; a call is spelled as before |
+| `inout state: provider` in `io.read`, `io.write`, the `files` functions, `io.out`, `io.argument_at` and the other `process` functions | `host: provider`, passed `in`; `io.write(host, io.out(host), bytes)` holds no lock |
+| `mut state := mem.arena_over(addr backing[0], 256)`, `arena_over_unchecked` | `mut space: mem.arena_space = zeroed` and `arena := mem.arena_over(space, addr backing[0], 256)`; `mem.arena_used(arena)` |
+| `mut parent := pool.over(base, extent, ...)` | `mut space: pool.space = zeroed` and `parent := pool.over(space, base, extent, ...)`; the counters take the handle |
+| `fault.new(addr inner, 3)` | `mut space: fault.space = zeroed` and `fault.over(space, inner, 3)`, the inner handle by value; `fault.permit` and the counters take the handle |
+| `region.new(addr heap)` and `defer region.release(program)` | `mut ledger: region.space(0) = zeroed`, `program := region.over(ledger, heap)` and `defer region.release(ledger, heap)` |
+| `region.over(addr parent, records[0..<2])` over caller `region.allocation` records | `mut ledger: region.space(2) = zeroed` and `region.over(ledger, parent)`; release as above, then `over` again to reuse it |
+| `mut memory := io.memory_over(...)` with `memory.write_limit = 2` and `memory.write_calls` | `mut state: io.memory_space = zeroed`, `memory := io.memory_over(state, ...)`, `state.write_limit = 2`, `state.write_calls`; `io.written(memory)` takes the handle |
+| `mut host := hosted.host()`, `mut heap := heap.host()` | the same calls bound without `mut`; the handles borrow nothing |
+| `hosted.last_errno(host)` reading the provider value | the same call, reading the cell the handle was made with: the process's from `host`, or a declared `hosted.space` from `hosted.over` |
+| `diag.stream(addr writer, addr stream)` | `diag.stream(writer, stream)`; the logger holds copies |
+| `io.writer_of(addr world)` | `io.writer_of(world)`; the adapter holds a copy of the erased world |
+| a provider of your own holding its state by value | a handle holding `ptr mut` to the caller's state, with by-value `self` entries |
+
+An allocation still borrows nothing from its allocator: a container keeps the
+block in its own storage, which a block borrowed from a handle could not
+reach without every container operation retaining the handle.
+
 ## Migrating container providers and indices
 
-Allocator conformances now provide `grow(state, block, old_size, new_size,
+Allocator conformances now provide `grow(self, block, old_size, new_size,
 alignment) -> bool`. A provider may always return false; refusal must change
 neither storage nor provider state. Success retains the address and existing
 bytes and transfers ownership of the enlarged extent to the caller, which

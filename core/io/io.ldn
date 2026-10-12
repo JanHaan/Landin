@@ -45,17 +45,20 @@ end argument
 --- image is a reader; system and memory providers also supply files and
 --- process entries. A consumer names the narrowest concept it uses; diagnostics
 --- stream through any io.writer.  `world` composes all four for roots that
---- have everything.  An erased `any io.world` dispatches every entry, but
---- it is not an `any io.writer`: build that from the same provider pointer
---- where a writer is wanted [D268].
+--- have everything.  A provider is a handle: a small copyable value, passed
+--- by value, that refers to its state, so a program and its logger share one
+--- without locking it.  An erased `any io.world` is built from the address of
+--- a handle binding and dispatches every entry, but it is not an
+--- `any io.writer`: build that from the same handle where a writer is wanted
+--- [D268].
 public writer: type = concept (provider: type)
     --- Write the entire byte slice or fail. Failure may follow partial
     --- output; do not blindly retry the whole slice.
-    write: (self: ptr mut provider, opened: file, bytes: []u8)
+    write: (self: provider, opened: file, bytes: []u8)
            -> none ! io_failed
     --- Attempt one transfer. Nonempty success returns positive progress,
     --- empty success returns zero, and failure transfers no bytes.
-    write_some: (self: ptr mut provider, opened: file, bytes: []u8)
+    write_some: (self: provider, opened: file, bytes: []u8)
                 -> (count: usize) ! io_failed
 end writer
 
@@ -66,7 +69,7 @@ public reader: type = concept (provider: type)
     --- Read at most the destination length and return progress; zero into a
     --- nonempty destination is end of input, and an empty one always reads
     --- zero.
-    read: (self: ptr mut provider, opened: file, into: []mut u8)
+    read: (self: provider, opened: file, into: []mut u8)
           -> (count: usize) ! io_failed
 end reader
 
@@ -76,20 +79,20 @@ end reader
 public files: type = concept (provider: type)
     --- Open a NUL-terminated path for reading; return a handle owned by this
     --- provider.
-    open_read: (self: ptr mut provider, path: ptr u8)
+    open_read: (self: provider, path: ptr u8)
                -> (opened: file) ! not_found | no_access | io_failed
     --- Open a NUL-terminated path for writing; creation and truncation follow
     --- the provider contract.
-    open_write: (self: ptr mut provider, path: ptr u8)
+    open_write: (self: provider, path: ptr u8)
                 -> (opened: file) ! not_found | no_access | io_failed
     --- Report whether two NUL-terminated paths name the same file. The left
     --- path is an existing input: if it names no file the provider can
     --- examine, the call fails with `io_failed`. The right path may be an
     --- output not yet created: if it does not exist, the answer is false.
-    same_file: (self: ptr mut provider, left: ptr u8, right: ptr u8)
+    same_file: (self: provider, left: ptr u8, right: ptr u8)
                -> (same: bool) ! io_failed
     --- Consume a file handle, including when closure reports a failure.
-    close: (self: ptr mut provider, sink opened: file)
+    close: (self: provider, sink opened: file)
            -> none ! io_failed
 end files
 
@@ -97,15 +100,18 @@ end files
 --- the provider; stream identifiers have provider-specific lifetime and
 --- closing rules.
 public process: type = concept (provider: type)
+    --- Return the standard-input handle, which a `reader` reads to end of
+    --- input.
+    input: (self: provider) -> (stream: file)
     --- Return the standard-output handle.
-    out: (self: ptr provider) -> (stream: file)
+    out: (self: provider) -> (stream: file)
     --- Return the standard-error handle.
-    err: (self: ptr provider) -> (stream: file)
+    err: (self: provider) -> (stream: file)
     --- Return the count of available arguments.
-    argument_count: (self: ptr provider) -> (count: usize)
+    argument_count: (self: provider) -> (count: usize)
     --- Lend an argument by index; the provider retains its backing. Report
     --- no_argument when out of range.
-    argument: (self: ptr provider, index: usize)
+    argument: (self: provider, index: usize)
               -> (value: argument from self) ! no_argument
 end process
 
@@ -116,111 +122,119 @@ end world
 
 --  The writer part of an erased world. `any io.world` and `any io.writer`
 --  do not convert, so a consumer holding only the world lends its writer
---  through this adapter, which forwards both entries to the same provider.
+--  through this adapter, which holds a copy of the erased world and forwards
+--  both entries to it.
 lent: type = struct
-    source: ptr any world
+    source: any world
 end lent
---- Adapter retaining an erased world's reference and forwarding the two
---- writer entries.
+--- Adapter holding an erased world and forwarding the two writer entries.
 public lent_writer: type = lent
 
---- Lend a writer adapter from an erased world. Keep the world and its
---- underlying provider alive while the adapter is used; this does not
---- transfer ownership.
-public writer_of: (erased: ptr any world)
-                  -> (adapter: lent_writer from erased) =
-    adapter = (source: erased)
+--- Lend a writer adapter from an erased world. Keep the world's handle and
+--- its state alive while the adapter is used; this does not transfer
+--- ownership.
+public writer_of: (host: any world) -> (adapter: lent_writer from host) =
+    adapter = (source: host)
 end writer_of
 
-lent_write: (self: ptr mut lent, opened: file, bytes: []u8)
+lent_write: (self: lent, opened: file, bytes: []u8)
             -> none ! io_failed =
-    try self.val.source.val.write(opened, bytes)
+    try self.source.write(opened, bytes)
 end lent_write
 
-lent_write_some: (self: ptr mut lent, opened: file, bytes: []u8)
+lent_write_some: (self: lent, opened: file, bytes: []u8)
                  -> (count: usize) ! io_failed =
-    count = try self.val.source.val.write_some(opened, bytes)
+    count = try self.source.write_some(opened, bytes)
 end lent_write_some
 
 lent is writer (write: lent_write, write_some: lent_write_some)
 
 --- Open a terminated path for reading through `files` evidence. The caller
 --- must close a successful handle using the same provider.
-public open_read: (provider: type is files, inout state: provider,
+public open_read: (provider: type is files, host: provider,
                    path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
-    opened = try provider.open_read(addr state, path)
+    opened = try provider.open_read(host, path)
 end open_read
 
 --- Open a terminated path for writing through `files` evidence. Creation and
 --- truncation behavior belongs to the provider; close a successful handle
 --- through that provider.
-public open_write: (provider: type is files, inout state: provider,
+public open_write: (provider: type is files, host: provider,
                     path: ptr u8)
                    -> (opened: file) ! not_found | no_access | io_failed =
-    opened = try provider.open_write(addr state, path)
+    opened = try provider.open_write(host, path)
 end open_write
 
 --- Ask whether two terminated paths name the same file. Delegates
 --- provider-specific identity rules and reports `io_failed` on failure.
-public same_file: (provider: type is files, inout state: provider,
+public same_file: (provider: type is files, host: provider,
                    left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io_failed =
-    same = try provider.same_file(addr state, left, right)
+    same = try provider.same_file(host, left, right)
 end same_file
 
 --- Close a provider handle. Treat it as consumed even if closing reports
 --- `io_failed`; do not retry a consumed handle.
-public close: (provider: type is files, inout state: provider,
+public close: (provider: type is files, host: provider,
                sink opened: file) -> none ! io_failed =
-    try provider.close(addr state, opened)
+    try provider.close(host, opened)
 end close
 
 --- Read up to the destination length through `reader` evidence. Returns the
 --- number of bytes placed in the buffer, or zero at end of input.
-public read: (provider: type is reader, inout state: provider,
+public read: (provider: type is reader, host: provider,
               opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
-    count = try provider.read(addr state, opened, into)
+    count = try provider.read(host, opened, into)
 end read
 
 --- Write the complete byte slice through `writer` evidence. `io_failed` may
 --- follow partial output; callers must not assume retrying the whole buffer
 --- is safe.
-public write: (provider: type is writer, inout state: provider,
+public write: (provider: type is writer, host: provider,
                opened: file, bytes: []u8) -> none ! io_failed =
-    try provider.write(addr state, opened, bytes)
+    try provider.write(host, opened, bytes)
 end write
 
 --- Make one write attempt and return its progress. Nonempty success is
 --- positive; empty input returns zero; failure transfers no bytes.
-public write_some: (provider: type is writer, inout state: provider,
+public write_some: (provider: type is writer, host: provider,
                     opened: file, bytes: []u8) -> (count: usize) ! io_failed =
-    count = try provider.write_some(addr state, opened, bytes)
+    count = try provider.write_some(host, opened, bytes)
 end write_some
 
+--- Return the provider's standard-input identifier. Read it through
+--- `reader` evidence; zero from a nonempty read is end of input.
+public input: (provider: type is process, host: provider)
+              -> (stream: file) =
+    stream = provider.input(host)
+end input
+
 --- Return the provider's standard-output identifier.
-public out: (provider: type is process, state: provider) -> (stream: file) =
-    stream = provider.out(addr state)
+public out: (provider: type is process, host: provider)
+            -> (stream: file) =
+    stream = provider.out(host)
 end out
 
 --- Return the provider's standard-error identifier.
-public err: (provider: type is process, state: provider) -> (stream: file) =
-    stream = provider.err(addr state)
+public err: (provider: type is process, host: provider)
+            -> (stream: file) =
+    stream = provider.err(host)
 end err
 
 --- Return the number of argument entries exposed by the provider.
-public argument_count: (provider: type is process, state: provider)
+public argument_count: (provider: type is process, host: provider)
                        -> (count: usize) =
-    count = provider.argument_count(addr state)
+    count = provider.argument_count(host)
 end argument_count
 
 --- Lend the indexed process argument. Reports `no_argument` for an invalid
 --- index; the provider's argument backing must outlive its use.
-public argument_at: (provider: type is process, state: ptr provider,
+public argument_at: (provider: type is process, host: provider,
                      index: usize)
-                    -> (value: argument from state) ! no_argument =
-    value = try provider.argument(state, index)
+                    -> (value: argument from host) ! no_argument =
+    value = try provider.argument(host, index)
 end argument_at
 
 --- Copy an argument into caller scratch and lend the written prefix. Reports
@@ -283,24 +297,24 @@ end terminate_path
 
 --- Terminate a byte path in caller scratch, then open it for reading.
 --- Path-validation failures occur before the provider is called.
-public open_read_bytes: (provider: type is files, inout state: provider,
+public open_read_bytes: (provider: type is files, host: provider,
                          path: []u8, scratch: []mut u8)
                         -> (opened: file)
                         ! empty_path | path_contains_nul | path_too_long
                         | not_found | no_access | io_failed =
     terminated: ptr u8 = try terminate_path(path, scratch)
-    opened = try open_read(state, terminated)
+    opened = try open_read(host, terminated)
 end open_read_bytes
 
 --- Terminate a byte path in caller scratch, then open it for writing. Path
 --- validation and provider failures remain distinct.
-public open_write_bytes: (provider: type is files, inout state: provider,
+public open_write_bytes: (provider: type is files, host: provider,
                           path: []u8, scratch: []mut u8)
                          -> (opened: file)
                          ! empty_path | path_contains_nul | path_too_long
                          | not_found | no_access | io_failed =
     terminated: ptr u8 = try terminate_path(path, scratch)
-    opened = try open_write(state, terminated)
+    opened = try open_write(host, terminated)
 end open_write_bytes
 
 --- Open a UTF-8 path for reading using caller scratch for the terminator.
@@ -309,22 +323,22 @@ end open_write_bytes
 --- UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
 --- to bytes does not allocate or invent a terminator; the same caller-owned
 --- scratch and validation policy as the byte adapters applies.
-public open_read_text: (provider: type is files, inout state: provider,
+public open_read_text: (provider: type is files, host: provider,
                         path: utf8, scratch: []mut u8)
                        -> (opened: file)
                        ! empty_path | path_contains_nul | path_too_long
                        | not_found | no_access | io_failed =
     raw: []u8 = text.bytes(path)
-    opened = try open_read_bytes(state, raw, scratch)
+    opened = try open_read_bytes(host, raw, scratch)
 end open_read_text
 
 --- Open a UTF-8 path for writing using caller scratch for the terminator.
 --- Delegates to the byte-path adapter.
-public open_write_text: (provider: type is files, inout state: provider,
+public open_write_text: (provider: type is files, host: provider,
                          path: utf8, scratch: []mut u8)
                         -> (opened: file)
                         ! empty_path | path_contains_nul | path_too_long
                         | not_found | no_access | io_failed =
     raw: []u8 = text.bytes(path)
-    opened = try open_write_bytes(state, raw, scratch)
+    opened = try open_write_bytes(host, raw, scratch)
 end open_write_text

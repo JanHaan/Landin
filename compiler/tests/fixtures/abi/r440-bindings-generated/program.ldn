@@ -119,8 +119,11 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     --  The generated cell can live in the same bounded, failing allocator
     --  used for ordinary Landin storage. No C heap allocation is involved.
     mut callback_bytes: [64]u8 = zeroed
-    mut callback_backing := mem.arena_over_unchecked(addr callback_bytes[0], 64)
-    mut callback_arena := fault.new(addr callback_backing, usize(1))
+    mut backing_space: mem.arena_space = zeroed
+    callback_backing := mem.arena_over_unchecked(backing_space,
+                                                 addr callback_bytes[0], 64)
+    mut arena_space: fault.space = zeroed
+    callback_arena := fault.over(arena_space, callback_backing, usize(1))
     cell_size: usize = binding_callback_cell_size()
     cell_alignment: usize = binding_callback_cell_alignment()
     callback_cell: ptr mut u8 = mem.allocate(callback_arena, cell_size,

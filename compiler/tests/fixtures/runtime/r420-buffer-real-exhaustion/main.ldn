@@ -36,17 +36,18 @@ arena_case: () -> (ok: bool) =
     mut backing: [8]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 8 * sizeof u64
-    mut state := mem.arena_over_unchecked(base, extent)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, base, extent)
 
     before: usize = evaluations
-    value: ptr mut node = mem.new(state, initial()) else (problem)
+    value: ptr mut node = mem.new(arena, initial()) else (problem)
         _ = problem
         return
     end
-    return when mem.arena_used(state) <> sizeof node
+    return when mem.arena_used(arena) <> sizeof node
 
     rest: usize = extent - sizeof node
-    mut keeper := mem.new_bytes(state, rest) else (problem)
+    mut keeper := mem.new_bytes(arena, rest) else (problem)
         _ = problem
         return
     end
@@ -56,12 +57,12 @@ arena_case: () -> (ok: bool) =
         view[47] = 9
     end
     --  The extent is exactly consumed and both live results are sound.
-    return when mem.arena_used(state) <> extent or value.val.value <> 42
+    return when mem.arena_used(arena) <> extent or value.val.value <> 42
       or value.val.next.val <> 37 or usize(value) % alignof node <> 0
 
     --  A zero-count buffer is still valid on an exhausted arena because it
     --  asks the provider for nothing.
-    mut empty := mem.new_bytes(state, zero) else (problem)
+    mut empty := mem.new_bytes(arena, zero) else (problem)
         _ = problem
         return
     end
@@ -69,12 +70,12 @@ arena_case: () -> (ok: bool) =
         view := mem.bytes(empty)
         lenof view == 0
     end
-    mem.delete_bytes(state, empty)
-    return when not empty_ok or mem.arena_used(state) <> extent
+    mem.delete_bytes(arena, empty)
+    return when not empty_ok or mem.arena_used(arena) <> extent
 
     --  A one-byte buffer is refused, and the refusal binds no descriptor.
     mut bytes_refused: bool = false
-    _ = mem.new_bytes(state, one) else (problem)
+    _ = mem.new_bytes(arena, one) else (problem)
         bytes_refused = problem == mem.out_of_memory
         keeper
     end
@@ -83,18 +84,18 @@ arena_case: () -> (ok: bool) =
         view := mem.bytes(keeper)
         lenof view == rest and view[0] == 5 and view[47] == 9
     end
-    return when not bytes_refused or not keeper_ok or mem.arena_used(state) <> extent
+    return when not bytes_refused or not keeper_ok or mem.arena_used(arena) <> extent
 
     --  A typed object is refused after its initial value was evaluated. The
     --  binding takes the failure arm, whose caller-supplied case is no_object;
     --  no allocator result reaches it.
     mut object_refused: bool = false
-    absent: object_result = mem.new(state, initial()) else (problem)
+    absent: object_result = mem.new(arena, initial()) else (problem)
         object_refused = problem == mem.out_of_memory
         no_object
     end
     return when not object_refused or not is_absent(absent)
-      or evaluations <> before + 2 or mem.arena_used(state) <> extent
+      or evaluations <> before + 2 or mem.arena_used(arena) <> extent
 
     --  Taken again after the object refusal, so the neighbouring buffer is
     --  checked intact after each of the two refusals rather than only the
@@ -105,10 +106,10 @@ arena_case: () -> (ok: bool) =
     end
     return when not keeper_still_ok
 
-    mem.delete(state, value)
-    mem.delete_bytes(state, keeper)
+    mem.delete(arena, value)
+    mem.delete_bytes(arena, keeper)
     --  The arena's free is a documented no-op, so the offset does not move.
-    ok = mem.arena_used(state) == extent
+    ok = mem.arena_used(arena) == extent
 end arena_case
 
 --  A two-slot pool at zero, one and full occupancy, exhausted by slot count
@@ -122,14 +123,15 @@ fixed_case: () -> (ok: bool) =
     mut words: [8]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [2]pool.slot = zeroed
-    mut state := pool.over(base, 8 * sizeof u64, thirty_two, 2, 8,
-                           records[0..<2]) else (problem)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, 8 * sizeof u64, thirty_two, 2, 8,
+                      records[0..<2]) else (problem)
         _ = problem
         return
     end
 
     --  Zero capacity: no slot is taken and none is returned.
-    mut empty := mem.new_bytes(state, zero) else (problem)
+    mut empty := mem.new_bytes(slab, zero) else (problem)
         _ = problem
         return
     end
@@ -137,12 +139,12 @@ fixed_case: () -> (ok: bool) =
         view := mem.bytes(empty)
         lenof view == 0
     end
-    mem.delete_bytes(state, empty)
-    return when not empty_ok or pool.allocations(state) <> 0
-      or pool.frees(state) <> 0
+    mem.delete_bytes(slab, empty)
+    return when not empty_ok or pool.allocations(slab) <> 0
+      or pool.frees(slab) <> 0
 
     --  One occupied slot.
-    mut first := mem.new_bytes(state, thirty_two) else (problem)
+    mut first := mem.new_bytes(slab, thirty_two) else (problem)
         _ = problem
         return
     end
@@ -151,36 +153,36 @@ fixed_case: () -> (ok: bool) =
         view[0] = 61
         view[31] = 62
     end
-    return when pool.live(state) <> 1 or pool.allocations(state) <> 1
+    return when pool.live(slab) <> 1 or pool.allocations(slab) <> 1
 
     --  Full: the object takes the remaining slot.
-    value: ptr mut node = mem.new(state, initial()) else (problem)
+    value: ptr mut node = mem.new(slab, initial()) else (problem)
         _ = problem
         return
     end
-    return when pool.live(state) <> 2 or pool.allocations(state) <> 2
+    return when pool.live(slab) <> 2 or pool.allocations(slab) <> 2
       or value.val.value <> 42 or value.val.next.val <> 37
 
     --  Exhausted by slot count, and separately by slot width. Neither
     --  refusal takes a slot, returns one, or falls back to a heap.
     mut count_refused: bool = false
-    _ = mem.new_bytes(state, one) else (problem)
+    _ = mem.new_bytes(slab, one) else (problem)
         count_refused = problem == mem.out_of_memory
         first
     end
-    mem.delete_bytes(state, first)
-    return when pool.live(state) <> 1 or pool.frees(state) <> 1
+    mem.delete_bytes(slab, first)
+    return when pool.live(slab) <> 1 or pool.frees(slab) <> 1
     mut width_refused: bool = false
-    _ = mem.new_bytes(state, oversized) else (problem)
+    _ = mem.new_bytes(slab, oversized) else (problem)
         width_refused = problem == mem.out_of_memory
         first
     end
     return when not count_refused or not width_refused
-      or pool.live(state) <> 1 or pool.allocations(state) <> 2
-      or pool.frees(state) <> 1
+      or pool.live(slab) <> 1 or pool.allocations(slab) <> 2
+      or pool.frees(slab) <> 1
 
     --  The exactly freed slot is available again.
-    mut reused := mem.new_bytes(state, thirty_two) else (problem)
+    mut reused := mem.new_bytes(slab, thirty_two) else (problem)
         _ = problem
         return
     end
@@ -190,14 +192,14 @@ fixed_case: () -> (ok: bool) =
         view[31] = 63
         fresh and view[31] == 63
     end
-    counts_ok: bool = pool.allocations(state) == 3
-                      and pool.live(state) == 2
+    counts_ok: bool = pool.allocations(slab) == 3
+                      and pool.live(slab) == 2
 
-    mem.delete_bytes(state, reused)
-    mem.delete(state, value)
-    ok = reused_ok and counts_ok and pool.live(state) == 0
-         and pool.frees(state) == 3
-         and pool.rejected_frees(state) == 0
+    mem.delete_bytes(slab, reused)
+    mem.delete(slab, value)
+    ok = reused_ok and counts_ok and pool.live(slab) == 0
+         and pool.frees(slab) == 3
+         and pool.rejected_frees(slab) == 0
 end fixed_case
 
 public main: () -> (code: i32) =

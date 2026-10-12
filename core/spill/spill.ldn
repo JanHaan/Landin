@@ -64,10 +64,10 @@ end first_capacity
 public push: (item: type, fixed inline_slots: usize,
               provider: type is mem.allocator,
               escaping inout value: list(item, inline_slots),
-              inout state: provider, escaping added: item)
+              memory: provider, escaping added: item)
              -> none ! mem.out_of_memory =
     if value.storage.spilled then
-        try vec.push(value.storage.spill, state, added)
+        try vec.push(value.storage.spill, memory, added)
         inc value.storage.count
         return
     end if
@@ -79,17 +79,17 @@ public push: (item: type, fixed inline_slots: usize,
 
     wanted: usize = try first_capacity(inline_slots: inline_slots)
     mut fresh := vec.new(item: item)
-    try vec.reserve(fresh, state, wanted)
+    try vec.reserve(fresh, memory, wanted)
 
     mut at: usize = 0
     while at < value.storage.count do
         --  Only the prefix has an item image. Reserve established room for
         --  every one of these pushes without another allocation.
         copied: item = value.storage.inline_values[at]
-        try vec.push(fresh, state, copied)
+        try vec.push(fresh, memory, copied)
         inc at
     end while
-    try vec.push(fresh, state, added)
+    try vec.push(fresh, memory, added)
 
     value.storage.spill = fresh
     value.storage.spilled = true
@@ -152,9 +152,9 @@ end pop
 public release: (item: type, fixed inline_slots: usize,
                  provider: type is mem.allocator,
                  inout value: list(item, inline_slots),
-                 inout state: provider) -> none =
+                 memory: provider) -> none =
     if value.storage.spilled then
-        vec.release(value.storage.spill, state)
+        vec.release(value.storage.spill, memory)
     end if
     value.storage.count = 0
     value.storage.spilled = false

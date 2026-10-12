@@ -173,7 +173,7 @@ import core/io
 import hosted/io as hosted
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     io.write(host, io.out(host), "Hello from Landin\n") else (problem)
         _ = problem
         code = 1
@@ -347,10 +347,16 @@ This is the maintained inventory of what the compiler does today:
   allocators and a failure injector as capabilities and supply raw memory,
   vectors, inline-prefix spill lists, maps, trees, sorting, byte-oriented and
   validated text, caller-backed I/O, bulk cleanup, panic dispatch and the
-  `any`-dispatched `core/diag.log`. I/O separates reader, writer, file and
-  process capabilities; a streaming log needs only a writer. Containers share
-  construction and release names, and vectors, spill lists and maps lend
-  writable slots with `at` alongside copying `get`. The comparison concepts
+  `any`-dispatched `core/diag.log`. A service, an allocator or an I/O
+  provider, is a handle passed by value over state its caller declares, so a
+  program and its logger write through one and a region allocates beside its
+  parent without either locking it. I/O separates reader, writer, file and
+  process capabilities; a streaming log needs only a writer, and the process
+  capability lends standard input beside standard output and error. Text
+  writes `u32`, `u64` and `usize` decimals and parses them from bytes.
+  Containers share construction and release names, and vectors, spill lists
+  and maps lend writable slots with `at` alongside copying `get`. The
+  comparison concepts
   are a module of their own, `core/cmp`, with library-supplied evidence for
   integer keys and ordering, Boolean and byte slice keys, and UTF-8 keys and
   ordering. A closed set of named values, such as a diagnostic's severity, is

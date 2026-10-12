@@ -6,7 +6,7 @@ node: type = struct
 end node
 
 bad: () -> (result: map.map(u32, ptr node)) ! ... =
-    mut provider := heap.host()
+    provider := heap.host()
     mut local: node = (value: 7)
     mut value := map.new(key: u32, item: ptr node)
     key: u32 = 11

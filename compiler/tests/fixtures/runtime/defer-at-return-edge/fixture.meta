@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a deferred inout cleanup on a return edge does not conflict with a handle used later on the fall-through path
+program: main.ldn
+status: 50
+constructs: 0790, 0800, 0830, 1030, 1100
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

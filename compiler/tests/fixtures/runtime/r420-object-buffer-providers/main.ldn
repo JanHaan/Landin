@@ -23,16 +23,17 @@ initial: () -> (value: node) =
     value = (next: addr number, value: 42)
 end initial
 
-exercise: (provider: type is mem.allocator, inout inner: provider)
+exercise: (provider: type is mem.allocator, memory: provider)
           -> (okay: bool) =
     okay = false
     zero: usize = 0
     one: usize = 1
     two: usize = 2
     three: usize = 3
-    mut state := fault.new(addr inner, zero)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, memory, zero)
     before: usize = evaluations
-    mut empty := mem.new_bytes(state, zero) else (problem)
+    mut empty := mem.new_bytes(counted, zero) else (problem)
         _ = problem
         return
     end
@@ -40,21 +41,21 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
         view := mem.bytes(empty)
         lenof view
     end
-    mem.delete_bytes(state, empty)
-    return when empty_size <> 0 or fault.attempts(state) <> 0
+    mem.delete_bytes(counted, empty)
+    return when empty_size <> 0 or fault.attempts(counted) <> 0
     mut refused: bool = false
-    absent: object_result = mem.new(state, initial()) else (problem)
+    absent: object_result = mem.new(counted, initial()) else (problem)
         refused = problem == mem.out_of_memory
         no_object
     end
     return when not refused or not is_absent(absent) or evaluations <> before + 1
-      or fault.live(state) <> 0 or fault.frees(state) <> 0
-    fault.permit(state, two)
-    value: ptr mut node = mem.new(state, initial()) else (problem)
+      or fault.live(counted) <> 0 or fault.frees(counted) <> 0
+    fault.permit(counted, two)
+    value: ptr mut node = mem.new(counted, initial()) else (problem)
         _ = problem
         return
     end
-    mut bytes := mem.new_bytes(state, three) else (problem)
+    mut bytes := mem.new_bytes(counted, three) else (problem)
         _ = problem
         return
     end
@@ -68,12 +69,12 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     end
     object_ok: bool = value.val.value == 42 and value.val.next.val == 37
       and usize(value) % alignof node == 0
-    mem.delete(state, value)
-    mem.delete_bytes(state, bytes)
-    mem.delete_bytes(state, bytes)
-    return when fault.live(state) <> 0 or fault.frees(state) <> 2
-    fault.permit(state, one)
-    mut retry := mem.new_bytes(state, three) else (problem)
+    mem.delete(counted, value)
+    mem.delete_bytes(counted, bytes)
+    mem.delete_bytes(counted, bytes)
+    return when fault.live(counted) <> 0 or fault.frees(counted) <> 2
+    fault.permit(counted, one)
+    mut retry := mem.new_bytes(counted, three) else (problem)
         _ = problem
         return
     end
@@ -81,31 +82,34 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
         view := mem.bytes(retry)
         lenof view == 3 and view[0] == 0 and view[2] == 0
     end
-    mem.delete_bytes(state, retry)
+    mem.delete_bytes(counted, retry)
     okay = content_ok and object_ok and retry_ok and evaluations == before + 2
-      and fault.attempts(state) == 4 and fault.successes(state) == 3
-      and fault.injected_failures(state) == 1 and fault.inner_failures(state) == 0
-      and fault.frees(state) == 3 and fault.live(state) == 0
+      and fault.attempts(counted) == 4 and fault.successes(counted) == 3
+      and fault.injected_failures(counted) == 1
+      and fault.inner_failures(counted) == 0
+      and fault.frees(counted) == 3 and fault.live(counted) == 0
 end exercise
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
-    heap_ok: bool = exercise(host)
+    heap := heap.host()
+    heap_ok: bool = exercise(heap)
     mut arena_bytes: [256]u8 = zeroed
-    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 256)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 256)
     arena_ok: bool = exercise(arena)
     mut pool_bytes: [128]u8 = zeroed
     mut records: [2]pool.slot = zeroed
-    mut fixed_state := pool.over(addr pool_bytes[0], 128, 32, 2, 16,
-                                 records[0..<2]) else (problem)
+    mut pool_space: pool.space = zeroed
+    slab := pool.over(pool_space, addr pool_bytes[0], 128, 32, 2, 16,
+                      records[0..<2]) else (problem)
         _ = problem
         return
     end
-    fixed_ok: bool = exercise(fixed_state)
+    fixed_ok: bool = exercise(slab)
     if heap_ok and arena_ok and fixed_ok and evaluations == 6
-      and mem.arena_used(arena) > 0 and pool.allocations(fixed_state) == 3
-      and pool.frees(fixed_state) == 3 and pool.live(fixed_state) == 0
-      and pool.rejected_frees(fixed_state) == 0
+      and mem.arena_used(arena) > 0 and pool.allocations(slab) == 3
+      and pool.frees(slab) == 3 and pool.live(slab) == 0
+      and pool.rejected_frees(slab) == 0
     then code = 42 end if
 end main

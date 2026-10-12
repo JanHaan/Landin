@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the published word count reads standard input larger than one read buffer and without a final newline to its end, a word straddling two reads, and prints u64 line, word and byte totals in decimal
+program: main.ldn
+root: ../../../../..
+stdin: input.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0570, 0670, 0900, 0940, 0960, 1030, 1130, 1150, 1290, 1650, 1660, 1680, 1970
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

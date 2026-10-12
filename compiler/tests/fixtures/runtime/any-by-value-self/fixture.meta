@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: a concept entry taking a record provider by value is dispatched through any, built from the handle binding's address, and a result lent from self keeps its origin
+program: main.ldn
+status: 42
+constructs: 1230, 1240, 1370, 1380, 1390, 0790
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -67,7 +67,7 @@ end next_id
 --- Append a named leaf and return its identifier. Retains the name's backing;
 --- allocation or identifier exhaustion leaves existing nodes unchanged.
 public add_leaf: (provider: type is mem.allocator, inout value: tree,
-                  inout state: provider, escaping name: utf8)
+                  memory: provider, escaping name: utf8)
                  -> (id: node_id) ! mem.out_of_memory | too_many_nodes =
     id = try next_id(length(value))
     mut previous_low: usize = 0
@@ -86,7 +86,7 @@ public add_leaf: (provider: type is mem.allocator, inout value: tree,
     added: node_value = (name: name, leaves: 1, through_low: next_low,
                          through_high: previous_high,
                          kind: leaf)
-    try vec.push(value.nodes, state, added)
+    try vec.push(value.nodes, memory, added)
 end add_leaf
 
 --- Append a branch over a contiguous interval of existing nodes. Retains the
@@ -98,7 +98,7 @@ end add_leaf
 --- Shared children count once for each incoming path, as recursive counting
 --- would. An empty child interval has total zero.
 public add_branch: (provider: type is mem.allocator, inout value: tree,
-                    inout state: provider, escaping name: utf8,
+                    memory: provider, escaping name: utf8,
                     first: node_id, count: usize)
                    -> (id: node_id)
                    ! mem.out_of_memory | too_many_nodes
@@ -147,7 +147,7 @@ public add_branch: (provider: type is mem.allocator, inout value: tree,
         (name: name, leaves: total, through_low: next_low,
          through_high: through_high,
          kind: branch(first: first, count: count))
-    try vec.push(value.nodes, state, added)
+    try vec.push(value.nodes, memory, added)
 end add_branch
 
 --- Copy the node selected by an identifier. Reports `no_such_node` if absent;
@@ -179,6 +179,6 @@ end count_leaves
 --- Release node storage through the original allocator and reset the tree.
 --- Name backing remains owned by its caller.
 public release: (provider: type is mem.allocator, inout value: tree,
-                 inout state: provider) -> none =
-    vec.release(value.nodes, state)
+                 memory: provider) -> none =
+    vec.release(value.nodes, memory)
 end release

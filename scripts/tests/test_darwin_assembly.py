@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Darwin parity frame negative controls."""
 import importlib.util
+import os
 from pathlib import Path
 import signal
+import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -98,6 +101,23 @@ class DarwinLargeImageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "output mismatch"):
             self.verdict(success, success, b"expected")
 
+
+
+class DarwinStandardInputTests(unittest.TestCase):
+    def test_a_fixture_input_is_the_program_standard_input(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            base = Path(scratch)
+            (base / "given.txt").write_bytes(b"one two\n")
+            run = CHECK.Run(base)
+            echo = [sys.executable, "-c",
+                    "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"]
+            given = CHECK.standard_input(base, {"stdin": "given.txt"})
+            _, stdout, _ = run.command(echo, "fed", base, stdin=given)
+            self.assertEqual(stdout, b"one two\n")
+            #  No `stdin:` key is an empty input, never this script's own.
+            self.assertEqual(CHECK.standard_input(base, {}), os.devnull)
+            _, stdout, _ = run.command(echo, "empty", base)
+            self.assertEqual(stdout, b"")
 
 if __name__ == "__main__":
     unittest.main()

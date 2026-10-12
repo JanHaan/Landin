@@ -17,7 +17,7 @@ end bytes
 --- Allocate `count` zero-initialized bytes. A zero count returns an empty
 --- buffer without calling the provider; allocation failure reports
 --- `out_of_memory`.
-public new_bytes: (provider: type is allocator, inout state: provider,
+public new_bytes: (provider: type is allocator, memory: provider,
                    count: usize) -> (result: byte_buffer) ! out_of_memory =
     zero: usize = 0
     if count == 0 then
@@ -25,7 +25,7 @@ public new_bytes: (provider: type is allocator, inout state: provider,
         result = (values: none_yet, extent: zero)
         return
     end if
-    block: ptr mut u8 = try provider.alloc(state, count, alignof u8)
+    block: ptr mut u8 = try provider.alloc(memory, count, alignof u8)
     mut fresh := storage_over(item: u8, base: block, slots: count)
     mut index: usize = 0
     initial: u8 = 0
@@ -34,7 +34,7 @@ public new_bytes: (provider: type is allocator, inout state: provider,
             --  Refusal is unreachable for this private state. If it occurs,
             --  release the saved allocation without trusting damaged counts.
             _ = problem
-            provider.free(state, block, count)
+            provider.free(memory, block, count)
             fail out_of_memory
         end
         _ = admitted
@@ -45,7 +45,7 @@ end new_bytes
 
 --- Free the buffer using its saved extent and reset it. Empty buffers require
 --- no provider call. End all byte views before deletion.
-public delete_bytes: (provider: type is allocator, inout state: provider,
+public delete_bytes: (provider: type is allocator, memory: provider,
                       inout value: byte_buffer) -> none =
     return when value.extent == 0
     extent: usize = value.extent
@@ -55,5 +55,5 @@ public delete_bytes: (provider: type is allocator, inout state: provider,
         return
     end
     value.extent = 0
-    provider.free(state, block, extent)
+    provider.free(memory, block, extent)
 end delete_bytes

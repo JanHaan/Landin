@@ -64,7 +64,7 @@ erased_ok: (values: vec.list(any counter), count: usize) -> (ok: bool) =
     ok = checked and vec.length(values) == count
 end erased_ok
 
-fill_erased: (provider: type is mem.allocator, inout state: provider,
+fill_erased: (provider: type is mem.allocator, memory: provider,
               inout values: vec.list(any counter), upto: usize,
               escaping a: any counter, escaping b: any counter)
              -> (ok: bool) =
@@ -72,7 +72,7 @@ fill_erased: (provider: type is mem.allocator, inout state: provider,
     mut at: usize = vec.length(values)
     while at < upto do
         added: any counter = if at % 2 == 0 then a else b end if
-        vec.push(values, state, added) else (problem)
+        vec.push(values, memory, added) else (problem)
             _ = problem
             return
         end
@@ -81,12 +81,12 @@ fill_erased: (provider: type is mem.allocator, inout state: provider,
     ok = true
 end fill_erased
 
-fill: (provider: type is mem.allocator, inout state: provider,
+fill: (provider: type is mem.allocator, memory: provider,
        inout values: vec.list(node_ptr), upto: usize) -> (ok: bool) =
     ok = false
     mut at: usize = vec.length(values)
     while at < upto do
-        vec.push(values, state, entry(at)) else (problem)
+        vec.push(values, memory, entry(at)) else (problem)
             _ = problem
             return
         end
@@ -101,33 +101,34 @@ arena_case: () -> (ok: bool) =
     mut backing: [24]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 24 * sizeof u64
-    mut state := mem.arena_over_unchecked(base, extent)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, base, extent)
     mut values := vec.new(item: node_ptr)
 
     eight: usize = 8
-    return when not fill(state, values, eight)
+    return when not fill(arena, values, eight)
     --  The first allocation owns 8 slots, 64 bytes.
     return when vec.capacity(values) <> 8
-      or mem.arena_used(state) <> 8 * sizeof node_ptr
+      or mem.arena_used(arena) <> 8 * sizeof node_ptr
 
     sixteen: usize = 16
-    return when not fill(state, values, sixteen)
+    return when not fill(arena, values, sixteen)
     --  Extending the same block spends only the final 128 bytes.
     return when vec.capacity(values) <> 16
-      or mem.arena_used(state) <> 16 * sizeof node_ptr
+      or mem.arena_used(arena) <> 16 * sizeof node_ptr
 
     mut exhausted: bool = false
-    vec.push(values, state, entry(sixteen)) else (problem)
+    vec.push(values, arena, entry(sixteen)) else (problem)
         exhausted = problem == mem.out_of_memory
     end
     preserved: bool = exhausted and contents_ok(values, sixteen)
                       and vec.capacity(values) == 16
-                      and mem.arena_used(state) == 16 * sizeof node_ptr
+                      and mem.arena_used(arena) == 16 * sizeof node_ptr
 
-    vec.release(values, state)
+    vec.release(values, arena)
     --  The arena's free is a documented no-op, so the offset does not move.
     ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
-         and mem.arena_used(state) == 16 * sizeof node_ptr
+         and mem.arena_used(arena) == 16 * sizeof node_ptr
 end arena_case
 
 --  The ordinary doubling path reaches the full 256-byte backing while
@@ -135,19 +136,20 @@ end arena_case
 arena_byte_case: () -> (ok: bool) =
     ok = false
     mut backing: [256]u8 = zeroed
-    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
     mut values := vec.new(item: u8)
     mut at: usize = 0
     while at < 256 do
-        vec.push(values, state, u8(at)) else (problem)
+        vec.push(values, arena, u8(at)) else (problem)
             _ = problem
             return
         end
         inc at
     end while
-    return when vec.capacity(values) <> 256 or mem.arena_used(state) <> 256
+    return when vec.capacity(values) <> 256 or mem.arena_used(arena) <> 256
     mut exhausted: bool = false
-    vec.push(values, state, u8(0)) else (problem)
+    vec.push(values, arena, u8(0)) else (problem)
         exhausted = problem == mem.out_of_memory
     end
     mut preserved: bool = exhausted and vec.length(values) == 256
@@ -161,8 +163,8 @@ arena_byte_case: () -> (ok: bool) =
         preserved = preserved and saved == u8(at)
         inc at
     end while
-    vec.release(values, state)
-    ok = preserved and mem.arena_used(state) == 256
+    vec.release(values, arena)
+    ok = preserved and mem.arena_used(arena) == 256
          and vec.length(values) == 0 and vec.capacity(values) == 0
 end arena_byte_case
 
@@ -171,26 +173,27 @@ end arena_byte_case
 arena_interleaved_case: () -> (ok: bool) =
     ok = false
     mut backing: [40]u8 = zeroed
-    mut state := mem.arena_over_unchecked(addr backing[0], lenof backing)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
     mut values := vec.new(item: u8)
     mut at: usize = 0
     while at < 8 do
-        vec.push(values, state, u8(at)) else (problem)
+        vec.push(values, arena, u8(at)) else (problem)
             _ = problem
             return
         end
         inc at
     end while
-    other: ptr mut u8 = mem.allocate(state, usize(8), usize(1)) else (problem)
+    other: ptr mut u8 = mem.allocate(arena, usize(8), usize(1)) else (problem)
         _ = problem
         return
     end
     other.val = 77
-    vec.push(values, state, u8(8)) else (problem)
+    vec.push(values, arena, u8(8)) else (problem)
         _ = problem
         return
     end
-    ok = other.val == 77 and mem.arena_used(state) == 32
+    ok = other.val == 77 and mem.arena_used(arena) == 32
          and vec.capacity(values) == 16 and vec.length(values) == 9
     at = 0
     while at < 9 do
@@ -202,7 +205,7 @@ arena_interleaved_case: () -> (ok: bool) =
         ok = ok and saved == u8(at)
         inc at
     end while
-    vec.release(values, state)
+    vec.release(values, arena)
 end arena_interleaved_case
 
 --  One slot wide enough for the grown block still cannot satisfy a growth
@@ -213,38 +216,39 @@ single_slot_case: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [1]pool.slot = zeroed
     slot_size: usize = 16 * sizeof node_ptr
-    mut state := pool.over(base, 16 * sizeof u64, slot_size, 1, 8,
-                           records[0..<1]) else (problem)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, 16 * sizeof u64, slot_size, 1, 8,
+                      records[0..<1]) else (problem)
         _ = problem
         return
     end
     mut values := vec.new(item: node_ptr)
 
     eight: usize = 8
-    return when not fill(state, values, eight)
-    return when vec.capacity(values) <> 8 or pool.live(state) <> 1
+    return when not fill(slab, values, eight)
+    return when vec.capacity(values) <> 8 or pool.live(slab) <> 1
 
     mut exhausted: bool = false
-    vec.push(values, state, entry(eight)) else (problem)
+    vec.push(values, slab, entry(eight)) else (problem)
         exhausted = problem == mem.out_of_memory
     end
     --  The old block is still the only live one and nothing fell back.
     return when not exhausted or not contents_ok(values, eight)
-      or vec.capacity(values) <> 8 or pool.live(state) <> 1
-      or pool.allocations(state) <> 1 or pool.frees(state) <> 0
+      or vec.capacity(values) <> 8 or pool.live(slab) <> 1
+      or pool.allocations(slab) <> 1 or pool.frees(slab) <> 0
 
-    vec.release(values, state)
-    return when pool.live(state) <> 0 or pool.frees(state) <> 1
+    vec.release(values, slab)
+    return when pool.live(slab) <> 0 or pool.frees(slab) <> 1
 
     --  Release returned the slot, so an ordinary later vector reuses it.
     mut again := vec.new(item: node_ptr)
-    return when not fill(state, again, eight)
+    return when not fill(slab, again, eight)
     reused: bool = contents_ok(again, eight)
-                   and pool.allocations(state) == 2
-                   and pool.live(state) == 1
-    vec.release(again, state)
-    ok = reused and pool.live(state) == 0 and pool.frees(state) == 2
-         and pool.rejected_frees(state) == 0
+                   and pool.allocations(slab) == 2
+                   and pool.live(slab) == 1
+    vec.release(again, slab)
+    ok = reused and pool.live(slab) == 0 and pool.frees(slab) == 2
+         and pool.rejected_frees(slab) == 0
 end single_slot_case
 
 --  The same growth succeeds when a second slot can hold the new block while
@@ -255,22 +259,23 @@ two_slot_case: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [2]pool.slot = zeroed
     slot_size: usize = 16 * sizeof node_ptr
-    mut state := pool.over(base, 32 * sizeof u64, slot_size, 2, 8,
-                           records[0..<2]) else (problem)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, 32 * sizeof u64, slot_size, 2, 8,
+                      records[0..<2]) else (problem)
         _ = problem
         return
     end
     mut values := vec.new(item: node_ptr)
 
     nine: usize = 9
-    return when not fill(state, values, nine)
+    return when not fill(slab, values, nine)
     --  Two slots were taken and the old one returned inside that one growth.
     grown: bool = contents_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocations(state) == 2
-                  and pool.frees(state) == 1 and pool.live(state) == 1
-    vec.release(values, state)
-    ok = grown and pool.live(state) == 0 and pool.frees(state) == 2
-         and pool.rejected_frees(state) == 0
+                  and pool.allocations(slab) == 2
+                  and pool.frees(slab) == 1 and pool.live(slab) == 1
+    vec.release(values, slab)
+    ok = grown and pool.live(slab) == 0 and pool.frees(slab) == 2
+         and pool.rejected_frees(slab) == 0
 end two_slot_case
 
 --  The erased item repeats the arena shape. [1380] keeps construction
@@ -284,31 +289,32 @@ arena_any_case: (escaping a: any counter, escaping b: any counter)
     item_bytes: usize = sizeof any counter
     extent: usize = 24 * item_bytes
     return when extent > lenof backing * sizeof u64
-    mut state := mem.arena_over_unchecked(base, extent)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, base, extent)
     mut values := vec.new(item: any counter)
 
     eight: usize = 8
-    return when not fill_erased(state, values, eight, a, b)
-    return when vec.capacity(values) <> 8 or mem.arena_used(state) <> 8 * item_bytes
+    return when not fill_erased(arena, values, eight, a, b)
+    return when vec.capacity(values) <> 8 or mem.arena_used(arena) <> 8 * item_bytes
 
     sixteen: usize = 16
-    return when not fill_erased(state, values, sixteen, a, b)
+    return when not fill_erased(arena, values, sixteen, a, b)
     --  The second growth extends the same block to sixteen items.
     return when vec.capacity(values) <> 16
-      or mem.arena_used(state) <> 16 * item_bytes
+      or mem.arena_used(arena) <> 16 * item_bytes
 
     mut exhausted: bool = false
-    vec.push(values, state, a) else (problem)
+    vec.push(values, arena, a) else (problem)
         exhausted = problem == mem.out_of_memory
     end
     --  Every descriptor still dispatches to the pointee it was built over.
     preserved: bool = exhausted and erased_ok(values, sixteen)
                       and vec.capacity(values) == 16
-                      and mem.arena_used(state) == 16 * item_bytes
+                      and mem.arena_used(arena) == 16 * item_bytes
 
-    vec.release(values, state)
+    vec.release(values, arena)
     ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
-         and mem.arena_used(state) == 16 * item_bytes
+         and mem.arena_used(arena) == 16 * item_bytes
 end arena_any_case
 
 --  The erased item repeats the simultaneous old-and-new pool shape.
@@ -321,38 +327,39 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
     item_bytes: usize = sizeof any counter
     slot_size: usize = 16 * item_bytes
     return when slot_size > lenof words * sizeof u64
-    mut state := pool.over(base, slot_size, slot_size, 1,
-                           alignof any counter, records[0..<1])
-      else (problem)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, slot_size, slot_size, 1,
+                      alignof any counter, records[0..<1])
+        else (problem)
         _ = problem
         return
     end
     mut values := vec.new(item: any counter)
 
     eight: usize = 8
-    return when not fill_erased(state, values, eight, a, b)
-    return when vec.capacity(values) <> 8 or pool.live(state) <> 1
+    return when not fill_erased(slab, values, eight, a, b)
+    return when vec.capacity(values) <> 8 or pool.live(slab) <> 1
 
     mut exhausted: bool = false
-    vec.push(values, state, a) else (problem)
+    vec.push(values, slab, a) else (problem)
         exhausted = problem == mem.out_of_memory
     end
     --  The sixteen-item block fits the slot; the old list still occupies it.
     return when not exhausted or not erased_ok(values, eight)
-      or vec.capacity(values) <> 8 or pool.live(state) <> 1
-      or pool.allocations(state) <> 1 or pool.frees(state) <> 0
+      or vec.capacity(values) <> 8 or pool.live(slab) <> 1
+      or pool.allocations(slab) <> 1 or pool.frees(slab) <> 0
 
-    vec.release(values, state)
-    return when pool.live(state) <> 0 or pool.frees(state) <> 1
+    vec.release(values, slab)
+    return when pool.live(slab) <> 0 or pool.frees(slab) <> 1
 
     mut again := vec.new(item: any counter)
-    return when not fill_erased(state, again, eight, a, b)
+    return when not fill_erased(slab, again, eight, a, b)
     reused: bool = erased_ok(again, eight)
-                   and pool.allocations(state) == 2
-                   and pool.live(state) == 1
-    vec.release(again, state)
-    ok = reused and pool.live(state) == 0 and pool.frees(state) == 2
-         and pool.rejected_frees(state) == 0
+                   and pool.allocations(slab) == 2
+                   and pool.live(slab) == 1
+    vec.release(again, slab)
+    ok = reused and pool.live(slab) == 0 and pool.frees(slab) == 2
+         and pool.rejected_frees(slab) == 0
 end single_slot_any_case
 
 --  A second slot lets the same erased growth hold both blocks and succeed.
@@ -366,22 +373,23 @@ two_slot_any_case: (escaping a: any counter, escaping b: any counter)
     slot_size: usize = 16 * item_bytes
     extent: usize = 2 * slot_size
     return when extent > lenof words * sizeof u64
-    mut state := pool.over(base, extent, slot_size, 2,
-                           alignof any counter, records[0..<2])
-      else (problem)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, extent, slot_size, 2,
+                      alignof any counter, records[0..<2])
+        else (problem)
         _ = problem
         return
     end
     mut values := vec.new(item: any counter)
 
     nine: usize = 9
-    return when not fill_erased(state, values, nine, a, b)
+    return when not fill_erased(slab, values, nine, a, b)
     grown: bool = erased_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocations(state) == 2
-                  and pool.frees(state) == 1 and pool.live(state) == 1
-    vec.release(values, state)
-    ok = grown and pool.live(state) == 0 and pool.frees(state) == 2
-         and pool.rejected_frees(state) == 0
+                  and pool.allocations(slab) == 2
+                  and pool.frees(slab) == 1 and pool.live(slab) == 1
+    vec.release(values, slab)
+    ok = grown and pool.live(slab) == 0 and pool.frees(slab) == 2
+         and pool.rejected_frees(slab) == 0
 end two_slot_any_case
 
 public main: () -> (code: i32) =
@@ -404,38 +412,45 @@ public main: () -> (code: i32) =
 end main
 
 --  Observe the exact final free after the allocator keeps a growing block.
-growing: type = struct
+growing_state: type = struct
     base: ptr mut u8
     used: usize
     allocations: usize
     frees: usize
     released_size: usize
+end growing_state
+
+growing: type = struct
+    state: ptr mut growing_state
 end growing
 
-growing_alloc: (inout state: growing, size: usize, alignment: usize)
-                -> (block: ptr mut u8) ! mem.out_of_memory =
+growing_alloc: (self: growing, size: usize, alignment: usize)
+               -> (block: ptr mut u8) ! mem.out_of_memory =
     _ = alignment
-    fail mem.out_of_memory when state.used <> 0 or size > 32
-    inc state.allocations
-    state.used = size
-    block = ptr(usize(state.base))
+    state: ptr mut growing_state = self.state
+    fail mem.out_of_memory when state.val.used <> 0 or size > 32
+    inc state.val.allocations
+    state.val.used = size
+    block = ptr(usize(state.val.base))
 end growing_alloc
 
-growing_grow: (inout state: growing, block: ptr mut u8,
-                old_size: usize, new_size: usize, alignment: usize)
-               -> (grown: bool) =
+growing_grow: (self: growing, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (grown: bool) =
     _ = alignment
     grown = false
-    return when usize(block) <> usize(state.base) or old_size <> state.used
+    state: ptr mut growing_state = self.state
+    return when usize(block) <> usize(state.val.base)
+      or old_size <> state.val.used
     return when new_size <= old_size or new_size > 32
-    state.used = new_size
+    state.val.used = new_size
     grown = true
 end growing_grow
 
-growing_free: (inout state: growing, block: ptr mut u8, size: usize) -> none =
+growing_free: (self: growing, block: ptr mut u8, size: usize) -> none =
     _ = block
-    inc state.frees
-    state.released_size = size
+    inc self.state.val.frees
+    self.state.val.released_size = size
 end growing_free
 
 growing is mem.allocator (alloc: growing_alloc, grow: growing_grow,
@@ -444,42 +459,46 @@ growing is mem.allocator (alloc: growing_alloc, grow: growing_grow,
 grown_extent_free: () -> (ok: bool) =
     ok = false
     mut bytes: [32]u8 = zeroed
-    mut state: growing = (base: addr bytes[0], used: 0, allocations: 0,
-                           frees: 0, released_size: 0)
+    mut state: growing_state = (base: addr bytes[0], used: 0, allocations: 0,
+                                frees: 0, released_size: 0)
+    memory: growing = (state: addr state)
     mut values := vec.new(item: u8)
     for at in usize(0)..<usize(17) do
-        vec.push(values, state, u8(at)) else (problem) _ = problem return end
+        vec.push(values, memory, u8(at)) else (problem) _ = problem return end
     end for
-    vec.release(values, state)
+    vec.release(values, memory)
     ok = state.allocations == 1 and state.used == 32
          and state.frees == 1 and state.released_size == 32
 end grown_extent_free
 
-grow: (provider: type is mem.allocator, inout state: provider,
-        block: ptr mut u8, old: usize, want: usize, alignment: usize)
-       -> (ok: bool) =
-    ok = provider.grow(state, block, old, want, alignment)
+grow: (provider: type is mem.allocator, memory: provider,
+       block: ptr mut u8, old: usize, want: usize, alignment: usize)
+      -> (ok: bool) =
+    ok = provider.grow(memory, block, old, want, alignment)
 end grow
 
 arena_grow_refusals: () -> (ok: bool) =
     ok = false
     mut words: [4]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
-    mut state := mem.arena_over_unchecked(base, usize(31))
-    block: ptr mut u8 = mem.allocate(state, usize(4), usize(1))
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, base, usize(31))
+    block: ptr mut u8 = mem.allocate(arena, usize(4), usize(1))
         else (problem) _ = problem return end
     block.val = 73
     --  Every refusal leaves the offset and existing byte intact.
-    return when grow(state, block, usize(4), usize(8), usize(8))
-    return when grow(state, block, usize(3), usize(8), usize(1))
-    return when grow(state, block, usize(4), usize(32), usize(1))
-    return when grow(state, block, usize(4), usize(4), usize(1))
-    return when mem.arena_used(state) <> 4 or block.val <> 73
-    return when not grow(state, block, usize(4), usize(8), usize(1))
-    return when mem.arena_used(state) <> 8 or block.val <> 73
+    return when grow(arena, block, usize(4), usize(8), usize(8))
+    return when grow(arena, block, usize(3), usize(8), usize(1))
+    return when grow(arena, block, usize(4), usize(32), usize(1))
+    return when grow(arena, block, usize(4), usize(4), usize(1))
+    return when mem.arena_used(arena) <> 4 or block.val <> 73
+    return when not grow(arena, block, usize(4), usize(8), usize(1))
+    return when mem.arena_used(arena) <> 8 or block.val <> 73
     maximum: usize = 0 -% 1
     near_end: ptr mut u8 = ptr(maximum - 7)
-    mut impossible := mem.arena_over_unchecked(near_end, usize(16))
+    mut impossible_space: mem.arena_space = zeroed
+    impossible := mem.arena_over_unchecked(impossible_space, near_end,
+                                           usize(16))
     edge: ptr mut u8 = mem.allocate(impossible, usize(4), usize(1))
         else (problem) _ = problem return end
     --  The synthetic address is never dereferenced.

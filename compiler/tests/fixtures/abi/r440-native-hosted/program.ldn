@@ -26,7 +26,7 @@ public extern(c) l_heap: () -> (ok: bool) =
     _ = malloc()
     _ = free()
     ok = false
-    mut provider: heap.system = heap.host()
+    provider: heap.system = heap.host()
     block: ptr mut u8 = mem.allocate(provider, usize(64), usize(24)) else (problem)
         _ = problem
         return

@@ -1,0 +1,52 @@
+--  A concept entry may take `self` by value when the provider is a record:
+--  `any(addr handle)` erases the handle binding's address, dispatch copies
+--  the handle from it, and the copy reaches its state through a pointer.
+--  A result lent `from self` keeps the erased value's origin.
+counter: type = concept (provider: type)
+    add: (self: provider, value: u32) -> none
+    total: (self: provider) -> (sum: u32)
+    name: (self: provider) -> (bytes: []u8 from self)
+end counter
+
+tally: type = struct
+    count: u32
+    sum: u32
+end tally
+
+handle: type = struct
+    state: ptr mut tally
+    scale: u32
+    label: []u8
+end handle
+
+handle_add: (self: handle, value: u32) -> none =
+    inc self.state.val.count
+    self.state.val.sum += value * self.scale
+end handle_add
+
+handle_total: (self: handle) -> (sum: u32) =
+    sum = self.state.val.sum + self.state.val.count
+end handle_total
+
+handle_name: (self: handle) -> (bytes: []u8 from self) =
+    bytes = self.label
+end handle_name
+
+handle is counter (add: handle_add, total: handle_total, name: handle_name)
+
+feed: (erased: any counter, value: u32) -> none =
+    erased.add(value)
+end feed
+
+public main: () -> (code: i32) =
+    mut state: tally = (count: 0, sum: 0)
+    label: []u8 = "tally"
+    first: handle = (state: addr state, scale: 2, label: label)
+    second := first
+    erased: any counter = any(addr first)
+    feed(erased, 5)
+    erased.add(7)
+    handle_add(second, 1)
+    named: []u8 = erased.name()
+    code = i32(erased.total()) + i32(lenof named) + 8
+end main

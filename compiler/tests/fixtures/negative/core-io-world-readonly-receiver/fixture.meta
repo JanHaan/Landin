@@ -1,5 +1,5 @@
 class: negative
-summary: a read-only system pointer cannot expose the mutable world entries
+summary: an erased world is built from the address of a host handle, never from the handle value
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-io-world-readonly-receiver
 codes: L0342

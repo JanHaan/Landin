@@ -57,8 +57,10 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     alignment: usize = 8
     mut records: [6]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut inner := pool.over
-        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+    mut pool_space: pool.space = zeroed
+    inner := pool.over
+        (pool_space, base, extent, slot_size, slot_count, alignment,
+         bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -66,8 +68,9 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     end
 
     three: usize = 3
-    mut state := fault.new
-        (inner_provider: fixed_provider, inner: addr inner,
+    mut space: fault.space = zeroed
+    budget := fault.over
+        (inner_provider: fixed_provider, state: space, inner: inner,
          allowed_attempts: three)
     mut value := map.new(key: colliding, item: ptr node)
     k1: colliding = colliding(u64(1))
@@ -77,40 +80,40 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     k5: colliding = colliding(u64(5))
     k6: colliding = colliding(u64(6))
     k7: colliding = colliding(u64(7))
-    map.insert(value, state, k1, addr n1) else 0
-    map.insert(value, state, k2, addr n2) else 0
-    map.insert(value, state, k3, addr n3) else 0
-    map.insert(value, state, k4, addr n4) else 0
-    map.insert(value, state, k5, addr n5) else 0
-    map.insert(value, state, k6, addr n6) else 0
+    map.insert(value, budget, k1, addr n1) else 0
+    map.insert(value, budget, k2, addr n2) else 0
+    map.insert(value, budget, k3, addr n3) else 0
+    map.insert(value, budget, k4, addr n4) else 0
+    map.insert(value, budget, k5, addr n5) else 0
+    map.insert(value, budget, k6, addr n6) else 0
 
     mut initial: bool = map.length(value) == 6
-                        and fault.attempts(state) == 3
-                        and fault.successes(state) == 3
-                        and fault.frees(state) == 0
-                        and fault.live(state) == 3
+                        and fault.attempts(budget) == 3
+                        and fault.successes(budget) == 3
+                        and fault.frees(budget) == 0
+                        and fault.live(budget) == 3
                         and pool.allocations(inner) == 3
                         and pool.frees(inner) == 0
                         and pool.live(inner) == 3
 
     --  An existing-key update at the six-of-eight threshold needs no growth.
     zero: usize = 0
-    fault.permit(state, zero)
-    map.insert(value, state, k6, addr n7) else (problem)
+    fault.permit(budget, zero)
+    map.insert(value, budget, k6, addr n7) else (problem)
         _ = problem
         initial = false
     end
     updated_without_allocation: bool = map.length(value) == 6
                                        and has(value, k6, 77)
                                        and has(value, k1, 11)
-                                       and fault.attempts(state) == 3
-                                       and fault.injected_failures(state) == 0
-                                       and fault.frees(state) == 0
-                                       and fault.live(state) == 3
+                                       and fault.attempts(budget) == 3
+                                       and fault.injected_failures(budget) == 0
+                                       and fault.frees(budget) == 0
+                                       and fault.live(budget) == 3
 
-    fault.permit(state, allowed)
+    fault.permit(budget, allowed)
     mut failed: bool = false
-    map.insert(value, state, k7, addr n7) else (problem)
+    map.insert(value, budget, k7, addr n7) else (problem)
         _ = problem
         failed = true
     end
@@ -120,8 +123,8 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     mut preserved: bool = failed and map.length(value) == 6
                           and has(value, k2, 22) and has(value, k3, 33)
                           and has(value, k6, 77)
-                          and fault.frees(state) == rollback_frees
-                          and fault.live(state) == 3
+                          and fault.frees(budget) == rollback_frees
+                          and fault.live(budget) == 3
                           and pool.frees(inner) == rollback_frees
                           and pool.live(inner) == 3
                           and pool.rejected_frees(inner) == 0
@@ -134,8 +137,8 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
 
     --  The rollback returned every temporary slot to the pool. A three-call
     --  retry can therefore coexist with all three unchanged old allocations.
-    fault.permit(state, three)
-    map.insert(value, state, k7, addr n7) else (problem)
+    fault.permit(budget, three)
+    map.insert(value, budget, k7, addr n7) else (problem)
         _ = problem
         preserved = false
     end
@@ -143,25 +146,25 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                    and map.slots(value) == 16
                    and has(value, k2, 22)
                    and has(value, k4, 44) and has(value, k7, 77)
-                   and fault.frees(state) == rollback_frees + 3
-                   and fault.live(state) == 3
+                   and fault.frees(budget) == rollback_frees + 3
+                   and fault.live(budget) == 3
                    and pool.frees(inner) == rollback_frees + 3
                    and pool.live(inner) == 3
                    and pool.rejected_frees(inner) == 0
 
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
-    counts: bool = fault.attempts(state) == expected_attempts
-                   and fault.delegated(state) == expected_allocations
-                   and fault.successes(state) == expected_allocations
-                   and fault.injected_failures(state) == 1
-                   and fault.inner_failures(state) == 0
+    counts: bool = fault.attempts(budget) == expected_attempts
+                   and fault.delegated(budget) == expected_allocations
+                   and fault.successes(budget) == expected_allocations
+                   and fault.injected_failures(budget) == 1
+                   and fault.inner_failures(budget) == 0
                    and pool.allocations(inner) == expected_allocations
 
-    map.release(value, state)
+    map.release(value, budget)
     released: bool = map.length(value) == 0
-                     and fault.frees(state) == rollback_frees + 6
-                     and fault.live(state) == 0
+                     and fault.frees(budget) == rollback_frees + 6
+                     and fault.live(budget) == 0
                      and pool.frees(inner) == rollback_frees + 6
                      and pool.live(inner) == 0
                      and pool.rejected_frees(inner) == 0
@@ -172,15 +175,16 @@ end failure_case
 churn_case: () -> (ok: bool) =
     mut words: [64]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
-    mut state := mem.arena_over_unchecked(base, lenof words * sizeof u64)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, base, lenof words * sizeof u64)
     mut value := map.new(key: colliding, item: ptr node)
-    map.insert(value, state, colliding(u64(1)), addr n1) else 0
-    map.insert(value, state, colliding(u64(2)), addr n2) else 0
-    map.insert(value, state, colliding(u64(3)), addr n3) else 0
-    map.insert(value, state, colliding(u64(4)), addr n4) else 0
-    map.insert(value, state, colliding(u64(5)), addr n5) else 0
-    map.insert(value, state, colliding(u64(6)), addr n6) else 0
-    before: usize = mem.arena_used(state)
+    map.insert(value, arena, colliding(u64(1)), addr n1) else 0
+    map.insert(value, arena, colliding(u64(2)), addr n2) else 0
+    map.insert(value, arena, colliding(u64(3)), addr n3) else 0
+    map.insert(value, arena, colliding(u64(4)), addr n4) else 0
+    map.insert(value, arena, colliding(u64(5)), addr n5) else 0
+    map.insert(value, arena, colliding(u64(6)), addr n6) else 0
+    before: usize = mem.arena_used(arena)
     mut departing: colliding = colliding(u64(1))
     mut arriving: colliding = colliding(u64(7))
     mut cycles: usize = 0
@@ -190,11 +194,11 @@ churn_case: () -> (ok: bool) =
             _ = problem
             intact = false
         end
-        map.insert(value, state, arriving, addr n7) else (problem)
+        map.insert(value, arena, arriving, addr n7) else (problem)
             _ = problem
             intact = false
         end
-        intact = intact and mem.arena_used(state) == before
+        intact = intact and mem.arena_used(arena) == before
                  and map.slots(value) == 8
                  and map.length(value) == 6
                  and has(value, arriving, 77)
@@ -203,8 +207,8 @@ churn_case: () -> (ok: bool) =
         arriving = colliding(u64(arriving) + 1)
         inc cycles
     end while
-    map.release(value, state)
-    ok = intact and mem.arena_used(state) == before and map.length(value) == 0
+    map.release(value, arena)
+    ok = intact and mem.arena_used(arena) == before and map.length(value) == 0
 end churn_case
 
 public main: () -> (code: i32) =

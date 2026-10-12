@@ -25,22 +25,45 @@ import outside_user  # noqa: E402
 
 class Documents(unittest.TestCase):
     def test_the_readme_shows_a_first_program_and_its_output(self):
-        source, printed, status = outside_user.first_program()
+        source, printed, status, given = outside_user.first_program()
         self.assertIn("public main", source)
         self.assertTrue(printed.endswith(b"\n") and printed.strip())
         self.assertEqual(status, 0)
+        self.assertEqual(given, b"")
 
     def test_every_example_is_its_fixture_with_its_oracle(self):
         found = list(outside_user.examples())
         listed = (ROOT / "examples.md").read_text().count("Fixture source: `")
         self.assertEqual(len(found), listed)
-        for name, source, expected, status in found:
+        reading = 0
+        for name, source, expected, status, given in found:
             fixture = ROOT / "compiler/tests/fixtures/runtime" / name
             self.assertEqual(source, (fixture / "main.ldn").read_text(),
                              name)
-            self.assertEqual(status, 42, name)
             if expected is not None:
                 self.assertTrue(expected, name)
+            if given:
+                #  A program that reads its input is a tool, which returns
+                #  0, and is held to the output for the input it is given.
+                reading += 1
+                self.assertEqual(status, 0, name)
+                self.assertIsNotNone(expected, name)
+            else:
+                self.assertEqual(status, 42, name)
+        self.assertGreaterEqual(reading, 1)
+
+    def test_a_program_reads_the_input_it_is_given(self):
+        ran, _ = outside_user.run(
+            [sys.executable, "-c",
+             "import sys; sys.stdout.buffer.write("
+             "sys.stdin.buffer.read()[::-1])"],
+            ROOT, dict(os.environ), "reverse", b"abc\n")
+        self.assertEqual(ran.stdout, b"\ncba")
+        ran, _ = outside_user.run(
+            [sys.executable, "-c",
+             "import sys; sys.stdout.write(repr(sys.stdin.read()))"],
+            ROOT, dict(os.environ), "nothing")
+        self.assertEqual(ran.stdout, b"''")
 
 
 class Archive(unittest.TestCase):

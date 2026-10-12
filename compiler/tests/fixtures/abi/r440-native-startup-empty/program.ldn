@@ -7,7 +7,7 @@ public extern(c) l_root: () -> (ok: bool) =
     state: hosted.system = hosted.host()
     ok = false
     return when io.argument_count(state) <> 0
-    value: io.argument = io.argument_at(addr state, usize(0)) else (problem)
+    value: io.argument = io.argument_at(state, usize(0)) else (problem)
         ok = problem == io.no_argument
         return
     end

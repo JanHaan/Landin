@@ -1,6 +1,7 @@
 --  The classifier stays independent of presentation; the hosted entry prints
 --  the traditional lines and checks the complete tally for one through 100.
 import core/io
+import core/text
 import hosted/io as hosted
 
 fizz, buzz, fizz_buzz, number: atom
@@ -34,24 +35,17 @@ tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
     end match
 end tally
 
-write_number: (inout host: hosted.system, stream: io.file, value: u32)
-              -> none ! io.io_failed =
-    mut digits: [3]u8 = zeroed
-    mut start: usize = lenof digits
-    mut remaining: u32 = value
-    loop do
-        dec start
-        digits[start] = u8(remaining % 10) + 48
-        remaining = remaining / 10
-        break when remaining == 0
-    end loop
-    output: []u8 = digits[start..<lenof digits]
-    try io.write(host, stream, output)
-    try io.write(host, stream, "\n")
+write_number: (host: hosted.system, stream: io.file, value: u32)
+              -> none ! io.io_failed | text.no_space =
+    mut line: [4]u8 = zeroed
+    mut used: usize = try text.write_u32(line[0..<4], 0, value)
+    used = try text.write_byte(line[0..<4], used, 10)
+    try io.write(host, stream, line[0..<used])
 end write_number
 
-write_line: (inout host: hosted.system, stream: io.file,
-             kind: fizzbuzz_kind, value: u32) -> none ! io.io_failed =
+write_line: (host: hosted.system, stream: io.file,
+             kind: fizzbuzz_kind, value: u32)
+            -> none ! io.io_failed | text.no_space =
     match kind
         fizz: try io.write(host, stream, "Fizz\n")
         buzz: try io.write(host, stream, "Buzz\n")
@@ -60,7 +54,8 @@ write_line: (inout host: hosted.system, stream: io.file,
     end match
 end write_line
 
-run: (inout host: hosted.system) -> (result: counts) ! io.io_failed =
+run: (host: hosted.system)
+     -> (result: counts) ! io.io_failed | text.no_space =
     result = zeroed
     stream: io.file = io.out(host)
     first: u32 = 1
@@ -73,7 +68,7 @@ run: (inout host: hosted.system) -> (result: counts) ! io.io_failed =
 end run
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     result := run(host) else (problem)
         _ = problem
         code = 1

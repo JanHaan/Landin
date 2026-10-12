@@ -1,0 +1,108 @@
+--  core/text's u64 and usize decimal writers and its byte-slice parsers at
+--  their edges: zero, each type's maximum and one past it, leading zeros, an
+--  empty slice and a stray byte, and a writer refused for room leaving the
+--  buffer as it found it.  usize is 32 bits on Cortex-M and 64 elsewhere,
+--  so its expectations follow `sizeof usize`.
+import core/text
+
+refusal: type = text.invalid_number | text.number_overflow
+
+same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    yes = true
+end same
+
+writes: () -> (ok: bool) ! text.no_space =
+    ok = false
+    mut line: [24]u8 = zeroed
+    mut used: usize = try text.write_u64(line[0..<24], 0, 0)
+    return when not same(line[0..<used], "0")
+    largest: u64 = 0 -% 1
+    used = try text.write_u64(line[0..<24], 0, largest)
+    return when not same(line[0..<used], "18446744073709551615")
+    used = try text.write_u64(line[0..<24], 2, 1000000)
+    return when used <> 9 or not same(line[2..<9], "1000000")
+    widest: usize = 0 -% 1
+    used = try text.write_usize(line[0..<24], 0, widest)
+    if sizeof usize == 8 then
+        return when not same(line[0..<used], "18446744073709551615")
+    else
+        return when not same(line[0..<used], "4294967295")
+    end if
+
+    --  Twenty digits do not fit in nineteen bytes: nothing is written.
+    mut cramped: [19]u8 = [19 of 33]
+    _ = text.write_u64(cramped[0..<19], 0, largest) else (problem)
+        return when problem <> text.no_space or cramped[0] <> 33
+          or cramped[18] <> 33
+        _ = text.write_usize(cramped[0..<19], 19, 0) else (full)
+            ok = full == text.no_space
+            return
+        end
+        return
+    end
+end writes
+
+refuses: (source: []u8, wanted: refusal)
+         -> (yes: bool) =
+    yes = false
+    _ = text.parse_u64(source) else (problem)
+        yes = problem == wanted
+        0
+    end
+end refuses
+
+parses: () -> (ok: bool) ! text.invalid_number | text.number_overflow =
+    ok = false
+    return when try text.parse_u32("0") <> 0
+    return when try text.parse_u32("4294967295") <> 4294967295
+    return when try text.parse_u64("000042") <> 42
+    return when try text.parse_u64("18446744073709551615")
+      <> 18446744073709551615
+    return when not refuses("18446744073709551616", text.number_overflow)
+    return when not refuses("", text.invalid_number)
+    return when not refuses("4 2", text.invalid_number)
+    return when not refuses("+1", text.invalid_number)
+    --  The scan meets the overflow before the stray byte after it.
+    return when not refuses("99999999999999999999x", text.number_overflow)
+
+    --  Bytes that are not UTF-8 still parse if they are digits, and are
+    --  refused as a number, not as text, if they are not.
+    stray: [2]u8 = [52, 255]
+    return when not refuses(stray[0..<2], text.invalid_number)
+
+    mut narrow_overflow: bool = false
+    _ = text.parse_u32("4294967296") else (problem)
+        narrow_overflow = problem == text.number_overflow
+        0
+    end
+    return when not narrow_overflow
+
+    if sizeof usize == 8 then
+        return when try text.parse_usize("18446744073709551615")
+          <> usize(0 -% 1)
+    else
+        return when try text.parse_usize("4294967295") <> usize(0 -% 1)
+        mut wide_overflow: bool = false
+        _ = text.parse_usize("4294967296") else (problem)
+            wide_overflow = problem == text.number_overflow
+            0
+        end
+        return when not wide_overflow
+    end if
+    ok = true
+end parses
+
+public main: () -> (code: i32) =
+    code = 1
+    wrote := writes() else false
+    return when not wrote
+    code = 2
+    parsed := parses() else false
+    return when not parsed
+    code = 42
+end main

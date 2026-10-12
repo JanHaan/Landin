@@ -1927,7 +1927,20 @@ package body Landin.IR.Verifier is
                   Expected : Signature_Part := Nth_Signature_Parameter
                     (Of_Unit, Provider.Signature, Index);
                begin
-                  if Index = 1 then
+                  if Index = 1
+                    and then Expected.Kind = Landin.Types.Aggregate
+                  then
+                     --  A by-value receiver is the represented aggregate
+                     --  itself, passed through its address carrier.
+                     if Expected.Convention /= In_Value
+                       or else Expected.Escaping
+                       or else Held.Represented.Kind /= Aggregate_Field_Shape
+                       or else Expected.Nominal /= Held.Represented.Nominal
+                     then
+                        return False;
+                     end if;
+                     Expected := (Kind => Landin.Types.Usize, others => <>);
+                  elsif Index = 1 then
                      if Expected.Kind /= Landin.Types.Usize
                        or else Expected.Convention /= In_Value
                        or else not Holds (Of_Unit, Expected.Pointee)

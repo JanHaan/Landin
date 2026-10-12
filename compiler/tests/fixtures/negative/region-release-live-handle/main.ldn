@@ -1,0 +1,23 @@
+--  Releasing a region takes its state `inout`, so it is refused while the
+--  region's handle is still used afterwards.
+import core/mem
+import core/region
+import hosted/heap
+
+public main: () -> (code: i32) =
+    code = 1
+    heap := heap.host()
+    mut ledger: region.space(0) = zeroed
+    scratch := region.over(ledger, heap)
+    first: ptr mut u8 = mem.allocate(scratch, usize(1), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    first.val = 1
+    region.release(ledger, heap)
+    second: ptr mut u8 = mem.allocate(scratch, usize(1), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    code = i32(second.val)
+end main

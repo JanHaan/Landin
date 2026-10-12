@@ -5,14 +5,14 @@ import hosted/heap
 import core/region
 
 public entry: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     world: any io.world = any(addr host)
-    mut heap := heap.host()
-    mut program := region.new(addr heap)
-    defer region.release(program)
-    stream: io.file = world.err()
+    heap := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, heap)
+    defer region.release(ledger, heap)
     writer: any io.writer = any(addr host)
-    mut logger := diag.stream(addr writer, addr stream)
+    mut logger := diag.stream(writer, world.err())
     log: any diag.log = any(addr logger)
     kept: usize = run_logged(program, world, usize(4096), log) else (problem)
         _ = problem

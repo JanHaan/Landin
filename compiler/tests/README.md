@@ -514,6 +514,7 @@ emits assembly text.
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `run_args` | no | the arguments handed to a compiled runtime or ABI program |
+| `stdin` | no | a file below the fixture directory whose bytes a compiled runtime or ABI program reads as its standard input; without it the program's standard input is empty |
 | `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
 | `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
@@ -631,7 +632,7 @@ this exact order:
 ```
 
 The resulting executable may get `main` from Landin or from a C companion.
-The harness passes `run_args`, compares `run_expect` with the selected
+The harness passes `run_args` and the `stdin` file, compares `run_expect` with the selected
 `stream` when it is present, and then compares either the
 exit `status` or the non-returning `traps: yes` verdict. Thus a C `main` can
 drive exported Landin routines, and a Landin `main` can drive imported C
@@ -756,7 +757,24 @@ default) or `traps: yes`, and neither `expect` nor `args`, because nothing
 compares `refine`'s own output — what is asserted is what the compiled program
 did. One without a `program` is a reported fault, for the same reason `expect`
 without `args` is: a status nobody produces is dead data. ABI additionally
-requires `c-sources`; `c-args`, `run_args`, and `run_expect` remain optional.
+requires `c-sources`; `c-args`, `run_args`, `stdin` and `run_expect` remain
+optional.
+
+`stdin` names a file the way `run_expect` does, relative to the fixture
+directory, and it must stay below it: a slash-separated path with no empty,
+`.` or `..` component, no backslash and no colon, so every lane opens the
+same file whatever its working directory. `run_args` is different, and older:
+its words are handed over as written, so a path among them is relative to the
+directory the program runs in, `compiler/ada`. Every lane that runs a compiled
+program honours `stdin`: the Ada harness on the Linux and Darwin hosts and
+under an emulator runner, the FreeBSD guests, the RV64 machines, the quality
+measurements and the outside-user lane. A fixture without the key gives its
+program an empty standard input, `/dev/null`, on every lane, and never the
+harness's own, which may be a terminal the program would wait on until its
+time limit; `runtime/word-count-no-input` holds every lane to that.
+Firmware has no standard input, so the Cortex-M corpus refuses to execute a
+fixture that names `stdin`: such a fixture is hosted and is recorded there by
+its source refusal, as `runtime/word-count` is.
 
 Accepted, emitted and executed are three claims and not one, which is why
 three classes make them. A positive fixture is a program the compiler must

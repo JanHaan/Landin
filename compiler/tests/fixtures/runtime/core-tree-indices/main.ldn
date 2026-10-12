@@ -4,40 +4,44 @@ import core/tree
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
+    heap := heap.host()
     budget: usize = 10
-    mut state := fault.new(addr host, budget)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, heap, budget)
     zero_count: usize = 0
     one_count: usize = 1
     three_count: usize = 3
     four_count: usize = 4
     maximum: usize = 0 -% 1
     mut value := tree.new()
-    a: tree.node_id = tree.add_leaf(value, state, "a") else (problem)
+    a: tree.node_id = tree.add_leaf(value, counted, "a") else (problem)
             _ = problem
             return
         end
-    b: tree.node_id = tree.add_leaf(value, state, "b") else (problem)
+    b: tree.node_id = tree.add_leaf(value, counted, "b") else (problem)
             _ = problem
             return
         end
-    c: tree.node_id = tree.add_leaf(value, state, "c") else (problem)
+    c: tree.node_id = tree.add_leaf(value, counted, "c") else (problem)
             _ = problem
             return
         end
-    root: tree.node_id = tree.add_branch(value, state, "root", a, three_count)
+    root: tree.node_id = tree.add_branch(value, counted, "root", a,
+                                         three_count)
         else (problem)
             _ = problem
             return
         end
     three: usize = tree.count_leaves(value, root) else 0
-    zero: tree.node_id = tree.add_branch(value, state, "empty", a, zero_count)
+    zero: tree.node_id = tree.add_branch(value, counted, "empty", a,
+                                         zero_count)
         else (problem)
             _ = problem
             return
         end
     empty: usize = tree.count_leaves(value, zero) else 1
-    shared: tree.node_id = tree.add_branch(value, state, "shared", a, four_count)
+    shared: tree.node_id = tree.add_branch(value, counted, "shared", a,
+                                           four_count)
         else (problem)
             _ = problem
             return
@@ -46,7 +50,7 @@ public main: () -> (code: i32) =
     mut deep: tree.node_id = root
     mut at: usize = 0
     while at < 512 do
-        deep = tree.add_branch(value, state, "nested", deep, one_count)
+        deep = tree.add_branch(value, counted, "nested", deep, one_count)
             else (problem)
             _ = problem
             return
@@ -69,8 +73,8 @@ public main: () -> (code: i32) =
     at = 0
     while at < 128 do
         span: usize = usize(at + 1)
-        overlap: tree.node_id = tree.add_branch(value, state, "overlap", root,
-                                                span) else (problem)
+        overlap: tree.node_id = tree.add_branch(value, counted, "overlap",
+                                                root, span) else (problem)
             _ = problem
             return
         end
@@ -84,18 +88,18 @@ public main: () -> (code: i32) =
     end while
     before: usize = tree.length(value)
     mut invalid: bool = false
-    _ = tree.add_branch(value, state, "invalid", c, maximum)
+    _ = tree.add_branch(value, counted, "invalid", c, maximum)
         else (problem)
             _ = problem
             invalid = true
             return_id()
         end
     unchanged: bool = tree.length(value) == before
-    tree.release(value, state)
+    tree.release(value, counted)
     if three == 3 and empty == 0 and six == 6 and deep_count == 3
       and invalid and unchanged and tree.length(value) == 0
-      and fault.live(state) == 0 and fault.successes(state) == 8
-      and fault.frees(state) == 8
+      and fault.live(counted) == 0 and fault.successes(counted) == 8
+      and fault.frees(counted) == 8
     then
         code = 42
     end if

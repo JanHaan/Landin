@@ -8,7 +8,7 @@ extern(c) identity_path: (which: i32) -> (path: ptr u8)
 extern(c) identity_cleanup: () -> none
 
 public main: () -> (code: i32) =
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
     world: any io.world = any(addr state)
     left: [5]u8 = [108, 101, 102, 116, 0]
     right: [6]u8 = [114, 105, 103, 104, 116, 0]

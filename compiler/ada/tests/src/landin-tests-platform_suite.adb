@@ -697,6 +697,72 @@ package body Landin.Tests.Platform_Suite is
         (Item, Missed, "a missing executable is a host failure");
    end Native_Arguments_And_Capture_Are_Preserved;
 
+   --  Deliberate native-host test: a file's bytes reach a real tool's
+   --  standard input, every one of them, once Set_Input names it; /dev/null
+   --  is an input that ends at once; an input that cannot be opened is the
+   --  caller's failure before any tool runs; and "" gives the tool the
+   --  caller's own input again.  `cat` is the tool; no compiler is invoked.
+   procedure Native_Standard_Input_Is_Fed_From_A_File
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Standard_Input_Is_Fed_From_A_File
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result  : Landin.Platform.Tool_Result;
+      Path    : constant String := Scratch & "/standard-input.bin";
+      Text    : constant String :=
+        "first" & ASCII.LF & Character'Val (0) & Character'Val (255)
+        & "last, with no newline";
+      Written : Landin.Platform.Write_Status;
+      Missed  : Boolean := False;
+      Shell   : Landin.Platform.Path_List := Landin.Platform.Arguments ("-c");
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Host.Write_File (Path, Text, Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok, "the input was written");
+
+      Runner.Set_Input (Path);
+      Runner.Run ("cat", Landin.Platform.No_Arguments, Result,
+                  Landin.Platform.Output_Only);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Output), Text,
+         "the tool reads the named file's bytes as its standard input");
+      Runner.Run ("cat", Landin.Platform.No_Arguments, Result,
+                  Landin.Platform.Output_Only);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Output), Text,
+         "each run opens the input afresh, from its first byte");
+
+      Runner.Set_Input ("/dev/null");
+      Runner.Run ("cat", Landin.Platform.No_Arguments, Result,
+                  Landin.Platform.Output_Only);
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 0
+           and then Unbounded.Length (Result.Output) = 0,
+         "an empty input ends at once");
+
+      Runner.Set_Input (Scratch & "/no-such-input");
+      begin
+         Runner.Run ("cat", Landin.Platform.No_Arguments, Result);
+      exception
+         when Landin.External_Tool_Failed => Missed := True;
+      end;
+      Landin.Testing.Check
+        (Item, Missed, "an input that cannot be opened is a host failure");
+
+      Runner.Set_Input ("");
+      Landin.Platform.Add (Shell, "exit 3");
+      Runner.Run ("sh", Shell, Result);
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 3,
+         "an empty path restores the inherited input");
+   end Native_Standard_Input_Is_Fed_From_A_File;
+
    --  Deliberate native-host test: only the host says where a file was
    --  created. The tool lists TMPDIR while its captures are open, and both
    --  must be there rather than in the current directory, where GNAT's
@@ -1563,6 +1629,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native captures use the temporary directory",
          Native_Captures_Use_The_Temporary_Directory'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native standard input is fed from a file",
+         Native_Standard_Input_Is_Fed_From_A_File'Access);
       Landin.Testing.Register
         (Into, "platform", "fake writes are recorded",
          Fake_Writes_Are_Recorded'Access);

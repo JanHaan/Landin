@@ -1,0 +1,82 @@
+--  Count the lines, words and bytes on standard input, as `wc` does when it
+--  is named no file.  The counting asks only for a reader, the narrowest
+--  capability it uses, so the same routine counts a pipe, a file or bytes in
+--  memory.  The totals are u64 and core/text writes them in decimal.
+import core/io
+import core/text
+import hosted/io as hosted
+
+counts: type = struct
+    lines: u64
+    words: u64
+    bytes: u64
+end counts
+
+--  White space as C's isspace has it: space, tab, newline, vertical tab,
+--  form feed and carriage return.  Every other byte belongs to a word.
+blank: (byte: u8) -> (yes: bool) =
+    yes = byte == 32 or (byte >= 9 and byte <= 13)
+end blank
+
+--  Read to end of input a buffer at a time.  A line is counted at its
+--  newline, so a last line without one adds no line; a word is counted at
+--  its first byte, and may run on from one buffer into the next.
+count: (provider: type is io.reader, source: provider,
+        opened: io.file, buffer: []mut u8)
+       -> (totals: counts) ! io.io_failed =
+    totals = (lines: 0, words: 0, bytes: 0)
+    mut inside: bool = false
+    loop do
+        got: usize = try io.read(source, opened, buffer)
+        break when got == 0
+        totals.bytes += u64(got)
+        for byte in buffer[0..<got] do
+            if byte == 10 then inc totals.lines end if
+            if blank(byte) then
+                inside = false
+            elsif not inside then
+                inside = true
+                inc totals.words
+            end if
+        end for
+    end loop
+end count
+
+--  The three totals in decimal, separated by spaces and ended by a newline.
+render: (totals: counts, into: []mut u8) -> (used: usize) ! text.no_space =
+    used = try text.write_u64(into, 0, totals.lines)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.words)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.bytes)
+    used = try text.write_byte(into, used, 10)
+end render
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    input: io.file = io.input(host)
+    mut buffer: [4096]u8 = zeroed
+    totals := count(host, input, buffer[0..<4096]) else (problem)
+        _ = problem
+        message: []u8 = "wc: standard input could not be read\n"
+        io.write(host, io.err(host), message) else (ignored)
+            _ = ignored
+        end
+        code = 1
+        return
+    end
+
+    --  Three twenty-digit totals, two spaces and a newline fit in 64 bytes.
+    mut line: [64]u8 = zeroed
+    used := render(totals, line[0..<64]) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    io.write(host, io.out(host), line[0..<used]) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = 0
+end main

@@ -32,7 +32,10 @@ allocator makes the out-of-memory paths testable, which almost nobody
 bothers with in C because it is too awkward. An ordinary arena or counted
 arena accepts only backing the caller may retain; a frame buffer requires
 the explicitly named unchecked constructor because allocator results carry
-no backing origin.
+no backing origin. What is edited, a list or a map, is passed `inout`; a
+service, an allocator or an I/O provider, is a handle: a small copyable value
+passed `in` that refers to state its caller declares, checked once where it
+is made, so sharing one locks nothing.
 
 **References** answer two independent questions in two places. `mut` on
 the binding says whether the name may be re-pointed. `mut` inside the

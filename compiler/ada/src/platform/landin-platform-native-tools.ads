@@ -5,6 +5,8 @@
 --  it creates in the host's temporary directory; GNAT supplies path lookup.
 --  Nothing above this seam depends on either.
 
+with Ada.Strings.Unbounded;
+
 package Landin.Platform.Native.Tools is
 
    type Native_Tool_Runner is limited new Tool_Runner with private;
@@ -18,6 +20,14 @@ package Landin.Platform.Native.Tools is
    --  group. This is supervision of ordinary tools, not confinement of a
    --  process that deliberately leaves its group.
    procedure Set_Limit (Host : in out Native_Tool_Runner; Seconds : Duration);
+
+   --  What a tool's standard input reads.  By default a tool inherits the
+   --  caller's own; after this, each later Run opens Path for reading and
+   --  gives the tool that instead, so a test can hand a program its input
+   --  and can give one that must not read the caller's terminal
+   --  `/dev/null`.  "" restores the inherited input.  A Path that cannot be
+   --  opened raises External_Tool_Failed before the tool starts.
+   procedure Set_Input (Host : in out Native_Tool_Runner; Path : String);
 
    overriding function Available
      (Host : Native_Tool_Runner; Program : String) return Boolean;
@@ -43,6 +53,7 @@ private
 
    type Native_Tool_Runner is limited new Tool_Runner with record
       Limit : Duration := 600.0;
+      Input : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
 end Landin.Platform.Native.Tools;

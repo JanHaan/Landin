@@ -1,13 +1,9 @@
---  Generic deterministic failure injection.  The wrapper retains a mutable
---  pointer to its supplied provider and delegates every successful free.
+--  Generic deterministic failure injection.  The handle holds a copy of the
+--  supplied provider's handle and delegates every successful free.
 
 import core/mem
 
---- Allocator wrapper with deterministic failure injection and cumulative
---- counters. Borrows its inner provider, delegates permitted allocations and
---- frees, and refuses in-place growth.
-public injector: type (inner_provider: type) = struct
-    inner: ptr mut inner_provider
+counters: type = struct
     remaining: usize
     attempts: usize
     delegated: usize
@@ -16,71 +12,89 @@ public injector: type (inner_provider: type) = struct
     inner_failures: usize
     frees: usize
     live: usize
-end injector
+end counters
 
---- Wrap an allocator with a budget of `allowed_attempts` allocation calls
---- that may reach it. An inner failure consumes one of them too; an injected
---- failure never calls the inner provider and counts only in `attempts` and
+--- Caller-owned state of an injector: its budget and cumulative counters.
+--- Declare it `zeroed` and give it to `over`, which fills it; it must outlive
+--- the injector handle.
+public space: type = counters
+
+injector_value: type (inner_provider: type) = struct
+    state: ptr mut counters
+    inner: inner_provider
+end injector_value
+
+--- Allocator wrapper with deterministic failure injection and cumulative
+--- counters, as a handle: copies share one budget. Holds a copy of its inner
+--- provider's handle, delegates permitted allocations and frees, and refuses
+--- in-place growth.
+public injector: type (inner_provider: type) = injector_value(inner_provider)
+
+--- Fill `state` for an injector over `inner` with a budget of
+--- `allowed_attempts` allocation calls that may reach it, and return its
+--- handle. An inner failure consumes one of them too; an injected failure
+--- never calls the inner provider and counts only in `attempts` and
 --- `injected_failures`.
-public new: (inner_provider: type is mem.allocator,
-             inner: ptr mut inner_provider,
-             allowed_attempts: usize)
-            -> (state: injector(inner_provider) from inner) =
-    state = (inner: inner, remaining: allowed_attempts,
+public over: (inner_provider: type is mem.allocator, inout state: space,
+              inner: inner_provider, allowed_attempts: usize)
+             -> (handle: injector(inner_provider) from state, inner) =
+    state = (remaining: allowed_attempts,
              attempts: 0, delegated: 0, successes: 0,
              injected_failures: 0, inner_failures: 0,
              frees: 0, live: 0)
-end new
+    handle = (state: addr state, inner: inner)
+end over
 
 --- Replace the future delegation budget without resetting the counters, so
 --- failed and successful calls stay distinguishable across retries.
-public permit: (inner_provider: type,
-                inout state: injector(inner_provider),
+public permit: (inner_provider: type, memory: injector(inner_provider),
                 allowed_attempts: usize) -> none =
-    state.remaining = allowed_attempts
+    memory.state.val.remaining = allowed_attempts
 end permit
 
-injector_alloc: (inner_provider: type,
-                 inout state: injector(inner_provider),
+injector_alloc: (inner_provider: type is mem.allocator,
+                 self: injector(inner_provider),
                  size: usize, alignment: usize)
                 -> (block: ptr mut u8) ! mem.out_of_memory =
-    inc state.attempts
-    if state.remaining == 0 then
-        inc state.injected_failures
+    state: ptr mut counters = self.state
+    inc state.val.attempts
+    if state.val.remaining == 0 then
+        inc state.val.injected_failures
         fail mem.out_of_memory
     end if
 
-    dec state.remaining
-    inc state.delegated
-    block = mem.allocate(state.inner.val, size, alignment)
+    dec state.val.remaining
+    inc state.val.delegated
+    block = mem.allocate(self.inner, size, alignment)
         else (problem)
         _ = problem
-        inc state.inner_failures
+        inc state.val.inner_failures
         fail mem.out_of_memory
     end
-    inc state.successes
-    inc state.live
+    inc state.val.successes
+    inc state.val.live
 end injector_alloc
 
-injector_free: (inner_provider: type,
-                inout state: injector(inner_provider),
+injector_free: (inner_provider: type is mem.allocator,
+                self: injector(inner_provider),
                 block: ptr mut u8, size: usize) -> none =
-    mem.free(state.inner.val, block, size)
+    mem.free(self.inner, block, size)
     --  Allocator free has no result. These two counters are therefore exact
     --  under the allocator contract: the caller frees each successful block
     --  once with its original extent. A malformed or duplicate free is still
     --  delegated, but an inner rejection cannot be reflected in live.
-    inc state.frees
-    if state.live > 0 then
-        dec state.live
+    state: ptr mut counters = self.state
+    inc state.val.frees
+    if state.val.live > 0 then
+        dec state.val.live
     end if
 end injector_free
 
 injector_grow: (inner_provider: type,
-                inout state: injector(inner_provider), block: ptr mut u8,
+                self: injector(inner_provider), block: ptr mut u8,
                 old_size: usize, new_size: usize, alignment: usize)
                -> (grown: bool) =
-    _ = state.live
+    _ = self.state
     _ = block
     _ = old_size
     _ = new_size
@@ -88,58 +102,58 @@ injector_grow: (inner_provider: type,
     grown = false
 end injector_grow
 
-(inner_provider: type is mem.allocator) injector(inner_provider)
+(inner_provider: type is mem.allocator) injector_value(inner_provider)
     is mem.allocator (alloc: injector_alloc, grow: injector_grow,
                       free: injector_free)
 
 --- Return how many allocation attempts may still reach the inner provider.
 public remaining: (inner_provider: type,
-                   state: injector(inner_provider)) -> (count: usize) =
-    count = state.remaining
+                   memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.remaining
 end remaining
 
 --- Return all allocation attempts, including injected and inner failures.
 public attempts: (inner_provider: type,
-                  state: injector(inner_provider)) -> (count: usize) =
-    count = state.attempts
+                  memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.attempts
 end attempts
 
 --- Return allocation attempts passed through to the inner provider.
 public delegated: (inner_provider: type,
-                   state: injector(inner_provider)) -> (count: usize) =
-    count = state.delegated
+                   memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.delegated
 end delegated
 
 --- Return the number of successful delegated allocations.
 public successes: (inner_provider: type,
-                   state: injector(inner_provider)) -> (count: usize) =
-    count = state.successes
+                   memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.successes
 end successes
 
 --- Return attempts rejected by the wrapper before calling the inner provider.
 public injected_failures: (inner_provider: type,
-                           state: injector(inner_provider))
+                           memory: injector(inner_provider))
                           -> (count: usize) =
-    count = state.injected_failures
+    count = memory.state.val.injected_failures
 end injected_failures
 
 --- Return allocation failures reported by the inner provider.
 public inner_failures: (inner_provider: type,
-                        state: injector(inner_provider)) -> (count: usize) =
-    count = state.inner_failures
+                        memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.inner_failures
 end inner_failures
 
 --- Return the number of delegated free calls.
 public frees: (inner_provider: type,
-               state: injector(inner_provider)) -> (count: usize) =
-    count = state.frees
+               memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.frees
 end frees
 
 --- Return successful allocations minus free calls, bounded below by zero.
 --- Exact under the allocator contract; malformed or duplicate frees are not
 --- validated here.
 public live: (inner_provider: type,
-              state: injector(inner_provider)) -> (count: usize) =
+              memory: injector(inner_provider)) -> (count: usize) =
     --  Successful allocations less delegated frees under valid-free use.
-    count = state.live
+    count = memory.state.val.live
 end live

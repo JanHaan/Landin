@@ -1,5 +1,6 @@
 import core/io
 import core/mem
+import core/text
 import core/vec
 
 --  A message owns copied arbitrary bytes. Its cursor commits the exact
@@ -13,7 +14,7 @@ public new_message: () -> (value: message) =
     bytes := vec.new(item: u8)
     value = (bytes: bytes, delivered: 0)
 end new_message
-reserve_message: (provider: type is mem.allocator, inout allocator: provider,
+reserve_message: (provider: type is mem.allocator, memory: provider,
                   inout value: message, want: usize)
                  -> none ! mem.out_of_memory =
     old_capacity: usize = vec.capacity(value.bytes)
@@ -28,28 +29,28 @@ reserve_message: (provider: type is mem.allocator, inout allocator: provider,
         doubled: usize = old_capacity * 2
         if next < doubled then next = doubled end if
     end if
-    try vec.reserve(value.bytes, allocator, next)
+    try vec.reserve(value.bytes, memory, next)
 end reserve_message
-public append: (provider: type is mem.allocator, inout allocator: provider,
+public append: (provider: type is mem.allocator, memory: provider,
                 inout value: message, bytes: []u8)
                -> none ! mem.out_of_memory =
     count: usize = vec.length(value.bytes)
     maximum: usize = 0 -% 1
     fail mem.out_of_memory when lenof bytes > maximum - count
     --  Reserve first: failure preserves the entire previous message.
-    try vec.reserve(value.bytes, allocator, count + lenof bytes)
-    for byte in bytes do try vec.push(value.bytes, allocator, byte) end for
+    try vec.reserve(value.bytes, memory, count + lenof bytes)
+    for byte in bytes do try vec.push(value.bytes, memory, byte) end for
 end append
-public append_line: (provider: type is mem.allocator, inout allocator: provider,
+public append_line: (provider: type is mem.allocator, memory: provider,
                      inout value: message, bytes: []u8)
                     -> none ! mem.out_of_memory =
     count: usize = vec.length(value.bytes)
     maximum: usize = 0 -% 1
     fail mem.out_of_memory when lenof bytes >= maximum - count
     --  Reserve the complete record before changing the message.
-    try reserve_message(allocator, value, count + lenof bytes + 1)
-    for byte in bytes do try vec.push(value.bytes, allocator, byte) end for
-    try vec.push(value.bytes, allocator, u8(10))
+    try reserve_message(memory, value, count + lenof bytes + 1)
+    for byte in bytes do try vec.push(value.bytes, memory, byte) end for
+    try vec.push(value.bytes, memory, u8(10))
 end append_line
 public deliver: (inout value: message, world: any io.world, stream: io.file)
                 -> none ! io.io_failed =
@@ -65,9 +66,9 @@ public clear_message: (inout value: message) -> none =
     end while
     value.delivered = 0
 end clear_message
-public drop_message: (provider: type is mem.allocator, inout allocator: provider,
+public drop_message: (provider: type is mem.allocator, memory: provider,
                       inout value: message) -> none =
-    vec.release(value.bytes, allocator)
+    vec.release(value.bytes, memory)
     value.delivered = 0
 end drop_message
 
@@ -107,10 +108,13 @@ count_emit: (self: ptr mut count_dest, world: any io.world, inout pending: messa
 end count_emit
 public print_number: (world: any io.world, stream: io.file, number: usize)
                      -> none ! io.io_failed =
-    if number >= 10 then try print_number(world, stream, number / 10) end if
-    mut digit: [1]u8 = zeroed
-    digit[0] = u8(number % 10) + 48
-    try world.write(stream, digit[0..<1])
+    --  Twenty bytes hold every decimal digit of a 64-bit usize.
+    mut digits: [20]u8 = zeroed
+    used: usize = text.write_usize(digits[0..<20], 0, number) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    try world.write(stream, digits[0..<used])
 end print_number
 count_done: (self: ptr mut count_dest, world: any io.world)
             -> none ! io.io_failed =

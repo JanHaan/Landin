@@ -1290,7 +1290,15 @@ package body Landin.IR is
                  Nth_Signature_Parameter (Into, Signature, Index);
             end loop;
             if Parameters'Length > 0 then
-               Parameters (1).Pointee := No_Pointee;
+               if Parameters (1).Kind = Landin.Types.Aggregate then
+                  --  A by-value `self` travels as the address carrier of
+                  --  its aggregate, which is the erased data pointer: the
+                  --  dispatch site passes that word unchanged and the
+                  --  provider copies its handle from it.
+                  Parameters (1) := (Kind => Landin.Types.Usize, others => <>);
+               else
+                  Parameters (1).Pointee := No_Pointee;
+               end if;
             end if;
             for Index in Results'Range loop
                Results (Index) :=

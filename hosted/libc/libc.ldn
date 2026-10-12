@@ -77,6 +77,8 @@ public enoent: i32 = 2
 public eintr: i32 = 4
 --- errno: permission denied.
 public eacces: i32 = 13
+--- errno: a path component is not a directory.
+public enotdir: i32 = 20
 --- errno: the file system is read-only.
 public erofs: i32 = 30
 

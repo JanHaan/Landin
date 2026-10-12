@@ -24,11 +24,11 @@ check_position_writes: () -> (ok: bool) =
     arguments: []io.argument = []
     mut output: [1]u8 = zeroed
     mut errors: [80]u8 = zeroed
-    mut memory := io.memory_over(files, arguments, output[0..<1],
-                                  errors[0..<lenof errors])
-    destination: io.file = io.err(memory)
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files, arguments, "", output[0..<1],
+                             errors[0..<lenof errors])
     writer: any io.writer = any(addr memory)
-    mut stream := diag.stream(addr writer, addr destination)
+    mut stream := diag.stream(writer, io.err(memory))
     logger: any diag.log = any(addr stream)
     logger.note(text.cursor(message_a[0..<2], 0), diag.warning, "A")
         else (problem)
@@ -47,7 +47,7 @@ check_position_writes: () -> (ok: bool) =
         return
     end
     bytes: []u8 = io.written_errors(memory)
-    ok = memory.write_calls == 12 and
+    ok = state.write_calls == 12 and
          same_bytes(bytes, "W:0:AE:1234567890:BW:18446744073709551615:C")
 end check_position_writes
 
@@ -171,11 +171,10 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut host := hosted.host()
-    diagnostic_stream := io.err(host)
+    host := hosted.host()
     world: any io.world = any(addr host)
     host_writer: any io.writer = any(addr host)
-    mut immediate := diag.stream(addr host_writer, addr diagnostic_stream)
+    mut immediate := diag.stream(host_writer, io.err(host))
     mut streaming_log: any diag.log = any(addr immediate)
     emit_notes(streaming_log) else (unexpected_stream_failure)
         _ = unexpected_stream_failure
@@ -235,9 +234,10 @@ public main: () -> (code: i32) =
         return
     end if
 
+    --  The argument is lent from the handle while the erased world and
+    --  writer made from it are live: using a handle never locks it.
     first_argument: usize = 0
-    argument_source: ptr hosted.system = addr host
-    path := io.argument_at(argument_source, first_argument)
+    path := io.argument_at(host, first_argument)
         else (argument_failure)
         _ = argument_failure
         return
@@ -252,7 +252,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut broken := diag.stream(addr host_writer, addr dead_stream)
+    mut broken := diag.stream(host_writer, dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     broken_log.note(text.first(message_a[0..<2]), diag.error,
                     message_a[0..<2])

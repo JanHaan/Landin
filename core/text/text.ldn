@@ -22,7 +22,7 @@ public invalid_text: atom
 --- The text is empty or contains a non-decimal digit where an unsigned
 --- integer is required.
 public invalid_number: atom
---- The parsed unsigned decimal value exceeds `u32`.
+--- The parsed unsigned decimal value exceeds the type it is parsed into.
 public number_overflow: atom
 --- The destination does not have room for the complete requested output.
 public no_space: atom
@@ -339,24 +339,67 @@ end contains
 
 --- Parse nonempty ASCII decimal digits into `u32`. Rejects signs, whitespace
 --- and non-digits with `invalid_number`, and excessive values with
---- `number_overflow`.
+--- `number_overflow`. The same as `parse_u32` over the encoded bytes.
 public to_u32: (source: utf8)
                -> (result: u32) ! invalid_number | number_overflow =
-    digits: []u8 = bytes(source)
-    fail invalid_number when lenof digits == 0
+    result = try parse_u32(bytes(source))
+end to_u32
+
+--- Parse nonempty ASCII decimal digits from bytes into `u32`. Rejects an
+--- empty slice, signs, whitespace and any other byte with `invalid_number`,
+--- and a value above `u32`'s maximum with `number_overflow`, whichever the
+--- scan meets first. The bytes need not be UTF-8: a digit is one byte.
+---
+--- The three parsers differ only in width.  Each scans left to right and
+--- checks for overflow before it multiplies, so leading zeros are accepted
+--- and a refusal reads no byte past the one that caused it.
+public parse_u32: (source: []u8)
+                  -> (result: u32) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    maximum: u32 = 0 -% 1
     mut value: u32 = 0
-    mut index: usize = 0
-    while index < lenof digits do
-        byte: u8 = digits[index]
+    for byte in source do
         fail invalid_number when byte < 48 or byte > 57
         digit: u32 = u32(byte - 48)
-        fail number_overflow when value > 429496729
-        fail number_overflow when value == 429496729 and digit > 5
+        fail number_overflow when value > (maximum - digit) / 10
         value = value * 10 + digit
-        inc index
-    end while
+    end for
     result = value
-end to_u32
+end parse_u32
+
+--- Parse nonempty ASCII decimal digits from bytes into `u64`. Refuses as
+--- `parse_u32` does, with `number_overflow` above `u64`'s maximum.
+public parse_u64: (source: []u8)
+                  -> (result: u64) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    maximum: u64 = 0 -% 1
+    mut value: u64 = 0
+    for byte in source do
+        fail invalid_number when byte < 48 or byte > 57
+        digit: u64 = u64(byte - 48)
+        fail number_overflow when value > (maximum - digit) / 10
+        value = value * 10 + digit
+    end for
+    result = value
+end parse_u64
+
+--- Parse nonempty ASCII decimal digits from bytes into `usize`. Refuses as
+--- `parse_u32` does, with `number_overflow` above the target's `usize`
+--- maximum, so the same digits can parse on a 64-bit target and overflow on
+--- a 32-bit one.
+public parse_usize: (source: []u8)
+                    -> (result: usize) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    maximum: usize = 0 -% 1
+    mut value: usize = 0
+    for byte in source do
+        fail invalid_number when byte < 48 or byte > 57
+        digit: usize = usize(byte - 48)
+        fail number_overflow when value > (maximum - digit) / 10
+        value = value * 10 + digit
+    end for
+    result = value
+end parse_usize
 
 --- Append one byte at `used` and return the new used count. Checks capacity
 --- before writing and reports `no_space` without partial output.
@@ -398,6 +441,64 @@ public write_u32: (into: []mut u8, used: usize, value: u32)
     into[used] = u8(remaining) + 48
     next = used + digits
 end write_u32
+
+--- Append the decimal representation of a `u64` and return the new used
+--- count. Checks space for the whole number before writing; `no_space`
+--- leaves the buffer unchanged. Twenty bytes hold any value.
+---
+--- The `u64` and `usize` writers count the digits by division before the
+--- first store, so they need no table of powers and work at either `usize`
+--- width.
+public write_u64: (into: []mut u8, used: usize, value: u64)
+                  -> (next: usize) ! no_space =
+    fail no_space when used > lenof into
+    mut digits: usize = 1
+    mut scan: u64 = value
+    while scan >= 10 do
+        scan /= 10
+        inc digits
+    end while
+    fail no_space when digits > lenof into - used
+
+    mut remaining: u64 = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: u64 = remaining / 10
+        digit: u8 = u8(remaining - quotient * 10)
+        dec offset
+        into[used + offset] = digit + 48
+        remaining = quotient
+    end while
+    into[used] = u8(remaining) + 48
+    next = used + digits
+end write_u64
+
+--- Append the decimal representation of a `usize` and return the new used
+--- count. Checks space for the whole number before writing; `no_space`
+--- leaves the buffer unchanged.
+public write_usize: (into: []mut u8, used: usize, value: usize)
+                    -> (next: usize) ! no_space =
+    fail no_space when used > lenof into
+    mut digits: usize = 1
+    mut scan: usize = value
+    while scan >= 10 do
+        scan /= 10
+        inc digits
+    end while
+    fail no_space when digits > lenof into - used
+
+    mut remaining: usize = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: usize = remaining / 10
+        digit: u8 = u8(remaining - quotient * 10)
+        dec offset
+        into[used + offset] = digit + 48
+        remaining = quotient
+    end while
+    into[used] = u8(remaining) + 48
+    next = used + digits
+end write_usize
 
 --- Lend the first `used` bytes of `source`, typically the part a writer has
 --- filled. Reports `past_end` when `used` exceeds its length; it does not

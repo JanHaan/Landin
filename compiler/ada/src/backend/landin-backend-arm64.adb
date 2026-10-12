@@ -28,6 +28,7 @@ package body Landin.Backend.Arm64 is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Scalar_Size;
    use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
@@ -660,6 +661,10 @@ package body Landin.Backend.Arm64 is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
+      procedure Move_Units
+        (Bytes : Landin.Targets.Byte_Count;
+         Width : Landin.Targets.Byte_Count;
+         Copy  : Boolean);
 
       procedure Put (Line : String; Known : Boolean := False) is
          Instruction : constant String := Trimmed (Line);
@@ -985,6 +990,58 @@ package body Landin.Backend.Arm64 is
          Emit ("b.ne " & Loop_Label);
          Put (Loop_Label & "_end:");
       end Copy_Bytes;
+
+      --  A by-value parameter's transfer from its carrier at x10, or its
+      --  clear, into its fresh slot at x9: both aligned to Width, four or
+      --  eight bytes, and advanced, over a whole number of Width units.
+      --  Up to eight units move as unrolled pairs; a longer extent moves
+      --  one unit per iteration.
+      procedure Move_Units
+        (Bytes : Landin.Targets.Byte_Count;
+         Width : Landin.Targets.Byte_Count;
+         Copy  : Boolean)
+      is
+         Loop_Label : constant String := Fresh;
+         R : constant String := (if Width = 8 then "x" else "w");
+         Step : constant String :=
+           Trimmed (Landin.Targets.Byte_Count'Image (Width));
+         Pair_Step : constant String :=
+           Trimmed (Landin.Targets.Byte_Count'Image (2 * Width));
+         Units : constant Landin.Targets.Byte_Count := Bytes / Width;
+      begin
+         if Units <= 8 then
+            for Pair in 1 .. Units / 2 loop
+               if Copy then
+                  Emit ("ldp " & R & "12, " & R & "13, [x10], #"
+                        & Pair_Step);
+                  Emit ("stp " & R & "12, " & R & "13, [x9], #"
+                        & Pair_Step);
+               else
+                  Emit ("stp " & R & "zr, " & R & "zr, [x9], #"
+                        & Pair_Step);
+               end if;
+            end loop;
+            if Units mod 2 /= 0 then
+               if Copy then
+                  Emit ("ldr " & R & "12, [x10], #" & Step);
+                  Emit ("str " & R & "12, [x9], #" & Step);
+               else
+                  Emit ("str " & R & "zr, [x9], #" & Step);
+               end if;
+            end if;
+            return;
+         end if;
+         Immediate ("x11", Pattern (Units));
+         Put (Loop_Label & ":");
+         if Copy then
+            Emit ("ldr " & R & "12, [x10], #" & Step);
+            Emit ("str " & R & "12, [x9], #" & Step);
+         else
+            Emit ("str " & R & "zr, [x9], #" & Step);
+         end if;
+         Emit ("subs x11, x11, #1");
+         Emit ("b.ne " & Loop_Label);
+      end Move_Units;
 
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
@@ -3605,13 +3662,35 @@ package body Landin.Backend.Arm64 is
                           Whole_Clear_Extent
                             ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
                              Landin.IR.No_Path_Steps);
+                        Size : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
+                        Width : Landin.Targets.Byte_Count := 1;
                      begin
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Slot, Facts, Size, Alignment);
+                        --  The carrier addresses storage aligned for this
+                        --  shape (docs/ir.md) and the slot is fresh, so an
+                        --  aligned whole-unit extent needs no runtime
+                        --  alignment test.
+                        if Alignment >= 8 and then Bytes mod 8 = 0 then
+                           Width := 8;
+                        elsif Alignment >= 4 and then Bytes mod 4 = 0 then
+                           Width := 4;
+                        end if;
                         Frame_Address (Slot_Offset (Layout, Slot), "x9");
                         Emit ("cbz x10, " & Zero_Label);
-                        Copy_Bytes (Bytes);
+                        if Width > 1 then
+                           Move_Units (Bytes, Width, Copy => True);
+                        else
+                           Copy_Bytes (Bytes);
+                        end if;
                         Emit ("b " & Done_Label);
                         Put (Zero_Label & ":");
-                        Zero_Bytes (Bytes);
+                        if Width > 1 then
+                           Move_Units (Bytes, Width, Copy => False);
+                        else
+                           Zero_Bytes (Bytes);
+                        end if;
                         Put (Done_Label & ":");
                      end;
                   else

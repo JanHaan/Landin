@@ -20,27 +20,30 @@ public main: () -> (code: i32) =
     middle: usize = 32767
     last: usize = total - 1
     allowance: usize = 14
-    mut state_arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
-    mut state := fault.new(addr state_arena, allowance)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, addr backing[0],
+                                      lenof backing)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, arena, allowance)
     mut values := vec.new(item: u32)
 
     for index in zero..<total do
-        vec.push(values, state, u32(index)) else 0
+        vec.push(values, counted, u32(index)) else 0
     end for
 
     if not (vec.length(values) == total)
       or not (vec.capacity(values) == total)
       or not contents_ok(values, middle, last)
-      or not (fault.successes(state) == allowance)
-      or not (fault.frees(state) == allowance - 1)
+      or not (fault.successes(counted) == allowance)
+      or not (fault.frees(counted) == allowance - 1)
     then
         code = 1
         return
     end if
 
-    vec.release(values, state)
+    vec.release(values, counted)
     if vec.length(values) == 0 and vec.capacity(values) == 0
-      and fault.frees(state) == allowance
+      and fault.frees(counted) == allowance
     then
         code = 42
     else

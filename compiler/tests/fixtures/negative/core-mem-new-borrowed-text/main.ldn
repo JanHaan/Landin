@@ -3,7 +3,7 @@ import core/mem
 filter: type = struct
     needle: utf8
 end filter
-bad: (inout state: heap.system, source: utf8)
+bad: (state: heap.system, source: utf8)
      -> (result: ptr mut filter) ! mem.out_of_memory =
     initial: filter = (needle: source)
     result = try mem.new(state, initial)

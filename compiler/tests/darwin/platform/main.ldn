@@ -9,7 +9,7 @@ missing: [41]u8 =
 null_name: [10]u8 = [47, 100, 101, 118, 47, 110, 117, 108, 108, 0]
 payload: [1]u8 = [88]
 
-missing_retains_errno: (inout state: hosted.system) -> (yes: bool) =
+missing_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
     opened: io.file = io.open_read(state, addr missing[0]) else (problem)
         return when problem <> io.not_found
@@ -23,7 +23,7 @@ missing_retains_errno: (inout state: hosted.system) -> (yes: bool) =
     end
 end missing_retains_errno
 
-write_retains_errno: (inout state: hosted.system) -> (yes: bool) =
+write_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
     opened: io.file = io.open_write(state, addr null_name[0]) else (problem)
         _ = problem
@@ -39,7 +39,7 @@ write_retains_errno: (inout state: hosted.system) -> (yes: bool) =
     end
 end write_retains_errno
 
-close_retains_errno: (inout state: hosted.system) -> (yes: bool) =
+close_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
     opened: io.file = io.open_read(state, addr null_name[0]) else (problem)
         _ = problem
@@ -58,7 +58,7 @@ end close_retains_errno
 
 public main: () -> (code: i32) =
     code = 1
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
     return when hosted.last_errno(state) <> 0
     code = 2
     return when not missing_retains_errno(state)

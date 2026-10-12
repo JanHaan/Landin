@@ -1,0 +1,15 @@
+--  A handle is made from its state, so it cannot outlive it: returning an
+--  arena whose state lives in this frame is refused where it is returned.
+import core/mem
+
+mut backing: [16]u8
+
+make: () -> (arena: mem.arena) =
+    mut space: mem.arena_space = zeroed
+    arena = mem.arena_over(space, addr backing[0], 16)
+end make
+
+public main: () -> (code: i32) =
+    arena := make()
+    code = i32(mem.arena_used(arena))
+end main

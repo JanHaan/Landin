@@ -6,7 +6,7 @@ absent: atom
 optional: type = absent | ptr mut u8
 counted: type = fault.injector(mem.arena)
 
-leave: (inout arena: counted, mode: u8) -> none ! stopped =
+leave: (arena: counted, mode: u8) -> none ! stopped =
     block := mem.allocate(arena, usize(1), usize(1)) else (problem)
         _ = problem
         fail stopped
@@ -20,8 +20,8 @@ leave: (inout arena: counted, mode: u8) -> none ! stopped =
     end if
 end leave
 
-nested: (inout outer: counted, inout inner: counted)
-         -> (ok: bool) ! mem.out_of_memory =
+nested: (outer: counted, inner: counted)
+        -> (ok: bool) ! mem.out_of_memory =
     ok = false
     first := try mem.allocate(outer, usize(1), usize(1))
     defer mem.free(outer, first, usize(1))
@@ -49,10 +49,16 @@ public main: () -> (code: i32) =
     code = 1
     mut outer_bytes: [4]u8 = zeroed
     mut inner_bytes: [2]u8 = zeroed
-    mut outer_arena := mem.arena_over_unchecked(addr outer_bytes[0], 4)
-    mut inner_arena := mem.arena_over_unchecked(addr inner_bytes[0], 2)
-    mut outer := fault.new(addr outer_arena, usize(4))
-    mut inner := fault.new(addr inner_arena, usize(3))
+    mut outer_arena_space: mem.arena_space = zeroed
+    mut inner_arena_space: mem.arena_space = zeroed
+    outer_arena := mem.arena_over_unchecked(outer_arena_space,
+                                            addr outer_bytes[0], 4)
+    inner_arena := mem.arena_over_unchecked(inner_arena_space,
+                                            addr inner_bytes[0], 2)
+    mut outer_space: fault.space = zeroed
+    mut inner_space: fault.space = zeroed
+    outer := fault.over(outer_space, outer_arena, usize(4))
+    inner := fault.over(inner_space, inner_arena, usize(3))
     ok: bool = nested(outer, inner) else false
     return when not ok or mem.arena_used(outer_arena) <> 2
       or mem.arena_used(inner_arena) <> 2

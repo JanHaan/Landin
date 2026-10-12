@@ -32,7 +32,7 @@ public main: () -> (code: i32) =
 
     --  The file, its hard link and a symbolic link to it are one file;
     --  another file is not, and neither is a path that does not exist.
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
     for which in i32(0)..<i32(5) do
         code = 20 + which
         mut failed: bool = false

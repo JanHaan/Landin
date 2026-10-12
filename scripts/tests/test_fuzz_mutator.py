@@ -144,8 +144,8 @@ class Mutator(unittest.TestCase):
         uri = (fuzz.FIXTURES /
                "negative/core-fault-needs-mutable-inner/main.ldn").as_uri()
         for code, line, report_uri, accepted in (
-                ("L0340", 9, uri, True), ("L0301", 9, uri, False),
-                ("L0340", 8, uri, False), ("L0340", 9, uri + "other", False)):
+                ("L0303", 9, uri, True), ("L0301", 9, uri, False),
+                ("L0303", 8, uri, False), ("L0303", 9, uri + "other", False)):
             with self.subTest(code=code, line=line, uri=report_uri):
                 server = Mock()
                 server.diagnostics = []

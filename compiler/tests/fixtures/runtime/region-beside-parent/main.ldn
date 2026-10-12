@@ -1,0 +1,46 @@
+--  A region holds a copy of its parent's handle, so the parent stays
+--  usable beside it: allocations alternate between the two while the
+--  region lives, and releasing the region's ledger returns only its own.
+import core/mem
+import core/pool
+import core/region
+
+public main: () -> (code: i32) =
+    code = 1
+    mut backing: [8]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut slots: [4]pool.slot = zeroed
+    mut space: pool.space = zeroed
+    parent := pool.over(space, base, usize(64), usize(16), usize(4),
+                        usize(8), slots[0..<4])
+        else (problem)
+        _ = problem
+        return
+    end
+    mut ledger: region.space(2) = zeroed
+    scratch := region.over(ledger, parent)
+    first: ptr mut u8 = mem.allocate(scratch, usize(8), usize(8))
+        else (problem)
+        _ = problem
+        return
+    end
+    own: ptr mut u8 = mem.allocate(parent, usize(8), usize(8))
+        else (problem)
+        _ = problem
+        return
+    end
+    second: ptr mut u8 = mem.allocate(scratch, usize(8), usize(8))
+        else (problem)
+        _ = problem
+        return
+    end
+    first.val = 1
+    own.val = 2
+    second.val = 3
+    return when pool.live(parent) <> 3
+    region.release(ledger, parent)
+    return when pool.live(parent) <> 1 or own.val <> 2
+    mem.free(parent, own, usize(8))
+    code = if pool.live(parent) == 0 and pool.frees(parent) == 3 then 42
+           else 2 end if
+end main

@@ -3,8 +3,8 @@ error[L0202]: this type's representation is module-internal
   |
 4 |     state = (base: base, size: 8, used: 0)
   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../../core/mem/mem.ldn:331:1
+  --> ../../core/mem/mem.ldn:344:1
     |
-331 | arena_value: type = struct
+344 | arena_value: type = struct
     | ^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields

@@ -50,7 +50,7 @@ next_growth: (capacity: usize) -> (next: usize) ! mem.out_of_memory =
 end next_growth
 
 free_empty: (item: type, provider: type is mem.allocator,
-             inout value: mem.storage(item), inout state: provider) -> none =
+             inout value: mem.storage(item), memory: provider) -> none =
     slots: usize = mem.capacity(value)
     return when slots == 0
     --  Every capacity published by vec passed byte_extent before reserve, so
@@ -61,7 +61,7 @@ free_empty: (item: type, provider: type is mem.allocator,
         _ = problem
         return
     end
-    provider.free(state, block, extent)
+    provider.free(memory, block, extent)
 end free_empty
 
 --- Ensure room for at least `want` items. May grow backing in place or copy
@@ -69,7 +69,7 @@ end free_empty
 --- successful relocation invalidates old views. Use the original provider for
 --- existing backing.
 public reserve: (item: type, provider: type is mem.allocator,
-                 inout value: list(item), inout state: provider, want: usize)
+                 inout value: list(item), memory: provider, want: usize)
                 -> none ! mem.out_of_memory =
     old_count: usize = mem.length(value.values)
     old_capacity: usize = mem.capacity(value.values)
@@ -77,11 +77,11 @@ public reserve: (item: type, provider: type is mem.allocator,
 
     extent: usize = try byte_extent(item: item, slots: want)
     old_extent: usize = old_capacity * sizeof item
-    if mem.grow_storage(value.values, state, old_extent, extent, want) then
+    if mem.grow_storage(value.values, memory, old_extent, extent, want) then
         return
     end if
     block: ptr mut u8 = try provider.alloc
-        (state, extent, alignof item)
+        (memory, extent, alignof item)
     mut fresh := mem.storage_over(item: item, base: block, slots: want)
     mem.transfer_prefix(value.values, fresh, old_count) else (problem)
         --  Given D151's private counters, want > old_capacity and an empty
@@ -90,12 +90,12 @@ public reserve: (item: type, provider: type is mem.allocator,
         --  invariant is ever violated; it is not evidence of provider OOM.
         _ = problem
         mem.clear(fresh)
-        free_empty(fresh, state)
+        free_empty(fresh, memory)
         fail mem.out_of_memory
     end
 
     mem.clear(value.values)
-    free_empty(value.values, state)
+    free_empty(value.values, memory)
     value.values = fresh
 end reserve
 
@@ -103,11 +103,11 @@ end reserve
 --- without appending on allocation failure. Successful growth may invalidate
 --- views into the previous allocation.
 public push: (item: type, provider: type is mem.allocator,
-              inout value: list(item), inout state: provider,
+              inout value: list(item), memory: provider,
               escaping added: item) -> none ! mem.out_of_memory =
     if length(value) == capacity(value) then
         next: usize = try next_growth(capacity(value))
-        try reserve(value, state, next)
+        try reserve(value, memory, next)
     end if
     admitted: usize = mem.admit(value.values, added) else (problem)
         --  After successful growth or a spare-slot check, mem.full would
@@ -166,7 +166,7 @@ end clear
 --- list. End all views first; nested resources remain the caller's
 --- responsibility.
 public release: (item: type, provider: type is mem.allocator,
-                 inout value: list(item), inout state: provider) -> none =
+                 inout value: list(item), memory: provider) -> none =
     mem.clear(value.values)
-    free_empty(value.values, state)
+    free_empty(value.values, memory)
 end release

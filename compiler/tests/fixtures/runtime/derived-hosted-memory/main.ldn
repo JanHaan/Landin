@@ -47,28 +47,30 @@ public main: () -> (code: i32) =
         (data: addr arg6[0], length: lenof arg6),
         (data: addr arg7[0], length: lenof arg7),
         (data: addr arg8[0], length: lenof arg8)]
-    mut memory := io.memory_over(files[0..<2], arguments[0..<9],
-                                  output[0..<128], errors[0..<128])
-    memory.read_limit = 2
-    memory.write_limit = 2
-    memory.fail_write_at = 4
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<2], arguments[0..<9], "",
+                             output[0..<128], errors[0..<128])
+    state.read_limit = 2
+    state.write_limit = 2
+    state.fail_write_at = 4
     empty_count: usize = io.write_some(memory, io.out(memory), source[0..<0])
         else (problem)
             _ = problem
             return
         end
-    return when empty_count <> 0 or memory.write_calls <> 0
+    return when empty_count <> 0 or state.write_calls <> 0
     world: any io.world = any(addr memory)
-    mut heap := heap.host()
-    mut program := region.new(addr heap)
-    defer region.release(program)
+    heap := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, heap)
+    defer region.release(ledger, heap)
     kept: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
     expected: []u8 = "ERROR keep\n"
     return when kept <> 1 or files[1].length <> lenof expected
       or files[0].opened or files[1].opened
       or not app.equal(destination[0..<lenof expected], expected)
-      or memory.close_calls <> 2 or memory.write_calls <> 7
+      or state.close_calls <> 2 or state.write_calls <> 7
     code = 2
     return when not long_lines()
     code = 11
@@ -128,7 +130,7 @@ end clear_reuses_storage
 --  final line all pass through the same application and count destination.
 long_lines: () -> (ok: bool) =
     ok = false
-    mut backing_host := heap.host()
+    backing_host := heap.host()
     mut backing := mem.new_bytes(backing_host, usize(10000)) else (problem) _ = problem
         return
     end
@@ -149,26 +151,28 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
     args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
-    mut world_state := io.memory_over(files[0..<1], args[0..<1], out[0..<128], err[0..<128])
-    world_state.read_limit = 1
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<1], "", out[0..<128], err[0..<128])
+    world_space.read_limit = 1
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
-    mut program := region.new(addr host)
-    defer region.release(program)
+    host := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, host)
+    defer region.release(ledger, host)
     kept: usize = app.run(program, world, usize(7)) else (problem) _ = problem
         return end
     expected: []u8 = "0: 2\n1: 0\n2: 0\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
     return when kept <> 2 or files[0].opened
-      or not app.equal(out[0..<world_state.output_used], expected)
+      or not app.equal(out[0..<world_space.output_used], expected)
     --  No phantom third line after trailing LF. Removing that LF keeps two
     --  lines, with the complete final 9998-byte line delivered exactly once.
     files[0].length = 9999
-    world_state.output_used = 0
+    world_space.output_used = 0
     kept_again: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
     return when kept_again <> 2 or files[0].opened
     files[0].length = 0
-    world_state.output_used = 0
+    world_space.output_used = 0
     empty: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
     ok = empty == 0 and not files[0].opened
@@ -190,27 +194,30 @@ count_finite_region: () -> (ok: bool) =
     args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
-    mut world_state := io.memory_over(files[0..<1], args[0..<1],
-                                       out[0..<128], err[0..<128])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<1], "",
+                                  out[0..<128], err[0..<128])
     world: any io.world = any(addr world_state)
     mut backing: [512]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over_unchecked(base, usize(4096))
-    mut program := region.new(addr arena)
-    defer region.release(program)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, base, usize(4096))
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, arena)
+    defer region.release(ledger, arena)
     kept: usize = app.run(program, world, usize(32)) else (problem)
         _ = problem
         return
     end
     expected: []u8 = "0: 0\n1: 0\n2: 0\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
     ok = kept == 1 and not files[0].opened
-         and app.equal(out[0..<world_state.output_used], expected)
+         and app.equal(out[0..<world_space.output_used], expected)
 end count_finite_region
 --  A leading level filter discards long lines, including an unterminated
 --  final one, without needing allocator space proportional to their length.
 skipped_long_lines: () -> (ok: bool) =
     ok = false
-    mut host := heap.host()
+    host := heap.host()
     mut source := mem.new_bytes(host, usize(20011)) else (problem) _ = problem
         return
     end
@@ -244,20 +251,23 @@ skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
       (data: addr arg6[0], length: lenof arg6),
       (data: addr arg7[0], length: lenof arg7),
       (data: addr arg8[0], length: lenof arg8)]
-    mut memory := io.memory_over(files[0..<2], args[0..<7],
-                                  destination[0..<0], errors[0..<32])
-    memory.read_limit = 3
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<2], args[0..<7], "",
+                             destination[0..<0], errors[0..<32])
+    state.read_limit = 3
     world: any io.world = any(addr memory)
     mut backing: [1024]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over_unchecked(base, usize(8192))
-    mut program := region.new(addr arena)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, base, usize(8192))
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, arena)
     kept: usize = app.run(program, world, usize(7)) else (problem)
         _ = problem
-        region.release(program)
+        region.release(ledger, arena)
         return
     end
-    region.release(program)
+    region.release(ledger, arena)
     ok = kept == 1 and files[1].length == lenof selected
       and app.equal(destination[0..<lenof selected], selected)
       and not files[0].opened and not files[1].opened
@@ -280,21 +290,24 @@ failure_sweep: () -> (ok: bool) =
         files[1] = second
         args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
                                 (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
-        mut world_state := io.memory_over(files[0..<2], args[0..<3], output[0..<128], errors[0..<128])
+        mut world_space: io.memory_space = zeroed
+        world_state := io.memory_over(world_space, files[0..<2], args[0..<3], "", output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
-        mut host := heap.host()
-        mut counted := fault.new(addr host, budget)
-        mut program := region.new(addr counted)
+        host := heap.host()
+        mut counted_space: fault.space = zeroed
+        counted := fault.over(counted_space, host, budget)
+        mut ledger: region.space(0) = zeroed
+        program := region.over(ledger, counted)
         mut succeeded: bool = true
         _ = app.run(program, world, usize(3)) else (problem)
             if problem <> mem.out_of_memory then
-                region.release(program)
+                region.release(ledger, counted)
                 return
             end if
             succeeded = false
             0
         end
-        region.release(program)
+        region.release(ledger, counted)
         return when fault.live(counted) <> 0 or files[0].opened or files[1].opened
           or fault.successes(counted) <> fault.frees(counted)
         if succeeded then
@@ -314,11 +327,13 @@ retained_arguments: () -> (ok: bool) =
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
                 readable: true, writable: false, opened: false, writing: false)
-    mut world_state := io.memory_over(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "", output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
-    mut program := region.new(addr host)
-    defer region.release(program)
+    host := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, host)
+    defer region.release(ledger, host)
     mut cfg := app.build(program, world) else (problem) _ = problem
         return end
     needle[0] = 88
@@ -339,7 +354,7 @@ end retained_arguments
 
 messages: () -> (ok: bool) =
     ok = false
-    mut backing_host := heap.host()
+    backing_host := heap.host()
     mut source_owner := mem.new_bytes(backing_host, usize(700)) else (problem)
         _ = problem
         return
@@ -358,11 +373,13 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     mut err: [1]u8 = zeroed
     files: []mut io.memory_file = []
     args: []io.argument = []
-    mut world_state := io.memory_over(files, args, out[0..<800], err[0..<1])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files, args, "", out[0..<800], err[0..<1])
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
+    host := heap.host()
     maximum: usize = 100
-    mut counted := fault.new(addr host, maximum)
+    mut counted_space: fault.space = zeroed
+    counted := fault.over(counted_space, host, maximum)
     mut pending := app.new_message()
     defer app.drop_message(counted, pending)
     for at in usize(0)..<usize(700) do source[at] = u8(at % 251) end for
@@ -373,25 +390,25 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     --  The ordinary successful path emits the entire message in one call.
     app.deliver(pending, world, world.out()) else (problem) _ = problem
         return end
-    return when pending.delivered <> 700 or world_state.output_used <> 700
-      or world_state.write_calls <> 1
+    return when pending.delivered <> 700 or world_space.output_used <> 700
+      or world_space.write_calls <> 1
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     pending.delivered = 0
-    world_state.output_used = 0
-    world_state.write_calls = 0
-    world_state.write_limit = 128
-    world_state.fail_write_at = 4
+    world_space.output_used = 0
+    world_space.write_calls = 0
+    world_space.write_limit = 128
+    world_space.fail_write_at = 4
     --  Three short writes commit 384 bytes before failure; retry resumes
     --  from that cursor and preserves the exact output order.
     mut failed: bool = false
     app.deliver(pending, world, world.out()) else (problem)
         failed = problem == io.io_failed
     end
-    return when not failed or pending.delivered <> 384 or world_state.output_used <> 384
+    return when not failed or pending.delivered <> 384 or world_space.output_used <> 384
     app.deliver(pending, world, world.out()) else (problem) _ = problem
         return end
-    return when pending.delivered <> 700 or world_state.output_used <> 700
-      or world_state.write_calls <> 7
+    return when pending.delivered <> 700 or world_space.output_used <> 700
+      or world_space.write_calls <> 7
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     zero: usize = 0
     fault.permit(counted, zero)
@@ -407,8 +424,9 @@ end messages_in
 --  Appending LF must fit the capacity reserved for the whole record.
 message_growth: () -> (ok: bool) =
     ok = false
-    mut host := heap.host()
-    mut counted := fault.new(addr host, usize(100))
+    host := heap.host()
+    mut counted_space: fault.space = zeroed
+    counted := fault.over(counted_space, host, usize(100))
     mut pending := app.new_message()
     defer app.drop_message(counted, pending)
     source: []u8 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -440,9 +458,12 @@ finite_regions: () -> (ok: bool) =
     ok = false
     mut backing: [128]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over_unchecked(base, usize(1024))
-    mut outer := region.new(addr arena)
-    mut inner := region.new(addr outer)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, base, usize(1024))
+    mut outer_ledger: region.space(0) = zeroed
+    outer := region.over(outer_ledger, arena)
+    mut inner_ledger: region.space(0) = zeroed
+    inner := region.over(inner_ledger, outer)
     one: usize = 1
     align: usize = 1
     object: ptr mut u8 = mem.allocate(inner, one, align) else (problem) _ = problem
@@ -456,8 +477,8 @@ finite_regions: () -> (ok: bool) =
         object
     end
     return when not refused or mem.arena_used(arena) <> before or object.val <> 42
-    region.release(inner)
-    region.release(outer)
+    region.release(inner_ledger, outer)
+    region.release(outer_ledger, arena)
     ok = mem.arena_used(arena) == before
 end finite_regions
 
@@ -478,15 +499,18 @@ io_failures: () -> (ok: bool) =
                                 (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
         mut argc: usize = 3
         if scenario == 4 then argc = 2 end if
-        mut world_state := io.memory_over(files[0..<2], args[0..<argc], output[0..<128], errors[0..<128])
-        if scenario == 0 then world_state.fail_read_at = 3 end if
-        if scenario == 1 then world_state.fail_close_at = 1 end if
-        if scenario == 2 then world_state.fail_close_at = 2 end if
+        mut world_space: io.memory_space = zeroed
+        world_state := io.memory_over(world_space, files[0..<2], args[0..<argc], "", output[0..<128], errors[0..<128])
+        if scenario == 0 then world_space.fail_read_at = 3 end if
+        if scenario == 1 then world_space.fail_close_at = 1 end if
+        if scenario == 2 then world_space.fail_close_at = 2 end if
         world: any io.world = any(addr world_state)
-        mut host := heap.host()
+        host := heap.host()
         budget: usize = 500
-        mut counted := fault.new(addr host, budget)
-        mut program := region.new(addr counted)
+        mut counted_space: fault.space = zeroed
+        counted := fault.over(counted_space, host, budget)
+        mut ledger: region.space(0) = zeroed
+        program := region.over(ledger, counted)
         mut chunk: usize = 3
         if scenario == 5 then chunk = 0 end if
         mut refused: bool = false
@@ -494,15 +518,15 @@ io_failures: () -> (ok: bool) =
             refused = problem == io.io_failed or problem == app.bad_argument
             0
         end
-        region.release(program)
+        region.release(ledger, counted)
         return when not refused or files[0].opened or files[1].opened
           or fault.live(counted) <> 0
         if scenario == 3 then
-            return when files[1].length <> 3 or world_state.write_calls <> 3
+            return when files[1].length <> 3 or world_space.write_calls <> 3
               or not app.equal(destination[0..<3], "DEB")
         end if
-        if scenario == 4 then return when world_state.open_calls <> 0 end if
-        if scenario == 5 then return when world_state.close_calls <> 0 end if
+        if scenario == 4 then return when world_space.open_calls <> 0 end if
+        if scenario == 5 then return when world_space.close_calls <> 0 end if
     end for
     ok = true
 end io_failures
@@ -522,12 +546,14 @@ missing_input_preserves_output: () -> (ok: bool) =
                             (data: addr missing[0], length: lenof missing)]
     mut out: [32]u8 = zeroed
     mut err: [32]u8 = zeroed
-    mut world_state := io.memory_over(files[0..<1], args[0..<3],
-                                       out[0..<32], err[0..<32])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "",
+                                  out[0..<32], err[0..<32])
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
-    mut program := region.new(addr host)
-    defer region.release(program)
+    host := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, host)
+    defer region.release(ledger, host)
     mut refused: bool = false
     _ = app.run(program, world, usize(3)) else (problem)
         refused = problem == io.not_found
@@ -535,8 +561,8 @@ missing_input_preserves_output: () -> (ok: bool) =
     end
     ok = refused and files[0].length == lenof previous
          and app.equal(contents[0..<lenof previous], previous)
-         and not files[0].opened and world_state.open_calls == 1
-         and world_state.close_calls == 0
+         and not files[0].opened and world_space.open_calls == 1
+         and world_space.close_calls == 0
 end missing_input_preserves_output
 
 diagnostics: () -> (ok: bool) =
@@ -553,18 +579,20 @@ diagnostics: () -> (ok: bool) =
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
                 readable: true, writable: false, opened: false, writing: false)
-    mut world_state := io.memory_over(files[0..<1], args[0..<7], output[0..<128], errors[0..<128])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<7], "", output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
-    mut program := region.new(addr host)
-    defer region.release(program)
+    host := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, host)
+    defer region.release(ledger, host)
     mut logger := diag.new(capacity: 4)
     log: any diag.log = any(addr logger)
     kept: usize = app.run_logged(program, world, usize(3), log) else (problem) _ = problem
         return
     end
     return when kept <> 3 or not log.failed() or diag.length(addr logger) <> 3
-      or diag.dropped(addr logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
+      or diag.dropped(addr logger) <> 0 or world_space.errors_used <> 0 or files[0].opened
     first: diag.entry = diag.get(addr logger, usize(0)) else (problem) _ = problem
         return
     end
@@ -579,13 +607,13 @@ diagnostics: () -> (ok: bool) =
       or not exact_note(third, "--every wants a positive number, using 1\n")
     --  Streaming diagnostics fail before input acquisition; the same core
     --  routine reports the delivery failure, with no implicit retry.
-    world_state.fail_write_at = world_state.write_calls + 1
+    world_space.fail_write_at = world_space.write_calls + 1
     mut refused: bool = false
     _ = app.run(program, world, usize(3)) else (problem)
         refused = problem == io.io_failed
         0
     end
-    ok = refused and not files[0].opened and world_state.open_calls == 1
+    ok = refused and not files[0].opened and world_space.open_calls == 1
 end diagnostics
 
 exact_note: (entry: diag.entry, expected: []u8) -> (ok: bool) =
@@ -613,19 +641,21 @@ bare_levels: () -> (ok: bool) =
         mut files: [1]io.memory_file
         files[0] = (name: "in", contents: data[0..<11], length: length, cursor: 0,
                     readable: true, writable: false, opened: false, writing: false)
-        mut world_state := io.memory_over(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
+        mut world_space: io.memory_space = zeroed
+        world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "", output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
-        mut host := heap.host()
-        mut program := region.new(addr host)
+        host := heap.host()
+        mut ledger: region.space(0) = zeroed
+        program := region.over(ledger, host)
         mut good: bool = true
         kept: usize = app.run(program, world, usize(3)) else (problem)
             _ = problem
             good = false
             0
         end
-        region.release(program)
+        region.release(ledger, host)
         return when not good or kept <> 2 or files[0].opened
-          or not app.equal(output[0..<world_state.output_used], expected)
+          or not app.equal(output[0..<world_space.output_used], expected)
     end for
     ok = true
 end bare_levels
@@ -655,30 +685,34 @@ repeated_matches: () -> (ok: bool) =
         (data: addr arg8[0], length: lenof arg8)]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
-    mut world_state := io.memory_over(files[0..<1], args[0..<7],
-                                       out[0..<128], err[0..<128])
+    mut world_space: io.memory_space = zeroed
+    world_state := io.memory_over(world_space, files[0..<1], args[0..<7], "",
+                                  out[0..<128], err[0..<128])
     world: any io.world = any(addr world_state)
-    mut host := heap.host()
-    mut program := region.new(addr host)
-    defer region.release(program)
+    host := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, host)
+    defer region.release(ledger, host)
     kept: usize = app.run(program, world, usize(3)) else (problem)
         _ = problem
         return
     end
     expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
     ok = kept == 1 and not files[0].opened
-         and app.equal(out[0..<world_state.output_used], expected)
+         and app.equal(out[0..<world_space.output_used], expected)
 end repeated_matches
 
 metadata_exhaustion: () -> (ok: bool) =
     ok = false
     mut backing: [1]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over_unchecked(base, usize(8))
-    mut program := region.new(addr arena)
-    --  An empty region releases without allocating and remains reusable.
-    region.release(program)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, base, usize(8))
+    mut ledger: region.space(0) = zeroed
+    --  An empty ledger releases without allocating and remains reusable.
+    region.release(ledger, arena)
     return when mem.arena_used(arena) <> 0
+    program := region.over(ledger, arena)
     mut refused: bool = false
     _ = mem.allocate(program, usize(1), usize(1)) else (problem)
         refused = problem == mem.out_of_memory
@@ -686,6 +720,6 @@ metadata_exhaustion: () -> (ok: bool) =
     end
     --  The payload fitted; recording its extent did not. Region returned the
     --  payload to its parent, whose monotonic free deliberately keeps it used.
-    region.release(program)
+    region.release(ledger, arena)
     ok = refused and mem.arena_used(arena) == 1
 end metadata_exhaustion

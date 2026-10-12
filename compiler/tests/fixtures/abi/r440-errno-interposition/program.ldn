@@ -16,7 +16,7 @@ payload: [6]u8 = [10, 20, 30, 40, 50, 60]
 
 public main: () -> (code: i32) =
     code = 1
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
 
     --  A read-only open retries EINTR with the identical path and flags.  The
     --  successful retry leaves no stale detail, and its fake handle is closed.

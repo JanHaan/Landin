@@ -32,7 +32,7 @@ is read as an editor shows it, a byte that is not UTF-8 as U+FFFD.
 
 The server is initialized with the checkout as its import root. Before the
 mutants, the driver opens `negative/core-fault-needs-mutable-inner` unchanged
-and requires its L0340 diagnostic at line 10. That diagnostic comes after
+and requires its L0303 diagnostic at line 10. That diagnostic comes after
 `core/fault` and `hosted/heap` resolve; a run that loses imports fails here.
 The reproducers are separate seeds, so each is copied into its own temporary
 module for the run. The unchanged `min-100299.ldn` must report L0336, L0339 and

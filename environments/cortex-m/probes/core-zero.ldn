@@ -8,18 +8,20 @@ empty: type = [0]u8
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut state_arena := mem.arena_over(addr backing[0], 0)
-    mut state := fault.new(addr state_arena, usize(1))
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over(arena_space, addr backing[0], 0)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, arena, usize(1))
     mut values := vec.new(item: empty)
     maximum: usize = 0 -% 1
-    try vec.reserve(values, state, maximum)
-    return when vec.capacity(values) <> maximum or mem.arena_used(state_arena) <> 0
-    return when fault.successes(state) <> 1 or fault.remaining(state) <> 0
+    try vec.reserve(values, counted, maximum)
+    return when vec.capacity(values) <> maximum or mem.arena_used(arena) <> 0
+    return when fault.successes(counted) <> 1 or fault.remaining(counted) <> 0
     value: empty = zeroed
-    try vec.push(values, state, value)
+    try vec.push(values, counted, value)
     return when vec.length(values) <> 1
-    vec.release(values, state)
-    return when fault.frees(state) <> 1 or vec.capacity(values) <> 0
+    vec.release(values, counted)
+    return when fault.frees(counted) <> 1 or vec.capacity(values) <> 0
     result = 42
 end exercise
 

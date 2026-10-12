@@ -1,10 +1,10 @@
-error[L0342]: this conformance is not usable behind `any`: every entry needs a compatible first `self` pointer
-  --> ../tests/fixtures/negative/core-io-world-readonly-receiver/main.ldn:6:27
+error[L0342]: `any` erases a pointer to the represented value
+  --> ../tests/fixtures/negative/core-io-world-readonly-receiver/main.ldn:6:31
   |
-6 |     world: any io.world = any(addr state)
-  |                           ^^^^^^^^^^^^^^^
+6 |     world: any io.world = any(host)
+  |                               ^^^^
   --> ../tests/fixtures/negative/core-io-world-readonly-receiver/main.ldn:6:12
   |
-6 |     world: any io.world = any(addr state)
+6 |     world: any io.world = any(host)
   |            ^^^^^^^^^^^^ the runtime-dispatch type written here
-  = note: [1370]/[1390]: dispatch inserts the erased data pointer as the first argument
+  = note: [1370]/[1380]: the pair retains the pointee; it never copies an unknown-sized value

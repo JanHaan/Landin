@@ -1,0 +1,8 @@
+class: negative
+summary: a provider handle made from frame-local state cannot be returned past that state
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0314
+constructs: 0770, 0790, 0820, 1360
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -38,39 +38,41 @@ public storage: type (item: type) = raw(item)
 --- arithmetic cannot represent the extent.
 public out_of_memory: atom
 
---- Explicit allocation capability. Free each successful block once through
---- its original provider with its current byte extent. Keep provider state
---- and backing alive until all uses end. Alignment zero or one means byte
---- alignment; zero-byte requests follow the provider's documented policy.
+--- Explicit allocation capability, given by a handle: a small copyable
+--- value passed by value that refers to its provider's state. Free each
+--- successful block once through the provider that allocated it, with its
+--- current byte extent. Keep the provider's state and backing alive until all
+--- uses end. Alignment zero or one means byte alignment; zero-byte requests
+--- follow the provider's documented policy.
 public allocator: type = concept (provider: type)
     --- Allocate the requested byte extent or report out_of_memory. Return
     --- backing valid until the matching free; honor the requested alignment.
-    alloc: (inout state: provider, size: usize, alignment: usize)
+    alloc: (self: provider, size: usize, alignment: usize)
            -> (block: ptr mut u8) ! out_of_memory
     --- Extend this same block in place. Return false without changing the
     --- block or provider state when extension is refused.
-    grow: (inout state: provider, block: ptr mut u8,
+    grow: (self: provider, block: ptr mut u8,
            old_size: usize, new_size: usize, alignment: usize)
           -> (grown: bool)
     --- Return a successful block with its current extent. The caller ends all
     --- uses first and must use the original provider.
-    free: (inout state: provider, block: ptr mut u8, size: usize) -> none
+    free: (self: provider, block: ptr mut u8, size: usize) -> none
 end allocator
 
 --- Request a byte extent with the supplied alignment through the provider.
 --- Propagates `out_of_memory`; the caller owns the resulting allocation
 --- obligation.
-public allocate: (provider: type is allocator, inout state: provider,
+public allocate: (provider: type is allocator, memory: provider,
                   size: usize, alignment: usize)
                  -> (block: ptr mut u8) ! out_of_memory =
-    block = try provider.alloc(state, size, alignment)
+    block = try provider.alloc(memory, size, alignment)
 end allocate
 
 --- Return a block to its provider using the allocation's current extent. The
 --- caller must end all uses first; no item cleanup runs.
-public free: (provider: type is allocator, inout state: provider,
+public free: (provider: type is allocator, memory: provider,
               block: ptr mut u8, size: usize) -> none =
-    provider.free(state, block, size)
+    provider.free(memory, block, size)
 end free
 
 --- Create an empty descriptor without allocating backing.
@@ -100,7 +102,7 @@ end storage_over
 --- one-allocation-per-reserve behavior. Callers supply the actual old and
 --- requested byte extents after checking capacity arithmetic.
 public grow_storage: (item: type, provider: type is allocator,
-                      inout store: storage(item), inout state: provider,
+                      inout store: storage(item), memory: provider,
                       old_size: usize, new_size: usize, slots: usize)
                      -> (grown: bool) =
     grown = false
@@ -108,7 +110,7 @@ public grow_storage: (item: type, provider: type is allocator,
     match store.base
         no_storage: return
         ptr (base): begin
-            grown = provider.grow(state, base, old_size, new_size,
+            grown = provider.grow(memory, base, old_size, new_size,
                                   alignof item)
             if grown then
                 store.capacity_count = slots
@@ -327,76 +329,97 @@ end aligned_offset
 
 --  A library arena is a monotonic allocator over a caller-supplied byte
 --  extent. Individual frees deliberately do nothing; ending the extent ends
---  all of its allocations together.
-arena_value: type = struct
-    base: ptr mut u8
+--  all of its allocations together. The caller holds the counters; the
+--  handle holds the backing and a pointer to them.
+arena_state: type = struct
     size: usize
     used: usize
+end arena_state
+
+--- Caller-owned state of an arena: its extent and the bytes it has handed
+--- out. Declare it `zeroed` beside the backing and give it to `arena_over`,
+--- which fills it; it must outlive the arena handle.
+public arena_space: type = arena_state
+
+arena_value: type = struct
+    state: ptr mut arena_state
+    base: ptr mut u8
 end arena_value
 
---- Monotonic allocator over caller-owned bytes. Individual frees do not
---- reclaim space; only the most recent allocation can grow in place.
---- Zero-byte requests may consume alignment padding. There is no reset:
---- every allocation ends with the backing, and a fresh arena over the same
---- bytes starts again once all of them have ended.
+--- Monotonic allocator over caller-owned bytes, as a handle: copies share one
+--- arena. Individual frees do not reclaim space; only the most recent
+--- allocation can grow in place. Zero-byte requests may consume alignment
+--- padding. There is no reset: every allocation ends with the backing, and a
+--- fresh arena over the same bytes starts again once all of them have ended.
 public arena: type = arena_value
 
---- Create an arena over retainable backing without allocating. The range must
---- stay valid for the arena and all allocations made through it.
+--- Fill `state` for an arena over retainable backing and return its handle,
+--- without allocating. The range must stay valid for the arena and all
+--- allocations made through it.
 ---
 --- The independent allocator result may be retained after this call. Only
 --- backing which the caller may itself retain can enter the checked arena.
-public arena_over: (escaping base: ptr mut u8, size: usize)
-                   -> (state: arena from base) =
-    state = (base: base, size: size, used: 0)
+public arena_over: (inout state: arena_space, escaping base: ptr mut u8,
+                    size: usize)
+                   -> (handle: arena from state, base) =
+    state = (size: size, used: 0)
+    handle = (state: addr state, base: base)
 end arena_over
 
---- Create an arena over local backing with an explicit lifetime opt-out. The
---- caller must end every allocated view before that backing ends.
+--- Fill `state` for an arena over local backing with an explicit lifetime
+--- opt-out and return its handle. The caller must end every allocated view
+--- before that backing ends.
 ---
 --- Explicit lifetime opt-out for a local extent. The handle still keeps its
---- tracked origin, but allocations do not; users must end every allocation
+--- tracked origins, but allocations do not; users must end every allocation
 --- before the backing ends, including allocations retained by helpers.
-public arena_over_unchecked: (base: ptr mut u8, size: usize)
-                             -> (state: arena from base) =
-    state = (base: base, size: size, used: 0)
+public arena_over_unchecked: (inout state: arena_space, base: ptr mut u8,
+                              size: usize)
+                             -> (handle: arena from state, base) =
+    state = (size: size, used: 0)
+    handle = (state: addr state, base: base)
 end arena_over_unchecked
 
 --- Return consumed arena bytes, including alignment padding.
-public arena_used: (state: arena) -> (count: usize) =
-    count = state.used
+public arena_used: (memory: arena) -> (count: usize) =
+    count = memory.state.val.used
 end arena_used
 
-arena_alloc: (inout state: arena, size: usize, alignment: usize)
+arena_alloc: (self: arena, size: usize, alignment: usize)
              -> (block: ptr mut u8) ! out_of_memory =
-    offset: usize = try aligned_offset(state.base, state.used, state.size,
-                                       size, alignment)
-    address: usize = usize(state.base) + offset
+    state: ptr mut arena_state = self.state
+    offset: usize = try aligned_offset(self.base, state.val.used,
+                                       state.val.size, size, alignment)
+    --  [0810]: the block borrows nothing, so that a container may keep it
+    --  in its own storage; its lifetime is the backing's, which the caller
+    --  keeps.
+    address: usize = usize(self.base) + offset
     block = ptr(address)
-    state.used = offset + size
+    state.val.used = offset + size
 end arena_alloc
 
-arena_free: (inout state: arena, block: ptr mut u8, size: usize) -> none =
-    _ = state.used
+arena_free: (self: arena, block: ptr mut u8, size: usize) -> none =
+    _ = self.state
     _ = block
     _ = size
 end arena_free
 
-arena_grow: (inout state: arena, block: ptr mut u8,
+arena_grow: (self: arena, block: ptr mut u8,
              old_size: usize, new_size: usize, alignment: usize)
             -> (grown: bool) =
     grown = false
-    return when new_size <= old_size or state.used > state.size
-    base_address: usize = usize(state.base)
+    state: ptr mut arena_state = self.state
+    return when new_size <= old_size or state.val.used > state.val.size
+    base_address: usize = usize(self.base)
     block_address: usize = usize(block)
     return when block_address < base_address
     offset: usize = block_address - base_address
-    return when offset > state.used or old_size <> state.used - offset
+    return when offset > state.val.used or old_size <> state.val.used - offset
     return when alignment > 1 and block_address % alignment <> 0
-    return when new_size > state.size - offset
+    return when new_size > state.val.size - offset
     maximum: usize = 0 -% 1
     return when new_size > maximum - block_address
-    state.used = offset + new_size
+    state.val.used = offset + new_size
     grown = true
 end arena_grow
 

@@ -1,0 +1,44 @@
+--  An erased writer is built from the address of an I/O handle. While it
+--  lives, the same handle is queried and written through directly, and the
+--  erased view is used again afterwards: the writes reach one provider in
+--  program order.
+import core/io
+
+argument_bytes: [1]u8 = [120]
+
+same_bytes: (actual: []u8, expected: []u8) -> (same: bool) =
+    same = false
+    return when lenof actual <> lenof expected
+    for at in usize(0)..<lenof expected do
+        return when actual[at] <> expected[at]
+    end for
+    same = true
+end same_bytes
+
+public main: () -> (code: i32) =
+    code = 1
+    arguments: [1]io.argument = [(data: addr argument_bytes[0], length: 1)]
+    files: []mut io.memory_file = []
+    mut output: [16]u8 = zeroed
+    mut errors: [1]u8 = zeroed
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files, arguments[0..<1], "",
+                             output[0..<16], errors[0..<1])
+    stream := io.out(memory)
+    writer: any io.writer = any(addr memory)
+    writer.write(stream, "ab") else (problem)
+        _ = problem
+        return
+    end
+    count := io.argument_count(memory)
+    io.write(memory, io.out(memory), "cd") else (problem)
+        _ = problem
+        return
+    end
+    writer.write(stream, "ef") else (problem)
+        _ = problem
+        return
+    end
+    return when count <> 1 or state.write_calls <> 3
+    code = if same_bytes(io.written(memory), "abcdef") then 42 else 2 end if
+end main

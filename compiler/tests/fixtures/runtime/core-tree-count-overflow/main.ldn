@@ -6,15 +6,16 @@ label: utf8 = "node"
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
+    heap := heap.host()
     budget: usize = 20
-    mut state := fault.new(addr host, budget)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, heap, budget)
     mut value := tree.new()
-    first: tree.node_id = tree.add_leaf(value, state, label) else (problem)
+    first: tree.node_id = tree.add_leaf(value, counted, label) else (problem)
         _ = problem
         return
     end
-    second: tree.node_id = tree.add_leaf(value, state, label) else (problem)
+    second: tree.node_id = tree.add_leaf(value, counted, label) else (problem)
         _ = problem
         return
     end
@@ -36,7 +37,8 @@ public main: () -> (code: i32) =
         if not predicted_overflow then expected = left + right end if
         before: usize = tree.length(value)
         start: tree.node_id = tree.id(before - 2)
-        added: tree.node_id = tree.add_branch(value, state, label, start, two)
+        added: tree.node_id = tree.add_branch(value, counted, label, start,
+                                              two)
             else (problem)
                 overflow = problem == tree.too_many_leaves
                 last
@@ -63,7 +65,7 @@ public main: () -> (code: i32) =
     end
     --  The cumulative total now exceeds usize, but this child interval does not.
     one: usize = 1
-    small: tree.node_id = tree.add_branch(value, state, label, first, one)
+    small: tree.node_id = tree.add_branch(value, counted, label, first, one)
         else (problem)
             _ = problem
             return
@@ -75,10 +77,11 @@ public main: () -> (code: i32) =
         0
     end
     before_release: usize = tree.length(value)
-    tree.release(value, state)
+    tree.release(value, counted)
     if overflow and unchanged and invalid and wide_count and before_release == 94
        and final == 12200160415121876738 and small_count == 1
-       and fault.attempts(state) == fault.frees(state) and fault.live(state) == 0
+       and fault.attempts(counted) == fault.frees(counted)
+       and fault.live(counted) == 0
     then
         code = 42
     end if

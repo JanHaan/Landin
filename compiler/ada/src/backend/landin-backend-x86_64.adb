@@ -472,6 +472,50 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & Selected);
       end Emit;
 
+      --  A by-value parameter this small moves at routine entry as plain
+      --  moves rather than a string instruction, whose startup dominates
+      --  a few words.  x86-64 needs no alignment for them.
+      Unrolled_Transfer : constant Landin.Targets.Byte_Count := 32;
+
+      --  Copy Bytes from (%rsi) to (%rdi) through %rax, or store the zero
+      --  already in %rax, widest moves first.  The ranges are disjoint.
+      procedure Move_Unrolled
+        (Bytes : Landin.Targets.Byte_Count; Copy : Boolean);
+
+      procedure Move_Unrolled
+        (Bytes : Landin.Targets.Byte_Count; Copy : Boolean)
+      is
+         At_Offset : Landin.Targets.Byte_Count := 0;
+      begin
+         while At_Offset < Bytes loop
+            declare
+               Left : constant Landin.Targets.Byte_Count :=
+                 Bytes - At_Offset;
+               Width : constant Landin.Targets.Byte_Count :=
+                 (if Left >= 8 then 8 elsif Left >= 4 then 4
+                  elsif Left >= 2 then 2 else 1);
+               Suffix : constant String :=
+                 (case Width is
+                     when 8 => "q", when 4 => "l", when 2 => "w",
+                     when others => "b");
+               Register : constant String :=
+                 (case Width is
+                     when 8 => "%rax", when 4 => "%eax", when 2 => "%ax",
+                     when others => "%al");
+               Where : constant String :=
+                 Trimmed (Landin.Targets.Byte_Count'Image (At_Offset));
+            begin
+               if Copy then
+                  Emit ("mov" & Suffix & " " & Where & "(%rsi), "
+                        & Register);
+               end if;
+               Emit ("mov" & Suffix & " " & Register & ", " & Where
+                     & "(%rdi)");
+               At_Offset := At_Offset + Width;
+            end;
+         end loop;
+      end Move_Unrolled;
+
       --  Allocate one namespace before emitting anything.  Forced linker
       --  identities are reserved first, including imports whose source names
       --  differ.  Ordinary routines, anonymous items and data then keep their
@@ -5625,23 +5669,31 @@ package body Landin.Backend.X86_64 is
                            0, "%rdi");
                         Emit ("testq %rsi, %rsi");
                         Emit ("jz " & Zero_Label);
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Bytes))
-                           & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep movsb");
+                        if Bytes <= Unrolled_Transfer then
+                           Move_Unrolled (Bytes, Copy => True);
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Bytes))
+                              & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep movsb");
+                        end if;
                         Emit ("jmp " & Done_Label);
                         Put (Zero_Label & ":");
                         Emit ("xorl %eax, %eax");
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Bytes))
-                           & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep stosb");
+                        if Bytes <= Unrolled_Transfer then
+                           Move_Unrolled (Bytes, Copy => False);
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Bytes))
+                              & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep stosb");
+                        end if;
                         Put (Done_Label & ":");
                      end;
                   end if;

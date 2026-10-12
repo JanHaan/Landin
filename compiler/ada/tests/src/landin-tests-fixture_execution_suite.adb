@@ -1387,6 +1387,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
    end Report_Levels;
 
+   --  A compiled program reads the file `stdin:` names, below its fixture
+   --  DIRECTORY, as its standard input, and an empty one when the fixture
+   --  names none: never the harness's own, which may be a terminal that
+   --  would hold the run until its time limit.
+   procedure Feed_Standard_Input
+     (Runner    : in out Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Case_Item : Fixture;
+      Directory : String);
+
+   procedure Feed_Standard_Input
+     (Runner    : in out Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Case_Item : Fixture;
+      Directory : String) is
+   begin
+      Runner.Set_Input
+        (if Standard_Input (Case_Item) = "" then "/dev/null"
+         else Directory & "/" & Standard_Input (Case_Item));
+   end Feed_Standard_Input;
+
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
@@ -1496,6 +1515,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end;
          end if;
          Runtime_Arguments := Split (Run_Args (Case_Item));
+         Feed_Standard_Input
+           (Runner, Case_Item, Fixture_Root & "/runtime/" & Name (Case_Item));
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item,
             Compiled => True);
@@ -1670,6 +1691,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Driver_Arguments, Item, Ready);
       if Ready then
          Runtime_Arguments := Split (Run_Args (Case_Item));
+         Feed_Standard_Input (Runner, Case_Item, Directory);
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item,
             Compiled => True);

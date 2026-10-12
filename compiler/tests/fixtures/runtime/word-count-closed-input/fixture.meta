@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the published word count's counting routine over a standard input the program has closed reports io_failed with EBADF kept as last_errno on every hosted system, the hosted failure oracle for reading standard input
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0900, 0940, 1030, 1290, 1660, 1680
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -31,11 +31,11 @@ end bundle
 filter: type = struct
     needle: utf8
 end filter
-keep_text: (provider: type is mem.allocator, inout state: provider,
+keep_text: (provider: type is mem.allocator, memory: provider,
             escaping source: utf8)
            -> (result: ptr mut filter) ! mem.out_of_memory =
     initial: filter = (needle: source)
-    result = try mem.new(state, initial)
+    result = try mem.new(memory, initial)
 end keep_text
 empty: type = [0]u8
 mut target: node = (value: 11)
@@ -48,34 +48,35 @@ end initial_value
 
 public main: () -> (code: i32) =
     code = 1
-    mut heap_state := heap.host()
+    heap := heap.host()
     zero: usize = 0
     four: usize = 4
-    mut state := fault.new(addr heap_state, zero)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, heap, zero)
     mut refused: bool = false
-    failed: object_result = mem.new(state, initial_value()) else (problem)
+    failed: object_result = mem.new(counted, initial_value()) else (problem)
         _ = problem
         refused = true
         no_object
     end
-    fault.permit(state, four)
-    scalar: ptr mut u32 = mem.new(state, initial_value()) else (problem)
+    fault.permit(counted, four)
+    scalar: ptr mut u32 = mem.new(counted, initial_value()) else (problem)
         _ = problem
         return
     end
     initial: bundle = (sentinel: 101, head: addr target,
                        action: any(addr target), bytes: data[0..<2])
-    object: ptr mut bundle = mem.new(state, initial) else (problem)
+    object: ptr mut bundle = mem.new(counted, initial) else (problem)
         _ = problem
         return
     end
     nothing: empty = zeroed
-    empty_object: ptr mut empty = mem.new(state, nothing) else (problem)
+    empty_object: ptr mut empty = mem.new(counted, nothing) else (problem)
         _ = problem
         return
     end
     text: utf8 = "needle"
-    filter_object: ptr mut filter = keep_text(state, text) else (problem)
+    filter_object: ptr mut filter = keep_text(counted, text) else (problem)
         _ = problem
         return
     end
@@ -93,16 +94,16 @@ public main: () -> (code: i32) =
         object.val.head.val.value += 2
         bumped == 12 and object.val.sentinel == 101
     end
-    mem.delete(state, scalar)
-    mem.delete(state, object)
-    mem.delete(state, empty_object)
-    mem.delete(state, filter_object)
+    mem.delete(counted, scalar)
+    mem.delete(counted, object)
+    mem.delete(counted, empty_object)
+    mem.delete(counted, filter_object)
     if refused and is_absent(failed) and evaluations == 2
       and scalar_ok and object_ok and text_ok and target.value == 14
       and data[0] == 17 and data[1] == 31
-      and fault.attempts(state) == 5 and fault.successes(state) == 4
-      and fault.injected_failures(state) == 1
-      and fault.frees(state) == 4 and fault.live(state) == 0
+      and fault.attempts(counted) == 5 and fault.successes(counted) == 4
+      and fault.injected_failures(counted) == 1
+      and fault.frees(counted) == 4 and fault.live(counted) == 0
     then
         code = 42
     end if

@@ -15598,7 +15598,15 @@ package body Landin.Stages.Checking is
                Safe := Spelled (Syn.Name (Concept_Tree, Self)) = "self"
                  and then Semantic_Convention (Concept_Tree, Self)
                    = Syn.Implicit_In
-                 and then Syn.Kind (Concept_Tree, Self_Type)
+                 and then
+                   ((Syn.Kind (Concept_Tree, Self_Type)
+                       in Syn.Type_Reference | Syn.Name_Reference
+                     and then Res.Verdict_Of
+                       (Meanings.all, Concept_Tree, Self_Type) = Res.Bound
+                     and then Res.Bound_To
+                       (Meanings.all, Concept_Tree, Self_Type) = Formal)
+                    or else
+                   (Syn.Kind (Concept_Tree, Self_Type)
                    = Syn.Pointer_Type
                  and then Syn.Kind
                    (Concept_Tree,
@@ -15611,7 +15619,7 @@ package body Landin.Stages.Checking is
                  and then Res.Bound_To
                    (Meanings.all, Concept_Tree,
                     Syn.Referenced_Type (Concept_Tree, Self_Type))
-                      = Formal;
+                      = Formal));
             end;
          end if;
          for Parameter in 2 .. Syn.Parameter_Count
@@ -15818,8 +15826,8 @@ package body Landin.Stages.Checking is
                   Message => "this concept entry has no object-safe erased"
                              & " self signature",
                   Note => "D146: every entry required by the erased table"
-                          & " needs input `self: ptr [mut] T`, with hidden"
-                          & " T nowhere else",
+                          & " needs input `self: ptr [mut] T` or `self: T`,"
+                          & " with hidden T nowhere else",
                   Related => Syn.Origin (Concept_Tree.all, Entry_Node),
                   Because => "an entry required by the erased table",
                   Into => Found);
@@ -29523,7 +29531,28 @@ package body Landin.Stages.Checking is
                                                  (Concept_Tree.all,
                                                   Entry_Node, 1));
                                        begin
-                                          if Syn.Is_Referent_Mutable
+                                          --  A by-value `self` receives a
+                                          --  copy read through the pointer,
+                                          --  so only a pointer receiver
+                                          --  asks for write permission.  The
+                                          --  copy is made from the data
+                                          --  pointer, which is the address
+                                          --  carrier of a record and of
+                                          --  nothing else.
+                                          if Syn.Kind
+                                            (Concept_Tree.all, Self_Type)
+                                              /= Syn.Pointer_Type
+                                            and then Landin.Checking
+                                              .Descriptor_Of
+                                                (Types.all, Pointer).Referent
+                                                  /= Ty.Aggregate
+                                          then
+                                             return False;
+                                          end if;
+                                          if Syn.Kind
+                                            (Concept_Tree.all, Self_Type)
+                                              = Syn.Pointer_Type
+                                            and then Syn.Is_Referent_Mutable
                                             (Concept_Tree.all, Self_Type)
                                             and then not Landin.Checking
                                               .Descriptor_Of
@@ -29614,7 +29643,8 @@ package body Landin.Stages.Checking is
                                  Message => "this conformance is not usable"
                                             & " behind `any`: every entry"
                                             & " needs a compatible first"
-                                            & " `self` pointer",
+                                            & " `self`, a pointer or a"
+                                            & " record by value",
                                  Note => "[1370]/[1390]: dispatch inserts"
                                          & " the erased data pointer as"
                                          & " the first argument",

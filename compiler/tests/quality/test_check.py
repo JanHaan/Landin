@@ -6,6 +6,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -45,6 +46,22 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["cwd"], config["execution_cwd"])
         self.assertEqual(run.call_args.kwargs["stderr"], subprocess.STDOUT)
         self.assertNotIn("text", run.call_args.kwargs)
+        #  No `stdin:` key: the program reads an empty standard input, never
+        #  the harness's own.
+        self.assertIsNone(config["stdin"])
+        self.assertEqual(run.call_args.kwargs["stdin"].name, os.devnull)
+
+    def test_a_fixture_input_is_the_program_standard_input(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            given = Path(scratch) / "input.txt"
+            given.write_bytes(b"answer\n")
+            CHECK.execute_measurement(
+                Path(sys.executable), expected_status=42,
+                run_args=("-c", "import sys; sys.stdout.buffer.write("
+                          "sys.stdin.buffer.read()); sys.exit(42)"),
+                expected_output=b"answer\n", stdin=given)
+        self.execute("import sys; sys.stdout.write(sys.stdin.read() or "
+                     "'answer\\n'); sys.exit(42)")
 
     def execute(self, source, expected=b"answer\n", status=42):
         return CHECK.execute_measurement(

@@ -228,7 +228,8 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
     if source.name in counterparts:
         inputs = ['--root=' + str(ROOT), str(COUNTERPARTS / 'cases' / source.name)]
     require(not meta.get('args'), 'fixture has explicit compiler arguments')
-    require(not meta.get('run_args') and not meta.get('run_expect'),
+    require(not meta.get('run_args') and not meta.get('run_expect')
+            and not meta.get('stdin'),
             'fixture requires hosted input/output')
     elf = build(run, refine, inputs, optimize, specialize, level=level)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else

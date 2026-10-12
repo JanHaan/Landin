@@ -465,7 +465,8 @@ package body Landin.Backend.Cortex_M is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Release (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
-      procedure Copy_Two_Words;
+      procedure Copy_Words (Bytes : Landin.Targets.Byte_Count);
+      procedure Zero_Words (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes
         (Bytes : Landin.Targets.Byte_Count;
          Alignment : Landin.Targets.Byte_Alignment);
@@ -729,15 +730,59 @@ package body Landin.Backend.Cortex_M is
          Emit ("bne " & Id);
       end Copy_Bytes;
 
-      --  Only for proven disjoint, word-aligned eight-byte ranges.  The
-      --  ordinary byte loop retains the forward-copy behavior for aliases.
-      procedure Copy_Two_Words is
+      --  A by-value transfer between disjoint, word-aligned ranges whose
+      --  extent is a whole number of words: r0 destination, r2 source,
+      --  both advanced.  Up to four words move as register pairs; a longer
+      --  extent moves one word per iteration.  The ordinary byte loop
+      --  retains the forward-copy behavior for aliases.
+      procedure Copy_Words (Bytes : Landin.Targets.Byte_Count) is
+         Id : constant String := Fresh;
       begin
-         Emit ("ldr r4, [r2]");
-         Emit ("str r4, [r0]");
-         Emit ("ldr r4, [r2, #4]");
-         Emit ("str r4, [r0, #4]");
-      end Copy_Two_Words;
+         if Bytes <= 16 then
+            for Pair in 1 .. Bytes / 8 loop
+               Emit ("ldmia r2!, {r4, r5}");
+               Emit ("stmia r0!, {r4, r5}");
+            end loop;
+            if Bytes mod 8 /= 0 then
+               Emit ("ldmia r2!, {r4}");
+               Emit ("stmia r0!, {r4}");
+            end if;
+            return;
+         end if;
+         Immediate ("r4", Pattern (Bytes / 4));
+         Put (Id & ":");
+         Emit ("ldmia r2!, {r5}");
+         Emit ("stmia r0!, {r5}");
+         Emit ("subs r4, #1");
+         Emit ("bne " & Id);
+      end Copy_Words;
+
+      --  Zero_Bytes' word form for the same extents, r0 advanced.
+      procedure Zero_Words (Bytes : Landin.Targets.Byte_Count) is
+         Id : constant String := Fresh;
+      begin
+         if Bytes = 0 then
+            return;
+         end if;
+         Emit ("movs r5, #0");
+         if Bytes <= 16 then
+            if Bytes >= 8 then
+               Emit ("movs r4, #0");
+            end if;
+            for Pair in 1 .. Bytes / 8 loop
+               Emit ("stmia r0!, {r4, r5}");
+            end loop;
+            if Bytes mod 8 /= 0 then
+               Emit ("stmia r0!, {r5}");
+            end if;
+            return;
+         end if;
+         Immediate ("r4", Pattern (Bytes / 4));
+         Put (Id & ":");
+         Emit ("stmia r0!, {r5}");
+         Emit ("subs r4, #1");
+         Emit ("bne " & Id);
+      end Zero_Words;
 
       procedure Zero_Bytes
         (Bytes : Landin.Targets.Byte_Count;
@@ -1938,6 +1983,10 @@ package body Landin.Backend.Cortex_M is
          function Disjoint_Roots
            (Left, Right : Landin.IR.Storage;
             Bytes : Landin.Targets.Byte_Count) return Boolean;
+         --  Whether two storage roots share no byte of their complete
+         --  extents, so any parts reached inside them are disjoint too.
+         function Separate_Roots
+           (Left, Right : Landin.IR.Storage) return Boolean;
          function Clear_Alignment
            (Place  : Landin.IR.Storage;
             Field  : Natural;
@@ -2278,15 +2327,13 @@ package body Landin.Backend.Cortex_M is
          --  its emitted .balign; frame offsets are relative to aligned r11.
          function Root_Word_Aligned (Place : Landin.IR.Storage)
            return Boolean is
-            Size : Landin.Targets.Byte_Count;
-            Alignment : Landin.Targets.Byte_Alignment;
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
-                  Landin.Backend.Field_Extent
-                    (Of_Unit, Root_Shape_Of (Place, 0), Facts,
-                     Size, Alignment);
-                  return Alignment >= 4;
+                  --  A whole struct datum has no array shape to measure;
+                  --  Clear_Alignment places either kind.
+                  return Clear_Alignment
+                    (Place, 0, Landin.IR.No_Path_Steps) >= 4;
                when Landin.IR.Frame_Slot =>
                   return Slot_Offset (Layout, Place.Slot) mod 4 = 0;
                when Landin.IR.Runtime_Address =>
@@ -2334,6 +2381,29 @@ package body Landin.Backend.Cortex_M is
                end;
             end if;
          end Disjoint_Roots;
+
+         function Separate_Roots
+           (Left, Right : Landin.IR.Storage) return Boolean is
+         begin
+            if Left.Kind = Landin.IR.Frame_Slot
+              and then Right.Kind = Landin.IR.Frame_Slot
+            then
+               declare
+                  A : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Left.Slot);
+                  B : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Right.Slot);
+               begin
+                  --  A slot lies at its offset below the frame base.
+                  return (if A >= B
+                          then A - B >= Whole_Clear_Extent
+                            (Left, 0, Landin.IR.No_Path_Steps)
+                          else B - A >= Whole_Clear_Extent
+                            (Right, 0, Landin.IR.No_Path_Steps));
+               end;
+            end if;
+            return Disjoint_Roots (Left, Right, 0);
+         end Separate_Roots;
          --  A runtime address may be supplied with weaker alignment than
          --  its shape.  Static storage and frame slots follow the target
          --  layout, including the offsets of their reached child fields.
@@ -3585,30 +3655,41 @@ package body Landin.Backend.Cortex_M is
                         Landin.IR.Path_Of (Of_Unit, Item, Value));
                      Storage_Address (Source, Field, "r2", Nested => Nested);
                      if Op = Landin.IR.Copy_Array
-                       and then Bytes = 8
-                       and then Field = 0 and then Nested'Length = 0
-                       and then Landin.IR.Element_Field_Of
-                         (Of_Unit, Item, Value) = 0
+                       and then Bytes > 0 and then Bytes mod 4 = 0
                        and then Landin.IR.Variant_Case_Of
                          (Of_Unit, Item, Value) = 0
                        and then Landin.IR.Variant_Payload_Field_Of
                          (Of_Unit, Item, Value) = 0
-                       and then Landin.IR.Path_Of
-                         (Of_Unit, Item, Value)'Length = 0
                        and then Source.Kind /= Landin.IR.Runtime_Address
                        and then Destination.Kind /= Landin.IR.Runtime_Address
                      then
-                        if Same_Root (Source, Destination) then
-                           null;
-                        elsif Root_Word_Aligned (Source)
-                          and then Root_Word_Aligned (Destination)
-                          and then Disjoint_Roots
-                            (Source, Destination, Bytes)
-                        then
-                           Copy_Two_Words;
-                        else
-                           Copy_Bytes (Bytes);
-                        end if;
+                        declare
+                           To_Field : constant Natural :=
+                             Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                           To_Path : constant Landin.IR.Path_Step_Array :=
+                             Landin.IR.Path_Of (Of_Unit, Item, Value);
+                        begin
+                           if Same_Root (Source, Destination)
+                             and then Field = 0 and then Nested'Length = 0
+                             and then To_Field = 0 and then To_Path'Length = 0
+                           then
+                              null;
+                           --  Static and frame storage follow the target
+                           --  layout, so a reached part of word alignment
+                           --  in a word-aligned root is word-aligned.
+                           elsif Root_Word_Aligned (Source)
+                             and then Root_Word_Aligned (Destination)
+                             and then Clear_Alignment
+                               (Source, Field, Nested) >= 4
+                             and then Clear_Alignment
+                               (Destination, To_Field, To_Path) >= 4
+                             and then Separate_Roots (Source, Destination)
+                           then
+                              Copy_Words (Bytes);
+                           else
+                              Copy_Bytes (Bytes);
+                           end if;
+                        end;
                      else
                         Copy_Bytes (Bytes);
                      end if;
@@ -3942,12 +4023,25 @@ package body Landin.Backend.Cortex_M is
                      declare
                         Slot : constant Landin.IR.Slot_Id :=
                           Landin.IR.Result_Slot (Of_Unit, Item);
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                              Landin.IR.No_Path_Steps);
                      begin
                         Load_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1));
                         Frame_Address (Slot_Offset (Layout, Slot), "r2");
-                        Copy_Bytes (Whole_Clear_Extent
-                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                            Landin.IR.No_Path_Steps));
+                        --  The caller formed the result address from its
+                        --  own storage of this shape, disjoint from this
+                        --  frame's result slot.
+                        if Bytes mod 4 = 0
+                          and then Clear_Alignment
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                             0, Landin.IR.No_Path_Steps) >= 4
+                        then
+                           Copy_Words (Bytes);
+                        else
+                           Copy_Bytes (Bytes);
+                        end if;
                      end;
                   end if;
                   Emit ("movs r2, #0");
@@ -4156,18 +4250,32 @@ package body Landin.Backend.Cortex_M is
                        Whole_Clear_Extent
                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
                            Landin.IR.No_Path_Steps);
+                     Alignment : constant Landin.Targets.Byte_Alignment :=
+                       Clear_Alignment
+                         ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                           Landin.IR.No_Path_Steps);
+                     --  The carrier addresses storage aligned for this
+                     --  shape (docs/ir.md), and the slot is fresh, so a
+                     --  word-aligned whole-word extent moves by words.
+                     Words : constant Boolean :=
+                       Alignment >= 4 and then Bytes mod 4 = 0;
                   begin
                      Emit ("ldr r2, [r6]");
                      Frame_Address (Slot_Offset (Layout, Slot), "r0");
                      Emit ("cmp r2, #0");
                      Branch ("eq", Zero_Label);
-                     Copy_Bytes (Bytes);
+                     if Words then
+                        Copy_Words (Bytes);
+                     else
+                        Copy_Bytes (Bytes);
+                     end if;
                      Jump (Done_Label);
                      Put (Zero_Label & ":");
-                     Zero_Bytes
-                       (Bytes, Clear_Alignment
-                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
-                           0, Landin.IR.No_Path_Steps));
+                     if Words then
+                        Zero_Words (Bytes);
+                     else
+                        Zero_Bytes (Bytes, Alignment);
+                     end if;
                      Put (Done_Label & ":");
                   end;
                else

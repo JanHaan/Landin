@@ -1045,7 +1045,8 @@ end right
 An `any` value or its dispatch is used outside the erased contract [1370]
 [1380] [1390] (D145-D147). `any C` names a concept with runtime entries,
 each dispatch name unique across its closure, and erases a pointer, never a
-value; every entry takes the erased `self` pointer first; an entry is called
+value; every entry takes the erased `self` first, as a pointer or as a record
+the dispatch copies from that pointer; an entry is called
 directly and is not a bound value; a concrete pointer selects exactly one
 conformance, and the closed program has a runtime table for it; and a module
 `any` binding has no implicit null pair. Pass a pointer, write the

@@ -2,7 +2,8 @@
 
 These are complete Landin programs that the bootstrap compiler accepts,
 lowers, emits, links and runs today on Linux x86-64 and Darwin arm64. They are the same sources
-the runtime suite executes, and each returns 42 only after checking its result.
+the runtime suite executes. Each but the last returns 42 only after checking
+its result; the last is a tool that reads its standard input, and returns 0.
 
 The implemented hosted language includes aggregate parameters and results,
 fixed arrays [0520], slices [0570], variants [0680], pattern matching [1210],
@@ -26,11 +27,13 @@ test $? -eq 42
 ```
 
 FizzBuzz writes its conventional one hundred lines, and the three Benchmark
-Game programs write their official correctness output; the other seven programs
+Game programs write their official correctness output; the next seven programs
 print nothing. Status 42 means the checks in `main` passed, and any other
-returned status makes the runtime fixture fail. The gate checks all four
-output oracles and all eleven programs on each full gate run, on Linux x86-64
-and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
+returned status makes the runtime fixture fail. The word count prints the
+totals for whatever its standard input holds and returns 0, and its fixture
+gives it an input of its own and holds the line it prints. The gate checks all
+five output oracles and all twelve programs on each full gate run, on Linux
+x86-64 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
 exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
 ## Sensors
@@ -84,7 +87,7 @@ thermometer is sensor (read: read_thermometer)
 door is sensor (read: read_door)
 
 --  Generic over where the memory comes from; the caller decides.
-poll: (provider: type is mem.allocator, inout memory: provider,
+poll: (provider: type is mem.allocator, memory: provider,
        sensors: []mut any sensor)
       -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
     readings = vec.new(item: i32)
@@ -101,7 +104,8 @@ end poll
 public main: () -> (code: i32) =
     mut bytes: [256]u8 = zeroed
     --  This local backing requires manual lifetime discipline for results.
-    mut arena := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr bytes[0], lenof bytes)
 
     mut kitchen: thermometer = (celsius: 21)
     mut hall: thermometer = (celsius: 19)
@@ -128,7 +132,7 @@ end main
 
 ## FizzBuzz
 
-FizzBuzz is the familiar remainder-and-branching exercise from [Rosetta Code](https://rosettacode.org/wiki/FizzBuzz). The classifier remains a small pure function. A separate hosted presentation layer traverses one through 100, writes contextual text literals through `core/io`, and formats the ordinary numbers; the fixture checks both its exact output and its aggregate tally.
+FizzBuzz is the familiar remainder-and-branching exercise from [Rosetta Code](https://rosettacode.org/wiki/FizzBuzz). The classifier remains a small pure function. A separate hosted presentation layer traverses one through 100, writes contextual text literals through `core/io`, and formats the ordinary numbers with `core/text`; the fixture checks both its exact output and its aggregate tally.
 
 Fixture source: `compiler/tests/fixtures/runtime/fizzbuzz/main.ldn`.
 
@@ -136,6 +140,7 @@ Fixture source: `compiler/tests/fixtures/runtime/fizzbuzz/main.ldn`.
 --  The classifier stays independent of presentation; the hosted entry prints
 --  the traditional lines and checks the complete tally for one through 100.
 import core/io
+import core/text
 import hosted/io as hosted
 
 fizz, buzz, fizz_buzz, number: atom
@@ -169,24 +174,17 @@ tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
     end match
 end tally
 
-write_number: (inout host: hosted.system, stream: io.file, value: u32)
-              -> none ! io.io_failed =
-    mut digits: [3]u8 = zeroed
-    mut start: usize = lenof digits
-    mut remaining: u32 = value
-    loop do
-        dec start
-        digits[start] = u8(remaining % 10) + 48
-        remaining = remaining / 10
-        break when remaining == 0
-    end loop
-    output: []u8 = digits[start..<lenof digits]
-    try io.write(host, stream, output)
-    try io.write(host, stream, "\n")
+write_number: (host: hosted.system, stream: io.file, value: u32)
+              -> none ! io.io_failed | text.no_space =
+    mut line: [4]u8 = zeroed
+    mut used: usize = try text.write_u32(line[0..<4], 0, value)
+    used = try text.write_byte(line[0..<4], used, 10)
+    try io.write(host, stream, line[0..<used])
 end write_number
 
-write_line: (inout host: hosted.system, stream: io.file,
-             kind: fizzbuzz_kind, value: u32) -> none ! io.io_failed =
+write_line: (host: hosted.system, stream: io.file,
+             kind: fizzbuzz_kind, value: u32)
+            -> none ! io.io_failed | text.no_space =
     match kind
         fizz: try io.write(host, stream, "Fizz\n")
         buzz: try io.write(host, stream, "Buzz\n")
@@ -195,7 +193,8 @@ write_line: (inout host: hosted.system, stream: io.file,
     end match
 end write_line
 
-run: (inout host: hosted.system) -> (result: counts) ! io.io_failed =
+run: (host: hosted.system)
+     -> (result: counts) ! io.io_failed | text.no_space =
     result = zeroed
     stream: io.file = io.out(host)
     first: u32 = 1
@@ -208,7 +207,7 @@ run: (inout host: hosted.system) -> (result: counts) ! io.io_failed =
 end run
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     result := run(host) else (problem)
         _ = problem
         code = 1
@@ -579,6 +578,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/m
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
+import core/text
 import hosted/io as hosted
 
 score: type = struct
@@ -650,23 +650,15 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (inout host: hosted.system, stream: io.file, value: u32)
-           -> none ! io.io_failed =
+write_u32: (host: hosted.system, stream: io.file, value: u32)
+           -> none ! io.io_failed | text.no_space =
     mut digits: [10]u8 = zeroed
-    mut start: usize = lenof digits
-    mut remaining: u32 = value
-    loop do
-        dec start
-        digits[start] = u8(remaining % 10) + 48
-        remaining = remaining / 10
-        break when remaining == 0
-    end loop
-    output: []u8 = digits[start..<lenof digits]
-    try io.write(host, stream, output)
+    used: usize = try text.write_u32(digits[0..<10], 0, value)
+    try io.write(host, stream, digits[0..<used])
 end write_u32
 
-write_score: (inout host: hosted.system, value: score)
-             -> none ! io.io_failed =
+write_score: (host: hosted.system, value: score)
+             -> none ! io.io_failed | text.no_space =
     stream: io.file = io.out(host)
     try write_u32(host, stream, u32(value.checksum))
     try io.write(host, stream, "\nPfannkuchen(7) = ")
@@ -676,7 +668,7 @@ end write_score
 
 public main: () -> (code: i32) =
     value: score = fannkuch()
-    mut host := hosted.host()
+    host := hosted.host()
     write_score(host, value) else (problem)
         _ = problem
         code = 1
@@ -729,7 +721,7 @@ in_set: (real_coordinate: f64, imaginary_coordinate: f64)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
+render: (host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
     coordinate_size: f64 = f64(size)
     bytes_per_row: usize = size / 8
@@ -764,7 +756,7 @@ render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
 end render
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     members := render(host) else (problem)
         _ = problem
         code = 1
@@ -845,7 +837,7 @@ select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
     end for
 end select_symbol
 
-write_repeated: (inout host: hosted.system, stream: io.file,
+write_repeated: (host: hosted.system, stream: io.file,
                  source: []u8, count: usize) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut emitted: usize = 0
@@ -868,7 +860,7 @@ write_repeated: (inout host: hosted.system, stream: io.file,
     end while
 end write_repeated
 
-write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
+write_random: (host: hosted.system, stream: io.file, symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
@@ -888,7 +880,7 @@ write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
     end while
 end write_random
 
-run: (inout host: hosted.system) -> (final_seed: u32) ! io.io_failed =
+run: (host: hosted.system) -> (final_seed: u32) ! io.io_failed =
     sample_size: usize = 1000
     stream: io.file = io.out(host)
     mut seed: u32 = 42
@@ -913,7 +905,7 @@ run: (inout host: hosted.system) -> (final_seed: u32) ! io.io_failed =
 end run
 
 public main: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     final_seed := run(host) else (problem)
         _ = problem
         code = 1
@@ -927,3 +919,119 @@ public main: () -> (code: i32) =
     end if
 end main
 ```
+
+## Word count
+
+`wc` with no file named: the program reads its standard input to the end
+and prints how many lines, words and bytes it held. The counting routine
+asks only for an `io.reader` [1290] [1230], the narrowest capability it
+uses, so it does not know whether the bytes come from a pipe, a file or a
+test's memory; `main` hands it the hosted provider and `io.input`, the
+standard-input handle of the process concept beside `io.out` and `io.err`.
+It reads a buffer at a time until a read returns zero, which is end of
+input, carrying whether a word is open from one buffer to the next. The
+totals are `u64`, and `core/text` writes them in decimal into a line the
+program writes once. A failed read is reported on standard error with
+status 1.
+
+Fixture source: `compiler/tests/fixtures/runtime/word-count/main.ldn`.
+
+```landin
+--  Count the lines, words and bytes on standard input, as `wc` does when it
+--  is named no file.  The counting asks only for a reader, the narrowest
+--  capability it uses, so the same routine counts a pipe, a file or bytes in
+--  memory.  The totals are u64 and core/text writes them in decimal.
+import core/io
+import core/text
+import hosted/io as hosted
+
+counts: type = struct
+    lines: u64
+    words: u64
+    bytes: u64
+end counts
+
+--  White space as C's isspace has it: space, tab, newline, vertical tab,
+--  form feed and carriage return.  Every other byte belongs to a word.
+blank: (byte: u8) -> (yes: bool) =
+    yes = byte == 32 or (byte >= 9 and byte <= 13)
+end blank
+
+--  Read to end of input a buffer at a time.  A line is counted at its
+--  newline, so a last line without one adds no line; a word is counted at
+--  its first byte, and may run on from one buffer into the next.
+count: (provider: type is io.reader, source: provider,
+        opened: io.file, buffer: []mut u8)
+       -> (totals: counts) ! io.io_failed =
+    totals = (lines: 0, words: 0, bytes: 0)
+    mut inside: bool = false
+    loop do
+        got: usize = try io.read(source, opened, buffer)
+        break when got == 0
+        totals.bytes += u64(got)
+        for byte in buffer[0..<got] do
+            if byte == 10 then inc totals.lines end if
+            if blank(byte) then
+                inside = false
+            elsif not inside then
+                inside = true
+                inc totals.words
+            end if
+        end for
+    end loop
+end count
+
+--  The three totals in decimal, separated by spaces and ended by a newline.
+render: (totals: counts, into: []mut u8) -> (used: usize) ! text.no_space =
+    used = try text.write_u64(into, 0, totals.lines)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.words)
+    used = try text.write_byte(into, used, 32)
+    used = try text.write_u64(into, used, totals.bytes)
+    used = try text.write_byte(into, used, 10)
+end render
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    input: io.file = io.input(host)
+    mut buffer: [4096]u8 = zeroed
+    totals := count(host, input, buffer[0..<4096]) else (problem)
+        _ = problem
+        message: []u8 = "wc: standard input could not be read\n"
+        io.write(host, io.err(host), message) else (ignored)
+            _ = ignored
+        end
+        code = 1
+        return
+    end
+
+    --  Three twenty-digit totals, two spaces and a newline fit in 64 bytes.
+    mut line: [64]u8 = zeroed
+    used := render(totals, line[0..<64]) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    io.write(host, io.out(host), line[0..<used]) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = 0
+end main
+```
+
+Pipe anything into it:
+
+```sh
+refine compile main.ldn -o wc
+printf 'one two\nthree\n' | ./wc
+```
+
+which prints `2 3 14`. The fixture feeds it a six-kilobyte text, larger
+than the 4096-byte buffer and ending without a newline, and two more feed it
+an empty input and none at all. The same routine counts `core/io.memory`'s
+standard input on every target, Cortex-M included, in
+`runtime/word-count-memory`, which also injects a read failure, and
+`runtime/word-count-closed-input` reads a standard input the program has
+closed, which every hosted system refuses.

@@ -23,7 +23,8 @@ zero_slots_exhaust: () -> (ok: bool) =
     alignment: usize = 8
     mut records: [1]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over(base, extent, size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, extent, size, count, alignment, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -32,13 +33,13 @@ zero_slots_exhaust: () -> (ok: bool) =
 
     one: usize = 1
     mut refused: bool = false
-    _ = mem.allocate(state, one, one) else (problem)
+    _ = mem.allocate(slab, one, one) else (problem)
         _ = problem
         refused = true
     end
-    ok = refused and pool.capacity(state) == 0
-         and pool.bookkeeping_capacity(state) == lenof bookkeeping
-         and pool.allocations(state) == 0 and pool.live(state) == 0
+    ok = refused and pool.capacity(slab) == 0
+         and pool.bookkeeping_capacity(slab) == lenof bookkeeping
+         and pool.allocations(slab) == 0 and pool.live(slab) == 0
 end zero_slots_exhaust
 
 zero_size_occupies_slot: () -> (ok: bool) =
@@ -46,7 +47,8 @@ zero_size_occupies_slot: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr words[0]))
     mut records: [1]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over(base, 16, 8, 1, 8, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, 16, 8, 1, 8, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -55,24 +57,24 @@ zero_size_occupies_slot: () -> (ok: bool) =
 
     zero: usize = 0
     one: usize = 1
-    block: ptr mut u8 = mem.allocate(state, zero, zero) else (problem)
+    block: ptr mut u8 = mem.allocate(slab, zero, zero) else (problem)
         _ = problem
         ok = false
         return
     end
     mut exhausted: bool = false
-    _ = mem.allocate(state, one, one) else (problem)
+    _ = mem.allocate(slab, one, one) else (problem)
         _ = problem
         exhausted = true
     end
-    mem.free(state, block, one)
-    ok = exhausted and pool.live(state) == 1
-         and pool.rejected_frees(state) == 1
-    mem.free(state, block, zero)
-    ok = ok and pool.live(state) == 0 and pool.frees(state) == 1
+    mem.free(slab, block, one)
+    ok = exhausted and pool.live(slab) == 1
+         and pool.rejected_frees(slab) == 1
+    mem.free(slab, block, zero)
+    ok = ok and pool.live(slab) == 0 and pool.frees(slab) == 1
     maximum: usize = 0 -% 1
-    mem.free(state, block, maximum)
-    ok = ok and pool.rejected_frees(state) == 2
+    mem.free(slab, block, maximum)
+    ok = ok and pool.rejected_frees(slab) == 2
 end zero_size_occupies_slot
 
 one_slot_reuses: () -> (ok: bool) =
@@ -84,7 +86,8 @@ one_slot_reuses: () -> (ok: bool) =
     alignment: usize = 24
     mut records: [1]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over(base, extent, size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over(space, base, extent, size, count, alignment, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -92,7 +95,7 @@ one_slot_reuses: () -> (ok: bool) =
     end
 
     first_size: usize = 17
-    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else (problem)
+    first: ptr mut u8 = mem.allocate(slab, first_size, alignment) else (problem)
         _ = problem
         ok = false
         return
@@ -100,13 +103,13 @@ one_slot_reuses: () -> (ok: bool) =
     first.val = 11
     mut exhausted: bool = false
     one: usize = 1
-    _ = mem.allocate(state, one, one) else (problem)
+    _ = mem.allocate(slab, one, one) else (problem)
         _ = problem
         exhausted = true
     end
-    mem.free(state, first, first_size)
+    mem.free(slab, first, first_size)
     second_size: usize = 31
-    second: ptr mut u8 = mem.allocate(state, second_size, alignment)
+    second: ptr mut u8 = mem.allocate(slab, second_size, alignment)
         else (problem)
         _ = problem
         ok = false
@@ -118,50 +121,50 @@ one_slot_reuses: () -> (ok: bool) =
     ok = exhausted and usize(first) == usize(second)
          and usize(second) % alignment == 0
          and second.val == 13 and second_last.val == 17
-         and pool.allocations(state) == 2
-         and pool.frees(state) == 1 and pool.live(state) == 1
-    mem.free(state, second, second_size)
-    ok = ok and pool.frees(state) == 2 and pool.live(state) == 0
+         and pool.allocations(slab) == 2
+         and pool.frees(slab) == 1 and pool.live(slab) == 1
+    mem.free(slab, second, second_size)
+    ok = ok and pool.frees(slab) == 2 and pool.live(slab) == 0
 
     --  The non-power-of-two slot alignment admits both kinds of divisors.
     eight: usize = 8
     three: usize = 3
     sixteen: usize = 16
     five: usize = 5
-    by_eight: ptr mut u8 = mem.allocate(state, one, eight) else (problem)
+    by_eight: ptr mut u8 = mem.allocate(slab, one, eight) else (problem)
         _ = problem
         ok = false
         return
     end
     ok = ok and usize(by_eight) % eight == 0
-    mem.free(state, by_eight, one)
-    by_three: ptr mut u8 = mem.allocate(state, one, three) else (problem)
+    mem.free(slab, by_eight, one)
+    by_three: ptr mut u8 = mem.allocate(slab, one, three) else (problem)
         _ = problem
         ok = false
         return
     end
     ok = ok and usize(by_three) % three == 0
-    mem.free(state, by_three, one)
+    mem.free(slab, by_three, one)
     zero: usize = 0
-    by_zero: ptr mut u8 = mem.allocate(state, one, zero) else (problem)
+    by_zero: ptr mut u8 = mem.allocate(slab, one, zero) else (problem)
         _ = problem
         ok = false
         return
     end
-    mem.free(state, by_zero, one)
+    mem.free(slab, by_zero, one)
     mut sixteen_refused: bool = false
-    _ = mem.allocate(state, one, sixteen) else (problem)
+    _ = mem.allocate(slab, one, sixteen) else (problem)
         _ = problem
         sixteen_refused = true
     end
     mut five_refused: bool = false
-    _ = mem.allocate(state, one, five) else (problem)
+    _ = mem.allocate(slab, one, five) else (problem)
         _ = problem
         five_refused = true
     end
     ok = ok and sixteen_refused and five_refused
-         and pool.allocations(state) == 5
-         and pool.frees(state) == 5 and pool.live(state) == 0
+         and pool.allocations(slab) == 5
+         and pool.frees(slab) == 5 and pool.live(slab) == 0
 end one_slot_reuses
 
 multiple_live_and_bounds: () -> (ok: bool) =
@@ -174,8 +177,9 @@ multiple_live_and_bounds: () -> (ok: bool) =
     alignment: usize = 8
     mut records: [3]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over
-        (base, extent, slot_size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over
+        (space, base, extent, slot_size, count, alignment, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -185,18 +189,18 @@ multiple_live_and_bounds: () -> (ok: bool) =
     first_size: usize = 16
     second_size: usize = 128
     third_size: usize = 1
-    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else (problem)
+    first: ptr mut u8 = mem.allocate(slab, first_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
-    second: ptr mut u8 = mem.allocate(state, second_size, alignment)
+    second: ptr mut u8 = mem.allocate(slab, second_size, alignment)
         else (problem)
         _ = problem
         ok = false
         return
     end
-    third: ptr mut u8 = mem.allocate(state, third_size, alignment) else (problem)
+    third: ptr mut u8 = mem.allocate(slab, third_size, alignment) else (problem)
         _ = problem
         ok = false
         return
@@ -207,36 +211,36 @@ multiple_live_and_bounds: () -> (ok: bool) =
     second_last.val = 31
 
     mut exhausted: bool = false
-    _ = mem.allocate(state, third_size, alignment) else (problem)
+    _ = mem.allocate(slab, third_size, alignment) else (problem)
         _ = problem
         exhausted = true
     end
-    mem.free(state, first, first_size)
+    mem.free(slab, first, first_size)
     replacement_size: usize = 64
     replacement: ptr mut u8 = mem.allocate
-        (state, replacement_size, alignment) else (problem)
+        (slab, replacement_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
 
     wrong_size: usize = 63
-    mem.free(state, replacement, wrong_size)
+    mem.free(slab, replacement, wrong_size)
     mut wrong_free_kept_live: bool = false
-    _ = mem.allocate(state, third_size, alignment) else (problem)
+    _ = mem.allocate(slab, third_size, alignment) else (problem)
         _ = problem
         wrong_free_kept_live = true
     end
 
     too_large_size: usize = 129
     mut too_large: bool = false
-    _ = mem.allocate(state, too_large_size, alignment) else (problem)
+    _ = mem.allocate(slab, too_large_size, alignment) else (problem)
         _ = problem
         too_large = true
     end
     unsupported_alignment: usize = 3
     mut unsupported: bool = false
-    _ = mem.allocate(state, third_size, unsupported_alignment) else (problem)
+    _ = mem.allocate(slab, third_size, unsupported_alignment) else (problem)
         _ = problem
         unsupported = true
     end
@@ -245,14 +249,14 @@ multiple_live_and_bounds: () -> (ok: bool) =
          and exhausted and usize(replacement) == usize(first)
          and second.val == 29 and second_last.val == 31
          and wrong_free_kept_live and too_large and unsupported
-         and pool.allocations(state) == 4
-         and pool.frees(state) == 1 and pool.live(state) == 3
-         and pool.rejected_frees(state) == 1
+         and pool.allocations(slab) == 4
+         and pool.frees(slab) == 1 and pool.live(slab) == 3
+         and pool.rejected_frees(slab) == 1
 
-    mem.free(state, replacement, replacement_size)
-    mem.free(state, second, second_size)
-    mem.free(state, third, third_size)
-    ok = ok and pool.frees(state) == 4 and pool.live(state) == 0
+    mem.free(slab, replacement, replacement_size)
+    mem.free(slab, second, second_size)
+    mem.free(slab, third, third_size)
+    ok = ok and pool.frees(slab) == 4 and pool.live(slab) == 0
 end multiple_live_and_bounds
 
 six_live_slots: () -> (ok: bool) =
@@ -267,8 +271,9 @@ six_live_slots: () -> (ok: bool) =
     alignment: usize = 8
     mut records: [6]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over
-        (base, extent, slot_size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over
+        (space, base, extent, slot_size, count, alignment, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -276,59 +281,59 @@ six_live_slots: () -> (ok: bool) =
     end
 
     first: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     second: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     third: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     fourth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     fifth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     sixth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else (problem)
+        (slab, slot_size, alignment) else (problem)
         _ = problem
         ok = false
         return
     end
     mut exhausted: bool = false
-    _ = mem.allocate(state, slot_size, alignment) else (problem)
+    _ = mem.allocate(slab, slot_size, alignment) else (problem)
         _ = problem
         exhausted = true
     end
 
-    ok = exhausted and pool.capacity(state) == lenof records
-         and pool.bookkeeping_capacity(state) == lenof records
-         and pool.live(state) == 6
+    ok = exhausted and pool.capacity(slab) == lenof records
+         and pool.bookkeeping_capacity(slab) == lenof records
+         and pool.live(slab) == 6
          and usize(second) - usize(first) == slot_size
          and usize(sixth) - usize(fifth) == slot_size
-    mem.free(state, first, slot_size)
-    mem.free(state, second, slot_size)
-    mem.free(state, third, slot_size)
-    mem.free(state, fourth, slot_size)
-    mem.free(state, fifth, slot_size)
-    mem.free(state, sixth, slot_size)
-    ok = ok and pool.live(state) == 0 and pool.frees(state) == 6
+    mem.free(slab, first, slot_size)
+    mem.free(slab, second, slot_size)
+    mem.free(slab, third, slot_size)
+    mem.free(slab, fourth, slot_size)
+    mem.free(slab, fifth, slot_size)
+    mem.free(slab, sixth, slot_size)
+    ok = ok and pool.live(slab) == 0 and pool.frees(slab) == 6
 end six_live_slots
 
 out_of_order_reuse: () -> (ok: bool) =
@@ -340,8 +345,9 @@ out_of_order_reuse: () -> (ok: bool) =
     alignment: usize = 8
     mut records: [8]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
-    mut state := pool.over
-        (base, extent, slot_size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    slab := pool.over
+        (space, base, extent, slot_size, count, alignment, bookkeeping)
         else (problem)
         _ = problem
         ok = false
@@ -351,7 +357,7 @@ out_of_order_reuse: () -> (ok: bool) =
     mut addresses: [8]usize = zeroed
     mut index: usize = 0
     while index < count do
-        block: ptr mut u8 = mem.allocate(state, slot_size, alignment)
+        block: ptr mut u8 = mem.allocate(slab, slot_size, alignment)
             else (problem)
             _ = problem
             ok = false
@@ -366,26 +372,26 @@ out_of_order_reuse: () -> (ok: bool) =
     between: ptr mut u8 = ptr(addresses[4] + 1)
     after: ptr mut u8 = ptr(addresses[7] + slot_size)
     fourth: ptr mut u8 = ptr(addresses[4])
-    mem.free(state, before, slot_size)
-    mem.free(state, between, slot_size)
-    mem.free(state, after, slot_size)
-    mem.free(state, fourth, slot_size - 1)
+    mem.free(slab, before, slot_size)
+    mem.free(slab, between, slot_size)
+    mem.free(slab, after, slot_size)
+    mem.free(slab, fourth, slot_size - 1)
 
     release_order: [8]usize = [7, 1, 5, 3, 6, 0, 4, 2]
     index = 0
     while index < count do
         to_release: ptr mut u8 = ptr(addresses[release_order[index]])
-        mem.free(state, to_release, slot_size)
+        mem.free(slab, to_release, slot_size)
         inc index
     end while
     duplicate: ptr mut u8 = ptr(addresses[2])
-    mem.free(state, duplicate, slot_size)
+    mem.free(slab, duplicate, slot_size)
 
-    ok = pool.live(state) == 0 and pool.frees(state) == count
-         and pool.rejected_frees(state) == 5
+    ok = pool.live(slab) == 0 and pool.frees(slab) == count
+         and pool.rejected_frees(slab) == 5
     index = 0
     while index < count do
-        block: ptr mut u8 = mem.allocate(state, slot_size, alignment)
+        block: ptr mut u8 = mem.allocate(slab, slot_size, alignment)
             else (problem)
             _ = problem
             ok = false
@@ -394,19 +400,19 @@ out_of_order_reuse: () -> (ok: bool) =
         ok = ok and usize(block) == addresses[index]
         inc index
     end while
-    ok = ok and pool.live(state) == count
-         and pool.allocations(state) == count * 2
+    ok = ok and pool.live(slab) == count
+         and pool.allocations(slab) == count * 2
     second: ptr mut u8 = ptr(addresses[2])
     sixth: ptr mut u8 = ptr(addresses[6])
-    mem.free(state, sixth, slot_size)
-    mem.free(state, second, slot_size)
-    reused_second: ptr mut u8 = mem.allocate(state, slot_size, alignment)
+    mem.free(slab, sixth, slot_size)
+    mem.free(slab, second, slot_size)
+    reused_second: ptr mut u8 = mem.allocate(slab, slot_size, alignment)
         else (problem)
         _ = problem
         ok = false
         return
     end
-    reused_sixth: ptr mut u8 = mem.allocate(state, slot_size, alignment)
+    reused_sixth: ptr mut u8 = mem.allocate(slab, slot_size, alignment)
         else (problem)
         _ = problem
         ok = false
@@ -414,7 +420,7 @@ out_of_order_reuse: () -> (ok: bool) =
     end
     ok = ok and usize(reused_second) == addresses[2]
          and usize(reused_sixth) == addresses[6]
-         and pool.live(state) == count
+         and pool.live(slab) == count
 end out_of_order_reuse
 
 --  Check construction without exposing the private provider representation.
@@ -423,7 +429,8 @@ check_configuration: (base: ptr mut u8, extent: usize, size: usize,
                       count: usize, alignment: usize,
                       bookkeeping: []mut pool.slot)
                      -> none ! mem.out_of_memory =
-    _ = try pool.over(base, extent, size, count, alignment, bookkeeping)
+    mut space: pool.space = zeroed
+    _ = try pool.over(space, base, extent, size, count, alignment, bookkeeping)
 end check_configuration
 
 bad_configuration_is_refused: () -> (ok: bool) =
@@ -462,13 +469,14 @@ maximum_size_is_refused: () -> (ok: bool) =
     mut records: [1]pool.slot = zeroed
     bookkeeping: []mut pool.slot = records[0..<lenof records]
 
+    mut space: pool.space = zeroed
     mut refused: bool = false
-    _ = pool.over(base, maximum, maximum, one, one, bookkeeping)
+    _ = pool.over(space, base, maximum, maximum, one, one, bookkeeping)
         else (problem)
         _ = problem
         refused = true
     end
-    empty := pool.over(base, zero, maximum, zero, one, bookkeeping)
+    empty := pool.over(space, base, zero, maximum, zero, one, bookkeeping)
         else (problem)
         _ = problem
         ok = false

@@ -9,7 +9,7 @@ import hosted/linux
 --  arguments still reach its world.
 public main: () -> (code: i32) =
     code = 1
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
     return when io.argument_count(state) <> 1
     code = 2
     table: linux.environment_table = linux.environment()

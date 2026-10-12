@@ -7,25 +7,26 @@ import core/tree
 leaf_name: utf8 = "retained"
 branch_name: utf8 = "branch"
 
-exercise: (provider: type is mem.allocator, inout backing: provider)
+exercise: (provider: type is mem.allocator, memory: provider)
           -> (okay: bool) =
     okay = false
     zero: usize = 0
     one: usize = 1
     eight: usize = 8
     mut value := tree.new()
-    mut state := fault.new(addr backing, zero)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, memory, zero)
     mut empty_refused: bool = false
-    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+    _ = tree.add_leaf(value, counted, leaf_name) else (problem)
         _ = problem
         empty_refused = true
         tree.id(0)
     end
     return when not empty_refused or tree.length(value) <> 0
-    fault.permit(state, one)
+    fault.permit(counted, one)
     mut at: usize = 0
     while at < 8 do
-        added: tree.node_id = tree.add_leaf(value, state, leaf_name)
+        added: tree.node_id = tree.add_leaf(value, counted, leaf_name)
             else (problem)
                 _ = problem
                 return
@@ -34,20 +35,20 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         inc at
     end while
     mut leaf_refused: bool = false
-    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+    _ = tree.add_leaf(value, counted, leaf_name) else (problem)
         _ = problem
         leaf_refused = true
         tree.id(0)
     end
     mut branch_refused: bool = false
-    _ = tree.add_branch(value, state, branch_name, tree.id(0), eight)
+    _ = tree.add_branch(value, counted, branch_name, tree.id(0), eight)
         else (problem)
             _ = problem
             branch_refused = true
             tree.id(0)
         end
     return when not leaf_refused or not branch_refused
-    return when tree.length(value) <> 8 or fault.live(state) <> 1
+    return when tree.length(value) <> 8 or fault.live(counted) <> 1
     at = 0
     while at < 8 do
         selected := tree.get(value, tree.id(at)) else (problem)
@@ -58,8 +59,8 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         return when lenof text <> 8 or text[0] <> 'r'
         inc at
     end while
-    fault.permit(state, one)
-    root: tree.node_id = tree.add_branch(value, state, branch_name,
+    fault.permit(counted, one)
+    root: tree.node_id = tree.add_branch(value, counted, branch_name,
                                          tree.id(0), eight) else (problem)
         _ = problem
         return
@@ -68,32 +69,34 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
         _ = problem
         return
     end
-    tree.release(value, state)
+    tree.release(value, counted)
     okay = tree.ordinal(root) == 8 and leaves == 8
-        and tree.length(value) == 0 and fault.attempts(state) == 5
-        and fault.injected_failures(state) == 3
-        and fault.successes(state) == 2 and fault.frees(state) == 2
-        and fault.live(state) == 0
+        and tree.length(value) == 0 and fault.attempts(counted) == 5
+        and fault.injected_failures(counted) == 3
+        and fault.successes(counted) == 2 and fault.frees(counted) == 2
+        and fault.live(counted) == 0
 end exercise
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
-    heap_ok: bool = exercise(host)
+    heap := heap.host()
+    heap_ok: bool = exercise(heap)
     mut arena_bytes: [8192]u8 = zeroed
-    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 8192)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 8192)
     arena_ok: bool = exercise(arena)
     mut pool_bytes: [8192]u8 = zeroed
     mut slots: [2]pool.slot = zeroed
-    mut pool_state := pool.over(addr pool_bytes[0], 8192, 2048, 2, 16,
-                           slots[0..<2]) else (problem)
+    mut pool_space: pool.space = zeroed
+    slab := pool.over(pool_space, addr pool_bytes[0], 8192, 2048, 2, 16,
+                      slots[0..<2]) else (problem)
         _ = problem
         return
     end
-    pool_ok: bool = exercise(pool_state)
-    if heap_ok and arena_ok and pool_ok and pool.live(pool_state) == 0
-       and pool.allocations(pool_state) == 2 and pool.frees(pool_state) == 2
-       and pool.rejected_frees(pool_state) == 0
+    pool_ok: bool = exercise(slab)
+    if heap_ok and arena_ok and pool_ok and pool.live(slab) == 0
+       and pool.allocations(slab) == 2 and pool.frees(slab) == 2
+       and pool.rejected_frees(slab) == 0
     then
         code = 42
     end if

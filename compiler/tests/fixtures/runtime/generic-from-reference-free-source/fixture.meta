@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a generic from clause naming a type-formal parameter is satisfied by an instance whose type for it holds no reference, and binds an instance whose type holds one
+program: main.ldn
+status: 42
+constructs: 0790, 1290, 1300
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

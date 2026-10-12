@@ -1,0 +1,41 @@
+--  A generic result may name a parameter whose type is a type formal in its
+--  `from` clause. Where an instance gives that parameter a type holding no
+--  reference, it supplies no origin and the clause asks nothing of it; where
+--  the type holds one, the clause binds as written.
+counts: type = struct
+    seen: u32
+end counts
+
+keeper: type (inner: type) = struct
+    state: ptr mut counts
+    inner: inner
+end keeper
+
+keep: (inner: type, inout state: counts, value: inner)
+      -> (result: keeper(inner) from state, value) =
+    state.seen = 0
+    result = (state: addr state, inner: value)
+end keep
+
+plain: type = struct
+    weight: u32
+end plain
+
+pointing: type = struct
+    weight: ptr u32
+end pointing
+
+weight_store: u32 = 20
+
+public main: () -> (code: i32) =
+    mut first_state: counts = (seen: 9)
+    light: plain = (weight: 20)
+    first := keep(first_state, light)
+    inc first.state.val.seen
+    mut second_state: counts = (seen: 9)
+    heavy: pointing = (weight: addr weight_store)
+    second := keep(second_state, heavy)
+    inc second.state.val.seen
+    weights: u32 = first.inner.weight + second.inner.weight.val
+    code = i32(weights + first_state.seen + second_state.seen)
+end main

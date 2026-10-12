@@ -3,15 +3,15 @@ import hosted/heap
 
 heap_provider: type = heap.system
 
-bad: () -> (state: fault.injector(heap_provider)) =
+remaining: () -> (count: usize) =
+    space: fault.space = zeroed
     inner := heap.host()
-    attempts: usize = 1
-    state = fault.new
-        (inner_provider: heap_provider, inner: addr inner,
-         allowed_attempts: attempts)
-end bad
+    counted := fault.over
+        (inner_provider: heap_provider, state: space, inner: inner,
+         allowed_attempts: usize(1))
+    count = fault.remaining(counted)
+end remaining
 
 public main: () -> (code: i32) =
-    state: fault.injector(heap_provider) = bad()
-    code = i32(fault.remaining(state))
+    code = i32(remaining())
 end main

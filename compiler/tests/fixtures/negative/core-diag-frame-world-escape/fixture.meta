@@ -1,5 +1,5 @@
 class: negative
-summary: a streaming logger cannot retain frame-local world and stream storage
+summary: a streaming logger cannot retain an erased writer over a frame-local handle
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-diag-frame-world-escape
 codes: L0314

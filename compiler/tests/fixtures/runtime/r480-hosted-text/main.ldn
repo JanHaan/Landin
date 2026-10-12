@@ -7,7 +7,7 @@ path: []u8 = "build/r480-hosted-output.txt\x00"
 public main: () -> (code: i32) =
     code = 1
     return when app.entry() <> 0
-    mut host := hosted.host()
+    host := hosted.host()
     world: any io.world = any(addr host)
     opened: io.file = world.open_read(addr path[0]) else (problem)
         _ = problem

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: two arguments lent from one I/O handle and its argument count are live at once, since using a handle locks nothing
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0790, 0800, 0830, 1660, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

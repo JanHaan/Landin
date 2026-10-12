@@ -1112,24 +1112,295 @@ package body Landin.Tests.Backend_Suite is
             Contains (Text, HT & "pushq %rsi" & LF)
               and then Contains (Text, HT & "pushq 16(%rbp)" & LF),
             "register and stack aggregate addresses are preserved");
-         --  Two copies are the callee's, one per aggregate parameter.
-         --  The third is the caller's: [0410] evaluates `state.nested`
-         --  before the arguments after it, so its bytes are taken into a
-         --  temporary there, while the last argument's address is passed as it
-         --  stands.
+         --  Both copies are the callee's, one per aggregate parameter,
+         --  each a few plain moves.  The arguments after `state.nested`
+         --  only read, so nothing can change its bytes before the callee
+         --  copies them and the caller passes its address as it stands.
          Landin.Testing.Check
            (Item,
             Occurrences (Text, HT & "popq %rsi" & LF) = 2
-              and then Occurrences (Text, HT & "rep movsb" & LF) = 3,
+              and then Occurrences (Text, HT & "rep movsb" & LF) = 0
+              and then Occurrences
+                (Text, HT & "movq 8(%rsi), %rax" & LF
+                 & HT & "movq %rax, 8(%rdi)" & LF) = 1
+              and then Occurrences
+                (Text, HT & "movq 0(%rsi), %rax" & LF
+                 & HT & "movq %rax, 0(%rdi)" & LF) = 2,
             "each aggregate is copied into independent callee storage,"
-            & " and the caller snapshots the one that precedes later"
-            & " arguments");
+            & " and reading arguments after one need no caller snapshot");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "leaq -20(%rbp), %rax" & LF
                               & HT & "addq $4, %rax" & LF),
             "the nested array address follows its target-derived offset");
       end;
    end Aggregate_Arguments_Are_Copied_In_The_Callee;
+
+   --  A by-value parameter's carrier addresses storage aligned for its
+   --  shape (docs/ir.md), so each backend moves an aligned record into its
+   --  fresh slot, or clears it, by machine words, and keeps byte transfers
+   --  for an odd byte-aligned extent.  The caller takes a snapshot only
+   --  before a later argument that may write.
+   procedure By_Value_Parameters_Move_By_Words
+     (Item : in out Landin.Testing.Context);
+
+   procedure By_Value_Parameters_Move_By_Words
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Item_Kind;
+      use type IR.Opcode;
+      Source : constant String :=
+        "pair: type = struct" & LF
+        & "    left: u64" & LF
+        & "    right: u64" & LF
+        & "end pair" & LF
+        & "small: type = struct" & LF
+        & "    a: u32" & LF
+        & "    b: u32" & LF
+        & "end small" & LF
+        & "three: type = struct" & LF
+        & "    a: u8" & LF
+        & "    b: u8" & LF
+        & "    c: u8" & LF
+        & "end three" & LF
+        & "take: (p: pair, s: small, t: three) -> (r: u64) =" & LF
+        & "    r = p.left + u64(s.b) + u64(t.c)" & LF
+        & "end take" & LF
+        & "first: (p: pair, x: u64) -> (r: u64) =" & LF
+        & "    r = p.right + x" & LF
+        & "end first" & LF
+        & "bump: () -> (r: u64) =" & LF
+        & "    r = 1" & LF
+        & "end bump" & LF
+        & "use: () -> (r: u64) =" & LF
+        & "    p: pair = (left: 1, right: 2)" & LF
+        & "    s: small = (a: 3, b: 4)" & LF
+        & "    t: three = (a: 5, b: 6, c: 7)" & LF
+        & "    r = take(p, s, t) + first(p, bump())" & LF
+        & "end use" & LF;
+
+      type Backend_Kind is (X86_64, Arm64, RV64, Cortex_M);
+
+      --  The entry of `take`, which runs until `first` begins.
+      function Take_Entry (Text : String) return String;
+
+      function Take_Entry (Text : String) return String is
+         Take_At : constant Natural := Index (Text, "take:" & LF);
+         First_At : constant Natural := Index (Text, "first:" & LF);
+      begin
+         if Take_At = 0 or else First_At <= Take_At then
+            return "";
+         end if;
+         return Text (Take_At .. First_At - 1);
+      end Take_Entry;
+
+      procedure One
+        (Facts : Landin.Targets.Target_Facts; Kind : Backend_Kind);
+
+      procedure One
+        (Facts : Landin.Targets.Target_Facts; Kind : Backend_Kind)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Copies : Natural := 0;
+         Name : constant String := Backend_Kind'Image (Kind);
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, Name & ": five stages ran");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Code : constant not null access IR.Unit :=
+              Landin.Stages.Code (Work);
+         begin
+            for Routine in 1 .. IR.Item_Count (Code.all) loop
+               if IR.Kind_Of (Code.all, IR.Item_Id (Routine))
+                 = IR.Routine
+               then
+                  for V in 1 .. IR.Value_Count
+                    (Code.all, IR.Item_Id (Routine))
+                  loop
+                     if IR.Op_Of
+                       (Code.all, IR.Item_Id (Routine), IR.Value_Id (V))
+                         = IR.Copy_Array
+                     then
+                        Copies := Copies + 1;
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+         end;
+         --  [0410]: `bump()` may write `p`, so `first` is given a
+         --  snapshot; `take`'s later arguments only read.
+         Landin.Testing.Check_Equal
+           (Item, Copies, 1,
+            Name & ": only the argument before a writing one is copied");
+         case Kind is
+            when X86_64 =>
+               Assembly := Ada.Strings.Unbounded.To_Unbounded_String
+                 (Emitted (Work));
+            when Arm64 =>
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work),
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            when RV64 =>
+               Landin.Backend.RiscV.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work),
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+            when Cortex_M =>
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work),
+                  Landin.Optimization.Reference_Options, Assembly, Report);
+         end case;
+         declare
+            Text : constant String :=
+              Take_Entry (Ada.Strings.Unbounded.To_String (Assembly));
+            Pair_Copy, Pair_Clear, Small_Copy, Small_Clear, Odd : Boolean;
+         begin
+            case Kind is
+               when X86_64 =>
+                  Pair_Copy := Contains
+                    (Text, HT & "movq 0(%rsi), %rax" & LF
+                     & HT & "movq %rax, 0(%rdi)" & LF
+                     & HT & "movq 8(%rsi), %rax" & LF
+                     & HT & "movq %rax, 8(%rdi)" & LF);
+                  Pair_Clear := Contains
+                    (Text, HT & "xorl %eax, %eax" & LF
+                     & HT & "movq %rax, 0(%rdi)" & LF
+                     & HT & "movq %rax, 8(%rdi)" & LF);
+                  Small_Copy := Occurrences
+                    (Text, HT & "movq 0(%rsi), %rax" & LF) = 2;
+                  Small_Clear := Occurrences
+                    (Text, HT & "xorl %eax, %eax" & LF
+                     & HT & "movq %rax, 0(%rdi)" & LF) = 2;
+                  --  x86-64 needs no alignment: three bytes are one word
+                  --  move and one byte move.
+                  Odd := Contains
+                    (Text, HT & "movw 0(%rsi), %ax" & LF
+                     & HT & "movw %ax, 0(%rdi)" & LF
+                     & HT & "movb 2(%rsi), %al" & LF)
+                    and then not Contains (Text, "rep movsb")
+                    and then not Contains (Text, "rep stosb");
+               when Arm64 =>
+                  Pair_Copy := Contains
+                    (Text, HT & "ldp x12, x13, [x10], #16" & LF
+                     & HT & "stp x12, x13, [x9], #16" & LF);
+                  Pair_Clear := Contains
+                    (Text, HT & "stp xzr, xzr, [x9], #16" & LF);
+                  Small_Copy := Contains
+                    (Text, HT & "ldp w12, w13, [x10], #8" & LF
+                     & HT & "stp w12, w13, [x9], #8" & LF);
+                  Small_Clear := Contains
+                    (Text, HT & "stp wzr, wzr, [x9], #8" & LF);
+                  Odd := Contains (Text, HT & "ldrb w12, [x10], #1" & LF)
+                    and then not Contains (Text, "tst x11, #7");
+               when RV64 =>
+                  Pair_Copy := Contains
+                    (Text, HT & "ld x28, 8(x6)" & LF
+                     & HT & "sd x28, 8(x5)" & LF);
+                  Pair_Clear := Contains
+                    (Text, HT & "sd zero, 0(x5)" & LF
+                     & HT & "sd zero, 8(x5)" & LF);
+                  Small_Copy := Contains
+                    (Text, HT & "lw x28, 4(x6)" & LF
+                     & HT & "sw x28, 4(x5)" & LF);
+                  Small_Clear := Contains
+                    (Text, HT & "sw zero, 0(x5)" & LF
+                     & HT & "sw zero, 4(x5)" & LF);
+                  Odd := Contains (Text, HT & "lbu x28, 0(x6)" & LF);
+               when Cortex_M =>
+                  Pair_Copy := Contains
+                    (Text, HT & "ldmia r2!, {r4, r5}" & LF
+                     & HT & "stmia r0!, {r4, r5}" & LF
+                     & HT & "ldmia r2!, {r4, r5}" & LF
+                     & HT & "stmia r0!, {r4, r5}" & LF);
+                  Pair_Clear := Contains
+                    (Text, HT & "movs r4, #0" & LF
+                     & HT & "stmia r0!, {r4, r5}" & LF
+                     & HT & "stmia r0!, {r4, r5}" & LF);
+                  Small_Copy := Occurrences
+                    (Text, HT & "ldmia r2!, {r4, r5}" & LF) = 3;
+                  Small_Clear := Occurrences
+                    (Text, HT & "stmia r0!, {r4, r5}" & LF) = 6;
+                  Odd := Occurrences (Text, HT & "ldrb r5, [r2]" & LF) = 1;
+            end case;
+            Landin.Testing.Check
+              (Item, Pair_Copy and then Pair_Clear,
+               Name & ": an eight-byte-aligned record moves by words");
+            Landin.Testing.Check
+              (Item, Small_Copy and then Small_Clear,
+               Name & ": a four-byte-aligned record moves by words");
+            Landin.Testing.Check
+              (Item, Odd,
+               Name & ": a byte-aligned odd extent keeps its byte form");
+         end;
+      end One;
+   begin
+      One (Landin.Targets.Linux_X86_64, X86_64);
+      One (Landin.Targets.Darwin_Arm64, Arm64);
+      One (Landin.Targets.Linux_RV64, RV64);
+      One (Landin.Targets.Cortex_M, Cortex_M);
+   end By_Value_Parameters_Move_By_Words;
+
+   --  A copy into one field of a struct datum is word-aligned when the
+   --  datum's own placement says so.  A whole struct datum has no array
+   --  shape, so its alignment is read from its placed fields; asking for
+   --  an array shape there was a compiler defect.
+   procedure Cortex_Field_Copies_Into_A_Datum_Move_By_Words
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Field_Copies_Into_A_Datum_Move_By_Words
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "wrap: type = struct" & LF
+         & "    cells: [2]i32" & LF
+         & "end wrap" & LF
+         & "mut state: wrap" & LF
+         & "public f: () -> (r: i32) =" & LF
+         & "    mut local: wrap = zeroed" & LF
+         & "    local.cells[1] = 42" & LF
+         & "    state = local" & LF
+         & "    r = state.cells[1]" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ldmia r2!, {r4, r5}" & LF
+                            & HT & "stmia r0!, {r4, r5}" & LF)
+              and then not Contains (Text, HT & "ldrb r5, [r2]" & LF),
+            "the field array moves into the datum as one register pair");
+      end;
+   end Cortex_Field_Copies_Into_A_Datum_Move_By_Words;
 
    --  D97's direct zero carrier consumes one ABI position, including a
    --  stack position, without putting an 8 KiB array in the caller frame.
@@ -5943,8 +6214,10 @@ package body Landin.Tests.Backend_Suite is
          Landin.Testing.Check
            (Item,
             Contains (Text, HT & "call take" & LF)
-              and then Contains (Whole, HT & "movabsq $8, %rcx" & LF)
-              and then Occurrences (Whole, HT & "rep movsb" & LF) = 1,
+              and then Contains
+                (Whole, HT & "movq 0(%rsi), %rax" & LF
+                 & HT & "movq %rax, 0(%rdi)" & LF)
+              and then Occurrences (Whole, HT & "rep movsb" & LF) = 0,
             "the callee copies the joined cell at target-derived extent");
       end;
    end An_Aggregate_Control_Join_Passes_One_Caller_Cell;
@@ -9236,6 +9509,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "aggregate arguments are copied in the callee",
          Aggregate_Arguments_Are_Copied_In_The_Callee'Access);
+      Landin.Testing.Register
+        (Into, "backend", "by-value parameters move by words",
+         By_Value_Parameters_Move_By_Words'Access);
+      Landin.Testing.Register
+        (Into, "backend", "cortex field copies into a datum move by words",
+         Cortex_Field_Copies_Into_A_Datum_Move_By_Words'Access);
       Landin.Testing.Register
         (Into, "backend", "direct zeroed arguments clear callee storage",
          Direct_Zeroed_Arguments_Clear_Only_Callee_Storage'Access);

@@ -217,6 +217,33 @@ package body Landin.Tests.Fixture_Suite is
         (Abi, "levelled-abi",
          "profiles: standard" & LF & "levels: x86-64-v3" & LF, 0,
          "levels belong to a runtime fixture");
+
+      --  `stdin:` names a file below the fixture directory, the same file
+      --  on every host and lane, and belongs only to a program that runs.
+      Check
+        (Runtime, "fed",
+         "profiles: standard" & LF & "stdin: inputs/text.txt" & LF, 4);
+      Check
+        (Abi, "fed-abi", "profiles: standard" & LF & "stdin: text.txt" & LF,
+         4);
+      Check
+        (Runtime, "fed-above",
+         "profiles: standard" & LF & "stdin: ../text.txt" & LF, 0,
+         "stdin is not a file below the fixture directory: ../text.txt");
+      Check
+        (Runtime, "fed-absolute",
+         "profiles: standard" & LF & "stdin: /dev/zero" & LF, 0,
+         "stdin is not a file below the fixture directory: /dev/zero");
+      Check
+        (Runtime, "fed-nothing", "profiles: standard" & LF & "stdin:" & LF,
+         0, "stdin is not a file below the fixture directory: <empty>");
+      Check
+        (Runtime, "fed-twice",
+         "profiles: standard" & LF & "stdin: a.txt" & LF & "stdin: b.txt"
+         & LF, 0, "duplicate key: stdin");
+      Check
+        (Positive_Program, "fed-positive", "stdin: text.txt" & LF, 0,
+         "stdin belongs only to a runtime or ABI fixture");
    end Profiles_Are_Explicit;
 
    procedure Well_Formed_Fixtures_Are_Discovered
@@ -281,7 +308,7 @@ package body Landin.Tests.Fixture_Suite is
          & "program: program.ldn" & LF & "root: imports" & LF
          & "c-sources: peer.c, native/helper.c" & LF
          & "c-args: -DVALUE=42" & ASCII.HT & "-lm" & LF
-         & "run_args: first second" & LF
+         & "run_args: first second" & LF & "stdin: native/input.txt" & LF
          & "run_expect: expected.txt" & LF & "status: 42" & LF
          & "constructs: 1570, 1580, 1600" & LF
          & "targets: linux-x86-64" & LF);
@@ -482,6 +509,12 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check_Equal
         (Item, Run_Args (Nth (Found, 6)), "first second",
          "ABI program arguments are kept");
+      Landin.Testing.Check_Equal
+        (Item, Standard_Input (Nth (Found, 6)), "native/input.txt",
+         "an ABI program's standard input is kept");
+      Landin.Testing.Check_Equal
+        (Item, Standard_Input (Nth (Found, 7)), "",
+         "a fixture naming no standard input has none");
       Landin.Testing.Check_Equal
         (Item, Run_Expect (Nth (Found, 6)), "expected.txt",
          "ABI output expectation is kept");
@@ -1061,6 +1094,10 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check_Equal
         (Item, Problem_Count (Found), 0,
          "the repository's fixture tree has no metadata problems");
+      --  A count says that the tree is wrong; each problem says where.
+      for Index in 1 .. Problem_Count (Found) loop
+         Landin.Testing.Fail (Item, Nth_Problem (Found, Index));
+      end loop;
    end Repository_Fixtures_Are_Clean;
 
    procedure Repository_Malformed_Cases_Are_Refused

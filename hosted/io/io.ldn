@@ -15,7 +15,15 @@ interrupted: i32 = 4
 missing: i32 = 2
 not_permitted: i32 = 1
 denied: i32 = 13
+not_directory: i32 = 20
 read_only_system: i32 = 30
+
+--  A path names nothing when a component is absent, ENOENT, or when a
+--  component before the last is not a directory, ENOTDIR: in both cases
+--  there is no file at that path for an open to find.
+absent: (number: i32) -> (yes: bool) =
+    yes = number == missing or number == not_directory
+end absent
 
 --  Each system call or C call below returns its result, negative for a
 --  failure, with the errno that failure gave, captured before any other
@@ -171,34 +179,46 @@ text_length: (data: ptr u8) -> (length: usize) =
     end loop
 end text_length
 
+--  The process's last-error cell, which every handle from `host` shares.
+mut process_errno: i32
+
 system_value: type = struct
     arguments: ptr ptr u8
     argument_length: usize
-    failure_errno: i32
+    failure: ptr mut i32
 end system_value
 
 --- Hosted implementation of all four I/O capabilities and `io.world`, backed
---- by Linux's system calls on Linux and by libc on Darwin and FreeBSD. File
---- identifiers belong to this provider; borrowed arguments refer to process
---- storage.
+--- by Linux's system calls on Linux and by libc on Darwin and FreeBSD, as a
+--- handle: copies share the process's descriptors and arguments, and the
+--- last-error cell they were made with. File identifiers belong to this
+--- provider; borrowed arguments refer to process storage.
 public system: type = system_value
 
+--- A last-error cell of the caller's own, for code that must not share the
+--- process's: a C thread calling into Landin, or a library keeping its own
+--- detail. Declare it `zeroed` and make its handle with `over`.
+public space: type = struct
+    failure: i32
+end space
+
 --- Return errno captured for the terminal failing provider call. Read it
---- immediately after failure; it is provider state, not a portable error
---- category.
+--- immediately after failure; it belongs to the cell the handle was made
+--- with, the process's from `host` or the caller's from `over`, and is not a
+--- portable error category.
 ---
 --- Zero means that the most recent open/read/write/close did not report a
---- failing libc call.  A nonzero value is the exact errno captured for the
+--- failing host call.  A nonzero value is the exact errno captured for the
 --- terminal call before the provider made any other host call.  Retriable
 --- EINTR attempts are internal and do not replace a previously reported
 --- operation with a failure.
-public last_errno: (state: system) -> (number: i32) =
-    number = state.failure_errno
+public last_errno: (host: system) -> (number: i32) =
+    number = host.failure.val
 end last_errno
 
-system_open_read: (self: ptr mut system, path: ptr u8)
+system_open_read: (self: system, path: ptr u8)
                   -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     loop do
         (result: descriptor, number) := host_open_read(path)
         if descriptor >= 0 then
@@ -210,8 +230,8 @@ system_open_read: (self: ptr mut system, path: ptr u8)
         --  EINTR before publishing a file descriptor, so retrying this
         --  same request is safe.
         if number <> interrupted then
-            self.val.failure_errno = number
-            fail io.not_found when number == missing
+            self.failure.val = number
+            fail io.not_found when absent(number)
             fail io.no_access when number == not_permitted
               or number == denied or number == read_only_system
             fail io.io_failed
@@ -219,10 +239,10 @@ system_open_read: (self: ptr mut system, path: ptr u8)
     end loop
 end system_open_read
 
-system_open_write: (self: ptr mut system, path: ptr u8)
+system_open_write: (self: system, path: ptr u8)
                    -> (opened: io.file)
                    ! io.not_found | io.no_access | io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     loop do
         (result: descriptor, number) := host_open_write(path)
         if descriptor >= 0 then
@@ -234,8 +254,8 @@ system_open_write: (self: ptr mut system, path: ptr u8)
         --  interrupted open has not returned a descriptor, so retry it; every
         --  other errno is retained before mapping to the stable atom set.
         if number <> interrupted then
-            self.val.failure_errno = number
-            fail io.not_found when number == missing
+            self.failure.val = number
+            fail io.not_found when absent(number)
             fail io.no_access when number == not_permitted
               or number == denied or number == read_only_system
             fail io.io_failed
@@ -245,44 +265,44 @@ end system_open_write
 
 --  A stable-path identity check, not an atomic check-and-open operation.
 --  Every input lookup failure refuses; only an absent output is allowed.
-system_same_file: (self: ptr mut system, left: ptr u8, right: ptr u8)
+system_same_file: (self: system, left: ptr u8, right: ptr u8)
                   -> (same: bool) ! io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     first := host_identity(left)
     if first.number <> 0 then
         --  A negative number is a record this provider cannot read, which
         --  no errno describes.
-        if first.number > 0 then self.val.failure_errno = first.number end if
+        if first.number > 0 then self.failure.val = first.number end if
         fail io.io_failed
     end if
     second := host_identity(right)
     if second.number <> 0 then
-        if second.number == missing then
+        if absent(second.number) then
             same = false
             return
         end if
-        if second.number > 0 then self.val.failure_errno = second.number end if
+        if second.number > 0 then self.failure.val = second.number end if
         fail io.io_failed
     end if
     same = first.device == second.device and first.inode == second.inode
 end system_same_file
 
-system_close: (self: ptr mut system, sink opened: io.file)
+system_close: (self: system, sink opened: io.file)
               -> none ! io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     (result: status, number) := host_close(i32(opened))
     if status <> 0 then
         --  Captured first, then reported.  A failed close may already have
         --  released the descriptor; retrying could close an unrelated reused
         --  descriptor, so EINTR is deliberately terminal here.
-        self.val.failure_errno = number
+        self.failure.val = number
         fail io.io_failed
     end if
 end system_close
 
-system_read: (self: ptr mut system, opened: io.file, into: []mut u8)
+system_read: (self: system, opened: io.file, into: []mut u8)
              -> (count: usize) ! io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     if lenof into == 0 then
         count = 0
         return
@@ -302,13 +322,13 @@ system_read: (self: ptr mut system, opened: io.file, into: []mut u8)
         --  buffer and extent may be retried.  A positive partial read is
         --  returned above and is never discarded by an unnecessary retry.
         if number <> interrupted then
-            self.val.failure_errno = number
+            self.failure.val = number
             fail io.io_failed
         end if
     end loop
 end system_read
 
-write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
+write_all: (self: system, descriptor: i32, bytes: []u8)
            -> none ! io.io_failed =
     mut written: usize = 0
     while written < lenof bytes do
@@ -325,7 +345,7 @@ write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
             --  Retry the same remaining suffix; a preceding positive partial
             --  write has already advanced `written` and is never repeated.
             if number <> interrupted then
-                self.val.failure_errno = number
+                self.failure.val = number
                 fail io.io_failed
             end if
         end loop
@@ -336,16 +356,16 @@ write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
     end while
 end write_all
 
-system_write: (self: ptr mut system, opened: io.file, bytes: []u8)
+system_write: (self: system, opened: io.file, bytes: []u8)
               -> none ! io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     return when lenof bytes == 0
     try write_all(self, i32(opened), bytes)
 end system_write
 
-system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
+system_write_some: (self: system, opened: io.file, bytes: []u8)
                    -> (count: usize) ! io.io_failed =
-    self.val.failure_errno = 0
+    self.failure.val = 0
     if lenof bytes == 0 then
         count = 0
         return
@@ -366,34 +386,39 @@ system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
         --  EINTR transfers nothing on this attempt. A positive short write
         --  returns immediately so its exact prefix reaches the caller.
         if number <> interrupted then
-            self.val.failure_errno = number
+            self.failure.val = number
             fail io.io_failed
         end if
     end loop
 end system_write_some
 
-system_out: (self: ptr system) -> (stream: io.file) =
-    _ = self.val.argument_length
+system_input: (self: system) -> (stream: io.file) =
+    _ = self.argument_length
+    stream = io.file(0)
+end system_input
+
+system_out: (self: system) -> (stream: io.file) =
+    _ = self.argument_length
     stream = io.file(1)
 end system_out
 
-system_err: (self: ptr system) -> (stream: io.file) =
-    _ = self.val.argument_length
+system_err: (self: system) -> (stream: io.file) =
+    _ = self.argument_length
     stream = io.file(2)
 end system_err
 
-system_argument_count: (self: ptr system) -> (count: usize) =
-    count = self.val.argument_length
+system_argument_count: (self: system) -> (count: usize) =
+    count = self.argument_length
 end system_argument_count
 
-system_argument_table: (self: ptr system)
+system_argument_table: (self: system)
                        -> (table: ptr ptr u8 from self) =
-    table = self.val.arguments
+    table = self.arguments
 end system_argument_table
 
-system_argument: (self: ptr system, index: usize)
+system_argument: (self: system, index: usize)
                  -> (value: io.argument from self) ! io.no_argument =
-    fail io.no_argument when index >= self.val.argument_length
+    fail io.no_argument when index >= self.argument_length
     table: ptr ptr u8 = system_argument_table(self)
     --  C promises a non-null string below argc; a null entry stops here
     --  rather than being published.
@@ -411,23 +436,39 @@ system is io.files
     (open_read: system_open_read, open_write: system_open_write,
      same_file: system_same_file, close: system_close)
 system is io.process
-    (out: system_out, err: system_err,
+    (input: system_input, out: system_out, err: system_err,
      argument_count: system_argument_count, argument: system_argument)
 system is io.world ()
 
---- Create the hosted I/O provider and expose process arguments and standard
---- streams. Regular open-write operations create or truncate files; close
---- regular files explicitly.
+--- Return a handle to the hosted I/O provider, exposing process arguments and
+--- the three standard streams, descriptors 0, 1 and 2. Regular open-write
+--- operations create or truncate files; close regular files explicitly. The
+--- handle borrows nothing: the root, the descriptors and its last-error cell
+--- belong to the process. Use `over` for a cell of the caller's own.
 ---
 --- The arguments are the root `_landin_host_initialize_arguments`
 --- established, which the hosted entry establishes before its body runs;
 --- calling this before any root exists traps.
-public host: () -> (state: system) =
+public host: () -> (handle: system) =
+    handle = rooted(addr process_errno)
+end host
+
+--- Fill `state` and return a handle that records its last error there
+--- rather than in the process's cell. It shares the process's arguments
+--- and descriptors like any other handle; calling this before any root
+--- exists traps, as `host` does.
+public over: (inout state: space) -> (handle: system from state) =
+    state = (failure: 0)
+    handle = rooted(addr state.failure)
+end over
+
+--  A handle over the established argument root, recording into `cell`.
+rooted: (cell: ptr mut i32) -> (handle: system from cell) =
     if root_values == 0 then
         compiler.unreachable()
     end if
-    state = (arguments: ptr(root_values + word),
-             argument_length: if root_count > 0 then usize(root_count - 1)
-                              else usize(0) end if,
-             failure_errno: 0)
-end host
+    handle = (arguments: ptr(root_values + word),
+              argument_length: if root_count > 0 then usize(root_count - 1)
+                               else usize(0) end if,
+              failure: cell)
+end rooted

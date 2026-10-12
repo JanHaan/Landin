@@ -9,9 +9,10 @@ end pair
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := heap.host()
+    host := heap.host()
     allowed: usize = 8
-    mut allocator := fault.new(addr host, allowed)
+    mut space: fault.space = zeroed
+    allocator := fault.over(space, host, allowed)
     mut values := spill.new(item: pair, inline_slots: 2)
     first: pair = (x: 10, y: 20)
     second: pair = (x: 30, y: 40)
@@ -61,7 +62,8 @@ public main: () -> (code: i32) =
     if spilled_removed.x <> 42 or spilled_removed.y <> 108 then return end if
     spill.release(values, allocator)
     if spill.length(addr values) <> 0 or spill.capacity(addr values) <> 2
-      or allocator.live <> 0 or allocator.frees <> allocator.successes
+      or fault.live(allocator) <> 0
+      or fault.frees(allocator) <> fault.successes(allocator)
     then return end if
     spill.push(values, allocator, first) else (problem)
         _ = problem

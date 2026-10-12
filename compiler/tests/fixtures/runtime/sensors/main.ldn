@@ -34,7 +34,7 @@ thermometer is sensor (read: read_thermometer)
 door is sensor (read: read_door)
 
 --  Generic over where the memory comes from; the caller decides.
-poll: (provider: type is mem.allocator, inout memory: provider,
+poll: (provider: type is mem.allocator, memory: provider,
        sensors: []mut any sensor)
       -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
     readings = vec.new(item: i32)
@@ -51,7 +51,8 @@ end poll
 public main: () -> (code: i32) =
     mut bytes: [256]u8 = zeroed
     --  This local backing requires manual lifetime discipline for results.
-    mut arena := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr bytes[0], lenof bytes)
 
     mut kitchen: thermometer = (celsius: 21)
     mut hall: thermometer = (celsius: 19)

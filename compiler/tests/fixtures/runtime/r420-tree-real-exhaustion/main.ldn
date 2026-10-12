@@ -3,16 +3,18 @@ import core/mem
 import core/pool
 import core/tree
 
-exhaust: (provider: type is mem.allocator, inout inner: provider)
+exhaust: (provider: type is mem.allocator, inner: provider)
          -> (okay: bool) =
     okay = false
     budget: usize = 10
-    mut state := fault.new(addr inner, budget)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, inner, budget)
     mut value := tree.new()
     name: utf8 = "kept"
     mut at: usize = 0
     while at < 8 do
-        added: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+        added: tree.node_id = tree.add_leaf(value, counted, name)
+            else (problem)
             _ = problem
             return
         end
@@ -20,23 +22,25 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
         inc at
     end while
     mut leaf_failed: bool = false
-    leaf: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+    leaf: tree.node_id = tree.add_leaf(value, counted, name) else (problem)
         leaf_failed = problem == mem.out_of_memory
         tree.id(0)
     end
     _ = tree.ordinal(leaf)
     mut branch_failed: bool = false
     eight: usize = 8
-    branch: tree.node_id = tree.add_branch(value, state, name, tree.id(0), eight)
+    branch: tree.node_id = tree.add_branch(value, counted, name, tree.id(0),
+                                           eight)
       else (problem)
         branch_failed = problem == mem.out_of_memory
         tree.id(0)
     end
     _ = tree.ordinal(branch)
     return when not leaf_failed or not branch_failed or tree.length(value) <> 8
-      or fault.attempts(state) <> 3 or fault.successes(state) <> 1
-      or fault.inner_failures(state) <> 2 or fault.injected_failures(state) <> 0
-      or fault.live(state) <> 1 or fault.frees(state) <> 0
+      or fault.attempts(counted) <> 3 or fault.successes(counted) <> 1
+      or fault.inner_failures(counted) <> 2
+      or fault.injected_failures(counted) <> 0
+      or fault.live(counted) <> 1 or fault.frees(counted) <> 0
     at = 0
     while at < 8 do
         saved := tree.get(value, tree.id(at)) else (problem)
@@ -51,18 +55,18 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
         return when lenof text <> 4 or text[0] <> 'k' or leaves <> 1
         inc at
     end while
-    tree.release(value, state)
-    okay = tree.length(value) == 0 and fault.frees(state) == 1
-      and fault.live(state) == 0
+    tree.release(value, counted)
+    okay = tree.length(value) == 0 and fault.frees(counted) == 1
+      and fault.live(counted) == 0
 end exhaust
 
-reuse: (inout state: pool.provider) -> (okay: bool) =
+reuse: (slab: pool.provider) -> (okay: bool) =
     okay = false
     mut value := tree.new()
     name: utf8 = "again"
     mut at: usize = 0
     while at < 3 do
-        added: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+        added: tree.node_id = tree.add_leaf(value, slab, name) else (problem)
             _ = problem
             return
         end
@@ -70,7 +74,7 @@ reuse: (inout state: pool.provider) -> (okay: bool) =
         inc at
     end while
     three: usize = 3
-    root: tree.node_id = tree.add_branch(value, state, name, tree.id(0), three)
+    root: tree.node_id = tree.add_branch(value, slab, name, tree.id(0), three)
       else (problem)
         _ = problem
         return
@@ -79,7 +83,7 @@ reuse: (inout state: pool.provider) -> (okay: bool) =
         _ = problem
         return
     end
-    tree.release(value, state)
+    tree.release(value, slab)
     okay = leaves == 3 and tree.length(value) == 0
 end reuse
 
@@ -88,24 +92,26 @@ public main: () -> (code: i32) =
     mut backing: [1024]u64 = zeroed
     extent: usize = 8 * sizeof tree.node
     arena_base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over_unchecked(arena_base, extent)
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, arena_base, extent)
     arena_ok: bool = exhaust(arena)
     return when not arena_ok or mem.arena_used(arena) <> extent
     mut words: [2048]u64 = zeroed
     mut records: [1]pool.slot = zeroed
     slot_size: usize = 16 * sizeof tree.node
     pool_base: ptr mut u8 = ptr(usize(addr words[0]))
-    mut state := pool.over(pool_base, 16384,
-                           slot_size, 1, alignof tree.node, records[0..<1])
+    mut space: pool.space = zeroed
+    slab := pool.over(space, pool_base, 16384,
+                      slot_size, 1, alignof tree.node, records[0..<1])
       else (problem)
         _ = problem
         return
     end
-    pool_ok: bool = exhaust(state)
-    return when not pool_ok or pool.live(state) <> 0
-      or pool.allocations(state) <> 1 or pool.frees(state) <> 1
-    reuse_ok: bool = reuse(state)
-    if reuse_ok and pool.live(state) == 0 and pool.allocations(state) == 2
-      and pool.frees(state) == 2 and pool.rejected_frees(state) == 0
+    pool_ok: bool = exhaust(slab)
+    return when not pool_ok or pool.live(slab) <> 0
+      or pool.allocations(slab) <> 1 or pool.frees(slab) <> 1
+    reuse_ok: bool = reuse(slab)
+    if reuse_ok and pool.live(slab) == 0 and pool.allocations(slab) == 2
+      and pool.frees(slab) == 2 and pool.rejected_frees(slab) == 0
     then code = 42 end if
 end main

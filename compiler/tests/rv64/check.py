@@ -234,6 +234,14 @@ def native_identity(output):
     return {'system': platform.system(), 'machine': platform.machine(), 'cpuinfo': cpu}
 
 
+def standard_input(result):
+    """The file a fixture's `stdin:` names below it, or an empty input."""
+    named = result['meta'].get('stdin')
+    if not named:
+        return os.devnull
+    return ROOT / 'compiler/tests/fixtures' / result['case'] / named
+
+
 def execute(args, manifest):
     bundle = args.output / 'bundle'
     if args.kind == 'isa':
@@ -246,9 +254,10 @@ def execute(args, manifest):
     for result in manifest['results']:
         meta, label = result['meta'], result['label']
         merged = meta.get('stream', 'merged') == 'merged'
-        completed = subprocess.run([str(bundle / label), *shlex.split(meta.get('run_args', ''))],
-                                   cwd=ROOT / 'compiler/ada', stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT if merged else subprocess.PIPE, timeout=90)
+        with open(standard_input(result), 'rb') as given:
+            completed = subprocess.run([str(bundle / label), *shlex.split(meta.get('run_args', ''))],
+                                       cwd=ROOT / 'compiler/ada', stdin=given, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT if merged else subprocess.PIPE, timeout=90)
         (args.output / (label + '.stdout')).write_bytes(completed.stdout)
         (args.output / (label + '.stderr')).write_bytes(completed.stderr or b'')
         (args.output / (label + '.status')).write_text(str(completed.returncode))

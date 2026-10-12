@@ -1,7 +1,8 @@
 import core/mem
 import core/pool
 
-bad: () -> (state: pool.provider) ! mem.out_of_memory =
+bad: (inout space: pool.space) -> (slab: pool.provider from space)
+     ! mem.out_of_memory =
     mut words: [128]u8 = zeroed
     mut records: [2]pool.slot = zeroed
     base: ptr mut u8 = addr words[0]
@@ -10,15 +11,16 @@ bad: () -> (state: pool.provider) ! mem.out_of_memory =
     slot_size: usize = 64
     slot_count: usize = 2
     alignment: usize = 8
-    state = try pool.over
-        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+    slab = try pool.over
+        (space, base, extent, slot_size, slot_count, alignment, bookkeeping)
 end bad
 
 public main: () -> (code: i32) =
-    state: pool.provider = bad() else (problem)
+    mut space: pool.space = zeroed
+    slab: pool.provider = bad(space) else (problem)
         _ = problem
         code = 0
         return
     end
-    code = i32(pool.capacity(state))
+    code = i32(pool.capacity(slab))
 end main

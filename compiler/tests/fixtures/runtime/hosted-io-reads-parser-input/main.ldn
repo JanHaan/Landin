@@ -11,13 +11,13 @@ public main: () -> (code: i32) =
     end if
 
     first: usize = 0
-    source := io.argument_at(addr argument_host, first) else (argument_problem)
+    source := io.argument_at(argument_host, first) else (argument_problem)
         _ = argument_problem
         code = fail_code
         return
     end
 
-    mut host := hosted.host()
+    host := hosted.host()
     opened := io.open_read(host, source.data) else (open_problem)
         _ = open_problem
         code = fail_code

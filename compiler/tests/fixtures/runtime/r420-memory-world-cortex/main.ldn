@@ -13,14 +13,15 @@ public main: () -> (code: i32) =
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: []io.argument = []
-    mut state := io.memory_over(files[0..<1], no_arguments,
-                                 output[0..<4], errors[0..<1])
-    stream: io.file = io.out(state)
-    io.write(state, stream, "ok") else (problem)
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<1], no_arguments, "",
+                             output[0..<4], errors[0..<1])
+    stream: io.file = io.out(memory)
+    io.write(memory, stream, "ok") else (problem)
         _ = problem
         return
     end
-    bytes: []u8 = io.written(state)
+    bytes: []u8 = io.written(memory)
     if lenof bytes == 2 and bytes[0] == 111 and bytes[1] == 107
       and output[2] == 0
     then code = 42 end if

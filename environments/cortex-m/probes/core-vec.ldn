@@ -7,18 +7,21 @@ mut observed: u32 = 0
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut state_arena := mem.arena_over(addr backing[0], lenof backing)
-    mut state := fault.new(addr state_arena, usize(1))
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over(arena_space, addr backing[0], lenof backing)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, arena, usize(1))
     mut values := vec.new(item: u32)
-    try vec.reserve(values, state, usize(2))
-    try vec.push(values, state, u32(17))
-    try vec.push(values, state, u32(25))
+    try vec.reserve(values, counted, usize(2))
+    try vec.push(values, counted, u32(17))
+    try vec.push(values, counted, u32(25))
     mut failed: bool = false
-    vec.reserve(values, state, usize(4)) else (problem)
+    vec.reserve(values, counted, usize(4)) else (problem)
         _ = problem
         failed = true
     end
-    return when not failed or fault.successes(state) <> 1 or fault.frees(state) <> 0
+    return when not failed or fault.successes(counted) <> 1
+      or fault.frees(counted) <> 0
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
     saved: u32 = begin
         view := vec.used(values)
@@ -27,16 +30,16 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
     return when saved <> 42
     maximum: usize = 0 -% 1
     failed = false
-    vec.reserve(values, state, maximum) else (problem)
+    vec.reserve(values, counted, maximum) else (problem)
         _ = problem
         failed = true
     end
-    return when not failed or fault.successes(state) <> 1
+    return when not failed or fault.successes(counted) <> 1
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
-    vec.release(values, state)
-    return when fault.frees(state) <> 1 or vec.length(values) <> 0
-    vec.release(values, state)
-    return when fault.frees(state) <> 1
+    vec.release(values, counted)
+    return when fault.frees(counted) <> 1 or vec.length(values) <> 0
+    vec.release(values, counted)
+    return when fault.frees(counted) <> 1
     result = 42
 end exercise
 

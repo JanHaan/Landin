@@ -1361,7 +1361,9 @@ On each return edge, [0790]'s exact
 A provably empty arm of [0480]'s optional pointer carries no reference and
 therefore no origin to compare; it is not an `Untracked` reference. For every
 edge that does return a tracked reference, the set of parameter origins is
-exactly the signature's `from` set. In addition, D222 forbids a known
+exactly the signature's `from` set; in a generic instance, a name whose
+parameter is typed by a type formal asks nothing when the instance's type for
+it holds no reference (D290). In addition, D222 forbids a known
 independent storage origin in a result with a nonempty `from` clause when
 its type carries a reachable writable reference. The permission walk includes
 pointer and slice referents, array elements, struct fields and variant
@@ -1380,7 +1382,11 @@ parameter and module alternatives passes both as explicit arguments and
 names both in its `from` clause. Calls reconstruct those written sources;
 no body inference is introduced. A live local view records the binding it
 derives from; an `inout` or `sink` use of that binding is refused when the view
-is read before being replaced.
+is read before being replaced. A view replaced by the result of the `inout`
+call itself ends at that assignment, except where the call's recovery can
+`break` or `continue` past it (D291). A deferred call on a return or failure
+edge is checked against what is live on that edge, and no later statement is
+a use there (D292).
 Volatile reference paths remain exempt [0850].
 
 A match payload alias keeps its selected storage live even when the payload
@@ -1855,11 +1861,13 @@ Foreign failure detail is ordinary explicit state. After a documented libc
 failure indication on Darwin and FreeBSD, `hosted/io` reads errno through
 `hosted/libc`'s `errno_cell` before any other host call; on Linux it takes
 the errno from the failing system call's negative result (D279). It
-retains the exact terminal value in its system provider, exposed by
-`hosted.last_errno`. Safe interrupted open/read/write attempts may retry; completed
+retains the exact terminal value in the last-error cell the system handle
+names, exposed by `hosted.last_errno`: the process's private cell for a handle
+from `hosted.host()`, or a caller-declared `hosted.space` for one from
+`hosted.over` (D288). Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
-payloads to error atoms nor make errno a process-global Landin variable.
+payloads to error atoms nor make errno a public Landin variable.
 
 The hosted argument root belongs to `hosted/io`, which defines the public
 C-convention routine `_landin_host_initialize_arguments` with the signature
@@ -3974,7 +3982,6 @@ closed while its headline sentence is evadable.
 `negative/pointer-union-is-not-a-pointer`,
 `negative/pointer-union-match-not-exhaustive`,
 `negative/pointer-union-frame-escape`,
-`negative/r440-parser-frame-arena`,
 `negative/pointer-union-comparison`,
 `negative/pointer-union-integer-conversion`,
 `negative/pointer-union-from-an-integer`,
@@ -3982,6 +3989,10 @@ closed while its headline sentence is evadable.
 `negative/pointer-union-zeroed`,
 `negative/pointer-case-arm-is-not-an-atom`, the generated lexical and IR
 records, and the `pointer.optional` guarantee row.
+`negative/r440-parser-frame-arena` also pinned it until D288, through the
+derived parser's entries, a union returned `from` an `escaping` arena; the
+parser now takes the arena handle by value and its entries borrow nothing, and
+that fixture's L0314 is the checked `arena_over`'s refusal of frame backing.
 
 ### D206 — Null construction cannot evade the pointer union
 
@@ -4007,11 +4018,13 @@ the existing one-atom union already expresses the state. All are declined.
 
 **Pinned by** `runtime/null-pointer-dynamic-traps`,
 `runtime/null-pointer-unchecked-traps`, `runtime/null-pointer-union-call-else`,
-`negative/null-pointer-union-call-else-frame-escape`,
-`negative/r440-parser-frame-arena` and
+`negative/null-pointer-union-call-else-frame-escape` and
 `runtime/core-mem-dispose-empty`, with `negative/r440-null-pointer-folded-zero`
 and `negative/r440-null-pointer-unchecked-zero` for the static refusals of a
-folded zero and of `unchecked` construction.
+folded zero and of `unchecked` construction. `negative/r440-parser-frame-arena`
+pinned the narrowed arm's origin as well until D288, after which its L0314 is
+the checked `arena_over`'s and the derived parser's entries borrow nothing
+(D189).
 
 ### D235 — Several atoms beside a pointer store the atom's own code beside the pointer
 
@@ -10687,10 +10700,11 @@ identified the helper-side-effect path that argument omitted.
 
 **Chosen:** withdraw both builtin forms. An arena is an ordinary allocator
 value with explicit backing and extent, such as `mem.arena_over`. Ordinary
-conformance supplies allocation, optional in-place growth and free. The existing inout-receiver
-`mem.allocator` is a generic evidence contract, not itself object-safe; an
-ordinary pointer-receiver adapter permits calls through `any` without changing
-that contract. The frontend has no privileged knowledge of `core/mem`. The
+conformance supplies allocation, optional in-place growth and free. The
+inout-receiver `mem.allocator` of this decision was a generic evidence
+contract, not itself object-safe, and needed a pointer-receiver adapter to be
+called through `any`; since D288 its entries take a record handle by value,
+which D289 makes object-safe, so `any mem.allocator` needs no adapter. The frontend has no privileged knowledge of `core/mem`. The
 named refusals remain migration diagnostics pointing to this decision, not
 promises to enable these forms later. Declared names spelled `arena` remain ordinary.
 
@@ -10716,8 +10730,9 @@ requires `escaping base`: an ordinary call cannot build the provider over
 tracked frame backing. Its representation is private, so a struct literal
 cannot evade this constructor rule. The explicitly named
 `arena_over_unchecked` allows local backing when the
-caller takes responsibility for all direct and helper-held results. Their
-handles still retain the base's origin. Backing validity, exact capacity and
+caller takes responsibility for all direct and helper-held results. Since
+D288 both fill a caller-declared `mem.arena_space` and return a handle `from`
+that state and the base, so the handle retains both origins. Backing validity, exact capacity and
 explicit release remain the caller's responsibility; neither constructor
 adds a lifetime borrow to allocation results. Explicit pointer-to-integer
 round trips remain [0470]'s separate opt-out.
@@ -10725,7 +10740,10 @@ round trips remain [0470]'s separate opt-out.
 **Why not the alternatives:** W7's omitted module-store path is executable
 without returning a value, so checking only the caller block exit is
 insufficient. Retaining the allocator's mutable borrow on each result would
-reject its next allocation and defeat the ordinary allocation idiom. A new
+reject its next allocation and defeat the ordinary allocation idiom. A result
+borrowed from a D288 handle, passed `in`, would no longer lock the arena, but
+a container keeping it in its own `inout` storage would be L0314, so the
+integer conversion stays. A new
 region effect system across erased calls, callbacks and helper side effects
 would be a different semantic design, unsupported by the local origin model;
 pretending an unsafe integer conversion preserves that promise would be false.
@@ -10738,6 +10756,8 @@ explicit local opt-out, keeps the existing allocator contract honest.
 `runtime/core-mem-arena-boundaries`,
 `runtime/arena-is-an-ordinary-name`, `negative/arena-block-names-owner`,
 `negative/arena-type-names-owner`, `negative/core-arena-frame-escape`,
+`negative/r440-parser-frame-arena`, whose frame backing the checked
+`arena_over` now refuses,
 `negative/frame-origin-return`, `negative/r480-callback-frame-escape`,
 `negative/r480-helper-frame-retention`, `negative/array-reference-frame-return`,
 `negative/core-text-frame-slice-escape`, `negative/any-frame-origin-escape`,
@@ -10893,6 +10913,79 @@ indirect and generic calls, nested effects, restoration and cleanup. The
 positive derivative covers the descriptor and handle patterns shared by
 prototypes 3 and 4. Assembly and runtime evidence remain separate obligations.
 
+### D290 — A generic `from` asks nothing of a source whose instance type holds no reference
+
+**The tour said** at [0790] that a `from` clause and the body agree both ways:
+returning something derived from a parameter without naming it is an error,
+and naming a parameter it did not come from is an error too. It did not say
+what a generic signature owes a parameter typed by a type formal, which one
+instance fills with a type that carries a reference and another with a type
+that carries none.
+
+**Chosen:** in a generic instance (D138), a `from` name whose parameter's
+declared type is a type formal asks nothing of that parameter when the
+instance's type for it holds no reference: such an argument has no origin to
+supply, and the clause is compared over its other names. Where the instance's
+type holds a reference, the name binds as written and the exact comparison
+applies. A parameter of any other type keeps the exact rule, so naming a
+reference-free one is still L0316. `region.over(state, parent) -> (handle:
+region(P) from state, parent)` (D288) is the case: a pool's handle carries
+references into its backing that the region must keep, and `heap.host()`'s
+handle carries none.
+
+**The alternatives:** leaving `parent` out of the clause, which refuses every
+parent that carries a reference with L0316, because the handle then derives
+from a parameter it does not name; and relaxing the rule for every parameter,
+which lets a signature name a source it can never have, the drift [0790]
+refuses. Both are declined.
+
+**Pinned by** `runtime/generic-from-reference-free-source`, with
+`runtime/region-beside-parent` and `negative/region-release-live-handle` for
+a parent of each kind.
+
+### D291 — A view taken again through an `inout` call ends the old one at its assignment
+
+**The tour said** at [0830] that a view derived from a local locks it against
+`inout` and `sink` while the view is in use, and that the repair is to take
+the view again afterwards; [0800] extends the lock to a view lent through a
+call's `from`. When the view is taken again through an `inout` call and
+assigned to the binding that held it, `slot = slot_at(table, index)`, the call
+is an `inout` use of `table` while `slot` still holds the old view.
+
+**Chosen:** the old view ends at that assignment, so it is not in use while
+the call runs, unless the call's recovery can `break` or `continue` past the
+assignment. On such an edge the binding keeps the old view, a later read of
+it is a use, and the `inout` call is L0315.
+
+**The alternatives:** requiring a fresh binding for the view taken again,
+which refuses the repair [0830] itself gives; and ending the old view at the
+call on every edge, which lets a recovery that leaves a loop read a view whose
+source was lent away. Both are declined.
+
+**Pinned by** `runtime/view-taken-again-through-inout` and
+`negative/view-taken-again-after-break`.
+
+### D292 — A cleanup on a return or failure edge has no later statement to conflict with
+
+**The tour said** at [1100] that a `defer` runs when its block is left,
+including by a return or by declared failure, and that it names places and
+reads them then. A deferred call that takes a state `inout`, as `defer
+region.release(ledger, heap)` does (D288), is an `inout` use of that state on
+every exit, and a handle made from the state is a view of it [0830].
+
+**Chosen:** on a return or failure edge the deferred call is checked against
+what is live on that edge, and no statement after the return or failure runs
+there, so a handle used later on the fall-through path is not in use. On the
+fall-through exit the cleanup runs after the handle's last use, as it always
+did.
+
+**The alternatives:** counting every later statement in the block as a use on
+every exit, which refuses `defer release` beside an early return while the
+region is used afterwards; and a binding per handle, which still refuses it.
+Both are declined.
+
+**Pinned by** `runtime/defer-at-return-edge`.
+
 ## DECISIONS: FUNCTIONS, CALLS AND RETURNS
 
 The call convention for values too large for a register, function
@@ -10921,6 +11014,15 @@ extent from its selected target, and copies an addressed source into a fresh
 aggregate parameter slot before the body runs. D97 clears that slot directly
 for a direct `zeroed` argument. Reads therefore use
 ordinary field and array operations against independent by-value storage.
+The callee copies a record whose alignment is at least four bytes by machine
+words, not bytes, so the storage a carrier addresses must be aligned for its
+type: frame and module storage are by layout, and storage reached through a
+pointer, slice or `any` is by [0430]'s rule that alignment is the program's
+responsibility. The caller snapshots an argument before the call only when a
+later argument may write memory; the callee's copy is what keeps the value
+independent, so a write to the original during the call never reaches it.
+Pinned by `runtime/by-value-records-stay-independent` and the backend case
+`by-value parameters move by words`.
 
 **Why an internal address and defensive copy:** flattening fields would make
 one source parameter consume a target-dependent number of argument positions,
@@ -12549,7 +12651,7 @@ classified failure boundary before the repository gate can pass.
 | `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `full`, `out_of_bounds`, `empty` or `not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | allocators report `core/mem.out_of_memory`, which a caller must handle or declare; arenas reject exhaustion and unrepresentable request arithmetic before mutation, vectors check extents and growth before provider calls and preserve the old list on failure, and heap refusal, finite pool exhaustion, injected refusal and delegated inner refusal use the same channel | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
-| `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: backing validity and exact capacities remain the caller's responsibility; checked arena and counted-arena constructors refuse tracked frame backing with L0314 and private representations prevent ordinary construction around that check; their unchecked constructors expose the lifetime opt-out; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; D212 preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-arena-private-representation`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
+| `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: backing validity and exact capacities remain the caller's responsibility; checked arena constructors refuse tracked frame backing with L0314 and private representations prevent ordinary construction around that check; their unchecked constructors expose the lifetime opt-out; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; D212 preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-arena-private-representation`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
 | `allocation.reclamation` | static | 0430, 0470, 0790, 1360 | heap release and a pool free of a currently occupied exact address and extent return real live storage; pool reuse is lowest-index first, stale same-address/same-size identity is outside the guarantee, and counted free delegates once with a live count exact only for valid-free use | `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -13870,7 +13972,10 @@ or state how origin analysis sees the pair.
 **Chosen:** every entry exposed by the direct concept's distinct finite
 represented-formal-constraint/parent closure must have first runtime input parameter
 named `self`, of exact direct type `ptr T` or `ptr mut T`, where `T` is that
-entry's concept's represented formal. `inout`, `sink`, `ptr ptr T` and a
+entry's concept's represented formal. D289 admits a third form, `self: T`
+taken by value when the conformance's `T` is a record, which dispatch passes
+as that record's address carrier and which asks no mutable permission.
+`inout`, `sink`, `ptr ptr T` and a
 parameterized referent that merely contains T are not that receiver ABI. Hidden `T` may occur nowhere in another runtime
 parameter or result: a caller that knows only `any C` has no source type with
 which to supply or receive it. The concrete provider keeps that substituted
@@ -13947,7 +14052,8 @@ static flattened-table address. Dispatch loads the pair's table, loads the
 verified function position, loads the data pointer, and makes the ordinary
 indirect call with data as runtime argument one and written arguments after it.
 Concrete provider signatures may differ in the referent identity of `self`,
-but D146 proves that this erased position is uniformly one pointer carrier and
+but D146 proves that this erased position is uniformly one pointer carrier,
+a record taken by value travelling as its address carrier (D289), and
 that every remaining parameter/result has one non-hidden source identity.
 
 **The alternatives:** adding all parent table pointers to the value would break
@@ -14052,6 +14158,41 @@ selection reports L0341 instead of choosing a provider.
 represented constraints, direct/inherited collisions, distinct names and unused
 colliding closures. `runtime/generic-composed-evidence` retains the independent
 execution obligation for the unchanged parent-table ABI.
+
+### D289 — An erased entry may take a record `self` by value
+
+**The tour said** at [1390] that dispatch inserts the data pointer as the
+first argument, and D146 required every erased entry's first parameter to be
+exactly `self: ptr t` or `self: ptr mut t`. A handle is passed by value
+(D288), so every entry of the allocator and I/O concepts would have been
+refused behind `any`, or each provider would have needed a pointer-receiver
+twin of every entry.
+
+**Chosen:** an entry whose first parameter is `self: t`, taken by value, is
+object-safe when the conformance's `t` is a record. Dispatch passes the pair's
+data pointer as the record's address carrier, the one D94 gives a by-value
+aggregate argument, and the callee copies the handle from it, so the provider
+changes state only through the pointers the handle holds. A scalar `t` taken
+by value has no such carrier and is L0342. A by-value entry writes nothing
+through the pair, so it asks no mutable permission: a read-only pointer builds
+the `any`, and `any(addr host)` over an immutable binding is accepted, while
+D146's construction rule still holds for a `ptr mut t` entry. The pair still
+erases a pointer, never a value (D145), so `any(host)` of the handle itself is
+L0342. Hidden `t` still appears nowhere else in the entry, the pair carries the
+origin of its pointer operand as D146 says, and a result lent `from self`
+keeps the erased value's origin. With this, `any mem.allocator` and the four
+I/O concepts are object-safe over a record provider.
+
+**The alternatives:** pointer receivers on the handle types, which contradict
+the by-value entries a generic caller uses; compiler-generated thunks that
+load the handle and call a by-value provider, a second calling path for one
+entry; and an adapter type per concept, which gives every provider two
+conformances. All are declined.
+
+**Pinned by** `runtime/any-by-value-self`, `negative/any-self-by-value-scalar`,
+`negative/core-io-world-readonly-receiver`,
+`runtime/io-handle-beside-erased-view` and
+`runtime/diagnostic-loggers-dispatch`.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 
@@ -14686,6 +14827,15 @@ suite and `abi/r440-bindings-generated`, with
 that has to go through a generated adapter instead.
 
 ### D207 — Foreign failure detail stays in the provider
+
+D288 keeps the remembered value in a cell the handle names rather than in the
+provider value, which a callee could only change in its own copy. Handles
+from `hosted.host()` share the process's cell; `hosted.over` gives a caller,
+such as a C thread calling into Landin, a cell of its own in a declared
+`hosted.space`. The thread-local meaning the alternatives below protect is
+therefore kept by ownership, until thread-local storage exists: a thread that
+owns its cell reads only its own failures, and code that shares the
+process's cell shares its last error as it shares its descriptors.
 
 **The tour said** at [0950] to represent foreseeable conditions directly and
 at [1660] to pass host authority explicitly. Prototype 2's diagnostic sink and
@@ -16080,7 +16230,9 @@ monotonic allocator over a caller-supplied pointer and byte extent, aligning
 each successful result and refusing a result that does not fit; `core/fault`
 wraps it, or any provider, with a deterministic budget and public counters so
 exhaustion and cleanup paths have executable evidence (D274). The returned
-allocator handle retains `from base`; returning one over frame storage is L0314. Freeing
+allocator handle retains `from base`; returning one over frame storage is L0314.
+Since D288 `arena_over` also fills a caller-declared `mem.arena_space` and the
+handle is `from state, base`, so returning it past that state is L0314 too. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is the explicit-authority replacement for [0820]'s formerly promised
@@ -16182,7 +16334,11 @@ bridge: the libc route it chose is now the ordinary `extern(c)` declarations of
 `hosted/libc`, and the argument root is `hosted/io` source. The provider
 contracts below are unchanged. On Linux, D279 replaces the libc route:
 `hosted/io` makes system calls through `hosted/linux`, and D280 links no C
-library by default.
+library by default. D288 makes both providers handles: every entry takes
+`self: provider` by value, the memory provider's mutable state is a
+caller-declared `io.memory_space`, and the system provider's last errno is in
+a cell its handle names, the process's or a caller's `hosted.space` (D207);
+the paragraphs below say where.
 
 **The tour and prototypes said** that hosted arguments begin in C `argc` and
 `argv` form [1650], that the entry is where a root capability is minted
@@ -16209,10 +16365,14 @@ not disguise a source-free global pointer with a false origin annotation.
 Every entry of the four `core/io` concepts has D146's exact first `self` pointer. Open, identity
 comparison, close, read,
 `write` and `write_some` use `ptr mut provider`; standard streams, argument
-count and argument lookup use `ptr provider`. The system provider is ordinary composed conformance
+count and argument lookup use `ptr provider`. D288 replaces both with
+`self: provider` by value, a record handle D289 dispatches from the erased
+pointer. The system provider is ordinary composed conformance
 evidence and may be erased behind `any world`; generic wrappers retain the
 same operations for statically known providers. A read-only provider pointer
-cannot construct an erased world containing the mutable entries. The opaque
+could not construct an erased world containing the mutable entries; since no
+by-value entry writes through the pair, a read-only pointer to a handle now
+builds one, and `any` of the handle value itself is L0342. The opaque
 file value remains one scalar descriptor whose interpretation belongs to its
 provider; `sink` on close consumes only the named handle place, so an earlier
 copy can still attempt a second close.
@@ -16276,7 +16436,9 @@ The bounded `core/io.memory` provider implements the same capability from
 caller-supplied file descriptors, content buffers, argument descriptors and
 standard-output/error buffers. It makes no host calls and allocates no storage.
 `memory_over` retains those four supplied slices through its result's `from`
-clause. Files are existing-only, selected by the first matching name; opening
+clause; since D285 and D288 it takes a fifth, the standard-input bytes, and a
+caller-declared `io.memory_space` `inout`, which it fills, and returns the
+opaque `io.memory` handle `from` that state and all five. Files are existing-only, selected by the first matching name; opening
 resets the cursor, and opening for writing truncates only after permission,
 open-state and capacity checks. Construction preserves the supplied file
 state. A file-table index is a provider-local handle, with no generation or
@@ -16295,7 +16457,10 @@ Failure schedules name one-based read, write-chunk and close counts; zero
 disables injection. A valid close clears the open state before its injected
 failure, allowing ordinary manual cleanup to consume the handle once.
 
-The memory representation is public composition. Clients preserve initialized
+The memory representation is public composition; since D288 that public part
+is the `io.memory_space` state, whose limits, failure schedules and counters
+the caller reads and sets while the handle lives, and the file records it
+supplies. Clients preserve initialized
 lengths and capacities, leave headroom for checked operation-counter increments,
 and keep both descriptor tables and all nested file-name, content and argument
 backing valid. Transfer source and destination ranges must not overlap. These
@@ -16303,7 +16468,8 @@ are caller obligations, not ownership or transitive alias guarantees. Argument
 lists exclude the executable name; `argument` returns a view `from self`.
 `written` and `written_errors` take the memory provider `inout` and return only
 the initialized output prefix `from` that provider, retaining the ordinary
-local frame-escape and live-view checks.
+local frame-escape and live-view checks; since D288 they take the handle `in`
+and return the prefix `from` it.
 
 An `argument` deliberately remains the foreign-shaped `ptr u8` plus byte
 length used by both providers; it is neither a `cstring` nor a fabricated
@@ -16422,7 +16588,11 @@ entry is written before `stored` grows, and `note_at` checks that prefix.
 `streaming` retains a pointer to an erased `core/io.writer` and a borrowed file,
 not a system-provider pointer. Its construction result derives from both
 stored addresses, so neither frame-local world-pair storage nor frame-local
-stream storage may escape through it. It writes `W:` or `E:`, the decimal byte
+stream storage may escape through it. Since D288 `diag.stream(host: any
+io.writer, where_to: io.file)` takes both by value: the logger holds a copy of
+the erased pair and the file identifier, and its result is `from host`, so it
+keeps the origin of the handle binding the pair was built from and cannot
+outlive a frame-local one. It writes `W:` or `E:`, the decimal byte
 position, `:`, and the message bytes as the note arrives through ordinary
 dynamic world dispatch. Each write propagates `io_failed`; the error count is
 updated before delivery is attempted, so `failed` describes what the logger
@@ -16532,7 +16702,7 @@ The pointer half is settled by evidence rather than by scheduling. [0810] says
 the three primitives are the cut that lets an allocator hand out storage
 pointing into itself without the storage borrowing it. `core/mem`'s
 `arena_alloc` does exactly that today and reaches none of them: it computes
-`usize(state.base) + offset` and converts the sum back with `ptr`, which is
+`usize(self.base) + offset` and converts the sum back with `ptr`, which is
 [0470]'s integer-to-pointer conversion. That conversion is already the cut,
 already classified — the `pointer.integer-origin` guarantee row calls it a
 non-guarantee with four fixtures behind it — and already in the open, written
@@ -16875,7 +17045,11 @@ the requested slot count may not exceed it. Construction initializes the active
 records only after every configuration check succeeds. The caller reserves
 those records for the provider while it is in use. Its result's `from base,
 bookkeeping` clause retains both when the actuals have tracked origins, and a
-local metadata slice cannot escape beside a named backing parameter. The
+local metadata slice cannot escape beside a named backing parameter. Since
+D288 `pool.over` also takes a caller-declared `pool.space` `inout`, which holds
+the geometry and counters and is changed only after every check succeeds, and
+returns the `pool.provider` handle `from state, base, bookkeeping`; the
+counters read the handle. The
 module imports no heap and has no fallback.
 
 Each `pool.slot` stores a `usize` requested size and a `usize` free-heap
@@ -16887,7 +17061,8 @@ slot size equal to that marker. Such a slot would require a base address of
 zero to fit in the target address space, and [1975] forbids constructing a
 non-null pointer there. Zero-slot pools may still use that size. A zero-size
 request stores zero and still occupies a slot. The single caller slice and
-the `from base, bookkeeping` origin clause remain the same.
+the `from base, bookkeeping` origin clause remain the same, with D288's
+`state` before them.
 
 The existing whole-value origin algebra still applies: Untracked is an OR.
 If one constituent is deliberately made untracked, such as a base produced by
@@ -16925,13 +17100,17 @@ transactional map rehash that holds three old and three replacement extents
 uses six records. The implementation has no unrolled boolean ceiling and the
 capacity is not an arbitrary library constant.
 
-`core/fault.injector(A)` is a separate generic wrapper for any mutable
-`A is mem.allocator`. `new` takes an ordinary nonescaping `ptr mut A`
-and returns `injector(A) from inner`: the returned value retains the actual's
-origin without [1880] requiring that actual itself to have an origin
-independent of the call. The wrapper therefore accepts local heap and pool
+`core/fault.injector(A)` is a separate generic wrapper for any
+`A is mem.allocator`. `new` took an ordinary nonescaping `ptr mut A`
+and returned `injector(A) from inner`. D288 replaces it with `fault.over(inout
+state: fault.space, inner: A, allowed_attempts) -> (handle: injector(A) from
+state, inner)`: the injector holds a copy of the inner handle, and its budget
+and counters live in the caller's `fault.space`. The returned value retains
+the actuals' origins without [1880] requiring the inner actual itself to have
+an origin independent of the call. The wrapper therefore accepts local heap and pool
 providers for local use, while returning such a wrapper past the inner
-provider's frame remains L0314. An immutable provider pointer is L0340.
+provider's frame or its own state remains L0314. An immutable state binding is
+L0303, where an immutable provider pointer was L0340.
 
 The budget counts future allocation calls allowed to reach the inner provider.
 It is consumed before delegation, so an inner failure consumes one attempt;
@@ -16944,7 +17123,7 @@ duplicate frees are still delegated, and an inner rejection cannot be learned
 or reflected in the live count.
 
 The parameterized conformance `(A: type is mem.allocator) counted(A) is
-mem.allocator` is ordinary evidence. Neither provider changes `mem.allocator`,
+mem.allocator`, `fault.injector(A)` since D274, is ordinary evidence. Neither provider changes `mem.allocator`,
 stores a provider in a container, adds an ownership type, or creates a new ABI.
 
 **The alternatives:** four unrolled occupancy booleans, a larger magic slot
@@ -16955,7 +17134,7 @@ but the admitted initialized mutable slice already exposes caller storage,
 runtime count and capacity without generating a family of provider types.
 Layering deterministic refusal into the monotonic arena was declined because
 it cannot provide real reclamation or wrap heap behavior. Marking the inner
-pointer `escaping` was declined because [1880] would unnecessarily exclude a
+provider `escaping` was declined because [1880] would unnecessarily exclude a
 local actual even when only the returned wrapper retains it.
 
 **Pinned by** `runtime/r420-pool-provider`,
@@ -17253,17 +17432,20 @@ argument table to be a diagnostics destination.
 
 **Chosen:** `core/io` declares four concepts over one provider type.
 `writer` is `write` and `write_some`; `reader` is `read`; `files` is
-`open_read`, `open_write`, `same_file` and `close`; `process` is `out`, `err`,
-`argument_count` and `argument`. `world` is the empty composition of all four
+`open_read`, `open_write`, `same_file` and `close`; `process` is `input`
+(D285), `out`, `err`, `argument_count` and `argument`. `world` is the empty composition of all four
 [1340], so a root that has everything still passes one `any io.world` and
 `world.write` on it reaches the writer entry through D147's flattened table.
 Each free function in `core/io` is constrained by the narrowest concept it
 calls. `core/io.memory` and `hosted/io.system` conform to all five, the fifth
-with an empty body. `core/diag.stream` takes `ptr any io.writer`. Because `any C`
+with an empty body. `core/diag.stream` takes `ptr any io.writer`, and since
+D288 takes `any io.writer` by value. Because `any C`
 has direct-concept identity (D145), an erased world is not an erased writer;
-a root builds the writer from the same provider pointer in typed context, and
+a root builds the writer from the same provider pointer in typed context, the
+address of the same handle binding since D288, and
 a routine holding only `any io.world` lends its writer through
-`io.writer_of`, a private adapter that forwards both entries. This is the
+`io.writer_of`, a private adapter that forwards both entries; since D288 it
+takes the erased world by value, holds a copy of it and is `from` it. This is the
 library case E2 waited for, and it confirms [1260]: the concept split rather
 than widened.
 
@@ -17290,7 +17472,8 @@ library grew three conventions: `new_list`, `new_map`, `new_tree`,
 `mem.raw_empty` for two conditions.
 
 **Chosen:** a module's principal type is constructed with `new`, a view over
-caller-supplied bytes or records with `over`, and a container's storage is
+caller-supplied bytes or records with `over`, which since D288 also makes a
+service's handle from the state its caller declares, and a container's storage is
 given back with `release`. `core/mem` keeps `new`/`delete` for one allocated
 item and `new_bytes`/`delete_bytes` for a byte buffer; its raw-storage pop is
 `withdraw`. Accessors are unprefixed unless one module holds several types,
@@ -17432,7 +17615,7 @@ source.
 `core/small` is `core/spill`, whose type is `spill.list`, and `core/failing` is
 `core/fault`, whose type is `fault.injector`. `core/mem.failing`, a bump arena
 with a budget that counted only successes, is withdrawn: `fault.new` over
-`mem.arena_over` is the one injector, and its budget spends a permit on every
+`mem.arena_over`, `fault.over` since D288, is the one injector, and its budget spends a permit on every
 call that reaches the provider, including one the arena refuses.
 
 A name says what the declaration does. `mem.reserve`, a view over caller bytes,
@@ -17547,7 +17730,8 @@ returning `isize`, `close`, `strlen`, `malloc` returning an `allocation`
 union whose empty arm is the atom `no_allocation`, `free`, `stat`, and
 `errno_cell`, linked to `__errno_location` on Linux and to `__error` on Darwin
 and FreeBSD by `fixed if compiler.os`, which `hosted/io` reads on Darwin and
-FreeBSD. The errno constants `eperm`, `enoent`, `eintr`, `eacces` and `erofs`, the flags
+FreeBSD. The errno constants `eperm`, `enoent`, `eintr`, `eacces`, `erofs` and
+`enotdir` (D287), the flags
 `o_rdonly` and `o_wronly`, the per-system `o_creat` and `o_trunc`, `timespec`,
 the per-system `file_status` record and `file_status_size` are source
 declarations selected by `compiler.os` and the C ABI and checked against each
@@ -17557,7 +17741,8 @@ creation mode stays in `hosted/io` as provider policy. On Linux `hosted/io`
 and `hosted/heap` use `hosted/linux` instead (D279, D282); every `hosted/libc` declaration is
 bodyless, so a program naming none of them needs no C library.
 
-`hosted/io` holds the argument root in two module cells and defines in source
+`hosted/io` holds the argument root in two module cells, and since D288 the
+process's last-error cell in a third, and defines in source
 the public C routine `_landin_host_initialize_arguments`, whose signature is
 `(count: i32, escaping values: ptr ptr u8) -> none`. D208's rules are unchanged: the first
 nonnegative-count, non-null-table call establishes the root without copying;
@@ -17872,3 +18057,204 @@ crash rather than a refusal.
 **Pinned by** `runtime/linux-level-check` at the default level,
 `x86-64-v2`, `x86-64-v3` and `armv8.1-a`.
 
+### D285 — Standard input is the process concept's third stream
+
+**The tour said** at [1660] that `io.process` holds the standard streams and
+the argument table, and D268 gave it `out`, `err`, `argument_count` and
+`argument`: a program could write to its standard streams and not read from
+one. `io.out`, `io.err` and `io.argument_count` took the
+provider by value while `io.argument_at` took a pointer, two forms for the
+functions of one concept.
+
+**Chosen:** `process` gains `input: (self: provider) -> (stream: file)`, taking
+the handle by value as every I/O entry does (D288), read through `reader` like
+any opened file: zero from a nonempty read is the end of input. `hosted/io`
+answers descriptor 0. `core/io.memory` answers handle 0 over the caller's
+`input` bytes, the argument `memory_over` takes after the argument table;
+the `read_limit` and `fail_read_at` of its `io.memory_space` apply to it as to
+a file, and closing it ends it. The five free functions `io.input`, `io.out`,
+`io.err`, `io.argument_count` and `io.argument_at` take the handle `in` as
+`host: provider`, as `io.read`, `io.write` and the `files` functions do, so a
+caller always passes the handle, `io.write(host, io.out(host), ...)`, and
+nothing is locked; `argument_at` lends its result `from host`, and two
+arguments lent from one handle are live at once. A
+runtime or ABI fixture names the file its program reads as standard input
+with `stdin:`, relative to the fixture and below it; without the key every
+lane gives the program an empty input, never the harness's own. A fixture
+that reads standard input is hosted: firmware refuses it by name (D267) and
+the memory provider runs the same routine there.
+
+**The alternatives:** `in`, which [1760] reserves; `stdin`, which keeps the
+C prefix `out` and `err` dropped; `standard_input`, long beside them; a
+separate concept, when D268 put the standard streams in `process`; free
+functions taking `ptr provider`, which makes a caller write `addr host` for a
+handle and `host` for the write beside it; free functions taking `inout state:
+provider`, which locks the provider while an argument lent from it lives, so
+a second argument or a write beside the first is refused (D288); `stdin:` relative to the
+harness's directory as `run_args` is, or inline bytes in the metadata; and
+inheriting the harness's input, which waits on a terminal until the time
+limit.
+
+**Pinned by** `runtime/word-count`, `runtime/word-count-empty`,
+`runtime/word-count-no-input`, `runtime/word-count-closed-input`,
+`runtime/word-count-memory`, `runtime/library-io-writer-adapter`,
+`runtime/first-program`, `runtime/io-handle-lends-two-arguments`, the
+fixture suite's `profiles are explicit` and the
+platform suite's `native standard input is fed from a file`.
+
+### D286 — Decimals of every unsigned width, over bytes
+
+**The tour said** nothing. `core/text` wrote and parsed decimals only as
+`u32`, and parsed only `utf8`, so a directory listing's `u64` sizes
+and a number read from input as bytes had no library form, and programs in
+the tree each wrote their own.
+
+**Chosen:** `text.write_u64` and `text.write_usize` have `write_u32`'s
+shape: they count the digits by division and report `no_space` before
+writing. `text.parse_u32`, `parse_u64` and `parse_usize` read decimal digits
+from `[]u8` and report `invalid_number` or `number_overflow`, whichever the
+scan from the left meets first; `usize` is the target's width, so firmware
+parses 32 bits. `to_u32` over `utf8` parses the text's bytes. `core/diag`'s
+position writer, the derived hosted program and the fizzbuzz and fannkuch
+writers use them; the configuration parser keeps its recursive digit parser,
+which the debugger sessions stop in.
+
+**The alternatives:** `to_u64` and `to_usize` over `utf8`, which makes a
+caller validate digits as text first; a `_bytes` suffix, as the opens have,
+which reads as a conversion to bytes; one routine generic over the width,
+which needs integer arithmetic over a type parameter the language does not
+have; and writing `usize` through `u64`, which puts 64-bit division into a
+32-bit image's diagnostics.
+
+**Pinned by** `runtime/core-text-decimal-widths` on every target,
+`runtime/word-count-memory`, `runtime/fizzbuzz`,
+`runtime/benchmark-game-fannkuch-redux`, `runtime/derived-hosted-memory`,
+`runtime/diagnostic-loggers-dispatch` and `runtime/library-shared-diag`.
+
+### D287 — A path through a file is not found
+
+**The tour said** at [1660] that a provider maps the host's errors to
+payload-free atoms and keeps the detail, and D153 mapped ENOENT to
+`not_found` and EPERM, EACCES and EROFS to `no_access`. ENOTDIR, a path
+whose directory part names a file, fell through to `io_failed`, though
+nothing exists at that path either.
+
+**Chosen:** ENOTDIR, 20 on Linux, Darwin and FreeBSD, is `not_found` from
+`open_read` and `open_write`, and an output path that meets it is absent, so
+`same_file` answers false. `last_errno` still holds 20 for a caller that
+needs the difference.
+
+**The alternatives:** keeping `io_failed`, which tells a caller the device
+failed when the path is simply wrong; and a `not_a_directory` atom, which
+widens every `files` signature for a distinction `last_errno` already
+keeps.
+
+**Pinned by** `runtime/hosted-io-not-a-directory` on every hosted target.
+
+### D288 — A service is a handle, made from state its caller declares
+
+**The tour said** at [1360] that an allocator is threaded rather than stored
+and wrote its entries `inout a: provider`, at [1660] that Io is a concept a
+root passes on, at [0790] that a result names what it borrows and at [0800]
+and [0830] that a binding lent to a live view is locked against `inout`. A
+service taken `inout` was therefore locked while anything derived from it
+lived: two arguments lent from one Io could not be held at once, a query
+could not be made beside an erased view built from the same provider, and a
+region could not allocate from its parent while the parent was used beside
+it. D153 had the four I/O concepts take `ptr provider` or `ptr mut
+provider`, so callers wrote `addr host`; `mem.arena_over` and
+`io.memory_over` returned the provider's state itself; and the region and the
+injector held their parent through a pointer the caller supplied,
+`region.new(addr heap)` and `fault.new(addr inner, n)`.
+
+**Chosen:** a value that is edited, a container or a bounded log, stays
+`inout`. A service is a handle: a small copyable record, passed `in`, that
+refers to its state through a pointer and whose lifetime is checked once,
+where it is made from that state. `mem.allocator`'s `alloc`, `grow` and
+`free` and every entry of `core/io`'s `reader`, `writer`, `files` and
+`process` take `self: provider` by value, and a conformance changes state
+through the handle. Free functions take `memory: provider` for an allocator
+and `host: provider` for I/O, passed `in`, and `core/vec`, `core/map`,
+`core/tree` and `core/spill` take `memory: provider`; a call is spelled as
+before.
+
+Caller-owned state is a type the caller declares `zeroed`; `over` takes it
+`inout`, fills it and returns the handle `from` it. `mem.arena_space` and
+`mem.arena` have `arena_over(inout state, escaping base, size) -> (handle:
+arena from state, base)` and `arena_over_unchecked` with a plain `base`;
+`pool.space` and `pool.provider` have `pool.over(inout state, base, extent,
+slot_size, slot_count, slot_alignment, bookkeeping)`, which reports
+`mem.out_of_memory` before changing the state; `fault.space` and
+`fault.injector(P)` have `fault.over(inout state, inner, allowed_attempts)`;
+`region.space(fixed capacity)` and `region.region(P)` have `region.over(inout
+state, parent)` and `region.release(inout state, parent)`, a capacity of zero
+growing the ledger through the parent and a positive one holding that many
+records in the state; and `io.memory_space` and `io.memory` have
+`memory_over(inout state, files, arguments, input, output, errors)`.
+`io.memory_space` is public, so its limits, failure points and counters may be
+read and set while the handle lives; the handles are opaque. A state type holds
+only scalars, because `zeroed` has no image for a pointer, a slice or a pointer
+union (L0328), so a reference the caller supplies lives in the handle. Since
+the handle is `from` its state, returning it past that state is L0314, and
+`release`, which takes the state `inout`, is L0315 while the handle is still
+used; using the handle is an `in` use and locks nothing.
+
+A provider stacked on another holds a copy of the other's handle: the region,
+the injector, `io.writer_of`'s lent writer, `writer_of(host: any world) ->
+(adapter: lent_writer from host)`, and `diag.stream(host: any io.writer,
+where_to: io.file) -> (result: streaming from host)`, which takes both by
+value. `region.release` takes the parent again because a zeroable state cannot
+hold the parent's handle (L0328), and keeping the parent in caller state
+through an `escaping` parameter would refuse every frame-local parent with
+L0314. The `diag.log` concept keeps `self: ptr mut logger`,
+because a bounded log is an edited value. Process-wide state belongs to the
+process, so its handles borrow nothing and are bound without `mut`:
+`hosted.host()` returns a handle holding the argument table, its count and
+the process's last-error cell, `heap.host()` is unchanged, and the Linux
+heap's size classes are module state (D282). An erased capability is built
+from the address of a handle binding, `any(addr host)`, which D289
+dispatches; an immutable binding suffices.
+
+The last error is the one value the system provider writes on behalf of its
+caller, so the handle names the cell it records into, `failure: ptr mut i32`,
+and `hosted.last_errno(host)` reads that cell. Every handle from
+`hosted.host()` shares the process's cell, a private module `mut` of
+`hosted/io`. `hosted.over(inout state: hosted.space) -> (handle: system from
+state)` fills a caller-declared, zeroable `hosted.space` holding one `failure:
+i32` and returns a handle that records its last error there instead, for a C
+thread calling into Landin or a library that keeps its own detail. Either
+handle shares the process's arguments and descriptors, and either traps before
+the argument root exists. D207's thread-local meaning is therefore kept by
+ownership until thread-local storage exists: a thread over its own cell reads
+only its own failures.
+
+An allocation still borrows nothing from its allocator: [0810]'s integer
+conversion is kept. A block returned `from self` and kept in a container's
+`inout` storage would be L0314, and making the handle `escaping` to allow it
+would refuse every handle over frame-local state.
+
+**The alternatives:** `inout` providers, which refuse the three programs above.
+`ptr` providers, which make every caller write `addr host` for a service it
+holds by value. A parent stored in the state, which needs `escaping` and so
+refuses a frame-local parent with L0314. A fourth parameter convention, or
+lending from an `in` parameter, either of which lets reads through while two
+writes through one provider still collide. State written into the caller's
+backing bytes, which the region, the injector and the memory world do not
+have. Making the state in one call and taking its handle in a second, which
+leaves state without a handle between them and doubles every constructor.
+For the last error: one process cell and no other, which reverses D207 and
+mixes the failures of C threads; a declared cell behind every handle, which
+loses the one-line `hosted.host()`; and a field in the handle value itself,
+where a write in the callee's copy is lost.
+
+**Pinned by** `runtime/io-handle-lends-two-arguments`,
+`runtime/io-handle-beside-erased-view`, `runtime/region-beside-parent`,
+`negative/handle-outlives-state`, `negative/region-release-live-handle`,
+`negative/core-fault-needs-mutable-inner` for an immutable state,
+`negative/core-io-world-readonly-receiver`,
+`negative/core-fault-frame-escape`, `negative/r480-region-frame-provider`,
+`negative/r440-parser-frame-arena`, `abi/r440-native-startup-initialized`,
+`runtime/diagnostic-loggers-dispatch`,
+`negative/core-diag-frame-world-escape`, and for the last error
+`abi/r440-errno-thread-local` on Darwin and FreeBSD,
+`runtime/r440-errno-detail` and `runtime/hosted-io-not-a-directory`.

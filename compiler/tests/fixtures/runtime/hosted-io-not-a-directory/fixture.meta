@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the hosted provider reports a path through a file that is not a directory as not_found, as it does a missing path, for reading and for writing, keeps ENOTDIR or ENOENT as last_errno, and finds neither the same file as an existing input
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

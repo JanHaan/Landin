@@ -214,6 +214,21 @@ class ProbeFailures(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'inventory disagrees'):
                     inventory()
 
+    def test_a_fixture_reading_standard_input_never_executes(self):
+        import shutil
+        import backend_corpus
+        from unittest.mock import patch
+        self.assertEqual(backend_corpus.inventory()['runtime/word-count']['mode'], 'refuse')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'cortex-m'
+            shutil.copytree(backend_corpus.COUNTERPARTS, root)
+            record = json.loads((root / 'corpus.json').read_text())
+            record['fixtures']['runtime/word-count'] = {'mode': 'execute'}
+            (root / 'corpus.json').write_text(json.dumps(record))
+            with patch('backend_corpus.COUNTERPARTS', root):
+                with self.assertRaisesRegex(RuntimeError, 'cannot execute on firmware'):
+                    backend_corpus.inventory()
+
     def test_corpus_hashes_compiler_once_and_direct_fixture_retains_digest(self):
         import backend
         import backend_corpus

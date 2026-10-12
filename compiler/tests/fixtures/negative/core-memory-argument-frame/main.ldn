@@ -7,7 +7,8 @@ bad: () -> (value: io.argument) ! io.no_argument =
     files: []mut io.memory_file = []
     output: []mut u8 = []
     errors: []mut u8 = []
-    mut state := io.memory_over(files, args[0..<1], output, errors)
-    world: any io.world = any(addr state)
+    mut space: io.memory_space = zeroed
+    memory := io.memory_over(space, files, args[0..<1], "", output, errors)
+    world: any io.world = any(addr memory)
     value = try world.argument(0)
 end bad

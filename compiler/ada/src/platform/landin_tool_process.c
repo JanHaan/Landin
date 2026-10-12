@@ -15,7 +15,8 @@
 extern char **environ;
 
 int landin_tool_capture(char *path, size_t capacity);
-int landin_tool_start(char *const args[], int capture, int errors, int *child);
+int landin_tool_start(char *const args[], int input, int capture, int errors,
+                      int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
 
@@ -38,7 +39,10 @@ int landin_tool_capture(char *path, size_t capacity)
     return mkstemp(path);
 }
 
-int landin_tool_start(char *const args[], int capture, int errors, int *child)
+/* A negative input inherits the caller's standard input; otherwise the
+   descriptor becomes the child's. */
+int landin_tool_start(char *const args[], int input, int capture, int errors,
+                      int *child)
 {
     posix_spawnattr_t attributes;
     posix_spawn_file_actions_t actions;
@@ -67,6 +71,11 @@ int landin_tool_start(char *const args[], int capture, int errors, int *child)
         else
             errors = error_copy;
     }
+    if (error == 0 && input >= 0)
+        error = posix_spawn_file_actions_adddup2(&actions, input, STDIN_FILENO);
+    if (error == 0 && input > STDERR_FILENO && input != capture
+        && input != errors)
+        error = posix_spawn_file_actions_addclose(&actions, input);
     if (error == 0)
         error = posix_spawn_file_actions_adddup2(&actions, capture, STDOUT_FILENO);
     /* A negative error descriptor requests the original merged stream. */

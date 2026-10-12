@@ -4,7 +4,9 @@ import core/pool
 
 fixed_provider: type = pool.provider
 
-bad: () -> (state: fault.injector(fixed_provider)) ! mem.out_of_memory =
+bad: (inout space: fault.space)
+     -> (counted: fault.injector(fixed_provider) from space)
+     ! mem.out_of_memory =
     mut words: [64]u8 = zeroed
     mut records: [1]pool.slot = zeroed
     base: ptr mut u8 = addr words[0]
@@ -13,19 +15,22 @@ bad: () -> (state: fault.injector(fixed_provider)) ! mem.out_of_memory =
     slot_size: usize = 64
     slot_count: usize = 1
     alignment: usize = 8
-    mut inner := try pool.over
-        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+    mut inner_space: pool.space = zeroed
+    inner := try pool.over
+        (inner_space, base, extent, slot_size, slot_count, alignment,
+         bookkeeping)
     attempts: usize = 1
-    state = fault.new
-        (inner_provider: fixed_provider, inner: addr inner,
+    counted = fault.over
+        (inner_provider: fixed_provider, state: space, inner: inner,
          allowed_attempts: attempts)
 end bad
 
 public main: () -> (code: i32) =
-    state: fault.injector(fixed_provider) = bad() else (problem)
+    mut space: fault.space = zeroed
+    counted: fault.injector(fixed_provider) = bad(space) else (problem)
         _ = problem
         code = 0
         return
     end
-    code = i32(fault.remaining(state))
+    code = i32(fault.remaining(counted))
 end main

@@ -1,0 +1,7 @@
+class: negative
+summary: a by-value self whose provider is not a record is not usable behind any
+program: main.ldn
+status: 1
+codes: L0342
+constructs: 1230, 1370, 1380, 1390
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

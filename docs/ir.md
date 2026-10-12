@@ -248,7 +248,18 @@ carriers rather than becoming large scalar values. An internal address used
 to pass an aggregate is distinct from a source-language pointer. In
 particular, passing a value by an address carrier does not silently change
 the source operation into an alias: the receiving routine copies the
-aggregate where the calling contract requires it. A direct `zeroed` internal
+aggregate where the calling contract requires it. The caller takes a snapshot
+of its own only when a later argument may write storage, as a call or a
+statement-bearing expression may; arguments that only read, form values or
+trap cannot change the bytes before the receiving routine copies them. A
+carrier addresses storage aligned for the parameter's shape: frame and module
+storage by their layout, and storage reached through a pointer, slice or `any`
+because [0430] makes a pointer's alignment the program's obligation. Each
+backend therefore moves an aligned parameter into its fresh slot, or clears
+it, by machine words, and keeps byte transfers for a byte-aligned extent.
+An aggregate result's hidden address is formed from the caller's own storage
+in the same way. Ordinary copies through runtime addresses keep their
+conservative forms. A direct `zeroed` internal
 aggregate argument instead carries scalar zero in the same argument position;
 the callee clears its own complete shaped parameter slot. Stored values still
 carry addresses and are copied. C ABI arguments retain caller materialization
@@ -291,7 +302,12 @@ An `any C` value packages an object with evidence for concept `C`, allowing
 runtime selection. The IR retains the represented shape and the relationship
 between the selected function and its receiver. Verification checks that
 relationship; an erased call cannot freely pair a function from one
-projection with an unrelated receiver.
+projection with an unrelated receiver. The receiver is the object's address
+whether the entry takes `self` as a pointer or takes a record by value: an
+aggregate parameter already travels as the address of its storage, which the
+receiving routine copies, so the erased signature replaces that parameter
+with the same address word and the verifier holds it to the represented
+record.
 
 Declared failure is separate from ordinary results. A call can have a
 failure slot, and a failure test selects the subsequent control flow. A

@@ -25,6 +25,7 @@ package body Landin.Backend.RiscV is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Scalar_Size;
    use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
@@ -461,6 +462,10 @@ package body Landin.Backend.RiscV is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
+      procedure Move_Words
+        (Bytes : Landin.Targets.Byte_Count;
+         Width : Landin.Targets.Byte_Count;
+         Copy  : Boolean);
 
       procedure Put (Line : String) is
       begin
@@ -641,6 +646,52 @@ package body Landin.Backend.RiscV is
             Emit ("bnez x7, " & Loop_Label);
          end if;
       end Zero_Bytes;
+
+      --  A by-value parameter's transfer from its carrier at x6, or its
+      --  clear, into its fresh slot at x5: both aligned to Width, four or
+      --  eight bytes, over a whole number of Width units.  Up to four
+      --  units move unrolled; a longer extent moves one per iteration.
+      procedure Move_Words
+        (Bytes : Landin.Targets.Byte_Count;
+         Width : Landin.Targets.Byte_Count;
+         Copy  : Boolean)
+      is
+         Load : constant String := (if Width = 8 then "ld" else "lw");
+         Store : constant String := (if Width = 8 then "sd" else "sw");
+         Loop_Label : constant String := Fresh;
+         Units : constant Landin.Targets.Byte_Count := Bytes / Width;
+      begin
+         if Units <= 4 then
+            for Unit in 0 .. Units - 1 loop
+               declare
+                  Where : constant String := Trimmed
+                    (Landin.Targets.Byte_Count'Image (Unit * Width));
+               begin
+                  if Copy then
+                     Emit (Load & " x28, " & Where & "(x6)");
+                     Emit (Store & " x28, " & Where & "(x5)");
+                  else
+                     Emit (Store & " zero, " & Where & "(x5)");
+                  end if;
+               end;
+            end loop;
+            return;
+         end if;
+         Immediate ("x7", Pattern (Units));
+         Put (Loop_Label & ":");
+         if Copy then
+            Emit (Load & " x28, 0(x6)");
+            Emit (Store & " x28, 0(x5)");
+            Emit ("addi x6, x6, " & Trimmed
+              (Landin.Targets.Byte_Count'Image (Width)));
+         else
+            Emit (Store & " zero, 0(x5)");
+         end if;
+         Emit ("addi x5, x5, " & Trimmed
+           (Landin.Targets.Byte_Count'Image (Width)));
+         Emit ("addi x7, x7, -1");
+         Emit ("bnez x7, " & Loop_Label);
+      end Move_Words;
 
       Float_Comparison : Boolean := False;
 
@@ -3365,13 +3416,34 @@ package body Landin.Backend.RiscV is
                           Whole_Clear_Extent
                             ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
                              Landin.IR.No_Path_Steps);
+                        Size : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
+                        Width : Landin.Targets.Byte_Count := 1;
                      begin
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Slot, Facts, Size, Alignment);
+                        --  The carrier addresses storage aligned for this
+                        --  shape (docs/ir.md) and the slot is fresh, so an
+                        --  aligned whole-unit extent moves by words.
+                        if Alignment >= 8 and then Bytes mod 8 = 0 then
+                           Width := 8;
+                        elsif Alignment >= 4 and then Bytes mod 4 = 0 then
+                           Width := 4;
+                        end if;
                         Frame_Address (Slot_Offset (Layout, Slot), "x5");
                         Emit ("beqz x6, " & Zero_Label);
-                        Copy_Bytes (Bytes);
+                        if Width > 1 then
+                           Move_Words (Bytes, Width, Copy => True);
+                        else
+                           Copy_Bytes (Bytes);
+                        end if;
                         Emit ("j " & Done_Label);
                         Put (Zero_Label & ":");
-                        Zero_Bytes (Bytes);
+                        if Width > 1 then
+                           Move_Words (Bytes, Width, Copy => False);
+                        else
+                           Zero_Bytes (Bytes);
+                        end if;
                         Put (Done_Label & ":");
                      end;
                   else

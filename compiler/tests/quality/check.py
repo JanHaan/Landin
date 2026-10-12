@@ -42,6 +42,10 @@ def fixture_configuration(name: str) -> dict:
         "root": (fixture / metadata["root"].strip()).resolve() if rooted else None,
         "expected_status": int(metadata["status"]),
         "run_args": tuple(shlex.split(metadata.get("run_args", ""))),
+        # The file `stdin:` names below the fixture, or None for an empty
+        # standard input, as every runtime lane gives one.
+        "stdin": (fixture / metadata["stdin"].strip()
+                  if "stdin" in metadata else None),
         "expected_output": ((fixture / metadata["run_expect"].strip()).read_bytes()
                             if "run_expect" in metadata else b""),
         # Runtime fixture arguments are relative to the Ada harness directory.
@@ -52,12 +56,16 @@ def fixture_configuration(name: str) -> dict:
 def execute_measurement(destination: Path, *, expected_status: int,
                         run_args: tuple[str, ...] = (),
                         expected_output: bytes = b"",
-                        execution_cwd: Path | None = None) -> dict:
+                        execution_cwd: Path | None = None,
+                        stdin: Path | None = None) -> dict:
     command = [str(destination), *run_args]
-    completed = subprocess.run(command, check=False, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, timeout=120,
-                               cwd=execution_cwd,
-                               env={**os.environ, "LC_ALL": "C"})
+    with (open(stdin, "rb") if stdin is not None
+          else open(os.devnull, "rb")) as given:
+        completed = subprocess.run(command, check=False,
+                                   stdin=given, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, timeout=120,
+                                   cwd=execution_cwd,
+                                   env={**os.environ, "LC_ALL": "C"})
     require(completed.returncode == expected_status,
             f"quality program returned {completed.returncode}, "
             f"expected {expected_status}: {command!r}\n{completed.stdout!r}")
@@ -120,7 +128,8 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
             expected_status: int = 0, root: Path | None = None,
             compile_timeout: int = 120, *, run_args: tuple[str, ...] = (),
             expected_output: bytes = b"",
-            execution_cwd: Path | None = None) -> dict:
+            execution_cwd: Path | None = None,
+            stdin: Path | None = None) -> dict:
     assembly = destination.with_suffix(".s")
     report = destination.with_suffix(".json")
     obj = destination.with_suffix(".o")
@@ -163,7 +172,8 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
     run([tools["gcc"], "-no-pie", str(obj), "-o", str(destination)])
     execution = execute_measurement(
         destination, expected_status=expected_status, run_args=run_args,
-        expected_output=expected_output, execution_cwd=execution_cwd)
+        expected_output=expected_output, execution_cwd=execution_cwd,
+        stdin=stdin)
     return {"execution": execution, "text_bytes": text_bytes, "build": build,
             "sources": parsed["sources"], "items": parsed["items"],
             "section_bytes": section_bytes, "function_bytes": function_bytes,

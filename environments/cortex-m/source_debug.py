@@ -119,7 +119,7 @@ def source_line(run, path, statement):
 # path, and the statement, which must occur once in that library source.
 LIBRARY_ANCHORS = {
     'pool': ('allocate', 'source/core/mem/mem.ldn',
-             'block = try provider.alloc(state, size, alignment)'),
+             'block = try provider.alloc(memory, size, alignment)'),
     'vec': ('reserve', 'source/core/vec/vec.ldn',
             'old_count: usize = mem.length(value.values)'),
 }

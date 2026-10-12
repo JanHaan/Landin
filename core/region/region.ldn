@@ -1,97 +1,145 @@
 import core/mem
-import core/vec
 
---- Ledger entry storing an allocated address and its byte extent. Used by
---- bounded regions in caller-supplied initialized storage.
+--- Ledger entry storing an allocated address and its byte extent. A region
+--- records one for every payload it hands out.
 public allocation: type = struct
     address: usize
     extent: usize
 end allocation
 
-bounded_ledger: type = struct
-    values: []mut allocation
+--  How many records are in use, and the ledger block a growing region keeps
+--  through its parent: its address, zero when there is none, and the
+--  records it holds.
+book_value: type = struct
     used: usize
-end bounded_ledger
+    address: usize
+    room: usize
+end book_value
+
+space_value: type (fixed capacity: usize) = struct
+    book: book_value
+    records: [capacity]allocation
+end space_value
+
+--- Caller-owned state of a region: its ledger. With a positive `capacity`
+--- the ledger is these `capacity` records and no more; with zero it grows
+--- through the parent. Declare it `zeroed` and give it to `over`, which
+--- fills it; it must outlive the region handle, and `release` empties it.
+public space: type (fixed capacity: usize) = space_value(capacity)
 
 region_value: type (provider: type) = struct
-    parent: ptr mut provider
-    allocations: variant
-        empty |
-        recorded: (values: vec.list(allocation)) |
-        bounded: (values: bounded_ledger)
-    end allocations
+    parent: provider
+    book: ptr mut book_value
+    records: []mut allocation
 end region_value
 
---- Allocator that records payload allocations through a borrowed parent.
---- Releasing the region frees all recorded payloads; the parent must outlive
---- the region.
+--- Allocator that records payload allocations through a parent, as a
+--- handle: copies share one ledger. Releasing its state frees all recorded
+--- payloads; the parent must outlive the region.
 public region: type (provider: type) = region_value(provider)
 
---- Create a region whose ledger grows through its parent allocator. Ledger
---- allocation failure rolls back the just-allocated payload.
-public new: (provider: type is mem.allocator, parent: ptr mut provider)
-            -> (value: region(provider) from parent) =
-    value = (parent: parent, allocations: empty)
-end new
-
---- Create a region with a bounded caller-owned ledger of initialized records.
---- Every allocation takes one record until the region is released, since an
---- individual free returns nothing; an exhausted ledger reports
---- `mem.out_of_memory` and returns the new payload to the parent. No ledger
---- request is sent to the parent in this form.
-public over: (provider: type is mem.allocator,
-              parent: ptr mut provider, records: []mut allocation)
-             -> (value: region(provider) from parent, records) =
-    value = (parent: parent,
-             allocations: bounded(values: (values: records, used: 0)))
+--- Fill `state` for a region over `parent` and return its handle. The handle
+--- holds a copy of the parent's handle. Every allocation takes one ledger
+--- record until `release`, since an individual free returns nothing. A
+--- bounded ledger that is full reports `mem.out_of_memory` and returns the
+--- new payload to the parent; a growing ledger's own allocation failure does
+--- the same.
+public over: (fixed capacity: usize, provider: type is mem.allocator,
+              inout state: space(capacity), parent: provider)
+             -> (handle: region(provider) from state, parent) =
+    state.book = (used: 0, address: 0, room: 0)
+    handle = (parent: parent, book: addr state.book,
+              records: state.records[0..<capacity])
 end over
 
+record_size: usize = sizeof allocation
+
 region_alloc: (provider: type is mem.allocator,
-               inout state: region(provider), size: usize, alignment: usize)
+               self: region(provider), size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
-    block = try mem.allocate(state.parent.val, size, alignment)
+    block = try mem.allocate(self.parent, size, alignment)
     record: allocation = (address: usize(block), extent: size)
-    record_allocation(state, record) else (problem)
-        mem.free(state.parent.val, block, size)
+    record_allocation(self, record) else (problem)
+        mem.free(self.parent, block, size)
         fail problem
     end
 end region_alloc
 
---  The constructor has no independent ledger destination to hide behind its
---  `from parent` contract. Materialize the list only when recording a payload.
+--  Keep one record, in the caller's bounded ledger or in the block a growing
+--  ledger holds through the parent.
 record_allocation: (provider: type is mem.allocator,
-                    inout state: region(provider), record: allocation)
+                    self: region(provider), record: allocation)
                    -> none ! mem.out_of_memory =
-    match state.allocations
-        empty: begin
-            mut records := vec.new(item: allocation)
-            try vec.push(records, state.parent.val, record)
-            state.allocations = recorded(values: records)
-        end
-        recorded(inout records): begin
-            try vec.push(records, state.parent.val, record)
-        end
-        bounded(inout records): begin
-            values: []mut allocation = records.values
-            fail mem.out_of_memory when records.used == lenof values
-            records.values[records.used] = record
-            inc records.used
-        end
-    end match
+    book: ptr mut book_value = self.book
+    records: []mut allocation = self.records
+    if lenof records > 0 then
+        fail mem.out_of_memory when book.val.used == lenof records
+        records[book.val.used] = record
+        inc book.val.used
+        return
+    end if
+    if book.val.used == book.val.room then
+        try grow_ledger(self)
+    end if
+    slot: ptr mut allocation =
+        ptr(book.val.address + book.val.used * record_size)
+    slot.val = record
+    inc book.val.used
 end record_allocation
 
-region_free: (provider: type is mem.allocator, inout state: region(provider),
+--  Double a growing ledger, in place when the parent can, otherwise into a
+--  fresh block that the records are copied to before the old one is freed.
+--  A failure leaves the ledger as it was.
+grow_ledger: (provider: type is mem.allocator, self: region(provider))
+             -> none ! mem.out_of_memory =
+    book: ptr mut book_value = self.book
+    mut room: usize = 8
+    if book.val.room > 0 then
+        maximum: usize = 0 -% 1
+        fail mem.out_of_memory when book.val.room > maximum / 2
+        room = book.val.room * 2
+    end if
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when room > maximum / record_size
+    extent: usize = room * record_size
+    old_extent: usize = book.val.room * record_size
+    if book.val.room > 0 then
+        old: ptr mut u8 = ptr(book.val.address)
+        if provider.grow(self.parent, old, old_extent, extent,
+                         alignof allocation) then
+            book.val.room = room
+            return
+        end if
+    end if
+    fresh: ptr mut u8 = try mem.allocate(self.parent, extent,
+                                         alignof allocation)
+    mut at: usize = 0
+    while at < book.val.used do
+        from_slot: ptr allocation = ptr(book.val.address + at * record_size)
+        to_slot: ptr mut allocation = ptr(usize(fresh) + at * record_size)
+        to_slot.val = from_slot.val
+        inc at
+    end while
+    if book.val.room > 0 then
+        old: ptr mut u8 = ptr(book.val.address)
+        mem.free(self.parent, old, old_extent)
+    end if
+    book.val.address = usize(fresh)
+    book.val.room = room
+end grow_ledger
+
+region_free: (provider: type is mem.allocator, self: region(provider),
               block: ptr mut u8, size: usize) -> none =
-    _ = state.parent
+    _ = self.book
     _ = block
     _ = size
 end region_free
 
 region_grow: (provider: type,
-              inout state: region(provider), block: ptr mut u8,
+              self: region(provider), block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (grown: bool) =
-    _ = state.parent
+    _ = self.book
     _ = block
     _ = old_size
     _ = new_size
@@ -102,53 +150,31 @@ end region_grow
 (provider: type is mem.allocator) region_value(provider) is mem.allocator
     (alloc: region_alloc, grow: region_grow, free: region_free)
 
---- Free recorded payloads in reverse order and release any dynamic ledger
---- backing; a bounded caller ledger remains available for reuse. End every
---- payload use first. Every payload and ledger allocation is returned to the
---- parent, including failed-construction payloads; an arena parent keeps the
---- bytes it handed out, since it reclaims nothing until its backing ends.
-public release: (provider: type is mem.allocator,
-                 inout state: region(provider)) -> none =
-    match state.allocations
-        empty: return
-        recorded(inout records): release_records(state.parent, records)
-        bounded(inout records): begin
-            release_bounded(state.parent, records.values, records.used)
-            records.used = 0
-            return
-        end
-    end match
-    state.allocations = empty
+--- Free recorded payloads in reverse order through `parent`, which must be
+--- the parent the region was made over, and give a growing ledger's block
+--- back to it; `state` is then empty and may be given to `over` again. End
+--- every payload use and every use of the region's handle first. An arena
+--- parent keeps the bytes it handed out, since it reclaims nothing until its
+--- backing ends.
+public release: (fixed capacity: usize, provider: type is mem.allocator,
+                 inout state: space(capacity), parent: provider) -> none =
+    mut remaining: usize = state.book.used
+    while remaining > 0 do
+        dec remaining
+        mut record: allocation = (address: 0, extent: 0)
+        if capacity > 0 then
+            record = state.records[remaining]
+        else
+            kept: ptr allocation =
+                ptr(state.book.address + remaining * record_size)
+            record = kept.val
+        end if
+        block: ptr mut u8 = ptr(record.address)
+        mem.free(parent, block, record.extent)
+    end while
+    if state.book.room > 0 then
+        ledger: ptr mut u8 = ptr(state.book.address)
+        mem.free(parent, ledger, state.book.room * record_size)
+    end if
+    state.book = (used: 0, address: 0, room: 0)
 end release
-
-release_bounded: (provider: type is mem.allocator, parent: ptr mut provider,
-                  records: []mut allocation, used: usize) -> none =
-    mut remaining: usize = used
-    while remaining > 0 do
-        dec remaining
-        record: allocation = records[remaining]
-        block: ptr mut u8 = ptr(record.address)
-        mem.free(parent.val, block, record.extent)
-    end while
-end release_bounded
-
---  Keep the ledger view and parent capability as separate parameters while
---  freeing payloads; the payload alias does not expose the whole region.
-release_records: (provider: type is mem.allocator, parent: ptr mut provider,
-                  inout records: vec.list(allocation)) -> none =
-    mut remaining: usize = vec.length(records)
-    while remaining > 0 do
-        dec remaining
-        record: allocation = record_at(records, remaining)
-        block: ptr mut u8 = ptr(record.address)
-        mem.free(parent.val, block, record.extent)
-    end while
-    vec.release(records, parent.val)
-end release_records
-
---  The extent-bearing record is reference-free. Read it within the helper's
---  view scope before calling the parent, then dispose the ledger as a whole.
-record_at: (records: vec.list(allocation), index: usize) -> (value: allocation) =
-    initialized := vec.used(records)
-    value = initialized[index]
-end record_at

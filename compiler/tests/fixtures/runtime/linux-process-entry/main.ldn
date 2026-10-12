@@ -36,15 +36,15 @@ end has_equals
 
 public main: () -> (code: i32) =
     code = 1
-    mut state: hosted.system = hosted.host()
+    state: hosted.system = hosted.host()
     return when io.argument_count(state) <> 2
     code = 2
-    first: io.argument = io.argument_at(addr state, usize(0)) else (problem)
+    first: io.argument = io.argument_at(state, usize(0)) else (problem)
         _ = problem
         return
     end
     return when not same_text(first, "first")
-    second: io.argument = io.argument_at(addr state, usize(1)) else (problem)
+    second: io.argument = io.argument_at(state, usize(1)) else (problem)
         _ = problem
         return
     end

@@ -1,0 +1,62 @@
+--  The published word count's counting routine, unchanged, over a hosted
+--  standard input this program has closed.  Reading a closed descriptor
+--  fails with EBADF on every hosted system, so the count reports io_failed
+--  and the provider keeps the errno, rather than a total.
+import core/io
+import hosted/io as hosted
+
+counts: type = struct
+    lines: u64
+    words: u64
+    bytes: u64
+end counts
+
+--  White space as C's isspace has it: space, tab, newline, vertical tab,
+--  form feed and carriage return.  Every other byte belongs to a word.
+blank: (byte: u8) -> (yes: bool) =
+    yes = byte == 32 or (byte >= 9 and byte <= 13)
+end blank
+
+--  Read to end of input a buffer at a time.  A line is counted at its
+--  newline, so a last line without one adds no line; a word is counted at
+--  its first byte, and may run on from one buffer into the next.
+count: (provider: type is io.reader, source: provider,
+        opened: io.file, buffer: []mut u8)
+       -> (totals: counts) ! io.io_failed =
+    totals = (lines: 0, words: 0, bytes: 0)
+    mut inside: bool = false
+    loop do
+        got: usize = try io.read(source, opened, buffer)
+        break when got == 0
+        totals.bytes += u64(got)
+        for byte in buffer[0..<got] do
+            if byte == 10 then inc totals.lines end if
+            if blank(byte) then
+                inside = false
+            elsif not inside then
+                inside = true
+                inc totals.words
+            end if
+        end for
+    end loop
+end count
+
+public main: () -> (code: i32) =
+    code = 1
+    host := hosted.host()
+    input: io.file = io.input(host)
+    stale: io.file = input
+    io.close(host, stale) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    mut buffer: [16]u8 = zeroed
+    totals := count(host, input, buffer[0..<16]) else (problem)
+        if problem == io.io_failed and hosted.last_errno(host) == 9 then
+            code = 42
+        end if
+        return
+    end
+    _ = totals
+end main

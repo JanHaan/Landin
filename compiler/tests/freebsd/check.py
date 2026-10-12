@@ -260,6 +260,14 @@ class Lane:
                 require(bool(re.search(exclusive, listing)) != higher,
                         result['label'] + ': incorrect exclusive-loop selection')
 
+    def standard_input(self, result):
+        """The guest's copy of the file a fixture's `stdin:` names below it,
+        which the payload carries with compiler/tests, or an empty input."""
+        named = result['meta'].get('stdin')
+        if not named:
+            return Path('/dev/null')
+        return self.source_root / 'compiler/tests/fixtures' / result['case'] / named
+
     def execute(self, guest, results):
         script = ['#!/bin/sh', 'ulimit -c 0', 'ulimit -d unlimited',
                   'cd ' + shlex.quote(str(self.source_root / 'compiler/ada'))]
@@ -269,7 +277,8 @@ class Lane:
             command = shlex.join([str(path), *shlex.split(meta.get('run_args', ''))])
             out, err, status = (str(path) + suffix for suffix in ('.stdout', '.stderr', '.status'))
             redirection = '2>&1' if meta.get('stream', 'merged') == 'merged' else '2>' + shlex.quote(err)
-            script += [f'timeout 60 {command} >{shlex.quote(out)} {redirection}',
+            given = shlex.quote(str(self.standard_input(result)))
+            script += [f'timeout 60 {command} <{given} >{shlex.quote(out)} {redirection}',
                        f'echo $? >{shlex.quote(status)}']
         remote_results = self.remote_prefix + '-results.tar.gz'
         remote_script = self.remote_prefix + '-execute.sh'

@@ -766,13 +766,13 @@ type kind, or the dishonest `slice_from` operation.
 
 ## ARRAYS, SLICES AND TEXT
 
-The initialized allocation helper `mem.new(state, value)` stores the complete
+The initialized allocation helper `mem.new(memory, value)` stores the complete
 initial value before returning `ptr mut t`; reference-containing values must
 satisfy its `escaping` parameter. `mem.delete` consumes one pointer binding
 and releases the original object extent through the supplied allocator.
-`mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
+`mem.new_bytes(memory, count)` instead returns a private `byte_buffer` owner:
 every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
-slice, and `mem.delete_bytes(state, owner)` releases the original allocation and
+slice, and `mem.delete_bytes(memory, owner)` releases the original allocation and
 clears the owner after the byte prefix is emptied. A zero count makes no
 allocation. A copied view or owner is
 still subject to manual lifetime discipline; consumption is not ownership.
@@ -1632,11 +1632,11 @@ push_front: (escaping inout head: ptr mut node, escaping item: ptr mut node)
     head = item
 end push_front
 
-build: (provider: type is mem.allocator, inout a: provider,
+build: (provider: type is mem.allocator, memory: provider,
         escaping seed: ptr mut node)
        -> (head: ptr mut node) ! mem.out_of_memory =
     head = seed
-    n := try mem.new(state: a, value: seed.val)
+    n := try mem.new(memory: memory, value: seed.val)
     push_front(head, n)             -- allocated, fine
 
     mut local: node = seed.val
@@ -1751,7 +1751,7 @@ storage is live or large enough; those remain the library's unsafe backing
 obligations [1720]. No special compiler privilege belongs to `core`.
 
 ```landin
-address: usize = usize(state.base) + offset
+address: usize = usize(self.base) + offset
 block: ptr mut u8 = ptr(address)  -- no tracked derivation survives
 
 ```
@@ -1771,11 +1771,14 @@ otherwise-undeclared builtin type `arena`, are withdrawn by D212. Their named
 diagnostics explain the change; a declared type or ordinary identifier named
 `arena` remains valid.
 
-`mem.arena_over(base, size)` supplies the backing address and byte capacity
-explicitly. Its `escaping base` parameter accepts backing that the caller may
-retain, including module storage and independently acquired storage; it
-rejects a frame array. The arena representation is private, so a struct
-literal cannot bypass that check. The handle retains the base's origin. Allocation aligns the
+`mem.arena_over(state, base, size)` supplies the backing address and byte
+capacity explicitly, and the arena's state: a `mem.arena_space` the caller
+declares `zeroed` beside the backing, which `arena_over` fills before returning
+the arena's handle `from` it. Its `escaping base` parameter accepts backing
+that the caller may retain, including module storage and independently
+acquired storage; it rejects a frame array. The arena representation is
+private, so a struct literal cannot bypass that check. The handle retains the
+origins of its state and its base, and copies of it share one arena. Allocation aligns the
 absolute address and advances a monotonic offset; individual frees do nothing.
 A caller can supply a fixed array on a constrained target or explicitly
 acquired hosted storage, choosing the actual capacity rather than a hidden
@@ -1789,7 +1792,8 @@ import core/mem
 
 mut backing: [1024]u8 = zeroed
 report: () -> (code: i32) =
-    mut scratch := mem.arena_over(addr backing[0], 1024)
+    mut space: mem.arena_space = zeroed
+    scratch := mem.arena_over(space, addr backing[0], 1024)
     code = 1
     first := mem.new(scratch, u8(7)) else (problem)
         _ = problem
@@ -1803,11 +1807,13 @@ report: () -> (code: i32) =
 end report
 ```
 
-For bulk hosted cleanup, `core/region.new(addr provider)` creates an
-ordinary allocator that records its acquired extents through that provider.
-An explicit `defer region.release(program)` releases them together.
-The region value borrows its provider; its allocations are still independent,
-and its bookkeeping also consumes the supplied provider's capacity. A finite
+For bulk hosted cleanup, `core/region.over(ledger, provider)` creates an
+ordinary allocator that records its acquired extents through that provider,
+in a `region.space` ledger the caller declares `zeroed`.
+An explicit `defer region.release(ledger, provider)` releases them together.
+The region's handle holds a copy of its provider's handle; its allocations are
+still independent, and its bookkeeping also consumes the supplied provider's
+capacity. A finite
 caller-backed provider therefore remains finite, with no hidden heap fallback.
 This library operation is not the withdrawn lexical escape guarantee. Region
 allocations must stop being used before `release`, regardless of the
@@ -1826,8 +1832,10 @@ For a local buffer whose use the programmer can keep entirely within its
 frame, `mem.arena_over_unchecked` makes the
 lifetime opt-out explicit at construction. Its allocation results remain
 independent, even through helpers; the caller must ensure every result stops
-being used before the buffer ends. Borrowing the mutable allocator for each
-result would also prevent its next ordinary allocation [0790].
+being used before the buffer ends. A result borrowed from the arena's handle
+would not lock the arena, since a handle is passed `in`, but every container
+that keeps the block in its own storage would then retain the handle, and
+could not take one made from a frame-local state [0790].
 
 The backing owner arranges its lifetime and explicit cleanup. A frame array
 used through an unchecked constructor ends with its frame; hosted allocations need explicit release, which `defer`
@@ -2517,16 +2525,16 @@ frees one, the third frees two.
 
 ```landin
 new_buffers: (provider: type is mem.allocator,
-              inout state: provider, count: usize)
+              memory: provider, count: usize)
              -> (first: mem.byte_buffer, second: mem.byte_buffer,
                  third: mem.byte_buffer) ! mem.out_of_memory =
-    first = try mem.new_bytes(state: state, count: count)
-    undo mem.delete_bytes(state, first)
+    first = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, first)
 
-    second = try mem.new_bytes(state: state, count: count)
-    undo mem.delete_bytes(state, second)
+    second = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, second)
 
-    third = try mem.new_bytes(state: state, count: count)
+    third = try mem.new_bytes(memory: memory, count: count)
     -- All three owners are published by the successful return.
 end new_buffers
 ```
@@ -3206,16 +3214,22 @@ with in C because it is too awkward.
 
 ```landin
 allocator: type = concept (provider: type)
-    alloc: (inout a: provider, size: usize, alignment: usize)
+    alloc: (self: provider, size: usize, alignment: usize)
            -> (p: ptr mut u8) ! out_of_memory
-    grow: (inout a: provider, p: ptr mut u8, old_size: usize,
+    grow: (self: provider, p: ptr mut u8, old_size: usize,
            new_size: usize, alignment: usize) -> (grown: bool)
-    free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
+    free:  (self: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
-push: (t: type, provider: type is allocator, inout l: list(t), inout a: provider,
+push: (t: type, provider: type is allocator, inout l: list(t), memory: provider,
       escaping v: t) -> none ! out_of_memory = ... end
 ```
+
+The list is edited, so it is passed `inout`; the allocator is a service, so
+it is a handle: a small copyable value passed `in` that refers to its
+provider's state. Its lifetime is checked once, where it is made from that
+state, and using it locks nothing, so several containers allocate from one
+handle and a region allocates from its parent while both are live.
 
 The allocator is threaded, not stored in the container, and
 the reason is stronger than visibility: a stored allocator
@@ -3388,10 +3402,10 @@ Building one is explicit. The concept comes from context
 where it can; otherwise name it.
 
 ```landin
-make_widget: (provider: type is mem.allocator, inout a: provider)
+make_widget: (provider: type is mem.allocator, memory: provider)
              -> (item: any widget) ! mem.out_of_memory =
     initial: button = (text: "OK")
-    b := try mem.new(state: a, value: initial)
+    b := try mem.new(memory: memory, value: initial)
     item = any(b)
 end make_widget
 
@@ -3416,7 +3430,9 @@ The enabled form reserves `any` and gives `any C` the identity of that
 direct concept, not of one hidden concrete type or one of C's parents.
 `any(pointer)` uses the contextual C; without one it requires exactly one
 collected exact conformance. Every erased entry has an object-safe first
-`self: ptr t` or `self: ptr mut t`, and hidden `t` appears nowhere else in the
+`self: ptr t` or `self: ptr mut t`, or `self: t` taken by value when `t` is a
+record, which dispatch copies from the data pointer: a provider handle is
+erased from the address of its binding. Hidden `t` appears nowhere else in the
 entry's runtime signature. Construction from a read-only pointer therefore
 cannot make a table that exposes mutable `self`. Once made, binding mutability
 controls replacing the two-word pair, not the authority already carried by its
@@ -4171,14 +4187,14 @@ root imports `hosted/io as hosted`; a caller-backed root needs only
 
 ```landin
 public entry: () -> (code: i32) =
-    mut host := hosted.host()
+    host := hosted.host()
     world: any io.world = any(addr host)
-    mut heap := heap.host()
-    mut program := region.new(addr heap)
-    defer region.release(program)
-    stream: io.file = world.err()
+    heap := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, heap)
+    defer region.release(ledger, heap)
     writer: any io.writer = any(addr host)
-    mut logger := diag.stream(addr writer, addr stream)
+    mut logger := diag.stream(writer, world.err())
     log: any diag.log = any(addr logger)
     kept: usize = run_logged(program, world, usize(4096), log) else (problem)
         _ = problem
@@ -4194,6 +4210,17 @@ The actual entry also reports `kept` and write failures before choosing its
 status. `build_logged`, called by `run_logged`, copies the world's arguments
 into the supplied program allocator before retaining configuration.
 
+Each root here is a handle: a small copyable value, passed by value, that
+refers to its state. `hosted.host()` and `heap.host()` make handles that borrow
+nothing, because what they refer to, the argument root, the descriptors, the
+last errno and the heap, belongs to the process. A caller-owned provider is
+made from state the caller declares, as the region is from `ledger`; the
+handle cannot outlive that state, and the state cannot be released while the
+handle is still used. An erased capability is built from the address of a
+handle binding, and its dispatch copies the handle from there, so `world`,
+`writer` and `host` itself are used side by side: a write through `host`, an
+argument lent from it and a note through the logger lock nothing.
+
 `hosted.host()` acquires the real argument-table capability; it does not create or
 copy that storage. The first nonnegative-count, non-null-table startup call
 establishes one exact `(argc, argv)` root. Repeating that exact pair is harmless;
@@ -4206,8 +4233,9 @@ program name consequently gives Landin an empty user-argument sequence.
 Which is what makes the same run testable and portable
 without it knowing: hand it a different world and it does
 not learn the difference. The memory provider takes caller-owned file,
-argument, output and error storage; the test must supply an input path in
-its argument table for the application's configuration.
+argument, standard-input, output and error storage, here an empty standard
+input; the test must supply an input path in its argument table for the
+application's configuration.
 
 ```landin
 test_drops_debug: () -> (ok: bool) =
@@ -4229,12 +4257,14 @@ test_drops_debug: () -> (ok: bool) =
       (data: addr path[0], length: lenof path)]
     mut output: [128]u8 = zeroed
     mut errors: [128]u8 = zeroed
-    mut memory := io.memory_over(files[0..<1], arguments[0..<3],
-                                  output[0..<128], errors[0..<128])
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files[0..<1], arguments[0..<3], "",
+                             output[0..<128], errors[0..<128])
     world: any io.world = any(addr memory)
-    mut backing := heap.host()
-    mut program := region.new(addr backing)
-    defer region.release(program)
+    heap := heap.host()
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, heap)
+    defer region.release(ledger, heap)
     mut logger := diag.new(capacity: 4)
     log: any diag.log = any(addr logger)
     kept: usize = app.run_logged(program, world, usize(4096), log) else (problem)
@@ -4255,7 +4285,7 @@ machinery, [1690], chosen per case.
 It is four concepts, not one, because a provider should
 supply only what it has [1260]: `io.writer` is `write` and
 `write_some`, `io.reader` is `read`, `io.files` is open,
-close and `same_file`, and `io.process` is the two standard
+close and `same_file`, and `io.process` is the three standard
 streams and the argument table. `io.world` composes all
 four for a root that has everything, and `world.write` on
 an erased world reaches the writer entry through the
@@ -4264,12 +4294,15 @@ else, and a diagnostics log asks for `any io.writer`, which
 is why `entry` builds one from the same `host`: an erased
 world is not an erased writer, the two do not convert. A
 routine holding only the world lends its writer with
-`io.writer_of(addr world)` (D268).
+`io.writer_of(world)` (D268).
 
 The system provider captures the errno of a failing call immediately, as
 minus a Linux system call's result, or as C's errno through `hosted/libc`,
 which names each system's accessor, on Darwin and FreeBSD, and keeps
-the exact terminal value in explicit state, available through `hosted.last_errno`.
+the exact terminal value in the handle's last-error cell, available through
+`hosted.last_errno`. A handle from `hosted.host()` shares the process's
+cell; one from `hosted.over(space)` keeps it in a `hosted.space` the caller
+declares, which is how two C threads calling into Landin keep theirs apart.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no
 progress. `world.write` completes the whole slice, continuing from each
@@ -4289,9 +4322,12 @@ before truncating an output. Names must remain stable during the check and
 open: this is not an atomic operation. A `files` provider implements
 `same_file` and a `writer` implements `write_some`; neither is optional.
 
-The bounded library provider is `core/io.memory`, constructed with
-`memory_over(files, arguments, output, errors)`. Its caller supplies every
-file name, content buffer, descriptor and output extent. Files must already
+The bounded library provider is `core/io.memory`, a handle made with
+`memory_over(state, files, arguments, input, output, errors)` over a
+`memory_space` its caller declares `zeroed`. Its caller supplies
+every file name, content buffer, descriptor, the bytes standard input reads
+and output extent, and reads and sets the limits and counters in that state
+while the handle is used. Files must already
 exist in the table; opening for writing truncates after checks. Reads stop at
 the initialized length. Memory `write` completes the slice or reports failure
 while preserving a completed prefix; memory `write_some` returns a positive
@@ -4305,7 +4341,7 @@ Empty transfers are no-ops. A close error still leaves a valid handle closed.
 The argument table omits the executable name. `written` and `written_errors`
 return source-derived views of the two output prefixes. The provider retains
 its supplied slices and performs no allocation or host call. Its public
-representation and copied handles remain subject to manual invariants:
+state and copied file handles remain subject to manual invariants:
 backing must remain valid, transfer ranges must not overlap, counters need
 headroom, and stale handles can address a reopened slot. D153 records these
 bounds. The complete derived hosted application, `examples/derived_hosted`,

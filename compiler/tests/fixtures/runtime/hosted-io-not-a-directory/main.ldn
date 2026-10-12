@@ -1,0 +1,76 @@
+--  A path through a file that is not a directory names nothing, so the
+--  hosted provider reports it as `not_found`, as it does a missing path,
+--  while `last_errno` keeps ENOTDIR, 20 on every hosted system.  /dev/null
+--  is a character device on Linux, Darwin and FreeBSD alike, and the
+--  missing path's parent does not exist, which gives ENOENT.
+import core/io
+import hosted/io as hosted
+
+through_file: []u8 = "/dev/null/absent"
+missing_parent: []u8 = "/landin-absent-parent/absent"
+existing: []u8 = "/dev/null"
+
+open_refused: (state: hosted.system, path: []u8, writing: bool,
+               errno: i32) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    mut opened: io.file = io.file(-1)
+    --  Parenthesised, so that each recovery's `else` is the call's and not
+    --  the branch's.
+    if writing then
+        opened = (io.open_write_bytes(state, path, scratch[0..<64])
+            else (problem)
+            yes = problem == io.not_found
+                  and hosted.last_errno(state) == errno
+            return
+        end)
+    else
+        opened = (io.open_read_bytes(state, path, scratch[0..<64])
+            else (problem)
+            yes = problem == io.not_found
+                  and hosted.last_errno(state) == errno
+            return
+        end)
+    end if
+    io.close(state, opened) else (problem)
+        _ = problem
+    end
+end open_refused
+
+--  An output path that names nothing is not the same file as an existing
+--  input, whichever way it names nothing.
+absent_output: (state: hosted.system, path: []u8) -> (yes: bool) =
+    yes = false
+    mut left: [64]u8 = zeroed
+    mut right: [64]u8 = zeroed
+    input := io.terminate_path(existing, left[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    output := io.terminate_path(path, right[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    same: bool = io.same_file(state, input, output) else (problem)
+        _ = problem
+        return
+    end
+    yes = not same and hosted.last_errno(state) == 0
+end absent_output
+
+public main: () -> (code: i32) =
+    state: hosted.system = hosted.host()
+    code = 1
+    return when not open_refused(state, through_file, false, 20)
+    code = 2
+    return when not open_refused(state, through_file, true, 20)
+    code = 3
+    return when not open_refused(state, missing_parent, false, 2)
+    code = 4
+    return when not open_refused(state, missing_parent, true, 2)
+    code = 5
+    return when not absent_output(state, through_file)
+    code = 6
+    return when not absent_output(state, missing_parent)
+    code = 42
+end main

@@ -15,9 +15,10 @@ system_value: type = struct
     reserved: u8
 end system_value
 
---- Host-heap allocator capability.  Allocates and frees through size
---- classes over mapped memory on Linux, and through the C library's malloc
---- and free on Darwin and FreeBSD; does not grow allocations in place.
+--- Host-heap allocator capability, as a handle that borrows nothing: the heap
+--- belongs to the process, and copies share it.  Allocates and frees through
+--- size classes over mapped memory on Linux, and through the C library's
+--- malloc and free on Darwin and FreeBSD; does not grow allocations in place.
 --- Available only on hosted targets.  On Linux it is single-threaded: two
 --- threads may not use it at once.
 ---
@@ -186,9 +187,9 @@ else
     rounding: usize = 0
 end if
 
-system_alloc: (inout state: system, size: usize, alignment: usize)
+system_alloc: (self: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
-    _ = state.reserved
+    _ = self.reserved
     unit: usize = if alignment > 1 then alignment else 1 end if
     --  The host takes no extent above PTRDIFF_MAX, and no addition may
     --  wrap: refuse both before asking it.
@@ -200,16 +201,16 @@ system_alloc: (inout state: system, size: usize, alignment: usize)
     block = ptr(address)
 end system_alloc
 
-system_free: (inout state: system, block: ptr mut u8, size: usize) -> none =
-    _ = state.reserved
+system_free: (self: system, block: ptr mut u8, size: usize) -> none =
+    _ = self.reserved
     _ = size
     host_free(usize(block))
 end system_free
 
-system_grow: (inout state: system, block: ptr mut u8,
+system_grow: (self: system, block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (grown: bool) =
-    _ = state.reserved
+    _ = self.reserved
     _ = block
     _ = old_size
     _ = new_size
@@ -220,8 +221,8 @@ end system_grow
 system is mem.allocator (alloc: system_alloc, grow: system_grow,
                          free: system_free)
 
---- Create the host heap provider state. The state itself does not allocate;
---- callers retain and free each successful allocation explicitly.
-public host: () -> (state: system) =
-    state = (reserved: 0)
+--- Return a handle to the host heap. Making one does not allocate; callers
+--- retain and free each successful allocation explicitly.
+public host: () -> (handle: system) =
+    handle = (reserved: 0)
 end host

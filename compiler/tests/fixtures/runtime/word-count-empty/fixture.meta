@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published word count given an empty standard input reads end of input at once and prints three zero totals
+program: ../word-count/main.ldn
+stdin: empty.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1130, 1650, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

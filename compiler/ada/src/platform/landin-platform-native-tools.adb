@@ -1,5 +1,4 @@
 with Ada.Real_Time;
-with Ada.Strings.Unbounded;
 
 with GNAT.OS_Lib;
 
@@ -22,6 +21,7 @@ package body Landin.Platform.Native.Tools is
    --  The spawn action establishes a private process group before exec.
    function Start_Tool
      (Args    : C_Strings.chars_ptr_array;
+      Input   : Interfaces.C.int;
       Capture : Interfaces.C.int;
       Errors  : Interfaces.C.int;
       Child   : access Interfaces.C.int) return Interfaces.C.int
@@ -75,6 +75,11 @@ package body Landin.Platform.Native.Tools is
       Host.Limit := Seconds;
    end Set_Limit;
 
+   procedure Set_Input (Host : in out Native_Tool_Runner; Path : String) is
+   begin
+      Host.Input := Unbounded.To_Unbounded_String (Path);
+   end Set_Input;
+
    overriding function Available
      (Host : Native_Tool_Runner; Program : String) return Boolean
    is
@@ -101,6 +106,7 @@ package body Landin.Platform.Native.Tools is
       FD             : OS.File_Descriptor := OS.Invalid_FD;
       Error_Name     : OS.String_Access := null;
       Error_FD       : OS.File_Descriptor := OS.Invalid_FD;
+      Input_FD       : OS.File_Descriptor := OS.Invalid_FD;
       Success        : Boolean;
       Status         : aliased Interfaces.C.int := 0;
       Pid            : aliased Interfaces.C.int := 0;
@@ -135,6 +141,7 @@ package body Landin.Platform.Native.Tools is
 
       procedure Cleanup_Capture is
          Clean : Boolean := True;
+         Closed_Input : Boolean := True;
 
          procedure Remove
            (File : in out OS.File_Descriptor;
@@ -162,6 +169,11 @@ package body Landin.Platform.Native.Tools is
       begin
          Remove (FD, Name);
          Remove (Error_FD, Error_Name);
+         if Input_FD /= OS.Invalid_FD then
+            OS.Close (Input_FD, Closed_Input);
+            Clean := Clean and Closed_Input;
+            Input_FD := OS.Invalid_FD;
+         end if;
          if not Clean then
             raise External_Tool_Failed
               with "could not remove temporary tool output";
@@ -204,6 +216,18 @@ package body Landin.Platform.Native.Tools is
          end if;
       end if;
 
+      --  Opened here, before the tool starts, so that an input which is
+      --  not there is the caller's fault and not the tool's.
+      if Unbounded.Length (Host.Input) > 0 then
+         Input_FD := OS.Open_Read
+           (Unbounded.To_String (Host.Input), OS.Binary);
+         if Input_FD = OS.Invalid_FD then
+            raise External_Tool_Failed
+              with "could not open standard input: "
+                   & Unbounded.To_String (Host.Input);
+         end if;
+      end if;
+
       declare
          Deadline : constant Ada.Real_Time.Time :=
            Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
@@ -211,7 +235,10 @@ package body Landin.Platform.Native.Tools is
          Wait_Interval : Duration := 0.001;
       begin
          if Start_Tool
-           (List, Interfaces.C.int (FD),
+           (List,
+            (if Input_FD = OS.Invalid_FD then -1
+             else Interfaces.C.int (Input_FD)),
+            Interfaces.C.int (FD),
             (if Capture = Merged then -1 else Interfaces.C.int (Error_FD)),
             Pid'Access) /= 0
          then

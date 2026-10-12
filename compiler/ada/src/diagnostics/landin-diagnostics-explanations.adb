@@ -590,13 +590,14 @@ package body Landin.Diagnostics.Explanations is
                & "d contract [1370] [1380] [1390] (D145-D147). `any C` nam"
                & "es a concept with runtime entries, each dispatch name un"
                & "ique across its closure, and erases a pointer, never a v"
-               & "alue; every entry takes the erased `self` pointer first;"
-               & " an entry is called directly and is not a bound value; a"
-               & " concrete pointer selects exactly one conformance, and t"
-               & "he closed program has a runtime table for it; and a modu"
-               & "le `any` binding has no implicit null pair. Pass a point"
-               & "er, write the `any C` context, or adjust the concept's e"
-               & "ntries.",
+               & "alue; every entry takes the erased `self` first, as a po"
+               & "inter or as a record the dispatch copies from that point"
+               & "er; an entry is called directly and is not a bound value"
+               & "; a concrete pointer selects exactly one conformance, an"
+               & "d the closed program has a runtime table for it; and a m"
+               & "odule `any` binding has no implicit null pair. Pass a po"
+               & "inter, write the `any C` context, or adjust the concept'"
+               & "s entries.",
             when Catalogue.Noreturn_Contract =>
                "A noreturn routine breaks its contract [0890]. A noretur"
                & "n signature is ordinary and infallible, and every reacha"

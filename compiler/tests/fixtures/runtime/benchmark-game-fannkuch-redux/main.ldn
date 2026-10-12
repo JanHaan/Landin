@@ -1,6 +1,7 @@
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
+import core/text
 import hosted/io as hosted
 
 score: type = struct
@@ -72,23 +73,15 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (inout host: hosted.system, stream: io.file, value: u32)
-           -> none ! io.io_failed =
+write_u32: (host: hosted.system, stream: io.file, value: u32)
+           -> none ! io.io_failed | text.no_space =
     mut digits: [10]u8 = zeroed
-    mut start: usize = lenof digits
-    mut remaining: u32 = value
-    loop do
-        dec start
-        digits[start] = u8(remaining % 10) + 48
-        remaining = remaining / 10
-        break when remaining == 0
-    end loop
-    output: []u8 = digits[start..<lenof digits]
-    try io.write(host, stream, output)
+    used: usize = try text.write_u32(digits[0..<10], 0, value)
+    try io.write(host, stream, digits[0..<used])
 end write_u32
 
-write_score: (inout host: hosted.system, value: score)
-             -> none ! io.io_failed =
+write_score: (host: hosted.system, value: score)
+             -> none ! io.io_failed | text.no_space =
     stream: io.file = io.out(host)
     try write_u32(host, stream, u32(value.checksum))
     try io.write(host, stream, "\nPfannkuchen(7) = ")
@@ -98,7 +91,7 @@ end write_score
 
 public main: () -> (code: i32) =
     value: score = fannkuch()
-    mut host := hosted.host()
+    host := hosted.host()
     write_score(host, value) else (problem)
         _ = problem
         code = 1

@@ -12,13 +12,13 @@ public reader: type = struct
     ended: bool
 end reader
 
-public open_reader: (provider: type is mem.allocator, inout allocator: provider,
+public open_reader: (provider: type is mem.allocator, memory: provider,
                      world: any io.world, path: ptr u8, chunk_size: usize)
                     -> (value: reader)
                     ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
     fail io.io_failed when chunk_size == 0
     opened: io.file = try world.open_read(path)
-    chunk := mem.new_bytes(allocator, chunk_size) else (problem)
+    chunk := mem.new_bytes(memory, chunk_size) else (problem)
         world.close(opened) else (close_problem) _ = close_problem end
         fail problem
     end
@@ -27,17 +27,17 @@ public open_reader: (provider: type is mem.allocator, inout allocator: provider,
              filled: 0, position: 0, ended: false)
 end open_reader
 
-public next_line: (provider: type is mem.allocator, inout allocator: provider,
+public next_line: (provider: type is mem.allocator, memory: provider,
                    inout value: reader, world: any io.world)
                   -> (line: []u8 from value)
                   ! io.io_failed | mem.out_of_memory | at_end =
-    line = try next_line_at_least(allocator, value, world, u8(0))
+    line = try next_line_at_least(memory, value, world, u8(0))
 end next_line
 
 --  A leading level filter can reject after at most six bytes: the longest
 --  level name has five bytes, and the sixth establishes its separator.
 public next_line_at_least: (provider: type is mem.allocator,
-                            inout allocator: provider, inout value: reader,
+                            memory: provider, inout value: reader,
                             world: any io.world, least: u8)
                            -> (line: []u8 from value)
                            ! io.io_failed | mem.out_of_memory | at_end =
@@ -68,7 +68,7 @@ public next_line_at_least: (provider: type is mem.allocator,
                     return
                 end if
             elsif not skipping then
-                try vec.push(value.line, allocator, byte)
+                try vec.push(value.line, memory, byte)
                 if not decided and vec.length(value.line) == 6 then
                     decided = true
                     if level_of(vec.used(value.line)) < least then
@@ -81,13 +81,13 @@ public next_line_at_least: (provider: type is mem.allocator,
     end loop
 end next_line_at_least
 
-public shut_reader: (provider: type is mem.allocator, inout allocator: provider,
+public shut_reader: (provider: type is mem.allocator, memory: provider,
                      world: any io.world, sink value: reader)
                     -> none ! io.io_failed =
     mut chunk := value.chunk
     mut line := value.line
-    mem.delete_bytes(allocator, chunk)
-    vec.release(line, allocator)
+    mem.delete_bytes(memory, chunk)
+    vec.release(line, memory)
     try world.close(value.opened)
 end shut_reader
 

@@ -21,7 +21,7 @@ end is_absent
 --  This fixture-local provider is an observer, not the reusable failure
 --  wrapper `core/fault` supplies.  It delegates every operation
 --  to the real heap while retaining the two simultaneously live extents.
-audit: type = struct
+audit_state: type = struct
     inner: heap.system
     first_live: bool
     first_block: allocation
@@ -39,9 +39,13 @@ audit: type = struct
     second_free_size: usize
     coexistence: bool
     mismatch: bool
+end audit_state
+
+audit: type = struct
+    state: ptr mut audit_state
 end audit
 
-new_audit: () -> (state: audit) =
+new_audit: () -> (state: audit_state) =
     state = (inner: heap.host(),
              first_live: false, first_block: no_allocation, first_size: 0,
              second_live: false, second_block: no_allocation, second_size: 0,
@@ -51,78 +55,81 @@ new_audit: () -> (state: audit) =
              coexistence: false, mismatch: false)
 end new_audit
 
-audit_alloc: (inout state: audit, size: usize, alignment: usize)
+audit_alloc: (self: audit, size: usize, alignment: usize)
              -> (block: ptr mut u8) ! mem.out_of_memory =
-    block = try mem.allocate(state.inner, size, alignment)
-    if state.first_live and state.second_live then
-        mem.free(state.inner, block, size)
+    state: ptr mut audit_state = self.state
+    block = try mem.allocate(state.val.inner, size, alignment)
+    if state.val.first_live and state.val.second_live then
+        mem.free(state.val.inner, block, size)
         fail mem.out_of_memory
     end if
 
-    if state.live > 0 then
-        state.coexistence = true
+    if state.val.live > 0 then
+        state.val.coexistence = true
     end if
-    inc state.live
-    if state.live > state.peak_live then
-        state.peak_live = state.live
+    inc state.val.live
+    if state.val.live > state.val.peak_live then
+        state.val.peak_live = state.val.live
     end if
-    inc state.allocations
-    if state.allocations == 1 then
-        state.first_alloc_size = size
-    elsif state.allocations == 2 then
-        state.second_alloc_size = size
+    inc state.val.allocations
+    if state.val.allocations == 1 then
+        state.val.first_alloc_size = size
+    elsif state.val.allocations == 2 then
+        state.val.second_alloc_size = size
     end if
     if alignment > 1 and usize(block) % alignment <> 0 then
-        state.mismatch = true
+        state.val.mismatch = true
     end if
 
-    if not state.first_live then
-        state.first_live = true
-        state.first_block = block
-        state.first_size = size
+    if not state.val.first_live then
+        state.val.first_live = true
+        state.val.first_block = block
+        state.val.first_size = size
     else
-        state.second_live = true
-        state.second_block = block
-        state.second_size = size
+        state.val.second_live = true
+        state.val.second_block = block
+        state.val.second_size = size
     end if
 end audit_alloc
 
-audit_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
+audit_free: (self: audit, block: ptr mut u8, size: usize) -> none =
+    state: ptr mut audit_state = self.state
     mut matched: bool = false
-    if state.first_live and same_block(state.first_block, block) then
-        if size <> state.first_size then
-            state.mismatch = true
+    if state.val.first_live and same_block(state.val.first_block, block) then
+        if size <> state.val.first_size then
+            state.val.mismatch = true
         end if
-        state.first_live = false
-        state.first_block = no_allocation
+        state.val.first_live = false
+        state.val.first_block = no_allocation
         matched = true
-    elsif state.second_live and same_block(state.second_block, block) then
-        if size <> state.second_size then
-            state.mismatch = true
+    elsif state.val.second_live
+      and same_block(state.val.second_block, block) then
+        if size <> state.val.second_size then
+            state.val.mismatch = true
         end if
-        state.second_live = false
-        state.second_block = no_allocation
+        state.val.second_live = false
+        state.val.second_block = no_allocation
         matched = true
     end if
     if not matched then
-        state.mismatch = true
+        state.val.mismatch = true
     else
-        dec state.live
+        dec state.val.live
     end if
 
-    inc state.frees
-    if state.frees == 1 then
-        state.first_free_size = size
-    elsif state.frees == 2 then
-        state.second_free_size = size
+    inc state.val.frees
+    if state.val.frees == 1 then
+        state.val.first_free_size = size
+    elsif state.val.frees == 2 then
+        state.val.second_free_size = size
     end if
-    mem.free(state.inner, block, size)
+    mem.free(state.val.inner, block, size)
 end audit_free
 
-audit_grow: (inout state: audit, block: ptr mut u8,
+audit_grow: (self: audit, block: ptr mut u8,
              old_size: usize, new_size: usize, alignment: usize)
             -> (grown: bool) =
-    _ = state.live
+    _ = self.state
     _ = block
     _ = old_size
     _ = new_size
@@ -150,12 +157,13 @@ node_9: node = (value: 9)
 public main: () -> (code: i32) =
     code = 1
     mut observed := new_audit()
+    observer: audit = (state: addr observed)
     mut trace: i32 = 0
 
     maximum: usize = 18446744073709551615
     one: usize = 1
     mut refused: bool = false
-    impossible: allocation = mem.allocate(observed, maximum, one)
+    impossible: allocation = mem.allocate(observer, maximum, one)
         else (problem)
         _ = problem
         refused = true
@@ -170,12 +178,12 @@ public main: () -> (code: i32) =
     second_size: usize = 31
     second_alignment: usize = 64
     first: ptr mut u8 = mem.allocate
-        (observed, first_size, first_alignment) else (problem)
+        (observer, first_size, first_alignment) else (problem)
         _ = problem
         return
     end
     second: ptr mut u8 = mem.allocate
-        (observed, second_size, second_alignment) else (problem)
+        (observer, second_size, second_alignment) else (problem)
         _ = problem
         return
     end
@@ -197,18 +205,18 @@ public main: () -> (code: i32) =
     then
         trace = trace + 2
     end if
-    mem.free(observed, first, first_size)
-    mem.free(observed, second, second_size)
+    mem.free(observer, first, first_size)
+    mem.free(observer, second, second_size)
 
     empty_size: usize = 0
     empty_alignment: usize = 0
     empty: ptr mut u8 = mem.allocate
-        (observed, empty_size, empty_alignment) else (problem)
+        (observer, empty_size, empty_alignment) else (problem)
         _ = problem
         return
     end
     another_empty: ptr mut u8 = mem.allocate
-        (observed, empty_size, one) else (problem)
+        (observer, empty_size, one) else (problem)
         _ = problem
         return
     end
@@ -217,8 +225,8 @@ public main: () -> (code: i32) =
     then
         trace = trace + 4
     end if
-    mem.free(observed, empty, empty_size)
-    mem.free(observed, another_empty, empty_size)
+    mem.free(observer, empty, empty_size)
+    mem.free(observer, another_empty, empty_size)
     if observed.live == 0 and observed.allocations == 4
       and observed.frees == 4 and not observed.first_live
       and not observed.second_live and not observed.mismatch
@@ -229,16 +237,17 @@ public main: () -> (code: i32) =
     end if
 
     mut growth := new_audit()
+    grower: audit = (state: addr growth)
     mut values := vec.new(item: ptr node)
-    vec.push(values, growth, addr node_1) else 0
-    vec.push(values, growth, addr node_2) else 0
-    vec.push(values, growth, addr node_3) else 0
-    vec.push(values, growth, addr node_4) else 0
-    vec.push(values, growth, addr node_5) else 0
-    vec.push(values, growth, addr node_6) else 0
-    vec.push(values, growth, addr node_7) else 0
-    vec.push(values, growth, addr node_8) else 0
-    vec.push(values, growth, addr node_9) else 0
+    vec.push(values, grower, addr node_1) else 0
+    vec.push(values, grower, addr node_2) else 0
+    vec.push(values, grower, addr node_3) else 0
+    vec.push(values, grower, addr node_4) else 0
+    vec.push(values, grower, addr node_5) else 0
+    vec.push(values, grower, addr node_6) else 0
+    vec.push(values, grower, addr node_7) else 0
+    vec.push(values, grower, addr node_8) else 0
+    vec.push(values, grower, addr node_9) else 0
 
     at_first: usize = 0
     at_eighth: usize = 7
@@ -258,7 +267,7 @@ public main: () -> (code: i32) =
     then
         trace = trace + 16
     end if
-    vec.release(values, growth)
+    vec.release(values, grower)
 
     if vec.length(values) == 0 and vec.capacity(values) == 0
       and growth.allocations == 2 and growth.frees == 2

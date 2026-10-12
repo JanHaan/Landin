@@ -17,18 +17,18 @@ read_byte: (self: ptr u8) -> (value: u8) =
 end read_byte
 u8 is readable (read: read_byte)
 
---  mem.allocator's inout receiver is a generic evidence contract. An
---  ordinary object-safe adapter supplies explicit pointer-receiver any calls.
+--  An ordinary object-safe adapter supplies explicit pointer-receiver any
+--  calls over the arena handle, which it reads but never changes.
 allocator_view: type = concept (provider: type)
-    alloc: (self: ptr mut provider, size: usize, alignment: usize)
+    alloc: (self: ptr provider, size: usize, alignment: usize)
            -> (block: ptr mut u8) ! mem.out_of_memory
-    free: (self: ptr mut provider, block: ptr mut u8, size: usize) -> none
+    free: (self: ptr provider, block: ptr mut u8, size: usize) -> none
 end allocator_view
-arena_alloc: (self: ptr mut mem.arena, size: usize, alignment: usize)
+arena_alloc: (self: ptr mem.arena, size: usize, alignment: usize)
              -> (block: ptr mut u8) ! mem.out_of_memory =
     block = try mem.allocate(self.val, size, alignment)
 end arena_alloc
-arena_free: (self: ptr mut mem.arena, block: ptr mut u8, size: usize)
+arena_free: (self: ptr mem.arena, block: ptr mut u8, size: usize)
             -> none =
     mem.free(self.val, block, size)
 end arena_free
@@ -47,38 +47,38 @@ extern(c) invoke: (state: ptr mut u8) -> (value: u8) =
     value = state.val
 end invoke
 
-helper: (provider: type is mem.allocator, inout arena: provider,
+helper: (provider: type is mem.allocator, arena: provider,
          value: u8) -> (result: ptr mut u8) ! mem.out_of_memory =
     result = try mem.new(arena, value)
 end helper
 
-retain: (provider: type is mem.allocator, inout arena: provider)
+retain: (provider: type is mem.allocator, arena: provider)
         -> none ! mem.out_of_memory =
     --  W7's missing path: this result never returns through the caller block.
     saved = try helper(arena, u8(37))
 end retain
 
-aggregate: (provider: type is mem.allocator, inout arena: provider)
+aggregate: (provider: type is mem.allocator, arena: provider)
            -> (result: pair) ! mem.out_of_memory =
     first := try helper(arena, u8(11))
     second := try helper(arena, u8(13))
     result = (first: first, second: second)
 end aggregate
 
-view: (provider: type is mem.allocator, inout arena: provider)
+view: (provider: type is mem.allocator, arena: provider)
       -> (result: []mut u8) ! mem.out_of_memory =
     initial: [2]u8 = [17, 19]
     storage := try mem.new(arena, initial)
     result = storage.val[0..<2]
 end view
 
-erased: (provider: type is mem.allocator, inout arena: provider)
+erased: (provider: type is mem.allocator, arena: provider)
         -> (result: any readable) ! mem.out_of_memory =
     object := try helper(arena, u8(23))
     result = any(object)
 end erased
 
-callback_result: (provider: type is mem.allocator, inout arena: provider)
+callback_result: (provider: type is mem.allocator, arena: provider)
                  -> (result: callback_state) ! mem.out_of_memory =
     object := try helper(arena, u8(29))
     result = (call: invoke, state: object)
@@ -86,7 +86,8 @@ end callback_result
 
 run: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
-    mut arena := mem.arena_over(addr backing[0], 128)
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over(space, addr backing[0], 128)
     mut first := try mem.allocate(arena, usize(1), usize(1))
     first.val = 7
     second := try helper(arena, u8(9))
@@ -115,8 +116,10 @@ public main: () -> (code: i32) =
         absent: false
         ptr (retained): retained.val == 37
     end match
-    mut counted_arena := mem.arena_over(addr counted_backing[0], 8)
-    mut counted := fault.new(addr counted_arena, usize(1))
+    mut arena_space: mem.arena_space = zeroed
+    counted_arena := mem.arena_over(arena_space, addr counted_backing[0], 8)
+    mut space: fault.space = zeroed
+    counted := fault.over(space, counted_arena, usize(1))
     counted_block: ptr mut u8 =
         mem.allocate(counted, usize(1), usize(1)) else (problem)
         _ = problem
