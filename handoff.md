@@ -250,7 +250,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R13.17 — Services are handles.**
+**Current roadmap work: R13.30 — Standard input, files and directories.**
 
 ---
 

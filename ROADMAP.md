@@ -1535,7 +1535,7 @@ adapters.
 
 ### R13.17 — Services are handles
 
-Status: active
+Status: complete
 Depends on: R13.16
 
 A program shares its services: a logger and the program write through one
@@ -1557,9 +1557,29 @@ write beside an erased view, a region and its parent used together, and a
 handle refused past its state; and the hosted and firmware corpora passing
 on every target.
 
+Done: D288 makes a service a handle. The allocator and the four I/O concepts
+take theirs by value, every provider in `core` and `hosted` makes one with
+`over` from state its caller declares, and region, fault and diag hold a
+copy of their parent's. `hosted.host()` and `heap.host()` stay one line; a
+handle from `hosted.over` keeps its own last error, which is how
+`abi/r440-errno-thread-local` gives each C thread its own until there is
+thread-local storage. D289 lets an erased entry take a record `self` by
+value, and D290 to D292 correct three borrow checks the conversion met.
+Passing records by value pushed a Cortex-M0 image past its flash, so a
+caller now snapshots a record only when a later argument could write memory,
+and every backend copies aligned records by words.
+`runtime/io-handle-lends-two-arguments`, `runtime/io-handle-beside-erased-view`
+and `runtime/region-beside-parent` pin the patterns that were refused, and
+`negative/handle-outlives-state` and `negative/region-release-live-handle` the
+lifetimes still checked. All 42 jobs in
+[the complete gate](https://github.com/JanHaan/Landin/actions/runs/38348601801)
+passed on `09ca0033`, physical RV64 among them, once Darwin's `stat` device
+numbers were read unsigned; [the branch's final gate](https://github.com/JanHaan/Landin/actions/runs/38409022298)
+passed on `4fa6f5c9` with RV64 suspended.
+
 ### R13.30 — Standard input, files and directories
 
-Status: planned
+Status: active
 Depends on: R13.10, R13.11, R13.13, R13.17
 
 The first of four hosted items, R13.30 to R13.33, which share these rules.
@@ -2030,6 +2050,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-78 | Usability | Run without `--tools` on a host whose locked Cortex-M tools are elsewhere, the corpus fails every profile with "No such file or directory" for `arm-none-eabi-gcc` under the default path, rather than saying the tools are not installed there and naming `--tools`. | The next change to the Cortex-M lanes. | A refusal before any build that names the path looked in and the option. | open |
 | SR-79 | Usability | A gate's `darwin-host` build failed at the bind with gnatbind's "error: disk full" writing the binder's generated main on a macOS runner guest with 37 GiB free, after three passes of the same job there. GNAT reports any short write as "disk full", so the message sent the investigation to clean disks that were not full; the cause is unknown, and the root runner service's open-file limit of 256 is unconfirmed. `scripts/build.sh` now reports the free space and open-file limit beside the message. | The next "disk full" from a build, read with the space and limit it reports. | The cause named, and either removed from the runner or reported by the build in its own words. | open |
 | SR-80 | Release readiness | RV64 is suspended from the gates since 2026-10-13: RISE queued its four hardware jobs for hours, which held every gate verdict. Its emission and execution jobs are skipped and the determinism manifests leave `linux-rv64` out, so only the compiler's own test program checks RV64, and it may regress without a gate failing. The backend is still maintained. | A better CI arrangement for RV64, such as the QEMU fallback R11.40 named or a dependable hardware runner. | The RV64 jobs and manifest target restored or replaced, any regression meanwhile repaired, and a full pass with them. | limit |
+| SR-81 | Usability | Closing an item after its branch's full gate cannot reuse that gate: the explanatory exception takes its base only from a full run on a push to `main`, and identical-tree reuse fails because the closing edit changes `ROADMAP.md`. So R13.17's `Done:` paragraph, a documents-only commit, cost one more full gate run on the branch before `main` could reuse it, and its `Gate: explanatory` line decided nothing. | The next change to `scripts/gate_inputs.py` or the promotion steps in `docs/process.md`. | Either a documents-only commit on a fully gated candidate reuses that candidate's run, or `docs/process.md` says to close the item on the branch before its gate. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

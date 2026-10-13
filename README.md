@@ -468,7 +468,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Current roadmap work: R13.17 — Services are handles.**
+**Current roadmap work: R13.30 — Standard input, files and directories.**
 
 ## License
 
