@@ -51,8 +51,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+#  linux-rv64 is suspended from the gates until further notice; its refusal
+#  pairs below stay listed so restoring it here is the whole change.
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
-           "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
+           "freebsd-x86-64", "freebsd-arm64")
 MODES = ("debug", "release")
 OPTIMIZATIONS = ("none", "size", "speed")
 SPECIALIZATIONS = ("off", "auto", "all")

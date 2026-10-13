@@ -37,7 +37,8 @@ guests; the evidence records the actual guest version and CPU probes.
 RV64 Linux LP64D is cross-emitted on the supported Linux compiler host and
 executed on the RISE service's physical runners with the sole label
 `ubuntu-24.04-riscv`. Separate recurring runtime, native GDB, C ABI and
-ISA-level verdicts retain hardware identity and transcripts. See the
+ISA-level verdicts retain hardware identity and transcripts. Both emission
+and execution are suspended from the gate until further notice. See the
 [RV64 evidence guide](../compiler/tests/rv64/README.md).
 
 ## GitHub Actions runners

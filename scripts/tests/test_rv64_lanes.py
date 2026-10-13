@@ -303,9 +303,9 @@ class RV64Controls(unittest.TestCase):
 
     def test_workflow_requires_all_native_and_emit_verdicts(self):
         workflow = (ROOT / '.github/workflows/gate.yml').read_text()
-        for kind in ('runtime', 'debugger', 'abi', 'isa'):
-            self.assertIn('rv64-' + kind, workflow)
-            self.assertIn('rv64-emit-' + kind, workflow)
+        rv64 = workflow.split('  rv64-emit:\n', 1)[1].split(
+            '  #  Build and compare assembly manifests', 1)[0]
+        self.assertEqual(rv64.count('kind: [runtime, debugger, abi, isa]'), 2)
         self.assertIn('runs-on: ubuntu-24.04-riscv\n', workflow)
         self.assertIn('libc6-dev-riscv64-cross', workflow)
         self.assertIn('-print-file-name=libm.a', workflow)
@@ -333,8 +333,18 @@ class RV64Controls(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/rv64-${{ matrix.kind }}.tar.gz', package)
         self.assertIn('compression-level: 0', package)
         self.assertIn('retention-days: 14', package)
+        # RV64 is suspended from the gates: both jobs stay defined but
+        # neither runs nor is required, and no host emits it for comparison.
+        for job in ('  rv64-emit:\n', '  rv64:\n'):
+            body = workflow.split(job, 1)[1].split('\n\n', 1)[0]
+            self.assertIn("if: false && needs.inputs.outputs.reuse != 'true'", body)
         aggregate = workflow.split('  gate:\n', 1)[1]
-        self.assertIn('rv64-emit, rv64', aggregate)
+        self.assertIn('freebsd-emit, freebsd, determinism]', aggregate)
+        inputs = workflow.split('  inputs:\n', 1)[1].split('  documents:\n', 1)[0]
+        self.assertNotIn('rv64', inputs)
+        manifest = (ROOT / 'scripts/emit_manifest.py').read_text()
+        targets = manifest.split('TARGETS = ', 1)[1].split(')', 1)[0]
+        self.assertNotIn('linux-rv64', targets)
 
 
 if __name__ == '__main__':

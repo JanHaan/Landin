@@ -1,5 +1,11 @@
 # Physical RV64 Linux evidence
 
+RV64 is suspended from the gates until further notice: the four emission
+and four execution jobs below are defined but skipped and not required, and
+the determinism manifests leave `linux-rv64` out. RV64 may regress until it
+has better CI; only the compiler's own test program still checks it. What
+follows describes the lanes when they run.
+
 The gate cross-emits RV64 Linux LP64D with the checked Linux release compiler
 and GNU RISC-V tools, then transfers the binaries to the RISE service's
 physical runners. Its exact runner label is `ubuntu-24.04-riscv`. No native

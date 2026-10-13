@@ -1,4 +1,5 @@
 #  The gate: every target, unless verified explanatory edits reuse a full pass.
+#  RV64 is the exception: suspended until further notice (see rv64-emit).
 #
 #  Verification lanes have separate verdicts.  A release build job on each
 #  host supplies an artifact to its same-host lanes; consumers check its
@@ -68,8 +69,6 @@ jobs:
             freebsd-emit-arm64-runtime freebsd-emit-arm64-debugger freebsd-emit-arm64-abi \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime freebsd-arm64-debugger freebsd-arm64-abi \
-            rv64-emit-runtime rv64-emit-debugger rv64-emit-abi rv64-emit-isa \
-            rv64-runtime rv64-debugger rv64-abi rv64-isa \
             'determinism / manifest (x86_64-linux)' \
             'determinism / manifest (aarch64-linux)' \
             'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate \
@@ -1008,10 +1007,17 @@ jobs:
 
   # Checked Linux compiler cross-emits; RISE runs the transferred payloads on
   # physical RV64. ISA execution probes hardware before extended code runs.
+  #
+  #  RV64 is suspended from the gates until further notice (2026-10-13): RISE
+  #  queued the hardware jobs for hours, which held every gate verdict, and
+  #  RV64 is left to regress until it has better CI.  Both jobs stay defined
+  #  but skipped.  To resume, drop `false &&` from both conditions, restore
+  #  `rv64-emit, rv64` to the gate's needs and their eight leg names to the
+  #  inputs list, and restore linux-rv64 to scripts/emit_manifest.py.
   rv64-emit:
     name: rv64-emit-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: false && needs.inputs.outputs.reuse != 'true'
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
@@ -1068,10 +1074,11 @@ jobs:
             ${{ runner.temp }}/rv64-payload/*.log
           retention-days: 14
 
+  #  Suspended with rv64-emit above.
   rv64:
     name: rv64-${{ matrix.kind }}
     needs: [inputs, rv64-emit]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: false && needs.inputs.outputs.reuse != 'true'
     # RISE requires this exact label set; jobs are ephemeral physical machines.
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 45
@@ -1134,7 +1141,7 @@ jobs:
     needs: [inputs, documents, scripts, compiler, linux-release-build, release,
             bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
             darwin-host, darwin-host-release, darwin-parity, lldb,
-            arm64-compiler, arm64-release, freebsd-emit, freebsd, rv64-emit, rv64, determinism]
+            arm64-compiler, arm64-release, freebsd-emit, freebsd, determinism]
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}

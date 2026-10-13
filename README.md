@@ -96,16 +96,19 @@ The exact-revision native acceptance that approved every revision through
 every push it runs every target unless the verified explanatory-only reuse
 exception below applies. Full runs cover Linux x86-64, Linux arm64 and macOS
 arm64 natively with GDB
-and LLDB, FreeBSD x86-64 and arm64 in accelerated VMs, physical RV64 Linux
-on RISE runners, and Cortex-M under QEMU, both compiler modes, and the
+and LLDB, FreeBSD x86-64 and arm64 in accelerated VMs, and Cortex-M under
+QEMU, both compiler modes, and the
 document, binding and editor-grammar checks. Same-run release build artifacts
 avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
 configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
-x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for all
-seven targets in both build modes, and compares emitted assembly digests
-across hosts; disagreement fails the aggregate gate. It does not assemble, link or run those programs.
+x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for every
+target but RV64 in both build modes, and compares emitted assembly digests
+across hosts; disagreement fails the aggregate gate. RV64 is suspended from
+the gates until it has better CI, so the manifests leave it out and its
+emission and physical execution jobs are skipped; only the compiler's own
+test program still checks it. It does not assemble, link or run those programs.
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
 compiler test.
@@ -381,7 +384,8 @@ This is the maintained inventory of what the compiler does today:
   in [architecture-specific VMs](environments/freebsd/README.md) with separate
   runtime, C ABI and debugger gate verdicts. RV64 uses LP64D and cross-emitted
   payloads on [physical RISE runners](compiler/tests/rv64/README.md), with
-  separate runtime, native GDB, C ABI and ISA-level verdicts.
+  separate runtime, native GDB, C ABI and ISA-level verdicts; those lanes
+  are suspended from the gate until further notice.
   Darwin checks a host-dependent large-image loader limitation against a native
   Clang control. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
@@ -405,7 +409,8 @@ This is the maintained inventory of what the compiler does today:
   an assembly block to the level, and a level runs only on a processor that
   confirms it; an unconfirmed level fails as unverified.
 - **Code generation.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all seven targets;
+  whatever the build directory, environment or order, on all seven targets,
+  though RV64's cross-host comparison is suspended from the gate;
   the hosted linked image is not claimed. Compact numeric-array loops,
   explicit `layout(optimal)` placement and optional evidence-proved
   specialization are independent switches.
@@ -422,10 +427,10 @@ This is the maintained inventory of what the compiler does today:
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0. The recurring gate runs Linux and Darwin programs
-natively, cross-emitted RV64 Linux programs on physical RISE runners,
-FreeBSD programs in accelerated VMs and Cortex-M firmware under QEMU,
-with separate runtime, C ABI and debugger verdicts and RV64 ISA-level
-checks. The recorded boundaries stand as measured: the 32 KiB capacity
+natively, FreeBSD programs in accelerated VMs and Cortex-M firmware under
+QEMU, with separate runtime, C ABI and debugger verdicts. RV64 Linux's
+emission and its execution on physical RISE runners are suspended from the
+gate until further notice. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit observed on some hosts.
 

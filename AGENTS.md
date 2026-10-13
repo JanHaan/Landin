@@ -84,7 +84,10 @@ nix build .#refine-bin
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
 push and pull request. A new candidate runs every target the compiler has,
-in jobs that report separate verdicts. A recent verified identical candidate
+in jobs that report separate verdicts, except RV64: until it has better
+CI, its emission and execution jobs are skipped, the determinism manifests
+leave it out, and it may regress. Only the compiler's own test program
+still checks it. A recent verified identical candidate
 or the explanatory-only exception below may reuse a full pass. Compiler
 builds supply checked executables to their same-host consumers, including
 the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
@@ -146,8 +149,8 @@ still succeed. The linked full run contains the target-test results.
 | `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | self-hosted `freebsd-amd64`, `freebsd-arm64` | execute the applicable runtime corpus in accelerated FreeBSD VMs hosted on Linux, including guest CPU confirmation |
 | `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | self-hosted `freebsd-amd64`, `freebsd-arm64` | native FreeBSD LLDB source stops, frames, local values and unwinding |
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | self-hosted `freebsd-amd64`, `freebsd-arm64` | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
-| `rv64-emit` matrix | self-hosted `linux-amd64` | cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
-| `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
+| `rv64-emit` matrix | self-hosted `linux-amd64` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
+| `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
 | `determinism` | self-hosted `linux-amd64`, `linux-arm64`, `darwin-arm64` | the called workflow emits the fixture manifest on each host and compares them |
 
 Linux and Darwin lanes use the registered `landin-linux-amd64`,
