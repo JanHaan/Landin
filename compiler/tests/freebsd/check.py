@@ -53,6 +53,17 @@ def select(arch, kind):
     return selected
 
 
+def expected_output(meta, base):
+    """The bytes a runtime fixture declares on its stream, or None.
+
+    compiler/tests/README.md compares `run_expect` only when it is present,
+    as the Linux and Darwin lanes do, so undeclared output is not compared.
+    """
+    if meta.get('run_expect'):
+        return (base / meta['run_expect']).read_bytes()
+    return meta['stdout'].encode() if 'stdout' in meta else None
+
+
 def fixture_code(symbols, listing, names):
     """Select ELF function extents, retaining instructions after local labels."""
     extents = []
@@ -300,8 +311,9 @@ class Lane:
             expected_status = (132 if self.args.arch == 'amd64' else 133) if meta.get('traps') == 'yes' else int(meta['status'])
             require(status == expected_status, f'{label}: guest status {status}, expected {expected_status}')
             stdout = Path(str(path) + '.stdout').read_bytes()
-            expected = (Path(result['base']) / meta['run_expect']).read_bytes() if meta.get('run_expect') else meta.get('stdout', '').encode()
-            require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
+            expected = expected_output(meta, Path(result['base']))
+            if expected is not None:
+                require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
             if meta.get('stream', 'merged') != 'merged':
                 require(not Path(str(path) + '.stderr').read_bytes(), label + ': unexpected stderr')
             result['status'] = 'passed'

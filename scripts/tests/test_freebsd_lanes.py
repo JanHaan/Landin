@@ -184,5 +184,16 @@ class FreeBSDControls(unittest.TestCase):
                 guest.checked('processor')
 
 
+class ExpectedOutput(unittest.TestCase):
+    def test_only_declared_output_is_compared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / 'expected.txt').write_bytes(b'listed\n')
+            self.assertEqual(LANE.expected_output({'run_expect': 'expected.txt'}, base), b'listed\n')
+            self.assertEqual(LANE.expected_output({'stdout': 'x'}, base), b'x')
+            self.assertEqual(LANE.expected_output({'stdout': ''}, base), b'')
+            self.assertIsNone(LANE.expected_output({}, base))
+
+
 if __name__ == '__main__':
     unittest.main()
