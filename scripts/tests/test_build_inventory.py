@@ -234,6 +234,13 @@ configs = [arg.split("=", 1)[1] for arg in sys.argv[1:]
            if arg.startswith("--config=")]
 assert len(configs) == 1 and pathlib.Path(configs[0]).is_file()
 project = sys.argv[sys.argv.index("-P") + 1]
+failure = os.environ.get("FAKE_BUILD_FAILURE")
+if failure:
+    print("compiling " + project)
+    print({"disk": "error: disk full writing b__refine.ads",
+           "compile": "main.adb:1:01: error: missing \\";\\""}[failure],
+          file=sys.stderr)
+    raise SystemExit(4)
 if os.environ.get("FAKE_EDIT_ON_PROJECT") == project:
     source = root / "compiler/ada/src/main.adb"
     source.write_text(source.read_text() + "edited during build\\n")
@@ -513,6 +520,25 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     self.assertIn("last build did not finish", retried.stdout)
                     self.assertFalse(marker.exists())
                     self.assertTrue(self.manifest.is_file())
+
+    def test_disk_full_reports_what_was_free(self):
+        for failure in ("disk", "compile"):
+            with self.subTest(failure=failure):
+                result = self.run_build(extra={"FAKE_BUILD_FAILURE": failure})
+                self.assertEqual(result.returncode, 4, result.stderr)
+                self.assertIn("compiling refine.gpr", result.stdout)
+                self.assertNotIn("error", result.stdout)
+                self.assertFalse(self.manifest.exists())
+                if failure == "disk":
+                    self.assertIn("error: disk full writing", result.stderr)
+                    self.assertRegex(
+                        result.stderr,
+                        r'landin: GNAT says "disk full" for any short write; '
+                        r"[0-9]+ MiB were free under .+ and the open-file "
+                        r"limit is [0-9]+")
+                else:
+                    self.assertIn("missing", result.stderr)
+                    self.assertNotIn("short write", result.stderr)
 
     def test_failed_configuration_keeps_successful_build(self):
         result = self.run_build()

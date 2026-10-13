@@ -237,10 +237,33 @@ python3 "$LANDIN_ROOT/scripts/build_identity.py" \
 #  test executable belongs to this snapshot after a compiler-only build.
 rm -f "$Manifest"
 
+#  GNAT reports any short write as "disk full", whatever cut it short: a gate
+#  job on a guest with 37 GiB free failed so.  Its error stream is shown as it
+#  comes and kept, and when it says so the build records what space and
+#  descriptor limit there actually were, so the message is not taken at its word.
+landin_gprbuild() {
+    Errors="$LANDIN_BUILD_DIR/gprbuild-errors.txt"
+    rm -f "$Errors" "$Errors.status"
+    { { gprbuild "$@" 2>&1 1>&3 3>&-
+        echo "$?" > "$Errors.status"; } | tee "$Errors" >&2; } 3>&1
+    Status="$(cat "$Errors.status" 2>/dev/null)" || Status=1
+    if [ "$Status" = 0 ]; then
+        rm -f "$Errors" "$Errors.status"
+        return 0
+    fi
+    if grep -q 'disk full' "$Errors"; then
+        Free="$(df -Pk "$LANDIN_BUILD_DIR" | awk 'NR == 2 { print int($4 / 1024) }')"
+        echo "landin: GNAT says \"disk full\" for any short write;" \
+             "${Free:-unknown} MiB were free under $LANDIN_BUILD_DIR" \
+             "and the open-file limit is $(ulimit -n)" >&2
+    fi
+    return "$Status"
+}
+
 cd "$LANDIN_ADA_DIR"
-gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
+landin_gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
 if [ "$Compiler_Only" = "no" ]; then
-    gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
+    landin_gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
     printf '%s\n' "$Current" > "$Tests_Manifest.tmp"
     mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"
 fi
