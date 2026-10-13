@@ -183,15 +183,18 @@ elsif compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d then
 else
     --- `sizeof (struct stat)` in the native C headers.
     public file_status_size: usize = 144
-    --- C's `struct stat`, as `stat` fills it on this system.
+    --- C's `struct stat`, as `stat` fills it on this system. C declares
+    --- `dev_t` as `int32_t` here, but a device number is a bit pattern, not
+    --- a quantity, and devfs's may have the sign bit set, so both device
+    --- fields are unsigned and widening them never traps.
     public file_status: type = struct
-        device: i32
+        device: u32
         mode: u16
         links: u16
         inode: u64
         uid: u32
         gid: u32
-        special_device: i32
+        special_device: u32
         accessed: timespec
         modified: timespec
         changed: timespec

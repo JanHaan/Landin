@@ -231,10 +231,20 @@ def main(argv=None):
         names = {name for name, _, _ in candidates}
         require(not args.case or set(args.case) <= names, "unknown exact case")
         def fixture(item):
+            #  A fixture's labels print only once all its profiles pass, so a
+            #  failure names the profile it met; the log alone would point at
+            #  the last fixture that passed.
+            labels = []
+            try:
+                return fixture_runs(item, labels)
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                raise ValueError(f"{labels[-1] if labels else item[0]}: {error}") from error
+
+        def fixture_runs(item, labels):
             #  One fixture's profiles run in order: a program may name a fixed
             #  file, and two of its own profiles would race on it.
             name, base, meta = item
-            results, labels = [], []
+            results = []
             profiles = PROFILES["profiles"]
             if args.parity:
                 profiles = [("none", "off"), ("size", "off"), ("size", "auto"), ("speed", "auto")]
