@@ -1,0 +1,26 @@
+--  A `try` of a routine whose error set is inferred, `! ...`, written as
+--  the argument of a generic call.  The argument is checked while the
+--  generic instance is chosen, before inference has solved `halve`'s set,
+--  and an unsolved set is not an empty one: the `try` is accepted, and
+--  its failure propagates through `twice` to `main`'s recovery.
+missing: atom
+
+halve: (value: u32) -> (result: u32) ! ... =
+    fail missing when value % 2 <> 0
+    result = value / 2
+end halve
+
+same: (t: type, value: t) -> (result: t) =
+    result = value
+end same
+
+twice: (value: u32) -> (result: u32) ! ... =
+    result = same(try halve(value)) * 2
+end twice
+
+public main: () -> (code: i32) =
+    code = 1
+    odd: u32 = twice(7) else 0
+    return when odd <> 0
+    code = i32(twice(42) else 0)
+end main

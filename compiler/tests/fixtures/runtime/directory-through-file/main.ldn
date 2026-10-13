@@ -1,0 +1,107 @@
+--  A file used as a directory names no directory, so it is `not_found`, as
+--  a missing path is, while the last errno keeps ENOTDIR, 20 on every
+--  hosted system (D287): opening a regular file or /dev/null as a
+--  directory, opening, making or removing a directory under a file, and
+--  removing a file as a directory.  Making a directory where the file is
+--  finds the name taken: `already_exists`, with EEXIST, 17.
+import core/io
+import hosted/io as hosted
+
+file: []u8 = "through-file-scratch"
+under_file: []u8 = "through-file-scratch/inner"
+device: []u8 = "/dev/null"
+
+refusal: type = io.not_found | io.no_access | io.io_failed | io.already_exists
+
+--  Whether PROBLEM is WANTED with errno NUMBER.
+refused: (host: hosted.system, problem: refusal, wanted: refusal,
+          number: i32) -> (yes: bool) =
+    yes = problem == wanted and hosted.last_errno(host) == number
+end refused
+
+--  Opening PATH as a directory is not_found with ENOTDIR.
+not_listed: (host: hosted.system, path: []u8) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    mut buffer: [1024]u8 = zeroed
+    listing := io.open_directory(host, terminated, buffer[0..<1024])
+        else (problem)
+        yes = refused(host, problem, io.not_found, 20)
+        return
+    end
+    io.close_directory(host, listing) else (problem)
+        _ = problem
+    end
+end not_listed
+
+--  Making a directory at PATH is WANTED with errno NUMBER.
+not_made: (host: hosted.system, path: []u8, wanted: refusal, number: i32)
+          -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    io.make_directory(host, terminated) else (problem)
+        yes = refused(host, problem, wanted, number)
+    end
+end not_made
+
+--  Removing PATH as a directory is not_found with ENOTDIR.
+not_removed: (host: hosted.system, path: []u8) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    io.remove_directory(host, terminated) else (problem)
+        yes = refused(host, problem, io.not_found, 20)
+    end
+end not_removed
+
+--  Make the regular file, or remove it when REMOVING.
+scratch_file: (host: hosted.system, removing: bool) -> none ! ... =
+    mut scratch: [64]u8 = zeroed
+    terminated: ptr u8 = try io.terminate_path(file, scratch[0..<64])
+    if removing then
+        try io.remove_file(host, terminated)
+    else
+        opened: io.file = try io.open_write(host, terminated)
+        try io.close(host, opened)
+    end if
+end scratch_file
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    scratch_file(host, false) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when not not_listed(host, device)
+    code = 3
+    return when not not_listed(host, file)
+    code = 4
+    return when not not_listed(host, under_file)
+    code = 5
+    return when not not_made(host, under_file, io.not_found, 20)
+    code = 6
+    return when not not_made(host, file, io.already_exists, 17)
+    code = 7
+    return when not not_removed(host, file)
+    code = 8
+    return when not not_removed(host, under_file)
+    code = 9
+    scratch_file(host, true) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

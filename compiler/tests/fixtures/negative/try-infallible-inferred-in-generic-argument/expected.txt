@@ -1,0 +1,10 @@
+error[L0329]: this call cannot fail, so `try` has no error to propagate
+  --> ../tests/fixtures/negative/try-infallible-inferred-in-generic-argument/main.ldn:13:19
+   |
+13 |     result = same(try whole(value)) * 2
+   |                   ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/try-infallible-inferred-in-generic-argument/main.ldn:4:1
+  |
+4 | whole: (value: u32) -> (result: u32) ! ... =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this infallible signature
+  = note: [0960]: `try` is for the declared error outcome of a call

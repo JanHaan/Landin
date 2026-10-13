@@ -1,0 +1,169 @@
+--  A name that is not UTF-8, `n`, the byte 0xFF and `.txt`, has each
+--  system's own outcome.  Linux and FreeBSD store a name as bytes, so the
+--  file is made, the listing gives back exactly those bytes, core/text
+--  finds them invalid, and the file is removed by them.  Darwin's file
+--  systems store names as UTF-8 and refuse another with EILSEQ, 92, which
+--  the provider reports as `io_failed` and keeps as the last errno, and
+--  the directory then lists empty.  The program says which it met.
+import core/io
+import core/text
+import hosted/io as hosted
+
+top: []u8 = "utf8-scratch"
+inside: []u8 = "utf8-scratch/n\xff.txt"
+invalid: []u8 = "n\xff.txt"
+
+fixed if compiler.os == darwin then
+    refuses: bool = true
+else
+    refuses: bool = false
+end if
+
+say: (host: hosted.system, line: []u8) -> none =
+    io.write(host, io.out(host), line) else (problem)
+        _ = problem
+    end
+end say
+
+terminated: (path: []u8, scratch: []mut u8)
+            -> (result: ptr u8 from scratch) ! ... =
+    result = try io.terminate_path(path, scratch)
+end terminated
+
+--  Remove what an earlier run may have left.  Where the system refuses
+--  the name, nothing can have been made with it, and the name is not
+--  asked about again.
+clear: (host: hosted.system) -> none ! ... =
+    mut scratch: [64]u8 = zeroed
+    if not refuses then
+        try forget(host, try terminated(inside, scratch[0..<64]))
+    end if
+    io.remove_directory(host, try terminated(top, scratch[0..<64]))
+        else (problem)
+        fail problem when problem <> io.not_found
+    end
+end clear
+
+--  Remove the file PATH names, if it is there.
+forget: (host: hosted.system, path: ptr u8) -> none ! ... =
+    io.remove_file(host, path) else (problem)
+        fail problem when problem <> io.not_found
+    end
+end forget
+
+--  Make the file with the invalid name: whether the system took it, and
+--  the errno it refused it with.
+made: (host: hosted.system) -> (taken: bool, number: i32) ! ... =
+    taken = false
+    number = 0
+    mut scratch: [64]u8 = zeroed
+    path: ptr u8 = try terminated(inside, scratch[0..<64])
+    opened: io.file = io.open_write(host, path) else (problem)
+        fail problem when problem <> io.io_failed
+        number = hosted.last_errno(host)
+        return
+    end
+    try io.close(host, opened)
+    taken = true
+end made
+
+--  How many entries the directory lists, and whether one of them was the
+--  invalid name, byte for byte, found invalid by core/text.
+listed: (host: hosted.system) -> (count: usize, found: bool) ! ... =
+    count = 0
+    found = false
+    mut scratch: [64]u8 = zeroed
+    mut buffer: [1024]u8 = zeroed
+    mut listing: io.directory =
+        try io.open_directory(host, try terminated(top, scratch[0..<64]),
+                              buffer[0..<1024])
+    defer io.close_directory(host, listing) else (problem)
+        _ = problem
+    end
+    loop do
+        item: io.entry = try io.read_entry(host, listing)
+        name: []u8 = item.name
+        break when lenof name == 0
+        inc count
+        if same(name, invalid) then
+            found = not text.valid(name) and refused_as_text(name)
+        end if
+    end loop
+end listed
+
+--  Whether core/text refuses NAME as UTF-8 text.
+refused_as_text: (name: []u8) -> (yes: bool) =
+    shown: utf8 = text.from_bytes(name) else (problem)
+        yes = problem == text.invalid_text
+        return
+    end
+    _ = shown
+    yes = false
+end refused_as_text
+
+same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    yes = true
+end same
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    clear(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    mut scratch: [64]u8 = zeroed
+    top_path := terminated(top, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    io.make_directory(host, top_path) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    (taken, number) := made(host) else (problem)
+        _ = problem
+        return
+    end
+    --  Said so that a failing lane shows which outcome it met.
+    if taken then
+        say(host, "accepted\n")
+    else
+        mut line: [24]u8 = zeroed
+        used: usize = text.write_u32(line[0..<24], 0, u32(number)) else 0
+        say(host, "refused with errno ")
+        say(host, line[0..<used])
+        say(host, "\n")
+    end if
+    code = 4
+    (count, found) := listed(host) else (problem)
+        _ = problem
+        return
+    end
+    if refuses then
+        --  Refused with EILSEQ, and nothing listed.
+        code = 5
+        return when taken or number <> 92
+        code = 6
+        return when count <> 0
+    else
+        --  Taken, and given back as the same invalid bytes.
+        code = 7
+        return when not taken
+        code = 8
+        return when count <> 1 or not found
+    end if
+    code = 9
+    clear(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

@@ -1,0 +1,56 @@
+--  core/io.memory's directories within a 32 KiB firmware image: three
+--  files under `tree`, read through a buffer that holds one entry's
+--  record, so each entry needs a refill of its own, and every one is read
+--  exactly once.  runtime/directory-memory holds the rest of the memory
+--  world's directories on the hosted targets, where it fits.
+import core/io
+
+mut unused: [1]u8 = zeroed
+mut output: [1]u8 = zeroed
+mut errors: [1]u8 = zeroed
+
+slot: (name: []u8, contents: []mut u8)
+      -> (file: io.memory_file from name, contents) =
+    file = (name: name, contents: contents, length: 0, cursor: 0,
+            readable: true, writable: false, opened: false, writing: false)
+end slot
+
+public main: () -> (code: i32) =
+    code = 1
+    mut files: [4]io.memory_file
+    files[0] = slot("tree/a", unused[0..<1])
+    files[1] = slot("other/z", unused[0..<1])
+    files[2] = slot("tree/b", unused[0..<1])
+    files[3] = slot("tree/c", unused[0..<1])
+    no_arguments: []io.argument = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<4], no_arguments, "",
+                           output[0..<1], errors[0..<1])
+    path: [5]u8 = [116, 114, 101, 101, 0]
+    --  A kind byte, a two-byte length and a one-byte name.
+    mut buffer: [4]u8 = zeroed
+    mut listing: io.directory =
+        io.open_directory(host, addr path[0], buffer[0..<4]) else (p)
+            _ = p
+            return
+        end
+    mut seen: u32 = 0
+    loop do
+        code = 2
+        item: io.entry = io.read_entry(host, listing) else (p)
+            _ = p
+            return
+        end
+        name: []u8 = item.name
+        break when lenof name == 0
+        code = 3
+        return when lenof name <> 1 or name[0] < 97 or name[0] > 99
+          or item.kind <> io.regular
+        bit: u32 = u32(1) << u32(name[0] - 97)
+        return when (seen & bit) <> 0
+        seen = seen | bit
+    end loop
+    code = 4
+    return when seen <> 7
+    code = 42
+end main

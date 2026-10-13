@@ -1,0 +1,9 @@
+class: negative
+summary: a try of a routine whose inferred error set turns out empty is refused when written as a generic call's argument, once inference has solved the set
+program: main.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/try-infallible-inferred-in-generic-argument/main.ldn
+status: 1
+constructs: 0960, 1290
+codes: L0329
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,140 @@
+--  A directory far larger than one read buffer: 400 files, each named for
+--  its number and padded to 41 bytes, read through the smallest buffer the
+--  hosted provider takes, so the entries arrive over many refills.
+--  Every name must be read exactly once and parse to a number not seen
+--  before, so a record lost, repeated or read past at the end of one
+--  buffer fails here, as `.` or `..` would if a listing gave them.
+import core/io
+import core/text
+import hosted/io as hosted
+
+top: []u8 = "larger-scratch"
+count: usize = 400
+padding: []u8 = "-padding-to-forty-bytes-in-all-names"
+
+--  The path of file NUMBER in the top directory, or of the directory
+--  itself when MAKING_TOP: `e`, four digits and the padding.
+named: (number: usize, making_top: bool, scratch: []mut u8)
+       -> (path: ptr u8 from scratch) =
+    mut used: usize = 0
+    for byte in top do
+        scratch[used] = byte
+        inc used
+    end for
+    if not making_top then
+        scratch[used] = 47
+        scratch[used + 1] = 101
+        scratch[used + 2] = u8(48 + number / 1000 % 10)
+        scratch[used + 3] = u8(48 + number / 100 % 10)
+        scratch[used + 4] = u8(48 + number / 10 % 10)
+        scratch[used + 5] = u8(48 + number % 10)
+        used += 6
+        for byte in padding do
+            scratch[used] = byte
+            inc used
+        end for
+    end if
+    scratch[used] = 0
+    path = addr scratch[0]
+end named
+
+--  Remove file NUMBER, or the directory, if it is there.
+forget: (host: hosted.system, number: usize, making_top: bool)
+        -> none ! ... =
+    mut scratch: [80]u8 = zeroed
+    path: ptr u8 = named(number, making_top, scratch[0..<80])
+    gone(host, path, making_top) else (problem)
+        fail problem when problem <> io.not_found
+    end
+end forget
+
+gone: (host: hosted.system, path: ptr u8, directory: bool) -> none ! ... =
+    if directory then
+        try io.remove_directory(host, path)
+    else
+        try io.remove_file(host, path)
+    end if
+end gone
+
+clear: (host: hosted.system) -> none ! ... =
+    for number in usize(0)..<count do
+        try forget(host, number, false)
+    end for
+    try forget(host, 0, true)
+end clear
+
+build: (host: hosted.system) -> none ! ... =
+    try clear(host)
+    mut scratch: [80]u8 = zeroed
+    try io.make_directory(host, named(0, true, scratch[0..<80]))
+    for number in usize(0)..<count do
+        opened: io.file = try io.open_write(host,
+                                            named(number, false,
+                                                  scratch[0..<80]))
+        try io.close(host, opened)
+    end for
+end build
+
+--  The number a name carries, or `count` when it is not one of ours.
+number_of: (name: []u8) -> (number: usize) =
+    number = count
+    return when lenof name <> 5 + lenof padding or name[0] <> 101
+    --  The padding after the digits must be ours too.
+    for at in usize(0)..<lenof padding do
+        return when name[5 + at] <> padding[at]
+    end for
+    number = text.parse_usize(name[1..<5]) else count
+    if number >= count then number = count end if
+end number_of
+
+--  Read every entry, counting each number's names; zero when each was
+--  seen once and nothing else was.
+read_all: (host: hosted.system, seen: []mut u16) -> (stray: usize) ! ... =
+    stray = 0
+    mut scratch: [80]u8 = zeroed
+    mut buffer: [1024]u8 = zeroed
+    mut listing: io.directory =
+        try io.open_directory(host, named(0, true, scratch[0..<80]),
+                              buffer[0..<1024])
+    defer io.close_directory(host, listing) else (problem)
+        _ = problem
+    end
+    loop do
+        item: io.entry = try io.read_entry(host, listing)
+        name: []u8 = item.name
+        break when lenof name == 0
+        number: usize = number_of(name)
+        if number == count or item.kind <> io.regular then
+            inc stray
+        else
+            inc seen[number]
+        end if
+    end loop
+end read_all
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    build(host) else (problem)
+        _ = problem
+        return
+    end
+    mut seen: [400]u16 = zeroed
+    code = 2
+    stray: usize = read_all(host, seen[0..<400]) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when stray <> 0
+    code = 4
+    for number in usize(0)..<count do
+        return when seen[number] <> 1
+    end for
+    code = 5
+    clear(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

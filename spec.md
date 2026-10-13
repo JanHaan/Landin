@@ -14126,6 +14126,27 @@ final signature-count assertion remains in place.
 `negative/r490-recovery-expanding-generic` and the checking case
 `recovery deduction interns final sets`.
 
+### D295 — `try` of a callee whose error set is inferred waits for the set
+
+**The tour said** at [0960] that `try` propagates a call's declared failure,
+and a call that cannot fail has none to propagate, which L0329 refuses. A
+callee written `! ...` has its set inferred; written as the argument of a
+generic call, the argument is synthesized while the instance is chosen,
+before the fixed point has solved the callee's set, and an unsolved set
+looked like an empty one.
+
+**Chosen:** a `try` whose callee's set is still being inferred is asked
+again once every set is final, and refused then only if the solved set is
+empty.
+
+**The alternatives:** solving every inferred set before any generic argument
+is synthesized, which D215's discovery order does not allow because a
+generic instance can add to a set; and treating an unsolved set as able to
+fail, which would accept `try` of a callee that turns out infallible.
+
+**Pinned by** `runtime/try-inferred-in-generic-argument` and
+`negative/try-infallible-inferred-in-generic-argument`.
+
 ### D221 — A static concept entry has one declaring concept
 
 **The tour said** that composed concepts retain separate evidence tables and
@@ -17874,7 +17895,9 @@ rsi, rdx, r10, r8 and r9, and rcx and r11 overwritten; arm64 `svc #0` with
 the number in x8 and arguments in x0–x5; RV64 `ecall` with the number in x17
 (a7) and arguments in x10–x15 (a0–a5). rax, x0 or a0 carries the result.
 Its wrappers are `read`, `write`, `openat`, `close`,
-`statx`, `mmap`, `munmap` and the `noreturn` `exit_group`. A failure is
+`statx`, `mmap`, `munmap` and the `noreturn` `exit_group`, to which D294 adds
+`getdents64`, `mkdirat` and `unlinkat`, a public raw `system_call` and every
+call's number. A failure is
 minus its errno in the result; there is no errno cell. The `*at` calls take
 `at_fdcwd`, and `statx`'s `file_status` is the kernel's one 256-byte record
 on every architecture. Every public routine has the link name
@@ -18016,6 +18039,36 @@ pushed later data out of reach; a large-model addressing sequence, which
 lengthens the code of every access. Both are declined.
 
 **Pinned by** `runtime/large-array-offset-is-addressed` under a static link.
+
+### D296 — A module binding the program never uses is not emitted
+
+**The tour said** at [1940] that a module value is known when the program
+starts, and nothing said it is in the image whether used or not. Every
+module binding was lowered and emitted as data into each program whose
+sources declared it, so a program importing a thousand system-call numbers
+(D294) for one of them compiled about two and a half times slower and
+emitted twice the assembly, though the linker discarded the unused data.
+
+**Chosen:** when the entry module declares a public `main`, a module binding
+is lowered and emitted only if something uses it: a resolved reference from
+any node of any source, as a read, a write, an `addr`, another datum's
+initializer, an array length, a routine body whether called or not, or a
+generic template; its name, or `_` and its name on Mach-O, as a word in an
+`assembler.block`'s text; or an explicit link symbol or placement, a
+section, an alignment, a vector or `keep`. `public` alone is not a use.
+Every binding is still checked, so an unused declaration's errors are
+still errors. A use count can keep too much but never too little, and kept
+bindings are numbered in declaration order, so the output stays a function
+of the sources. Any compilation without a public `main` keeps every
+binding.
+
+**The alternatives:** leaving it to the linker, which already discarded the
+data but not the compile time or assembly; and treating `public` as an
+export, which keeps every library table in every program.
+
+**Pinned by** the lowering record `compiler/tests/lowering.ir`, the
+cross-host assembly manifests, and `runtime/linux-system-calls`, which
+imports `hosted/linux/numbers`.
 
 ### D284 — A static Linux executable holds the processor to its level in the entry
 
@@ -18258,3 +18311,93 @@ where a write in the callee's copy is lost.
 `negative/core-diag-frame-world-escape`, and for the last error
 `abi/r440-errno-thread-local` on Darwin and FreeBSD,
 `runtime/r440-errno-detail` and `runtime/hosted-io-not-a-directory`.
+
+### D293 — A directory is a value read through a fifth concept
+
+**The tour said** at [1660] that a program reaches its host only through the
+capabilities it is given, and D268 gave `core/io` four concepts. Nothing
+could list a directory, so an outside program listing one made its own
+system calls.
+
+**Chosen:** `io.directories` is a fifth concept, outside `world`, with
+`open_directory`, `read_entry`, `entry_size`, `close_directory`,
+`make_directory`, `remove_file` and `remove_directory`; the listing consumer
+has to build and clear its own tree. Its provider is a handle (D288); an open
+`io.directory` is a value the caller edits. `open_directory(host, path,
+buffer)` returns a directory `from` a buffer the caller supplies,
+`read_entry` takes it `inout` and returns an entry whose name is lent `from`
+it until the next read, and `close_directory` takes it `sink`. An entry is
+its name as `[]u8` and its kind, `regular | subdirectory | symbolic_link |
+special`, never following a link; where the file system records no kind the
+provider asks the entry itself, and skips one removed in between. An empty
+name is the end of the directory, as zero bytes is the end of a read; `.`
+and `..` are never entries. `entry_size` gives a `u64` relative to the open
+directory without following a link, and a name that is empty, holds `/` or
+NUL, or is 1,024 bytes or longer is `not_found` without asking the host.
+`io.directory_buffer` is 1,024 bytes, the hosted providers' smallest buffer,
+which every hosted system's entries fit. A missing path or a file used as a
+directory is `not_found` (D287), EPERM, EACCES and EROFS are `no_access`, a
+name `make_directory` finds taken is the new atom `io.already_exists`, and
+anything else is `io_failed` with its errno kept. A directory dropped without
+`close_directory` keeps its descriptor until the process ends; `defer
+io.close_directory(...)` is the idiom. On Linux, `getdents64` fills the
+caller's buffer, and every record is held to lie inside what was filled, to
+be long enough for its header and to end its name inside itself, so a bad
+record is `io_failed` rather than a trap. Darwin and FreeBSD open with
+`O_DIRECTORY` and read through `fdopendir`, `readdir` and `closedir`,
+copying each name into the caller's buffer, and make and remove with
+`mkdirat` and `unlinkat`. The memory provider's directories are the slot
+names' parts before a `/`, and a slot ending in `/` is an empty directory;
+it refuses changes other than an existing directory's `already_exists` with
+`no_access`, so `memory_over` keeps its signature.
+
+**The alternatives:** widening `world`, which every world provider and every
+firmware image using `world` would carry; adding the removals to `files`,
+which widens every conformance; a result flag, an end atom or a union for
+the end of a directory; a size in every entry, a status call per entry for a
+listing that wants names; listing `.` and `..` as POSIX `readdir` does;
+an opaque directory type, which a provider in another module cannot build;
+Darwin's `getdirentries`, deprecated and unavailable with 64-bit inodes; and
+`getattrlistbulk`, whose attribute layout no fixture here could pin.
+
+**Pinned by** `runtime/directory-listing`, the published listing consumer;
+`runtime/directory-larger-than-buffer`, which refills a small buffer many
+times and sees every name exactly once; `runtime/directory-missing-path`,
+`runtime/directory-through-file` and `runtime/directory-name-not-utf8`, the
+last reporting each system's own outcome; `runtime/directory-memory` and
+`runtime/directory-memory-firmware`; `abi/libc-directory-record`, which holds
+each system's `struct dirent` and constants to its C headers; and
+`negative/directory-name-outlives-read`, a name kept across the next read.
+
+### D294 — Every Linux system call is reachable by number
+
+**The tour said** nothing of the system interface beneath the library, and
+D279 kept `hosted/linux`'s raw call private behind eight wrappers, so a Linux
+program needing any other call wrote its own assembly block and its own
+numbers.
+
+**Chosen:** the raw call is public as `system_call`, six integer arguments
+and an integer result, minus the errno on failure. `hosted/linux/numbers`
+names every call's number for x86-64, arm64 and RV64 by one rule, the
+kernel's table name followed by `_number`, which no reserved word or wrapper
+can meet. The numbers are generated by `scripts/linux_syscalls.py` from a
+pinned kernel release's own tables, x86-64's `syscall_64.tbl` with the
+common and 64 ABIs and the generic table for arm64 and RV64 with each
+architecture's own entries, and the generated file names the release and its
+checksum; the generator can check the committed file instead of writing it.
+The wrappers take their numbers from the same tables, through a private
+generated file, so there is one source of numbers. The numbers are a module
+of their own, imported by a program that calls by number, so `hosted/linux`
+stays the wrappers every static Linux program imports; a program pays only
+for the numbers it uses (D296). Typed wrappers stay for the calls the library
+itself makes, `getdents64`, `mkdirat` and `unlinkat` among them.
+
+**The alternatives:** keeping the call private, which leaves every unwrapped
+call to hand-written assembly; numbers written by hand, which drift from the
+kernel; the numbers inside `hosted/linux`, a thousand declarations in every
+static Linux program's sources; and a typed wrapper for every
+call, which the roadmap's register keeps in view as its own record.
+
+**Pinned by** `runtime/linux-system-calls`, extended to the public route, and
+`scripts/tests/test_linux_syscalls.py`, which runs the generator on small
+tables and requires the committed files to be its output.

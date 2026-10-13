@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a missing path is not_found with ENOENT kept as last_errno when it is opened as a directory, made under, or removed as a file or a directory, and an entry name that is absent, empty or holds a slash is not_found from entry_size
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1100, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

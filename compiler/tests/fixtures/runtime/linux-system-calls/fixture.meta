@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: hosted/linux makes write, openat, read, close and statx directly and returns each failure as minus its errno
+summary: hosted/linux makes write, openat, read, close, statx, mkdirat, getdents64 and unlinkat directly and any call by its generated number through the raw system_call, and returns each failure as minus its errno
 program: main.ldn
 root: ../../../../..
 run_expect: expected.txt

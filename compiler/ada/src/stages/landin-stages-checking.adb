@@ -1734,6 +1734,9 @@ package body Landin.Stages.Checking is
         (Index_Type => Positive, Element_Type => Pending_Selection);
       Pending_Selections : Selection_Lists.Vector;
       Deferred_Error_Calls : Selection_Lists.Vector;
+      --  `try` of a `! ...` callee met before the callee's set was solved:
+      --  whether it can fail is asked once every set is final.
+      Deferred_Tries : Selection_Lists.Vector;
       Checked_Recovery_Calls : Selection_Lists.Vector;
       Contextual_Recovery_Calls : Selection_Lists.Vector;
       Checking_Routine_Body : Boolean := False;
@@ -18773,8 +18776,13 @@ package body Landin.Stages.Checking is
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this type does not permit a zeroed initializer",
-               Note    => "[0540]/[0630]/D213: zeroed is available only when"
-                          & " the complete type permits a zero image",
+               Note    => "[0540]/[0630]/D213: zeroed needs a zero image for"
+                          & " every field, and a pointer, slice, pointer"
+                          & " union, function or atom set has none; write"
+                          & " the value with its fields, or, for a"
+                          & " service's state, keep its references in the"
+                          & " handle and only scalars in the zeroed state"
+                          & " (D288)",
                Related => Site,
                Because => Because,
                Into    => Found);
@@ -18814,7 +18822,8 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this array has no all-bits-zero value",
                Note    => "[0540]: the complete element type must have a"
-                          & " zero image",
+                          & " zero image; fill the array from one valid"
+                          & " element with `[n of value]`",
                Related => Site,
                Because => Because,
                Into    => Found);
@@ -21054,7 +21063,27 @@ package body Landin.Stages.Checking is
                      Signature : constant Landin.Checking.Signature_Id :=
                        Effective_Call_Signature (Of_Tree, Operand);
                   begin
+                     --  A `! ...` callee whose set is still being solved
+                     --  has no atoms yet without being infallible: an
+                     --  argument of a generic call is synthesized while
+                     --  its instance is chosen, before the fixed point
+                     --  finalizes the set.  Ask again once it has.
                      if Signature /= Landin.Checking.No_Signature
+                       and then Landin.Checking.Signature_Error_Form
+                         (Types.all, Signature)
+                           = Landin.Checking.Inferred
+                     then
+                        declare
+                           Pending : constant Pending_Selection :=
+                             (Syn.Source_Of (Of_Tree), Node,
+                              Landin.Checking.Current_Routine_View
+                                (Types.all));
+                        begin
+                           if not Deferred_Tries.Contains (Pending) then
+                              Deferred_Tries.Append (Pending);
+                           end if;
+                        end;
+                     elsif Signature /= Landin.Checking.No_Signature
                        and then Landin.Checking.Signature_Errors
                          (Types.all, Signature)
                            = Landin.Checking.No_Atom_Set
@@ -30341,7 +30370,8 @@ package body Landin.Stages.Checking is
                Message => "this module array needs an explicit initial"
                           & " value",
                Note    => "[0540]: its complete element type has no"
-                          & " zero image",
+                          & " zero image; fill it from one valid element"
+                          & " with `[n of value]`",
                Related => Syn.Origin (Of_Tree, Written),
                Because => "the array type written here",
                Into    => Found);
@@ -35994,6 +36024,47 @@ package body Landin.Stages.Checking is
                      end if;
                      Restore_Routine_View
                        (Previous);
+                  exception
+                     when others =>
+                        Restore_Failed_Routine_View (Previous);
+                        raise;
+                  end;
+               end loop;
+               for Pending of Deferred_Tries loop
+                  declare
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Pending.Source);
+                     Operand : constant Syn.Node_Id :=
+                       Syn.Operand_Of (Of_Tree.all, Pending.Node);
+                     Previous : constant Landin.Checking.Routine_Instance_Id :=
+                       Landin.Checking.Current_Routine_View (Types.all);
+                  begin
+                     Restore_Routine_View (Pending.View);
+                     declare
+                        Signature : constant Landin.Checking.Signature_Id :=
+                          Effective_Call_Signature (Of_Tree.all, Operand);
+                     begin
+                        if Signature /= Landin.Checking.No_Signature
+                          and then Landin.Checking.Signature_Errors
+                            (Types.all, Signature)
+                              = Landin.Checking.No_Atom_Set
+                        then
+                           Bad.Report
+                             (Item    => Bad.Error_Contract_Violated,
+                              Source  => Pending.Source,
+                              Where   => Syn.Where
+                                (Of_Tree.all, Pending.Node),
+                              Message => "this call cannot fail, so `try`"
+                                         & " has no error to propagate",
+                              Note    => "[0960]: `try` is for the declared"
+                                         & " error outcome of a call",
+                              Related => Landin.Checking.Signature_Origin
+                                (Types.all, Signature),
+                              Because => "this infallible signature",
+                              Into    => Found);
+                        end if;
+                     end;
+                     Restore_Routine_View (Previous);
                   exception
                      when others =>
                         Restore_Failed_Routine_View (Previous);

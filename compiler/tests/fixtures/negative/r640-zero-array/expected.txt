@@ -7,4 +7,4 @@ error[L0328]: this array has no all-bits-zero value
    |
 10 |     value.row = zeroed
    |     ^^^^^^^^^ the array place written here
-  = note: [0540]: the complete element type must have a zero image
+  = note: [0540]: the complete element type must have a zero image; fill the array from one valid element with `[n of value]`

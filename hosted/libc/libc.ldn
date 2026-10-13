@@ -213,3 +213,160 @@ end if
 --- symbolic links: 0, or -1 with the reason in errno.
 public extern(c) stat: (path: ptr u8, result: ptr mut file_status)
                        -> (status: i32)
+
+--- Fill `result` with the status of `path`, relative to the directory
+--- open as `directory`: 0, or -1 with the reason in errno.  With
+--- `at_symlink_nofollow` in `flags` a symbolic link is reported itself.
+public extern(c) fstatat: (directory: i32, path: ptr u8,
+                           result: ptr mut file_status, flags: i32)
+                          -> (status: i32)
+
+--- errno: the name already exists.  The same on every hosted system.
+public eexist: i32 = 17
+
+--- A `struct dirent`'s `d_type`: the entry's type is not known, and a
+--- status call relative to the directory tells it.  The values are the
+--- same on every hosted system.
+public dt_unknown: u8 = 0
+--- `d_type`: a directory.
+public dt_dir: u8 = 4
+--- `d_type`: a regular file.
+public dt_reg: u8 = 8
+--- `d_type`: a symbolic link.
+public dt_lnk: u8 = 10
+
+--- A `stat` mode's file-type bits, and the types among them.  The same on
+--- every hosted system.
+public s_ifmt: u32 = 0o170000
+--- `stat` mode: a directory.
+public s_ifdir: u32 = 0o040000
+--- `stat` mode: a regular file.
+public s_ifreg: u32 = 0o100000
+--- `stat` mode: a symbolic link.
+public s_iflnk: u32 = 0o120000
+
+fixed if compiler.os == linux then
+    fixed if compiler.arch == arm64 then
+        --- `open` flag: fail with ENOTDIR unless the path names a
+        --- directory.  Linux's arm64 keeps a value of its own.
+        public o_directory: i32 = 16384
+    else
+        --- `open` flag: fail with ENOTDIR unless the path names a
+        --- directory.  Linux's arm64 keeps a value of its own.
+        public o_directory: i32 = 65536
+    end if
+    --- `fstatat` flag: report a symbolic link itself.
+    public at_symlink_nofollow: i32 = 256
+
+    --- C's `struct dirent` as `readdir` returns it.  glibc gives no name
+    --- length: the name ends at its NUL.
+    public directory_record: type = struct
+        inode: u64
+        offset: i64
+        record_length: u16
+        kind: u8
+        name: [256]u8
+    end directory_record
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -100
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 512
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u32)
+                              -> (status: i32)
+elsif compiler.os == darwin then
+    --- `open` flag: fail with ENOTDIR unless the path names a directory.
+    --- Linux's arm64 keeps a value of its own.
+    public o_directory: i32 = 1048576
+    --- `fstatat` flag: report a symbolic link itself.
+    public at_symlink_nofollow: i32 = 32
+
+    --- C's `struct dirent` as `readdir` returns it, with the 64-bit
+    --- inode every arm64 Darwin has.
+    public directory_record: type = struct
+        inode: u64
+        seek_offset: u64
+        record_length: u16
+        name_length: u16
+        kind: u8
+        name: [1024]u8
+    end directory_record
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -2
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 128
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u16)
+                              -> (status: i32)
+else
+    --- `open` flag: fail with ENOTDIR unless the path names a directory.
+    --- Linux's arm64 keeps a value of its own.
+    public o_directory: i32 = 131072
+    --- `fstatat` flag: report a symbolic link itself.
+    public at_symlink_nofollow: i32 = 512
+
+    --- C's `struct dirent` as `readdir` returns it, in the layout
+    --- FreeBSD 12 gave it with 64-bit inodes.
+    public directory_record: type = struct
+        inode: u64
+        offset: i64
+        record_length: u16
+        kind: u8
+        padding0: u8
+        name_length: u16
+        padding1: u16
+        name: [256]u8
+    end directory_record
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -100
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 2048
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u16)
+                              -> (status: i32)
+end if
+
+--- What `fdopendir` gives when it cannot open a directory stream, and
+--- `readdir` at the end or on a failure: C's null pointer.
+public no_directory: atom
+
+--- An `fdopendir` result: a directory stream, `DIR *`, or `no_directory`.
+public directory_stream: type = no_directory | ptr mut u8
+
+--- A `readdir` result: the next record, or `no_directory`.
+public directory_entry: type = no_directory | ptr directory_record
+
+--- A directory stream over the directory open as `descriptor`, which the
+--- stream then owns and `closedir` closes, or `no_directory` with the
+--- reason in errno.
+public extern(c) fdopendir: (descriptor: i32) -> (stream: directory_stream)
+
+--- The stream's next record, good until the next `readdir` or `closedir`
+--- on it, or `no_directory` at the end and on a failure, which errno tells
+--- apart when the caller zeroed it first.  Records include `.` and `..`.
+public extern(c) readdir: (stream: ptr mut u8) -> (record: directory_entry)
+
+--- Close a directory stream and its descriptor: 0, or -1 with the reason
+--- in errno.  The stream is released either way.
+public extern(c) closedir: (stream: ptr mut u8) -> (status: i32)
+
+--- Remove the name `path`, relative to `directory` (or `at_fdcwd`): a
+--- file with `flags` zero, an empty directory with `at_removedir`.  0, or
+--- -1 with the reason in errno.
+public extern(c) unlinkat: (directory: i32, path: ptr u8, flags: i32)
+                           -> (status: i32)

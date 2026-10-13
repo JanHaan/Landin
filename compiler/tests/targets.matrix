@@ -11,6 +11,7 @@ abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/core-io-file-identity | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/darwin-varargs-stack-slots | macos-arm64
+abi/libc-directory-record | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
 abi/lp64d-main-return | linux-rv64
@@ -291,6 +292,7 @@ negative/derived-array-slice-by-value | linux-x86-64, linux-arm64, macos-arm64, 
 negative/derived-array-slice-local | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-local-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/directory-name-outlives-read | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/discard-of-nothing | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/divisor-is-zero | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/divisor-is-zero-in-a-body | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1221,6 +1223,7 @@ negative/text-view-byte-escape | linux-x86-64, linux-arm64, macos-arm64, freebsd
 negative/text-view-identities-are-distinct | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/tool-namespace-bindings | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/try-infallible-call | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+negative/try-infallible-inferred-in-generic-argument | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/type-alias-cycle | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/type-name-is-not-a-type | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/unchecked-keeps-a-borrow | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1331,6 +1334,7 @@ negative/written-type-repetition-prefix | linux-x86-64, linux-arm64, macos-arm64
 negative/written-type-text-permissions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/written-type-unclosed-application | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/written-type-wrong-from | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/zeroed-names-its-routes | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/alias-conversion | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/any-slice-dispatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/arm-scopes-are-siblings | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1722,6 +1726,13 @@ runtime/derived-hosted-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-
 runtime/derived-parser | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/derived-storage-address-origin | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/diagnostic-loggers-dispatch | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/directory-larger-than-buffer | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/directory-listing | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/directory-memory | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
+runtime/directory-memory-firmware | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/directory-missing-path | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/directory-name-not-utf8 | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/directory-through-file | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-arguments-at-every-width | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/erased-named-recovery | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2140,6 +2151,7 @@ runtime/text-conversion-truncated-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/text-literal-bytes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-ordinary-conversions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-range-slicing | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/try-inferred-in-generic-argument | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/try-nominal-inference | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/unchecked-arithmetic-wraps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

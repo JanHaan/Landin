@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a directory of 400 files read through a 1024-byte buffer arrives over many refills, and every name is read exactly once, parses to its number through core/text, and is the only kind of entry given, with no record lost, repeated or read past at a buffer's end
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 0940, 0960, 1030, 1100, 1130, 1150, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

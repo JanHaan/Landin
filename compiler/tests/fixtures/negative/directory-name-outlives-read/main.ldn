@@ -1,0 +1,13 @@
+import core/io
+
+--  A name is lent from the directory until the next read, which refills
+--  the caller's buffer the name is in: keeping one across that read is
+--  refused, and the fix is to copy it first.
+first_byte: (host: io.memory, inout listing: io.directory)
+            -> (first: u8) ! io.io_failed =
+    item: io.entry = try io.read_entry(host, listing)
+    name: []u8 = item.name
+    following: io.entry = try io.read_entry(host, listing)
+    _ = following.kind
+    first = name[0]
+end first_byte

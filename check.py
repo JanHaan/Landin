@@ -107,6 +107,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn"),
     ("Word count",
      "compiler/tests/fixtures/runtime/word-count/main.ldn"),
+    ("Directory listing",
+     "compiler/tests/fixtures/runtime/directory-listing/main.ldn"),
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads

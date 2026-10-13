@@ -1,4 +1,5 @@
 import hosted/linux
+import hosted/linux/numbers
 
 --  hosted/linux's system calls, made directly with no C library
 --  beneath them, on every Linux architecture.  Each failure comes back as
@@ -22,6 +23,14 @@ not_directory: [15]u8 =
 sysctl: [27]u8 =
     [47, 112, 114, 111, 99, 47, 115, 121, 115, 47, 107, 101, 114, 110,
      101, 108, 47, 111, 115, 114, 101, 108, 101, 97, 115, 101, 0]
+
+--  A directory made and removed in the directory the program runs in.
+scratch_name: [27]u8 =
+    [108, 105, 110, 117, 120, 45, 115, 121, 115, 116, 101, 109, 45, 99,
+     97, 108, 108, 115, 45, 115, 99, 114, 97, 116, 99, 104, 0]
+
+--  ENOSYS: no call has the number.
+no_call: i64 = 38
 
 --  A character device's file type in a statx mode.
 type_mask: u16 = 0o170000
@@ -78,5 +87,46 @@ public main: () -> (code: i32) =
     mut absent: linux.file_status = zeroed
     return when linux.statx(linux.at_fdcwd, addr missing[0], 0,
                             linux.statx_ino, addr absent) <> -linux.enoent
+
+    --  The raw route: any call by its generated number.
+    code = 10
+    process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0, 0, 0)
+    return when process <= 0
+    return when linux.system_call(numbers.getpid_number, 0, 0, 0, 0, 0, 0)
+      <> process
+    return when linux.system_call(100000, 0, 0, 0, 0, 0, 0) <> -no_call
+
+    --  A directory made, read and removed.
+    code = 11
+    scratch: ptr u8 = addr scratch_name[0]
+    _ = linux.unlinkat(linux.at_fdcwd, scratch, linux.at_removedir)
+    return when linux.mkdirat(linux.at_fdcwd, scratch, 0o700) <> 0
+    return when linux.mkdirat(linux.at_fdcwd, scratch, 0o700)
+      <> -linux.eexist
+    code = 12
+    directory: i32 = linux.openat(linux.at_fdcwd, scratch,
+                                  linux.o_rdonly | linux.o_directory, 0)
+    return when directory < 0
+    mut records: [512]u8 = zeroed
+    filled: isize = linux.getdents64(directory, addr records[0], 512)
+    --  An empty directory holds `.` and `..` and nothing else.
+    return when filled <= 0
+    mut entries: usize = 0
+    mut at: usize = 0
+    while at + 19 < usize(filled) do
+        length: usize = usize(records[at + 16]) | (usize(records[at + 17]) << 8)
+        return when length == 0
+        return when records[at + 19] <> 46
+        inc entries
+        at += length
+    end while
+    return when entries <> 2 or at <> usize(filled)
+    return when linux.getdents64(directory, addr records[0], 512) <> 0
+    return when linux.close(directory) <> 0
+    code = 13
+    return when linux.unlinkat(linux.at_fdcwd, scratch, linux.at_removedir)
+      <> 0
+    return when linux.unlinkat(linux.at_fdcwd, scratch, linux.at_removedir)
+      <> -linux.enoent
     code = 42
 end main

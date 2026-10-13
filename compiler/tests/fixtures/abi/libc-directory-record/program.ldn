@@ -1,0 +1,76 @@
+--  hosted/libc's directory declarations against the system's own C
+--  headers, which the C peer reads: `struct dirent` field by field, the
+--  `open`, `fstatat` and `unlinkat` flags, AT_FDCWD, EEXIST, and the mode
+--  and `d_type` bits.
+import hosted/libc
+
+extern(c) record_size: () -> (bytes: usize)
+extern(c) record_alignment: () -> (bytes: usize)
+extern(c) record_inode: () -> (offset: usize)
+extern(c) record_length: () -> (offset: usize)
+extern(c) record_kind: () -> (offset: usize)
+extern(c) record_name: () -> (offset: usize)
+extern(c) record_name_room: () -> (bytes: usize)
+extern(c) record_name_length: () -> (offset: usize)
+extern(c) flag_directory: () -> (flag: i32)
+extern(c) flag_nofollow: () -> (flag: i32)
+extern(c) flag_removedir: () -> (flag: i32)
+extern(c) working_directory: () -> (directory: i32)
+extern(c) errno_exists: () -> (number: i32)
+extern(c) mode_mask: () -> (bits: u32)
+extern(c) mode_directory: () -> (bits: u32)
+extern(c) mode_regular: () -> (bits: u32)
+extern(c) mode_link: () -> (bits: u32)
+extern(c) type_unknown: () -> (kind: u32)
+extern(c) type_directory: () -> (kind: u32)
+extern(c) type_regular: () -> (kind: u32)
+extern(c) type_link: () -> (kind: u32)
+
+mut probe: libc.directory_record = zeroed
+
+--  How far into the record ADDRESS lies.
+offset_of: (address: usize) -> (offset: usize) =
+    offset = address - usize(addr probe)
+end offset_of
+
+fixed if compiler.os == linux then
+    --  glibc gives no name length; the peer says so with the largest size.
+    name_length_offset: () -> (offset: usize) =
+        offset = 0 -% 1
+    end name_length_offset
+else
+    name_length_offset: () -> (offset: usize) =
+        offset = offset_of(usize(addr probe.name_length))
+    end name_length_offset
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    return when sizeof libc.directory_record <> record_size()
+      or alignof libc.directory_record <> record_alignment()
+    code = 2
+    return when offset_of(usize(addr probe.inode)) <> record_inode()
+      or offset_of(usize(addr probe.record_length)) <> record_length()
+      or offset_of(usize(addr probe.kind)) <> record_kind()
+      or offset_of(usize(addr probe.name[0])) <> record_name()
+      or sizeof libc.directory_record - record_name() < record_name_room()
+    code = 3
+    return when name_length_offset() <> record_name_length()
+    code = 4
+    return when libc.o_directory <> flag_directory()
+      or libc.at_symlink_nofollow <> flag_nofollow()
+      or libc.at_removedir <> flag_removedir()
+      or libc.at_fdcwd <> working_directory()
+      or libc.eexist <> errno_exists()
+    code = 5
+    return when libc.s_ifmt <> mode_mask()
+      or libc.s_ifdir <> mode_directory()
+      or libc.s_ifreg <> mode_regular()
+      or libc.s_iflnk <> mode_link()
+    code = 6
+    return when u32(libc.dt_unknown) <> type_unknown()
+      or u32(libc.dt_dir) <> type_directory()
+      or u32(libc.dt_reg) <> type_regular()
+      or u32(libc.dt_lnk) <> type_link()
+    code = 42
+end main

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io.memory lists the directories its slots' names imply on every hosted target through a 16-byte buffer over many refills with each entry read once, a subdirectory implied by several slots once and an empty directory from a slot ending in a slash, gives entry sizes, and refuses a missing path and a file used as a directory as not_found, an entry larger than the buffer as io_failed, and every change to its caller's slots
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0790, 0900, 0940, 1030, 1130, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

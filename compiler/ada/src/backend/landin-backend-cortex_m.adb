@@ -432,6 +432,16 @@ package body Landin.Backend.Cortex_M is
       Instruction_Count : Natural := 0;
       Leaf_Frame : Boolean := False;
       Leaf_Homes : Landin.Targets.Byte_Count := 0;
+      --  How far sp stands below the bottom of a framed routine's homes,
+      --  and whether that is known here.  A home is then sp plus a small
+      --  constant, which one `add rd, sp, #imm` reaches up to 1020 bytes
+      --  away, where r11 minus the offset takes a register move and, past
+      --  255 bytes, three more instructions.  Known from the end of the
+      --  prologue at every block's start, where nothing has moved sp yet;
+      --  Reserve, Release and the paired pushes keep it; an assembly block
+      --  that names sp, push or pop forgets it until the next block.
+      Sp_Depth : Landin.Targets.Byte_Count := 0;
+      Sp_Known : Boolean := False;
       type Low_Set is array (4 .. 7) of Boolean;
       type Literal_Entry is record
          Name : Unbounded.Unbounded_String;
@@ -629,9 +639,49 @@ package body Landin.Backend.Cortex_M is
          if Leaf_Frame then
             Emit ("mov " & Register & ", sp");
             Add_Offset (Register, Leaf_Homes - Offset);
+         elsif Sp_Known and then Offset <= Leaf_Homes
+           and then Leaf_Homes - Offset + Sp_Depth <= 1020 + 2 * 255
+           and then (Offset > 255
+             or else Leaf_Homes - Offset + Sp_Depth <= 1020)
+           and then Register'Length = 2
+           and then Register (Register'First) = 'r'
+           and then Register (Register'Last) in '0' .. '7'
+         then
+            --  Up to 1020 bytes above sp in one instruction, whose
+            --  immediate counts words, and the rest in at most two more
+            --  byte additions: never longer than the r11 forms below.
+            declare
+               Above : constant Landin.Targets.Byte_Count :=
+                 Leaf_Homes - Offset + Sp_Depth;
+               Base : constant Landin.Targets.Byte_Count :=
+                 Landin.Targets.Byte_Count'Min (Above - Above mod 4, 1020);
+               Rest : Landin.Targets.Byte_Count := Above - Base;
+            begin
+               Emit ("add " & Register & ", sp, #"
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Base)));
+               while Rest > 0 loop
+                  declare
+                     Step : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count'Min (Rest, 255);
+                  begin
+                     Emit ("adds " & Register & ", #"
+                       & Trimmed (Landin.Targets.Byte_Count'Image (Step)));
+                     Rest := Rest - Step;
+                  end;
+               end loop;
+            end;
          elsif Offset <= 255 then
             Emit ("mov " & Register & ", r11");
             Emit ("subs " & Register & ", #" & Trimmed (Offset'Image));
+         elsif Offset <= 2 * 255
+           and then Register'Length = 2
+           and then Register (Register'First) = 'r'
+           and then Register (Register'Last) in '0' .. '7'
+         then
+            Emit ("mov " & Register & ", r11");
+            Emit ("subs " & Register & ", #255");
+            Emit ("subs " & Register & ", #"
+              & Trimmed (Landin.Targets.Byte_Count'Image (Offset - 255)));
          else
             Emit ("mov " & Register & ", r11");
             Immediate ("r7", Pattern (Offset));
@@ -661,6 +711,12 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Verbatim (Text : String) is
          Start : Natural := Text'First;
       begin
+         if Ada.Strings.Fixed.Index (Text, "sp") > 0
+           or else Ada.Strings.Fixed.Index (Text, "push") > 0
+           or else Ada.Strings.Fixed.Index (Text, "pop") > 0
+         then
+            Sp_Known := False;
+         end if;
          Flush_Literals;
          for Index in Text'First .. Text'Last + 1 loop
             if Index > Text'Last or else Text (Index) = LF then
@@ -692,6 +748,7 @@ package body Landin.Backend.Cortex_M is
 
       procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
       begin
+         Sp_Depth := Sp_Depth + Bytes;
          if Bytes in 1 .. 508 and then Bytes mod 4 = 0 then
             Emit ("sub sp, #" & Trimmed (Bytes'Image));
          elsif Bytes > 0 then
@@ -704,6 +761,11 @@ package body Landin.Backend.Cortex_M is
 
       procedure Release (Bytes : Landin.Targets.Byte_Count) is
       begin
+         if Bytes > Sp_Depth then
+            Sp_Known := False;
+         else
+            Sp_Depth := Sp_Depth - Bytes;
+         end if;
          if Bytes in 1 .. 508 and then Bytes mod 4 = 0 then
             Emit ("add sp, #" & Trimmed (Bytes'Image));
          elsif Bytes > 0 then
@@ -2736,6 +2798,7 @@ package body Landin.Backend.Cortex_M is
                   Store_Value (Value);
                else
                   Emit ("push {r2, r4}");
+                  Sp_Depth := Sp_Depth + 8;
                   Load_Value (Input);
                   if Size_Of_Value (Input) /= Landin.Targets.Byte_8 then
                      Emit ("movs r1, #0");
@@ -2750,6 +2813,7 @@ package body Landin.Backend.Cortex_M is
                   Emit ("ldr r2, [sp, #4]");
                   Shift_Pair (True);
                   Emit ("push {r0, r1}");
+                  Sp_Depth := Sp_Depth + 8;
                   Immediate ("r0", Bits and 16#FFFF_FFFF#);
                   Immediate ("r1", Bits / 2 ** 32);
                   Emit ("ldr r2, [sp, #12]");
@@ -2762,9 +2826,11 @@ package body Landin.Backend.Cortex_M is
                   Emit ("bics r4, r0");
                   Emit ("bics r5, r1");
                   Emit ("pop {r0, r1}");
+                  Sp_Depth := Sp_Depth - 8;
                   Emit ("orrs r0, r4");
                   Emit ("orrs r1, r5");
                   Emit ("pop {r2, r4}");
+                  Sp_Depth := Sp_Depth - 8;
                   Memory (True, Carrier, "r0", "r2");
                end if;
             end Packed_Access;
@@ -3135,6 +3201,7 @@ package body Landin.Backend.Cortex_M is
                            Emit ("cmp r4, #0");
                            Branch ("eq", Done & "_multiply");
                            Emit ("push {r0, r1, r2, r3}");
+                           Sp_Depth := Sp_Depth + 16;
                            if Signed then
                               Emit ("cmp r1, #0");
                               Branch ("ge", Done & "_left");
@@ -3174,6 +3241,7 @@ package body Landin.Backend.Cortex_M is
                            Branch ("hi", Trap);
                            Put (Done & "_fits:");
                            Emit ("pop {r0, r1, r2, r3}");
+                           Sp_Depth := Sp_Depth - 16;
                            Put (Done & "_multiply:");
                         end if;
                         Emit ("bl __aeabi_lmul");
@@ -4185,6 +4253,7 @@ package body Landin.Backend.Cortex_M is
                Emit (".cfi_def_cfa_register r11");
             end if;
          end if;
+         Sp_Known := False;
          Reserve (Homes);
          if Leaf and then Debug /= null then
             Emit (".cfi_def_cfa_offset " & Trimmed
@@ -4291,6 +4360,9 @@ package body Landin.Backend.Cortex_M is
          end if;
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             Put (Label (Item, Landin.IR.Block_Id (Block)) & ":");
+            --  Every block starts with sp at the bottom of the homes.
+            Sp_Depth := 0;
+            Sp_Known := not Leaf_Frame;
             for Position in 1 .. Landin.IR.Length
               (Of_Unit, Item, Landin.IR.Block_Id (Block))
             loop
@@ -4303,6 +4375,7 @@ package body Landin.Backend.Cortex_M is
                Instruction (Current_Value);
             end loop;
          end loop;
+         Sp_Known := False;
          for Edge of Edges loop
             Put (Unbounded.To_String (Edge.Label) & ":");
             if Debug /= null then

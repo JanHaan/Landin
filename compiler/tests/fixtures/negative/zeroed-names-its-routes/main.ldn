@@ -1,0 +1,25 @@
+--  A service's state that holds its backing, and an array of records that
+--  hold an atom: neither has a zero image, and each refusal names the route
+--  that has one.  The state keeps scalars and its handle the reference
+--  (D288); the array is filled from one valid element with `[n of value]`.
+calm: atom
+loud: atom
+level: type = calm | loud
+
+counter_space: type = struct
+    backing: []mut u8
+    used: usize
+end counter_space
+
+reading: type = struct
+    value: u32
+    kind: level
+end reading
+
+bad: () -> (total: usize) =
+    mut state: counter_space = zeroed
+    mut readings: [4]reading = zeroed
+    readings[0].value = 1
+    state.used = 2
+    total = state.used + usize(readings[0].value)
+end bad

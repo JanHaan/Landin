@@ -14203,7 +14203,7 @@ item 2 ROUTINE f result bool signature 1 params 0 slots 2 blocks 1 values 8
     7 LOAD bool slot 1
     8 LEAVE <- 7
 file positive/shared-declarations-every-position/main.ldn
-unit signatures 11 items 21
+unit signatures 11 items 14
 signature 1 (inout usize, inout usize) -> none
 signature 2 (in i32, in i32, in u8) -> i32
 signature 3 (in [2]usize) -> ([2]usize from 1, [2]usize from 1)
@@ -14215,27 +14215,15 @@ signature 8 () -> i32
 signature 9 (in struct shape) -> i32
 signature 10 () -> i32
 signature 11 (in i32, in i32) -> i32
-item 1 DATUM red result u8 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER u8 0
-    2 LEAVE <- 1
-item 2 DATUM green result u8 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER u8 0
-    2 LEAVE <- 1
-item 3 DATUM blue result u8 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER u8 0
-    2 LEAVE <- 1
-item 4 DATUM first result i32 params 0 slots 0 blocks 1 values 2
+item 1 DATUM first result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 1
     2 LEAVE <- 1
-item 5 DATUM second result i32 params 0 slots 0 blocks 1 values 2
+item 2 DATUM second result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 LOAD_DATUM i32 datum 4 first
+    1 LOAD_DATUM i32 datum 1 first
     2 LEAVE <- 1
-item 6 DATUM limit result u32 params 0 slots 1 blocks 1 values 6
+item 3 DATUM limit result u32 params 0 slots 1 blocks 1 values 6
   slot 1 - u32
   block 1 scope 1 PROGRAM length 6
     1 NUMBER u32 3
@@ -14244,19 +14232,11 @@ item 6 DATUM limit result u32 params 0 slots 1 blocks 1 values 6
     4 LOAD u32 slot 1
     5 ADD u32 <- 4 3
     6 LEAVE <- 5
-item 7 DATUM ceiling result u32 params 0 slots 0 blocks 1 values 2
+item 4 DATUM ceiling result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 LOAD_DATUM u32 datum 6 limit
+    1 LOAD_DATUM u32 datum 3 limit
     2 LEAVE <- 1
-item 8 DATUM spare result u16 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER u16 0
-    2 LEAVE <- 1
-item 9 DATUM extra result u16 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER u16 0
-    2 LEAVE <- 1
-item 10 ROUTINE swap result none signature 1 params 2 slots 3 blocks 1 values 11
+item 5 ROUTINE swap result none signature 1 params 2 slots 3 blocks 1 values 11
   slot 1 a address of i32 param 1
   slot 2 b address of i32 param 2
   slot 3 held i32
@@ -14272,7 +14252,7 @@ item 10 ROUTINE swap result none signature 1 params 2 slots 3 blocks 1 values 11
     9 LOAD usize slot 2
     10 STORE_INDIRECT address slot 2 <- 9 8
     11 LEAVE
-item 11 ROUTINE total result i32 signature 2 params 3 slots 6 blocks 1 values 13
+item 6 ROUTINE total result i32 signature 2 params 3 slots 6 blocks 1 values 13
   slot 1 a i32 param 1
   slot 2 b i32 param 2
   slot 3 c u8 param 3
@@ -14293,7 +14273,7 @@ item 11 ROUTINE total result i32 signature 2 params 3 slots 6 blocks 1 values 13
     11 STORE slot 4 <- 10
     12 LOAD i32 slot 4
     13 LEAVE <- 12
-item 12 ROUTINE split result struct signature 3 params 2 slots 15 blocks 1 values 43
+item 7 ROUTINE split result struct signature 3 params 2 slots 15 blocks 1 values 43
   slot 1 split usize param 1
   slot 2 source elements 2 of usize param 2
   slot 3 - aggregate fields [2]usize [2]usize return
@@ -14353,7 +14333,7 @@ item 12 ROUTINE split result struct signature 3 params 2 slots 15 blocks 1 value
     41 STORE_FIELD slot 10 field 2 <- 38
     42 COPY_ARRAY from slot 10 to slot 3 field 2
     43 LEAVE
-item 13 ROUTINE observe result u32 signature 4 params 2 slots 4 blocks 1 values 8
+item 8 ROUTINE observe result u32 signature 4 params 2 slots 4 blocks 1 values 8
   slot 1 here aggregate fields u32 u32 u32 param 1
   slot 2 there aggregate fields u32 u32 u32 param 2
   slot 3 lines u32 return
@@ -14367,7 +14347,7 @@ item 13 ROUTINE observe result u32 signature 4 params 2 slots 4 blocks 1 values 
     6 STORE slot 3 <- 5
     7 LOAD u32 slot 3
     8 LEAVE <- 7
-item 14 ROUTINE ends result struct signature 6 params 2 slots 6 blocks 1 values 14
+item 9 ROUTINE ends result struct signature 6 params 2 slots 6 blocks 1 values 14
   slot 1 ends usize param 1
   slot 2 s usize signature 5 param 2
   slot 3 - aggregate fields i32 i32 return
@@ -14389,7 +14369,7 @@ item 14 ROUTINE ends result struct signature 6 params 2 slots 6 blocks 1 values 
     12 LOAD_FIELD i32 slot 4 field 2
     13 STORE_FIELD slot 3 field 2 <- 12
     14 LEAVE
-item 15 ROUTINE rank result struct signature 7 params 3 slots 4 blocks 1 values 5
+item 10 ROUTINE rank result struct signature 7 params 3 slots 4 blocks 1 values 5
   slot 1 rank usize param 1
   slot 2 x i32 param 2
   slot 3 y i32 param 3
@@ -14400,15 +14380,7 @@ item 15 ROUTINE rank result struct signature 7 params 3 slots 4 blocks 1 values 
     3 LOAD i32 slot 3
     4 STORE_FIELD slot 4 field 2 <- 3
     5 LEAVE
-item 16 DATUM after result i32 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER i32 0
-    2 LEAVE <- 1
-item 17 DATUM closing result i32 params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 NUMBER i32 0
-    2 LEAVE <- 1
-item 18 ROUTINE value_first result i32 signature 8 params 0 slots 4 blocks 1 values 12
+item 11 ROUTINE value_first result i32 signature 8 params 0 slots 4 blocks 1 values 12
   slot 1 sum i32 return
   slot 2 left i32
   slot 3 right i32
@@ -14426,7 +14398,7 @@ item 18 ROUTINE value_first result i32 signature 8 params 0 slots 4 blocks 1 val
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
     12 LEAVE <- 11
-item 19 ROUTINE area result i32 signature 9 params 1 slots 6 blocks 5 values 23
+item 12 ROUTINE area result i32 signature 9 params 1 slots 6 blocks 5 values 23
   slot 1 s aggregate fields variant u8 cases2 () (i32,i32) param 1
   slot 2 r i32 return
   slot 3 - u8
@@ -14461,7 +14433,7 @@ item 19 ROUTINE area result i32 signature 9 params 1 slots 6 blocks 5 values 23
     19 MULTIPLY i32 <- 18 17
     20 STORE slot 2 <- 19
     21 JUMP target 4
-item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 154
+item 13 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 154
   slot 1 code i32 return
   slot 2 a i32
   slot 3 - i32
@@ -14509,7 +14481,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     5 NUMBER u8 3
     6 LOAD i32 slot 3
     7 LOAD i32 slot 4
-    8 CALL i32 callee 11 total signature 2 <- 6 7 5
+    8 CALL i32 callee 6 total signature 2 <- 6 7 5
     9 STORE slot 2 <- 8
     10 LOAD i32 slot 2
     11 STORE slot 5 <- 10
@@ -14517,7 +14489,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     13 STORE slot 6 <- 12
     14 PLACE_ADDRESS usize
     15 LOAD usize slot 6
-    16 CALL none callee 10 swap signature 1 <- 15 14
+    16 CALL none callee 5 swap signature 1 <- 15 14
     17 NUMBER u8 1
     18 STORE_FIELD slot 7 field 1 <- 17
     19 NUMBER u8 2
@@ -14545,7 +14517,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     41 STORE_FIELD slot 10 field 2 <- 38
     42 STORAGE_ADDRESS usize storage slot 10
     43 STORAGE_ADDRESS usize storage slot 9
-    44 CALL none callee 12 split signature 3 <- 43 42
+    44 CALL none callee 7 split signature 3 <- 43 42
     45 LOAD_FIELD usize slot 9 field 1 nested 1
     46 LOAD_FIELD usize slot 9 field 1 nested 2
     47 STORE slot 16 <- 45
@@ -14572,11 +14544,11 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     68 LOAD u8 slot 19
     69 ADD u8 <- 68 67
     70 STORE_FIELD slot 8 field 1 <- 69
-    71 FUNCTION_ADDRESS usize target 21 - signature 11
+    71 FUNCTION_ADDRESS usize target 14 - signature 11
     72 STORE slot 23 <- 71
-    73 FUNCTION_ADDRESS usize target 15 rank signature 7
+    73 FUNCTION_ADDRESS usize target 10 rank signature 7
     74 STORAGE_ADDRESS usize storage slot 24
-    75 CALL none callee 14 ends signature 6 <- 74 73
+    75 CALL none callee 9 ends signature 6 <- 74 73
     76 LOAD usize slot 23
     77 STORE slot 25 <- 76
     78 LOAD i32 slot 2
@@ -14608,7 +14580,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     104 NUMBER u32 36
     105 STORE_FIELD slot 31 field 3 <- 104
     106 STORAGE_ADDRESS usize storage slot 31
-    107 CALL u32 callee 13 observe signature 4 <- 99 106
+    107 CALL u32 callee 8 observe signature 4 <- 99 106
     108 STORE slot 32 <- 107
     109 NUMBER u32 1
     110 STORE_FIELD slot 33 field 1 <- 109
@@ -14624,7 +14596,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     120 NUMBER u32 48
     121 STORE_FIELD slot 34 field 3 <- 120
     122 STORAGE_ADDRESS usize storage slot 34
-    123 CALL u32 callee 13 observe signature 4 <- 115 122
+    123 CALL u32 callee 8 observe signature 4 <- 115 122
     124 LOAD u32 slot 32
     125 SUBTRACT u32 <- 124 123
     126 CONVERSION i32 <- 125
@@ -14633,21 +14605,21 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     129 STORE slot 1 <- 128
     130 LOAD i32 slot 1
     131 STORE slot 35 <- 130
-    132 CALL i32 callee 18 value_first signature 8
+    132 CALL i32 callee 11 value_first signature 8
     133 LOAD i32 slot 35
     134 ADD i32 <- 133 132
     135 STORE slot 36 <- 134
-    136 LOAD_DATUM i32 datum 4 first
+    136 LOAD_DATUM i32 datum 1 first
     137 LOAD i32 slot 36
     138 ADD i32 <- 137 136
     139 STORE slot 37 <- 138
-    140 LOAD_DATUM i32 datum 5 second
+    140 LOAD_DATUM i32 datum 2 second
     141 LOAD i32 slot 37
     142 ADD i32 <- 141 140
     143 STORE slot 38 <- 142
-    144 LOAD_DATUM u32 datum 6 limit
+    144 LOAD_DATUM u32 datum 3 limit
     145 STORE slot 39 <- 144
-    146 LOAD_DATUM u32 datum 7 ceiling
+    146 LOAD_DATUM u32 datum 4 ceiling
     147 LOAD u32 slot 39
     148 ADD u32 <- 147 146
     149 CONVERSION i32 <- 148
@@ -14656,7 +14628,7 @@ item 20 ROUTINE main result i32 signature 10 params 0 slots 39 blocks 1 values 1
     152 STORE slot 1 <- 151
     153 LOAD i32 slot 1
     154 LEAVE <- 153
-item 21 ROUTINE - result i32 signature 11 params 2 slots 4 blocks 1 values 8
+item 14 ROUTINE - result i32 signature 11 params 2 slots 4 blocks 1 values 8
   slot 1 u i32 param 1
   slot 2 v i32 param 2
   slot 3 w i32 return

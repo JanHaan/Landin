@@ -1,0 +1,14 @@
+--  `same`'s argument is checked before inference solves `whole`'s set, so
+--  whether the `try` has anything to propagate is asked again once the set
+--  is final: it is empty, and the `try` is refused.
+whole: (value: u32) -> (result: u32) ! ... =
+    result = value
+end whole
+
+same: (t: type, value: t) -> (result: t) =
+    result = value
+end same
+
+twice: (value: u32) -> (result: u32) ! ... =
+    result = same(try whole(value)) * 2
+end twice

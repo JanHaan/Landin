@@ -20,6 +20,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
     },
+    "abi/libc-directory-record": {
+      "mode": "restriction",
+      "reason": "The C library's struct dirent and its flags exist only on a hosted system, so the C peer that reads them is hosted; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/libc-directory-record/fixture.meta"
+    },
     "abi/linux-file-identity": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -640,6 +645,49 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
+    },
+    "runtime/directory-larger-than-buffer": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+    },
+    "runtime/directory-listing": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+    },
+    "runtime/directory-memory": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/directory-memory-firmware": {
+      "mode": "execute"
+    },
+    "runtime/directory-missing-path": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+    },
+    "runtime/directory-name-not-utf8": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+    },
+    "runtime/directory-through-file": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
@@ -1320,14 +1368,10 @@
       "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
     "runtime/r420-memory-world": {
-      "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
+      "mode": "execute"
     },
     "runtime/r420-memory-world-boundaries": {
-      "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
+      "mode": "execute"
     },
     "runtime/r420-memory-world-cortex": {
       "mode": "execute",
@@ -1473,9 +1517,7 @@
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
     "runtime/r440-io-partial-progress": {
-      "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
+      "mode": "execute"
     },
     "runtime/r440-optional-origin-edges": {
       "mode": "execute"
@@ -2086,6 +2128,9 @@
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+    },
+    "runtime/try-inferred-in-generic-argument": {
+      "mode": "execute"
     },
     "runtime/try-nominal-inference": {
       "mode": "execute"

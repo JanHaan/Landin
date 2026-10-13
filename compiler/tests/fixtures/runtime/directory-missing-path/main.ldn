@@ -1,0 +1,120 @@
+--  A path that names nothing is `not_found` to every directory operation,
+--  with ENOENT, 2 on every hosted system, kept as the last errno: opening
+--  it as a directory, making a directory under it, and removing it as a
+--  file or as a directory.  An entry name that is not in an open directory
+--  is `not_found` too, and so is a name no entry can have, which never
+--  reaches the system and leaves the last errno at zero.
+import core/io
+import hosted/io as hosted
+
+missing: []u8 = "/landin-absent-parent/absent"
+missing_parent: []u8 = "/landin-absent-parent/absent/new"
+
+--  Every way a directory operation can fail.
+refusal: type = io.not_found | io.no_access | io.io_failed | io.already_exists
+
+--  Whether the outcome was `not_found` with errno NUMBER.
+absent: (host: hosted.system, problem: refusal, number: i32) -> (yes: bool) =
+    yes = problem == io.not_found and hosted.last_errno(host) == number
+end absent
+
+opened_absent: (host: hosted.system) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    path := io.terminate_path(missing, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    mut buffer: [1024]u8 = zeroed
+    listing := io.open_directory(host, path, buffer[0..<1024]) else (problem)
+        yes = absent(host, problem, 2)
+        return
+    end
+    io.close_directory(host, listing) else (problem)
+        _ = problem
+    end
+end opened_absent
+
+made_absent: (host: hosted.system) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    path := io.terminate_path(missing_parent, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    io.make_directory(host, path) else (problem)
+        yes = absent(host, problem, 2)
+    end
+end made_absent
+
+removed_absent: (host: hosted.system, directory: bool) -> (yes: bool) =
+    yes = false
+    mut scratch: [64]u8 = zeroed
+    path := io.terminate_path(missing, scratch[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    gone(host, path, directory) else (problem)
+        yes = absent(host, problem, 2)
+    end
+end removed_absent
+
+gone: (host: hosted.system, path: ptr u8, directory: bool)
+      -> none ! io.not_found | io.no_access | io.io_failed =
+    if directory then
+        try io.remove_directory(host, path)
+    else
+        try io.remove_file(host, path)
+    end if
+end gone
+
+--  In the directory the program runs in, which is there: a name that is
+--  not, and names no entry can have.
+sized_absent: (host: hosted.system) -> (code: i32) =
+    code = 10
+    here: []u8 = "."
+    mut scratch: [4]u8 = zeroed
+    path := io.terminate_path(here, scratch[0..<4]) else (problem)
+        _ = problem
+        return
+    end
+    mut buffer: [1024]u8 = zeroed
+    listing := io.open_directory(host, path, buffer[0..<1024]) else (problem)
+        _ = problem
+        return
+    end
+    defer io.close_directory(host, listing) else (problem)
+        _ = problem
+    end
+    code = 11
+    _ = io.entry_size(host, listing, "landin-absent-entry") else (problem)
+        return when not absent(host, problem, 2)
+        0
+    end
+    code = 12
+    _ = io.entry_size(host, listing, "") else (problem)
+        return when not absent(host, problem, 0)
+        0
+    end
+    code = 13
+    _ = io.entry_size(host, listing, "a/b") else (problem)
+        return when not absent(host, problem, 0)
+        0
+    end
+    code = 0
+end sized_absent
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    return when not opened_absent(host)
+    code = 2
+    return when not made_absent(host)
+    code = 3
+    return when not removed_absent(host, false)
+    code = 4
+    return when not removed_absent(host, true)
+    code = sized_absent(host)
+    return when code <> 0
+    code = 42
+end main

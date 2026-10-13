@@ -4,6 +4,7 @@ with Landin.Machine;
 --  retains request overrides and mode, and records option provenance,
 --  inactive declarations and ordered library requests for one compilation.
 
+private with Ada.Containers.Ordered_Sets;
 private with Ada.Containers.Vectors;
 private with Ada.Containers.Indefinite_Vectors;
 private with Ada.Strings.Unbounded;
@@ -113,8 +114,15 @@ private
       Node   : Landin.Syntax.Node_Id;
    end record;
 
-   package Entries is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Inactive_Node);
+   function "<" (Left, Right : Inactive_Node) return Boolean;
+
+   --  Every node of every inactive subtree is marked, and every stage asks
+   --  about nodes and declarations one at a time, so a lookup must not cost
+   --  a walk of the marks: a list made each question linear in the inactive
+   --  code, which on hosted/linux and its numbers module was most of the
+   --  frontend's time.
+   package Entries is new Ada.Containers.Ordered_Sets
+     (Element_Type => Inactive_Node);
 
    type Override_Entry is record
       Name, Value : Ada.Strings.Unbounded.Unbounded_String;
@@ -131,7 +139,7 @@ private
      (Index_Type => Positive, Element_Type => Option_Site);
 
    type Table is record
-      Inactive : Entries.Vector;
+      Inactive : Entries.Set;
       Settings : Overrides.Vector;
       Linked   : Libraries.Vector;
       Declared : Option_Sites.Vector;

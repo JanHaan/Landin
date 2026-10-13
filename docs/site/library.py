@@ -207,7 +207,7 @@ def collect(root):
 
 def overviews(root, modules):
     text = (root / 'docs/library.md').read_text()
-    parts = re.split(r'^## ((?:core|hosted|platform)/\w+)\s*$', text, flags=re.M)
+    parts = re.split(r'^## ((?:core|hosted|platform)(?:/\w+)+)\s*$', text, flags=re.M)
     result = {}
     for module, body in zip(parts[1::2], parts[2::2]):
         example = re.search(r'^\[Executable example\]\(\.\./([^\n)]+)\)\s*$', body, re.M)
@@ -365,7 +365,7 @@ def write(root, destination, render):
         aliases = {}
         for path, text in sources.items():
             if str(Path(path).parent) == module:
-                for match in re.finditer(r'^import ((?:core|hosted|platform)/\w+)(?: as (\w+))?\s*$', text, re.M):
+                for match in re.finditer(r'^import ((?:core|hosted|platform)(?:/\w+)+)(?: as (\w+))?\s*$', text, re.M):
                     aliases[match[2] or match[1].split('/')[-1]] = match[1]
         def reference(name):
             if '.' in name:

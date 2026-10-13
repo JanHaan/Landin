@@ -5,12 +5,16 @@ with Landin.Stages.Folding;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Cleanup;
 with Landin.IR;
 with Landin.IR.Verifier;
+with Landin.Machine;
+with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -155,6 +159,16 @@ package body Landin.Stages.Lowering is
         [others => 0];
       Has_Distinct_Image : array (Module_Image_Index) of Boolean :=
         [others => False];
+
+      --  A module binding nothing names is neither lowered nor
+      --  emitted, whatever module declares it.  It is still checked: a
+      --  module's errors are errors whether or not a program uses it.
+      --  Filled before pass one; see Retain_Module_Data.
+      Retained : array (Module_Image_Index) of Boolean := [others => False];
+
+      --  Whether module binding ID becomes a datum of this program.
+      function Is_Retained (Id : Res.Declaration_Id) return Boolean
+      is (Id in Module_Image_Index and then Retained (Id));
 
       function Has_Distinct_Conversion
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
@@ -15161,6 +15175,184 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
+      --  Which module bindings this program uses.  A use is any
+      --  resolved reference to the binding from a node of any source, in any
+      --  position: a read, a write, an `addr`, another datum's initializer,
+      --  a type's length, a routine's body whether or not that routine is
+      --  itself used, and a generic template, whose instances share its
+      --  nodes.  A binding whose own spelling carries a link symbol or a
+      --  placement is used as well, since a C peer, a linker script or a
+      --  kept section may name it (a binding is never `extern`), and so is
+      --  one whose name appears as a word in the text of any
+      --  `assembler.block`, which reaches data by symbol where the resolver
+      --  cannot see it.  `public` alone is not an export, so a public
+      --  binding nothing names is dropped like a private one.  The
+      --  count over-approximates, never under: a reference from a datum
+      --  that is itself unused, or from code a branch never reaches, keeps
+      --  its target.  Item numbering follows declaration order among what
+      --  is kept, so the emitted program stays a function of its sources.
+      --  Only a program is pruned: one whose entry module declares a public
+      --  `main`, which is what roots it.  A compilation with no such entry,
+      --  assembly for an object or a firmware image entered elsewhere,
+      --  keeps every binding, since anything in it may be what a consumer
+      --  came for.
+      Retain_Module_Data :
+      declare
+         Default : constant Landin.Machine.Placement := (others => <>);
+         use type Landin.Machine.Placement;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+
+         --  Whether WORD stands in some assembly text as a symbol of its
+         --  own, with no symbol character on either side.
+         function Named_In_Assembly (Word : String) return Boolean;
+
+         function Named_In_Assembly (Word : String) return Boolean is
+            Text : constant String :=
+              Ada.Strings.Unbounded.To_String (Assembly);
+            From : Natural := Text'First;
+            function Symbolic (C : Character) return Boolean is
+              (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | '$');
+         begin
+            if Word'Length = 0 then
+               return False;
+            end if;
+            loop
+               declare
+                  At_Index : constant Natural :=
+                    Ada.Strings.Fixed.Index (Text (From .. Text'Last), Word);
+               begin
+                  exit when At_Index = 0;
+                  if (At_Index = Text'First
+                      or else not Symbolic (Text (At_Index - 1)))
+                    and then (At_Index + Word'Length > Text'Last
+                      or else not Symbolic (Text (At_Index + Word'Length)))
+                  then
+                     return True;
+                  end if;
+                  From := At_Index + 1;
+               end;
+            end loop;
+            return False;
+         end Named_In_Assembly;
+         Grouped : constant not null access Landin.Modules.Table :=
+           Landin.Stages.Modules (Context);
+         Rooted : Boolean := False;
+      begin
+         for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
+            declare
+               Id : constant Res.Declaration_Id := Res.Declaration_Id (Index);
+               From : constant Landin.Source.Source_Id :=
+                 Res.Source_Of (Meanings.all, Id);
+               use type Landin.Modules.Module_Id;
+            begin
+               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+                 and then Res.Is_Public (Meanings.all, Id)
+                 and then Landin.Source.Names.Spelling
+                   (Spellings.all, Res.Name_Of (Meanings.all, Id)) = "main"
+                 and then Natural (From)
+                   <= Landin.Modules.Source_Count (Grouped.all)
+                 and then Landin.Modules.Module_Of (Grouped.all, From)
+                   = Landin.Modules.Entry_Module
+                 and then Landin.Configuration.Is_Active
+                   (Activity.all, From, Res.Node_Of (Meanings.all, Id))
+               then
+                  Rooted := True;
+               end if;
+            end;
+         end loop;
+         if not Rooted then
+            Retained := [others => True];
+         end if;
+
+         for Index in 1 .. Source_Count (Context) loop
+            exit when not Rooted;
+            declare
+               Src : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Src);
+            begin
+               for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+               loop
+                  if Landin.Configuration.Assembly_Call
+                    (Spellings.all, Of_Tree.all, Node)
+                  then
+                     for Which in 1 .. Syn.Argument_Count (Of_Tree.all, Node)
+                     loop
+                        declare
+                           Written : constant Syn.Node_Id :=
+                             Syn.Nth_Argument (Of_Tree.all, Node, Which);
+                           Argument : constant Syn.Node_Id :=
+                             (if Syn.Kind (Of_Tree.all, Written)
+                                   = Syn.Call_Argument
+                              then Syn.Expression_Projection
+                                (Of_Tree.all, Written)
+                              else Written);
+                        begin
+                           if Argument /= Syn.No_Node
+                             and then Syn.Kind (Of_Tree.all, Argument)
+                               in Syn.Text_Literal | Syn.Raw_Literal
+                           then
+                              Ada.Strings.Unbounded.Append
+                                (Assembly,
+                                 Landin.Configuration.Fixed_Text
+                                   (Source (Context, Src), Of_Tree.all,
+                                    Argument) & ASCII.LF);
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+                  if Res.Verdict_Of (Meanings.all, Of_Tree.all, Node)
+                       = Res.Bound
+                  then
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree.all, Node);
+                     begin
+                        if Means in Module_Image_Index
+                          and then Res.Sort_Of (Meanings.all, Means)
+                                     = Res.Module_Binding
+                        then
+                           Retained (Means) := True;
+                        end if;
+                     end;
+                  end if;
+               end loop;
+            end;
+         end loop;
+
+         for Id in Module_Image_Index loop
+            if Natural (Id) <= Res.Declaration_Count (Meanings.all)
+              and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+              and then not Retained (Id)
+            then
+               declare
+                  Src : constant Landin.Source.Source_Id :=
+                    Res.Source_Of (Meanings.all, Id);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Src);
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Id);
+               begin
+                  Retained (Id) :=
+                    Landin.Checking.Link_Symbol (Types.all, Id)
+                      /= Landin.Source.Names.No_Name
+                    or else Named_In_Assembly
+                      (Landin.Source.Names.Spelling
+                         (Spellings.all, Res.Name_Of (Meanings.all, Id)))
+                    --  Mach-O spells a C-level symbol with a leading `_`.
+                    or else Named_In_Assembly
+                      ("_" & Landin.Source.Names.Spelling
+                         (Spellings.all, Res.Name_Of (Meanings.all, Id)))
+                    or else (Syn.Kind (Of_Tree.all, Node) = Syn.Binding
+                      and then Landin.Configuration.Placement_Of
+                        (Source (Context, Src), Of_Tree.all, Node,
+                         Spellings.all) /= Default);
+               end;
+            end if;
+         end loop;
+      end Retain_Module_Data;
+
       --  Pass one: every active item, over every tree, before any is
       --  filled.  D139's shared declaration traversal flattens selected
       --  runs before this action sees them.
@@ -15261,6 +15453,10 @@ package body Landin.Stages.Lowering is
                end;
 
             when Syn.Binding =>
+               if not Is_Retained (Id) then
+                  Made := IR.No_Item;
+                  return;
+               end if;
                declare
                   Held : constant Ty.Type_Kind :=
                     Landin.Checking.Type_Of (Types.all, Id);
@@ -19085,6 +19281,7 @@ package body Landin.Stages.Lowering is
                       Res.Declaration_Id (Declarations)
             loop
                if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+                 and then Is_Retained (Id)
                  and then Landin.Checking.Type_Of (Types.all, Id)
                           in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
                              | Ty.Atom_Value | Ty.Pointer_Value
@@ -19112,7 +19309,11 @@ package body Landin.Stages.Lowering is
                      Lower_Routine (Of_Tree, Node);
                   end if;
                when Syn.Binding =>
-                  Lower_Datum (Of_Tree, Node);
+                  if Is_Retained
+                    (Declaration_At (Syn.Source_Of (Of_Tree), Node))
+                  then
+                     Lower_Datum (Of_Tree, Node);
+                  end if;
                when others =>
                   null;
             end case;

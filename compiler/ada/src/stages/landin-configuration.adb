@@ -267,27 +267,25 @@ package body Landin.Configuration is
       Into.Declared.Clear;
    end Prepare;
 
+   function "<" (Left, Right : Inactive_Node) return Boolean is
+     (Left.Source < Right.Source
+      or else (Left.Source = Right.Source and then Left.Node < Right.Node));
+
    procedure Mark_Inactive
      (Into : in out Table;
       Source : Landin.Source.Source_Id;
       Node : Landin.Syntax.Node_Id) is
    begin
-      Into.Inactive.Append
+      Into.Inactive.Include
         (Inactive_Node'(Source => Source, Node => Node));
    end Mark_Inactive;
 
    function Is_Active
      (In_Table : Table;
       Source : Landin.Source.Source_Id;
-      Node : Landin.Syntax.Node_Id) return Boolean is
-   begin
-      for Item of In_Table.Inactive loop
-         if Item.Source = Source and then Item.Node = Node then
-            return False;
-         end if;
-      end loop;
-      return True;
-   end Is_Active;
+      Node : Landin.Syntax.Node_Id) return Boolean
+   is (not In_Table.Inactive.Contains
+         (Inactive_Node'(Source => Source, Node => Node)));
 
    procedure For_Each_Active_Declaration
      (In_Table : Table; Of_Tree : Landin.Syntax.Tree)

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io.memory lists a directory on every target within a 32 KiB firmware image, through a buffer holding one entry's record so that each entry takes a refill, reading each entry exactly once and skipping a slot outside the directory
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 1030, 1130, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

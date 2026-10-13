@@ -1,0 +1,9 @@
+class: negative
+summary: zeroed refused for a record holding a slice and for an array of records holding an atom set names its routes, the state-and-handle split and the repeated-element array form
+program: main.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn
+status: 1
+constructs: 0540, 0630
+codes: L0328, L0328
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

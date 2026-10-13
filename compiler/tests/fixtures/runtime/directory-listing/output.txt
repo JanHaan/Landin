@@ -1,0 +1,6 @@
+file 6 alpha.log
+file 1000 beta.log
+file 6 café.log
+file 0 empty
+directory - nested
+5 entries, 1012 bytes in files

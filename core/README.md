@@ -19,9 +19,13 @@ available on every target. Their providers retain caller-supplied authority.
 
 `hosted/heap`, `hosted/io` and `hosted/libc` require a hosted system. Import
 the I/O provider `as hosted` alongside the shared `core/io` protocol.
-`hosted/libc` declares the C library both providers call, with the facts that
-differ between systems selected by `compiler.os`; the compiler names none of
-it. `platform/c` holds the
+`hosted/libc` declares the C library both providers call on Darwin and
+FreeBSD, with the facts that differ between systems selected by
+`compiler.os`; the compiler names none of it. `hosted/linux` declares
+Linux's system calls, which the providers make on Linux, and the raw
+`system_call` that makes any of them; `hosted/linux/numbers` names every
+call's number, generated from a pinned kernel release. Both declare nothing
+on Darwin and FreeBSD. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cpu` holds M-profile CPU operations and admits the
 armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
@@ -64,7 +68,13 @@ copyable value passed `in` that refers to its state, so a program, its logger
 and several containers share one without locking it. Its lifetime is checked
 once, where `over` makes it `from` the state; the state's type is the
 module's `space`, which the caller declares `zeroed` beside its backing bytes
-and keeps alive while any handle is used. Giving the state back, as
+and keeps alive while any handle is used. So a state holds only scalars,
+counters, limits and cursors: `zeroed` has no image for a pointer, a slice,
+a pointer union, a function or an atom set, and refuses one with L0328.
+Everything a service refers to, the backing it was given and the provider it
+stacks on, is held by the handle `over` returns, which is why the handle is
+`from` the state and may also be `from` that backing: `mem.arena_space`
+counts, and the arena's handle holds the base. Giving the state back, as
 `region.release` does, takes it `inout` and is refused while a handle made
 from it is still in use. Process-wide state, the argument root, the last
 errno and the Linux heap's classes, belongs to the process, so
@@ -102,6 +112,26 @@ so two lent arguments, the count and a write through an erased world made
 from the same handle are live at once. `in` is reserved [1760], so the
 standard-input entry is the noun `input`, which reads beside `out` and `err`
 without C's `std` prefix.
+
+`directories` is a fifth concept beside the four and outside `world`, so a
+sink, an image or a firmware world that has no tree is not made to carry
+one. It opens a directory, reads its entries, asks an entry's size, and
+makes and removes directories and files. An open directory is a value, not
+a service: the caller declares the `directory` that `open_directory`
+returns, supplies its read buffer, and passes it `inout` to `read_entry`.
+Each entry's name is lent `from` the directory, because the next read
+refills the buffer the name lies in, so a program that keeps a name copies
+it, and keeping one across a read is refused [0800]. Names are `[]u8`, as
+the system stores them; `core/text` validates one that should be text. An
+empty name is the end of the directory, as a zero-byte read is the end of a
+file, and `.` and `..` are never entries. The size is a separate
+`entry_size` call relative to the open directory, the `*at` form, so a
+listing that wants only names makes no status call per entry. A directory
+dropped without `close_directory` keeps its descriptor until the process
+ends; a `defer` closes it on every way out. `core/io.memory`'s directories
+are the parts of its slots' names before a `/`, a slot ending in `/` an
+empty directory, read through the caller's buffer as the hosted provider's
+are; its tree is the caller's slots, so it makes and removes nothing.
 `core/text` writes `u32`, `u64` and `usize` decimals and parses them from
 `[]u8`; a program does not write its own digit loop. The comparison concepts
 `equatable`, `hashable` and `ordered` live in `core/cmp`, apart from the map

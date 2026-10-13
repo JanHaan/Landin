@@ -283,6 +283,15 @@ value description or image, including nested contents and function
 relocations where needed. Instructions used to describe a static value are
 not startup code. They do not introduce execution before the entry point.
 
+A program, one whose entry module declares a public `main`, gets a datum only
+for the module bindings something names: a resolved reference from any node
+of any source, the text of an `assembler.block`, a link symbol or a placement.
+Every binding is still checked. A binding nothing names, in a library module
+or the program's own, is not lowered or emitted, so a module of a thousand
+public constants costs a program that uses one of them a single datum. A
+compilation without such an entry keeps every binding, since anything in it
+may be what its consumer came for.
+
 ## Calls, evidence and failure
 
 A function value needs more than an address. Its signature descriptor

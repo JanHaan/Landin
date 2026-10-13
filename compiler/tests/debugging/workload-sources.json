@@ -16,7 +16,8 @@
     "examples/config_parser/parser/parser.ldn",
     "hosted/io/io.ldn",
     "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn"
+    "hosted/linux/linux.ldn",
+    "hosted/linux/wrapped.ldn"
   ],
   "containers": [
     "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
@@ -36,7 +37,8 @@
     "examples/derived_containers/workload/workload.ldn",
     "hosted/heap/heap.ldn",
     "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn"
+    "hosted/linux/linux.ldn",
+    "hosted/linux/wrapped.ldn"
   ],
   "hosted": [
     "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
@@ -62,6 +64,7 @@
     "hosted/heap/heap.ldn",
     "hosted/io/io.ldn",
     "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn"
+    "hosted/linux/linux.ldn",
+    "hosted/linux/wrapped.ldn"
   ]
 }

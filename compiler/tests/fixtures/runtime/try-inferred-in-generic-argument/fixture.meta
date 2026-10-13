@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a try of a routine with an inferred error set, written as a generic call's argument, is accepted before inference solves the set and propagates its failure
+program: main.ldn
+status: 42
+constructs: 0940, 0960, 1030, 1290
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

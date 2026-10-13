@@ -6,6 +6,15 @@
 --  architectures.  The module also holds the program-owned process entry,
 --  `_landin_start`, which a static Linux executable starts at.
 --
+--  Every call is public by number: `system_call` is the raw six-argument
+--  call, and the module hosted/linux/numbers, generated from a pinned
+--  kernel release by scripts/linux_syscalls.py, names each call's number as
+--  its kernel name followed by `_number`.  It is a module of its own so
+--  that a program that makes no raw call does not compile a thousand
+--  declarations.  The typed wrappers below cover the calls the library
+--  itself makes; their numbers are wrapped.ldn's, which the same generator
+--  writes from the same tables.
+--
 --  Every public routine carries a link name of its own, so none of them is
 --  mistaken for, or replaces, the C library's function of the same name in
 --  a program that also links libc.
@@ -16,11 +25,19 @@
 
 fixed if compiler.os == linux then
     fixed if compiler.arch == x86_64 then
-        --  rax names the call and carries its result; rdi, rsi, rdx, r10,
-        --  r8 and r9 carry its arguments; the kernel overwrites rcx and
-        --  r11.
-        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
-                f: i64) -> (result: i64) =
+        --- Make the system call `number` with six arguments, unused ones
+        --- zero, and return the kernel's result: a failure is minus its
+        --- errno, from -4095 to -1.  This is the raw route to every Linux
+        --- call: the module hosted/linux/numbers names each call's number,
+        --- `numbers.getpid_number` for one.  A pointer goes as
+        --- `i64(usize(p))`, and nothing checks an argument's type, so
+        --- prefer a typed wrapper where there is one.
+        ---
+        --- rax names the call and carries its result; rdi, rsi, rdx, r10,
+        --- r8 and r9 carry its arguments; the kernel overwrites rcx and r11.
+        public link(symbol: "_landin_linux_system_call") system_call:
+            (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
+            -> (result: i64) =
             result = assembler.block("syscall", inout n: i64 at rax = number,
                                      in p: i64 at rdi = a,
                                      in q: i64 at rsi = b,
@@ -29,16 +46,11 @@ fixed if compiler.os == linux then
                                      in t: i64 at r8 = e,
                                      in u: i64 at r9 = f, out _ at rcx,
                                      out _ at r11)
-        end call6
+        end system_call
 
-        read_number: i64 = 0
-        write_number: i64 = 1
-        close_number: i64 = 3
-        mmap_number: i64 = 9
-        munmap_number: i64 = 11
-        exit_group_number: i64 = 231
-        openat_number: i64 = 257
-        statx_number: i64 = 332
+        --- `openat` flag: fail with ENOTDIR unless `path` names a
+        --- directory.  arm64 keeps a value of its own.
+        public o_directory: i32 = 65536
 
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc on top of the stack and no return address.  It
@@ -49,10 +61,19 @@ fixed if compiler.os == linux then
             assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rdi\nandq $-16, %rsp\ncall _landin_start_main")
         end _landin_start
     elsif compiler.arch == arm64 then
-        --  x8 names the call; x0 to x5 carry its arguments and x0 its
-        --  result.
-        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
-                f: i64) -> (result: i64) =
+        --- Make the system call `number` with six arguments, unused ones
+        --- zero, and return the kernel's result: a failure is minus its
+        --- errno, from -4095 to -1.  This is the raw route to every Linux
+        --- call: the module hosted/linux/numbers names each call's number,
+        --- `numbers.getpid_number` for one.  A pointer goes as
+        --- `i64(usize(p))`, and nothing checks an argument's type, so
+        --- prefer a typed wrapper where there is one.
+        ---
+        --- x8 names the call; x0 to x5 carry its arguments and x0 its
+        --- result.
+        public link(symbol: "_landin_linux_system_call") system_call:
+            (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
+            -> (result: i64) =
             result = assembler.block("svc #0", in n: i64 at x8 = number,
                                      inout p: i64 at x0 = a,
                                      in q: i64 at x1 = b,
@@ -60,16 +81,11 @@ fixed if compiler.os == linux then
                                      in s: i64 at x3 = d,
                                      in t: i64 at x4 = e,
                                      in u: i64 at x5 = f)
-        end call6
+        end system_call
 
-        read_number: i64 = 63
-        write_number: i64 = 64
-        close_number: i64 = 57
-        mmap_number: i64 = 222
-        munmap_number: i64 = 215
-        exit_group_number: i64 = 94
-        openat_number: i64 = 56
-        statx_number: i64 = 291
+        --- `openat` flag: fail with ENOTDIR unless `path` names a
+        --- directory.  arm64 keeps a value of its own.
+        public o_directory: i32 = 16384
 
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc at the sixteen-byte-aligned stack pointer and no
@@ -80,10 +96,19 @@ fixed if compiler.os == linux then
             assembler.block("mov x29, #0\nmov x30, #0\nmov x0, sp\nbl _landin_start_main")
         end _landin_start
     else
-        --  a7 names the call; a0 to a5 carry its arguments and a0 its
-        --  result.
-        call6: (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64,
-                f: i64) -> (result: i64) =
+        --- Make the system call `number` with six arguments, unused ones
+        --- zero, and return the kernel's result: a failure is minus its
+        --- errno, from -4095 to -1.  This is the raw route to every Linux
+        --- call: the module hosted/linux/numbers names each call's number,
+        --- `numbers.getpid_number` for one.  A pointer goes as
+        --- `i64(usize(p))`, and nothing checks an argument's type, so
+        --- prefer a typed wrapper where there is one.
+        ---
+        --- a7 names the call; a0 to a5 carry its arguments and a0 its
+        --- result.
+        public link(symbol: "_landin_linux_system_call") system_call:
+            (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
+            -> (result: i64) =
             result = assembler.block("ecall", in n: i64 at x17 = number,
                                      inout p: i64 at x10 = a,
                                      in q: i64 at x11 = b,
@@ -91,16 +116,11 @@ fixed if compiler.os == linux then
                                      in s: i64 at x13 = d,
                                      in t: i64 at x14 = e,
                                      in u: i64 at x15 = f)
-        end call6
+        end system_call
 
-        read_number: i64 = 63
-        write_number: i64 = 64
-        close_number: i64 = 57
-        mmap_number: i64 = 222
-        munmap_number: i64 = 215
-        exit_group_number: i64 = 94
-        openat_number: i64 = 56
-        statx_number: i64 = 291
+        --- `openat` flag: fail with ENOTDIR unless `path` names a
+        --- directory.  arm64 keeps a value of its own.
+        public o_directory: i32 = 65536
 
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc on top of the stack and no return address.  It
@@ -125,6 +145,12 @@ fixed if compiler.os == linux then
     --- `openat` flag: truncate an existing regular file to length zero.
     public o_trunc: i32 = 512
 
+    --- `statx` flag: report a symbolic link itself rather than what it
+    --- names.
+    public at_symlink_nofollow: i32 = 256
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 512
+
     --- errno: the operation is not permitted.
     public eperm: i32 = 1
     --- errno: no such file or directory.
@@ -135,6 +161,8 @@ fixed if compiler.os == linux then
     public eacces: i32 = 13
     --- errno: a path component is not a directory.
     public enotdir: i32 = 20
+    --- errno: the name already exists.
+    public eexist: i32 = 17
     --- errno: the file system is read-only.
     public erofs: i32 = 30
 
@@ -147,9 +175,13 @@ fixed if compiler.os == linux then
     --- `mmap` flag: the mapping is backed by no file and starts zeroed.
     public map_anonymous: i32 = 32
 
+    --- `statx` mask: the file's type, in `mode`'s top bits.
+    public statx_type: u32 = 1
     --- `statx` mask: the inode number, beside the basic fields every call
     --- fills.
     public statx_ino: u32 = 256
+    --- `statx` mask: the size in bytes.
+    public statx_size: u32 = 512
 
     --- A `statx` time: whole seconds and the nanoseconds after them.
     public statx_time: type = struct
@@ -190,16 +222,16 @@ fixed if compiler.os == linux then
     --- count read, zero at end of file, or minus the errno.
     public link(symbol: "_landin_linux_read") read:
         (descriptor: i32, data: ptr mut u8, length: usize) -> (result: isize) =
-        result = isize(call6(read_number, i64(descriptor),
-                             i64(usize(data)), i64(length), 0, 0, 0))
+        result = isize(system_call(read_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), 0, 0, 0))
     end read
 
     --- Write at most `length` bytes from `data` to `descriptor`: the count
     --- accepted, which may be short, or minus the errno.
     public link(symbol: "_landin_linux_write") write:
         (descriptor: i32, data: ptr u8, length: usize) -> (result: isize) =
-        result = isize(call6(write_number, i64(descriptor),
-                             i64(usize(data)), i64(length), 0, 0, 0))
+        result = isize(system_call(write_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), 0, 0, 0))
     end write
 
     --- Open `path`, relative to `directory` (or `at_fdcwd`), with `flags`
@@ -208,47 +240,85 @@ fixed if compiler.os == linux then
     public link(symbol: "_landin_linux_openat") openat:
         (directory: i32, path: ptr u8, flags: i32, mode: u32)
         -> (result: i32) =
-        result = i32(call6(openat_number, i64(directory), i64(usize(path)),
-                           i64(flags), i64(mode), 0, 0))
+        result = i32(system_call(openat_number, i64(directory),
+                                 i64(usize(path)), i64(flags), i64(mode), 0,
+                                 0))
     end openat
 
     --- Close `descriptor`: zero, or minus the errno.  The descriptor is
     --- released even when this fails, so a failed close is never retried.
     public link(symbol: "_landin_linux_close") close:
         (descriptor: i32) -> (result: i32) =
-        result = i32(call6(close_number, i64(descriptor), 0, 0, 0, 0, 0))
+        result = i32(system_call(close_number, i64(descriptor), 0, 0, 0, 0,
+                                 0))
     end close
 
     --- Fill `into` with the status of `path`, relative to `directory`:
-    --- zero, or minus the errno.  `flags` zero follows symbolic links;
-    --- `mask` asks for fields beyond the basic ones.
+    --- zero, or minus the errno.  `flags` zero follows symbolic links and
+    --- `at_symlink_nofollow` does not; `mask` asks for fields beyond the
+    --- basic ones.
     public link(symbol: "_landin_linux_statx") statx:
         (directory: i32, path: ptr u8, flags: i32, mask: u32,
          into: ptr mut file_status) -> (result: i32) =
-        result = i32(call6(statx_number, i64(directory), i64(usize(path)),
-                           i64(flags), i64(mask), i64(usize(into)), 0))
+        result = i32(system_call(statx_number, i64(directory),
+                                 i64(usize(path)), i64(flags), i64(mask),
+                                 i64(usize(into)), 0))
     end statx
+
+    --- Fill at most `length` bytes at `into` with the next records of the
+    --- directory open as `descriptor`: the bytes filled, zero at the end of
+    --- the directory, or minus the errno, EINVAL when not even one record
+    --- fits.  A record is the entry's inode as a `u64`, an offset as an
+    --- `i64`, its own length as a `u16` at byte 16, the entry's type as a
+    --- `u8` at byte 18, and its NUL-terminated name from byte 19, padded
+    --- to a multiple of eight; it is little-endian on every architecture
+    --- Linux runs Landin on.  The records come in no promised order and
+    --- include `.` and `..`.
+    public link(symbol: "_landin_linux_getdents64") getdents64:
+        (descriptor: i32, into: ptr mut u8, length: usize) -> (result: isize) =
+        result = isize(system_call(getdents64_number, i64(descriptor),
+                                   i64(usize(into)), i64(length), 0, 0, 0))
+    end getdents64
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- zero, or minus the errno, EEXIST when the name is taken.
+    public link(symbol: "_landin_linux_mkdirat") mkdirat:
+        (directory: i32, path: ptr u8, mode: u32) -> (result: i32) =
+        result = i32(system_call(mkdirat_number, i64(directory),
+                                 i64(usize(path)), i64(mode), 0, 0, 0))
+    end mkdirat
+
+    --- Remove the name `path`, relative to `directory` (or `at_fdcwd`): a
+    --- file with `flags` zero, an empty directory with `at_removedir`.
+    --- Zero, or minus the errno.
+    public link(symbol: "_landin_linux_unlinkat") unlinkat:
+        (directory: i32, path: ptr u8, flags: i32) -> (result: i32) =
+        result = i32(system_call(unlinkat_number, i64(directory),
+                                 i64(usize(path)), i64(flags), 0, 0, 0))
+    end unlinkat
 
     --- Map `length` bytes: the mapping's address, or minus the errno.
     --- With `map_anonymous` the descriptor is -1 and the offset zero.
     public link(symbol: "_landin_linux_mmap") mmap:
         (address: usize, length: usize, protection: i32, flags: i32,
          descriptor: i32, offset: i64) -> (result: i64) =
-        result = call6(mmap_number, i64(address), i64(length),
-                       i64(protection), i64(flags), i64(descriptor), offset)
+        result = system_call(mmap_number, i64(address), i64(length),
+                             i64(protection), i64(flags), i64(descriptor),
+                             offset)
     end mmap
 
     --- Unmap the `length` bytes at `address`: zero, or minus the errno.
     public link(symbol: "_landin_linux_munmap") munmap:
         (address: usize, length: usize) -> (result: i32) =
-        result = i32(call6(munmap_number, i64(address), i64(length), 0, 0,
-                           0, 0))
+        result = i32(system_call(munmap_number, i64(address), i64(length), 0,
+                                 0, 0, 0))
     end munmap
 
     --- End every thread of the process with `status`.  It does not return.
     public link(symbol: "_landin_linux_exit_group") exit_group:
         (status: i32) -> noreturn =
-        _ = call6(exit_group_number, i64(status), 0, 0, 0, 0, 0)
+        _ = system_call(exit_group_number, i64(status), 0, 0, 0, 0, 0)
         compiler.unreachable()
     end exit_group
 
@@ -601,14 +671,12 @@ fixed if compiler.os == linux then
             value: u64
         end probe_pair
 
-        hwprobe_number: i64 = 258
-
         --- The words this processor gives.
         public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
             () -> (words: cpu_words) =
             mut pair: probe_pair = (key: 4, value: 0)
-            result: i64 = call6(hwprobe_number, i64(usize(addr pair)), 1, 0,
-                                0, 0, 0)
+            result: i64 = system_call(riscv_hwprobe_number,
+                                      i64(usize(addr pair)), 1, 0, 0, 0, 0)
             answered: bool = result == 0 and pair.key == 4
             words = (extensions: if answered then pair.value else 0 end if)
         end read_cpu_words

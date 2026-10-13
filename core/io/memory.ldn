@@ -300,6 +300,219 @@ memory is process
      argument_count: memory_argument_count, argument: memory_argument)
 memory is world ()
 
+--  The memory world's directories are the parts of its slots' names before
+--  a `/`: slot "tree/a.txt" puts a regular file "a.txt" in directory
+--  "tree", "tree/sub/b.txt" a subdirectory "sub" in it, and a slot named
+--  "tree/empty/" an empty directory "empty".  An open directory's
+--  descriptor is the index of a slot under it and its stream the length of
+--  its path; position is the next slot a refill looks at.  Its buffer
+--  holds records of a kind byte, a two-byte length and the name.
+
+--  Whether NAME begins with PREFIX followed by a `/`.
+memory_under: (name: []u8, prefix: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof name <= lenof prefix
+    for at in usize(0)..<lenof prefix do
+        return when name[at] <> prefix[at]
+    end for
+    yes = name[lenof prefix] == 47
+end memory_under
+
+--  The bytes of PATH before its terminator, or LIMIT when there are more.
+memory_path_length: (path: ptr u8, limit: usize) -> (length: usize) =
+    length = 0
+    while length < limit do
+        current: ptr u8 = ptr(usize(path) + length)
+        return when current.val == 0
+        inc length
+    end while
+end memory_path_length
+
+--  The first slot under the directory at PATH, or the slot count when no
+--  slot is under it.
+memory_directory_slot: (self: memory, path: ptr u8) -> (slot: usize) =
+    slot = memory_file_count(self.files)
+    for at in usize(0)..<memory_file_count(self.files) do
+        name: []u8 = self.files[at].name
+        length: usize = memory_path_length(path, lenof name)
+        if length > 0 and length < lenof name
+          and memory_name_matches(path, name[0..<length])
+          and memory_under(name, name[0..<length]) then
+            slot = at
+            return
+        end if
+    end for
+end memory_directory_slot
+
+--  The name a slot gives an entry of the directory PREFIX, with whether it
+--  is a subdirectory; an empty name when the slot gives none.
+memory_component: (name: []u8, prefix: []u8)
+                  -> (component: []u8 from name, below: bool) =
+    component = name[0..<0]
+    below = false
+    return when not memory_under(name, prefix)
+    start: usize = lenof prefix + 1
+    mut stop: usize = start
+    while stop < lenof name and name[stop] <> 47 do
+        inc stop
+    end while
+    component = name[start..<stop]
+    below = stop < lenof name
+end memory_component
+
+memory_same_bytes: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    yes = true
+end memory_same_bytes
+
+--  Whether a slot before INDEX already gave the directory PREFIX the entry
+--  COMPONENT.
+memory_seen: (files: []memory_file, index: usize, prefix: []u8,
+              component: []u8) -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<index do
+        (component: earlier, below) := memory_component(files[at].name, prefix)
+        _ = below
+        if memory_same_bytes(earlier, component) then
+            yes = true
+            return
+        end if
+    end for
+end memory_seen
+
+memory_open_directory: (self: memory, path: ptr u8, buffer: []mut u8)
+                       -> (opened: directory from buffer)
+                       ! not_found | no_access | io_failed =
+    inc self.state.val.open_calls
+    slot: usize = memory_directory_slot(self, path)
+    fail not_found when slot == memory_file_count(self.files)
+      or slot > 2147483647
+    name: []u8 = self.files[slot].name
+    length: usize = memory_path_length(path, lenof name)
+    opened = (descriptor: i32(slot), stream: length, position: 0,
+              buffer: buffer, filled: 0, cursor: 0, finished: false)
+end memory_open_directory
+
+--  Fill the directory's buffer with the records of as many entries as fit,
+--  from its position on.
+memory_refill: (self: memory, inout opened: directory) -> none ! io_failed =
+    opened.filled = 0
+    opened.cursor = 0
+    prefix: []u8 = self.files[usize(opened.descriptor)].name[0..<opened.stream]
+    while opened.position < memory_file_count(self.files) do
+        (component, below) := memory_component(
+            self.files[opened.position].name, prefix)
+        if lenof component > 0
+          and not memory_seen(self.files, opened.position, prefix, component)
+        then
+            fail io_failed when lenof component > 65535
+            needed: usize = lenof component + 3
+            if needed > memory_bytes_count(opened.buffer) - opened.filled then
+                --  An entry larger than the whole buffer can never be read.
+                fail io_failed when opened.filled == 0
+                return
+            end if
+            at: usize = opened.filled
+            opened.buffer[at] = if below then 1 else 0 end if
+            opened.buffer[at + 1] = u8(lenof component & 255)
+            opened.buffer[at + 2] = u8(lenof component >> 8)
+            for n in usize(0)..<lenof component do
+                opened.buffer[at + 3 + n] = component[n]
+            end for
+            opened.filled += needed
+        end if
+        inc opened.position
+    end while
+    opened.finished = true
+end memory_refill
+
+memory_read_entry: (self: memory, inout opened: directory)
+                   -> (item: entry from opened) ! io_failed =
+    if opened.cursor >= opened.filled and not opened.finished then
+        try memory_refill(self, opened)
+    end if
+    if opened.cursor >= opened.filled then
+        item = (name: opened.buffer[0..<0], kind: special)
+        return
+    end if
+    fail io_failed when opened.filled - opened.cursor < 3
+    at: usize = opened.cursor
+    length: usize = usize(opened.buffer[at + 1])
+                    | (usize(opened.buffer[at + 2]) << 8)
+    fail io_failed when length > opened.filled - at - 3
+    opened.cursor = at + 3 + length
+    kind: entry_kind = if opened.buffer[at] == 1 then subdirectory
+                       else regular end if
+    item = (name: opened.buffer[at + 3..<at + 3 + length], kind: kind)
+end memory_read_entry
+
+memory_entry_size: (self: memory, opened: directory, name: []u8)
+                   -> (size: u64) ! not_found | no_access | io_failed =
+    size = 0
+    fail not_found when lenof name == 0
+    for byte in name do
+        fail not_found when byte == 0 or byte == 47
+    end for
+    fail io_failed when usize(opened.descriptor) >= memory_file_count(self.files)
+    prefix: []u8 = self.files[usize(opened.descriptor)].name[0..<opened.stream]
+    for at in usize(0)..<memory_file_count(self.files) do
+        (component, below) := memory_component(self.files[at].name, prefix)
+        if memory_same_bytes(component, name) then
+            current: ptr memory_file = addr self.files[at]
+            size = if below then 0 else u64(current.val.length) end if
+            return
+        end if
+    end for
+    fail not_found
+end memory_entry_size
+
+memory_close_directory: (self: memory, sink opened: directory)
+                        -> none ! io_failed =
+    _ = opened.descriptor
+    state: ptr mut memory_space = self.state
+    inc state.val.close_calls
+    fail io_failed when state.val.close_calls == state.val.fail_close_at
+end memory_close_directory
+
+--  The memory world's tree is its caller's slots, which it cannot add to
+--  or take from: a directory it has already exists, and every other change
+--  is refused.
+memory_make_directory: (self: memory, path: ptr u8)
+                       -> none
+                       ! already_exists | not_found | no_access | io_failed =
+    slot: usize = memory_directory_slot(self, path)
+    fail already_exists when slot < memory_file_count(self.files)
+    for at in usize(0)..<memory_file_count(self.files) do
+        fail already_exists when memory_name_matches(path, self.files[at].name)
+    end for
+    fail no_access
+end memory_make_directory
+
+memory_remove_file: (self: memory, path: ptr u8)
+                    -> none ! not_found | no_access | io_failed =
+    for at in usize(0)..<memory_file_count(self.files) do
+        fail no_access when memory_name_matches(path, self.files[at].name)
+    end for
+    fail not_found
+end memory_remove_file
+
+memory_remove_directory: (self: memory, path: ptr u8)
+                         -> none ! not_found | no_access | io_failed =
+    slot: usize = memory_directory_slot(self, path)
+    fail no_access when slot < memory_file_count(self.files)
+    fail not_found
+end memory_remove_directory
+
+memory is directories
+    (open_directory: memory_open_directory, read_entry: memory_read_entry,
+     entry_size: memory_entry_size, close_directory: memory_close_directory,
+     make_directory: memory_make_directory, remove_file: memory_remove_file,
+     remove_directory: memory_remove_directory)
+
 --- Lend the initialized standard-output prefix accumulated by the memory
 --- provider.
 public written: (host: memory) -> (bytes: []u8 from host) =

@@ -1,0 +1,20 @@
+error[L0328]: this type does not permit a zeroed initializer
+  --> ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn:20:32
+   |
+20 |     mut state: counter_space = zeroed
+   |                                ^^^^^^
+  --> ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn:20:16
+   |
+20 |     mut state: counter_space = zeroed
+   |                ^^^^^^^^^^^^^ the type written here
+  = note: [0540]/[0630]/D213: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)
+error[L0328]: this array has no all-bits-zero value
+  --> ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn:21:32
+   |
+21 |     mut readings: [4]reading = zeroed
+   |                                ^^^^^^
+  --> ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn:21:19
+   |
+21 |     mut readings: [4]reading = zeroed
+   |                   ^^^^^^^^^^ the array type written here
+  = note: [0540]: the complete element type must have a zero image; fill the array from one valid element with `[n of value]`

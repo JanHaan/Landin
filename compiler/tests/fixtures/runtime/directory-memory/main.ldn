@@ -1,0 +1,210 @@
+--  core/io.memory's directories on every hosted target: the slots' names
+--  before a `/` are its tree.  The whole set of oracles is larger than a
+--  32 KiB firmware image; runtime/directory-memory-firmware runs there.  A buffer of 16 bytes holds two
+--  short entries, so twelve are read over many refills, each exactly once;
+--  a subdirectory implied by several slots is one entry, and a slot ending
+--  in `/` is an empty directory.  A name is lent from the directory and is
+--  copied to be kept.  The failure oracles: a missing path and a file used
+--  as a directory are not_found, an entry larger than the whole buffer is
+--  io_failed, and the world, which is its caller's slots, refuses to make
+--  or remove anything but reports a directory it has as already there.
+import core/io
+
+tree_name: []u8 = "tree"
+missing_name: []u8 = "absent"
+file_name: []u8 = "tree/a"
+long_name: []u8 = "long"
+sub_name: []u8 = "tree/sub"
+new_name: []u8 = "tree/new"
+
+mut contents: [4]u8 = [1, 2, 3, 4]
+mut unused: [1]u8 = zeroed
+mut output: [1]u8 = zeroed
+mut errors: [1]u8 = zeroed
+
+slot: (name: []u8, bytes: []mut u8, length: usize)
+      -> (file: io.memory_file from name, bytes) =
+    file = (name: name, contents: bytes, length: length, cursor: 0,
+            readable: true, writable: false, opened: false, writing: false)
+end slot
+
+--  Whether bytes A and B agree.
+same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do
+        return when left[at] <> right[at]
+    end for
+    yes = true
+end same
+
+--  Read the directory at PATH through a buffer of ROOM bytes: the bit of
+--  each one-letter entry `a` to `l` seen, `sub` and `empty` as bits 12 and
+--  13, and bit 15 for anything else or a repeat.
+listed: (host: io.memory, path: ptr u8, room: usize)
+        -> (seen: u32) ! io.not_found | io.no_access | io.io_failed =
+    seen = 0
+    mut buffer: [16]u8 = zeroed
+    mut listing: io.directory =
+        try io.open_directory(host, path, buffer[0..<room])
+    loop do
+        item: io.entry = try io.read_entry(host, listing)
+        name: []u8 = item.name
+        break when lenof name == 0
+        mut bit: u32 = 15
+        if lenof name == 1 and name[0] >= 97 and name[0] <= 108
+          and item.kind == io.regular then
+            bit = u32(name[0] - 97)
+        elsif same(name, "sub") and item.kind == io.subdirectory then
+            bit = 12
+        elsif same(name, "empty") and item.kind == io.subdirectory then
+            bit = 13
+        end if
+        if (seen & (u32(1) << bit)) <> 0 then bit = 15 end if
+        seen = seen | (u32(1) << bit)
+    end loop
+    try io.close_directory(host, listing)
+end listed
+
+public main: () -> (code: i32) =
+    code = 1
+    mut files: [17]io.memory_file
+    files[0] = slot("tree/a", contents[0..<4], 4)
+    files[1] = slot("tree/b", contents[0..<4], 2)
+    files[2] = slot("tree/sub/x", unused[0..<1], 0)
+    files[3] = slot("tree/c", unused[0..<1], 0)
+    files[4] = slot("tree/d", unused[0..<1], 0)
+    files[5] = slot("tree/sub/y", unused[0..<1], 0)
+    files[6] = slot("tree/e", unused[0..<1], 0)
+    files[7] = slot("tree/f", unused[0..<1], 0)
+    files[8] = slot("tree/g", unused[0..<1], 0)
+    files[9] = slot("tree/h", unused[0..<1], 0)
+    files[10] = slot("tree/i", unused[0..<1], 0)
+    files[11] = slot("tree/j", unused[0..<1], 0)
+    files[12] = slot("tree/k", unused[0..<1], 0)
+    files[13] = slot("tree/l", unused[0..<1], 0)
+    files[14] = slot("tree/empty/", unused[0..<1], 0)
+    files[15] = slot("other/z", unused[0..<1], 0)
+    files[16] = slot("long/a-name-longer-than-sixteen", unused[0..<1], 0)
+    no_arguments: []io.argument = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<17], no_arguments, "",
+                           output[0..<1], errors[0..<1])
+
+    mut scratch: [40]u8 = zeroed
+    tree: ptr u8 = io.terminate_path(tree_name, scratch[0..<40]) else (p)
+        _ = p
+        return
+    end
+    code = 2
+    seen: u32 = listed(host, tree, 16) else 0
+    return when seen <> 0x3FFF
+    code = 3
+    whole: u32 = listed(host, tree, 4) else 0
+    --  Four bytes hold `a`'s record and no more, so a refill comes
+    --  after every entry, and `sub`'s six-byte record never fits.
+    return when whole <> 0
+
+    code = 4
+    mut sub_scratch: [40]u8 = zeroed
+    sub: ptr u8 = io.terminate_path(sub_name, sub_scratch[0..<40]) else (p)
+        _ = p
+        return
+    end
+    mut small: [16]u8 = zeroed
+    mut inner: io.directory =
+        io.open_directory(host, sub, small[0..<16]) else (p)
+            _ = p
+            return
+        end
+    first: io.entry = io.read_entry(host, inner) else (p)
+        _ = p
+        return
+    end
+    --  Kept as a copy: the next read refills the buffer it lies in.
+    kept: u8 = first.name[0]
+    second: io.entry = io.read_entry(host, inner) else (p)
+        _ = p
+        return
+    end
+    return when kept <> 120 or second.name[0] <> 121
+    io.close_directory(host, inner) else (p)
+        _ = p
+        return
+    end
+
+    code = 5
+    mut sizes: [16]u8 = zeroed
+    opened: io.directory =
+        io.open_directory(host, tree, sizes[0..<16]) else (p)
+            _ = p
+            return
+        end
+    size_a: u64 = io.entry_size(host, opened, "a") else 99
+    size_b: u64 = io.entry_size(host, opened, "b") else 99
+    size_sub: u64 = io.entry_size(host, opened, "sub") else 99
+    absent: u64 = io.entry_size(host, opened, "zz") else (p)
+        if p == io.not_found then 77 else 99 end if
+    end
+    slash: u64 = io.entry_size(host, opened, "sub/x") else (p)
+        if p == io.not_found then 77 else 99 end if
+    end
+    return when size_a <> 4 or size_b <> 2 or size_sub <> 0
+      or absent <> 77 or slash <> 77
+    io.close_directory(host, opened) else (p)
+        _ = p
+        return
+    end
+
+    code = 6
+    mut other: [40]u8 = zeroed
+    missing: ptr u8 = io.terminate_path(missing_name, other[0..<40])
+        else (p)
+        _ = p
+        return
+    end
+    _ = listed(host, missing, 16) else (p)
+        return when p <> io.not_found
+        0
+    end
+    code = 7
+    file: ptr u8 = io.terminate_path(file_name, other[0..<40]) else (p)
+        _ = p
+        return
+    end
+    _ = listed(host, file, 16) else (p)
+        return when p <> io.not_found
+        0
+    end
+    code = 8
+    long: ptr u8 = io.terminate_path(long_name, other[0..<40]) else (p)
+        _ = p
+        return
+    end
+    _ = listed(host, long, 16) else (p)
+        return when p <> io.io_failed
+        0
+    end
+
+    code = 9
+    io.make_directory(host, tree) else (p)
+        return when p <> io.already_exists
+    end
+    made: ptr u8 = io.terminate_path(new_name, other[0..<40]) else (p)
+        _ = p
+        return
+    end
+    code = 10
+    io.make_directory(host, made) else (p)
+        return when p <> io.no_access
+    end
+    code = 11
+    io.remove_directory(host, made) else (p)
+        return when p <> io.not_found
+    end
+    code = 12
+    io.remove_file(host, made) else (p)
+        return when p <> io.not_found
+    end
+    code = 42
+end main

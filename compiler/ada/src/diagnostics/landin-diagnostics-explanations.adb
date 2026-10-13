@@ -449,7 +449,18 @@ package body Landin.Diagnostics.Explanations is
                & "n operand has no destination to take its type from. Give"
                & " an explicit initializer that constructs a valid value, "
                & "use a type with a zero image, or write `zeroed` as the w"
-               & "hole value of a typed destination.",
+               & "hole value of a typed destination."
+               & LF
+               & LF
+               & "Two routes cover most programs. An array whose element h"
+               & "as no zero image is filled from one valid element, `[n o"
+               & "f value]`, rather than zeroed. A service's state is decl"
+               & "ared `zeroed` beside the caller's other storage, so it h"
+               & "olds only scalars, and the references the service needs,"
+               & " the backing it was given or the provider it stacks on, "
+               & "live in the handle `over` returns from that state (D288)"
+               & ": `mem.arena_space` holds counters, and the arena's hand"
+               & "le holds the base.",
             when Catalogue.Error_Contract_Violated =>
                "A failure does not follow the declared error contract [0"
                & "940] [0960] [1030]. `fail` carries exactly one atom of t"

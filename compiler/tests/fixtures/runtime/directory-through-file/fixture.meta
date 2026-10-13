@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a regular file or a device used as a directory is not_found with ENOTDIR kept as last_errno when opened as one, when a directory is opened, made or removed under it, and when it is removed as a directory, and making a directory at the file's name is already_exists with EEXIST
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -799,6 +799,14 @@ expression or used as an operand has no destination to take its type from.
 Give an explicit initializer that constructs a valid value, use a type with a
 zero image, or write `zeroed` as the whole value of a typed destination.
 
+Two routes cover most programs. An array whose element has no zero image is
+filled from one valid element, `[n of value]`, rather than zeroed. A
+service's state is declared `zeroed` beside the caller's other storage, so it
+holds only scalars, and the references the service needs, the backing it was
+given or the provider it stacks on, live in the handle `over` returns from
+that state (D288): `mem.arena_space` holds counters, and the arena's handle
+holds the base.
+
 ```landin
 node: type = struct
     value: i32

@@ -20,6 +20,21 @@ public empty_path: atom
 public path_contains_nul: atom
 --- The scratch buffer cannot hold the path and its terminating NUL.
 public path_too_long: atom
+--- Something already has the name a directory was to be made at.
+public already_exists: atom
+
+--- A directory entry that is a regular file.
+public regular: atom
+--- A directory entry that is itself a directory.
+public subdirectory: atom
+--- A directory entry that is a symbolic link, which a listing does not
+--- follow.
+public symbolic_link: atom
+--- A directory entry that is anything else: a device, a pipe or a socket.
+public special: atom
+--- What a directory entry names: `regular`, `subdirectory`,
+--- `symbolic_link` or `special`.
+public entry_kind: type = regular | subdirectory | symbolic_link | special
 
 file_value: type = distinct i32
 
@@ -117,8 +132,81 @@ end process
 
 --- Composition of reader, writer, files and process over one provider type.
 --- Consumers should request the narrowest capability they use.
+--- `directories` is not part of it: a program that lists, makes or removes
+--- directories names that concept as well.
 public world: type = concept (provider: type) is reader, writer, files, process
 end world
+
+--- The bytes a directory's buffer needs at the least: room for any entry
+--- any provider here gives, its record and its terminator included.  The
+--- hosted provider refuses a smaller buffer when the directory is opened.
+public directory_buffer: usize = 1024
+
+--- An open directory: a value its caller keeps and edits, passing it
+--- `inout` to `read_entry`, which refills `buffer` with entries as the
+--- caller reads them.  The buffer is the caller's, so each entry's name is
+--- lent from the directory and is good until the next read; copy a name to
+--- keep it.  The other fields belong to the provider that opened it: its
+--- descriptor and stream, and how much of the buffer it has filled and
+--- read.  Close it through the same provider.  A directory dropped
+--- without closing keeps its descriptor until the process ends: there are
+--- no destructors, and a `defer` closes it on every exit.
+public directory: type = struct
+    descriptor: i32
+    stream: usize
+    position: usize
+    buffer: []mut u8
+    filled: usize
+    cursor: usize
+    finished: bool
+end directory
+
+--- One entry of a directory: its name, as bytes the system stores and
+--- which need not be UTF-8, and what it is.  `read_entry` returns an entry
+--- with an empty name at the end of the directory, since no entry has
+--- one.
+public entry: type = struct
+    name: []u8
+    kind: entry_kind
+end entry
+
+--- Directory listing and the names in a tree: open a directory and read
+--- its entries, ask an entry's size, and make and remove directories and
+--- remove files.  Paths are NUL-terminated, as `files` takes them;
+--- `terminate_path` makes one from bytes.  A listing hides `.` and `..`,
+--- which every directory holds and which name no entry of its own, and
+--- gives its entries in the system's order, which no provider promises.
+public directories: type = concept (provider: type)
+    --- Open the directory at `path` and read it into the caller's
+    --- `buffer`.  A missing path and a path through or to something that
+    --- is not a directory are `not_found`.
+    open_directory: (self: provider, path: ptr u8, buffer: []mut u8)
+                    -> (opened: directory from buffer)
+                    ! not_found | no_access | io_failed
+    --- The directory's next entry, lent from it until the next read, or
+    --- an entry with an empty name at its end.
+    read_entry: (self: provider, inout opened: directory)
+                -> (item: entry from opened) ! io_failed
+    --- The size in bytes of the entry `name` in the open directory, not
+    --- following a symbolic link.  A name no entry can have, empty, with a
+    --- `/` or a NUL, or longer than `directory_buffer` allows, is
+    --- `not_found`, as is an entry removed since it was read.
+    entry_size: (self: provider, opened: directory, name: []u8)
+                -> (size: u64) ! not_found | no_access | io_failed
+    --- Close the directory, which is consumed even when this fails.
+    close_directory: (self: provider, sink opened: directory)
+                     -> none ! io_failed
+    --- Make a directory at `path`.  A path whose parent is missing is
+    --- `not_found`; a name already taken is `already_exists`.
+    make_directory: (self: provider, path: ptr u8)
+                    -> none ! already_exists | not_found | no_access | io_failed
+    --- Remove the file `path` names, not a directory.
+    remove_file: (self: provider, path: ptr u8)
+                 -> none ! not_found | no_access | io_failed
+    --- Remove the empty directory `path` names.
+    remove_directory: (self: provider, path: ptr u8)
+                      -> none ! not_found | no_access | io_failed
+end directories
 
 --  The writer part of an erased world. `any io.world` and `any io.writer`
 --  do not convert, so a consumer holding only the world lends its writer
@@ -180,6 +268,61 @@ public close: (provider: type is files, host: provider,
                sink opened: file) -> none ! io_failed =
     try provider.close(host, opened)
 end close
+
+--- Open the directory at a terminated path through `directories` evidence,
+--- reading it into the caller's `buffer`; close a successful directory
+--- through the same provider.
+public open_directory: (provider: type is directories, host: provider,
+                        path: ptr u8, buffer: []mut u8)
+                       -> (opened: directory from buffer)
+                       ! not_found | no_access | io_failed =
+    opened = try provider.open_directory(host, path, buffer)
+end open_directory
+
+--- Read the directory's next entry, whose name is lent from the directory
+--- until the next read; an empty name is the end of the directory.
+public read_entry: (provider: type is directories, host: provider,
+                    inout opened: directory)
+                   -> (item: entry from opened) ! io_failed =
+    item = try provider.read_entry(host, opened)
+end read_entry
+
+--- The size in bytes of the entry `name` in an open directory, without
+--- following a symbolic link.
+public entry_size: (provider: type is directories, host: provider,
+                    opened: directory, name: []u8)
+                   -> (size: u64) ! not_found | no_access | io_failed =
+    size = try provider.entry_size(host, opened, name)
+end entry_size
+
+--- Close a directory.  Treat it as consumed even if closing reports
+--- `io_failed`.
+public close_directory: (provider: type is directories, host: provider,
+                         sink opened: directory) -> none ! io_failed =
+    try provider.close_directory(host, opened)
+end close_directory
+
+--- Make a directory at a terminated path.
+public make_directory: (provider: type is directories, host: provider,
+                        path: ptr u8)
+                       -> none
+                       ! already_exists | not_found | no_access | io_failed =
+    try provider.make_directory(host, path)
+end make_directory
+
+--- Remove the file a terminated path names.
+public remove_file: (provider: type is directories, host: provider,
+                     path: ptr u8)
+                    -> none ! not_found | no_access | io_failed =
+    try provider.remove_file(host, path)
+end remove_file
+
+--- Remove the empty directory a terminated path names.
+public remove_directory: (provider: type is directories, host: provider,
+                          path: ptr u8)
+                         -> none ! not_found | no_access | io_failed =
+    try provider.remove_directory(host, path)
+end remove_directory
 
 --- Read up to the destination length through `reader` evidence. Returns the
 --- number of bytes placed in the buffer, or zero at end of input.

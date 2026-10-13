@@ -1341,7 +1341,10 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         inventory = json.loads(report.read_text())["sources"]
         reported = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
                          for entry in inventory)
-        implicit = (str(ROOT / "hosted/linux/linux.ldn"),)
+        #  The module's files come in their sorted order: linux.ldn, then
+        #  the generated wrapped.ldn.
+        implicit = tuple(str(path) for path in
+                         sorted((ROOT / "hosted/linux").glob("*.ldn")))
         require(reported == source_args + implicit,
                 f"the build's sources are not the named ones and hosted/linux:"
                 f" {reported!r}")
