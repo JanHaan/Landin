@@ -74,10 +74,10 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.31, R13.32, R13.33, R12, R13.20, R14, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.33, R13.34, R13.35, R12, R13.20, R14, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
-R12.10 depends on R13.33 to hold the first boundary. The freestanding
+R12.10 depends on R13.35 to hold the first boundary. The freestanding
 facilities retain R12.30's prerequisite and also depend on R12.60 to hold
 the boundary after the whole microcontroller phase. R12 stays in scope, and
 its gates and R13's gate retain their requirements, and no identity is renumbered. Each new R12 target repeats
@@ -1010,7 +1010,7 @@ R12.40 and R12.50 each apply this rule to any profile they first admit.
 ### R12.10 — Describe devices
 
 Status: planned
-Depends on: R11.10, R13.33
+Depends on: R11.10, R13.35
 
 A general SVD generator, memory profiles, linker configuration and firmware
 vector mappings selected per device instead of the fixed constrained profile,
@@ -1627,44 +1627,152 @@ lanes do. The complete gate passed on the commit that closes this item, with
 RV64 suspended; [the run before it](https://github.com/JanHaan/Landin/actions/runs/38470178283)
 passed every job but FreeBSD's output comparison.
 
-### R13.31 — The environment and processes
+### R13.18 — The POSIX layer and host strings
 
 Status: planned
 Depends on: R13.30
 
-Under R13.30's rules: the environment, read from the initial stack on Linux
-and through the C library elsewhere, and processes spawned by explicit path
-with explicit arguments and environment, waited for, and reported as exited
-with a code or ended by a signal. A consumer runs a shell with an explicit
-environment and reports what the child saw and how it ended.
+The hosted library gets four layers. Each system's own interface stays raw:
+`hosted/linux` and `hosted/libc` move to `platform/linux` and
+`platform/libc`, beside a BSD and Darwin module for kqueue, and Linux's
+epoll, signalfd, pidfd and getrandom stay in `platform/linux`. A new
+`platform/posix` gives POSIX's facilities in Landin types, a descriptor as a
+handle type, errno as atoms with the number kept, a structured `stat` and
+`poll`, written once over Linux's system calls and once over the C library on
+Darwin and FreeBSD; it is never available on Windows. The portable concepts
+in `core` name no POSIX type, no integer descriptor, mode bit, user or signal
+number, and `hosted/io` and `hosted/heap` are rewritten over `platform/posix`,
+so a hosted facility is written once and Windows can later implement the
+same concepts over its own interface. Each later hosted item adds the POSIX
+facilities its consumer needs. A host string is one opaque type whose
+representation each target fixes, bytes on POSIX and 16-bit units on
+Windows, with checked conversions to `utf8` and to bytes and comparison with
+a literal; arguments and paths take it, so a value passed through is never
+converted.
+
+Exit evidence: every existing hosted fixture passing on every hosted target
+over the new layers, with no `hosted/io` facility written per system;
+`platform/posix` fixtures with failure oracles for each facility it gives;
+and an argument and a path that are not UTF-8 passed through unchanged and
+refused by the checked conversion to `utf8`.
+
+### R13.19 — Formatting, buffered text and byte blocks
+
+Status: planned
+Depends on: R13.18
+
+`core/mem` gains `copy`, with `memmove`'s rule for overlap, `fill`, `compare`
+and `find` over byte slices with their lengths checked. `core/text` gains a
+builder that writes typed pieces into a caller's buffer, bytes and text,
+signed and unsigned decimals, hexadecimal, width and padding, failing
+`no_space` or growing through an allocator the caller passes, and appends a
+byte string; and `text.format` over a format string and an array of
+`any text.formattable`, whose count and kinds are checked when it runs,
+because nothing is executed at compile time. Parsing is its mirror, signed
+values included. `core/io` gains a buffered writer flushed explicitly, with
+`defer` its idiom, and a line reader that lends each line until the next
+read, as a directory lends its names. Formatting is independent of locale,
+and a locale is never global state. The word counter and the directory
+listing are rewritten over it.
+
+Exit evidence: both consumers rewritten and running on every hosted target;
+fixtures for each piece with failure oracles, a full buffer, a format string
+whose count disagrees with its arguments and an overlapping copy among them;
+and the builder and the buffered writer running on the Cortex-M0 profiles.
+
+### R13.31 — The environment and processes
+
+Status: planned
+Depends on: R13.19
+
+Under R13.30's rules, written once over `platform/posix`: the environment as
+host strings, read from the initial stack on Linux and through the C library
+elsewhere, read-only, since changing one's own environment is not safe beside
+threads; and processes spawned by explicit path with explicit arguments and
+an explicitly built environment, each of their three streams inherited,
+discarded or a pipe, waited for, and reported as exited with a code or ended
+by a signal. `platform/posix` gains pipes and the waiting it needs. A
+consumer runs a shell with an explicit environment, captures what it writes
+and reports what the child saw and how it ended.
 
 Exit evidence: the consumer running on every hosted target with failure
-oracles: a missing program and a child ended by a signal.
+oracles: a missing program, a child ended by a signal, and a child's output
+larger than a pipe's buffer.
 
-### R13.32 — Time
+### R13.32 — Time and randomness
 
 Status: planned
 Depends on: R13.31
 
 Under R13.30's rules: monotonic and wall clocks, and sleeping. On Linux the
 clock is read through the vDSO the auxiliary vector names, falling back to
-the system call. The process consumer times its child.
+the system call. The system's entropy, getrandom on Linux and arc4random on
+Darwin and FreeBSD, is a hosted facility, and `core` gains a deterministic
+generator seeded from it or from a fixed seed. Calendars, time zones and
+their formatting belong to the locale record in the register. The process
+consumer times its child.
 
 Exit evidence: the consumer's timing running on every hosted target, with
-monotonic order and a sleep's lower bound as oracles.
+monotonic order and a sleep's lower bound as oracles; the entropy facility
+answering on every hosted target; and the generator reproducing a fixed
+seed's sequence on every target, Cortex-M0 included.
 
-### R13.33 — Blocking sockets
+### R13.33 — Sockets
 
 Status: planned
 Depends on: R13.32
 
-Under R13.30's rules: blocking TCP sockets that listen, accept, connect,
-read and write, with each system's address layouts. An echo client and
-server run over loopback in one process. Sockets under an event-driven Io
-are R14.30's.
+Under R13.30's rules: blocking TCP and UDP sockets over IPv4 and IPv6 that
+bind, listen, accept, connect, send and receive, with address values, each
+system's address layouts, shutdown and the common options, no delay, address
+reuse and timeouts. Unix-domain sockets are `platform/posix`'s. SIGPIPE is
+ignored when a POSIX process starts, so a write to a peer that has gone is
+an error atom rather than the end of the process. An echo client and server
+run over loopback in one process, over TCP and UDP and both address
+families. Sockets under an event-driven Io are R14.30's; resolving a name
+belongs to the resolver record in the register.
 
 Exit evidence: the echo consumer running on every hosted target with
-failure oracles: a refused connection and an address already in use.
+failure oracles: a refused connection, an address already in use and a write
+to a closed peer.
+
+### R13.34 — The rest of the file system
+
+Status: planned
+Depends on: R13.33
+
+Under R13.30's rules. The portable concepts gain renaming, a metadata record
+with size, kind, modification time and a read-only flag, `fsync`,
+truncation, temporary files, the current directory, reading and writing at
+an offset rather than through a hidden position, and appending as an open
+option, and whether a stream is a terminal and its window size.
+`platform/posix` gives the rest: mode bits and owners, hard and symbolic
+links, file times, advisory locks as each system has them, a terminal's raw
+mode, and users and groups, read from `/etc/passwd` and `/etc/group` on a
+static Linux program, where accounts kept elsewhere need `--link=libc`. A
+consumer copies a tree, keeping what each system keeps.
+
+Exit evidence: the consumer running on every hosted target with failure
+oracles: a rename onto an existing name, a symbolic link listed without
+being followed, a write refused on a read-only file and an offset past the
+end of a file.
+
+### R13.35 — Dynamic loading
+
+Status: planned
+Depends on: R13.34
+
+`platform/posix` loads a C library and looks its symbols up into typed
+`extern(c)` function values, wherever the system's loader started the
+process: on Darwin and FreeBSD always, and on Linux under `--link=libc`. A
+static Linux program that asks for it is refused by name before any tool
+runs, naming `--link=libc`, as D280 refuses a C import. Code loaded this way
+is C, or Landin only through C-ABI entry points. A consumer loads a library
+the fixture builds and calls into it.
+
+Exit evidence: the consumer running on Darwin, FreeBSD and Linux under
+`--link=libc`, with failure oracles: a missing library, a missing symbol,
+and the refusal of a static program.
 
 ### R13 gate
 
@@ -1747,7 +1855,12 @@ Status: planned
 Depends on: R14.20, R13.33
 
 An event-driven Io that runs fibres over epoll on Linux and kqueue on
-Darwin/FreeBSD. Windows is outside this item's scope.
+Darwin/FreeBSD. Its operations are completion-shaped, submitted and then
+answered, so that a completion interface, Windows' or Linux's io_uring, can
+later implement the same Io; readiness stays below it, in `platform/posix`'s
+`poll` and the systems' own modules. Signals reach it as events, through
+signalfd on Linux and kqueue on Darwin and FreeBSD, never as handlers that
+run Landin code. Windows is outside this item's scope.
 
 Exit evidence: prototype 5's derived server running on the hosted targets over
 both implementations of Io, unchanged.
@@ -1759,6 +1872,9 @@ Depends on: R14.20
 
 Hosted threads, and the atomic wrapper type over D227's builtins that answers
 Cortex-M0's missing read-modify-write explicitly. This takes on R730-21.
+Under `--link=libc` the C library owns thread creation and thread-local
+storage, so a thread there is the C library's; a static Linux program owns
+both itself.
 
 Exit evidence: consumers of both on every applicable target, with failure
 oracles. The hosted thread facility implements D227's creation and join
@@ -1970,7 +2086,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
 | R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.31, R13.32, R13.33, R14.40 |
+| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R13.18, R13.19, R13.31, R13.32, R13.33, R13.34, R13.35, R14.40 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
 | R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
@@ -1984,7 +2100,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R730-24 | Competitive optimization | Build-report counters are filled differently per backend, so a cross-target comparison from them is unsafe. | Before any cross-target code-quality comparison from the report. | Every declared counter filled on every backend, or the report saying which it does not measure. | scheduled R16.10 |
 | B3 | Scale and self-hosting | Separate compilation: whole-program checking is done; stable interfaces are R551-32's. | As R551-32. | As R551-32. | open |
 | B4 | Companion tool and ecosystem | Package, build and generators beyond the thin pieces the compiler owns; R551-33's. | As R551-33. | As R551-33. | open |
-| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20, R13.31, R13.32, R13.33, R14.40 |
+| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20, R13.18, R13.19, R13.31, R13.32, R13.33, R13.34, R13.35, R14.40 |
 | B6 | Companion tool and ecosystem | Package naming authority, keeping the project-first override [1480]. | Before acquisition or a naming authority is offered. | A naming policy that keeps the project-first override. | open |
 | D6 | Companion tool and ecosystem | One version of a package name per program [1470]; the compiler's first-root rule is done and arranging roots is the tool's. | Before acquisition or root arrangement is offered. | Roots arranged so one version is reachable, a conflict a hard error. | open |
 | C1 | Language evolution | Affine values, which would change [0910]'s non-ownership `sink`. Merged: R730-10, the derived driver's device authority, descriptor linearity and stop are manual obligations. | A peripheral or resource program unpleasant without them. | [0910] amended with a register decision answering R730-10's obligations, on every target. | open |
@@ -2036,7 +2152,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-46 | Competitive optimization | An immutable module `bool` is loaded from memory rather than folded, so `return when baseline` kept a whole check routine in a baseline image until the check was split per level. | A measured image or hot path holding a foldable module constant. | Immutable scalar module values folded at their uses, with an image comparison. | open |
 | SR-47 | Usability | The formatter's continuation rules turn a multi-line `if` expression into extra locals, and the library reference requires a public routine's name on its `public` line, which forces a long first line. | The next change to the layout or the reference generator. | A continuation layout for `if` expressions and a reference that reads a wrapped signature. | open |
 | SR-48 | Usability | No compiler fact names the selected CPU feature level, so `hosted/linux` mirrors D255's level-to-feature table in source to check the processor; the two can drift. | A new feature level, or a second consumer of the level's name. | A level fact or a check that the library's table matches D255's, with a fixture. | open |
-| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. | R13.30 to R13.33. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | scheduled R13.31, R13.32, R13.33 |
+| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. | R13.30 to R13.33. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | scheduled R13.19, R13.31, R13.32, R13.33, R13.34, R13.35 |
 | SR-53 | Usability | A C record ending in a flexible array, `dirent64`'s name, has no Landin form: L0346 points at `struct` rather than the field and offers no route, and with no offset query an outside program hand-computed the name's offset as 19. | The next program reading a C record with a trailing array, or the next change to L0346. | L0346 labelling the offending field with a note naming the route, and a register decision on an offset query or a trailing-bytes field. | open |
 | SR-54 | Usability | Assembly operands are integers, so a system-call wrapper passes storage as `i64(addr …)`, and the conversion drops the binding's mutability and permission: an outside program handed the kernel an immutable module buffer to write, and nothing could object. Beside SR-29, which is the same loss when indexing a C table. | The next wrapper passing storage to an assembly block. | A pointer or slice operand that keeps its permission, or the documented idiom with the reason operands stay integers. | open |
 | SR-55 | Usability | With no panic handler a hosted program ends a trap with D232's bare terminal instruction, which a shell reports as "Illegal instruction": nothing names the kind or the site, so a newcomer cannot tell an index error from a processor fault. | The next change to D232's terminal default or to hosted startup. | The hosted default reporting the trap's kind and site before ending, or the reason it stays silent. | open |
@@ -2071,13 +2187,19 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-85 | Usability | Indexing a string literal, `"beta"[i]`, is refused with a fix-it that deletes the literal, which would change what the program means. | The next item touching fix-its. | A fix-it that keeps the program's meaning, or none. | open |
 | SR-86 | Usability | A second `io.terminate_path` into the same scratch silently re-points a path still in use, because a fresh `[]mut` view of the scratch is not an `inout` use of it, so the checker does not see the first path's borrow end. | The next change to `core/io`'s paths or to the borrow rules for `[]mut` views. | Either the second terminate refused while the first path lives, or a path form that cannot alias. | open |
 | SR-88 | Usability | Publishing a program in `examples.md` fails the formatting suite until a hard-coded count of listings in `landin-tests-formatting_suite.adb` is raised, and neither `check.py` nor the page points there. | The next example published. | The count derived from `examples.md`, or a failure that names where it is kept. | open |
-| SR-89 | Broader standard library | `core/text` writes a byte and decimals into a buffer but cannot append a byte string, so the directory listing hand-rolls an `append`. | The next consumer that writes text, R13.31's process consumer. | A byte-string append in `core/text` replacing the listing's own. | open |
+| SR-89 | Broader standard library | `core/text` writes a byte and decimals into a buffer but cannot append a byte string, so the directory listing hand-rolls an `append`. | The next consumer that writes text, R13.31's process consumer. | A byte-string append in `core/text` replacing the listing's own. | scheduled R13.19 |
 | SR-90 | Usability | `refine compile main.ldn -o prog` leaves `prog.s` beside the executable, which the README's first program does not mention. | The next change to the driver's outputs. | The intermediate kept only on request, or documented where a first compile is shown. | open |
 | SR-91 | Usability | Inside parentheses, a continued `(a) or (b)` aligns under `a`, not under the `(`, and `docs/format.md` does not show it; laying out by hand where `refine fmt` cannot rewrite, as on a ZFS host, depends on guessing it. | The next change to `docs/format.md`. | The rule shown in `docs/format.md` with an example. | open |
 | SR-92 | Scale and self-hosting | The compiler cannot be profiled from the development shell: it has no `perf` or `valgrind`, its `gdb` has no Python, attaching fails with "ptrace: Operation not permitted", and `--stage-report` names a stage but not a routine. R13.30's slow lookup of inactive `fixed if` code was found by interrupting the compiler under `gdb`. | The next performance item, R16.10, or a scaling regression. | A documented way to profile `refine` to the routine on a development host. | open |
 | SR-93 | Usability | `environments/cortex-m/firmware.py` fails with "compile failed; inspect retained log" without naming the case or the log's path, so finding the failure means searching every `commands.json`. | The next change to the Cortex-M lanes. | The failing case and its log's path in the failure line. | open |
 | SR-94 | Usability | Rebuilding with `dev-build.sh` while `test_determinism.py` or `emit_manifest.py` runs that build's `refine` replaces the executable under them, which fail with PermissionError tracebacks and no word of a build lock. | The next change to `scripts/build_lock.py` or to those scripts. | A reader of `refine` that holds the build lock, or a refusal that names the rebuild. | open |
 | SR-95 | Usability | `dev-test.sh --case='core and the examples are formatted'` prints only the usage line, not that a case is named `SUITE/NAME`. | The next change to the harness's argument handling. | An unknown case refused with the naming rule and the nearest names. | open |
+| SR-96 | Broader standard library | `core` has no math functions: `f32` and `f64` have the language's arithmetic and nothing more. The first `core/math` is written in Landin, so its results are the same on every target, with `sqrt` and `fma` as instructions where IEEE makes them exact and the other functions ported from a permissively licensed implementation, musl's and FreeBSD's msun or CORE-MATH, and tested against MPFR's values; it is known to need tuning for speed and accuracy after that. | The first consumer that needs a math function, or a numeric workload. | `core/math` with its functions' accuracy stated and pinned, and the tuning left measured rather than assumed. | open |
+| SR-97 | Broader standard library | Floating-point values are neither written as text nor parsed: R13.19's formatting covers integers. Writing the shortest text that reads back exactly, and parsing correctly rounded, is real work and costs flash on Cortex-M0. | The first consumer that writes or reads a floating-point value, or `core/math`. | Shortest round-trip writing and correctly rounded parsing, with their size on the Cortex-M0 profiles measured. | open |
+| SR-98 | Broader standard library | There is no locale or Unicode beyond `utf8`'s validation and traversal. Done properly, a locale is an explicit value named by a BCP 47 identifier, never global state, with the host reporting the user's; its data is generated from a pinned CLDR release into modules a program uses only in part, as ICU4X does; and the work comes in phases: Unicode properties from the character database, case mapping, normalization and segmentation, then numbers and dates by locale, collation, and time zones from the IANA database, read from the host or carried. | The first consumer that formats for a person's locale, or a time zone. | The first phase's data generated from a pinned release with a checked generator, and a consumer formatting in two locales. | open |
+| SR-99 | Broader standard library | No library resolves a host name. `getaddrinfo` is a C library service, not a system call: glibc reads `nsswitch.conf`, `hosts` and `resolv.conf` and may load NSS modules, Darwin asks its resolver daemon, and FreeBSD's C library resolves itself. A resolver library uses the system's where it is authoritative, the C library on Darwin and FreeBSD, and on a static Linux program its own, reading `/etc/hosts` and `/etc/resolv.conf` and speaking DNS over UDP and TCP, with configured NSS modules needing `--link=libc`. | The first consumer that connects by name, after R13.33. | The resolver on every hosted target with failure oracles: an unknown name, a name only `/etc/hosts` knows, and a server that does not answer. | open |
+| SR-100 | Broader standard library | There is no regular-expression library. It is its own library, outside the hosted layers: linear-time automata without backreferences, so no pattern can make it run away, compiled when the program runs with its allocator passed, and freestanding. | The first consumer that matches a pattern. | The library with its linear time pinned on adversarial patterns, on a hosted target and Cortex-M0. | open |
+| SR-101 | Broader standard library | Nothing loads self-contained code into a process: freestanding position-independent C, built `-ffreestanding -nostdlib -fPIC`, or Landin with C-ABI entry points, whose imports the host provides. A loader would have a format-neutral core that maps, relocates, binds each import to a function the host exports, runs initializers and finds exports, with ELF first, then Mach-O, registering a file's signature as Darwin's own loader does, and PE; it works whether or not the host links a C library, and needs no C library in the loaded code. Code that uses a statically embedded C library's process state, musl's thread block among it, is outside it. `refine` would also need to emit a self-contained shared object with C-ABI exports. | A consumer that loads plugins without the system's libraries. | The loader and the driver output on Linux, FreeBSD and Darwin, with failure oracles: an unknown relocation, an import the host does not provide, and an unsigned object on Darwin. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

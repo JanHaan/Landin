@@ -1226,7 +1226,7 @@ class RoadmapStructure(unittest.TestCase):
         #  An item or record of either roadmap: the first roadmap's are
         #  closed and in the history, and no more welcome outside it.
         from check_controls import tree
-        for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3):
+        for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3, "SR-%d" % 100):
             with self.subTest(cited=cited), \
                     tree(copied=ROADMAP_INPUTS) as root:
                 target = root / "docs/ir.md"

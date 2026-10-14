@@ -196,7 +196,7 @@ SUCCESSOR_HEADING = "## Successor families"
 REGISTER_HEADING = "## Register"
 REGISTER_COLUMNS = ("Record", "Family", "What stands", "Activation",
                     "Completion", "Status")
-REGISTER_RECORD = re.compile(r"R551-\d\d|R730-\d\d|[A-F]\d|SR-\d\d")
+REGISTER_RECORD = re.compile(r"R551-\d\d|R730-\d\d|[A-F]\d|SR-\d{2,}")
 REGISTER_STATUS = re.compile(
     r"open|limit|watch|scheduled (R\d+\.\d+(?:, R\d+\.\d+)*)|retired: \S.*")
 #  A work item of either roadmap, or a record of the register that is
@@ -206,7 +206,7 @@ REGISTER_STATUS = re.compile(
 #  records, a letter and a digit, are not matched: `C2` is also a byte, `D6`
 #  a decision and `E1` an erratum, and no rule could tell them apart.
 ROADMAP_CITATION = re.compile(
-    r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d\d)"
+    r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d{2,})"
     r"(?![A-Za-z0-9_])")
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",

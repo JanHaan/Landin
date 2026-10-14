@@ -50,6 +50,14 @@ ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
 ENDPOINT = BETWEEN_ITEMS.replace("Status: planned", "Status: complete", 1)
 
 
+#  The hosted items in execution order.
+HOSTED = ("Standard input, files and directories",
+          "The POSIX layer and host strings",
+          "Formatting, buffered text and byte blocks",
+          "The environment and processes", "Time and randomness", "Sockets",
+          "The rest of the file system", "Dynamic loading")
+
+
 class RoadmapProgress(unittest.TestCase):
     def project_status(self, roadmap, marker):
         with tempfile.TemporaryDirectory(prefix="landin-roadmap-") as directory:
@@ -161,9 +169,7 @@ Depends on: none
         boundary = headings["The OS boundary in source"]
         linux = headings["Linux without the C library"]
         handles = headings["Services are handles"]
-        hosted = [headings["Standard input, files and directories"],
-                  headings["The environment and processes"],
-                  headings["Time"], headings["Blocking sockets"]]
+        hosted = [headings[title] for title in HOSTED]
         devices = headings["Describe devices"]
         freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
@@ -208,10 +214,7 @@ Depends on: none
         complete([linux])
         assert_next(handles, "Services are handles")
         complete([handles])
-        for identity, title in zip(hosted, (
-                "Standard input, files and directories",
-                "The environment and processes", "Time",
-                "Blocking sockets")):
+        for identity, title in zip(hosted, HOSTED):
             assert_next(identity, title)
             complete([identity])
         assert_next(devices, "Describe devices")

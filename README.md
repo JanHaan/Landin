@@ -473,7 +473,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.31 — The environment and processes (planned).**
+**Next roadmap item: R13.18 — The POSIX layer and host strings (planned).**
 
 ## License
 
