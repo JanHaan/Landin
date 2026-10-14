@@ -37,16 +37,8 @@ public main: () -> (code: i32) =
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second
-    arguments: [9]io.argument = [
-        (data: addr arg0[0], length: lenof arg0),
-        (data: addr arg1[0], length: lenof arg1),
-        (data: addr arg2[0], length: lenof arg2),
-        (data: addr arg3[0], length: lenof arg3),
-        (data: addr arg4[0], length: lenof arg4),
-        (data: addr arg5[0], length: lenof arg5),
-        (data: addr arg6[0], length: lenof arg6),
-        (data: addr arg7[0], length: lenof arg7),
-        (data: addr arg8[0], length: lenof arg8)]
+    arguments: [9][]u8 = [arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
+                          arg8]
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<2], arguments[0..<9], "",
                              output[0..<128], errors[0..<128])
@@ -148,7 +140,7 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
          readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
-    args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
+    args: [1][]u8 = [arg8]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
     mut world_space: io.memory_space = zeroed
@@ -191,7 +183,7 @@ count_finite_region: () -> (ok: bool) =
          readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
-    args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
+    args: [1][]u8 = [arg8]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
     mut world_space: io.memory_space = zeroed
@@ -244,13 +236,7 @@ skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
     files[1] = (name: "out", contents: destination[0..<32], length: 0,
                 cursor: 0, readable: true, writable: true,
                 opened: false, writing: false)
-    args: [7]io.argument = [(data: addr arg0[0], length: lenof arg0),
-      (data: addr arg_debug[0], length: lenof arg_debug),
-      (data: addr arg0[0], length: lenof arg0),
-      (data: addr arg_error[0], length: lenof arg_error),
-      (data: addr arg6[0], length: lenof arg6),
-      (data: addr arg7[0], length: lenof arg7),
-      (data: addr arg8[0], length: lenof arg8)]
+    args: [7][]u8 = [arg0, arg_debug, arg0, arg_error, arg6, arg7, arg8]
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<2], args[0..<7], "",
                              destination[0..<0], errors[0..<32])
@@ -288,8 +274,7 @@ failure_sweep: () -> (ok: bool) =
         mut files: [2]io.memory_file
         files[0] = first
         files[1] = second
-        args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-                                (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+        args: [3][]u8 = [arg6, arg7, arg8]
         mut world_space: io.memory_space = zeroed
         world_state := io.memory_over(world_space, files[0..<2], args[0..<3], "", output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
@@ -322,8 +307,7 @@ retained_arguments: () -> (ok: bool) =
     ok = false
     mut needle: [4]u8 = [107, 101, 101, 112]
     mut name: [2]u8 = [105, 110]
-    args: [3]io.argument = [(data: addr arg2[0], length: lenof arg2),
-                            (data: addr needle[0], length: 4), (data: addr name[0], length: 2)]
+    args: [3][]u8 = [arg2, needle[0..<4], name[0..<2]]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
                 readable: true, writable: false, opened: false, writing: false)
@@ -372,7 +356,7 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     ok = false
     mut err: [1]u8 = zeroed
     files: []mut io.memory_file = []
-    args: []io.argument = []
+    args: [][]u8 = []
     mut world_space: io.memory_space = zeroed
     world_state := io.memory_over(world_space, files, args, "", out[0..<800], err[0..<1])
     world: any io.world = any(addr world_state)
@@ -495,8 +479,7 @@ io_failures: () -> (ok: bool) =
         files[0] = first
         files[1] = second
         if scenario == 3 then files[1].contents = destination[0..<3] end if
-        args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-                                (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+        args: [3][]u8 = [arg6, arg7, arg8]
         mut argc: usize = 3
         if scenario == 4 then argc = 2 end if
         mut world_space: io.memory_space = zeroed
@@ -541,9 +524,7 @@ missing_input_preserves_output: () -> (ok: bool) =
                 length: lenof previous, cursor: 0, readable: true, writable: true,
                 opened: false, writing: false)
     missing: []u8 = "missing"
-    args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
-                            (data: addr arg7[0], length: lenof arg7),
-                            (data: addr missing[0], length: lenof missing)]
+    args: [3][]u8 = [arg6, arg7, missing]
     mut out: [32]u8 = zeroed
     mut err: [32]u8 = zeroed
     mut world_space: io.memory_space = zeroed
@@ -570,12 +551,8 @@ diagnostics: () -> (ok: bool) =
     malformed: [1]u8 = [255]
     zero_text: []u8 = "0"
     bad_number: []u8 = "999999999999999999999999999999999999"
-    args: [7]io.argument = [(data: addr arg4[0], length: lenof arg4),
-                            (data: addr malformed[0], length: 1),
-                            (data: addr arg4[0], length: lenof arg4), (data: addr zero_text[0], length: 1),
-                            (data: addr arg4[0], length: lenof arg4),
-                            (data: addr bad_number[0], length: lenof bad_number),
-                            (data: addr arg8[0], length: lenof arg8)]
+    args: [7][]u8 = [arg4, malformed[0..<1], arg4, zero_text[0..<1], arg4,
+                     bad_number, arg8]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
                 readable: true, writable: false, opened: false, writing: false)
@@ -634,8 +611,7 @@ bare_levels: () -> (ok: bool) =
     source: []u8 = "INFO\nERROR\n"
     mut data: [11]u8 = zeroed
     for at in usize(0)..<lenof source do data[at] = source[at] end for
-    args: [3]io.argument = [(data: addr arg0[0], length: lenof arg0),
-                            (data: addr arg1[0], length: lenof arg1), (data: addr arg8[0], length: lenof arg8)]
+    args: [3][]u8 = [arg0, arg1, arg8]
     expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
     for length in usize(10)..<usize(12) do
         mut files: [1]io.memory_file
@@ -675,14 +651,7 @@ repeated_matches: () -> (ok: bool) =
     files[0] = (name: "in", contents: data[0..<31], length: 31, cursor: 0,
                 readable: true, writable: false, opened: false, writing: false)
     every: []u8 = "2"
-    args: [7]io.argument = [
-        (data: addr arg2[0], length: lenof arg2),
-        (data: addr arg1[0], length: lenof arg1),
-        (data: addr arg4[0], length: lenof arg4),
-        (data: addr every[0], length: lenof every),
-        (data: addr arg2[0], length: lenof arg2),
-        (data: addr arg3[0], length: lenof arg3),
-        (data: addr arg8[0], length: lenof arg8)]
+    args: [7][]u8 = [arg2, arg1, arg4, every, arg2, arg3, arg8]
     mut out: [128]u8 = zeroed
     mut err: [128]u8 = zeroed
     mut world_space: io.memory_space = zeroed

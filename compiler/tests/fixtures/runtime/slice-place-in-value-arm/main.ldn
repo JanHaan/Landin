@@ -1,0 +1,33 @@
+--  A slice read from a place, an element of an array of slices or the
+--  slice behind a pointer, is a value arm of a `match` or an `if`.
+--  Lowering used to stop with an internal defect here.
+no_names: atom
+names_root: type = no_names | ptr []u8
+
+words: [2][]u8 = ["alpha", "beta"]
+mut root: names_root = no_names
+
+current: () -> (value: []u8) =
+    value = match root
+        no_names: words[1]
+        ptr (found): found.val
+    end match
+end current
+
+either: (first: bool) -> (value: []u8) =
+    value = if first then words[0] else words[1] end if
+end either
+
+public main: () -> (code: i32) =
+    code = 1
+    before: []u8 = current()
+    return when lenof before <> 4 or before[0] <> 98
+    root = addr words[0]
+    code = 2
+    after: []u8 = current()
+    return when lenof after <> 5 or after[0] <> 97
+    code = 3
+    other: []u8 = either(false)
+    return when lenof other <> 4
+    code = 42
+end main

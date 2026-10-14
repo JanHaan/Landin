@@ -87,10 +87,10 @@ blindly retried. The memory provider's injected failures do not invent a
 thread-local host errno.
 
 For the argument path touched by this slice, both providers expose only user
-arguments and index zero is the first of them, never `argv[0]`. The ordinary
-adapter copies a pointer-and-length `io.argument` into exact caller scratch and
-returns its initialized prefix for `text.from_bytes`; it does not reinterpret
-the pointer as a C string or manufacture a slice. The complete application
+arguments and index zero is the first of them, never `argv[0]`. Each is lent
+as a host string, `text.host_string`, in the system's own representation and
+never converted: `text.from_host` is the checked route to UTF-8, and passed on
+as a path it reaches the system unconverted. The complete application
 copies every retained argument into its explicitly supplied region before
 building configuration, so later changes to memory-world argument bytes do
 not change paths or match needles.
@@ -655,9 +655,9 @@ end on_progress
 ```
 Hosted entry. The sketch names its argument adapter `io.args`; the complete
 derivative uses the supplied world's `argument_count` and `argument` entries,
-then admits their bytes directly into run-lifetime raw storage and appends one
-NUL for paths. The ordinary `io.copy_argument` remains available for callers
-with initialized scratch. Its hosted `entry` routine imports `hosted/io`
+then admits their bytes directly into run-lifetime raw storage, over which a
+path is a host string again; the NUL a C call needs is added beneath the
+provider. Its hosted `entry` routine imports `hosted/io`
 and is the only place that acquires the heap and system world.
 No uninitialized view constructor is implied.
 ```landin

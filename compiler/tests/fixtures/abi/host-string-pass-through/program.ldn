@@ -1,0 +1,79 @@
+--  An argument that is not UTF-8 is passed through unchanged: it is lent
+--  as the host string the process was given, the checked conversion to
+--  `utf8` refuses it, and given back as a path it reaches the system with
+--  the same bytes.  Linux and FreeBSD make the file it names, which is
+--  read back through the same argument and then found by the C peer;
+--  Darwin's file systems store names as UTF-8 and refuse it with EILSEQ,
+--  92, kept as the last errno, so the path reached the system as given.
+import core/io
+import core/text
+import hosted/io as hosted
+
+fixed if compiler.os == darwin then
+    refuses: bool = true
+else
+    refuses: bool = false
+end if
+
+extern(c) c_argument_is_argv: (bytes: ptr u8, length: usize) -> (yes: bool)
+
+public extern(c) l_pass_through: () -> (code: i32) =
+    host := hosted.host()
+    code = 10
+    return when io.argument_count(host) <> 1
+    argument: text.host_string = io.argument_at(host, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+
+    --  Lent, not copied.
+    code = 11
+    bytes: []u8 = text.host_bytes(argument)
+    return when not c_argument_is_argv(addr bytes[0], lenof bytes)
+
+    --  Refused by the checked conversion to text.
+    code = 12
+    shown: utf8 = text.from_host(argument) else (problem)
+        code = if problem == text.invalid_text then 13 else 12 end if
+        ""
+    end
+    _ = shown
+    return when code <> 13
+
+    --  Passed on as a path, unconverted.
+    code = 14
+    written: io.file = io.open_write(host, argument) else (problem)
+        if refuses and problem == io.io_failed
+          and hosted.last_errno(host) == 92
+        then
+            code = 42
+        end if
+        return
+    end
+    code = 15
+    return when refuses
+    io.write(host, written, "passed\n") else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, written) else (problem)
+        _ = problem
+        return
+    end
+    code = 16
+    reading: io.file = io.open_read(host, argument) else (problem)
+        _ = problem
+        return
+    end
+    mut buffer: [16]u8 = zeroed
+    got: usize = io.read(host, reading, buffer[0..<16]) else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, reading) else (problem)
+        _ = problem
+        return
+    end
+    return when got <> 7 or buffer[0] <> 112
+    code = 42
+end l_pass_through

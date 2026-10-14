@@ -402,12 +402,17 @@ def write(root, destination, render):
                         else 'Target scope is enforced by the module assertion below.')
         body = '<p class="api-condition">' + availability + '</p>' + prose(overview)
         if module.startswith('platform/'):
-            for path, text in sources.items():
-                if str(Path(path).parent) == module:
-                    assertion = re.search(r'compiler\.assert\([\s\S]*?\)\s*', text)
-                    if not assertion:
-                        raise ValueError(f'{module}: no target assertion')
-                    body += signature(assertion[0].strip())
+            # A module declares its scope once, in one of its files; a
+            # generated file or one implementing a single system need not
+            # repeat it.
+            assertions = [found[0].strip()
+                          for path, text in sorted(sources.items())
+                          if str(Path(path).parent) == module
+                          for found in [re.search(r'compiler\.assert\([\s\S]*?\)\s*', text)]
+                          if found]
+            if not assertions:
+                raise ValueError(f'{module}: no target assertion')
+            body += signature(assertions[0])
         body += '<h2>Items</h2><ul class="api-index">'
         grouped = {}
         for item in items:

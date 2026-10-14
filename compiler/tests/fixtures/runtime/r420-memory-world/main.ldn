@@ -1,11 +1,12 @@
 import core/io
+import core/text
 
 mut input: [5]u8 = [65, 66, 67, 68, 69]
 mut destination: [12]u8 = zeroed
 mut output: [12]u8 = zeroed
 mut errors: [8]u8 = zeroed
-path_in_bytes: [3]u8 = [105, 110, 0]
-path_out_bytes: [4]u8 = [111, 117, 116, 0]
+path_in_bytes: []u8 = "in"
+path_out_bytes: []u8 = "out"
 
 public main: () -> (code: i32) =
     code = 1
@@ -20,7 +21,7 @@ public main: () -> (code: i32) =
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second
-    no_arguments: []io.argument = []
+    no_arguments: [][]u8 = []
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<lenof files], no_arguments, "",
                              output[0..<lenof output], errors[0..<lenof errors])
@@ -29,7 +30,7 @@ public main: () -> (code: i32) =
     world: any io.world = any(addr memory)
     if world.argument_count() <> 0 then return end if
     if not missing_argument(world) then return end if
-    path_in := addr path_in_bytes[0]
+    path_in := text.host_over(path_in_bytes)
     opened: io.file = world.open_read(path_in) else (problem)
         _ = problem
         return
@@ -83,7 +84,7 @@ public main: () -> (code: i32) =
     end
     if not no_progress or state.output_used <> 7 then return end if
     state.write_limit = 2
-    path_out := addr path_out_bytes[0]
+    path_out := text.host_over(path_out_bytes)
     destination_file: io.file = world.open_write(path_out) else (problem)
         _ = problem
         return
@@ -112,10 +113,10 @@ public main: () -> (code: i32) =
 end main
 
 missing_argument: (world: any io.world) -> (yes: bool) =
-    value: io.argument = world.argument(0) else (problem)
+    value: text.host_string = world.argument(0) else (problem)
         yes = problem == io.no_argument
         return
     end
-    _ = value.length
+    _ = text.host_bytes(value)
     yes = false
 end missing_argument

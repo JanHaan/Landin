@@ -1,0 +1,19 @@
+--  A module array's image names atoms qualified by the module that
+--  declares them, as platform/posix's errno tables are read from another
+--  module: each element folds to the atom itself, as the same atom named
+--  unqualified in its own module does.
+import kinds
+
+order: [3]kinds.colour = [kinds.blue, kinds.red, kinds.green]
+mut latest: [1]kinds.colour = [kinds.green]
+
+public main: () -> (code: i32) =
+    code = 1
+    return when order[0] <> kinds.blue or order[1] <> kinds.red
+      or order[2] <> kinds.green
+    code = 2
+    return when latest[0] <> kinds.green
+    latest[0] = order[0]
+    return when latest[0] <> kinds.blue
+    code = 42
+end main

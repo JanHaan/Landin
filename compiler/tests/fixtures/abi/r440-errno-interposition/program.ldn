@@ -1,17 +1,17 @@
 --  This program uses the real core/io system provider.  The C companion wraps
---  the libc symbols hosted/libc declares and hosted/io calls; it scripts
+--  the libc symbols platform/libc declares and hosted/io calls; it scripts
 --  return values and checks every offered address, extent and byte.
 
 import core/io
+import core/text
 import hosted/io as hosted
 
 extern(c) r440_errno_select: (scenario: i32) -> none
 extern(c) r440_errno_check: (scenario: i32) -> (fault: i32)
 extern(c) r440_errno_record: (detail: i32) -> none
 
-read_path: [10]u8 = [114, 52, 52, 48, 45, 114, 101, 97, 100, 0]
-write_path: [11]u8 =
-    [114, 52, 52, 48, 45, 119, 114, 105, 116, 101, 0]
+read_path: []u8 = "r440-read"
+write_path: []u8 = "r440-write"
 payload: [6]u8 = [10, 20, 30, 40, 50, 60]
 
 public main: () -> (code: i32) =
@@ -21,7 +21,7 @@ public main: () -> (code: i32) =
     --  A read-only open retries EINTR with the identical path and flags.  The
     --  successful retry leaves no stale detail, and its fake handle is closed.
     r440_errno_select(1)
-    read_file: io.file = io.open_read(state, addr read_path[0]) else (problem)
+    read_file: io.file = io.open_read(state, text.host_over(read_path)) else (problem)
         _ = problem
         return
     end
@@ -36,7 +36,7 @@ public main: () -> (code: i32) =
     --  the EINTR retry rather than rebuilding a different request.
     code = 2
     r440_errno_select(2)
-    write_file: io.file = io.open_write(state, addr write_path[0]) else (problem)
+    write_file: io.file = io.open_write(state, text.host_over(write_path)) else (problem)
         _ = problem
         return
     end

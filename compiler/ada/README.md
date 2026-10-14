@@ -495,7 +495,7 @@ Logical link names stay in checking and IR. `Targets.Capabilities.Link_Symbol`
 adds Darwin's underscore before assembly quoting; ELF leaves the name intact.
 Compiler-local labels are separate. `Landin.Hosted` supplies the argument
 initializer's name to both checking and emission; the C library's spellings
-that differ by operating system are the library's own, in `hosted/libc`.
+that differ by operating system are the library's own, in `platform/libc`.
 `Backend.ELF` holds the directive spellings every ELF backend shares. See [target contracts](../../docs/targets.md).
 
 A compilation owns everything its stages build and frees it when it ends.
@@ -937,7 +937,7 @@ C definitions retain their ABI spelling unless an explicit C symbol override
 selects another; private C definitions without overrides keep collision-safe
 internal names. Checking decodes and validates overrides and refuses
 incompatible same-symbol declarations or multiple definitions. Thus an ordinary
-lexer function named `open` cannot interpose on `hosted/libc`'s call to libc
+lexer function named `open` cannot interpose on `platform/libc`'s call to libc
 `open`.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
@@ -1227,7 +1227,7 @@ general C support. Routine debugger-risk policy covers both native backends;
 Cortex has the explicit line/function source-debugging contract.
 
 The FreeBSD x86-64 and arm64 descriptions share the existing ELF backends and
-C ABI planners. Hosted libc spelling is the library's `hosted/libc`, target identity
+C ABI planners. Hosted libc spelling is the library's `platform/libc`, target identity
 and availability in `Targets` and `Targets.Capabilities`, and Clang/sysroot
 argument policy in `Backend.Toolchain`. `compiler.os` selects libc records
 without changing C transport facts. The FreeBSD supervisor emits on Linux;

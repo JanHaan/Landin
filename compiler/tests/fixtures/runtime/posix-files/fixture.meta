@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix opens, writes, reads and closes a file relative to a directory's descriptor and asks its status, and fails with the errno POSIX names, the same atom on every system, for a missing name, a taken exclusive one, a file used as a directory, a directory opened for writing, a path holding a NUL, a path longer than PATH_MAX and a closed descriptor
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

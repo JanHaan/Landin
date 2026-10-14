@@ -3297,8 +3297,13 @@ package body Landin.Syntax.Parser is
                      Parsed : constant Node_Id := Parse_Link_Declaration;
                   begin
                      if Exported then
+                        --  The declaration begins at its `public`, as one
+                        --  without a link annotation does.
                         for Each of Parsed_Run (Parsed) loop
                            Result.Items (Positive (Each)).Exported := True;
+                           Result.Items (Positive (Each)).Extent := Join
+                             (Public_At,
+                              Result.Items (Positive (Each)).Extent);
                         end loop;
                      end if;
                      return Parsed;

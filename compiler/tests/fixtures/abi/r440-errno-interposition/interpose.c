@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 /*
- * The link resolves hosted/libc's undefined libc references to these
+ * The link resolves platform/libc's undefined libc references to these
  * functions.  Landin's hosted/io therefore still calls open, read and their
  * siblings exactly as it calls the C library; only the endpoint is scripted.
  */

@@ -1866,12 +1866,24 @@ package body Landin.Backend.Cortex_M is
                      Emit ("cmp " & Register & ", #0");
                      Branch ("eq", Done);
                   end if;
-                  for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms) loop
-                     Immediate ("r4", Pattern (Atom_Code
-                       (Atoms_Ranked,
-                        Landin.IR.Nth_Atom (Of_Unit, Atoms, Index))));
-                     Emit ("cmp " & Register & ", r4");
-                     Branch ("eq", Done);
+                  for Run of Runs_Of (Of_Unit, Atoms_Ranked, Atoms) loop
+                     if Run.Low = Run.High then
+                        Immediate ("r4", Pattern (Run.Low));
+                        Emit ("cmp " & Register & ", r4");
+                        Branch ("eq", Done);
+                     else
+                        declare
+                           Next : constant String := Fresh;
+                        begin
+                           Immediate ("r4", Pattern (Run.Low));
+                           Emit ("cmp " & Register & ", r4");
+                           Branch ("cc", Next);
+                           Immediate ("r4", Pattern (Run.High));
+                           Emit ("cmp " & Register & ", r4");
+                           Branch ("ls", Done);
+                           Put (Next & ":");
+                        end;
+                     end if;
                   end loop;
                   Jump (Trap (Landin.Panics.Bad_Conversion));
                   Put (Done & ":");

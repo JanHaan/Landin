@@ -1,4 +1,5 @@
 import core/io
+import core/text
 
 --  A small world with one writable stream. Unsupported services refuse;
 --  the adapter must preserve partial progress and failures on that stream.
@@ -14,7 +15,7 @@ end device
 
 write: (self: device, opened: io.file, bytes: []u8)
        -> none ! io.io_failed =
-    fail io.io_failed when i32(opened) <> 1 or lenof bytes <> 1
+    fail io.io_failed when usize(opened) <> 1 or lenof bytes <> 1
     self.state.val.byte = bytes[0]
     inc self.state.val.calls
 end write
@@ -35,14 +36,15 @@ read: (self: device, opened: io.file, into: []mut u8)
     fail io.io_failed
 end read
 
-open: (self: device, path: ptr u8)
+open: (self: device, path: text.host_string)
       -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
     _ = self
     _ = path
     fail io.no_access
 end open
 
-same_file: (self: device, left: ptr u8, right: ptr u8)
+same_file: (self: device, left: text.host_string,
+            right: text.host_string)
            -> (same: bool) ! io.io_failed =
     _ = self
     _ = left
@@ -67,7 +69,7 @@ argument_count: (self: device) -> (count: usize) =
 end argument_count
 
 argument: (self: device, index: usize)
-          -> (value: io.argument from self) ! io.no_argument =
+          -> (value: text.host_string from self) ! io.no_argument =
     _ = self
     _ = index
     fail io.no_argument

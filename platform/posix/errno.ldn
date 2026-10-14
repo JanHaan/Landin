@@ -1,0 +1,448 @@
+--  POSIX's error numbers as atoms, one for every errno Linux, Darwin and
+--  FreeBSD define, named after the C macro in lower case, with each
+--  system's number kept.  The names and numbers were read from Linux 7.1's
+--  include/uapi/asm-generic/errno-base.h and errno.h, which x86-64, arm64
+--  and RV64 share, from FreeBSD 15's sys/errno.h, the same on both of its
+--  architectures, and from the macOS SDK's sys/errno.h; the C peer of
+--  abi/posix-errno-numbers holds every entry to each system's own header.
+--  An alias names no atom of its own: EWOULDBLOCK is EAGAIN's number on
+--  all three and is `eagain`, Linux's EDEADLOCK is `edeadlk`, and
+--  ENOTSUP, a number of its own only on Darwin, is EOPNOTSUPP's on Linux
+--  and FreeBSD, where a failure gives `eopnotsupp`.
+
+--- A failure no errno this module names describes: a number newer than
+--- its tables, or a record the system filled that could not be read.  Its
+--- `number` is zero.
+public unlisted: atom
+
+--- errno EPERM: Operation not permitted.
+public eperm: atom
+--- errno ENOENT: No such file or directory.
+public enoent: atom
+--- errno ESRCH: No such process.
+public esrch: atom
+--- errno EINTR: Interrupted system call.
+public eintr: atom
+--- errno EIO: I/O error.
+public eio: atom
+--- errno ENXIO: No such device or address.
+public enxio: atom
+--- errno E2BIG: Argument list too long.
+public e2big: atom
+--- errno ENOEXEC: Exec format error.
+public enoexec: atom
+--- errno EBADF: Bad file number.
+public ebadf: atom
+--- errno ECHILD: No child processes.
+public echild: atom
+--- errno EAGAIN: Try again.
+public eagain: atom
+--- errno ENOMEM: Out of memory.
+public enomem: atom
+--- errno EACCES: Permission denied.
+public eacces: atom
+--- errno EFAULT: Bad address.
+public efault: atom
+--- errno ENOTBLK: Block device required.
+public enotblk: atom
+--- errno EBUSY: Device or resource busy.
+public ebusy: atom
+--- errno EEXIST: File exists.
+public eexist: atom
+--- errno EXDEV: Cross-device link.
+public exdev: atom
+--- errno ENODEV: No such device.
+public enodev: atom
+--- errno ENOTDIR: Not a directory.
+public enotdir: atom
+--- errno EISDIR: Is a directory.
+public eisdir: atom
+--- errno EINVAL: Invalid argument.
+public einval: atom
+--- errno ENFILE: File table overflow.
+public enfile: atom
+--- errno EMFILE: Too many open files.
+public emfile: atom
+--- errno ENOTTY: Not a typewriter.
+public enotty: atom
+--- errno ETXTBSY: Text file busy.
+public etxtbsy: atom
+--- errno EFBIG: File too large.
+public efbig: atom
+--- errno ENOSPC: No space left on device.
+public enospc: atom
+--- errno ESPIPE: Illegal seek.
+public espipe: atom
+--- errno EROFS: Read-only file system.
+public erofs: atom
+--- errno EMLINK: Too many links.
+public emlink: atom
+--- errno EPIPE: Broken pipe.
+public epipe: atom
+--- errno EDOM: Math argument out of domain of func.
+public edom: atom
+--- errno ERANGE: Math result not representable.
+public erange: atom
+--- errno EDEADLK: Resource deadlock would occur.
+public edeadlk: atom
+--- errno ENAMETOOLONG: File name too long.
+public enametoolong: atom
+--- errno ENOLCK: No record locks available.
+public enolck: atom
+--- errno ENOSYS: Invalid system call number.
+public enosys: atom
+--- errno ENOTEMPTY: Directory not empty.
+public enotempty: atom
+--- errno ELOOP: Too many symbolic links encountered.
+public eloop: atom
+--- errno ENOMSG: No message of desired type.
+public enomsg: atom
+--- errno EIDRM: Identifier removed.
+public eidrm: atom
+--- errno ECHRNG: Channel number out of range.
+public echrng: atom
+--- errno EL2NSYNC: Level 2 not synchronized.
+public el2nsync: atom
+--- errno EL3HLT: Level 3 halted.
+public el3hlt: atom
+--- errno EL3RST: Level 3 reset.
+public el3rst: atom
+--- errno ELNRNG: Link number out of range.
+public elnrng: atom
+--- errno EUNATCH: Protocol driver not attached.
+public eunatch: atom
+--- errno ENOCSI: No CSI structure available.
+public enocsi: atom
+--- errno EL2HLT: Level 2 halted.
+public el2hlt: atom
+--- errno EBADE: Invalid exchange.
+public ebade: atom
+--- errno EBADR: Invalid request descriptor.
+public ebadr: atom
+--- errno EXFULL: Exchange full.
+public exfull: atom
+--- errno ENOANO: No anode.
+public enoano: atom
+--- errno EBADRQC: Invalid request code.
+public ebadrqc: atom
+--- errno EBADSLT: Invalid slot.
+public ebadslt: atom
+--- errno EBFONT: Bad font file format.
+public ebfont: atom
+--- errno ENOSTR: Device not a stream.
+public enostr: atom
+--- errno ENODATA: No data available.
+public enodata: atom
+--- errno ETIME: Timer expired.
+public etime: atom
+--- errno ENOSR: Out of streams resources.
+public enosr: atom
+--- errno ENONET: Machine is not on the network.
+public enonet: atom
+--- errno ENOPKG: Package not installed.
+public enopkg: atom
+--- errno EREMOTE: Object is remote.
+public eremote: atom
+--- errno ENOLINK: Link has been severed.
+public enolink: atom
+--- errno EADV: Advertise error.
+public eadv: atom
+--- errno ESRMNT: Srmount error.
+public esrmnt: atom
+--- errno ECOMM: Communication error on send.
+public ecomm: atom
+--- errno EPROTO: Protocol error.
+public eproto: atom
+--- errno EMULTIHOP: Multihop attempted.
+public emultihop: atom
+--- errno EDOTDOT: RFS specific error.
+public edotdot: atom
+--- errno EBADMSG: Not a data message.
+public ebadmsg: atom
+--- errno EOVERFLOW: Value too large for defined data type.
+public eoverflow: atom
+--- errno ENOTUNIQ: Name not unique on network.
+public enotuniq: atom
+--- errno EBADFD: File descriptor in bad state.
+public ebadfd: atom
+--- errno EREMCHG: Remote address changed.
+public eremchg: atom
+--- errno ELIBACC: Can not access a needed shared library.
+public elibacc: atom
+--- errno ELIBBAD: Accessing a corrupted shared library.
+public elibbad: atom
+--- errno ELIBSCN: .lib section in a.out corrupted.
+public elibscn: atom
+--- errno ELIBMAX: Attempting to link in too many shared libraries.
+public elibmax: atom
+--- errno ELIBEXEC: Cannot exec a shared library directly.
+public elibexec: atom
+--- errno EILSEQ: Illegal byte sequence.
+public eilseq: atom
+--- errno ERESTART: Interrupted system call should be restarted.
+public erestart: atom
+--- errno ESTRPIPE: Streams pipe error.
+public estrpipe: atom
+--- errno EUSERS: Too many users.
+public eusers: atom
+--- errno ENOTSOCK: Socket operation on non-socket.
+public enotsock: atom
+--- errno EDESTADDRREQ: Destination address required.
+public edestaddrreq: atom
+--- errno EMSGSIZE: Message too long.
+public emsgsize: atom
+--- errno EPROTOTYPE: Protocol wrong type for socket.
+public eprototype: atom
+--- errno ENOPROTOOPT: Protocol not available.
+public enoprotoopt: atom
+--- errno EPROTONOSUPPORT: Protocol not supported.
+public eprotonosupport: atom
+--- errno ESOCKTNOSUPPORT: Socket type not supported.
+public esocktnosupport: atom
+--- errno EOPNOTSUPP: Operation not supported on transport endpoint.
+public eopnotsupp: atom
+--- errno EPFNOSUPPORT: Protocol family not supported.
+public epfnosupport: atom
+--- errno EAFNOSUPPORT: Address family not supported by protocol.
+public eafnosupport: atom
+--- errno EADDRINUSE: Address already in use.
+public eaddrinuse: atom
+--- errno EADDRNOTAVAIL: Cannot assign requested address.
+public eaddrnotavail: atom
+--- errno ENETDOWN: Network is down.
+public enetdown: atom
+--- errno ENETUNREACH: Network is unreachable.
+public enetunreach: atom
+--- errno ENETRESET: Network dropped connection because of reset.
+public enetreset: atom
+--- errno ECONNABORTED: Software caused connection abort.
+public econnaborted: atom
+--- errno ECONNRESET: Connection reset by peer.
+public econnreset: atom
+--- errno ENOBUFS: No buffer space available.
+public enobufs: atom
+--- errno EISCONN: Transport endpoint is already connected.
+public eisconn: atom
+--- errno ENOTCONN: Transport endpoint is not connected.
+public enotconn: atom
+--- errno ESHUTDOWN: Cannot send after transport endpoint shutdown.
+public eshutdown: atom
+--- errno ETOOMANYREFS: Too many references: cannot splice.
+public etoomanyrefs: atom
+--- errno ETIMEDOUT: Connection timed out.
+public etimedout: atom
+--- errno ECONNREFUSED: Connection refused.
+public econnrefused: atom
+--- errno EHOSTDOWN: Host is down.
+public ehostdown: atom
+--- errno EHOSTUNREACH: No route to host.
+public ehostunreach: atom
+--- errno EALREADY: Operation already in progress.
+public ealready: atom
+--- errno EINPROGRESS: Operation now in progress.
+public einprogress: atom
+--- errno ESTALE: Stale file handle.
+public estale: atom
+--- errno EUCLEAN: Structure needs cleaning.
+public euclean: atom
+--- errno ENOTNAM: Not a XENIX named type file.
+public enotnam: atom
+--- errno ENAVAIL: No XENIX semaphores available.
+public enavail: atom
+--- errno EISNAM: Is a named type file.
+public eisnam: atom
+--- errno EREMOTEIO: Remote I/O error.
+public eremoteio: atom
+--- errno EDQUOT: Quota exceeded.
+public edquot: atom
+--- errno ENOMEDIUM: No medium found.
+public enomedium: atom
+--- errno EMEDIUMTYPE: Wrong medium type.
+public emediumtype: atom
+--- errno ECANCELED: Operation Canceled.
+public ecanceled: atom
+--- errno ENOKEY: Required key not available.
+public enokey: atom
+--- errno EKEYEXPIRED: Key has expired.
+public ekeyexpired: atom
+--- errno EKEYREVOKED: Key has been revoked.
+public ekeyrevoked: atom
+--- errno EKEYREJECTED: Key was rejected by service.
+public ekeyrejected: atom
+--- errno EOWNERDEAD: Owner died.
+public eownerdead: atom
+--- errno ENOTRECOVERABLE: State not recoverable.
+public enotrecoverable: atom
+--- errno ERFKILL: Operation not possible due to RF-kill.
+public erfkill: atom
+--- errno EHWPOISON: Memory page has hardware error.
+public ehwpoison: atom
+--- errno EAUTH: Authentication error.
+public eauth: atom
+--- errno EBADARCH: Bad CPU type in executable.
+public ebadarch: atom
+--- errno EBADEXEC: Bad executable (or shared library).
+public ebadexec: atom
+--- errno EBADMACHO: Malformed Mach-o file.
+public ebadmacho: atom
+--- errno EBADRPC: RPC struct is bad.
+public ebadrpc: atom
+--- errno ECAPMODE: Not permitted in capability mode.
+public ecapmode: atom
+--- errno EDEVERR: Device error.
+public edeverr: atom
+--- errno EDOOFUS: Programming error.
+public edoofus: atom
+--- errno EFTYPE: Inappropriate file type or format.
+public eftype: atom
+--- errno EINTEGRITY: Integrity check failed.
+public eintegrity: atom
+--- errno ENEEDAUTH: Need authenticator.
+public eneedauth: atom
+--- errno ENOATTR: Attribute not found.
+public enoattr: atom
+--- errno ENOPOLICY: Policy not found.
+public enopolicy: atom
+--- errno ENOTCAPABLE: Capabilities insufficient.
+public enotcapable: atom
+--- errno ENOTSUP: Operation not supported.
+public enotsup: atom
+--- errno EPROCLIM: Too many processes.
+public eproclim: atom
+--- errno EPROCUNAVAIL: Bad procedure for program.
+public eprocunavail: atom
+--- errno EPROGMISMATCH: Program version wrong.
+public eprogmismatch: atom
+--- errno EPROGUNAVAIL: RPC prog. not avail.
+public eprogunavail: atom
+--- errno EPWROFF: Device power is off.
+public epwroff: atom
+--- errno EQFULL: Interface output queue is full.
+public eqfull: atom
+--- errno ERPCMISMATCH: RPC version wrong.
+public erpcmismatch: atom
+--- errno ESHLIBVERS: Shared library version mismatch.
+public eshlibvers: atom
+
+--- Every failure a POSIX call here reports: the errno it failed with, as
+--- an atom, or `unlisted`.  `number` gives the errno's number on this
+--- system and `errno_of` the atom for a number.
+public errno: type = eperm | enoent | esrch | eintr | eio | enxio | e2big
+    | enoexec | ebadf | echild | eagain | enomem | eacces | efault | enotblk
+    | ebusy | eexist | exdev | enodev | enotdir | eisdir | einval | enfile
+    | emfile | enotty | etxtbsy | efbig | enospc | espipe | erofs | emlink
+    | epipe | edom | erange | edeadlk | enametoolong | enolck | enosys
+    | enotempty | eloop | enomsg | eidrm | echrng | el2nsync | el3hlt | el3rst
+    | elnrng | eunatch | enocsi | el2hlt | ebade | ebadr | exfull | enoano
+    | ebadrqc | ebadslt | ebfont | enostr | enodata | etime | enosr | enonet
+    | enopkg | eremote | enolink | eadv | esrmnt | ecomm | eproto | emultihop
+    | edotdot | ebadmsg | eoverflow | enotuniq | ebadfd | eremchg | elibacc
+    | elibbad | elibscn | elibmax | elibexec | eilseq | erestart | estrpipe
+    | eusers | enotsock | edestaddrreq | emsgsize | eprototype | enoprotoopt
+    | eprotonosupport | esocktnosupport | eopnotsupp | epfnosupport
+    | eafnosupport | eaddrinuse | eaddrnotavail | enetdown | enetunreach
+    | enetreset | econnaborted | econnreset | enobufs | eisconn | enotconn
+    | eshutdown | etoomanyrefs | etimedout | econnrefused | ehostdown
+    | ehostunreach | ealready | einprogress | estale | euclean | enotnam
+    | enavail | eisnam | eremoteio | edquot | enomedium | emediumtype
+    | ecanceled | enokey | ekeyexpired | ekeyrevoked | ekeyrejected
+    | eownerdead | enotrecoverable | erfkill | ehwpoison | eauth | ebadarch
+    | ebadexec | ebadmacho | ebadrpc | ecapmode | edeverr | edoofus | eftype
+    | eintegrity | eneedauth | enoattr | enopolicy | enotcapable | enotsup
+    | eproclim | eprocunavail | eprogmismatch | eprogunavail | epwroff
+    | eqfull | erpcmismatch | eshlibvers | unlisted
+
+--  Each system's errno numbers in order: entry N is the atom for errno N,
+--  and a number the system leaves unused is `unlisted`.
+fixed if compiler.os == darwin then
+    --  Whether ENOTSUP is EOPNOTSUPP's number.
+    shared_notsup: bool = false
+else
+    shared_notsup: bool = true
+end if
+
+fixed if compiler.os == linux then
+    errno_table: [134]errno =
+        [unlisted, eperm, enoent, esrch, eintr, eio, enxio, e2big, enoexec,
+         ebadf, echild, eagain, enomem, eacces, efault, enotblk, ebusy,
+         eexist, exdev, enodev, enotdir, eisdir, einval, enfile, emfile,
+         enotty, etxtbsy, efbig, enospc, espipe, erofs, emlink, epipe, edom,
+         erange, edeadlk, enametoolong, enolck, enosys, enotempty, eloop,
+         unlisted, enomsg, eidrm, echrng, el2nsync, el3hlt, el3rst, elnrng,
+         eunatch, enocsi, el2hlt, ebade, ebadr, exfull, enoano, ebadrqc,
+         ebadslt, unlisted, ebfont, enostr, enodata, etime, enosr, enonet,
+         enopkg, eremote, enolink, eadv, esrmnt, ecomm, eproto, emultihop,
+         edotdot, ebadmsg, eoverflow, enotuniq, ebadfd, eremchg, elibacc,
+         elibbad, elibscn, elibmax, elibexec, eilseq, erestart, estrpipe,
+         eusers, enotsock, edestaddrreq, emsgsize, eprototype, enoprotoopt,
+         eprotonosupport, esocktnosupport, eopnotsupp, epfnosupport,
+         eafnosupport, eaddrinuse, eaddrnotavail, enetdown, enetunreach,
+         enetreset, econnaborted, econnreset, enobufs, eisconn, enotconn,
+         eshutdown, etoomanyrefs, etimedout, econnrefused, ehostdown,
+         ehostunreach, ealready, einprogress, estale, euclean, enotnam,
+         enavail, eisnam, eremoteio, edquot, enomedium, emediumtype,
+         ecanceled, enokey, ekeyexpired, ekeyrevoked, ekeyrejected,
+         eownerdead, enotrecoverable, erfkill, ehwpoison]
+elsif compiler.os == darwin then
+    errno_table: [108]errno =
+        [unlisted, eperm, enoent, esrch, eintr, eio, enxio, e2big, enoexec,
+         ebadf, echild, edeadlk, enomem, eacces, efault, enotblk, ebusy,
+         eexist, exdev, enodev, enotdir, eisdir, einval, enfile, emfile,
+         enotty, etxtbsy, efbig, enospc, espipe, erofs, emlink, epipe, edom,
+         erange, eagain, einprogress, ealready, enotsock, edestaddrreq,
+         emsgsize, eprototype, enoprotoopt, eprotonosupport, esocktnosupport,
+         enotsup, epfnosupport, eafnosupport, eaddrinuse, eaddrnotavail,
+         enetdown, enetunreach, enetreset, econnaborted, econnreset, enobufs,
+         eisconn, enotconn, eshutdown, etoomanyrefs, etimedout, econnrefused,
+         eloop, enametoolong, ehostdown, ehostunreach, enotempty, eproclim,
+         eusers, edquot, estale, eremote, ebadrpc, erpcmismatch,
+         eprogunavail, eprogmismatch, eprocunavail, enolck, enosys, eftype,
+         eauth, eneedauth, epwroff, edeverr, eoverflow, ebadexec, ebadarch,
+         eshlibvers, ebadmacho, ecanceled, eidrm, enomsg, eilseq, enoattr,
+         ebadmsg, emultihop, enodata, enolink, enosr, enostr, eproto, etime,
+         eopnotsupp, enopolicy, enotrecoverable, eownerdead, eqfull,
+         enotcapable]
+else
+    errno_table: [98]errno =
+        [unlisted, eperm, enoent, esrch, eintr, eio, enxio, e2big, enoexec,
+         ebadf, echild, edeadlk, enomem, eacces, efault, enotblk, ebusy,
+         eexist, exdev, enodev, enotdir, eisdir, einval, enfile, emfile,
+         enotty, etxtbsy, efbig, enospc, espipe, erofs, emlink, epipe, edom,
+         erange, eagain, einprogress, ealready, enotsock, edestaddrreq,
+         emsgsize, eprototype, enoprotoopt, eprotonosupport, esocktnosupport,
+         eopnotsupp, epfnosupport, eafnosupport, eaddrinuse, eaddrnotavail,
+         enetdown, enetunreach, enetreset, econnaborted, econnreset, enobufs,
+         eisconn, enotconn, eshutdown, etoomanyrefs, etimedout, econnrefused,
+         eloop, enametoolong, ehostdown, ehostunreach, enotempty, eproclim,
+         eusers, edquot, estale, eremote, ebadrpc, erpcmismatch,
+         eprogunavail, eprogmismatch, eprocunavail, enolck, enosys, eftype,
+         eauth, eneedauth, eidrm, enomsg, eoverflow, ecanceled, eilseq,
+         enoattr, edoofus, ebadmsg, emultihop, enolink, eproto, enotcapable,
+         ecapmode, enotrecoverable, eownerdead, eintegrity]
+end if
+
+--- The errno atom for the number `value` on this system: `unlisted` for a
+--- number it does not define.
+public link(symbol: "_landin_posix_errno_of") errno_of:
+    (value: i32) -> (problem: errno) =
+    problem = unlisted
+    return when value <= 0 or usize(value) >= lenof errno_table
+    problem = errno_table[usize(value)]
+end errno_of
+
+--- The number `problem` has on this system, as C's `errno` holds it: zero for
+--- `unlisted` and for an errno this system does not define.  ENOTSUP is
+--- EOPNOTSUPP's number on Linux and FreeBSD.
+public link(symbol: "_landin_posix_number") number:
+    (problem: errno) -> (value: i32) =
+    value = 0
+    return when problem == unlisted
+    mut sought: errno = problem
+    if shared_notsup and sought == enotsup then sought = eopnotsupp end if
+    for at in usize(1)..<lenof errno_table do
+        if errno_table[at] == sought then
+            value = i32(at)
+            return
+        end if
+    end for
+end number

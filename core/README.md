@@ -17,15 +17,20 @@ The shared freestanding modules are `core/cmp`, `core/diag`, `core/fault`,
 `core/sort`, `core/spill`, `core/text`, `core/tree` and `core/vec`. Every public interface is
 available on every target. Their providers retain caller-supplied authority.
 
-`hosted/heap`, `hosted/io` and `hosted/libc` require a hosted system. Import
-the I/O provider `as hosted` alongside the shared `core/io` protocol.
-`hosted/libc` declares the C library both providers call on Darwin and
-FreeBSD, with the facts that differ between systems selected by
-`compiler.os`; the compiler names none of it. `hosted/linux` declares
-Linux's system calls, which the providers make on Linux, and the raw
-`system_call` that makes any of them; `hosted/linux/numbers` names every
-call's number, generated from a pinned kernel release. Both declare nothing
-on Darwin and FreeBSD. `platform/c` holds the
+`hosted/heap` and `hosted/io` require a hosted system. Import the I/O
+provider `as hosted` alongside the shared `core/io` protocol. Both are
+written once, over `platform/posix`, which gives POSIX's facilities in
+Landin types on Linux, Darwin and FreeBSD and would not exist on a system
+that is not POSIX. Beneath it each system's own interface stays raw:
+`platform/linux` declares Linux's system calls, which `platform/posix`
+makes on Linux, and the raw `system_call` that makes any of them, and
+`platform/linux/numbers` names every call's number, generated from a pinned
+kernel release; both declare nothing on Darwin and FreeBSD. `platform/libc`
+declares the C library `platform/posix` calls on Darwin and FreeBSD, and
+which a Linux program linked with `--link=libc` may call, with the facts
+that differ between systems selected by `compiler.os`; the compiler names
+none of it. The three `platform` modules' scope is the hosted POSIX
+systems, and firmware refuses each by name. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cpu` holds M-profile CPU operations and admits the
 armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
@@ -107,7 +112,7 @@ streams through `any io.writer` (D268). Every entry takes the provider's
 handle by value, and an erased capability is built from the address of a
 handle binding, `any(addr host)`; dispatch copies the handle from there.
 `process` lends the standard streams `input`, `out` and `err` and the argument
-table, and its free functions take the handle `in`, as `read` and `write` do,
+table, each argument a host string, and its free functions take the handle `in`, as `read` and `write` do,
 so two lent arguments, the count and a write through an erased world made
 from the same handle are live at once. `in` is reserved [1760], so the
 standard-input entry is the noun `input`, which reads beside `out` and `err`
@@ -121,14 +126,17 @@ a service: the caller declares the `directory` that `open_directory`
 returns, supplies its read buffer, and passes it `inout` to `read_entry`.
 Each entry's name is lent `from` the directory, because the next read
 refills the buffer the name lies in, so a program that keeps a name copies
-it, and keeping one across a read is refused [0800]. Names are `[]u8`, as
-the system stores them; `core/text` validates one that should be text. An
+it, and keeping one across a read is refused [0800]. Names, paths and
+arguments are host strings, `text.host_string`, as the system stores and
+takes them, never converted on the way through; `text.from_host` validates
+one that should be text, and `text.host_over` makes one over the caller's
+bytes. An
 empty name is the end of the directory, as a zero-byte read is the end of a
 file, and `.` and `..` are never entries. The size is a separate
 `entry_size` call relative to the open directory, the `*at` form, so a
 listing that wants only names makes no status call per entry. A directory
-dropped without `close_directory` keeps its descriptor until the process
-ends; a `defer` closes it on every way out. `core/io.memory`'s directories
+dropped without `close_directory` keeps what its provider holds for it
+until the process ends; a `defer` closes it on every way out. `core/io.memory`'s directories
 are the parts of its slots' names before a `/`, a slot ending in `/` an
 empty directory, read through the caller's buffer as the hosted provider's
 are; its tree is the caller's slots, so it makes and removes nothing.
@@ -196,8 +204,9 @@ Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
 of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
 caller backing, and every `core/io` concept can be selected on Cortex-M0. The
-`hosted/io` provider, `hosted/heap`, `hosted/libc` and the hosted C aliases in
-`platform/c` remain outside this consumer closure. Even unused hosted declarations in a
+`hosted/io` provider, `hosted/heap`, `platform/posix`, `platform/linux`,
+`platform/libc` and the hosted C aliases in `platform/c` remain outside this
+consumer closure. Even unused hosted declarations in a
 selected module must meet target checks.
 
 `core/sort.sort` sorts a mutable initialized view in place with heapsort:
@@ -352,6 +361,26 @@ unchanged except where noted.
 An allocation still borrows nothing from its allocator: a container keeps the
 block in its own storage, which a block borrowed from a handle could not
 reach without every container operation retaining the handle.
+
+## Migrating to host strings and the POSIX layer
+
+A path, a process argument and a directory entry's name are host strings,
+and the hosted providers are written once over `platform/posix`. Behaviour
+is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `import hosted/linux`, `hosted/linux/numbers`, `hosted/libc` | `import platform/linux`, `platform/linux/numbers`, `platform/libc`; the modules are unchanged |
+| a `ptr u8` path, NUL-terminated, to `open_read`, `open_write`, `same_file`, `open_directory`, `make_directory`, `remove_file` and `remove_directory` | a `text.host_string`; a literal one is `text.host_over("name")`, and the provider adds the NUL |
+| `io.terminate_path(bytes, scratch)` | `text.host_over(bytes)`, which copies nothing |
+| `io.open_read_bytes`, `open_write_bytes`, `open_read_text`, `open_write_text` | `io.open_read` and `io.open_write` of `text.host_over(bytes)` or `text.host_over(text.bytes(path))` |
+| `io.empty_path`, `io.path_contains_nul`, `io.path_too_long` refused before the provider was called | the system's answer: an empty path is `not_found` with ENOENT, a path with a NUL `io_failed` with EINVAL, one longer than PATH_MAX `io_failed` with ENAMETOOLONG |
+| `io.argument`, a pointer and a length | `text.host_string`, from `io.argument_at`; `io.memory_over`'s argument table is the arguments' bytes, `[][]u8`, which it lends as host strings, so a firmware test declares it as data |
+| `io.copy_argument(argument, scratch)` and `io.argument_too_long` | `text.host_bytes(argument)`, which lends the argument's own bytes, and `text.from_host(argument)` for text |
+| `io.entry`'s `name: []u8`, and `io.entry_size` taking `[]u8` | `name: text.host_string`, passed back to `io.entry_size` as it came |
+| `io.directory`'s `descriptor: i32` | `handle: usize`, the provider's own |
+| `io.file` as a `distinct i32` | a `distinct usize`, wide enough for any provider's identifier |
+| Darwin and FreeBSD's heap over `malloc` | size classes over `platform/posix`'s mappings, as Linux's were; single-threaded on every system |
 
 ## Migrating container providers and indices
 

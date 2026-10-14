@@ -1,8 +1,8 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:2:1
+  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:3:1
   |
-2 | bad: () -> (value: io.argument) ! io.no_argument =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3 | bad: () -> (value: text.host_string) ! io.no_argument =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:11:5
    |
 11 |     memory := io.memory_over(space, files, args[0..<1], "", output, errors)

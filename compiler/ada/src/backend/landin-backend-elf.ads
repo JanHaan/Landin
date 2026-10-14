@@ -38,6 +38,24 @@ package Landin.Backend.ELF is
 
    Data_Section : constant String := ".data";
 
+   --  An item's own input section: Kind is `text`, `rodata`, `data`,
+   --  `bss` or `data.rel.ro.local`, Name says what the item is and Index
+   --  which, so a link's --gc-sections keeps only what something retained
+   --  reaches.  A zero-image datum's is pushed and popped around it.
+   function Item_Section
+     (Kind, Name : String; Index : Positive) return String
+     is (".section ." & Kind & ".landin_" & Name & "_"
+         & Positive'Image (Index) (2 .. Positive'Image (Index)'Last) & ","
+         & (if Kind = "text" then """ax"",@progbits"
+            elsif Kind = "rodata" then """a"",@progbits"
+            elsif Kind = "bss" then """aw"",@nobits"
+            else """aw"",@progbits"));
+
+   function Push_Item_Section
+     (Kind, Name : String; Index : Positive) return String
+     is (".push" & Item_Section (Kind, Name, Index) (2 .. Item_Section
+           (Kind, Name, Index)'Last));
+
    Zero_Section : constant String := ".bss";
 
    --  An executable stack is inherited when nothing says otherwise, and

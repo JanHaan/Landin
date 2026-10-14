@@ -1,0 +1,30 @@
+error[L0301]: a distinct type has `==` and `<>`, and `&`, `^`, `|` and `~` when its base is an unsigned integer; extract the base for anything else
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:8:16
+  |
+8 |     yes = left < right
+  |                ^
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:8:11
+  |
+8 |     yes = left < right
+  |           ^^^^^^^^^^^^ here
+  = note: [0650]: ordering, arithmetic and shifts are the base's, written `base(value)`; an updating assignment is written out
+error[L0301]: a distinct type has `==` and `<>`, and `&`, `^`, `|` and `~` when its base is an unsigned integer; extract the base for anything else
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:12:17
+   |
+12 |     both = left | right
+   |                 ^
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:12:12
+   |
+12 |     both = left | right
+   |            ^^^^^^^^^^^^ here
+  = note: [0650]: ordering, arithmetic and shifts are the base's, written `base(value)`; an updating assignment is written out
+error[L0301]: a distinct type has `==` and `<>`, and `&`, `^`, `|` and `~` when its base is an unsigned integer; extract the base for anything else
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:16:9
+   |
+16 |     set |= more
+   |         ^^
+  --> ../tests/fixtures/negative/distinct-ordering-and-signed-flags/main.ldn:16:5
+   |
+16 |     set |= more
+   |     ^^^^^^^^^^^ here
+  = note: [0650]: ordering, arithmetic and shifts are the base's, written `base(value)`; an updating assignment is written out

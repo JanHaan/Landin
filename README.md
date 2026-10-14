@@ -368,10 +368,15 @@ This is the maintained inventory of what the compiler does today:
   ordering. A closed set of named values, such as a diagnostic's severity, is
   an atom set.
   `hosted/heap` and `hosted/io` supply the hosted heap and
-  system I/O capabilities over `hosted/libc` on Darwin and FreeBSD and
-  `hosted/linux` on Linux. `hosted/linux` supplies Linux's system calls and
+  system I/O capabilities, written once over `platform/posix`, which gives
+  POSIX's files, directories, memory mappings and `poll` in Landin types,
+  with a descriptor handle type and errno atoms that keep their numbers,
+  over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
+  A path, a process argument and a directory entry's name are host
+  strings, never converted on the way through, with a checked conversion to
+  UTF-8. `platform/linux` supplies Linux's system calls and
   the static process entry, with a raw `system_call` that reaches any call
-  by the number `hosted/linux/numbers` names, generated from a pinned kernel
+  by the number `platform/linux/numbers` names, generated from a pinned kernel
   release; Linux executables link with no C library by
   default (`--link=libc` keeps it). `platform/c` supplies aliases for the supported
   LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
@@ -473,7 +478,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.18 — The POSIX layer and host strings (planned).**
+**Next roadmap item: R13.19 — Formatting, buffered text and byte blocks (planned).**
 
 ## License
 

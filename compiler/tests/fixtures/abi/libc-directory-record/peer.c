@@ -1,5 +1,5 @@
 /* What each system's own C headers say of the directory declarations in
-   hosted/libc: struct dirent's layout, the flags and the mode and type
+   platform/libc: struct dirent's layout, the flags and the mode and type
    bits.  The Landin program holds its declarations to these answers. */
 #define _DARWIN_C_SOURCE 1
 #define _GNU_SOURCE 1

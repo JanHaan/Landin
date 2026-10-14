@@ -931,12 +931,12 @@ package body Landin.Driver is
                and then Link_Mode /= Link_Libc);
 
          --  What a static link starts at is library source: the program
-         --  holds hosted/linux, whose `_landin_start` is the process entry,
+         --  holds platform/linux, whose `_landin_start` is the process entry,
          --  whether or not its own imports reach it, as C's startup object
          --  is linked into every C program.
          function Implicit_Module return String
            is (if Static_Link and then Emit /= Emit_Nothing
-               then "hosted/linux" else "");
+               then "platform/linux" else "");
 
          function Policy_Report return Landin.Diagnostics.Diagnostic_List;
          function Policy_Report return Landin.Diagnostics.Diagnostic_List is
@@ -1764,13 +1764,13 @@ package body Landin.Driver is
                       (Landin.Stages.Configurations (Context).all);
                begin
                   if Landin.Modules.Find_Logical
-                       (Landin.Stages.Modules (Context).all, "hosted/linux")
+                       (Landin.Stages.Modules (Context).all, "platform/linux")
                      = Landin.Modules.No_Module
                   then
                      Note_No_Toolchain
                        ("a static link of " & Landin.Targets.Name (Facts)
-                        & " starts at hosted/linux's `_landin_start`, and"
-                        & " no library holding hosted/linux was found",
+                        & " starts at platform/linux's `_landin_start`, and"
+                        & " no library holding platform/linux was found",
                         "name the library with --library=PATH, or link"
                         & " with --link=libc, which keeps C's runtime");
                      return;

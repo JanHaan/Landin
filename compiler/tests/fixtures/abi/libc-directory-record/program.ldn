@@ -1,8 +1,8 @@
---  hosted/libc's directory declarations against the system's own C
+--  platform/libc's directory declarations against the system's own C
 --  headers, which the C peer reads: `struct dirent` field by field, the
 --  `open`, `fstatat` and `unlinkat` flags, AT_FDCWD, EEXIST, and the mode
 --  and `d_type` bits.
-import hosted/libc
+import platform/libc
 
 extern(c) record_size: () -> (bytes: usize)
 extern(c) record_alignment: () -> (bytes: usize)

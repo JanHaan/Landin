@@ -82,7 +82,7 @@ package Landin.Backend.Toolchain is
    --
    --  `Static` (Linux only) links the program alone: no C runtime
    --  object or library, no dynamic loader and no position independence,
-   --  starting at hosted/linux's `_landin_start`.
+   --  starting at platform/linux's `_landin_start`.
    --
    --  `Linker` is a pass-through and not a second driver.  mold, the linker
    --  this exists for, documents three ways to be used and every one of

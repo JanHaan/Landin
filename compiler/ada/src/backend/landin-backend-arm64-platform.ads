@@ -7,7 +7,7 @@
 --  wants `.subsections_via_symbols` and ELF a non-executable stack note.
 --  Each function here returns the directive or operand text alone, and the
 --  backend writes it with its own line discipline.  The operating system's
---  libc spellings are the library's `hosted/libc` and the C transport is
+--  libc spellings are the library's `platform/libc` and the C transport is
 --  `Landin.Backend.AAPCS64_ABI`'s; this is the object format only.
 
 with Landin.Targets.Capabilities;

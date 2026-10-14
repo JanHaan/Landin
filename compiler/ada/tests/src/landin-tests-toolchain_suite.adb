@@ -191,7 +191,7 @@ package body Landin.Tests.Toolchain_Suite is
    end A_Linker_Is_Passed_Through_The_Driver;
 
    --  A static Linux link names no C runtime object, no C library
-   --  and no dynamic loader, and enters at hosted/linux's `_landin_start`;
+   --  and no dynamic loader, and enters at platform/linux's `_landin_start`;
    --  every Linux architecture spells it alike before the assembly operand,
    --  and the libc link keeps the invocation it had.
    procedure A_Static_Linux_Link_Has_No_C_Runtime
@@ -233,8 +233,8 @@ package body Landin.Tests.Toolchain_Suite is
               ("main.s", "main", "", Facts => Landin.Targets.Linux_Arm64,
                Static => False)),
          "main.s" & LF & "-o" & LF & "main" & LF
-         & "-Wa,-march=armv8-a" & LF,
-         "the libc link of arm64 is unchanged");
+         & "-Wl,--gc-sections" & LF & "-Wa,-march=armv8-a" & LF,
+         "the libc link of arm64 collects unreached sections too");
    end A_Static_Linux_Link_Has_No_C_Runtime;
 
    ------------------------------------------------------------------
@@ -360,7 +360,7 @@ package body Landin.Tests.Toolchain_Suite is
            (Item, Landin.Platform.Joined (Args),
             "main.s" & LF & "-l:libsupport.a" & LF
             & "-l:libsupport.a" & LF & "-o" & LF & "main" & LF
-            & "-Wl,--build-id=0xa1b2" & LF
+            & "-Wl,--build-id=0xa1b2" & LF & "-Wl,--gc-sections" & LF
             & "-Wa,-march=armv8.1-a" & LF,
             "Linux arm64 links as Linux and assembles at its level");
          Landin.Testing.Check_Equal
@@ -369,7 +369,7 @@ package body Landin.Tests.Toolchain_Suite is
                  ("main.s", "main", "",
                   Facts => Landin.Targets.Linux_Arm64)),
             "main.s" & LF & "-o" & LF & "main" & LF
-            & "-Wa,-march=armv8-a" & LF,
+            & "-Wl,--gc-sections" & LF & "-Wa,-march=armv8-a" & LF,
             "the arm64 baseline is named to the assembler too");
       end;
       --  FreeBSD shares ELF transport, with its Clang assembler interface.
@@ -396,7 +396,8 @@ package body Landin.Tests.Toolchain_Suite is
                  (Landin.Targets.FreeBSD_Arm64, "armv8.1-a"))),
          "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
          & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
-         & "-march=armv8.1-a" & LF & "-Wa,-L" & LF,
+         & "-Wl,--gc-sections" & LF & "-march=armv8.1-a" & LF & "-Wa,-L"
+         & LF,
          "FreeBSD arm64 preserves public dot names and constrains Clang");
    end File_Operands_Keep_Their_Identity;
 

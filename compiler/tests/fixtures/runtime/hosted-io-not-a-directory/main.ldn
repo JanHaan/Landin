@@ -4,6 +4,7 @@
 --  is a character device on Linux, Darwin and FreeBSD alike, and the
 --  missing path's parent does not exist, which gives ENOENT.
 import core/io
+import core/text
 import hosted/io as hosted
 
 through_file: []u8 = "/dev/null/absent"
@@ -13,20 +14,18 @@ existing: []u8 = "/dev/null"
 open_refused: (state: hosted.system, path: []u8, writing: bool,
                errno: i32) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    mut opened: io.file = io.file(-1)
+    named: text.host_string = text.host_over(path)
+    mut opened: io.file = io.out(state)
     --  Parenthesised, so that each recovery's `else` is the call's and not
     --  the branch's.
     if writing then
-        opened = (io.open_write_bytes(state, path, scratch[0..<64])
-            else (problem)
+        opened = (io.open_write(state, named) else (problem)
             yes = problem == io.not_found
                   and hosted.last_errno(state) == errno
             return
         end)
     else
-        opened = (io.open_read_bytes(state, path, scratch[0..<64])
-            else (problem)
+        opened = (io.open_read(state, named) else (problem)
             yes = problem == io.not_found
                   and hosted.last_errno(state) == errno
             return
@@ -41,17 +40,8 @@ end open_refused
 --  input, whichever way it names nothing.
 absent_output: (state: hosted.system, path: []u8) -> (yes: bool) =
     yes = false
-    mut left: [64]u8 = zeroed
-    mut right: [64]u8 = zeroed
-    input := io.terminate_path(existing, left[0..<64]) else (problem)
-        _ = problem
-        return
-    end
-    output := io.terminate_path(path, right[0..<64]) else (problem)
-        _ = problem
-        return
-    end
-    same: bool = io.same_file(state, input, output) else (problem)
+    same: bool = io.same_file(state, text.host_over(existing),
+                              text.host_over(path)) else (problem)
         _ = problem
         return
     end

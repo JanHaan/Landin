@@ -1,15 +1,16 @@
 import core/io
+import core/text
 import hosted/io as hosted
 import examples/derived_hosted/app
 extern(c) unlink: (path: cstring) -> (status: i32)
-path: []u8 = "build/r480-hosted-output.txt\x00"
+path: []u8 = "build/r480-hosted-output.txt"
 
 public main: () -> (code: i32) =
     code = 1
     return when app.entry() <> 0
     host := hosted.host()
     world: any io.world = any(addr host)
-    opened: io.file = world.open_read(addr path[0]) else (problem)
+    opened: io.file = world.open_read(text.host_over(path)) else (problem)
         _ = problem
         return
     end

@@ -1,0 +1,8 @@
+class: negative
+summary: a distinct value is not compared with its base or with another distinct type without a conversion
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/distinct-compare-across-types
+constructs: 0330, 0350, 0650, 1890
+codes: L0301, L0301
+status: 1
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

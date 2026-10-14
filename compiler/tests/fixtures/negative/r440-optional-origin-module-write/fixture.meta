@@ -1,5 +1,5 @@
 class: negative
-summary: Another call can replace an empty module optional with a static pointer so module state cannot supply an absence proof
+summary: Another call can replace an empty module optional with a static pointer, so module state supplies no absence proof that could excuse a writable from clause hiding it
 constructs: 0480, 0790
 program: program.ldn
 codes: L0316

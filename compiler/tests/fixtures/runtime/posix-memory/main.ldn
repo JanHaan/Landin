@@ -1,0 +1,76 @@
+--  platform/posix's memory: a page is a power of two of at least 4 KiB,
+--  and `map` gives fresh pages that start zeroed, are aligned to a page
+--  and may be written, which `unmap` gives back.  The failure oracles: an
+--  address that does not begin a page is `einval` to `unmap` on Linux,
+--  Darwin and FreeBSD, and a mapping larger than any address space fails,
+--  with whichever errno the system gives, which the program writes.
+import core/text
+import platform/posix
+
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [32]u8 = zeroed
+    mut used: usize = 0
+    for byte in name do
+        line[used] = byte
+        inc used
+    end for
+    line[used] = 61
+    inc used
+    used = text.write_u32(line[0..<32], used,
+                          u32(posix.number(problem))) else used
+    line[used] = 10
+    say(line[0..<used + 1])
+end said
+
+public main: () -> (code: i32) =
+    code = 1
+    page: usize = posix.page_size()
+    return when page < 4096 or (page & (page - 1)) <> 0
+
+    code = 2
+    length: usize = 3 * page
+    base: ptr mut u8 = posix.map(length) else (problem)
+        said("map", problem)
+        return
+    end
+    return when usize(base) % page <> 0
+    code = 3
+    for at in usize(0)..<length do
+        cell: ptr mut u8 = ptr(usize(base) + at)
+        return when cell.val <> 0
+        cell.val = u8(at & 255)
+    end for
+    for at in usize(0)..<length do
+        cell: ptr u8 = ptr(usize(base) + at)
+        return when cell.val <> u8(at & 255)
+    end for
+
+    code = 4
+    inside: ptr mut u8 = ptr(usize(base) + 1)
+    posix.unmap(inside, page) else (problem)
+        said("unaligned", problem)
+        return when problem <> posix.einval
+    end
+    code = 5
+    posix.unmap(base, length) else (problem)
+        said("unmap", problem)
+        return
+    end
+
+    code = 6
+    huge: usize = ((0 -% 1) >> 1) & (0 -% page)
+    refused: ptr mut u8 = posix.map(huge) else (problem)
+        said("huge", problem)
+        return when problem == posix.unlisted
+        code = 42
+        return
+    end
+    posix.unmap(refused, huge) else (p)
+        _ = p
+    end
+end main

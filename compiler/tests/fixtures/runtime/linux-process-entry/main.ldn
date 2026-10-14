@@ -1,23 +1,13 @@
 import core/io
+import core/text
 import hosted/io as hosted
-import hosted/linux
+import platform/linux
 
---  A static Linux executable starts at hosted/linux's
+--  A static Linux executable starts at platform/linux's
 --  `_landin_start`, which reads argc, argv, the environment and the
 --  auxiliary vector from the initial stack and calls `main` as C's runtime
 --  would.  The arguments reach hosted/io's world; the environment and the
---  vector stay with hosted/linux.
-
---  Whether `value` is the NUL-terminated `expected`.
-same_text: (value: io.argument, expected: []u8) -> (same: bool) =
-    same = false
-    return when value.length <> lenof expected
-    for at in usize(0)..<lenof expected do
-        byte: ptr u8 = ptr(usize(value.data) + at)
-        return when byte.val <> expected[at]
-    end for
-    same = true
-end same_text
+--  vector stay with platform/linux.
 
 --  Whether the NUL-terminated `entry` holds an `=`.
 has_equals: (entry: ptr u8) -> (found: bool) =
@@ -39,16 +29,16 @@ public main: () -> (code: i32) =
     state: hosted.system = hosted.host()
     return when io.argument_count(state) <> 2
     code = 2
-    first: io.argument = io.argument_at(state, usize(0)) else (problem)
+    first: text.host_string = io.argument_at(state, usize(0)) else (problem)
         _ = problem
         return
     end
-    return when not same_text(first, "first")
-    second: io.argument = io.argument_at(state, usize(1)) else (problem)
+    return when not text.host_equal(first, "first")
+    second: text.host_string = io.argument_at(state, usize(1)) else (problem)
         _ = problem
         return
     end
-    return when not same_text(second, "second")
+    return when not text.host_equal(second, "second")
 
     --  The environment ends at a null entry, and every entry is a
     --  `NAME=value` string.
@@ -61,8 +51,8 @@ public main: () -> (code: i32) =
             loop do
                 entry: ptr usize = ptr(usize(entries) + at * sizeof usize)
                 break when entry.val == 0
-                text: ptr u8 = ptr(entry.val)
-                return when not has_equals(text)
+                variable: ptr u8 = ptr(entry.val)
+                return when not has_equals(variable)
                 at += 1
             end loop
         end

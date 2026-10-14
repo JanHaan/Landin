@@ -1,0 +1,76 @@
+--  platform/posix keeps an errno's number with its atom: `number` gives
+--  the number this system uses and `errno_of` the atom for a number, each
+--  the other's inverse over every number the system defines.  The numbers
+--  POSIX's first editions fixed are the same everywhere, and the rest are
+--  each system's own: EAGAIN is 11 on Linux and 35 on Darwin and FreeBSD,
+--  and ENOTSUP is EOPNOTSUPP's number except on Darwin.  A number no
+--  system defines is `unlisted`, whose number is zero.
+import platform/posix
+
+fixed if compiler.os == linux then
+    again: i32 = 11
+    no_space: i32 = 28
+    too_long: i32 = 36
+    not_empty: i32 = 39
+    not_supported: i32 = 95
+    unsupported_operation: i32 = 95
+    last: i32 = 133
+elsif compiler.os == darwin then
+    again: i32 = 35
+    no_space: i32 = 28
+    too_long: i32 = 63
+    not_empty: i32 = 66
+    not_supported: i32 = 45
+    unsupported_operation: i32 = 102
+    last: i32 = 107
+else
+    again: i32 = 35
+    no_space: i32 = 28
+    too_long: i32 = 63
+    not_empty: i32 = 66
+    not_supported: i32 = 45
+    unsupported_operation: i32 = 45
+    last: i32 = 97
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    return when posix.number(posix.eperm) <> 1
+      or posix.number(posix.enoent) <> 2 or posix.number(posix.eintr) <> 4
+      or posix.number(posix.eacces) <> 13 or posix.number(posix.eexist) <> 17
+      or posix.number(posix.enotdir) <> 20 or posix.number(posix.einval) <> 22
+      or posix.number(posix.erofs) <> 30
+    code = 2
+    return when posix.errno_of(2) <> posix.enoent
+      or posix.errno_of(20) <> posix.enotdir
+    code = 3
+    return when posix.number(posix.eagain) <> again
+      or posix.errno_of(again) <> posix.eagain
+      or posix.number(posix.enospc) <> no_space
+      or posix.number(posix.enametoolong) <> too_long
+      or posix.errno_of(too_long) <> posix.enametoolong
+      or posix.number(posix.enotempty) <> not_empty
+      or posix.errno_of(not_empty) <> posix.enotempty
+    code = 4
+    return when posix.number(posix.enotsup) <> not_supported
+      or posix.number(posix.eopnotsupp) <> unsupported_operation
+      or posix.errno_of(unsupported_operation) <> posix.eopnotsupp
+    code = 5
+    return when posix.errno_of(0) <> posix.unlisted
+      or posix.errno_of(-1) <> posix.unlisted
+      or posix.errno_of(last + 1) <> posix.unlisted
+      or posix.errno_of(100000) <> posix.unlisted
+      or posix.number(posix.unlisted) <> 0
+    --  Every number the system defines names an atom whose number it is.
+    code = 6
+    mut defined: i32 = 0
+    for value in i32(1)..last + 1 do
+        atom_of: posix.errno = posix.errno_of(value)
+        if atom_of <> posix.unlisted then
+            return when posix.number(atom_of) <> value
+            inc defined
+        end if
+    end for
+    return when defined < 90
+    code = 42
+end main

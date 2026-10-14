@@ -1,4 +1,5 @@
 import core/io
+import core/text
 
 --  A name is lent from the directory until the next read, which refills
 --  the caller's buffer the name is in: keeping one across that read is
@@ -6,7 +7,7 @@ import core/io
 first_byte: (host: io.memory, inout listing: io.directory)
             -> (first: u8) ! io.io_failed =
     item: io.entry = try io.read_entry(host, listing)
-    name: []u8 = item.name
+    name: []u8 = text.host_bytes(item.name)
     following: io.entry = try io.read_entry(host, listing)
     _ = following.kind
     first = name[0]

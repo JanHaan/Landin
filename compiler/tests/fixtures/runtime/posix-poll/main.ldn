@@ -1,0 +1,85 @@
+--  platform/posix's `poll`, in Landin types: an entry is made by `watch`
+--  from a descriptor and the events asked about, a set of flags, and
+--  `happened` reads what the call reported.  Standard input is a file here, which is always
+--  ready to read, and standard error is always ready to write.  The
+--  failure oracles: a closed descriptor is reported `invalid` rather than
+--  failing the call, and nothing to watch waits out its time and reports
+--  none ready.
+import core/text
+import platform/posix
+
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [32]u8 = zeroed
+    mut used: usize = 0
+    for byte in name do
+        line[used] = byte
+        inc used
+    end for
+    line[used] = 61
+    inc used
+    used = text.write_u32(line[0..<32], used,
+                          u32(posix.number(problem))) else used
+    line[used] = 10
+    say(line[0..<used + 1])
+end said
+
+public main: () -> (code: i32) =
+    code = 1
+    reading: posix.poll_events = posix.poll_input
+    writing: posix.poll_events = posix.poll_output
+    closed: posix.descriptor =
+        posix.open_at(posix.working_directory,
+                      text.host_over("/dev/null"), posix.reading, 0)
+          else (problem)
+        said("open", problem)
+        return
+    end
+    posix.close(closed) else (problem)
+        said("close", problem)
+        return
+    end
+    mut entries: [3]posix.poll_entry =
+        [posix.watch(posix.standard_input, reading),
+         posix.watch(posix.standard_error, writing),
+         posix.watch(closed, reading)]
+    ready: usize = posix.poll(entries[0..<3], 1000) else (problem)
+        said("poll", problem)
+        return
+    end
+    code = 2
+    return when ready <> 3
+    code = 3
+    first: posix.poll_events = posix.happened(entries[0])
+    return when (first & posix.poll_input) == posix.poll_no_events
+      or (first & posix.poll_invalid) <> posix.poll_no_events
+    code = 4
+    second: posix.poll_events = posix.happened(entries[1])
+    return when (second & posix.poll_output) == posix.poll_no_events
+      or (second & posix.poll_invalid) <> posix.poll_no_events
+    code = 5
+    gone: posix.poll_events = posix.happened(entries[2])
+    return when gone <> posix.poll_invalid
+
+    --  Standard input reads what poll said was there.
+    code = 6
+    mut buffer: [8]u8 = zeroed
+    got: usize = posix.read(posix.standard_input, buffer[0..<8]) else (problem)
+        said("read", problem)
+        return
+    end
+    return when got <> 6 or buffer[0] <> 114
+
+    --  Nothing to watch: the call waits out ten milliseconds.
+    code = 7
+    none_ready: usize = posix.poll(entries[0..<0], 10) else (problem)
+        said("empty", problem)
+        return
+    end
+    return when none_ready <> 0
+    code = 42
+end main

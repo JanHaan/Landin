@@ -1,0 +1,9 @@
+--  Module storage satisfies a source it does not derive from, but a
+--  result that may also derive from a parameter its clause leaves out is
+--  still refused.
+words: [1][]u8 = ["alpha"]
+
+bad: (left: []u8, right: []u8, pick: bool) -> (value: []u8 from right) =
+    _ = right
+    value = if pick then left else words[0] end if
+end bad

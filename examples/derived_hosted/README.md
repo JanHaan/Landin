@@ -41,11 +41,11 @@ line. A line that reaches another filter is assembled before that filter runs.
 Allocation and read failures are
 terminal for that reader; its partial internal line is not a retry protocol.
 
-Every argument is copied before parsing, including a private trailing NUL for
-paths. Configuration and match filters therefore survive later mutation of a
+Every argument is copied before parsing, and a path is a host string over its
+copy. Configuration and match filters therefore survive later mutation of a
 memory provider's argument buffers. The copy admits each source byte into
-private raw storage, then admits the terminator; it never zeroes bytes that the
-copy will overwrite. The reader returns a `from reading` view,
+private raw storage; it never zeroes bytes that the copy will overwrite. The
+NUL a C call needs is added beneath the provider, never kept in the copy. The reader returns a `from reading` view,
 consumed before its next refill. Count delivery classifies that borrowed line
 without copying it. For text delivery, `process` copies each kept line into an
 owned message with one LF, reserving the complete record before changing it.

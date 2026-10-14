@@ -1,8 +1,8 @@
 -- C-owned startup uses the library's startup-independent services: the C
--- library through hosted/libc and the hosted heap, with no argument root.
+-- library through platform/libc and the hosted heap, with no argument root.
 import core/mem
 import hosted/heap
-import hosted/libc
+import platform/libc
 
 -- Private Landin names cannot replace the library's calls into libc.
 strlen: () -> (result: usize) = result = 99 end strlen

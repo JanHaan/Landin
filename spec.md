@@ -1136,9 +1136,9 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | --- | --- |
 | `+` `-` `*` `/` | one integer or float type, and that type back [0290] |
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
-| `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
+| `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650], which no updating assignment writes |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>` and no ordering |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |
 
@@ -1363,7 +1363,18 @@ therefore no origin to compare; it is not an `Untracked` reference. For every
 edge that does return a tracked reference, the set of parameter origins is
 exactly the signature's `from` set; in a generic instance, a name whose
 parameter is typed by a type formal asks nothing when the instance's type for
-it holds no reference (D290). In addition, D222 forbids a known
+it holds no reference (D290). One exception keeps the exactness honest about
+storage that outlives the call. A reference is static when it reaches storage
+no frame owns: module storage, a reference read from module storage or
+reached through one, a literal, or an independent result such as an
+allocation. A read-only result whose edge carries a static reference
+satisfies a named source it does not derive from, because keeping that
+source alive asks nothing the static storage does not already give; it must
+still derive from no parameter its clause leaves out. So a concept entry
+written `from self` is implemented by a provider lending storage the program
+or the process keeps, as the hosted I/O provider lends the process's
+arguments. A writable result gets no such exception. In addition, D222
+forbids a known
 independent storage origin in a result with a nonempty `from` clause when
 its type carries a reachable writable reference. The permission walk includes
 pointer and slice referents, array elements, struct fields and variant
@@ -1668,7 +1679,7 @@ can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
 Beside the selected entry, a bodyless `extern(c) link(symbol: "main")` of
 `(i32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's view of the same
-symbol; it is how `hosted/linux`'s process entry calls `main` under a static
+symbol; it is how `platform/linux`'s process entry calls `main` under a static
 Linux link, which passes the returned code to `exit_group` (D279).
 
 ### [1975] The selected hosted C boundaries
@@ -1857,11 +1868,12 @@ ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
 `core/mem.dispose` reports `not_empty` for a nonempty prefix and `empty`
 for already absent backing; a successful release clears backing to its atom.
 
-Foreign failure detail is ordinary explicit state. After a documented libc
-failure indication on Darwin and FreeBSD, `hosted/io` reads errno through
-`hosted/libc`'s `errno_cell` before any other host call; on Linux it takes
-the errno from the failing system call's negative result (D279). It
-retains the exact terminal value in the last-error cell the system handle
+Foreign failure detail is ordinary explicit state. `platform/posix` reads the
+errno after a documented libc failure indication on Darwin and FreeBSD,
+through `platform/libc`'s `errno_cell` before any other host call, and on
+Linux takes it from the failing system call's negative result (D279); either
+way it reaches `hosted/io` as an atom of `posix.errno` with its number (D298).
+`hosted/io` retains the exact terminal value in the last-error cell the system handle
 names, exposed by `hosted.last_errno`: the process's private cell for a handle
 from `hosted.host()`, or a caller-declared `hosted.space` for one from
 `hosted.over` (D288). Safe interrupted open/read/write attempts may retry; completed
@@ -1908,15 +1920,15 @@ at `argv + 1`, its count is `max(argc - 1, 0)`, and indexed lookup traps on a
 null entry within that count.
 
 The compiler names no other host routine, except that a static Linux link
-enters the program at `hosted/linux`'s `_landin_start` (D280). The public
-module `hosted/libc` declares the C library beneath the hosted providers as
+enters the program at `platform/linux`'s `_landin_start` (D280). The public
+module `platform/libc` declares the C library beneath the hosted providers as
 ordinary `extern(c)` imports: `open`, `read`, `write`, `close`, `strlen`, `malloc`, `free`, `stat`
 and the calling thread's errno cell, with the constants and records whose
 values differ between systems selected by `compiler.os` and the C ABI. These
 are library declarations, not privileged language operations, and the
 compiler reserves none of their names. On Darwin and FreeBSD, `hosted/io` and
 `hosted/heap` reach the host only through them. On Linux they reach it through
-the public module `hosted/linux`, which declares Linux's system calls in
+the public module `platform/linux`, which declares Linux's system calls in
 source as ordinary assembly blocks and owns the process entry `_landin_start`
 (D279); a hosted Linux executable links statically by default, with no C
 runtime or library, and `--link=libc` links C's runtime instead (D280).
@@ -6484,8 +6496,10 @@ user code. A contextual literal receives the base's complete descriptor.
 An integer or float conversion is a separate explicit step: extracting a
 `distinct u32` as `i32` directly is L0301, while `i32(u32(value))` states both
 operations. Copying, assignment, parameter passing and returning preserve the
-identity; arithmetic, comparisons, indexing, dereferencing, field selection
-and calls require an explicit extraction first. No representation field is
+identity; arithmetic, ordering, indexing, dereferencing, field selection
+and calls require an explicit extraction first. D302 admits equality between
+two values of one distinct scalar type, and flag operators over an unsigned
+base. No representation field is
 visible in source. In particular, two values of the same distinct numeric
 type still inherit no arithmetic operation.
 
@@ -6549,6 +6563,30 @@ keys.
 `negative/r490-distinct-slice-cycle`, and the IR unit case
 "atom images retain their declared set" in
 `compiler/ada/tests/src/landin-tests-ir_suite.adb`.
+
+### D302 — Two values of one distinct scalar type compare equal, and flags combine
+
+**The tour said** at [0650] that a distinct type inherits no operations, and
+D213 required an extraction before any comparison. A descriptor compared with
+another as `i32(a) == i32(b)`, and `poll`'s events became a record of
+booleans, because a set of flags had no operators.
+
+**Chosen:** `==` and `<>` take two values of the same distinct type whose base
+is a scalar. `&`, `^`, `|` and `~` take values of the same distinct type
+whose base is an unsigned integer, and their result keeps that type. Ordering,
+arithmetic, shifts and updating assignment stay refused, `|=` with a note to
+write it out. A distinct value never meets its base or another distinct type
+without a conversion, and the refusal says so.
+
+**The alternatives:** equality for every distinct type, though an aggregate
+has none (D200); ordering, though an identifier is not ordered and a type that
+wants order declares `cmp.ordered` evidence; bit operators over any integer
+base, though a signed identifier is not a set; and `|=`, which the updating
+path would need of its own.
+
+**Pinned by** `runtime/distinct-equality-and-flags`,
+`negative/distinct-compare-across-types` and
+`negative/distinct-ordering-and-signed-flags`.
 
 ### D228 — A packed image holds bits; extraction produces a validated value
 
@@ -10991,6 +11029,33 @@ Both are declined.
 The call convention for values too large for a register, function
 values, named returns, and the declared-error channel beside them.
 
+### D301 — Static storage satisfies a read-only `from` clause
+
+**The tour said** at [0790] that a result's `from` clause names the parameters
+it may derive from, and the checker held the clause to the parameters
+exactly. A provider that lends what the process keeps, the arguments, derives
+from none of them, so a concept entry written `-> (value from self)` could not
+be implemented over storage no frame owns, and the hosted provider kept its
+argument table as an integer address, whose pointers are untracked.
+
+**Chosen:** a reference is static when it reaches storage no frame owns, a
+module binding or what one points to. A result with no writable reference
+whose edge carries a static reference satisfies a named source it does not
+derive from, because static storage outlives every source. A parameter the
+clause leaves out is still refused, and a writable result keeps D222's
+refusal.
+
+**The alternatives:** an origin form written at the source, new syntax for a
+fact the checker already has; a static fact distinct from allocations, more
+tracking for no difference in lifetime; relaxing D222 for read-only fields of
+writable aggregates, which needs origins per field; and the integer address,
+which hid the relation instead of stating it.
+
+**Pinned by** `runtime/static-origin-satisfies-from`,
+`negative/frame-origin-under-from`,
+`negative/static-origin-beside-unnamed-source` and
+`negative/static-origin-writable-from`.
+
 ### D94 — An ordinary struct argument is copied into callee storage
 
 **The tour said** that an unmarked parameter is `in` [0900], calls evaluate
@@ -14684,10 +14749,11 @@ its interface or introduce hosted authority. The memory-backed I/O provider
 remains part of core/io; importing it does not select hosted I/O or allocation.
 
 `hosted/*` is available only where the target has a hosted system. The current
-modules are hosted/heap, hosted/io, hosted/libc, which declares the C
-library beneath the first two on Darwin and FreeBSD (D276), and hosted/linux,
-which declares Linux's system calls and the static process entry beneath them
-on Linux and declares nothing elsewhere (D279). hosted/io is ordinarily imported
+modules are hosted/heap and hosted/io, written once over `platform/posix`
+(D297). `platform/libc` declares the C library, `platform/linux` Linux's
+system calls and the static process entry (D279), and `platform/posix` the
+POSIX facilities over both; all three are scoped to the hosted POSIX systems
+and refused by name on firmware. hosted/io is ordinarily imported
 `as hosted` when a consumer also imports core/io. `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
 AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
@@ -14866,7 +14932,7 @@ prototype 4's replaceable world both need detail without a second error system.
 `hosted.last_errno` preserve the exact terminal libc detail while ordinary
 `not_found`, `no_access` and `io_failed` remain payload-free atoms. On
 Darwin and FreeBSD the provider reads the calling thread's `errno_cell`
-through `hosted/libc` immediately after the failing call and before any other
+through `platform/libc` immediately after the failing call and before any other
 host call (D276); on Linux a system call's result is minus its errno, so the
 detail is captured from the result itself (D279). A successful operation clears the remembered
 detail; a local refusal invents no errno.
@@ -14901,7 +14967,7 @@ the program defines it. A C-owned startup calls it with its real carriers before
 `hosted.host()` or any thread that may acquire the argument capability. Exports
 and callbacks never call it implicitly. File, stream and heap work needs no
 argument root, and retaining `core/io` alone does not initialize one. Under a
-static Linux link, `hosted/linux`'s `_landin_start` is the process entry
+static Linux link, `platform/linux`'s `_landin_start` is the process entry
 (D279, D280); it calls the hosted `main` as C's runtime would, so `main` still
 initializes the root as here.
 
@@ -15839,8 +15905,8 @@ plain `char` and reserved x18. `compiler.os` is a fixed configuration value
 in its own equality domain, with `linux`, `darwin`, `freebsd` and
 `freestanding` as compiler-owned values. It names the target's hosted system,
 never the compiler host, and is available only in fixed configuration.
-`hosted/libc` uses it to select FreeBSD's native libc record; calling
-conventions remain selected by C ABI facts. By the same fact `hosted/libc`
+`platform/libc` uses it to select FreeBSD's native libc record; calling
+conventions remain selected by C ABI facts. By the same fact `platform/libc`
 links its errno cell to `__error` and gives
 `O_WRONLY | O_CREAT | O_TRUNC = 0x601` (D276). The selected FreeBSD driver is
 Clang with an explicit FreeBSD sysroot and ELF linker; x86-64 assembly uses
@@ -16051,7 +16117,7 @@ aliases as those same registers, without reserving caller floating registers;
 `platform/c` exposes
 the LP64 aliases and unsigned plain `c_char`; [1975]'s existing C subset,
 including callbacks and outgoing variadic calls, is enabled. On Linux,
-`hosted/libc` selects libc's `__errno_location`, Linux open flags and the
+`platform/libc` selects libc's `__errno_location`, Linux open flags and the
 128-byte generic `stat` layout by `compiler.os` and the C ABI, separately
 checked against C headers.
 D255's supported ISA strings are exactly `rv64gc`, `rv64gc_zba`,
@@ -16352,10 +16418,11 @@ owned argument capture into the shared Landin- or C-owned startup contract. The
 original bridge decision below remains the basis of the hosted authority path,
 not today's complete C admissibility rule. D276 supersedes its compiler-emitted
 bridge: the libc route it chose is now the ordinary `extern(c)` declarations of
-`hosted/libc`, and the argument root is `hosted/io` source. The provider
+`platform/libc`, and the argument root is `hosted/io` source. The provider
 contracts below are unchanged. On Linux, D279 replaces the libc route:
-`hosted/io` makes system calls through `hosted/linux`, and D280 links no C
-library by default. D288 makes both providers handles: every entry takes
+`hosted/io` makes system calls through `platform/linux`, and D280 links no C
+library by default; D297 puts both routes beneath `platform/posix`, over which
+`hosted/io` is written once. D288 makes both providers handles: every entry takes
 `self: provider` by value, the memory provider's mutable state is a
 caller-declared `io.memory_space`, and the system provider's last errno is in
 a cell its handle names, the process's or a caller's `hosted.space` (D207);
@@ -16447,7 +16514,7 @@ cleanup cannot replace it.
 The `core/io` module contains the target-neutral `world` concept, adapters and
 caller-backed `memory` provider. The libc-backed `system` provider and its
 argument root live in `hosted/io`, over the `extern(c)` declarations of
-`hosted/libc`; hosted roots import `hosted/io` explicitly and call
+`platform/libc`; hosted roots import `hosted/io` explicitly and call
 `hosted.host()`. Selecting `core/io` alone does not select foreign
 declarations, so the same world API can be used by Cortex-M0 consumers. The
 hosted provider still conforms to `io.world`, and the errno contract above
@@ -16505,7 +16572,7 @@ then be validated by
 pointer-to-slice operation is introduced. Both provider argument sequences
 contain only user arguments and exclude `argv[0]`.
 
-The C library names `hosted/libc` declares, `strlen`, `open`, `read`,
+The C library names `platform/libc` declares, `strlen`, `open`, `read`,
 `write`, `close`, `malloc`, `free`, `stat` and the errno accessor, are ordinary
 `extern(c)` imports, not names reserved from Landin source. A non-external
 Landin declaration with one of those spellings is given a deterministic
@@ -16934,7 +17001,7 @@ and `runtime/core-vec-pointer-storage`.
 ### D195 — The hosted heap over-allocates through a fixed libc shim
 
 D277 supersedes the shim below: `hosted/heap` now performs the same
-over-allocation in source over `hosted/libc`'s `malloc` and `free`, and the
+over-allocation in source over `platform/libc`'s `malloc` and `free`, and the
 contract this decision states is unchanged.
 
 **The tour and prototype said** that one allocator concept serves heap, arena
@@ -17745,7 +17812,7 @@ types, argument cells the entry wrote, and the errno accessor's name, the open
 flags and the creation mode as facts in every backend.
 
 **Chosen:** the compiler names no host routine but one. The public module
-`hosted/libc` declares the C library beneath the hosted providers as ordinary
+`platform/libc` declares the C library beneath the hosted providers as ordinary
 `extern(c)` imports: `open`, variadic as C declares it, `read` and `write`
 returning `isize`, `close`, `strlen`, `malloc` returning an `allocation`
 union whose empty arm is the atom `no_allocation`, `free`, `stat`, and
@@ -17759,7 +17826,8 @@ declarations selected by `compiler.os` and the C ABI and checked against each
 system's C headers. Like every hosted module it is refused on firmware (D267).
 `hosted/io` and `hosted/heap` reach the host only through it; the 0666
 creation mode stays in `hosted/io` as provider policy. On Linux `hosted/io`
-and `hosted/heap` use `hosted/linux` instead (D279, D282); every `hosted/libc` declaration is
+and `hosted/heap` use `platform/linux` instead (D279, D282), and since D297 both
+reach the host only through `platform/posix`; every `platform/libc` declaration is
 bodyless, so a program naming none of them needs no C library.
 
 `hosted/io` holds the argument root in two module cells, and since D288 the
@@ -17784,7 +17852,7 @@ Beside a hosted entry every declaration carrying that symbol must be exactly
 refused with L0347. The symbol is an ordinary default-visibility global rather
 than a hidden one, and a C-owned `main` still calls it explicitly. The names
 `strlen`, `malloc`, `free`, `open`, `read`, `write`, `close` and the errno
-accessor are no longer set aside for the backend: they are `hosted/libc`'s
+accessor are no longer set aside for the backend: they are `platform/libc`'s
 imports, and ordinary symbol allocation keeps a private Landin definition of
 the same spelling from capturing them.
 
@@ -17792,7 +17860,7 @@ the same spelling from capturing them.
 libc's names, flags and errno spelling in three backends and a checker
 contract for each wrapper. Always calling the initializer as an import that
 may be undefined, which makes every hosted program link against `hosted/io`
-or fail to link. Keeping the argument root in `hosted/libc`, which would put
+or fail to link. Keeping the argument root in `platform/libc`, which would put
 Landin policy in the module whose purpose is to transcribe C. Declaring
 libc privately in each provider, declined because one module gives each
 per-system fact one place.
@@ -17821,7 +17889,7 @@ emitted, holding the pointer-word width, the `PTRDIFF_MAX` test and the hidden
 header layout as backend facts.
 
 **Chosen:** `hosted/heap` performs the same over-allocation in source over
-`hosted/libc`'s `malloc` and `free` (D276). It asks `malloc` for the request
+`platform/libc`'s `malloc` and `free` (D276). It asks `malloc` for the request
 plus `alignment - 1` bytes and one `usize` word, refusing with
 `mem.out_of_memory` before the call an addition that would overflow or a total
 above `(0 -% 1) >> 1`, the host's `PTRDIFF_MAX`. It aligns within the block
@@ -17831,7 +17899,8 @@ word the word is unaligned; release reads it back the same way and passes it
 to `free`. A `no_allocation` result is `mem.out_of_memory`. D195's contract is
 unchanged: every `usize` alignment is accepted, zero and one meaning byte
 alignment, and a zero-byte request returns a distinct non-null token. On
-Linux, D282 replaces this provider; Darwin and FreeBSD keep it.
+Linux, D282 replaces this provider, and D300 replaces it on Darwin and
+FreeBSD too.
 
 **The alternatives:** keeping the shim in the backends, which keeps a host
 allocator in the compiler; `posix_memalign` and `aligned_alloc`, declined as
@@ -17878,7 +17947,7 @@ trapping through an ordinary check, a nonnull conversion of zero, reports
 its own panic site`, `abi/r670-panic`'s startup modes and the Cortex-M corpus
 rows for the three runtime fixtures.
 
-### D279 — Linux's system interface is `hosted/linux`, with no C library
+### D279 — Linux's system interface is `platform/linux`, with no C library
 
 **The tour said** at [1660] that the entry mints host authority, and [1975]
 chose a selected C boundary for the hosted world. D276 put that boundary in
@@ -17886,7 +17955,7 @@ library source over libc on every hosted system. Linux, unlike Darwin and
 FreeBSD, promises its system-call interface itself, so a Linux program needs
 no C library to reach its kernel.
 
-**Chosen:** the public module `hosted/linux` declares Linux's system calls in
+**Chosen:** the public module `platform/linux` declares Linux's system calls in
 source, inside `fixed if compiler.os == linux`. It declares nothing on Darwin
 and FreeBSD, and because Landin has no conditional import, `hosted/io` and
 `hosted/heap` import it on every hosted system. Each call is one ordinary
@@ -17943,7 +18012,7 @@ sessions.
 a hosted executable is linked, and whether a C runtime starts it, unsaid.
 
 **Chosen:** `--link=static|libc` chooses how a hosted executable is linked.
-Linux defaults to `static`: the driver loads `hosted/linux` from the
+Linux defaults to `static`: the driver loads `platform/linux` from the
 compiler's library (D275) and links with `-nostdlib -static -no-pie
 -Wl,-e,_landin_start` and `-Wl,--gc-sections`, with no C runtime object, no C
 library and no dynamic loader. `--link=libc` keeps the C runtime's link.
@@ -17951,12 +18020,12 @@ Darwin and FreeBSD reach their systems only through their C libraries and
 link with `libc`, their only mode; `--link=static` there is a usage error, as
 is `--link` on a target with no hosted system or without `--emit=exe` or
 `--emit=asm`. A static request is refused with L0500 before any tool runs,
-naming `--link=libc`, when no library holding `hosted/linux` was found, when
+naming `--link=libc`, when no library holding `platform/linux` was found, when
 the program asks for `linker.library`, or when it refers to a bodyless
-external symbol no program item defines. The refusal counts a reference from
-any routine, reached or not, because only x86-64 collects per-item sections.
+external symbol no program item defines. The refusal counts only what the
+entry reaches, since every backend collects per-item sections (D303).
 `-v`, `--dry-run` and the build report name the mode. An emitted `.s` under
-static mode includes `hosted/linux` and still links under a C driver.
+static mode includes `platform/linux` and still links under a C driver.
 
 **The alternatives:** libc as the default, which leaves every Linux
 executable a dynamic dependency it does not use. Letting the linker report
@@ -17970,7 +18039,7 @@ changes; the maintainer chose the explicit option for this reason.
 `end-to-end/link-static-linker-library`, `end-to-end/link-static-needs-linux`
 and `end-to-end/link-needs-hosted-system`; the toolchain case `a static Linux
 link has no C runtime`; and the driver cases `a static link needs
-hosted/linux` and `a static link starts at hosted/linux`.
+platform/linux` and `a static link starts at platform/linux`.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 
@@ -18000,7 +18069,7 @@ RV64's breakpoints and `mret`.
 fixed-buffer providers, and D277 had the hosted heap over-allocate through
 libc's `malloc` on every hosted system.
 
-**Chosen:** on Linux `hosted/heap` maps its own memory through `hosted/linux`
+**Chosen:** on Linux `hosted/heap` maps its own memory through `platform/linux`
 (D279). It keeps eight size classes from 32 to 4096 bytes. A class with no
 free slot maps a 64 KiB chunk and links its slots into a free list; a freed
 slot returns to its class's list and is handed out before any new chunk is
@@ -18011,8 +18080,7 @@ written a byte at a time, so every `usize` alignment works, a power of two or
 not, and a zero-byte request is a distinct token. An addition that would
 overflow, or an extent above `PTRDIFF_MAX` less the page rounding, is
 `mem.out_of_memory` before any state changes, as is a failed mapping. The
-provider is single-threaded. Darwin and FreeBSD keep D277's `malloc`
-provider.
+provider is single-threaded. D300 makes it the heap of every hosted system.
 
 **The alternatives:** one mapping per allocation, which spends a page on
 every small object; a general-purpose allocator with coalescing, more code
@@ -18031,7 +18099,7 @@ the backend; D18 admits an array as large as the target's `usize`.
 **Chosen:** zero-image module data are laid out smallest first, ties in item
 order, on x86-64 and RV64, so one object as large as RIP-relative or `auipc`
 addressing reaches cannot push another datum out of reach. arm64's ±4 GiB
-reach is unchanged. The implicit `hosted/linux` roots of a static link
+reach is unchanged. The implicit `platform/linux` roots of a static link
 (D280) exposed it.
 
 **The alternatives:** item order, in which a 2 GiB object placed first
@@ -18068,7 +18136,34 @@ export, which keeps every library table in every program.
 
 **Pinned by** the lowering record `compiler/tests/lowering.ir`, the
 cross-host assembly manifests, and `runtime/linux-system-calls`, which
-imports `hosted/linux/numbers`.
+imports `platform/linux/numbers`.
+
+### D303 — Every routine and datum has its own section, and a static link counts what it reaches
+
+**The tour said** nothing of sections. Only x86-64 gave each item its own
+input section, so a linker could drop unreached code there alone: a static
+arm64 program carried every routine of every module it imported, and L0500
+counted a C reference from any routine, reached or not.
+
+**Chosen:** the ELF backends for x86-64, arm64 and RV64, on Linux and FreeBSD,
+give every routine, datum and evidence table its own section, named by item
+index so the output stays a function of the sources, with zero-image data in
+their own `.bss` sections; Mach-O keeps `.subsections_via_symbols` and Darwin
+links with `-dead_strip`; Cortex-M keeps its per-item sections under its own
+script. Every ELF link passes `--gc-sections`. A static link's L0500 counts
+only the references the entry reaches, from `_landin_start`, `main`, the
+argument initializer, `panic_handler`, every `keep` item and every datum and
+evidence table, through calls and taken addresses, an external C name leading
+to the routine that defines it.
+
+**The alternatives:** sections on x86-64 alone, which left arm64 and FreeBSD
+images several times larger, a static hello on arm64 near 200 KB; and
+counting every routine's references, which refuses programs the link accepts.
+
+**Pinned by** `end-to-end/link-static-unreached-c-import`,
+`end-to-end/link-static-unsatisfied-c-import`,
+`end-to-end/link-static-dry-run-arm64` and the toolchain and targets suites'
+link arguments.
 
 ### D284 — A static Linux executable holds the processor to its level in the entry
 
@@ -18078,7 +18173,7 @@ executable's GNU property note, which glibc's loader refuses on a processor
 without it. A static Linux executable (D280) has no loader, the kernel reads
 no such note, and arm64 and RV64 executables carry none.
 
-**Chosen:** `hosted/linux`'s `_landin_start_main` holds the processor to the
+**Chosen:** `platform/linux`'s `_landin_start_main` holds the processor to the
 executable's level before `main` runs. The level is the compile-time
 `compiler.feature` facts: `fixed if` selects, for each level, its name, its
 checks and its `check_level`, and the baseline's `check_level` is empty, so a
@@ -18372,12 +18467,12 @@ each system's `struct dirent` and constants to its C headers; and
 ### D294 — Every Linux system call is reachable by number
 
 **The tour said** nothing of the system interface beneath the library, and
-D279 kept `hosted/linux`'s raw call private behind eight wrappers, so a Linux
+D279 kept `platform/linux`'s raw call private behind eight wrappers, so a Linux
 program needing any other call wrote its own assembly block and its own
 numbers.
 
 **Chosen:** the raw call is public as `system_call`, six integer arguments
-and an integer result, minus the errno on failure. `hosted/linux/numbers`
+and an integer result, minus the errno on failure. `platform/linux/numbers`
 names every call's number for x86-64, arm64 and RV64 by one rule, the
 kernel's table name followed by `_number`, which no reserved word or wrapper
 can meet. The numbers are generated by `scripts/linux_syscalls.py` from a
@@ -18387,17 +18482,134 @@ architecture's own entries, and the generated file names the release and its
 checksum; the generator can check the committed file instead of writing it.
 The wrappers take their numbers from the same tables, through a private
 generated file, so there is one source of numbers. The numbers are a module
-of their own, imported by a program that calls by number, so `hosted/linux`
+of their own, imported by a program that calls by number, so `platform/linux`
 stays the wrappers every static Linux program imports; a program pays only
 for the numbers it uses (D296). Typed wrappers stay for the calls the library
 itself makes, `getdents64`, `mkdirat` and `unlinkat` among them.
 
 **The alternatives:** keeping the call private, which leaves every unwrapped
 call to hand-written assembly; numbers written by hand, which drift from the
-kernel; the numbers inside `hosted/linux`, a thousand declarations in every
+kernel; the numbers inside `platform/linux`, a thousand declarations in every
 static Linux program's sources; and a typed wrapper for every
 call, which the roadmap's register keeps in view as its own record.
 
 **Pinned by** `runtime/linux-system-calls`, extended to the public route, and
 `scripts/tests/test_linux_syscalls.py`, which runs the generator on small
 tables and requires the committed files to be its output.
+
+### D297 — The hosted library stands on a POSIX layer
+
+**The tour said** at [1660] that a program reaches its host through
+capabilities, and D276 and D279 put each system's interface beneath
+`hosted/io` and `hosted/heap`, which then wrote every facility once over
+Linux's system calls and once over the C library.
+
+**Chosen:** four layers. Each system's own interface stays raw under
+`platform/`: `platform/linux` with its numbers (D279, D294) and
+`platform/libc` (D276). `platform/posix` gives POSIX's facilities in Landin
+types, written once over each (D298). The portable concepts in `core` name no
+POSIX type, so `io.file` is a `distinct usize`, an open directory holds a
+`handle: usize`, and no integer descriptor, mode bit, owner, signal number or
+errno is in a `core` signature. `hosted/io` and `hosted/heap` are written once
+over `platform/posix`, with no code of their own for any system. All three
+`platform` modules are scoped to the hosted POSIX systems, Linux, Darwin and
+FreeBSD, by namespace and by a `compiler.assert`, and firmware refuses them
+by name with L0015; `platform/libc` serves Linux too, under `--link=libc`.
+Every public routine of `platform/posix` has a `_landin_posix_` link name, so
+none replaces a C library function of the same spelling. A BSD and Darwin
+module for kqueue comes with the event-driven Io that needs it.
+
+**The alternatives:** writing every hosted facility twice, once per route;
+`platform/linux` scoped to Linux alone, which needs a conditional import the
+language does not have; and a compiler fact for POSIX, where the namespace
+rule already scopes `platform/c` and `platform/cpu`.
+
+**Pinned by** every hosted fixture, unchanged in behaviour,
+`runtime/posix-files`, `runtime/posix-directories`, `runtime/posix-memory`,
+`runtime/posix-poll` and `runtime/posix-errno`, and the firmware refusal of
+`runtime/posix-files` on Cortex-M.
+
+### D298 — POSIX's descriptor, errors and status in Landin types
+
+**The tour said** at [1660] that a provider maps the host's errors to atoms
+and keeps the detail, and D153, D207 and D287 did so for the four I/O
+concepts.
+
+**Chosen:** `posix.descriptor` is a `distinct i32`, with
+`standard_input`, `standard_output`, `standard_error` and
+`working_directory`, the `*at` calls' AT_FDCWD. Every errno any of the three
+systems defines is an atom named after its C macro in lower case, 154 of
+them and `unlisted`, in the atom set `posix.errno`; an alias has no atom of
+its own, so EWOULDBLOCK is `eagain`, and ENOTSUP is its own atom only on
+Darwin. `number` gives an atom's number on this system and `errno_of` a
+number's atom, through tables generated from Linux's, FreeBSD's and Darwin's
+headers. The calls are POSIX's own: `open_at`, `read`, `write`, `close`,
+`status_at` with a `status` of device, inode, kind and size, the directory
+calls over a caller's buffer, which list `.` and `..` as POSIX does,
+`make_directory_at`, `unlink_at`, `remove_directory_at`, `map`, `unmap`,
+`page_size`, `exit` and `poll`, whose events are a `distinct u16` flag set
+(D302). None retries EINTR or completes a short transfer; that is provider
+policy in `hosted/io`. Each path is copied with its NUL into a per-system
+`PATH_MAX` buffer, so the terminator never reaches a caller; a path holding a
+NUL is `einval` and one too long `enametoolong`. The argument root lives here,
+read from the initial stack on a static Linux program and through the C
+runtime otherwise, as a real `ptr ptr u8` (D301).
+
+**The alternatives:** a numeric errno, which is not D287's atoms; an atom set
+of only today's errors, which every later item would widen; and retrying
+EINTR in the layer, which takes a policy decision from the providers.
+
+**Pinned by** `abi/posix-errno-numbers`, which holds each system's table to
+its own C header, `runtime/posix-errno`, `runtime/posix-files` and
+`runtime/posix-poll`.
+
+### D299 — A host string is passed through unconverted
+
+**The tour said** at [0260] that text is `utf8`, and paths were NUL-terminated
+`ptr u8` with byte and text variants, arguments a pointer and a length.
+Neither POSIX nor Windows promises that a name or an argument is UTF-8, and
+Windows' are 16-bit units.
+
+**Chosen:** `text.host_string` is one opaque type whose representation is
+chosen in one place by target, bytes on every system today, so a 16-bit
+representation for Windows goes there. `text.host_over` makes one lending its
+bytes, `text.host_bytes` gives the bytes back, `text.from_host` converts to
+`utf8` and fails `invalid_text` when it is not, and `text.host_equal` compares
+with a literal. Every path the `files` and `directories` concepts take, every
+argument and every directory entry's name is a host string, so a value passed
+from an argument to `open` is never converted. `io.terminate_path`, the
+`_bytes` and `_text` open variants, `io.copy_argument`, `io.argument` and the
+atoms `empty_path`, `path_contains_nul`, `path_too_long` and
+`argument_too_long` are withdrawn; those cases are now the system's own
+answer, `not_found` for ENOENT and `io_failed` for EINVAL and ENAMETOOLONG,
+their errno kept. The memory provider's argument table is `[][]u8`, which
+firmware can declare as static data.
+
+**The alternatives:** a host-string parameter on every generic function,
+which makes every portable program generic or a converter; converting at the
+boundary, which converts on every pass-through on Windows; `cstring` paths,
+which give the caller the terminator and lose the length; and keeping the
+variants beside host strings, which every path made redundant. A Windows
+counterpart of `host_over` is not designed yet.
+
+**Pinned by** `abi/host-string-pass-through`, in which an argument that is not
+UTF-8 is lent unchanged, refused by `from_host` and used as a path, which
+Linux and FreeBSD create and Darwin refuses with EILSEQ, and
+`runtime/core-io-erased-system`.
+
+### D300 — One heap on every hosted system
+
+**The tour said** at [1360] that one allocator concept serves every heap, and
+D277 kept `malloc` beneath `hosted/heap` on Darwin and FreeBSD while D282 gave
+Linux size classes over its own mappings.
+
+**Chosen:** D282's size-class heap is the heap of every hosted system, over
+`platform/posix`'s `map` and `unmap`, so `hosted/heap` has no code of its own
+for any system. It is single-threaded everywhere; a heap that threads share
+is the threads item's, on every system alike.
+
+**The alternatives:** keeping `malloc` on Darwin and FreeBSD, which keeps
+per-system code in `hosted/heap` and a thread-safe heap on two systems only.
+
+**Pinned by** `runtime/hosted-heap-provider`, `runtime/posix-memory` and
+`abi/r440-native-hosted` on every hosted target.

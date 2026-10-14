@@ -1,5 +1,5 @@
 class: negative
-summary: Writing a present static pointer through an alias cannot leave a reusable empty proof on the original optional binding
+summary: Writing a present static pointer through an alias leaves no reusable empty proof on the original optional binding, so a writable from clause hiding it is still refused
 constructs: 0430, 0480, 0790
 program: program.ldn
 codes: L0316

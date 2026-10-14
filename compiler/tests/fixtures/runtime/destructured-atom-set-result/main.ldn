@@ -1,0 +1,47 @@
+--  A destructured result of an atom-set type keeps its set, as a plain
+--  binding of the same result does: the local compares with the set's
+--  atoms and is matched over them.  The checker used to stop with an
+--  internal defect here.
+too_deep: atom
+near: atom
+far: atom
+gone: atom
+reach: type = near | far | gone
+
+measured: (depth: u32) -> (where: reach, steps: u32) ! too_deep =
+    fail too_deep when depth > 8
+    where = if depth < 2 then near elsif depth < 6 then far else gone end if
+    steps = depth * 2
+end measured
+
+total: (depth: u32) -> (score: u32) ! too_deep =
+    (where, steps) := try measured(depth)
+    score = match where
+        near: steps + 1
+        far: steps + 10
+        gone: steps + 100
+    end match
+end total
+
+public main: () -> (code: i32) =
+    code = 1
+    (where: first, steps: counted) := measured(1) else (problem)
+        _ = problem
+        return
+    end
+    return when first <> near or counted <> 2
+    code = 2
+    (where, steps) := measured(7) else (problem)
+        _ = problem
+        return
+    end
+    return when where <> gone or steps <> 14
+    code = 3
+    score: u32 = total(3) else 0
+    return when score <> 16
+    code = 4
+    refused: u32 = total(9) else (problem)
+        if problem == too_deep then 42 else 0 end if
+    end
+    code = i32(refused)
+end main

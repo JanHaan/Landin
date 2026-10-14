@@ -1,7 +1,7 @@
-import hosted/linux
-import hosted/linux/numbers
+import platform/linux
+import platform/linux/numbers
 
---  hosted/linux's system calls, made directly with no C library
+--  platform/linux's system calls, made directly with no C library
 --  beneath them, on every Linux architecture.  Each failure comes back as
 --  minus its errno.  The paths are NUL-terminated: /dev/zero and /dev/null
 --  exist everywhere; a missing parent gives ENOENT, a path through a

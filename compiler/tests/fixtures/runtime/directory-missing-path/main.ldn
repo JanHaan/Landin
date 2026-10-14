@@ -5,6 +5,7 @@
 --  is `not_found` too, and so is a name no entry can have, which never
 --  reaches the system and leaves the last errno at zero.
 import core/io
+import core/text
 import hosted/io as hosted
 
 missing: []u8 = "/landin-absent-parent/absent"
@@ -20,11 +21,7 @@ end absent
 
 opened_absent: (host: hosted.system) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    path := io.terminate_path(missing, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    path: text.host_string = text.host_over(missing)
     mut buffer: [1024]u8 = zeroed
     listing := io.open_directory(host, path, buffer[0..<1024]) else (problem)
         yes = absent(host, problem, 2)
@@ -37,11 +34,7 @@ end opened_absent
 
 made_absent: (host: hosted.system) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    path := io.terminate_path(missing_parent, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    path: text.host_string = text.host_over(missing_parent)
     io.make_directory(host, path) else (problem)
         yes = absent(host, problem, 2)
     end
@@ -49,17 +42,13 @@ end made_absent
 
 removed_absent: (host: hosted.system, directory: bool) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    path := io.terminate_path(missing, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    path: text.host_string = text.host_over(missing)
     gone(host, path, directory) else (problem)
         yes = absent(host, problem, 2)
     end
 end removed_absent
 
-gone: (host: hosted.system, path: ptr u8, directory: bool)
+gone: (host: hosted.system, path: text.host_string, directory: bool)
       -> none ! io.not_found | io.no_access | io.io_failed =
     if directory then
         try io.remove_directory(host, path)
@@ -73,11 +62,7 @@ end gone
 sized_absent: (host: hosted.system) -> (code: i32) =
     code = 10
     here: []u8 = "."
-    mut scratch: [4]u8 = zeroed
-    path := io.terminate_path(here, scratch[0..<4]) else (problem)
-        _ = problem
-        return
-    end
+    path: text.host_string = text.host_over(here)
     mut buffer: [1024]u8 = zeroed
     listing := io.open_directory(host, path, buffer[0..<1024]) else (problem)
         _ = problem
@@ -87,17 +72,18 @@ sized_absent: (host: hosted.system) -> (code: i32) =
         _ = problem
     end
     code = 11
-    _ = io.entry_size(host, listing, "landin-absent-entry") else (problem)
+    _ = io.entry_size(host, listing,
+                      text.host_over("landin-absent-entry")) else (problem)
         return when not absent(host, problem, 2)
         0
     end
     code = 12
-    _ = io.entry_size(host, listing, "") else (problem)
+    _ = io.entry_size(host, listing, text.host_over("")) else (problem)
         return when not absent(host, problem, 0)
         0
     end
     code = 13
-    _ = io.entry_size(host, listing, "a/b") else (problem)
+    _ = io.entry_size(host, listing, text.host_over("a/b")) else (problem)
         return when not absent(host, problem, 0)
         0
     end

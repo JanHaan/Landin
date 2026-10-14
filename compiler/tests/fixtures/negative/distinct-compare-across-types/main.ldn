@@ -1,0 +1,12 @@
+--  A distinct value meets its base or another type only through a
+--  conversion, `==` included.
+handle: type = distinct u32
+other: type = distinct u32
+
+with_base: (value: handle) -> (same: bool) =
+    same = value == u32(1)
+end with_base
+
+with_other: (value: handle, next: other) -> (same: bool) =
+    same = value == next
+end with_other

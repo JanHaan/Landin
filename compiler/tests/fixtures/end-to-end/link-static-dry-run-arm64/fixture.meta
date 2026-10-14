@@ -1,0 +1,9 @@
+class: end-to-end
+summary: a static Linux arm64 executable links with --gc-sections, since every routine and datum is its own input section
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64, linux-arm64
+expect: expected.txt
+args: compile --target=linux-arm64 --emit=exe --dry-run -o out ../tests/fixtures/end-to-end/link-static-dry-run-arm64/main.ldn
+status: 0
+stream: output

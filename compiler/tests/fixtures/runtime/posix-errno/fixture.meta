@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's errno atoms keep each system's number, number and errno_of are each other's inverse over every number the system defines, the numbers that differ between systems are each system's own, and a number no system defines is unlisted
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

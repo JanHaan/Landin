@@ -1,4 +1,4 @@
-import hosted/linux
+import platform/linux
 
 --  The process entry holds the processor to the executable's CPU feature
 --  level before `main` runs; this program reaching `main` is that check

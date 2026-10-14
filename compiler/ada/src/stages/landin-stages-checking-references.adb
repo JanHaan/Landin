@@ -2937,10 +2937,27 @@ package body Landin.Stages.Checking.References is
                         end;
                      end if;
                   end loop;
-                  for Source in Expected'Range loop
-                     Same := Same
-                       and then Expected (Source) = Fact.From (Source);
-                  end loop;
+                  --  [0790]: a read-only result whose edges also reach
+                  --  storage that outlives the call, module storage or
+                  --  what is reached from it, a literal or an independent
+                  --  allocation, satisfies a source it does not derive
+                  --  from: keeping that source alive asks nothing the
+                  --  storage does not already give.  It still derives
+                  --  from no parameter its clause leaves out, and a
+                  --  writable result keeps D222's refusal above.
+                  declare
+                     Outlives : constant Boolean :=
+                       Fact.External
+                       and then not Landin.Checking
+                         .Contains_Writable_References (Types.all, Part);
+                  begin
+                     for Source in Expected'Range loop
+                        Same := Same
+                          and then (Expected (Source) = Fact.From (Source)
+                                    or else (Outlives
+                                             and then Expected (Source)));
+                     end loop;
+                  end;
                   if not Same then
                      Bad.Report
                        (Item    => Bad.Return_Sources_Disagree,

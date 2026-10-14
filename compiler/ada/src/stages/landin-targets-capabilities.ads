@@ -43,7 +43,7 @@ package Landin.Targets.Capabilities is
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 
    --  The operating system whose C library a hosted program runs on, which
-   --  `compiler.os` names to source: `hosted/libc` selects its errno
+   --  `compiler.os` names to source: `platform/libc` selects its errno
    --  function and `open` flags by it.  Neither the object format nor the
    --  C ABI decides it: FreeBSD's objects are ELF and its errno function is
    --  Darwin's.  A target with no hosted system has none.

@@ -1,10 +1,10 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-memory-written-frame/main.ldn:2:1
+  --> ../tests/fixtures/negative/core-memory-written-frame/main.ldn:3:1
   |
-2 | bad: () -> (view: []u8) =
+3 | bad: () -> (view: []u8) =
   | ^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/core-memory-written-frame/main.ldn:3:5
+  --> ../tests/fixtures/negative/core-memory-written-frame/main.ldn:4:5
   |
-3 |     mut output: [2]u8 = zeroed
+4 |     mut output: [2]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

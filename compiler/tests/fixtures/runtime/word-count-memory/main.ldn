@@ -73,7 +73,7 @@ counted: (input: []u8, limit: usize, room: usize, fail_at: usize,
          readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
-    no_arguments: []io.argument = []
+    no_arguments: [][]u8 = []
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<1], no_arguments, input,
                              output[0..<1], errors[0..<1])

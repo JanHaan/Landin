@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: values of one distinct scalar type compare with == and <>, and with an unsigned base combine with &, ^, | and ~ into that type, in bindings, fields, array elements and returns
+program: main.ldn
+status: 42
+constructs: 0330, 0350, 0650, 1890
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

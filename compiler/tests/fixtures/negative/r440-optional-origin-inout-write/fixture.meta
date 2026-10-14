@@ -1,5 +1,5 @@
 class: negative
-summary: An inout call can replace an empty optional with a static pointer so its old absence fact cannot excuse a false from clause
+summary: An inout call can replace an empty optional with a static pointer, so its old absence fact cannot excuse a writable from clause that hides it
 constructs: 0480, 0790, 0800
 program: program.ldn
 codes: L0316

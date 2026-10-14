@@ -1,0 +1,8 @@
+--  A writable result keeps D222: storage that outlives the call is a
+--  destination its `from` clause would hide, so it is refused.
+mut cell: [1]i32 = [0]
+
+bad: (slot: ptr mut i32) -> (target: ptr mut i32 from slot) =
+    _ = slot.val
+    target = addr cell[0]
+end bad

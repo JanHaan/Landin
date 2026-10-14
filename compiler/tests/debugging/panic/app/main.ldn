@@ -1,5 +1,5 @@
 import core/panic
-import hosted/linux
+import platform/linux
 
 fixed if compiler.os == linux then
     --  A static Linux executable has no C library: the process ends with

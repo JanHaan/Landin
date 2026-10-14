@@ -1,11 +1,12 @@
 import core/io
+import core/text
 refill: (inout state: io.memory_space) -> none =
     state.output_used = 0
 end refill
 bad: (inout state: io.memory_space, output: []mut u8, errors: []mut u8)
      -> (first: u8) =
     files: []mut io.memory_file = []
-    args: []io.argument = []
+    args: [][]u8 = []
     memory := io.memory_over(state, files, args, "", output, errors)
     view := io.written(memory)
     refill(state)

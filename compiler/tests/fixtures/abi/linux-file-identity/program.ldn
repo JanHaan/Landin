@@ -1,19 +1,27 @@
 import core/io
+import core/text
 import hosted/io as hosted
-import hosted/linux
+import platform/linux
 
---  On Linux hosted/io reads file identity with hosted/linux's
---  statx, which no C function stands between and no C peer can replace.
---  The peer instead holds hosted/linux's record to the C header's
+--  On Linux hosted/io reads file identity through platform/posix with
+--  platform/linux's statx, which no C function stands between and no C
+--  peer can replace.
+--  The peer instead holds platform/linux's record to the C header's
 --  `struct statx` and to the C library's own statx of the same path, and
 --  makes the hard link and symbolic link the identities are checked on.
 
 extern(c) identity_setup: () -> (good: bool)
-extern(c) identity_path: (which: i32) -> (path: ptr u8)
+extern(c) identity_path: (which: i32) -> (path: cstring)
 extern(c) identity_cleanup: () -> none
 extern(c) identity_record_size: () -> (size: usize)
-extern(c) identity_record_agrees: (path: ptr u8, record: ptr u8)
+extern(c) identity_record_agrees: (path: cstring, record: ptr u8)
                                   -> (good: bool)
+
+--  The peer's path `which` as a host string, lending the peer's storage.
+path_of: (which: i32) -> (path: text.host_string) =
+    named: []u8 = []u8(identity_path(which))
+    path = text.host_over(named)
+end path_of
 
 public main: () -> (code: i32) =
     code = 1
@@ -23,7 +31,8 @@ public main: () -> (code: i32) =
     return when not identity_setup()
     mut status: linux.file_status = zeroed
     record: ptr u8 = ptr(usize(addr status))
-    if linux.statx(linux.at_fdcwd, identity_path(0), 0, linux.statx_ino,
+    first: []u8 = []u8(identity_path(0))
+    if linux.statx(linux.at_fdcwd, addr first[0], 0, linux.statx_ino,
                    addr status) <> 0
       or not identity_record_agrees(identity_path(0), record) then
         identity_cleanup()
@@ -36,8 +45,8 @@ public main: () -> (code: i32) =
     for which in i32(0)..<i32(5) do
         code = 20 + which
         mut failed: bool = false
-        same: bool = io.same_file(state, identity_path(0),
-                                  identity_path(which)) else (problem)
+        same: bool = io.same_file(state, path_of(0),
+                                  path_of(which)) else (problem)
             failed = problem == io.io_failed
             false
         end
@@ -50,8 +59,7 @@ public main: () -> (code: i32) =
     --  A first path that does not exist is a failure with its errno.
     code = 30
     mut failed: bool = false
-    same: bool = io.same_file(state, identity_path(4),
-                              identity_path(0)) else (problem)
+    same: bool = io.same_file(state, path_of(4), path_of(0)) else (problem)
         failed = problem == io.io_failed
         false
     end

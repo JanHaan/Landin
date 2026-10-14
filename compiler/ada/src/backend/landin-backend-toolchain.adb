@@ -348,6 +348,10 @@ package body Landin.Backend.Toolchain is
       then
          Landin.Platform.Add (List, "-arch");
          Landin.Platform.Add (List, "arm64");
+         --  The assembly splits into atoms at its symbols
+         --  (`.subsections_via_symbols`); drop those nothing retained
+         --  reaches, as --gc-sections does on ELF.
+         Landin.Platform.Add (List, "-Wl,-dead_strip");
          if Full_Debug then
             --  Apple Clang retains the object and invokes dsymutil after
             --  linking. The resulting dSYM carries the executable's UUID.
@@ -359,7 +363,7 @@ package body Landin.Backend.Toolchain is
       end if;
       --  A static Linux executable is the program alone.  No C
       --  runtime object, no C library and no dynamic loader: the process
-      --  starts at hosted/linux's `_landin_start`, at a fixed address.
+      --  starts at platform/linux's `_landin_start`, at a fixed address.
       if Static then
          if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
            /= Landin.Targets.Capabilities.Linux
@@ -441,9 +445,8 @@ package body Landin.Backend.Toolchain is
       then
          --  The GNU assembler takes Arm's own level names.  An arm64
          --  executable carries no level note for the loader to check.
-         if Static then
-            Landin.Platform.Add (List, "-Wl,--gc-sections");
-         end if;
+         --  Every routine and datum occupies its own input section.
+         Landin.Platform.Add (List, "-Wl,--gc-sections");
          Landin.Platform.Add
            (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
                        = Landin.Targets.Capabilities.FreeBSD

@@ -20,6 +20,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
     },
+    "abi/host-string-pass-through": {
+      "mode": "restriction",
+      "reason": "A C main hands Landin a process argument through the hosted argument root and checks the file the host system made from it; runtime/r420-memory-world-boundaries passes core/io.memory's arguments as host strings on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/host-string-pass-through/fixture.meta"
+    },
     "abi/libc-directory-record": {
       "mode": "restriction",
       "reason": "The C library's struct dirent and its flags exist only on a hosted system, so the C peer that reads them is hosted; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0.",
@@ -44,6 +49,11 @@
       "mode": "restriction",
       "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
       "witness": "compiler/tests/fixtures/abi/lp64d-varargs/fixture.meta"
+    },
+    "abi/posix-errno-numbers": {
+      "mode": "restriction",
+      "reason": "Each system's errno numbers are its C header's, which only a hosted system has; platform/posix itself is refused on firmware.",
+      "witness": "compiler/tests/fixtures/abi/posix-errno-numbers/fixture.meta"
     },
     "abi/r440-bindings-generated": {
       "mode": "restriction",
@@ -231,10 +241,10 @@
     "runtime/any-aggregate-storage": {
       "mode": "execute"
     },
-    "runtime/any-argument-save": {
+    "runtime/any-allocator-handle": {
       "mode": "execute"
     },
-    "runtime/any-allocator-handle": {
+    "runtime/any-argument-save": {
       "mode": "execute"
     },
     "runtime/any-by-value-self": {
@@ -639,6 +649,9 @@
     "runtime/derived-storage-address-origin": {
       "mode": "execute"
     },
+    "runtime/destructured-atom-set-result": {
+      "mode": "execute"
+    },
     "runtime/diagnostic-loggers-dispatch": {
       "codes": [
         "L0015"
@@ -688,6 +701,9 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+    },
+    "runtime/distinct-equality-and-flags": {
+      "mode": "execute"
     },
     "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
@@ -1054,28 +1070,28 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/linux, a Linux module, on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses platform/linux, a Linux module, on the freestanding target before checking declarations."
     },
     "runtime/linux-process-entry": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/io and hosted/linux on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/io and platform/linux on the freestanding target before checking declarations."
     },
     "runtime/linux-process-entry-libc": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/io and hosted/linux on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/io and platform/linux on the freestanding target before checking declarations."
     },
     "runtime/linux-system-calls": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/linux, a Linux module, on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses platform/linux, a Linux module, on the freestanding target before checking declarations."
     },
     "runtime/literal-conditions-select-flow": {
       "mode": "execute"
@@ -1164,6 +1180,9 @@
       "mode": "execute"
     },
     "runtime/module-float-arithmetic": {
+      "mode": "execute"
+    },
+    "runtime/module-image-qualified-atoms": {
       "mode": "execute"
     },
     "runtime/module-known-short-circuit-bools": {
@@ -1293,6 +1312,41 @@
       "counterpart": "pointer-unions",
       "mode": "execute",
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/posix-directories": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-errno": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-files": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-memory": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-poll": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
     },
     "runtime/r230-composition": {
       "mode": "execute"
@@ -2034,6 +2088,9 @@
     "runtime/slice-lower-after-upper-traps": {
       "mode": "execute"
     },
+    "runtime/slice-place-in-value-arm": {
+      "mode": "execute"
+    },
     "runtime/stack-arguments-cross-calls": {
       "mode": "execute"
     },
@@ -2041,6 +2098,9 @@
       "mode": "execute"
     },
     "runtime/statements-run-as-they-read": {
+      "mode": "execute"
+    },
+    "runtime/static-origin-satisfies-from": {
       "mode": "execute"
     },
     "runtime/struct-arguments-cross-calls": {

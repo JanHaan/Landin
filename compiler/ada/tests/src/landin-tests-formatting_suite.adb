@@ -379,6 +379,14 @@ package body Landin.Tests.Formatting_Suite is
       Expect (Item, "a doc comment stays above what it documents",
               "  --- the answer" & LF & "   answer: u32 = 42" & LF,
               "--- the answer" & LF & "answer: u32 = 42" & LF);
+      Expect (Item, "a public linked routine stands at the margin",
+              "x: u32 = 1" & LF & LF
+              & "    public link(symbol: ""_f"") f:" & LF
+              & "        () -> none =" & LF & "    g()" & LF
+              & "    end f" & LF,
+              "x: u32 = 1" & LF & LF
+              & "public link(symbol: ""_f"") f:" & LF
+              & "    () -> none =" & LF & "    g()" & LF & "end f" & LF);
       Expect (Item, "a comment before a closer stays in the block",
               "f: () -> none =" & LF & "    g()" & LF & "-- last" & LF
               & "end f" & LF,

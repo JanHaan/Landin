@@ -1,0 +1,8 @@
+class: negative
+summary: a writable result under a from clause that reaches module storage keeps the refusal of a hidden destination
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/static-origin-writable-from
+constructs: 0430, 0790, 0840
+codes: L0316
+status: 1
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

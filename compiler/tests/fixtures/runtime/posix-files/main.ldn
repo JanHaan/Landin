@@ -1,0 +1,196 @@
+--  platform/posix's files: a descriptor is a handle, a failure is the
+--  errno as an atom, and a path is a host string, terminated beneath the
+--  caller.  The program makes a scratch directory, opens a file in it
+--  relative to the directory's own descriptor, writes and reads it back,
+--  asks its status, and removes both.  Each failure is the errno POSIX
+--  names for it, the same atom on Linux, Darwin and FreeBSD: a missing
+--  name, an exclusive create of a taken one, a file used as a directory, a
+--  directory opened for writing, a closed descriptor, a path holding a NUL
+--  and one longer than PATH_MAX.  The program writes each atom's number
+--  on this system, so a failing lane shows what it met.
+import core/text
+import platform/posix
+
+top: []u8 = "posix-files-scratch"
+inner: []u8 = "posix-files-scratch/data"
+
+--  Write LINE to standard output.
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [32]u8 = zeroed
+    mut used: usize = 0
+    for byte in name do
+        line[used] = byte
+        inc used
+    end for
+    line[used] = 61
+    inc used
+    used = text.write_u32(line[0..<32], used,
+                          u32(posix.number(problem))) else used
+    line[used] = 10
+    say(line[0..<used + 1])
+end said
+
+--  Remove what an earlier run may have left.
+clear: () -> none =
+    posix.unlink_at(posix.working_directory, text.host_over(inner)) else (p)
+        _ = p
+    end
+    posix.remove_directory_at(posix.working_directory,
+                              text.host_over(top)) else (p)
+        _ = p
+    end
+end clear
+
+--  Whether opening PATH with OPTIONS, relative to AT, fails with WANTED.
+refused: (at: posix.descriptor, path: text.host_string,
+          options: posix.open_options, wanted: posix.errno, name: []u8)
+         -> (yes: bool) =
+    yes = false
+    opened: posix.descriptor = posix.open_at(at, path, options, 0o644)
+      else (problem)
+        said(name, problem)
+        yes = problem == wanted
+        return
+    end
+    posix.close(opened) else (p)
+        _ = p
+    end
+end refused
+
+public main: () -> (code: i32) =
+    clear()
+    code = 1
+    posix.make_directory_at(posix.working_directory, text.host_over(top),
+                            0o755) else (problem)
+        said("mkdir", problem)
+        return
+    end
+    code = 2
+    folder: posix.descriptor =
+        posix.open_at(posix.working_directory, text.host_over(top),
+                      (access: posix.read_only, create: false,
+                       exclusive: false, truncate: false, append: false,
+                       directory: true), 0) else (problem)
+        said("folder", problem)
+        return
+    end
+
+    --  A file made relative to the directory's descriptor, written and
+    --  read back through a second descriptor.
+    code = 3
+    written: posix.descriptor =
+        posix.open_at(folder, text.host_over("data"), posix.writing,
+                      0o644) else (problem)
+        said("create", problem)
+        return
+    end
+    count: usize = posix.write(written, "posix\n") else (problem)
+        said("write", problem)
+        return
+    end
+    return when count <> 6
+    posix.close(written) else (problem)
+        said("close", problem)
+        return
+    end
+    code = 4
+    reading: posix.descriptor =
+        posix.open_at(posix.working_directory, text.host_over(inner),
+                      posix.reading, 0) else (problem)
+        said("open", problem)
+        return
+    end
+    mut buffer: [16]u8 = zeroed
+    got: usize = posix.read(reading, buffer[0..<16]) else (problem)
+        said("read", problem)
+        return
+    end
+    return when got <> 6 or buffer[0] <> 112 or buffer[5] <> 10
+    ended: usize = posix.read(reading, buffer[0..<16]) else (problem)
+        said("eof", problem)
+        return
+    end
+    return when ended <> 0
+    posix.close(reading) else (problem)
+        said("close", problem)
+        return
+    end
+
+    --  Its status: a regular file of six bytes, the same file by either
+    --  path, inside a directory.
+    code = 5
+    file: posix.status =
+        posix.status_at(folder, text.host_over("data"), false) else (problem)
+        said("stat", problem)
+        return
+    end
+    again: posix.status =
+        posix.status_at(posix.working_directory, text.host_over(inner),
+                        true) else (problem)
+        said("stat", problem)
+        return
+    end
+    holder: posix.status =
+        posix.status_at(posix.working_directory, text.host_over(top),
+                        true) else (problem)
+        said("stat", problem)
+        return
+    end
+    return when file.kind <> posix.regular or file.size <> 6
+      or file.device <> again.device or file.inode <> again.inode
+      or holder.kind <> posix.directory or holder.inode == file.inode
+
+    --  The failure oracles.
+    code = 6
+    return when not refused(folder, text.host_over("absent"), posix.reading,
+                            posix.enoent, "absent")
+    code = 7
+    return when not refused(folder, text.host_over("data"),
+                            (access: posix.write_only, create: true,
+                             exclusive: true, truncate: false,
+                             append: false, directory: false),
+                            posix.eexist, "exclusive")
+    code = 8
+    return when not refused(folder, text.host_over("data/below"),
+                            posix.reading, posix.enotdir, "through")
+    code = 9
+    return when not refused(posix.working_directory, text.host_over(top),
+                            posix.writing, posix.eisdir, "directory")
+    code = 10
+    return when not refused(posix.working_directory,
+                            text.host_over("posix\x00files"), posix.reading,
+                            posix.einval, "nul")
+    code = 11
+    long: [5000]u8 = [5000 of 97]
+    return when not refused(posix.working_directory,
+                            text.host_over(long[0..<5000]), posix.reading,
+                            posix.enametoolong, "long")
+    code = 12
+    _ = posix.read(reading, buffer[0..<16]) else (problem)
+        said("closed", problem)
+        return when problem <> posix.ebadf
+        0
+    end
+
+    code = 13
+    posix.close(folder) else (problem)
+        said("close", problem)
+        return
+    end
+    posix.unlink_at(posix.working_directory, text.host_over(inner))
+      else (problem)
+        said("unlink", problem)
+        return
+    end
+    posix.remove_directory_at(posix.working_directory, text.host_over(top))
+      else (problem)
+        said("rmdir", problem)
+        return
+    end
+    code = 42
+end main

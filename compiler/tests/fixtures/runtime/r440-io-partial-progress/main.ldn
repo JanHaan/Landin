@@ -1,9 +1,9 @@
 import core/io
+import core/text
 
 mut contents: [2]u8 = [65, 66]
 mut output: [5]u8 = zeroed
 mut errors: [1]u8 = zeroed
-path: [2]u8 = [102, 0]
 
 public main: () -> (code: i32) =
     code = 1
@@ -13,8 +13,8 @@ public main: () -> (code: i32) =
        readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = source
-    mut arguments: [1]io.argument
-    arguments[0] = (data: addr path[0], length: 0)
+    path: text.host_string = text.host_over(name)
+    arguments: [1][]u8 = [name]
     mut state: io.memory_space = zeroed
     memory: io.memory = io.memory_over
         (state, files[0..<1], arguments[0..<0], "", output[0..<5],
@@ -48,7 +48,7 @@ public main: () -> (code: i32) =
     end
     return when state.output_used <> 5 or output[4] <> 33
 
-    opened: io.file = world.open_read(addr path[0]) else (problem)
+    opened: io.file = world.open_read(path) else (problem)
         _ = problem
         return
     end

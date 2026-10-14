@@ -1,5 +1,5 @@
 class: negative
-summary: A present static pointer with no parameter origin is not an empty optional and cannot falsely promise from cell
+summary: A present static pointer is not an empty optional, so a writable result cannot promise from cell while it may hold one
 constructs: 0480, 0790
 program: program.ldn
 codes: L0316

@@ -2,15 +2,12 @@
 --  from it locks nothing: two lent arguments and the count are live at
 --  once, and every one is read after the others were taken.
 import core/io
+import core/text
 
-first_bytes: [5]u8 = [97, 108, 112, 104, 97]
-second_bytes: [2]u8 = [52, 50]
 
 public main: () -> (code: i32) =
     code = 1
-    arguments: [2]io.argument = [
-        (data: addr first_bytes[0], length: 5),
-        (data: addr second_bytes[0], length: 2)]
+    arguments: [2][]u8 = ["alpha", "42"]
     files: []mut io.memory_file = []
     mut output: [1]u8 = zeroed
     mut errors: [1]u8 = zeroed
@@ -26,14 +23,9 @@ public main: () -> (code: i32) =
         return
     end
     count := io.argument_count(memory)
-    mut scratch: [8]u8 = zeroed
-    copied := io.copy_argument(first, scratch[0..<8]) else (problem)
-        _ = problem
-        return
-    end
-    return when count <> 2 or lenof copied <> 5 or copied[4] <> 97
-    return when second.length <> 2
-    tens: ptr u8 = second.data
-    units: ptr u8 = ptr(usize(second.data) + 1)
-    code = i32(tens.val - 48) * 10 + i32(units.val - 48)
+    word: []u8 = text.host_bytes(first)
+    return when count <> 2 or lenof word <> 5 or word[4] <> 97
+    digits: []u8 = text.host_bytes(second)
+    return when lenof digits <> 2
+    code = i32(digits[0] - 48) * 10 + i32(digits[1] - 48)
 end main

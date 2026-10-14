@@ -262,6 +262,18 @@ package body Landin.Stages.Folding is
             if Float_Special_Type (Of_Tree, Node) in Ty.Float_Name then
                Value := Ty.Folded (Float_Special_Bits (Of_Tree, Node));
                Known := True;
+            elsif Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Node))
+                = Res.Module_Atom
+            then
+               --  Resolution binds an imported `module.atom` to the atom
+               --  itself, which is as known as the same atom named
+               --  unqualified in its own module.
+               Value := (if Held = Ty.Pointer_Value then 0
+                         else Ty.Folded
+                           (Res.Bound_To (Meanings.all, Of_Tree, Node)));
+               Known := True;
             end if;
 
          when Syn.Pointer_Conversion =>

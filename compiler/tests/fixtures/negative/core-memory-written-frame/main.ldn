@@ -1,9 +1,10 @@
 import core/io
+import core/text
 bad: () -> (view: []u8) =
     mut output: [2]u8 = zeroed
     mut errors: [1]u8 = zeroed
     files: []mut io.memory_file = []
-    args: []io.argument = []
+    args: [][]u8 = []
     mut space: io.memory_space = zeroed
     memory := io.memory_over(space, files, args, "", output[0..<2],
                              errors[0..<1])

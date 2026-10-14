@@ -1,4 +1,5 @@
 import core/io
+import core/text
 
 mut backing: [1]u8 = zeroed
 mut output: [4]u8 = zeroed
@@ -12,7 +13,7 @@ public main: () -> (code: i32) =
        readable: true, writable: true, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
-    no_arguments: []io.argument = []
+    no_arguments: [][]u8 = []
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<1], no_arguments, "",
                              output[0..<4], errors[0..<1])

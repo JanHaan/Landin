@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a module array image of atoms qualified by their declaring module folds each to its atom, where lowering used to stop with an internal defect
+program: main.ldn
+root: root
+status: 42
+constructs: 0270, 0520, 1420, 1940
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

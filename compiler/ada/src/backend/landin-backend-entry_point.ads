@@ -49,11 +49,18 @@ package Landin.Backend.Entry_Point is
      (Of_Unit : Landin.IR.Unit;
       Names   : Landin.Source.Names.Table) return Landin.IR.Item_Id;
 
-   --  The link names of the bodyless imports the program's code
+   --  The link names of the bodyless imports the program's reached code
    --  calls, takes the address of, or holds in data or evidence, that no
    --  routine or datum of the program defines.  A static Linux link has no
-   --  C library to satisfy them.  Every routine the program holds counts,
-   --  whether or not the entry reaches it, in item order, each name once.
+   --  C library to satisfy them.  Every backend of a static Linux target
+   --  gives each routine and datum its own input section and the link
+   --  drops what nothing retained reaches, so only what the entry
+   --  `_landin_start` reaches counts: through calls and addresses taken,
+   --  a C name to the routine defining it, `main`, the argument
+   --  initializer and the panic handler the entry and the backend call,
+   --  and whatever any datum or evidence table names, which is counted
+   --  whole because a datum is cheap to keep.  In item order, each name
+   --  once.
    function Unsatisfied_Imports
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

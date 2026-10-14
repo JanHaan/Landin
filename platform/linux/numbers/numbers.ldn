@@ -5,7 +5,7 @@
 --  Do not edit it: change the pin in the generator and run it again.
 --
 --  Each number is named after its call, the kernel table's name
---  followed by `_number`, and goes to hosted/linux's `system_call`.
+--  followed by `_number`, and goes to platform/linux's `system_call`.
 --  A number whose call the running kernel lacks gives minus ENOSYS.
 --  x86-64 reads arch/x86/entry/syscalls/syscall_64.tbl
 --  with the ABIs common, 64.
@@ -13,6 +13,12 @@
 --  with the ABIs common, 64, renameat, rlimit, memfd_secret.
 --  RV64 reads scripts/syscall.tbl
 --  with the ABIs common, 64, riscv, rlimit, memfd_secret.
+--
+--  Its scope is platform/linux's, Linux, Darwin and FreeBSD, and on
+--  Darwin and FreeBSD it declares nothing.
+
+compiler.assert(compiler.os == linux or compiler.os == darwin
+                or compiler.os == freebsd)
 
 fixed if compiler.os == linux then
     fixed if compiler.arch == x86_64 then

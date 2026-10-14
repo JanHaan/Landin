@@ -1,0 +1,183 @@
+--  platform/posix's directories, as POSIX gives them: a directory stream
+--  read into the caller's buffer lists `.` and `..` beside its entries,
+--  with each entry's kind where the file system records one, and
+--  `status_at` tells the rest without following a symbolic link.  The
+--  failure oracles are the errno POSIX names, the same atom on Linux,
+--  Darwin and FreeBSD: a directory made twice, a directory removed while
+--  it holds a file, a missing directory, a file opened as a directory and
+--  a buffer smaller than `posix.directory_buffer`.
+import core/text
+import platform/posix
+
+top: []u8 = "posix-directories-scratch"
+inside: []u8 = "posix-directories-scratch/file"
+below: []u8 = "posix-directories-scratch/below"
+
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [32]u8 = zeroed
+    mut used: usize = 0
+    for byte in name do
+        line[used] = byte
+        inc used
+    end for
+    line[used] = 61
+    inc used
+    used = text.write_u32(line[0..<32], used,
+                          u32(posix.number(problem))) else used
+    line[used] = 10
+    say(line[0..<used + 1])
+end said
+
+clear: () -> none =
+    posix.unlink_at(posix.working_directory, text.host_over(inside)) else (p)
+        _ = p
+    end
+    posix.remove_directory_at(posix.working_directory,
+                              text.host_over(below)) else (p)
+        _ = p
+    end
+    posix.remove_directory_at(posix.working_directory,
+                              text.host_over(top)) else (p)
+        _ = p
+    end
+end clear
+
+--  The kind of the entry NAME of the directory open as AT, its own when
+--  its record says none.
+kind_of: (at: posix.descriptor, entry: posix.directory_entry)
+         -> (kind: posix.file_kind) ! posix.errno =
+    kind = entry.kind
+    return when kind <> posix.unknown_kind
+    found: posix.status = try posix.status_at(at, entry.name, false)
+    kind = found.kind
+end kind_of
+
+--  Bits for what the listing saw: `.` 1, `..` 2, `file` as a regular file
+--  4, `below` as a directory 8, and 16 for anything else.
+listed: () -> (seen: u32) ! posix.errno =
+    seen = 0
+    mut stream: posix.directory_stream =
+        try posix.open_directory(posix.working_directory, text.host_over(top))
+    mut buffer: [1024]u8 = zeroed
+    loop do
+        entry: posix.directory_entry =
+            posix.read_directory(stream, buffer[0..<1024]) else (problem)
+            posix.close_directory(stream) else (p)
+                _ = p
+            end
+            fail problem
+        end
+        name: text.host_string = entry.name
+        spelled: []u8 = text.host_bytes(name)
+        break when lenof spelled == 0
+        kind: posix.file_kind = try kind_of(stream.descriptor, entry)
+        bit: u32 = if text.host_equal(name, ".") then 1
+                   elsif text.host_equal(name, "..") then 2
+                   elsif text.host_equal(name, "file")
+                     and kind == posix.regular then 4
+                   elsif text.host_equal(name, "below")
+                     and kind == posix.directory then 8
+                   else 16 end if
+        seen = seen | bit
+    end loop
+    try posix.close_directory(stream)
+end listed
+
+public main: () -> (code: i32) =
+    clear()
+    code = 1
+    posix.make_directory_at(posix.working_directory, text.host_over(top),
+                            0o755) else (problem)
+        said("mkdir", problem)
+        return
+    end
+    posix.make_directory_at(posix.working_directory, text.host_over(below),
+                            0o755) else (problem)
+        said("mkdir", problem)
+        return
+    end
+    made: posix.descriptor =
+        posix.open_at(posix.working_directory, text.host_over(inside),
+                      posix.writing, 0o644) else (problem)
+        said("create", problem)
+        return
+    end
+    posix.close(made) else (problem)
+        said("close", problem)
+        return
+    end
+
+    code = 2
+    seen: u32 = listed() else (problem)
+        said("listed", problem)
+        return
+    end
+    return when seen <> 15
+
+    --  The failure oracles.
+    code = 3
+    posix.make_directory_at(posix.working_directory, text.host_over(below),
+                            0o755) else (problem)
+        said("again", problem)
+        return when problem <> posix.eexist
+    end
+    code = 4
+    posix.remove_directory_at(posix.working_directory,
+                              text.host_over(top)) else (problem)
+        said("full", problem)
+        return when problem <> posix.enotempty
+    end
+    code = 5
+    absent: posix.directory_stream =
+        posix.open_directory(posix.working_directory,
+                             text.host_over("posix-directories-absent"))
+          else (problem)
+        said("absent", problem)
+        return when problem <> posix.enoent
+        posix.directory_stream(descriptor: posix.standard_input, stream: 0,
+                               filled: 0, cursor: 0, finished: true)
+    end
+    _ = absent.finished
+    code = 6
+    as_file: posix.directory_stream =
+        posix.open_directory(posix.working_directory,
+                             text.host_over(inside)) else (problem)
+        said("file", problem)
+        return when problem <> posix.enotdir
+        posix.directory_stream(descriptor: posix.standard_input, stream: 0,
+                               filled: 0, cursor: 0, finished: true)
+    end
+    _ = as_file.finished
+    code = 7
+    mut stream: posix.directory_stream =
+        posix.open_directory(posix.working_directory,
+                             text.host_over(top)) else (problem)
+        said("open", problem)
+        return
+    end
+    mut small: [16]u8 = zeroed
+    _ = posix.read_directory(stream, small[0..<16]) else (problem)
+        said("small", problem)
+        return when problem <> posix.einval
+        posix.directory_entry(name: text.host_over(""),
+                              kind: posix.unknown_kind)
+    end
+    posix.close_directory(stream) else (problem)
+        said("close", problem)
+        return
+    end
+
+    code = 8
+    clear()
+    _ = posix.status_at(posix.working_directory, text.host_over(top),
+                        false) else (problem)
+        return when problem <> posix.enoent
+        posix.status(device: 0, inode: 0, kind: posix.unknown_kind, size: 0)
+    end
+    code = 42
+end main

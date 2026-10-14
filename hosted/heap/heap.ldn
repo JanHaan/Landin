@@ -1,13 +1,12 @@
 --  The hosted heap is separate from core/mem's freestanding allocator
---  protocol and caller-backed providers.  On Linux it keeps size classes
---  over memory it maps itself through hosted/linux; on Darwin and FreeBSD
---  it allocates through the C library's malloc and free.  Either way it
---  over-allocates so that every usize alignment is honoured, not only the
---  powers of two posix_memalign and aligned_alloc admit.
+--  protocol and caller-backed providers.  It keeps size classes over
+--  memory it maps itself through platform/posix, written once for every
+--  hosted system.  It over-allocates so that every usize alignment is
+--  honoured, not only the powers of two posix_memalign and aligned_alloc
+--  admit.
 
 import core/mem
-import hosted/libc
-import hosted/linux
+import platform/posix
 
 --  The state carries no information; it is opaque so that only `host` makes
 --  one.
@@ -17,10 +16,9 @@ end system_value
 
 --- Host-heap allocator capability, as a handle that borrows nothing: the heap
 --- belongs to the process, and copies share it.  Allocates and frees through
---- size classes over mapped memory on Linux, and through the C library's
---- malloc and free on Darwin and FreeBSD; does not grow allocations in place.
---- Available only on hosted targets.  On Linux it is single-threaded: two
---- threads may not use it at once.
+--- size classes over memory it maps through platform/posix; does not grow
+--- allocations in place.  Available only on hosted targets.  It is
+--- single-threaded: two threads may not use it at once.
 ---
 --- Every usize alignment is accepted.  Zero and one mean no stricter than
 --- byte alignment.  A zero-byte request still returns a distinct, non-null,
@@ -62,130 +60,111 @@ align_up: (first: usize, unit: usize) -> (aligned: usize) =
     aligned = if over == 0 then first else first + (unit - over) end if
 end align_up
 
-fixed if compiler.os == linux then
-    --  Every block is preceded by two words: the start of the slot or
-    --  mapping that holds it, and that slot's or mapping's extent.  A slot
-    --  of a size class has the class's extent; anything larger than the
-    --  largest class is a mapping of its own, unmapped when it is freed.
-    header: usize = 2 * word
+--  Every block is preceded by two words: the start of the slot or mapping
+--  that holds it, and that slot's or mapping's extent.  A slot of a size
+--  class has the class's extent; anything larger than the largest class
+--  is a mapping of its own, unmapped when it is freed.
+header: usize = 2 * word
 
-    --  Eight classes, of 32 to 4096 bytes.  A class with no free slot
-    --  maps a chunk and divides it into slots.  A freed slot goes back on
-    --  its class's list, linked through its first word, and is reused
-    --  before any new chunk is mapped; chunks are never unmapped.
-    classes: usize = 8
-    smallest_class: usize = 32
-    largest_class: usize = 4096
-    chunk: usize = 65536
+--  Eight classes, of 32 to 4096 bytes.  A class with no free slot maps a
+--  chunk and divides it into slots.  A freed slot goes back on its class's
+--  list, linked through its first word, and is reused before any new chunk
+--  is mapped; chunks are never unmapped.
+classes: usize = 8
+smallest_class: usize = 32
+largest_class: usize = 4096
+chunk: usize = 65536
 
-    --  The first free slot of each class, or zero.  Single-threaded: the
-    --  lists are plain module storage and nothing serialises them.
-    mut free_slots: [8]usize
+--  The first free slot of each class, or zero.  Single-threaded: the lists
+--  are plain module storage and nothing serialises them.
+mut free_slots: [8]usize
 
-    --  The smallest class holding `extent` bytes, which is at most the
-    --  largest class: its index and its size.
-    class_of: (extent: usize) -> (index: usize, size: usize) =
-        index = 0
-        size = smallest_class
-        while size < extent do
-            index += 1
-            size = size * 2
-        end while
-    end class_of
+--  The smallest class holding `extent` bytes, which is at most the largest
+--  class: its index and its size.
+class_of: (extent: usize) -> (index: usize, size: usize) =
+    index = 0
+    size = smallest_class
+    while size < extent do
+        index += 1
+        size = size * 2
+    end while
+end class_of
 
-    --  A mapping of `length` readable and writable bytes, or zero.
-    map: (length: usize) -> (address: usize) =
-        result: i64 = linux.mmap(0, length,
-                                 linux.prot_read | linux.prot_write,
-                                 linux.map_private | linux.map_anonymous,
-                                 -1, 0)
-        address = if result < 0 then usize(0) else usize(result) end if
-    end map
+--  A mapping of `length` readable and writable bytes, or zero.
+map: (length: usize) -> (address: usize) =
+    base: ptr mut u8 = posix.map(length) else (problem)
+        _ = problem
+        address = 0
+        return
+    end
+    address = usize(base)
+end map
 
-    --  A free slot of class `index` and `size`, taken off its list, or
-    --  zero when none is free and no chunk could be mapped.
-    take_slot: (index: usize, size: usize) -> (slot: usize) =
-        if free_slots[index] == 0 then
-            base: usize = map(chunk)
-            if base == 0 then
-                slot = 0
-                return
-            end if
-            --  Link the chunk's slots in address order.
-            mut at: usize = base
-            while at < base + chunk do
-                link: ptr mut usize = ptr(at)
-                link.val = if at + size < base + chunk then at + size
-                           else usize(0) end if
-                at += size
-            end while
-            free_slots[index] = base
-        end if
-        slot = free_slots[index]
-        link: ptr usize = ptr(slot)
-        free_slots[index] = link.val
-    end take_slot
-
-    host_alloc: (size: usize, unit: usize) -> (block: usize) =
-        extent: usize = size + (unit - 1) + header
-        mut origin: usize = 0
-        mut held: usize = 0
-        if extent <= largest_class then
-            (index, size: class_size) := class_of(extent)
-            origin = take_slot(index, class_size)
-            held = class_size
-        else
-            page: usize = linux.page_size()
-            held = align_up(extent, page)
-            origin = map(held)
-        end if
-        if origin == 0 then
-            block = 0
+--  A free slot of class `index` and `size`, taken off its list, or zero
+--  when none is free and no chunk could be mapped.
+take_slot: (index: usize, size: usize) -> (slot: usize) =
+    if free_slots[index] == 0 then
+        base: usize = map(chunk)
+        if base == 0 then
+            slot = 0
             return
         end if
-        block = align_up(origin + header, unit)
-        store_word(block - header, origin)
-        store_word(block - word, held)
-    end host_alloc
+        --  Link the chunk's slots in address order.
+        mut at: usize = base
+        while at < base + chunk do
+            link: ptr mut usize = ptr(at)
+            link.val = if at + size < base + chunk then at + size
+                       else usize(0) end if
+            at += size
+        end while
+        free_slots[index] = base
+    end if
+    slot = free_slots[index]
+    link: ptr usize = ptr(slot)
+    free_slots[index] = link.val
+end take_slot
 
-    host_free: (block: usize) -> none =
-        origin: usize = load_word(block - header)
-        held: usize = load_word(block - word)
-        if held <= largest_class then
-            (index, size: _) := class_of(held)
-            link: ptr mut usize = ptr(origin)
-            link.val = free_slots[index]
-            free_slots[index] = origin
-        else
-            _ = linux.munmap(origin, held)
-        end if
-    end host_free
+host_alloc: (size: usize, unit: usize) -> (block: usize) =
+    extent: usize = size + (unit - 1) + header
+    mut origin: usize = 0
+    mut held: usize = 0
+    if extent <= largest_class then
+        (index, size: class_size) := class_of(extent)
+        origin = take_slot(index, class_size)
+        held = class_size
+    else
+        page: usize = posix.page_size()
+        held = align_up(extent, page)
+        origin = map(held)
+    end if
+    if origin == 0 then
+        block = 0
+        return
+    end if
+    block = align_up(origin + header, unit)
+    store_word(block - header, origin)
+    store_word(block - word, held)
+end host_alloc
 
-    --  The page rounding a mapping adds, beyond the header and alignment.
-    rounding: usize = 65535
-else
-    --  The word before every block holds the address malloc returned, so
-    --  that free can hand back exactly that.
-    header: usize = word
+host_free: (block: usize) -> none =
+    origin: usize = load_word(block - header)
+    held: usize = load_word(block - word)
+    if held <= largest_class then
+        (index, size: _) := class_of(held)
+        link: ptr mut usize = ptr(origin)
+        link.val = free_slots[index]
+        free_slots[index] = origin
+    else
+        base: ptr mut u8 = ptr(origin)
+        posix.unmap(base, held) else (problem)
+            _ = problem
+        end
+    end if
+end host_free
 
-    host_alloc: (size: usize, unit: usize) -> (block: usize) =
-        allocated: libc.allocation = libc.malloc(size + (unit - 1) + header)
-        match allocated
-            libc.no_allocation: block = 0
-            ptr (origin): begin
-                block = align_up(usize(origin) + header, unit)
-                store_word(block - word, usize(origin))
-            end
-        end match
-    end host_alloc
-
-    host_free: (block: usize) -> none =
-        origin: ptr mut u8 = ptr(load_word(block - word))
-        libc.free(origin)
-    end host_free
-
-    rounding: usize = 0
-end if
+--  The page rounding a mapping adds, beyond the header and alignment: a
+--  page is at most 64 KiB on every hosted system.
+rounding: usize = 65535
 
 system_alloc: (self: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =

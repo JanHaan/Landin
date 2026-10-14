@@ -1,0 +1,201 @@
+--  platform/posix on Darwin and FreeBSD, over platform/libc: their C
+--  library is their system interface.  A failing call's errno is read
+--  from the calling thread's own cell immediately after it, before any
+--  other call, and becomes the atom the call fails with, so no number is
+--  shared between threads.  A path relative to the working directory goes
+--  to `open` and `stat`, and only a path relative to an open directory to
+--  `openat` and `fstatat`, so a program interposing on the C library meets
+--  the calls it always has.
+
+import core/text
+import platform/libc
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --  The errno the calling thread's last failing call left, as an atom.
+    failure: () -> (problem: errno) =
+        cell: ptr mut i32 = libc.errno_cell()
+        problem = errno_of(cell.val)
+    end failure
+
+    --  The flags `open` takes for `options`.
+    flags_of: (options: open_options) -> (flags: i32) =
+        flags = match options.access
+            read_only: libc.o_rdonly
+            write_only: libc.o_wronly
+            read_write: libc.o_rdwr
+        end match
+        if options.create then flags = flags | libc.o_creat end if
+        if options.exclusive then flags = flags | libc.o_excl end if
+        if options.truncate then flags = flags | libc.o_trunc end if
+        if options.append then flags = flags | libc.o_append end if
+        if options.directory then flags = flags | libc.o_directory end if
+    end flags_of
+
+    --  `open`, or `openat` relative to an open directory, with the
+    --  permission bits as the one variadic argument only when creating.
+    opened_at: (at: descriptor, path: ptr u8, flags: i32, permissions: u32)
+               -> (result: i32) =
+        if at == working_directory then
+            result = if (flags & libc.o_creat) <> 0
+            then libc.open(path, flags, i32(permissions))
+            else libc.open(path, flags) end if
+        else
+            result = if (flags & libc.o_creat) <> 0
+            then libc.openat(i32(at), path, flags, i32(permissions))
+            else libc.openat(i32(at), path, flags) end if
+        end if
+    end opened_at
+
+    system_open: (at: descriptor, path: ptr u8, options: open_options,
+                  permissions: u32) -> (opened: descriptor) ! errno =
+        result: i32 = opened_at(at, path, flags_of(options), permissions)
+        fail failure() when result < 0
+        opened = descriptor(result)
+    end system_open
+
+    system_read: (source: descriptor, into: []mut u8)
+                 -> (count: usize) ! errno =
+        mut spare: u8 = 0
+        base: ptr mut u8 = if lenof into > 0 then addr into[0]
+                           else addr spare end if
+        result: isize = libc.read(i32(source), base, lenof into)
+        fail failure() when result < 0
+        count = usize(result)
+    end system_read
+
+    system_write: (to: descriptor, bytes: []u8) -> (count: usize) ! errno =
+        spare: u8 = 0
+        base: ptr u8 = if lenof bytes > 0 then addr bytes[0]
+                       else addr spare end if
+        result: isize = libc.write(i32(to), base, lenof bytes)
+        fail failure() when result < 0
+        count = usize(result)
+    end system_write
+
+    system_close: (closing: descriptor) -> none ! errno =
+        fail failure() when libc.close(i32(closing)) <> 0
+    end system_close
+
+    --  The record is checked against the native header's size before it
+    --  is used, as abi/core-io-file-identity holds it to that header: a
+    --  disagreement is `unlisted`, which no errno describes.
+    system_status: (at: descriptor, path: ptr u8, follow: bool)
+                   -> (result: status) ! errno =
+        fail unlisted when alignof libc.file_status <> 8
+          or sizeof libc.file_status <> libc.file_status_size
+        mut record: libc.file_status = zeroed
+        outcome: i32 =
+            if at == working_directory and follow
+            then libc.stat(path, addr record)
+            else libc.fstatat(i32(at), path, addr record,
+                              if follow then 0
+                              else libc.at_symlink_nofollow end if) end if
+        fail failure() when outcome <> 0
+        result = (device: u64(record.device), inode: u64(record.inode),
+                  kind: kind_of_mode(u32(record.mode)),
+                  size: u64(record.bytes))
+    end system_status
+
+    --  The directory is opened with o_directory, which makes anything else
+    --  ENOTDIR, and a C directory stream made over it, which then owns the
+    --  descriptor.
+    system_open_directory: (at: descriptor, path: ptr u8)
+                           -> (opened: directory_stream) ! errno =
+        result: i32 = opened_at(at, path, libc.o_rdonly | libc.o_directory, 0)
+        fail failure() when result < 0
+        made: libc.directory_stream = libc.fdopendir(result)
+        match made
+            libc.no_directory: begin
+                problem: errno = failure()
+                _ = libc.close(result)
+                fail problem
+            end
+            ptr (stream): opened = (descriptor: descriptor(result),
+                                    stream: usize(stream), filled: 0,
+                                    cursor: 0, finished: false)
+        end match
+    end system_open_directory
+
+    --  The stream's next record, its name copied into the buffer with a
+    --  NUL after it, since the record is the C library's and good only
+    --  until the next readdir.  The buffer holds any name a record can:
+    --  `directory_buffer` is larger than every d_name.  readdir's end and
+    --  its failure are told apart by errno, zeroed before the call.
+    system_read_directory: (inout opened: directory_stream, buffer: []mut u8)
+                           -> (item: directory_entry from buffer) ! errno =
+        cell: ptr mut i32 = libc.errno_cell()
+        cell.val = 0
+        if opened.finished then
+            item = (name: text.host_over(buffer[0..<0]), kind: unknown_kind)
+            return
+        end if
+        stream: ptr mut u8 = ptr(opened.stream)
+        record: libc.directory_entry = libc.readdir(stream)
+        match record
+            libc.no_directory: begin
+                fail errno_of(cell.val) when cell.val <> 0
+                opened.finished = true
+                item = (name: text.host_over(buffer[0..<0]),
+                        kind: unknown_kind)
+            end
+            ptr (found): begin
+                length: usize = usize(found.val.name_length)
+                fail unlisted when length >= lenof buffer
+                for at in usize(0)..<length do
+                    buffer[at] = found.val.name[at]
+                end for
+                buffer[length] = 0
+                item = (name: text.host_over(buffer[0..<length]),
+                        kind: kind_of_type(found.val.kind))
+            end
+        end match
+    end system_read_directory
+
+    system_close_directory: (opened: directory_stream) -> none ! errno =
+        stream: ptr mut u8 = ptr(opened.stream)
+        fail failure() when libc.closedir(stream) <> 0
+    end system_close_directory
+
+    system_make_directory: (at: descriptor, path: ptr u8, permissions: u32)
+                           -> none ! errno =
+        fail failure() when libc.mkdirat(i32(at), path, u16(permissions)) <> 0
+    end system_make_directory
+
+    system_remove: (at: descriptor, path: ptr u8, directory: bool)
+                   -> none ! errno =
+        flags: i32 = if directory then libc.at_removedir else 0 end if
+        fail failure() when libc.unlinkat(i32(at), path, flags) <> 0
+    end system_remove
+
+    system_map: (length: usize) -> (base: ptr mut u8) ! errno =
+        result: usize = libc.mmap(0, length, libc.prot_read | libc.prot_write,
+                                  libc.map_private | libc.map_anonymous, -1,
+                                  0)
+        fail failure() when result == libc.map_failed
+        base = ptr(result)
+    end system_map
+
+    system_unmap: (base: ptr mut u8, length: usize) -> none ! errno =
+        fail failure() when libc.munmap(usize(base), length) <> 0
+    end system_unmap
+
+    system_page_size: () -> (bytes: usize) =
+        bytes = usize(libc.getpagesize())
+    end system_page_size
+
+    system_exit: (status: i32) -> noreturn =
+        libc._exit(status)
+    end system_exit
+
+    system_poll: (entries: []mut poll_entry, milliseconds: i32)
+                 -> (ready: usize) ! errno =
+        mut spare: libc.poll_record = zeroed
+        records: ptr mut libc.poll_record =
+            if lenof entries > 0 then ptr(usize(addr entries[0]))
+            else addr spare end if
+        result: i32 = libc.poll(records, libc.poll_count(lenof entries),
+                                milliseconds)
+        fail failure() when result < 0
+        ready = usize(result)
+    end system_poll
+end if

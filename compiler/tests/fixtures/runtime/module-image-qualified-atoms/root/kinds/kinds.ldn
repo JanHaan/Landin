@@ -1,0 +1,5 @@
+--  Three atoms and their set, named from another module.
+public red: atom
+public green: atom
+public blue: atom
+public colour: type = red | green | blue

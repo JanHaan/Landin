@@ -1,20 +1,18 @@
 import core/io
+import core/text
 import hosted/io as hosted
 
 --  These are paths supplied by the selected Linux execution profile.  The
 --  missing parent makes ENOENT deterministic; /dev/full and /dev/null provide
 --  terminal write and close failures without changing repository files.
-missing: [41]u8 =
-    [47, 108, 97, 110, 100, 105, 110, 45, 114, 52, 52, 48, 45, 97,
-     98, 115, 101, 110, 116, 45, 112, 97, 114, 101, 110, 116, 47, 102,
-     105, 108, 101, 45, 100, 111, 101, 115, 45, 110, 111, 116, 0]
-full_name: [10]u8 = [47, 100, 101, 118, 47, 102, 117, 108, 108, 0]
-null_name: [10]u8 = [47, 100, 101, 118, 47, 110, 117, 108, 108, 0]
+missing: []u8 = "/landin-r440-absent-parent/file-does-not"
+full_name: []u8 = "/dev/full"
+null_name: []u8 = "/dev/null"
 payload: [1]u8 = [88]
 
 missing_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
-    opened: io.file = io.open_read(state, addr missing[0]) else (problem)
+    opened: io.file = io.open_read(state, text.host_over(missing)) else (problem)
         return when problem <> io.not_found
         --  A pure capability query cannot clobber captured failure detail.
         _ = io.argument_count(state)
@@ -28,7 +26,7 @@ end missing_retains_errno
 
 full_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
-    opened: io.file = io.open_write(state, addr full_name[0]) else (problem)
+    opened: io.file = io.open_write(state, text.host_over(full_name)) else (problem)
         _ = problem
         return
     end
@@ -45,7 +43,7 @@ end full_retains_errno
 
 close_retains_errno: (state: hosted.system) -> (yes: bool) =
     yes = false
-    opened: io.file = io.open_read(state, addr null_name[0]) else (problem)
+    opened: io.file = io.open_read(state, text.host_over(null_name)) else (problem)
         _ = problem
         return
     end

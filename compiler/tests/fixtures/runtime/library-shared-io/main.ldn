@@ -1,13 +1,22 @@
 import core/io
+import core/text
 
-exercise: () -> (ok: bool) ! io.empty_path | io.path_contains_nul | io.path_too_long =
+--  An argument is a host string, lent from the world and compared with a
+--  literal unconverted; past the last one is `no_argument`.
+exercise: () -> (ok: bool) ! io.no_argument =
     ok = false
-    source: [2]u8 = [65, 66]
-    mut scratch: [3]u8 = zeroed
-    terminated := try io.terminate_path(source[0..<2], scratch[0..<3])
-    return when terminated.val <> 65 or scratch[2] <> 0
-    _ = io.terminate_path(source[0..<2], scratch[0..<1]) else (problem)
-        ok = problem == io.path_too_long and scratch[0] == 65
+    arguments: [1][]u8 = ["AB"]
+    files: []mut io.memory_file = []
+    mut output: [1]u8 = zeroed
+    mut errors: [1]u8 = zeroed
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(state, files, arguments[0..<1], "",
+                             output[0..<1], errors[0..<1])
+    first := try io.argument_at(memory, usize(0))
+    return when io.argument_count(memory) <> 1
+      or not text.host_equal(first, "AB")
+    _ = io.argument_at(memory, usize(1)) else (problem)
+        ok = problem == io.no_argument
         return
     end
 end exercise

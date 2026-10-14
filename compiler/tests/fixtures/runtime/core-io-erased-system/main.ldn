@@ -1,159 +1,78 @@
 import core/io
+import core/text
 import hosted/io as hosted
+import platform/posix
 
-path_rules_code: () -> (code: i32) =
+--  A host string is the bytes it was made over, lent and unconverted:
+--  these are not UTF-8, which the checked conversion refuses, and they
+--  spell no text but their own.
+host_string_rules_code: () -> (code: i32) =
     code = 10
-    mut scratch: [4]u8 = [91, 92, 93, 94]
-    empty: [1]u8 = [65]
-    mut empty_path: ptr u8 = addr scratch[0]
-    empty_path = io.terminate_path(empty[0..<0], scratch[0..<4])
-      else (problem)
-        if problem <> io.empty_path or scratch[0] <> 91
-          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
-        then
-            return
-        end if
-        empty_path
-    end
-    _ = empty_path
+    raw: []u8 = "A\xffB"
+    name: text.host_string = text.host_over(raw)
+    bytes: []u8 = text.host_bytes(name)
+    return when lenof bytes <> 3 or usize(addr bytes[0]) <> usize(addr raw[0])
     code = 11
-
-    with_nul: [3]u8 = [65, 0, 66]
-    mut nul_path: ptr u8 = addr scratch[0]
-    nul_path = io.terminate_path(with_nul[0..<3], scratch[0..<4])
-      else (problem)
-        if problem <> io.path_contains_nul or scratch[0] <> 91
-          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
-        then
-            return
-        end if
-        nul_path
+    shown: utf8 = text.from_host(name) else (problem)
+        if problem == text.invalid_text then code = 12 end if
+        ""
     end
-    _ = nul_path
-    code = 12
-
-    too_wide: [2]u8 = [65, 66]
-    mut short_scratch: [2]u8 = [81, 82]
-    mut long_path: ptr u8 = addr short_scratch[0]
-    long_path = io.terminate_path(too_wide[0..<2], short_scratch[0..<2])
-      else (problem)
-        if problem <> io.path_too_long or short_scratch[0] <> 81
-          or short_scratch[1] <> 82
-        then
-            return
-        end if
-        long_path
-    end
-    _ = long_path
+    _ = shown
+    return when code <> 12
     code = 13
-
-    mut exact_scratch: [3]u8 = [71, 72, 73]
-    exact: ptr u8 = io.terminate_path(too_wide[0..<2],
-                                      exact_scratch[0..<3])
-      else (problem)
-        _ = problem
-        return
-    end
-    if exact <> addr exact_scratch[0] or exact_scratch[0] <> 65
-      or exact_scratch[1] <> 66 or exact_scratch[2] <> 0
-    then
-        return
-    end if
+    plain: text.host_string = text.host_over("plain")
+    return when not text.host_equal(plain, "plain")
+      or text.host_equal(plain, "plai") or text.host_equal(name, "AB")
     code = 14
-    mut right: [5]u8 = [65, 66, 67, 88, 88]
-    right_path: ptr u8 = io.terminate_path(right[0..<3], right[1..<5])
-      else (problem)
+    as_text: utf8 = text.from_host(plain) else (problem)
         _ = problem
         return
     end
-    if right_path <> addr right[1] or right[1] <> 65 or right[2] <> 66
-      or right[3] <> 67 or right[4] <> 0
-    then
-        return
-    end if
-    code = 15
-    mut left: [5]u8 = [88, 65, 66, 67, 88]
-    left_path: ptr u8 = io.terminate_path(left[1..<4], left[0..<4])
-      else (problem)
-        _ = problem
-        return
-    end
-    if left_path <> addr left[0] or left[0] <> 65 or left[1] <> 66
-      or left[2] <> 67 or left[3] <> 0
-    then
-        return
-    end if
-    code = 16
-    mut same: [4]u8 = [65, 66, 67, 88]
-    same_path: ptr u8 = io.terminate_path(same[0..<3], same[0..<4])
-      else (problem)
-        _ = problem
-        return
-    end
-    if same_path <> addr same[0] or same[0] <> 65 or same[1] <> 66
-      or same[2] <> 67 or same[3] <> 0
-    then
-        return
-    end if
-    code = 17
-    mut invalid: [5]u8 = [65, 0, 67, 88, 88]
-    mut invalid_path: ptr u8 = addr invalid[1]
-    invalid_path = io.terminate_path(invalid[0..<3], invalid[1..<5])
-      else (problem)
-        if problem <> io.path_contains_nul or invalid[0] <> 65
-          or invalid[1] <> 0 or invalid[2] <> 67 or invalid[3] <> 88
-          or invalid[4] <> 88
-        then
-            return
-        end if
-        invalid_path
-    end
-    _ = invalid_path
+    return when not text.equal(as_text, "plain")
     code = 42
-end path_rules_code
+end host_string_rules_code
 
-text_path_rules_code: (state: hosted.system) -> (code: i32) =
-    mut scratch: [4]u8 = [91, 92, 93, 94]
+--  What the system says of a path no file can have: an empty one names
+--  nothing, ENOENT; one holding a NUL is refused by the POSIX layer with
+--  EINVAL, since no system can be given it; and one longer than the
+--  system's PATH_MAX is ENAMETOOLONG.  Each errno is kept.
+path_rules_code: (state: hosted.system) -> (code: i32) =
     mut opened: io.file = io.out(state)
     code = 32
-    opened = io.open_read_text(state, "", scratch[0..<4]) else (problem)
-        if problem <> io.empty_path or scratch[0] <> 91
-          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+    opened = io.open_read(state, text.host_over("")) else (problem)
+        if problem <> io.not_found
+          or hosted.last_errno(state) <> posix.number(posix.enoent)
         then
             return
         end if
         code = 33
         io.out(state)
     end
-    if code <> 33 then
-        return
-    end if
+    return when code <> 33
 
-    opened = io.open_read_text(state, "A\u{0}B", scratch[0..<4])
-      else (problem)
-        if problem <> io.path_contains_nul or scratch[0] <> 91
-          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+    opened = io.open_read(state, text.host_over("A\x00B")) else (problem)
+        if problem <> io.io_failed
+          or hosted.last_errno(state) <> posix.number(posix.einval)
         then
             return
         end if
         code = 34
         io.out(state)
     end
-    if code <> 34 then
-        return
-    end if
+    return when code <> 34
 
-    opened = io.open_read_text(state, "ABCD", scratch[0..<4])
+    long: [5000]u8 = [5000 of 97]
+    opened = io.open_read(state, text.host_over(long[0..<5000]))
       else (problem)
-        if problem <> io.path_too_long or scratch[0] <> 91
-          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        if problem <> io.io_failed
+          or hosted.last_errno(state) <> posix.number(posix.enametoolong)
         then
             return
         end if
         code = 42
         io.out(state)
     end
-end text_path_rules_code
+end path_rules_code
 
 no_second_argument: (state: any io.world) -> (yes: bool) =
     second: usize = 1
@@ -161,11 +80,11 @@ no_second_argument: (state: any io.world) -> (yes: bool) =
         yes = problem == io.no_argument
         return
     end
-    _ = unexpected.length
+    _ = text.host_bytes(unexpected)
     yes = false
 end no_second_argument
 
-missing_read_is_reported: (state: any io.world, path: ptr u8)
+missing_read_is_reported: (state: any io.world, path: text.host_string)
                           -> (yes: bool) =
     opened := state.open_read(path) else (problem)
         yes = problem == io.not_found
@@ -177,7 +96,7 @@ missing_read_is_reported: (state: any io.world, path: ptr u8)
     yes = false
 end missing_read_is_reported
 
-missing_write_is_reported: (state: any io.world, path: ptr u8)
+missing_write_is_reported: (state: any io.world, path: text.host_string)
                            -> (yes: bool) =
     opened := state.open_write(path) else (problem)
         yes = problem == io.not_found
@@ -189,7 +108,7 @@ missing_write_is_reported: (state: any io.world, path: ptr u8)
     yes = false
 end missing_write_is_reported
 
-denied_write_is_reported: (state: any io.world, path: ptr u8)
+denied_write_is_reported: (state: any io.world, path: text.host_string)
                           -> (yes: bool) =
     opened := state.open_write(path) else (problem)
         yes = problem == io.no_access
@@ -203,9 +122,9 @@ end denied_write_is_reported
 
 public main: () -> (code: i32) =
     code = 1
-    path_code: i32 = path_rules_code()
-    if path_code <> 42 then
-        code = path_code
+    string_code: i32 = host_string_rules_code()
+    if string_code <> 42 then
+        code = string_code
         return
     end if
 
@@ -220,12 +139,13 @@ public main: () -> (code: i32) =
         return
     end
     code = 3
-    if direct_source.length == 0 then
+    direct_bytes: []u8 = text.host_bytes(direct_source)
+    if lenof direct_bytes == 0 then
         return
     end if
-    text_path_code: i32 = text_path_rules_code(host)
-    if text_path_code <> 42 then
-        code = text_path_code
+    path_code: i32 = path_rules_code(host)
+    if path_code <> 42 then
+        code = path_code
         return
     end if
     world: any io.world = any(addr host)
@@ -241,13 +161,15 @@ public main: () -> (code: i32) =
         return
     end
     code = 6
-    if source.length == 0 then
+    source_bytes: []u8 = text.host_bytes(source)
+    if lenof source_bytes == 0 then
         return
     end if
     return when not no_second_argument(world)
     code = 7
 
-    opened := world.open_read(source.data) else (problem)
+    --  The argument is passed on as a path, never converted.
+    opened := world.open_read(source) else (problem)
         _ = problem
         return
     end
@@ -287,11 +209,10 @@ public main: () -> (code: i32) =
     code = 17
 
     generic_host := hosted.host()
-    mut path_scratch: [30]u8 = zeroed
+    written_path: text.host_string =
+        text.host_over("/tmp/landin-r420-io-world.out")
     code = 18
-    output := io.open_write_text(generic_host,
-                                 "/tmp/landin-r420-io-world.out",
-                                 path_scratch[0..<30]) else (problem)
+    output := io.open_write(generic_host, written_path) else (problem)
         _ = problem
         return
     end
@@ -312,10 +233,7 @@ public main: () -> (code: i32) =
     end
     code = 21
 
-    mut second_scratch: [30]u8 = zeroed
-    verify := io.open_read_text(generic_host,
-                                "/tmp/landin-r420-io-world.out",
-                                second_scratch[0..<30]) else (problem)
+    verify := io.open_read(generic_host, written_path) else (problem)
         _ = problem
         return
     end
@@ -340,26 +258,18 @@ public main: () -> (code: i32) =
     end if
     code = 25
 
-    missing: [45]u8 =
-        [47, 100, 101, 102, 105, 110, 105, 116, 101, 108, 121, 45,
-         110, 111, 116, 45, 97, 45, 108, 97, 110, 100, 105, 110, 45,
-         100, 105, 114, 101, 99, 116, 111, 114, 121, 45, 114, 52, 50,
-         48, 47, 102, 105, 108, 101, 0]
-    missing_path: ptr u8 = addr missing[0]
+    missing_path: text.host_string =
+        text.host_over("/definitely-not-a-landin-directory-r420/file")
     return when not missing_read_is_reported(world, missing_path)
     code = 26
     return when not missing_write_is_reported(world, missing_path)
     code = 27
 
-    denied: [24]u8 =
-        [47, 115, 121, 115, 47, 108, 97, 110, 100, 105, 110, 45,
-         114, 52, 50, 48, 45, 100, 101, 110, 105, 101, 100, 0]
-    denied_path: ptr u8 = addr denied[0]
+    denied_path: text.host_string = text.host_over("/sys/landin-r420-denied")
     return when not denied_write_is_reported(world, denied_path)
     code = 28
 
-    full_name: [10]u8 = [47, 100, 101, 118, 47, 102, 117, 108, 108, 0]
-    full_path: ptr u8 = addr full_name[0]
+    full_path: text.host_string = text.host_over("/dev/full")
     full := world.open_write(full_path) else (problem)
         _ = problem
         return

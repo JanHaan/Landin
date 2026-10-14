@@ -1,0 +1,44 @@
+--  Two values of one distinct type compare with `==` and `<>`, which is
+--  identity and asks nothing of what the base means: a descriptor is
+--  compared without extracting its number.  Where the base is an unsigned
+--  integer, `&`, `^`, `|` and `~` combine values into that same type, so
+--  a set of flags stays one; in a binding, a field, an array element and a
+--  returned value alike.
+events: type = distinct u16
+readable: events = events(1)
+writable: events = events(4)
+none_set: events = events(0)
+
+descriptor: type = distinct i32
+standard_output: descriptor = descriptor(1)
+meter: type = distinct f32
+
+flags: type = struct
+    asked: events
+end flags
+
+combine: (a: events, b: events) -> (both: events) =
+    both = a | b
+end combine
+
+public main: () -> (code: i32) =
+    code = 1
+    both: events = readable | writable
+    return when (both & writable) == none_set
+    code = 2
+    return when (both & ~writable) <> readable
+    code = 3
+    held: flags = (asked: combine(readable, writable) ^ readable)
+    return when held.asked <> writable
+    code = 4
+    out: descriptor = descriptor(1)
+    return when out <> standard_output or out == descriptor(2)
+    code = 5
+    a: meter = meter(1.5)
+    return when not (a == meter(1.5))
+    code = 6
+    mut set: [2]events = [none_set, readable]
+    set[0] = set[1] | writable
+    return when u16(set[0]) <> 5
+    code = 42
+end main

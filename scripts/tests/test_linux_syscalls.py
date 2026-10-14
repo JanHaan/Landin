@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""hosted/linux's system-call numbers are the pinned kernel's own.
+"""platform/linux's system-call numbers are the pinned kernel's own.
 
 scripts/linux_syscalls.py reads each architecture's table out of a pinned
 Linux release with the ABIs that architecture's build selects.  These cases
 run it on a small release of their own, so what it selects, what it refuses
 and the files it writes are held without the 160 MB tarball; and they hold
-the checked-in module hosted/linux/numbers to being exactly what the
-generator renders under the pin it names, and hosted/linux's wrapped.ldn to
+the checked-in module platform/linux/numbers to being exactly what the
+generator renders under the pin it names, and platform/linux's wrapped.ldn to
 being the numbers the module's wrappers use, from those same tables.
 """
 import hashlib
@@ -161,7 +161,7 @@ class Generator(unittest.TestCase):
                          ("9.9", "a" * 64, "https://example/x", generated))
 
     def module(self, uses):
-        """A hosted/linux of one file whose code uses the numbers USES."""
+        """A platform/linux of one file whose code uses the numbers USES."""
         module = self.directory / "linux"
         module.mkdir()
         (module / "linux.ldn").write_text(

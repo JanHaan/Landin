@@ -12,14 +12,6 @@ public no_access: atom
 public io_failed: atom
 --- The argument index does not identify an available argument.
 public no_argument: atom
---- The caller's scratch buffer cannot hold all argument bytes.
-public argument_too_long: atom
---- The path has no bytes before its terminator.
-public empty_path: atom
---- The supplied path bytes contain an embedded NUL.
-public path_contains_nul: atom
---- The scratch buffer cannot hold the path and its terminating NUL.
-public path_too_long: atom
 --- Something already has the name a directory was to be made at.
 public already_exists: atom
 
@@ -36,19 +28,13 @@ public special: atom
 --- `symbolic_link` or `special`.
 public entry_kind: type = regular | subdirectory | symbolic_link | special
 
-file_value: type = distinct i32
+--  A word wide enough for any provider's identifier: a POSIX descriptor,
+--  a slot index, or a handle a system gives as a pointer.
+file_value: type = distinct usize
 
 --- Provider-defined file identifier. Use a handle only with the provider that
 --- created it and obey that provider's close rules.
 public file: type = file_value
-
---- A borrowed pointer and byte length for one process argument. The provider
---- owns its lifetime; use `copy_argument` for a checked copy into caller
---- storage.
-public argument: type = struct
-    data: ptr u8
-    length: usize
-end argument
 
 --- Output capability with complete and partial writes. `write` completes all
 --- bytes or fails; failure may follow partial output. `write_some` reports
@@ -88,32 +74,34 @@ public reader: type = concept (provider: type)
           -> (count: usize) ! io_failed
 end reader
 
---- File lifecycle and identity capability. Path pointers must be readable
---- through a terminating NUL. A successful open returns a provider-specific
---- handle; close consumes the handle even when reporting failure.
+--- File lifecycle and identity capability. A path is a host string, as
+--- the system gives and takes it (`text.host_string`); a literal one is
+--- `text.host_over("name")`. A successful open returns a
+--- provider-specific handle; close consumes the handle even when reporting
+--- failure.
 public files: type = concept (provider: type)
-    --- Open a NUL-terminated path for reading; return a handle owned by this
-    --- provider.
-    open_read: (self: provider, path: ptr u8)
+    --- Open a path for reading; return a handle owned by this provider.
+    open_read: (self: provider, path: text.host_string)
                -> (opened: file) ! not_found | no_access | io_failed
-    --- Open a NUL-terminated path for writing; creation and truncation follow
-    --- the provider contract.
-    open_write: (self: provider, path: ptr u8)
+    --- Open a path for writing; creation and truncation follow the
+    --- provider contract.
+    open_write: (self: provider, path: text.host_string)
                 -> (opened: file) ! not_found | no_access | io_failed
-    --- Report whether two NUL-terminated paths name the same file. The left
-    --- path is an existing input: if it names no file the provider can
-    --- examine, the call fails with `io_failed`. The right path may be an
-    --- output not yet created: if it does not exist, the answer is false.
-    same_file: (self: provider, left: ptr u8, right: ptr u8)
+    --- Report whether two paths name the same file. The left path is an
+    --- existing input: if it names no file the provider can examine, the
+    --- call fails with `io_failed`. The right path may be an output not yet
+    --- created: if it does not exist, the answer is false.
+    same_file: (self: provider, left: text.host_string,
+                right: text.host_string)
                -> (same: bool) ! io_failed
     --- Consume a file handle, including when closure reports a failure.
     close: (self: provider, sink opened: file)
            -> none ! io_failed
 end files
 
---- Standard streams and argument access. Returned argument storage belongs to
---- the provider; stream identifiers have provider-specific lifetime and
---- closing rules.
+--- Standard streams and argument access. An argument is a host string
+--- whose storage belongs to the provider; stream identifiers have
+--- provider-specific lifetime and closing rules.
 public process: type = concept (provider: type)
     --- Return the standard-input handle, which a `reader` reads to end of
     --- input.
@@ -127,7 +115,7 @@ public process: type = concept (provider: type)
     --- Lend an argument by index; the provider retains its backing. Report
     --- no_argument when out of range.
     argument: (self: provider, index: usize)
-              -> (value: argument from self) ! no_argument
+              -> (value: text.host_string from self) ! no_argument
 end process
 
 --- Composition of reader, writer, files and process over one provider type.
@@ -147,12 +135,13 @@ public directory_buffer: usize = 1024
 --- caller reads them.  The buffer is the caller's, so each entry's name is
 --- lent from the directory and is good until the next read; copy a name to
 --- keep it.  The other fields belong to the provider that opened it: its
---- descriptor and stream, and how much of the buffer it has filled and
---- read.  Close it through the same provider.  A directory dropped
---- without closing keeps its descriptor until the process ends: there are
---- no destructors, and a `defer` closes it on every exit.
+--- own handle and stream for the directory, and how much of the buffer it
+--- has filled and read.  Close it through the same provider.  A directory
+--- dropped without closing keeps what its provider holds for it until the
+--- process ends: there are no destructors, and a `defer` closes it on
+--- every exit.
 public directory: type = struct
-    descriptor: i32
+    handle: usize
     stream: usize
     position: usize
     buffer: []mut u8
@@ -161,26 +150,28 @@ public directory: type = struct
     finished: bool
 end directory
 
---- One entry of a directory: its name, as bytes the system stores and
---- which need not be UTF-8, and what it is.  `read_entry` returns an entry
---- with an empty name at the end of the directory, since no entry has
---- one.
+--- One entry of a directory: its name, a host string as the system stores
+--- it, which need not be UTF-8, and what it is.  `read_entry` returns an
+--- entry with an empty name at the end of the directory, since no entry
+--- has one.
 public entry: type = struct
-    name: []u8
+    name: text.host_string
     kind: entry_kind
 end entry
 
 --- Directory listing and the names in a tree: open a directory and read
 --- its entries, ask an entry's size, and make and remove directories and
---- remove files.  Paths are NUL-terminated, as `files` takes them;
---- `terminate_path` makes one from bytes.  A listing hides `.` and `..`,
---- which every directory holds and which name no entry of its own, and
---- gives its entries in the system's order, which no provider promises.
+--- remove files.  Paths are host strings, as `files` takes them, and an
+--- entry's name is one, so a name read is given back unconverted.  A
+--- listing hides `.` and `..`, which every directory holds and which name
+--- no entry of its own, and gives its entries in the system's order, which
+--- no provider promises.
 public directories: type = concept (provider: type)
     --- Open the directory at `path` and read it into the caller's
     --- `buffer`.  A missing path and a path through or to something that
     --- is not a directory are `not_found`.
-    open_directory: (self: provider, path: ptr u8, buffer: []mut u8)
+    open_directory: (self: provider, path: text.host_string,
+                     buffer: []mut u8)
                     -> (opened: directory from buffer)
                     ! not_found | no_access | io_failed
     --- The directory's next entry, lent from it until the next read, or
@@ -191,20 +182,21 @@ public directories: type = concept (provider: type)
     --- following a symbolic link.  A name no entry can have, empty, with a
     --- `/` or a NUL, or longer than `directory_buffer` allows, is
     --- `not_found`, as is an entry removed since it was read.
-    entry_size: (self: provider, opened: directory, name: []u8)
+    entry_size: (self: provider, opened: directory,
+                 name: text.host_string)
                 -> (size: u64) ! not_found | no_access | io_failed
     --- Close the directory, which is consumed even when this fails.
     close_directory: (self: provider, sink opened: directory)
                      -> none ! io_failed
     --- Make a directory at `path`.  A path whose parent is missing is
     --- `not_found`; a name already taken is `already_exists`.
-    make_directory: (self: provider, path: ptr u8)
+    make_directory: (self: provider, path: text.host_string)
                     -> none ! already_exists | not_found | no_access | io_failed
     --- Remove the file `path` names, not a directory.
-    remove_file: (self: provider, path: ptr u8)
+    remove_file: (self: provider, path: text.host_string)
                  -> none ! not_found | no_access | io_failed
     --- Remove the empty directory `path` names.
-    remove_directory: (self: provider, path: ptr u8)
+    remove_directory: (self: provider, path: text.host_string)
                       -> none ! not_found | no_access | io_failed
 end directories
 
@@ -237,27 +229,27 @@ end lent_write_some
 
 lent is writer (write: lent_write, write_some: lent_write_some)
 
---- Open a terminated path for reading through `files` evidence. The caller
---- must close a successful handle using the same provider.
+--- Open a path for reading through `files` evidence. The caller must close
+--- a successful handle using the same provider.
 public open_read: (provider: type is files, host: provider,
-                   path: ptr u8)
+                   path: text.host_string)
                   -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_read(host, path)
 end open_read
 
---- Open a terminated path for writing through `files` evidence. Creation and
+--- Open a path for writing through `files` evidence. Creation and
 --- truncation behavior belongs to the provider; close a successful handle
 --- through that provider.
 public open_write: (provider: type is files, host: provider,
-                    path: ptr u8)
+                    path: text.host_string)
                    -> (opened: file) ! not_found | no_access | io_failed =
     opened = try provider.open_write(host, path)
 end open_write
 
---- Ask whether two terminated paths name the same file. Delegates
+--- Ask whether two paths name the same file. Delegates
 --- provider-specific identity rules and reports `io_failed` on failure.
 public same_file: (provider: type is files, host: provider,
-                   left: ptr u8, right: ptr u8)
+                   left: text.host_string, right: text.host_string)
                   -> (same: bool) ! io_failed =
     same = try provider.same_file(host, left, right)
 end same_file
@@ -269,11 +261,11 @@ public close: (provider: type is files, host: provider,
     try provider.close(host, opened)
 end close
 
---- Open the directory at a terminated path through `directories` evidence,
---- reading it into the caller's `buffer`; close a successful directory
---- through the same provider.
+--- Open the directory at a path through `directories` evidence, reading it
+--- into the caller's `buffer`; close a successful directory through the
+--- same provider.
 public open_directory: (provider: type is directories, host: provider,
-                        path: ptr u8, buffer: []mut u8)
+                        path: text.host_string, buffer: []mut u8)
                        -> (opened: directory from buffer)
                        ! not_found | no_access | io_failed =
     opened = try provider.open_directory(host, path, buffer)
@@ -290,7 +282,7 @@ end read_entry
 --- The size in bytes of the entry `name` in an open directory, without
 --- following a symbolic link.
 public entry_size: (provider: type is directories, host: provider,
-                    opened: directory, name: []u8)
+                    opened: directory, name: text.host_string)
                    -> (size: u64) ! not_found | no_access | io_failed =
     size = try provider.entry_size(host, opened, name)
 end entry_size
@@ -302,24 +294,24 @@ public close_directory: (provider: type is directories, host: provider,
     try provider.close_directory(host, opened)
 end close_directory
 
---- Make a directory at a terminated path.
+--- Make a directory at a path.
 public make_directory: (provider: type is directories, host: provider,
-                        path: ptr u8)
+                        path: text.host_string)
                        -> none
                        ! already_exists | not_found | no_access | io_failed =
     try provider.make_directory(host, path)
 end make_directory
 
---- Remove the file a terminated path names.
+--- Remove the file a path names.
 public remove_file: (provider: type is directories, host: provider,
-                     path: ptr u8)
+                     path: text.host_string)
                     -> none ! not_found | no_access | io_failed =
     try provider.remove_file(host, path)
 end remove_file
 
---- Remove the empty directory a terminated path names.
+--- Remove the empty directory a path names.
 public remove_directory: (provider: type is directories, host: provider,
-                          path: ptr u8)
+                          path: text.host_string)
                          -> none ! not_found | no_access | io_failed =
     try provider.remove_directory(host, path)
 end remove_directory
@@ -372,116 +364,13 @@ public argument_count: (provider: type is process, host: provider)
     count = provider.argument_count(host)
 end argument_count
 
---- Lend the indexed process argument. Reports `no_argument` for an invalid
---- index; the provider's argument backing must outlive its use.
+--- Lend the indexed process argument as a host string. Reports
+--- `no_argument` for an invalid index; the provider's argument backing must
+--- outlive its use. `text.from_host` is its checked conversion to `utf8`
+--- and `text.host_bytes` its bytes; passed on as a path, it is not
+--- converted at all.
 public argument_at: (provider: type is process, host: provider,
                      index: usize)
-                    -> (value: argument from host) ! no_argument =
+                    -> (value: text.host_string from host) ! no_argument =
     value = try provider.argument(host, index)
 end argument_at
-
---- Copy an argument into caller scratch and lend the written prefix. Reports
---- `argument_too_long` before any write when capacity is insufficient.
----
---- An argument is a foreign-shaped pointer and length, not a slice.  Copy it
---- into genuine caller-owned initialized storage before passing its bytes to
---- ordinary slice APIs.  Exact capacity is sufficient and failure precedes
---- every write.  The caller keeps the source extent readable and disjoint
---- from scratch, with representable address arithmetic, for the duration of
---- the copy.
-public copy_argument: (source: argument, scratch: []mut u8)
-                      -> (bytes: []u8 from scratch) ! argument_too_long =
-    fail argument_too_long when source.length > lenof scratch
-    mut copied: usize = 0
-    while copied < source.length do
-        current: ptr u8 = ptr(usize(source.data) + copied)
-        scratch[copied] = current.val
-        inc copied
-    end while
-    bytes = scratch[0..<source.length]
-end copy_argument
-
---- Copy path bytes into scratch and add a NUL terminator. Rejects empty
---- input, embedded NUL and insufficient space in that order before any write;
---- overlapping input and scratch are supported.
----
---- A files entry receives one already terminated pointer. Dynamic callers
---- make that precondition explicit with caller-owned scratch: empty input,
---- an embedded NUL, and insufficient terminator capacity are distinct and
---- checked in that order. No byte is copied before all checks pass. Source
---- and scratch may overlap; the copy preserves the original source bytes.
-public terminate_path: (source: []u8, scratch: []mut u8)
-                       -> (path: ptr u8 from scratch)
-                       ! empty_path | path_contains_nul | path_too_long =
-    fail empty_path when lenof source == 0
-    mut checked: usize = 0
-    while checked < lenof source do
-        fail path_contains_nul when source[checked] == 0
-        inc checked
-    end while
-    fail path_too_long when lenof source >= lenof scratch
-
-    if usize(addr scratch[0]) > usize(addr source[0]) then
-        mut remaining: usize = lenof source
-        while remaining > 0 do
-            dec remaining
-            scratch[remaining] = source[remaining]
-        end while
-    else
-        mut copied: usize = 0
-        while copied < lenof source do
-            scratch[copied] = source[copied]
-            inc copied
-        end while
-    end if
-    scratch[lenof source] = 0
-    path = addr scratch[0]
-end terminate_path
-
---- Terminate a byte path in caller scratch, then open it for reading.
---- Path-validation failures occur before the provider is called.
-public open_read_bytes: (provider: type is files, host: provider,
-                         path: []u8, scratch: []mut u8)
-                        -> (opened: file)
-                        ! empty_path | path_contains_nul | path_too_long
-                        | not_found | no_access | io_failed =
-    terminated: ptr u8 = try terminate_path(path, scratch)
-    opened = try open_read(host, terminated)
-end open_read_bytes
-
---- Terminate a byte path in caller scratch, then open it for writing. Path
---- validation and provider failures remain distinct.
-public open_write_bytes: (provider: type is files, host: provider,
-                          path: []u8, scratch: []mut u8)
-                         -> (opened: file)
-                         ! empty_path | path_contains_nul | path_too_long
-                         | not_found | no_access | io_failed =
-    terminated: ptr u8 = try terminate_path(path, scratch)
-    opened = try open_write(host, terminated)
-end open_write_bytes
-
---- Open a UTF-8 path for reading using caller scratch for the terminator.
---- Delegates to the byte-path adapter; UTF-8 does not excuse embedded NUL.
----
---- UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
---- to bytes does not allocate or invent a terminator; the same caller-owned
---- scratch and validation policy as the byte adapters applies.
-public open_read_text: (provider: type is files, host: provider,
-                        path: utf8, scratch: []mut u8)
-                       -> (opened: file)
-                       ! empty_path | path_contains_nul | path_too_long
-                       | not_found | no_access | io_failed =
-    raw: []u8 = text.bytes(path)
-    opened = try open_read_bytes(host, raw, scratch)
-end open_read_text
-
---- Open a UTF-8 path for writing using caller scratch for the terminator.
---- Delegates to the byte-path adapter.
-public open_write_text: (provider: type is files, host: provider,
-                         path: utf8, scratch: []mut u8)
-                        -> (opened: file)
-                        ! empty_path | path_contains_nul | path_too_long
-                        | not_found | no_access | io_failed =
-    raw: []u8 = text.bytes(path)
-    opened = try open_write_bytes(host, raw, scratch)
-end open_write_text

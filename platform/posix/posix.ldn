@@ -1,0 +1,517 @@
+--  POSIX's facilities in Landin types, on the systems that give them:
+--  Linux, Darwin and FreeBSD.  A descriptor is a handle type of its own,
+--  a failure is the errno as an atom whose number `number` keeps, a path
+--  or an argument is a host string, and a file's status is a record.  It
+--  is written twice, beneath this file: once over platform/linux's system
+--  calls in linux.ldn, and once over platform/libc, the C library Darwin
+--  and FreeBSD give as their system interface, in libc.ldn.  hosted/io and
+--  hosted/heap are written once over it.  A system that is not POSIX, as
+--  Windows is not, has no platform/posix: its providers implement the
+--  core concepts over its own interface instead.
+--
+--  The calls are POSIX's own, not policy: a call interrupted by a signal
+--  fails with `eintr` and is not retried here, a short read or write is
+--  returned as it came, and nothing is closed on the caller's behalf.  A
+--  path is copied into a buffer of the system's PATH_MAX with a NUL after
+--  it on its way to the system, so the terminator is this module's and
+--  never the caller's: a path holding a NUL fails with `einval`, as no
+--  system could be given it, and one too long for the buffer with
+--  `enametoolong`, as the system says of a path longer than it takes.
+
+import core/text
+
+compiler.assert(compiler.os == linux or compiler.os == darwin
+                or compiler.os == freebsd)
+
+descriptor_value: type = distinct i32
+
+--- An open file's descriptor: a handle the system gives, which names one
+--- open file until it is closed.  It is a handle and not a number to
+--- count with; `descriptor(n)` and `i32(d)` convert at a C boundary.
+public descriptor: type = descriptor_value
+
+--- Standard input, descriptor 0.
+public standard_input: descriptor = descriptor_value(0)
+--- Standard output, descriptor 1.
+public standard_output: descriptor = descriptor_value(1)
+--- Standard error, descriptor 2.
+public standard_error: descriptor = descriptor_value(2)
+
+fixed if compiler.os == darwin then
+    --- The working directory as the directory an `*_at` call's relative
+    --- path is relative to: C's `AT_FDCWD`, which is no open file.
+    public working_directory: descriptor = descriptor_value(-2)
+    --  PATH_MAX: room for the longest path a call takes, its NUL
+    --  included.
+    path_room: type = [1024]u8
+elsif compiler.os == freebsd then
+    --- The working directory as the directory an `*_at` call's relative
+    --- path is relative to: C's `AT_FDCWD`, which is no open file.
+    public working_directory: descriptor = descriptor_value(-100)
+    path_room: type = [1024]u8
+else
+    --- The working directory as the directory an `*_at` call's relative
+    --- path is relative to: C's `AT_FDCWD`, which is no open file.
+    public working_directory: descriptor = descriptor_value(-100)
+    path_room: type = [4096]u8
+end if
+
+--- Open for reading only.
+public read_only: atom
+--- Open for writing only.
+public write_only: atom
+--- Open for reading and writing.
+public read_write: atom
+--- How an open file may be used: `read_only`, `write_only` or
+--- `read_write`.
+public access: type = read_only | write_only | read_write
+
+--- How `open_at` opens a file: its access, and whether to create it when
+--- it is missing, refuse it when it exists (`exclusive`, with `create`),
+--- truncate it, append every write to its end, or refuse anything that is
+--- not a directory with `enotdir`.
+public open_options: type = struct
+    access: access
+    create: bool
+    exclusive: bool
+    truncate: bool
+    append: bool
+    directory: bool
+end open_options
+
+--- The options for reading an existing file.
+public reading: open_options = (access: read_only, create: false,
+                                exclusive: false, truncate: false,
+                                append: false, directory: false)
+
+--- The options for writing a file from its start, creating it when it is
+--- missing and truncating it when it is not.
+public writing: open_options = (access: write_only, create: true,
+                                exclusive: false, truncate: true,
+                                append: false, directory: false)
+
+--- Open the file `path` names, relative to the directory open as `at`
+--- (or `working_directory`), with `options`; a file it creates gets the
+--- permission bits `permissions`, which the process umask filters.  The
+--- new descriptor, or the errno: `enoent` for a missing name, `enotdir`
+--- when a component is not a directory, `eacces` when refused, `eexist`
+--- for an `exclusive` name that is taken, `eintr` when a signal came
+--- first.
+public link(symbol: "_landin_posix_open_at") open_at:
+    (at: descriptor, path: text.host_string,
+     options: open_options, permissions: u32)
+    -> (opened: descriptor) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    opened = try system_open(at, terminated, options, permissions)
+end open_at
+
+--- Read at most `lenof into` bytes from `source` into `into`: the count
+--- read, zero at the end of a file, or the errno; `eintr` means nothing
+--- was read.
+public link(symbol: "_landin_posix_read") read:
+    (source: descriptor, into: []mut u8) -> (count: usize) ! errno =
+    count = try system_read(source, into)
+end read
+
+--- Write at most `lenof bytes` bytes of `bytes` to `to`: the count
+--- accepted, which may be short, or the errno; `eintr` means nothing was
+--- written.
+public link(symbol: "_landin_posix_write") write:
+    (to: descriptor, bytes: []u8) -> (count: usize) ! errno =
+    count = try system_write(to, bytes)
+end write
+
+--- Close `closing`.  The descriptor is released even when this fails, so
+--- a failed close is never retried: the number may already name another
+--- file.
+public link(symbol: "_landin_posix_close") close:
+    (closing: descriptor) -> none ! errno =
+    try system_close(closing)
+end close
+
+--- A regular file.
+public regular: atom
+--- A directory.
+public directory: atom
+--- A symbolic link, reported as itself when it is not followed.
+public symbolic_link: atom
+--- A FIFO, a named pipe.
+public fifo: atom
+--- A socket: `socket_file`, since `socket` is the name of a call.
+public socket_file: atom
+--- A character device.
+public character_device: atom
+--- A block device.
+public block_device: atom
+--- A kind the system did not say: a directory entry whose file system
+--- records none, which `status_at` then tells.
+public unknown_kind: atom
+--- What a file is.
+public file_kind: type = regular | directory | symbolic_link | fifo
+    | socket_file | character_device | block_device
+    | unknown_kind
+
+--- A file's status, POSIX's `stat`: the device and inode that identify
+--- it, what it is and its size in bytes.  On Linux the device is the
+--- kernel's major number in the upper 32 bits and its minor in the lower,
+--- as `statx` reports them; elsewhere it is the system's `st_dev`.  Two
+--- paths name the same file when both identify it alike.
+public status: type = struct
+    device: u64
+    inode: u64
+    kind: file_kind
+    size: u64
+end status
+
+--- The status of the file `path` names, relative to the directory open as
+--- `at` (or `working_directory`), following a final symbolic link when
+--- `follow` is true and reporting the link itself when it is not.
+public link(symbol: "_landin_posix_status_at") status_at:
+    (at: descriptor, path: text.host_string, follow: bool)
+    -> (result: status) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    result = try system_status(at, terminated, follow)
+end status_at
+
+--- The least a buffer `read_directory` reads into holds: room for any
+--- entry any of the three systems gives, its record and its NUL included.
+public directory_buffer: usize = 1024
+
+--- An open directory stream, POSIX's `DIR`: a value its caller keeps and
+--- passes `inout` to `read_directory`, with the same buffer each time.
+--- Its fields belong to this module: the directory's descriptor, the C
+--- library's stream where there is one, and how much of the buffer the
+--- system has filled and the caller has read.
+public directory_stream: type = struct
+    descriptor: descriptor
+    stream: usize
+    filled: usize
+    cursor: usize
+    finished: bool
+end directory_stream
+
+--- An entry of a directory: its name, lent from the buffer it was read
+--- into until the next read, and its kind, `unknown_kind` where the file
+--- system records none.
+public directory_entry: type = struct
+    name: text.host_string
+    kind: file_kind
+end directory_entry
+
+--- Open the directory `path` names, relative to `at`, for reading:
+--- `enotdir` when it is not a directory, `enoent` when it is missing.
+--- Close it with `close_directory`, which also closes its descriptor.
+public link(symbol: "_landin_posix_open_directory") open_directory:
+    (at: descriptor, path: text.host_string)
+    -> (opened: directory_stream) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    opened = try system_open_directory(at, terminated)
+end open_directory
+
+--- The directory's next entry, read into `buffer`, which must be the
+--- buffer every earlier read of this stream was given and hold at least
+--- `directory_buffer` bytes, or `einval`.  The entry lends its name from
+--- `buffer` until the next read.  An entry with an empty name is the end
+--- of the directory.  Entries come in the system's order, `.` and `..`
+--- among them, as POSIX's `readdir` gives them.
+public link(symbol: "_landin_posix_read_directory") read_directory:
+    (inout opened: directory_stream, buffer: []mut u8)
+    -> (item: directory_entry from buffer) ! errno =
+    fail einval when lenof buffer < directory_buffer
+    item = try system_read_directory(opened, buffer)
+end read_directory
+
+--- Close the directory stream and its descriptor, which are released even
+--- when this fails.
+public link(symbol: "_landin_posix_close_directory") close_directory:
+    (opened: directory_stream) -> none ! errno =
+    try system_close_directory(opened)
+end close_directory
+
+--- Make the directory `path` names, relative to `at`, with the permission
+--- bits `permissions`, which the process umask filters: `eexist` when the
+--- name is taken, `enoent` when its parent is missing.
+public link(symbol: "_landin_posix_make_directory_at") make_directory_at:
+    (at: descriptor, path: text.host_string,
+     permissions: u32) -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_make_directory(at, terminated, permissions)
+end make_directory_at
+
+--- Remove the name `path`, relative to `at`, of a file that is not a
+--- directory, POSIX's `unlinkat`.
+public link(symbol: "_landin_posix_unlink_at") unlink_at:
+    (at: descriptor, path: text.host_string) -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_remove(at, terminated, false)
+end unlink_at
+
+--- Remove the empty directory `path` names, relative to `at`, POSIX's
+--- `unlinkat` with `AT_REMOVEDIR`: `enotempty` when it holds anything.
+public link(symbol: "_landin_posix_remove_directory_at") remove_directory_at:
+    (at: descriptor, path: text.host_string)
+    -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_remove(at, terminated, true)
+end remove_directory_at
+
+--- Map `length` bytes of fresh, zeroed memory that this process alone may
+--- read and write, POSIX's anonymous private `mmap`: its first byte, which
+--- is aligned to a page, or the errno, `enomem` when the system has no
+--- room.
+public link(symbol: "_landin_posix_map") map:
+    (length: usize) -> (base: ptr mut u8) ! errno =
+    base = try system_map(length)
+end map
+
+--- Give back the `length` bytes mapped at `base`, POSIX's `munmap`.
+public link(symbol: "_landin_posix_unmap") unmap:
+    (base: ptr mut u8, length: usize) -> none ! errno =
+    try system_unmap(base, length)
+end unmap
+
+--- The size of the system's pages in bytes, which `map` aligns to: 16 KiB
+--- on Darwin arm64 and 4 KiB on the others.  On Linux it is what the
+--- kernel told a static executable's entry, and 4096 when the C runtime
+--- started the program instead.
+public link(symbol: "_landin_posix_page_size") page_size:
+    () -> (bytes: usize) =
+    bytes = system_page_size()
+end page_size
+
+--- End the process with `status` at once, POSIX's `_exit`: nothing more
+--- of the program runs, and no C stream is flushed.
+public link(symbol: "_landin_posix_exit") exit:
+    (status: i32) -> noreturn =
+    system_exit(status)
+end exit
+
+events_value: type = distinct u16
+
+--- Poll events, POSIX's `poll` bits as a set: a value combines with `|`,
+--- `&` and `~` and compares with `==` and `<>`.  `poll_input`,
+--- `poll_output` and `poll_urgent` are what an entry can ask about;
+--- `poll_error`, `poll_hung_up` and `poll_invalid` are only ever
+--- reported.  The bits are the same on Linux,
+--- Darwin and FreeBSD.
+public poll_events: type = events_value
+
+--- No event.
+public poll_no_events: poll_events = events_value(0)
+--- Data to read, or the end of a file.
+public poll_input: poll_events = events_value(1)
+--- Out-of-band data to read.
+public poll_urgent: poll_events = events_value(2)
+--- Room to write.
+public poll_output: poll_events = events_value(4)
+--- An error on the file.
+public poll_error: poll_events = events_value(8)
+--- The peer has gone.
+public poll_hung_up: poll_events = events_value(16)
+--- A descriptor that is not open.
+public poll_invalid: poll_events = events_value(32)
+
+--  C's `struct pollfd`, the same on all three systems, so a slice of
+--  entries is what the system reads and fills: `short` fields, whose bits
+--  these are.
+poll_record: type = struct
+    descriptor: descriptor
+    events: poll_events
+    returned: poll_events
+end poll_record
+
+--- One descriptor for `poll` to watch and the events asked about, made by
+--- `watch`, and after the call what happened, which `happened` reads.
+public poll_entry: type = poll_record
+
+--- An entry watching `watched` for the events `wanted` asks about; its
+--- `poll_error`, `poll_hung_up` and `poll_invalid` are reported whether
+--- asked or not.
+public link(symbol: "_landin_posix_watch") watch:
+    (watched: descriptor, wanted: poll_events)
+    -> (entry: poll_entry) =
+    asked: poll_events = poll_input | poll_urgent | poll_output
+    entry = (descriptor: watched, events: wanted & asked,
+             returned: poll_no_events)
+end watch
+
+--- What happened to an entry's descriptor in the last `poll`; nothing,
+--- before one.
+public link(symbol: "_landin_posix_happened") happened:
+    (entry: poll_entry) -> (events: poll_events) =
+    events = entry.returned
+end happened
+
+--- Wait until an event happens to one of `entries`' descriptors, or
+--- `milliseconds` pass, waiting indefinitely when it is negative and not
+--- at all when it is zero, POSIX's `poll`: how many entries had an event,
+--- each of which `happened` reads, zero when the time passed first, or
+--- the errno, `eintr` when a signal came first.
+public link(symbol: "_landin_posix_poll") poll:
+    (entries: []mut poll_entry, milliseconds: i32)
+    -> (ready: usize) ! errno =
+    ready = try system_poll(entries, milliseconds)
+end poll
+
+--  What the argument root holds before it is established, and what C's
+--  null pointer is in an argv entry: no table, no string.
+no_table: atom
+no_string: atom
+root_table: type = no_table | ptr ptr u8
+argument_string: type = no_string | ptr u8
+
+--  The argument root: C's argv and argc as the process's entry gave them,
+--  retained without copying.  The table is the pointer the entry gave,
+--  kept in module storage, so what is lent from it outlives every call.
+mut root_values: root_table = no_table
+mut root_count: i32
+
+word: usize = sizeof usize
+
+--- Establish the process's argument root from C's `main` carriers.  The
+--- hosted entry calls this with its own `argc` and `argv` before its body
+--- runs; a C `main` that drives Landin exports calls it itself, before
+--- it reads an argument and before starting a thread that may.
+---
+--- The first call needs a nonnegative count and a non-null table, and
+--- keeps that exact pair without copying: the caller keeps the table and
+--- its strings readable while any argument lent from them is in use.
+--- Repeating the identical pair changes nothing; a negative count, a null
+--- table or a different pair traps.  The published arguments omit
+--- `argv[0]`, so their count is `max(argc - 1, 0)`.
+public extern(c) _landin_host_initialize_arguments:
+    (count: i32, escaping values: ptr ptr u8) -> none =
+    --  Every misuse of the root stops at compiler.unreachable(), which a
+    --  selected panic handler sees as `unreachable` at that site [1560].
+    --  C may pass a null table, which no Landin pointer is, so its address
+    --  is what is checked.
+    given: usize = usize(values)
+    held: usize = match root_values
+        no_table: usize(0)
+        ptr (table): usize(table)
+    end match
+    if held <> 0 then
+        --  An identical repeat changes nothing; another pair would replace
+        --  a root that lent arguments may still use.
+        if count <> root_count or given <> held then
+            compiler.unreachable()
+        end if
+        return
+    end if
+    if count < 0 or given == 0 then
+        compiler.unreachable()
+    end if
+    root_count = count
+    root_values = values
+end _landin_host_initialize_arguments
+
+--- The process's arguments as its entry gave them: argv after `argv[0]`
+--- and their count.  `arguments` gives the table, which lends what it
+--- points to from storage the process keeps, and `argument` reads it.
+public argument_table: type = struct
+    values: ptr ptr u8
+    count: usize
+end argument_table
+
+--- The process's arguments, `argv[0]` not among them.  It traps when no
+--- argument root has been established: the hosted entry establishes one
+--- before `main` runs, and a C `main` calls
+--- `_landin_host_initialize_arguments` itself.
+public link(symbol: "_landin_posix_arguments") arguments:
+    () -> (table: argument_table) =
+    held: ptr ptr u8 = match root_values
+        no_table: compiler.unreachable()
+        ptr (found): found
+    end match
+    first: ptr ptr u8 = ptr(usize(held) + word)
+    table = (values: first,
+             count: if root_count > 0 then usize(root_count - 1)
+                    else usize(0) end if)
+end arguments
+
+--- The argument `index`, from zero, as a host string lending the
+--- process's own storage, which nothing copies.  An index at or past the
+--- table's `count` traps, as does a null entry, which C promises none
+--- below argc is.
+public link(symbol: "_landin_posix_argument") argument:
+    (table: argument_table, index: usize)
+    -> (value: text.host_string from table) =
+    if index >= table.count then
+        compiler.unreachable()
+    end if
+    entry: ptr argument_string = ptr(usize(table.values) + index * word)
+    match entry.val
+        no_string: compiler.unreachable()
+        ptr (data): value = text.host_over(view(data,
+                                                terminated_length(data)))
+    end match
+end argument
+
+--  The bytes before the first NUL at `first`.
+terminated_length: (first: ptr u8) -> (length: usize) =
+    length = 0
+    loop do
+        at: ptr u8 = ptr(usize(first) + length)
+        break when at.val == 0
+        inc length
+    end loop
+end terminated_length
+
+--  The `length` bytes at `first`, which the system or the process owns and
+--  keeps readable.
+view: (first: ptr u8, length: usize) -> (bytes: []u8 from first) =
+    whole: ptr [1]u8 = ptr(usize(first))
+    bytes = whole.val[0..<0]
+    if length > 0 then
+        unchecked begin
+            bytes = whole.val[0..<length]
+        end unchecked
+    end if
+end view
+
+--  Copy PATH into ROOM with a NUL after it, for a call that takes a C
+--  path: `enametoolong` when it and its NUL do not fit, before anything
+--  is copied, and `einval` when it holds a NUL.
+terminate: (path: text.host_string, room: []mut u8)
+           -> (terminated: ptr u8 from room) ! errno =
+    bytes: []u8 = text.host_bytes(path)
+    fail enametoolong when lenof bytes >= lenof room
+    for at in usize(0)..<lenof bytes do
+        fail einval when bytes[at] == 0
+        room[at] = bytes[at]
+    end for
+    room[lenof bytes] = 0
+    terminated = addr room[0]
+end terminate
+
+--  What a mode's type bits, the same on all three systems, say a file is.
+kind_of_mode: (mode: u32) -> (kind: file_kind) =
+    bits: u32 = mode & 0o170000
+    kind = if bits == 0o100000 then regular
+           elsif bits == 0o040000 then directory
+           elsif bits == 0o120000 then symbolic_link
+           elsif bits == 0o010000 then fifo
+           elsif bits == 0o140000 then socket_file
+           elsif bits == 0o020000 then character_device
+           elsif bits == 0o060000 then block_device
+           else unknown_kind end if
+end kind_of_mode
+
+--  What a directory record's `d_type`, the same on all three systems, says
+--  an entry is; DT_UNKNOWN and BSD's whiteout are `unknown_kind`.
+kind_of_type: (type_byte: u8) -> (kind: file_kind) =
+    kind = if type_byte == 8 then regular
+           elsif type_byte == 4 then directory
+           elsif type_byte == 10 then symbolic_link
+           elsif type_byte == 1 then fifo
+           elsif type_byte == 12 then socket_file
+           elsif type_byte == 2 then character_device
+           elsif type_byte == 6 then block_device
+           else unknown_kind end if
+end kind_of_type

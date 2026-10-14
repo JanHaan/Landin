@@ -1538,12 +1538,24 @@ package body Landin.Backend.Arm64 is
                   then
                      Emit ("cbz " & Register & ", " & Done);
                   end if;
-                  for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms) loop
-                     Immediate ("x14", Pattern (Atom_Code
-                       (Atoms_Ranked,
-                        Landin.IR.Nth_Atom (Of_Unit, Atoms, Index))));
-                     Emit ("cmp " & Register & ", x14");
-                     Emit ("b.eq " & Done);
+                  for Run of Runs_Of (Of_Unit, Atoms_Ranked, Atoms) loop
+                     if Run.Low = Run.High then
+                        Immediate ("x14", Pattern (Run.Low));
+                        Emit ("cmp " & Register & ", x14");
+                        Emit ("b.eq " & Done);
+                     else
+                        declare
+                           Next : constant String := Fresh;
+                        begin
+                           Immediate ("x14", Pattern (Run.Low));
+                           Emit ("cmp " & Register & ", x14");
+                           Emit ("b.lo " & Next);
+                           Immediate ("x14", Pattern (Run.High));
+                           Emit ("cmp " & Register & ", x14");
+                           Emit ("b.ls " & Done);
+                           Put (Next & ":");
+                        end;
+                     end if;
                   end loop;
                   Emit ("b " & Trap (Landin.Panics.Bad_Conversion));
                   Put (Done & ":");
@@ -4815,9 +4827,10 @@ package body Landin.Backend.Arm64 is
                  & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
                  & Trimmed (Natural'Image (Power)));
             when Landin.Targets.Capabilities.ELF =>
-               --  The whole datum is one switch into `.bss` and back, so the
-               --  writable run around it keeps its section.
-               Emit (ELF_Spelling.Zero_Section);
+               --  The whole datum is its own `.bss` input section, pushed
+               --  and popped, so the section around it is unchanged.
+               Emit (ELF_Spelling.Push_Item_Section
+                 ("bss", "datum", Positive (Item)));
                Emit (".balign "
                  & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
                Emit (ELF_Spelling.Object_Type (Symbol (Item)));
@@ -4827,7 +4840,7 @@ package body Landin.Backend.Arm64 is
                Emit (ELF_Spelling.Size
                  (Symbol (Item),
                   Trimmed (Landin.Targets.Byte_Count'Image (Size))));
-               Emit (ELF_Spelling.Data_Section);
+               Emit (ELF_Spelling.Pop_Section);
          end case;
       end Emit_Reserved;
 
@@ -5047,6 +5060,12 @@ package body Landin.Backend.Arm64 is
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then not Landin.IR.Is_External (Of_Unit, Item)
             then
+               --  On ELF every routine and datum is its own input
+               --  section, so --gc-sections drops what nothing retained
+               --  reaches; Mach-O splits at symbols for -dead_strip.
+               if Format = Landin.Targets.Capabilities.ELF then
+                  Emit (ELF_Spelling.Item_Section ("text", "routine", Index));
+               end if;
                Emit_Routine (Item);
             end if;
          end;
@@ -5057,10 +5076,16 @@ package body Landin.Backend.Arm64 is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
-                  Emit (Platform.Read_Only_Section (Format));
+                  Emit (if Format = Landin.Targets.Capabilities.ELF
+                        then ELF_Spelling.Item_Section
+                          ("rodata", "datum", Index)
+                        else Platform.Read_Only_Section (Format));
                   Emit_Array_Image_Datum (Item);
                else
-                  Emit (".data");
+                  Emit (if Format = Landin.Targets.Capabilities.ELF
+                        then ELF_Spelling.Item_Section
+                          ("data", "datum", Index)
+                        else ".data");
                   if Is_All_Zero (Item) then
                      if Landin.IR.Result_Of (Of_Unit, Item) =
                        Landin.Types.Aggregate
@@ -5113,6 +5138,10 @@ package body Landin.Backend.Arm64 is
                Alignment : Landin.Targets.Byte_Alignment;
             begin
                if not Alias_Previous then
+                  if Format = Landin.Targets.Capabilities.ELF then
+                     Emit (ELF_Spelling.Item_Section
+                       ("data.rel.ro.local", "evidence", Index));
+                  end if;
                   Field_Extent
                     (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                      Facts, Bytes, Alignment);

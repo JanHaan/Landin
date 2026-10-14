@@ -1,0 +1,66 @@
+--  Every errno atom platform/posix names, in the order the C peer lists
+--  each system's header's macro: `posix.number` of each must be the
+--  header's value, zero where the header has none, and `posix.errno_of`
+--  of each defined value must give the atom back.  ENOTSUP is the one
+--  alias with an atom of its own: where the header makes it EOPNOTSUPP,
+--  its number is EOPNOTSUPP's and the number gives `eopnotsupp` back.
+import platform/posix
+
+extern(c) posix_errno_count: () -> (count: i32)
+extern(c) posix_errno_number: (index: i32) -> (value: i32)
+
+atoms: [154]posix.errno =
+    [posix.eperm, posix.enoent, posix.esrch, posix.eintr, posix.eio,
+     posix.enxio, posix.e2big, posix.enoexec, posix.ebadf, posix.echild,
+     posix.eagain, posix.enomem, posix.eacces, posix.efault, posix.enotblk,
+     posix.ebusy, posix.eexist, posix.exdev, posix.enodev, posix.enotdir,
+     posix.eisdir, posix.einval, posix.enfile, posix.emfile, posix.enotty,
+     posix.etxtbsy, posix.efbig, posix.enospc, posix.espipe, posix.erofs,
+     posix.emlink, posix.epipe, posix.edom, posix.erange, posix.edeadlk,
+     posix.enametoolong, posix.enolck, posix.enosys, posix.enotempty,
+     posix.eloop, posix.enomsg, posix.eidrm, posix.echrng, posix.el2nsync,
+     posix.el3hlt, posix.el3rst, posix.elnrng, posix.eunatch, posix.enocsi,
+     posix.el2hlt, posix.ebade, posix.ebadr, posix.exfull, posix.enoano,
+     posix.ebadrqc, posix.ebadslt, posix.ebfont, posix.enostr, posix.enodata,
+     posix.etime, posix.enosr, posix.enonet, posix.enopkg, posix.eremote,
+     posix.enolink, posix.eadv, posix.esrmnt, posix.ecomm, posix.eproto,
+     posix.emultihop, posix.edotdot, posix.ebadmsg, posix.eoverflow,
+     posix.enotuniq, posix.ebadfd, posix.eremchg, posix.elibacc,
+     posix.elibbad, posix.elibscn, posix.elibmax, posix.elibexec,
+     posix.eilseq, posix.erestart, posix.estrpipe, posix.eusers,
+     posix.enotsock, posix.edestaddrreq, posix.emsgsize, posix.eprototype,
+     posix.enoprotoopt, posix.eprotonosupport, posix.esocktnosupport,
+     posix.eopnotsupp, posix.epfnosupport, posix.eafnosupport,
+     posix.eaddrinuse, posix.eaddrnotavail, posix.enetdown,
+     posix.enetunreach, posix.enetreset, posix.econnaborted,
+     posix.econnreset, posix.enobufs, posix.eisconn, posix.enotconn,
+     posix.eshutdown, posix.etoomanyrefs, posix.etimedout,
+     posix.econnrefused, posix.ehostdown, posix.ehostunreach, posix.ealready,
+     posix.einprogress, posix.estale, posix.euclean, posix.enotnam,
+     posix.enavail, posix.eisnam, posix.eremoteio, posix.edquot,
+     posix.enomedium, posix.emediumtype, posix.ecanceled, posix.enokey,
+     posix.ekeyexpired, posix.ekeyrevoked, posix.ekeyrejected,
+     posix.eownerdead, posix.enotrecoverable, posix.erfkill, posix.ehwpoison,
+     posix.eauth, posix.ebadarch, posix.ebadexec, posix.ebadmacho,
+     posix.ebadrpc, posix.ecapmode, posix.edeverr, posix.edoofus,
+     posix.eftype, posix.eintegrity, posix.eneedauth, posix.enoattr,
+     posix.enopolicy, posix.enotcapable, posix.enotsup, posix.eproclim,
+     posix.eprocunavail, posix.eprogmismatch, posix.eprogunavail,
+     posix.epwroff, posix.eqfull, posix.erpcmismatch, posix.eshlibvers]
+
+public main: () -> (code: i32) =
+    code = 1
+    return when posix_errno_count() <> i32(lenof atoms)
+    for at in usize(0)..<lenof atoms do
+        code = 100 + i32(at)
+        defined: i32 = posix_errno_number(i32(at))
+        if defined < 0 then
+            return when posix.number(atoms[at]) <> 0
+        else
+            return when posix.number(atoms[at]) <> defined
+            back: posix.errno = posix.errno_of(defined)
+            return when back <> atoms[at] and atoms[at] <> posix.enotsup
+        end if
+    end for
+    code = 42
+end main

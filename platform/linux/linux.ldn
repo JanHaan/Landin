@@ -4,10 +4,13 @@
 --  failure comes back in the result as minus the errno, with no errno cell.
 --  The `*at` calls and `statx` keep one record layout on all three
 --  architectures.  The module also holds the program-owned process entry,
---  `_landin_start`, which a static Linux executable starts at.
+--  `_landin_start`, which a static Linux executable starts at.  It is the
+--  system's own interface, raw: platform/posix gives the same facilities in
+--  Landin types, over these calls on Linux and over platform/libc on Darwin
+--  and FreeBSD.
 --
 --  Every call is public by number: `system_call` is the raw six-argument
---  call, and the module hosted/linux/numbers, generated from a pinned
+--  call, and the module platform/linux/numbers, generated from a pinned
 --  kernel release by scripts/linux_syscalls.py, names each call's number as
 --  its kernel name followed by `_number`.  It is a module of its own so
 --  that a program that makes no raw call does not compile a thousand
@@ -20,15 +23,19 @@
 --  a program that also links libc.
 --
 --  Everything here is declared on Linux only.  Landin has no conditional
---  import, so hosted/io and hosted/heap import this module on every hosted
---  system, and on Darwin and FreeBSD it declares nothing.
+--  import, so platform/posix imports this module on every system it
+--  serves, and the module's scope is theirs: Linux, Darwin and FreeBSD.
+--  On Darwin and FreeBSD it declares nothing.
+
+compiler.assert(compiler.os == linux or compiler.os == darwin
+                or compiler.os == freebsd)
 
 fixed if compiler.os == linux then
     fixed if compiler.arch == x86_64 then
         --- Make the system call `number` with six arguments, unused ones
         --- zero, and return the kernel's result: a failure is minus its
         --- errno, from -4095 to -1.  This is the raw route to every Linux
-        --- call: the module hosted/linux/numbers names each call's number,
+        --- call: the module platform/linux/numbers names each call's number,
         --- `numbers.getpid_number` for one.  A pointer goes as
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
@@ -64,7 +71,7 @@ fixed if compiler.os == linux then
         --- Make the system call `number` with six arguments, unused ones
         --- zero, and return the kernel's result: a failure is minus its
         --- errno, from -4095 to -1.  This is the raw route to every Linux
-        --- call: the module hosted/linux/numbers names each call's number,
+        --- call: the module platform/linux/numbers names each call's number,
         --- `numbers.getpid_number` for one.  A pointer goes as
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
@@ -99,7 +106,7 @@ fixed if compiler.os == linux then
         --- Make the system call `number` with six arguments, unused ones
         --- zero, and return the kernel's result: a failure is minus its
         --- errno, from -4095 to -1.  This is the raw route to every Linux
-        --- call: the module hosted/linux/numbers names each call's number,
+        --- call: the module platform/linux/numbers names each call's number,
         --- `numbers.getpid_number` for one.  A pointer goes as
         --- `i64(usize(p))`, and nothing checks an argument's type, so
         --- prefer a typed wrapper where there is one.
@@ -140,10 +147,17 @@ fixed if compiler.os == linux then
     public o_rdonly: i32 = 0
     --- `openat` flag: write only.
     public o_wronly: i32 = 1
+    --- `openat` flag: read and write.
+    public o_rdwr: i32 = 2
     --- `openat` flag: create the file if it does not exist.
     public o_creat: i32 = 64
+    --- `openat` flag: with `o_creat`, fail with EEXIST if the name is
+    --- taken.
+    public o_excl: i32 = 128
     --- `openat` flag: truncate an existing regular file to length zero.
     public o_trunc: i32 = 512
+    --- `openat` flag: every write goes to the end of the file.
+    public o_append: i32 = 1024
 
     --- `statx` flag: report a symbolic link itself rather than what it
     --- names.
@@ -314,6 +328,44 @@ fixed if compiler.os == linux then
         result = i32(system_call(munmap_number, i64(address), i64(length), 0,
                                  0, 0, 0))
     end munmap
+
+    --- One record `ppoll` reads and fills, the kernel's `struct pollfd`:
+    --- the descriptor to watch, the events asked about and the events that
+    --- happened.  A negative descriptor is ignored.
+    public poll_record: type = struct
+        descriptor: i32
+        events: i16
+        returned: i16
+    end poll_record
+
+    --- A `ppoll` time limit, the kernel's `struct __kernel_timespec`: whole
+    --- seconds and the nanoseconds after them.
+    public timespec: type = struct
+        seconds: i64
+        nanoseconds: i64
+    end timespec
+
+    --- What `ppoll` takes for no time limit: C's null pointer, so the
+    --- call waits until a record is ready.
+    public no_limit: atom
+
+    --- A `ppoll` time limit, or `no_limit`.
+    public poll_limit: type = no_limit | ptr timespec
+
+    --- Wait until one of the `count` records at `records` has an event or
+    --- `limit` passes, with no signal mask: the number of records whose
+    --- `returned` is nonzero, zero when the limit passed first, or minus
+    --- the errno.  arm64 and RV64 have no `poll` call; this is their one.
+    public link(symbol: "_landin_linux_ppoll") ppoll:
+        (records: ptr mut poll_record, count: usize, limit: poll_limit)
+        -> (result: i32) =
+        address: usize = match limit
+            no_limit: usize(0)
+            ptr (given): usize(given)
+        end match
+        result = i32(system_call(ppoll_number, i64(usize(records)),
+                                 i64(count), i64(address), 0, 8, 0))
+    end ppoll
 
     --- End every thread of the process with `status`.  It does not return.
     public link(symbol: "_landin_linux_exit_group") exit_group:

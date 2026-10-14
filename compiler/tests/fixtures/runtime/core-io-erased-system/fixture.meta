@@ -1,6 +1,6 @@
 class: runtime
 profiles: specialization
-summary: erased system I/O validates dynamic paths and handles arguments, files, streams and failures
+summary: erased system I/O takes host strings as paths, passing an argument through unconverted, and handles arguments, files, streams and failures
 program: main.ldn
 root: ../../../../..
 run_args: ../tests/fixtures/runtime/core-io-erased-system/input.txt

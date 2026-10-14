@@ -1217,7 +1217,7 @@ The requested output cannot be made with the selected target, settings or
 available toolchain [1550]. The diagnostic and its note identify the cause:
 the target has no backend, its source debug mode is unsupported, firmware
 forbids `linker.library`, a static Linux link cannot be made (no library
-holding `hosted/linux` was found, or the program asks for `linker.library` or
+holding `platform/linux` was found, or the program asks for `linker.library` or
 refers to C symbols nothing in it defines), no toolchain is selected, or the
 named tool is unavailable. Choose a target with a backend,
 change the debug or firmware configuration, link with `--link=libc`, or

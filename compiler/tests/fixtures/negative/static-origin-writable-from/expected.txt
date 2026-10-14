@@ -1,0 +1,10 @@
+error[L0316]: this writable `from` result also carries an independent storage origin
+  --> ../tests/fixtures/negative/static-origin-writable-from/main.ldn:5:1
+  |
+5 | bad: (slot: ptr mut i32) -> (target: ptr mut i32 from slot) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/static-origin-writable-from/main.ldn:5:30
+  |
+5 | bad: (slot: ptr mut i32) -> (target: ptr mut i32 from slot) =
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]/D222: pass each alternative as an explicit source, or return it separately

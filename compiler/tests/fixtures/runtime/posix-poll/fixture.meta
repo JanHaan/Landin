@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: platform/posix polls standard input from a file, standard error and a closed descriptor through Landin-typed entries, reporting the first two ready and the closed one invalid, and an empty poll waits out its time with none ready
+program: main.ldn
+root: ../../../../..
+stdin: input.txt
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

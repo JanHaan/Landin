@@ -15,7 +15,7 @@ padding: []u8 = "-padding-to-forty-bytes-in-all-names"
 --  The path of file NUMBER in the top directory, or of the directory
 --  itself when MAKING_TOP: `e`, four digits and the padding.
 named: (number: usize, making_top: bool, scratch: []mut u8)
-       -> (path: ptr u8 from scratch) =
+       -> (path: text.host_string from scratch) =
     mut used: usize = 0
     for byte in top do
         scratch[used] = byte
@@ -34,21 +34,21 @@ named: (number: usize, making_top: bool, scratch: []mut u8)
             inc used
         end for
     end if
-    scratch[used] = 0
-    path = addr scratch[0]
+    path = text.host_over(scratch[0..<used])
 end named
 
 --  Remove file NUMBER, or the directory, if it is there.
 forget: (host: hosted.system, number: usize, making_top: bool)
         -> none ! ... =
     mut scratch: [80]u8 = zeroed
-    path: ptr u8 = named(number, making_top, scratch[0..<80])
+    path: text.host_string = named(number, making_top, scratch[0..<80])
     gone(host, path, making_top) else (problem)
         fail problem when problem <> io.not_found
     end
 end forget
 
-gone: (host: hosted.system, path: ptr u8, directory: bool) -> none ! ... =
+gone: (host: hosted.system, path: text.host_string, directory: bool)
+      -> none ! ... =
     if directory then
         try io.remove_directory(host, path)
     else
@@ -101,7 +101,7 @@ read_all: (host: hosted.system, seen: []mut u16) -> (stray: usize) ! ... =
     end
     loop do
         item: io.entry = try io.read_entry(host, listing)
-        name: []u8 = item.name
+        name: []u8 = text.host_bytes(item.name)
         break when lenof name == 0
         number: usize = number_of(name)
         if number == count or item.kind <> io.regular then

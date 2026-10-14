@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* hosted/linux's file_status is the kernel's struct statx, one layout on
+/* platform/linux's file_status is the kernel's struct statx, one layout on
    every Linux architecture. */
 _Static_assert(sizeof(struct statx) == 256, "statx extent");
 _Static_assert(offsetof(struct statx, stx_mask) == 0, "mask offset");

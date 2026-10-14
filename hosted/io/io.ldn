@@ -1,442 +1,32 @@
 --  The provider of every core/io concept on hosted targets: reader,
---  writer, files and process, and so of their composition, world.  On
---  Linux it reaches the kernel through hosted/linux's system calls; on
---  Darwin and FreeBSD, whose C library is their system interface, through
---  hosted/libc.  Import this module only at a hosted authority root.
+--  writer, files and process, and so of their composition, world, and
+--  directories beside them.  It is written once, over platform/posix,
+--  which reaches Linux through its system calls and Darwin and FreeBSD
+--  through their C library: nothing here is written per system.  Import
+--  this module only at a hosted authority root.
 
 import core/io
-import hosted/libc
-import hosted/linux
+import core/text
+import platform/posix
 
---  The errno values this provider tells apart are the same on every hosted
---  system: hosted/linux's and hosted/libc's own constants agree.  A module
---  value cannot read another module's, so they are written here.
-interrupted: i32 = 4
-missing: i32 = 2
-not_permitted: i32 = 1
-denied: i32 = 13
-not_directory: i32 = 20
-read_only_system: i32 = 30
-exists: i32 = 17
-
---  The record a provider cannot read, which no errno describes.
-unreadable: i32 = -1
+--  A file open_write creates gets 0666, which the process umask filters.
+created_mode: u32 = 0o666
 
 --  A directory made by make_directory gets 0777, which the umask filters.
 created_directory_mode: u32 = 0o777
-
---  `d_type` and a mode's file-type bits, the same on every hosted system.
-unknown_type: u8 = 0
-directory_type: u8 = 4
-regular_type: u8 = 8
-link_type: u8 = 10
-mode_type: u32 = 0o170000
-mode_directory: u32 = 0o040000
-mode_regular: u32 = 0o100000
-mode_link: u32 = 0o120000
-
---  How many bytes a buffer holds.
-buffer_length: (bytes: []u8) -> (count: usize) =
-    count = lenof bytes
-end buffer_length
-
---  The next entry of an open directory as a host gives it: where its name
---  lies in the directory's buffer, its `d_type`, the errno of a failure
---  (or `unreadable`), and whether the directory has ended.
-next_entry: type = struct
-    start: usize
-    length: usize
-    kind: u8
-    number: i32
-    ended: bool
-end next_entry
-
---  An entry's size and its mode's type bits, or the errno that refused
---  them.
-entry_status: type = struct
-    size: u64
-    kind: u32
-    number: i32
-end entry_status
-
---  A path names nothing when a component is absent, ENOENT, or when a
---  component before the last is not a directory, ENOTDIR: in both cases
---  there is no file at that path for an open to find.
-absent: (number: i32) -> (yes: bool) =
-    yes = number == missing or number == not_directory
-end absent
-
---  Each system call or C call below returns its result, negative for a
---  failure, with the errno that failure gave, captured before any other
---  host call; zero when it succeeded.
-fixed if compiler.os == linux then
-    host_open_read: (path: ptr u8) -> (result: i32, number: i32) =
-        result = linux.openat(linux.at_fdcwd, path, linux.o_rdonly, 0)
-        number = if result < 0 then -result else 0 end if
-    end host_open_read
-
-    host_open_write: (path: ptr u8) -> (result: i32, number: i32) =
-        result = linux.openat(linux.at_fdcwd, path,
-                              linux.o_wronly | linux.o_creat | linux.o_trunc,
-                              u32(created_mode))
-        number = if result < 0 then -result else 0 end if
-    end host_open_write
-
-    host_close: (descriptor: i32) -> (result: i32, number: i32) =
-        result = linux.close(descriptor)
-        number = if result < 0 then -result else 0 end if
-    end host_close
-
-    host_read: (descriptor: i32, data: ptr mut u8, length: usize)
-               -> (result: isize, number: i32) =
-        result = linux.read(descriptor, data, length)
-        number = if result < 0 then i32(-result) else 0 end if
-    end host_read
-
-    host_write: (descriptor: i32, data: ptr u8, length: usize)
-                -> (result: isize, number: i32) =
-        result = linux.write(descriptor, data, length)
-        number = if result < 0 then i32(-result) else 0 end if
-    end host_write
-
-    --  The device and inode `path` names, following symbolic links;
-    --  statx's record is the kernel's own on every architecture.
-    host_identity: (path: ptr u8)
-                   -> (device: u64, inode: u64, number: i32) =
-        mut status: linux.file_status = zeroed
-        result: i32 = linux.statx(linux.at_fdcwd, path, 0, linux.statx_ino,
-                                  addr status)
-        device = (u64(status.device_major) << 32) | u64(status.device_minor)
-        inode = status.inode
-        number = if result < 0 then -result else 0 end if
-    end host_identity
-
-    --  Open the directory at `path` without following it into anything
-    --  else: o_directory makes a file ENOTDIR.
-    host_open_directory: (path: ptr u8)
-                         -> (result: i32, stream: usize, number: i32) =
-        result = linux.openat(linux.at_fdcwd, path,
-                              linux.o_rdonly | linux.o_directory, 0)
-        stream = 0
-        number = if result < 0 then -result else 0 end if
-    end host_open_directory
-
-    --  A byte of a getdents64 record, and its little-endian u16.
-    record_u16: (bytes: []u8, at: usize) -> (value: usize) =
-        value = usize(bytes[at]) | (usize(bytes[at + 1]) << 8)
-    end record_u16
-
-    --  The next record in the buffer, refilling it from getdents64 when
-    --  every record in it has been read.  A record is checked to lie within
-    --  what the kernel filled before any byte of it is read, and its name
-    --  to end within it, so a buffer's last record is never read past.
-    host_next: (inout opened: io.directory) -> (next: next_entry) =
-        next = (start: 0, length: 0, kind: 0, number: 0, ended: false)
-        loop do
-            if opened.cursor >= opened.filled then
-                if opened.finished then
-                    next.ended = true
-                    return
-                end if
-                room: usize = buffer_length(opened.buffer)
-                got: isize = linux.getdents64(opened.descriptor,
-                                              addr opened.buffer[0], room)
-                if got < 0 then
-                    if i32(-got) <> interrupted then
-                        next.number = i32(-got)
-                        return
-                    end if
-                elsif got == 0 then
-                    opened.finished = true
-                    next.ended = true
-                    return
-                elsif usize(got) > room then
-                    next.number = unreadable
-                    return
-                else
-                    opened.filled = usize(got)
-                    opened.cursor = 0
-                end if
-            else
-                at: usize = opened.cursor
-                --  The fixed part is 19 bytes and the name at least one
-                --  byte and its NUL.
-                if opened.filled - at < 21 then
-                    next.number = unreadable
-                    return
-                end if
-                length: usize = record_u16(opened.buffer, at + 16)
-                if length < 21 or length > opened.filled - at then
-                    next.number = unreadable
-                    return
-                end if
-                opened.cursor = at + length
-                mut stop: usize = at + 19
-                while stop < at + length and opened.buffer[stop] <> 0 do
-                    inc stop
-                end while
-                if stop == at + length then
-                    next.number = unreadable
-                    return
-                end if
-                next.start = at + 19
-                next.length = stop - (at + 19)
-                next.kind = opened.buffer[at + 18]
-                return
-            end if
-        end loop
-    end host_next
-
-    --  The size and type of the entry `name`, terminated, in the directory
-    --  open as `descriptor`, not following a symbolic link.
-    host_entry_status: (descriptor: i32, name: ptr u8)
-                       -> (status: entry_status) =
-        mut record: linux.file_status = zeroed
-        result: i32 = linux.statx(descriptor, name, linux.at_symlink_nofollow,
-                                  linux.statx_type | linux.statx_size,
-                                  addr record)
-        status = (size: record.size, kind: u32(record.mode) & mode_type,
-                  number: if result < 0 then -result else 0 end if)
-    end host_entry_status
-
-    host_close_directory: (opened: io.directory)
-                          -> (result: i32, number: i32) =
-        result = linux.close(opened.descriptor)
-        number = if result < 0 then -result else 0 end if
-    end host_close_directory
-
-    host_make_directory: (path: ptr u8) -> (result: i32, number: i32) =
-        result = linux.mkdirat(linux.at_fdcwd, path, created_directory_mode)
-        number = if result < 0 then -result else 0 end if
-    end host_make_directory
-
-    --  Remove the file, or with `directory` the empty directory, at `path`.
-    host_remove: (path: ptr u8, directory: bool)
-                 -> (result: i32, number: i32) =
-        result = linux.unlinkat(linux.at_fdcwd, path,
-                                if directory then linux.at_removedir
-                                else 0 end if)
-        number = if result < 0 then -result else 0 end if
-    end host_remove
-else
-    --  errno, read immediately after the failing call.
-    errno: () -> (number: i32) =
-        cell: ptr mut i32 = libc.errno_cell()
-        number = cell.val
-    end errno
-
-    host_open_read: (path: ptr u8) -> (result: i32, number: i32) =
-        result = libc.open(path, libc.o_rdonly)
-        number = if result < 0 then errno() else 0 end if
-    end host_open_read
-
-    host_open_write: (path: ptr u8) -> (result: i32, number: i32) =
-        result = libc.open(path, libc.o_wronly | libc.o_creat | libc.o_trunc,
-                           created_mode)
-        number = if result < 0 then errno() else 0 end if
-    end host_open_write
-
-    host_close: (descriptor: i32) -> (result: i32, number: i32) =
-        result = libc.close(descriptor)
-        number = if result <> 0 then errno() else 0 end if
-    end host_close
-
-    host_read: (descriptor: i32, data: ptr mut u8, length: usize)
-               -> (result: isize, number: i32) =
-        result = libc.read(descriptor, data, length)
-        number = if result == -1 then errno() else 0 end if
-    end host_read
-
-    host_write: (descriptor: i32, data: ptr u8, length: usize)
-                -> (result: isize, number: i32) =
-        result = libc.write(descriptor, data, length)
-        number = if result == -1 then errno() else 0 end if
-    end host_write
-
-    --  The device and inode `path` names, following symbolic links.  The
-    --  record's layout is checked against the header's before it is used:
-    --  a disagreement is number -1, which is no errno.
-    host_identity: (path: ptr u8)
-                   -> (device: u64, inode: u64, number: i32) =
-        device = 0
-        inode = 0
-        number = 0
-        if alignof libc.file_status <> 8
-          or sizeof libc.file_status <> libc.file_status_size then
-            number = -1
-            return
-        end if
-        mut status: libc.file_status = zeroed
-        if libc.stat(path, addr status) <> 0 then
-            number = errno()
-            return
-        end if
-        device = u64(status.device)
-        inode = u64(status.inode)
-    end host_identity
-
-    --  Open the directory at `path`, o_directory making a file ENOTDIR,
-    --  and a C directory stream over it, which then owns the descriptor.
-    host_open_directory: (path: ptr u8)
-                         -> (result: i32, stream: usize, number: i32) =
-        stream = 0
-        result = libc.open(path, libc.o_rdonly | libc.o_directory)
-        if result < 0 then
-            number = errno()
-            return
-        end if
-        number = 0
-        opened: libc.directory_stream = libc.fdopendir(result)
-        match opened
-            libc.no_directory: begin
-                number = errno()
-                _ = libc.close(result)
-                result = -1
-            end
-            ptr (made): stream = usize(made)
-        end match
-    end host_open_directory
-
-    --  The stream's next record, its name copied into the directory's
-    --  buffer with a NUL after it, since the record is the C library's and
-    --  is good only until the next readdir.  The buffer holds any name a
-    --  record can: `directory_buffer` is larger than every d_name.
-    host_next: (inout opened: io.directory) -> (next: next_entry) =
-        next = (start: 0, length: 0, kind: 0, number: 0, ended: false)
-        cell: ptr mut i32 = libc.errno_cell()
-        cell.val = 0
-        stream: ptr mut u8 = ptr(opened.stream)
-        record: libc.directory_entry = libc.readdir(stream)
-        match record
-            libc.no_directory: begin
-                next.number = cell.val
-                next.ended = next.number == 0
-            end
-            ptr (found): begin
-                length: usize = usize(found.val.name_length)
-                if length >= buffer_length(opened.buffer) then
-                    next.number = unreadable
-                else
-                    for at in usize(0)..<length do
-                        opened.buffer[at] = found.val.name[at]
-                    end for
-                    opened.buffer[length] = 0
-                    next.length = length
-                    next.kind = found.val.kind
-                end if
-            end
-        end match
-    end host_next
-
-    --  The size and type of the entry `name`, terminated, in the directory
-    --  open as `descriptor`, not following a symbolic link.
-    host_entry_status: (descriptor: i32, name: ptr u8)
-                       -> (status: entry_status) =
-        status = (size: 0, kind: 0, number: 0)
-        if alignof libc.file_status <> 8
-          or sizeof libc.file_status <> libc.file_status_size then
-            status.number = unreadable
-            return
-        end if
-        mut record: libc.file_status = zeroed
-        if libc.fstatat(descriptor, name, addr record,
-                        libc.at_symlink_nofollow) <> 0 then
-            status.number = errno()
-            return
-        end if
-        status.size = u64(record.bytes)
-        status.kind = u32(record.mode) & mode_type
-    end host_entry_status
-
-    host_close_directory: (opened: io.directory)
-                          -> (result: i32, number: i32) =
-        stream: ptr mut u8 = ptr(opened.stream)
-        result = libc.closedir(stream)
-        number = if result <> 0 then errno() else 0 end if
-    end host_close_directory
-
-    host_make_directory: (path: ptr u8) -> (result: i32, number: i32) =
-        result = libc.mkdirat(libc.at_fdcwd, path,
-                              u16(created_directory_mode))
-        number = if result <> 0 then errno() else 0 end if
-    end host_make_directory
-
-    --  Remove the file, or with `directory` the empty directory, at `path`.
-    host_remove: (path: ptr u8, directory: bool)
-                 -> (result: i32, number: i32) =
-        result = libc.unlinkat(libc.at_fdcwd, path,
-                               if directory then libc.at_removedir
-                               else 0 end if)
-        number = if result <> 0 then errno() else 0 end if
-    end host_remove
-end if
-
---  A file open_write creates gets 0666, which the process umask filters.
-created_mode: i32 = 0o666
-
-word: usize = sizeof usize
-
---  The argument root: C's argv and argc as the startup call established
---  them, retained without copying.  Zero is absence; no C table is at
---  address zero.
-mut root_values: usize
-mut root_count: i32
-
---- Establish the process's argument root from C's `main` carriers.  The
---- hosted entry calls this with its own `argc` and `argv` before its body
---- runs; a C `main` that drives Landin exports calls it itself, before
---- `host` and before starting a thread that may call `host`.
----
---- The first call needs a nonnegative count and a non-null table, and
---- keeps that exact pair without copying: the caller keeps the table and
---- its strings readable while any world or view derived from them is in
---- use.  Repeating the identical pair changes nothing; a negative count, a
---- null table or a different pair traps.  The published arguments omit
---- `argv[0]`, so their count is `max(argc - 1, 0)`.
-public extern(c) _landin_host_initialize_arguments:
-    (count: i32, escaping values: ptr ptr u8) -> none =
-    --  Every misuse of the root stops at compiler.unreachable(), which a
-    --  selected panic handler sees as `unreachable` at that site [1560].
-    address: usize = usize(values)
-    if root_values <> 0 then
-        --  An identical repeat changes nothing; another pair would replace
-        --  a root that published worlds and views may still use.
-        if count <> root_count or address <> root_values then
-            compiler.unreachable()
-        end if
-        return
-    end if
-    if count < 0 or address == 0 then
-        compiler.unreachable()
-    end if
-    root_count = count
-    root_values = address
-end _landin_host_initialize_arguments
-
---  The bytes before the first NUL at `data`.
-text_length: (data: ptr u8) -> (length: usize) =
-    length = 0
-    loop do
-        at: ptr u8 = ptr(usize(data) + length)
-        break when at.val == 0
-        length += 1
-    end loop
-end text_length
 
 --  The process's last-error cell, which every handle from `host` shares.
 mut process_errno: i32
 
 system_value: type = struct
-    arguments: ptr ptr u8
-    argument_length: usize
     failure: ptr mut i32
 end system_value
 
---- Hosted implementation of all four I/O capabilities and `io.world`, backed
---- by Linux's system calls on Linux and by libc on Darwin and FreeBSD, as a
---- handle: copies share the process's descriptors and arguments, and the
---- last-error cell they were made with. File identifiers belong to this
---- provider; borrowed arguments refer to process storage.
+--- Hosted implementation of all four I/O capabilities, `io.world` and
+--- `io.directories`, over platform/posix, as a handle: copies share the
+--- process's descriptors and arguments, and the last-error cell they were
+--- made with. File identifiers belong to this provider; borrowed arguments
+--- refer to process storage.
 public system: type = system_value
 
 --- A last-error cell of the caller's own, for code that must not share the
@@ -453,95 +43,108 @@ end space
 ---
 --- Zero means that the most recent open/read/write/close did not report a
 --- failing host call.  A nonzero value is the exact errno captured for the
---- terminal call before the provider made any other host call.  Retriable
---- EINTR attempts are internal and do not replace a previously reported
---- operation with a failure.
+--- terminal call before the provider made any other host call: its number
+--- as the system gives it, platform/posix's `number` of the atom the call
+--- failed with.  Retriable EINTR attempts are internal and do not replace
+--- a previously reported operation with a failure.
 public last_errno: (host: system) -> (number: i32) =
     number = host.failure.val
 end last_errno
 
-system_open_read: (self: system, path: ptr u8)
-                  -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+--  Keep a failure's errno in the handle's cell; `unlisted`, which no errno
+--  describes, leaves the cell at zero.
+record: (self: system, problem: posix.errno) -> none =
+    number: i32 = posix.number(problem)
+    if number > 0 then self.failure.val = number end if
+end record
+
+--  A path names nothing when a component is absent, ENOENT, or when a
+--  component before the last is not a directory, ENOTDIR: in both cases
+--  there is no file at that path for an open to find.
+absent: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.enoent or problem == posix.enotdir
+end absent
+
+--  Whether an errno says the caller may not do what it asked.
+refused: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eperm or problem == posix.eacces
+          or problem == posix.erofs
+end refused
+
+--  The descriptor a file of this provider is, and the file a descriptor
+--  is: the identifier is the descriptor's number.
+descriptor_of: (opened: io.file) -> (result: posix.descriptor) =
+    result = posix.descriptor(i32(usize(opened)))
+end descriptor_of
+
+file_of: (opened: posix.descriptor) -> (result: io.file) =
+    result = io.file(usize(i32(opened)))
+end file_of
+
+--  Open `path` with `options`.  open reports EINTR before publishing a
+--  descriptor, so the same request is retried; every other errno is kept
+--  before it is mapped to the stable atom set.
+open: (self: system, path: text.host_string, options: posix.open_options)
+      -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
     self.failure.val = 0
     loop do
-        (result: descriptor, number) := host_open_read(path)
-        if descriptor >= 0 then
-            opened = io.file(descriptor)
-            return
-        end if
-
-        --  The host call captured errno before any other.  open reports
-        --  EINTR before publishing a file descriptor, so retrying this
-        --  same request is safe.
-        if number <> interrupted then
-            self.failure.val = number
-            fail io.not_found when absent(number)
-            fail io.no_access when number == not_permitted
-              or number == denied or number == read_only_system
-            fail io.io_failed
-        end if
+        made: posix.descriptor =
+            posix.open_at(posix.working_directory, path, options,
+                          created_mode) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.not_found when absent(problem)
+                fail io.no_access when refused(problem)
+                fail io.io_failed
+            end
+        opened = file_of(made)
+        return
     end loop
+end open
+
+system_open_read: (self: system, path: text.host_string)
+                  -> (opened: io.file)
+                  ! io.not_found | io.no_access | io.io_failed =
+    opened = try open(self, path, posix.reading)
 end system_open_read
 
-system_open_write: (self: system, path: ptr u8)
+system_open_write: (self: system, path: text.host_string)
                    -> (opened: io.file)
                    ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
-    loop do
-        (result: descriptor, number) := host_open_write(path)
-        if descriptor >= 0 then
-            opened = io.file(descriptor)
-            return
-        end if
-
-        --  The write-open request is fixed across attempts.  An
-        --  interrupted open has not returned a descriptor, so retry it; every
-        --  other errno is retained before mapping to the stable atom set.
-        if number <> interrupted then
-            self.failure.val = number
-            fail io.not_found when absent(number)
-            fail io.no_access when number == not_permitted
-              or number == denied or number == read_only_system
-            fail io.io_failed
-        end if
-    end loop
+    opened = try open(self, path, posix.writing)
 end system_open_write
 
 --  A stable-path identity check, not an atomic check-and-open operation.
 --  Every input lookup failure refuses; only an absent output is allowed.
-system_same_file: (self: system, left: ptr u8, right: ptr u8)
+system_same_file: (self: system, left: text.host_string,
+                   right: text.host_string)
                   -> (same: bool) ! io.io_failed =
     self.failure.val = 0
-    first := host_identity(left)
-    if first.number <> 0 then
-        --  A negative number is a record this provider cannot read, which
-        --  no errno describes.
-        if first.number > 0 then self.failure.val = first.number end if
-        fail io.io_failed
-    end if
-    second := host_identity(right)
-    if second.number <> 0 then
-        if absent(second.number) then
-            same = false
-            return
-        end if
-        if second.number > 0 then self.failure.val = second.number end if
-        fail io.io_failed
-    end if
+    first: posix.status =
+        posix.status_at(posix.working_directory, left, true) else (problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+    same = false
+    second: posix.status =
+        posix.status_at(posix.working_directory, right, true) else (problem)
+            return when absent(problem)
+            record(self, problem)
+            fail io.io_failed
+        end
     same = first.device == second.device and first.inode == second.inode
 end system_same_file
 
 system_close: (self: system, sink opened: io.file)
               -> none ! io.io_failed =
     self.failure.val = 0
-    (result: status, number) := host_close(i32(opened))
-    if status <> 0 then
-        --  Captured first, then reported.  A failed close may already have
-        --  released the descriptor; retrying could close an unrelated reused
-        --  descriptor, so EINTR is deliberately terminal here.
-        self.failure.val = number
+    --  A failed close may already have released the descriptor; retrying
+    --  could close an unrelated reused descriptor, so EINTR is
+    --  deliberately terminal here.
+    posix.close(descriptor_of(opened)) else (problem)
+        record(self, problem)
         fail io.io_failed
-    end if
+    end
 end system_close
 
 system_read: (self: system, opened: io.file, into: []mut u8)
@@ -551,52 +154,42 @@ system_read: (self: system, opened: io.file, into: []mut u8)
         count = 0
         return
     end if
-    base: ptr mut u8 = addr into[0]
     loop do
-        (result: read_count, number) := host_read(i32(opened), base, lenof into)
-        if number == 0 then
-            fail io.io_failed when read_count < 0
-              or usize(read_count) > lenof into
-            --  Zero from a nonempty read is genuine EOF, not stalled progress.
-            count = usize(read_count)
-            return
-        end if
-
         --  read returns EINTR only before transferring a byte, so the same
         --  buffer and extent may be retried.  A positive partial read is
-        --  returned above and is never discarded by an unnecessary retry.
-        if number <> interrupted then
-            self.failure.val = number
+        --  returned and is never discarded by an unnecessary retry.
+        got: usize = posix.read(descriptor_of(opened), into) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
             fail io.io_failed
-        end if
+        end
+        --  A count beyond the buffer violates the system's contract and
+        --  fabricates no errno.  Zero from a nonempty read is genuine EOF.
+        fail io.io_failed when got > lenof into
+        count = got
+        return
     end loop
 end system_read
 
-write_all: (self: system, descriptor: i32, bytes: []u8)
+write_all: (self: system, opened: io.file, bytes: []u8)
            -> none ! io.io_failed =
     mut written: usize = 0
     while written < lenof bytes do
         remaining: []u8 = bytes[written..<lenof bytes]
-        count: usize = lenof remaining
-        base: ptr u8 = addr remaining[0]
-        mut accepted: isize = -1
-        loop do
-            (result: sent, number) := host_write(descriptor, base, count)
-            accepted = sent
-            break when number == 0
-
-            --  write reports EINTR only before this attempt transfers data.
-            --  Retry the same remaining suffix; a preceding positive partial
-            --  write has already advanced `written` and is never repeated.
-            if number <> interrupted then
-                self.failure.val = number
+        --  write reports EINTR only before this attempt transfers data.
+        --  Retry the same remaining suffix; a preceding positive partial
+        --  write has already advanced `written` and is never repeated.
+        accepted: usize =
+            posix.write(descriptor_of(opened), remaining) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
                 fail io.io_failed
-            end if
-        end loop
-        --  A nonempty zero-progress success cannot complete write-all, and an
-        --  oversized count violates the host seam.  Neither fabricates errno.
-        fail io.io_failed when accepted <= 0 or usize(accepted) > count
-        written += usize(accepted)
+            end
+        --  A nonempty zero-progress success cannot complete write-all, and
+        --  an oversized count violates the system's contract.  Neither
+        --  fabricates errno.
+        fail io.io_failed when accepted == 0 or accepted > lenof remaining
+        written += accepted
     end while
 end write_all
 
@@ -604,7 +197,7 @@ system_write: (self: system, opened: io.file, bytes: []u8)
               -> none ! io.io_failed =
     self.failure.val = 0
     return when lenof bytes == 0
-    try write_all(self, i32(opened), bytes)
+    try write_all(self, opened, bytes)
 end system_write
 
 system_write_some: (self: system, opened: io.file, bytes: []u8)
@@ -614,79 +207,74 @@ system_write_some: (self: system, opened: io.file, bytes: []u8)
         count = 0
         return
     end if
-    base: ptr u8 = addr bytes[0]
     --  Keep a single host request within a representable, bounded extent;
     --  the caller can send the remaining suffix after this progress.
     mut requested: usize = lenof bytes
     if requested > 65536 then requested = 65536 end if
     loop do
-        (result: accepted, number) := host_write(i32(opened), base, requested)
-        if number == 0 then
-            fail io.io_failed when accepted <= 0
-              or usize(accepted) > requested
-            count = usize(accepted)
-            return
-        end if
         --  EINTR transfers nothing on this attempt. A positive short write
         --  returns immediately so its exact prefix reaches the caller.
-        if number <> interrupted then
-            self.failure.val = number
+        accepted: usize = posix.write(descriptor_of(opened),
+                                      bytes[0..<requested]) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
             fail io.io_failed
-        end if
+        end
+        fail io.io_failed when accepted == 0 or accepted > requested
+        count = accepted
+        return
     end loop
 end system_write_some
 
 system_input: (self: system) -> (stream: io.file) =
-    _ = self.argument_length
-    stream = io.file(0)
+    _ = self.failure
+    stream = file_of(posix.standard_input)
 end system_input
 
 system_out: (self: system) -> (stream: io.file) =
-    _ = self.argument_length
-    stream = io.file(1)
+    _ = self.failure
+    stream = file_of(posix.standard_output)
 end system_out
 
 system_err: (self: system) -> (stream: io.file) =
-    _ = self.argument_length
-    stream = io.file(2)
+    _ = self.failure
+    stream = file_of(posix.standard_error)
 end system_err
 
 system_argument_count: (self: system) -> (count: usize) =
-    count = self.argument_length
+    _ = self.failure
+    table: posix.argument_table = posix.arguments()
+    count = table.count
 end system_argument_count
 
-system_argument_table: (self: system)
-                       -> (table: ptr ptr u8 from self) =
-    table = self.arguments
-end system_argument_table
-
+--  The argument is lent from the process's argument root, storage that
+--  outlives every handle, which satisfies the concept's `from self`.
 system_argument: (self: system, index: usize)
-                 -> (value: io.argument from self) ! io.no_argument =
-    fail io.no_argument when index >= self.argument_length
-    table: ptr ptr u8 = system_argument_table(self)
-    --  C promises a non-null string below argc; a null entry stops here
-    --  rather than being published.
-    entry: ptr usize = ptr(usize(table) + index * word)
-    if entry.val == 0 then
-        compiler.unreachable()
-    end if
-    data: ptr u8 = ptr(entry.val)
-    value = (data: data, length: text_length(data))
+                 -> (value: text.host_string from self) ! io.no_argument =
+    _ = self.failure
+    table: posix.argument_table = posix.arguments()
+    fail io.no_argument when index >= table.count
+    value = posix.argument(table, index)
 end system_argument
 
---  Whether an errno says a path names nothing a caller could open.
-refused: (number: i32) -> (yes: bool) =
-    yes = number == not_permitted or number == denied
-          or number == read_only_system
-end refused
+--  The open directory as platform/posix's stream, and the stream's
+--  progress kept back in the directory.  The directory's handle is its
+--  descriptor's number and its stream the C library's, where there is
+--  one.
+stream_of: (opened: io.directory) -> (stream: posix.directory_stream) =
+    stream = (descriptor: posix.descriptor(i32(opened.handle)),
+              stream: opened.stream, filled: opened.filled,
+              cursor: opened.cursor, finished: opened.finished)
+end stream_of
 
---  Keep an errno in the handle's cell; `unreadable` is no errno and leaves
---  the cell at zero.
-record_failure: (self: system, number: i32) -> none =
-    if number > 0 then self.failure.val = number end if
-end record_failure
+keep: (inout opened: io.directory, stream: posix.directory_stream) -> none =
+    opened.filled = stream.filled
+    opened.cursor = stream.cursor
+    opened.finished = stream.finished
+end keep
 
-system_open_directory: (self: system, path: ptr u8, buffer: []mut u8)
+system_open_directory: (self: system, path: text.host_string,
+                        buffer: []mut u8)
                        -> (opened: io.directory from buffer)
                        ! io.not_found | io.no_access | io.io_failed =
     self.failure.val = 0
@@ -694,20 +282,20 @@ system_open_directory: (self: system, path: ptr u8, buffer: []mut u8)
     --  and all, so a read never meets one that cannot fit.
     fail io.io_failed when lenof buffer < io.directory_buffer
     loop do
-        (result: descriptor, stream, number) := host_open_directory(path)
-        if number == 0 then
-            opened = (descriptor: descriptor, stream: stream, position: 0,
-                      buffer: buffer, filled: 0, cursor: 0, finished: false)
-            return
-        end if
         --  open reports EINTR before publishing a descriptor, so the same
         --  request is retried; every other errno is kept and mapped.
-        if number <> interrupted then
-            record_failure(self, number)
-            fail io.not_found when absent(number)
-            fail io.no_access when refused(number)
-            fail io.io_failed
-        end if
+        made: posix.directory_stream =
+            posix.open_directory(posix.working_directory, path) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.not_found when absent(problem)
+                fail io.no_access when refused(problem)
+                fail io.io_failed
+            end
+        opened = (handle: usize(i32(made.descriptor)), stream: made.stream,
+                  position: 0, buffer: buffer, filled: made.filled,
+                  cursor: made.cursor, finished: made.finished)
+        return
     end loop
 end system_open_directory
 
@@ -718,133 +306,144 @@ dot_name: (name: []u8) -> (yes: bool) =
     yes = lenof name == 1 or name[1] == 46
 end dot_name
 
---  What a `d_type` or, when it is unknown, a mode's type bits say an
---  entry is.
-kind_of_type: (kind: u8) -> (named: io.entry_kind) =
-    named = if kind == directory_type then io.subdirectory
-            elsif kind == regular_type then io.regular
-            elsif kind == link_type then io.symbolic_link
+--  What platform/posix's kind of a file is among core/io's four.
+kind_of: (kind: posix.file_kind) -> (named: io.entry_kind) =
+    named = if kind == posix.directory then io.subdirectory
+            elsif kind == posix.regular then io.regular
+            elsif kind == posix.symbolic_link then io.symbolic_link
             else io.special end if
-end kind_of_type
+end kind_of
 
-kind_of_mode: (kind: u32) -> (named: io.entry_kind) =
-    named = if kind == mode_directory then io.subdirectory
-            elsif kind == mode_regular then io.regular
-            elsif kind == mode_link then io.symbolic_link
-            else io.special end if
-end kind_of_mode
+--  What the entry `next` of the directory open as `at` is, and whether it
+--  is still there.  Where the file system keeps no kind in its records,
+--  the entry itself is asked, relative to the directory, and one removed
+--  since the directory was read is no entry.
+kind_at: (self: system, at: posix.descriptor, next: posix.directory_entry)
+         -> (kind: io.entry_kind, present: bool) ! io.io_failed =
+    kind = kind_of(next.kind)
+    present = true
+    return when next.kind <> posix.unknown_kind
+    found: posix.status = posix.status_at(at, next.name, false) else (problem)
+        if not absent(problem) then
+            record(self, problem)
+            fail io.io_failed
+        end if
+        present = false
+        return
+    end
+    kind = kind_of(found.kind)
+end kind_at
 
 system_read_entry: (self: system, inout opened: io.directory)
                    -> (item: io.entry from opened) ! io.io_failed =
     self.failure.val = 0
     loop do
-        next: next_entry = host_next(opened)
-        if next.number <> 0 then
-            record_failure(self, next.number)
-            fail io.io_failed
-        end if
-        if next.ended then
-            item = (name: opened.buffer[0..<0], kind: io.special)
+        mut stream: posix.directory_stream = stream_of(opened)
+        next: posix.directory_entry =
+            posix.read_directory(stream, opened.buffer) else (problem)
+                keep(opened, stream)
+                --  A read interrupted before it filled anything is read
+                --  again.
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.io_failed
+            end
+        opened.filled = stream.filled
+        opened.cursor = stream.cursor
+        opened.finished = stream.finished
+        name: []u8 = text.host_bytes(next.name)
+        if lenof name == 0 then
+            item = (name: next.name, kind: io.special)
             return
         end if
-        stop: usize = next.start + next.length
-        if not dot_name(opened.buffer[next.start..<stop]) then
-            mut kind: io.entry_kind = kind_of_type(next.kind)
-            mut present: bool = true
-            if next.kind == unknown_type then
-                --  The file system keeps no type in its records, so ask
-                --  the entry itself; the name is terminated in the buffer.
-                status: entry_status =
-                    host_entry_status(opened.descriptor,
-                                      addr opened.buffer[next.start])
-                if status.number == 0 then
-                    kind = kind_of_mode(status.kind)
-                elsif absent(status.number) then
-                    --  Removed since the directory was read: no entry.
-                    present = false
-                else
-                    record_failure(self, status.number)
-                    fail io.io_failed
-                end if
-            end if
+        if not dot_name(name) then
+            (kind, present) := try kind_at(self, stream.descriptor, next)
             if present then
-                item = (name: opened.buffer[next.start..<stop], kind: kind)
+                item = (name: next.name, kind: kind)
                 return
             end if
         end if
     end loop
 end system_read_entry
 
-system_entry_size: (self: system, opened: io.directory, name: []u8)
+system_entry_size: (self: system, opened: io.directory,
+                    name: text.host_string)
                    -> (size: u64) ! io.not_found | io.no_access | io.io_failed =
     self.failure.val = 0
     size = 0
     --  No hosted system gives a name this long, or one with a `/` or a
-    --  NUL, so no entry has one.
-    fail io.not_found when lenof name == 0 or lenof name >= io.directory_buffer
-    mut terminated: [1024]u8 = zeroed
-    for at in usize(0)..<lenof name do
-        fail io.not_found when name[at] == 0 or name[at] == 47
-        terminated[at] = name[at]
+    --  NUL, so no entry has one, and the system is not asked.
+    bytes: []u8 = text.host_bytes(name)
+    fail io.not_found when lenof bytes == 0
+      or lenof bytes >= io.directory_buffer
+    for byte in bytes do
+        fail io.not_found when byte == 0 or byte == 47
     end for
-    status: entry_status = host_entry_status(opened.descriptor,
-                                             addr terminated[0])
-    if status.number <> 0 then
-        record_failure(self, status.number)
-        fail io.not_found when absent(status.number)
-        fail io.no_access when refused(status.number)
-        fail io.io_failed
-    end if
-    size = status.size
+    found: posix.status =
+        posix.status_at(posix.descriptor(i32(opened.handle)), name,
+                        false) else (problem)
+            record(self, problem)
+            fail io.not_found when absent(problem)
+            fail io.no_access when refused(problem)
+            fail io.io_failed
+        end
+    size = found.size
 end system_entry_size
 
 system_close_directory: (self: system, sink opened: io.directory)
                         -> none ! io.io_failed =
     self.failure.val = 0
-    (result: status, number) := host_close_directory(opened)
-    if status <> 0 then
-        --  The descriptor may already be released, as with close, so a
-        --  failure is terminal and never retried.
-        record_failure(self, number)
+    --  The descriptor may already be released, as with close, so a
+    --  failure is terminal and never retried.
+    posix.close_directory(stream_of(opened)) else (problem)
+        record(self, problem)
         fail io.io_failed
-    end if
+    end
 end system_close_directory
 
-system_make_directory: (self: system, path: ptr u8)
+system_make_directory: (self: system, path: text.host_string)
                        -> none
                        ! io.already_exists | io.not_found | io.no_access
                        | io.io_failed =
     self.failure.val = 0
-    (result: status, number) := host_make_directory(path)
-    if status <> 0 then
-        --  Not retried on EINTR: a directory made before the interruption
-        --  would then report EEXIST.
-        record_failure(self, number)
-        fail io.already_exists when number == exists
-        fail io.not_found when absent(number)
-        fail io.no_access when refused(number)
+    --  Not retried on EINTR: a directory made before the interruption
+    --  would then report EEXIST.
+    posix.make_directory_at(posix.working_directory, path,
+                            created_directory_mode) else (problem)
+        record(self, problem)
+        fail io.already_exists when problem == posix.eexist
+        fail io.not_found when absent(problem)
+        fail io.no_access when refused(problem)
         fail io.io_failed
-    end if
+    end
 end system_make_directory
 
-remove: (self: system, path: ptr u8, directory: bool)
+--  Remove the file, or with `directory` the empty directory, at `path`.
+removed: (path: text.host_string, directory: bool) -> none ! posix.errno =
+    if directory then
+        try posix.remove_directory_at(posix.working_directory, path)
+    else
+        try posix.unlink_at(posix.working_directory, path)
+    end if
+end removed
+
+remove: (self: system, path: text.host_string, directory: bool)
         -> none ! io.not_found | io.no_access | io.io_failed =
     self.failure.val = 0
-    (result: status, number) := host_remove(path, directory)
-    if status <> 0 then
-        record_failure(self, number)
-        fail io.not_found when absent(number)
-        fail io.no_access when refused(number)
+    removed(path, directory) else (problem)
+        record(self, problem)
+        fail io.not_found when absent(problem)
+        fail io.no_access when refused(problem)
         fail io.io_failed
-    end if
+    end
 end remove
 
-system_remove_file: (self: system, path: ptr u8)
+system_remove_file: (self: system, path: text.host_string)
                     -> none ! io.not_found | io.no_access | io.io_failed =
     try remove(self, path, false)
 end system_remove_file
 
-system_remove_directory: (self: system, path: ptr u8)
+system_remove_directory: (self: system, path: text.host_string)
                          -> none ! io.not_found | io.no_access | io.io_failed =
     try remove(self, path, true)
 end system_remove_directory
@@ -869,14 +468,17 @@ system is io.directories
 --- Return a handle to the hosted I/O provider, exposing process arguments and
 --- the three standard streams, descriptors 0, 1 and 2. Regular open-write
 --- operations create or truncate files; close regular files explicitly. The
---- handle borrows nothing: the root, the descriptors and its last-error cell
---- belong to the process. Use `over` for a cell of the caller's own.
+--- handle borrows nothing: the argument root, the descriptors and its
+--- last-error cell belong to the process. Use `over` for a cell of the
+--- caller's own.
 ---
---- The arguments are the root `_landin_host_initialize_arguments`
---- established, which the hosted entry establishes before its body runs;
---- calling this before any root exists traps.
+--- The arguments are the root platform/posix's
+--- `_landin_host_initialize_arguments` established, which the hosted entry
+--- establishes before its body runs; calling this before any root exists
+--- traps.
 public host: () -> (handle: system) =
-    handle = rooted(addr process_errno)
+    _ = posix.arguments()
+    handle = (failure: addr process_errno)
 end host
 
 --- Fill `state` and return a handle that records its last error there
@@ -884,17 +486,7 @@ end host
 --- and descriptors like any other handle; calling this before any root
 --- exists traps, as `host` does.
 public over: (inout state: space) -> (handle: system from state) =
+    _ = posix.arguments()
     state = (failure: 0)
-    handle = rooted(addr state.failure)
+    handle = (failure: addr state.failure)
 end over
-
---  A handle over the established argument root, recording into `cell`.
-rooted: (cell: ptr mut i32) -> (handle: system from cell) =
-    if root_values == 0 then
-        compiler.unreachable()
-    end if
-    handle = (arguments: ptr(root_values + word),
-              argument_length: if root_count > 0 then usize(root_count - 1)
-                               else usize(0) end if,
-              failure: cell)
-end rooted

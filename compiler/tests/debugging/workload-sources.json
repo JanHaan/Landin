@@ -15,9 +15,13 @@
     "examples/config_parser/lexer/lexer.ldn",
     "examples/config_parser/parser/parser.ldn",
     "hosted/io/io.ldn",
-    "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn",
-    "hosted/linux/wrapped.ldn"
+    "platform/libc/libc.ldn",
+    "platform/linux/linux.ldn",
+    "platform/linux/wrapped.ldn",
+    "platform/posix/errno.ldn",
+    "platform/posix/libc.ldn",
+    "platform/posix/linux.ldn",
+    "platform/posix/posix.ldn"
   ],
   "containers": [
     "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
@@ -30,15 +34,20 @@
     "core/pool/pool.ldn",
     "core/sort/sort.ldn",
     "core/spill/spill.ldn",
+    "core/text/text.ldn",
     "core/tree/tree.ldn",
     "core/vec/growth.ldn",
     "core/vec/used.ldn",
     "core/vec/vec.ldn",
     "examples/derived_containers/workload/workload.ldn",
     "hosted/heap/heap.ldn",
-    "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn",
-    "hosted/linux/wrapped.ldn"
+    "platform/libc/libc.ldn",
+    "platform/linux/linux.ldn",
+    "platform/linux/wrapped.ldn",
+    "platform/posix/errno.ldn",
+    "platform/posix/libc.ldn",
+    "platform/posix/linux.ldn",
+    "platform/posix/posix.ldn"
   ],
   "hosted": [
     "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
@@ -63,8 +72,12 @@
     "examples/derived_hosted/app/reader.ldn",
     "hosted/heap/heap.ldn",
     "hosted/io/io.ldn",
-    "hosted/libc/libc.ldn",
-    "hosted/linux/linux.ldn",
-    "hosted/linux/wrapped.ldn"
+    "platform/libc/libc.ldn",
+    "platform/linux/linux.ldn",
+    "platform/linux/wrapped.ldn",
+    "platform/posix/errno.ldn",
+    "platform/posix/libc.ldn",
+    "platform/posix/linux.ldn",
+    "platform/posix/posix.ldn"
   ]
 }

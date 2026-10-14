@@ -1420,6 +1420,10 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Of_Kind : Syn.Node_Kind;
          Left, Right, Site : Syn.Node_Id) return Ty.Type_Kind;
+      --  The scalar base of a value of a distinct type whose base is a
+      --  scalar, or No_Value for any other value.
+      function Distinct_Scalar_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Signatures_Agree
         (Left, Right : Landin.Checking.Signature_Id) return Boolean;
       function Note_Reference_Value
@@ -12898,6 +12902,33 @@ package body Landin.Stages.Checking is
              Syn.Left_Of (Of_Tree, Node), Syn.Right_Of (Of_Tree, Node),
              Node));
 
+      function Distinct_Scalar_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+           /= Ty.Aggregate
+         then
+            return Ty.No_Value;
+         end if;
+         declare
+            Nominal : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
+         begin
+            if Nominal = Landin.Checking.No_Nominal_Type
+              or else not Landin.Checking.Is_Distinct (Types.all, Nominal)
+            then
+               return Ty.No_Value;
+            end if;
+            declare
+               Base : constant Ty.Type_Kind :=
+                 Landin.Checking.Distinct_Base (Types.all, Nominal).Kind;
+            begin
+               return (if Base in Ty.Scalar_Name then Base else Ty.No_Value);
+            end;
+         end;
+      end Distinct_Scalar_Base;
+
       function Synthesise_Binary
         (Of_Tree : Syn.Tree;
          Of_Kind : Syn.Node_Kind;
@@ -12988,6 +13019,94 @@ package body Landin.Stages.Checking is
                        (Of_Tree, Right, "a comparison"))
          then
             return Ty.Ill_Typed;
+         end if;
+
+         --  [0650]/[1890]: two values of one distinct type whose base is
+         --  a scalar compare for equality, which is identity and asks
+         --  nothing of the base's meaning; and where the base is an
+         --  unsigned integer, `&`, `^` and `|` combine them into that same
+         --  type, as a set of flags does.  Ordering, arithmetic and shifts
+         --  belong to the base and need an explicit extraction, and a
+         --  distinct value meets its base or another type only through a
+         --  conversion.
+         if (Distinct_Scalar_Base (Of_Tree, Left) /= Ty.No_Value)
+           /= (Distinct_Scalar_Base (Of_Tree, Right) /= Ty.No_Value)
+           and then Left_Type /= Ty.Ill_Typed
+           and then Right_Type /= Ty.Ill_Typed
+         then
+            declare
+               Other : constant Syn.Node_Id :=
+                 (if Distinct_Scalar_Base (Of_Tree, Left) /= Ty.No_Value
+                  then Right else Left);
+            begin
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Other),
+                  Message => "this operator takes two values of one"
+                             & " distinct type, and this is another type",
+                  Note    => "[0650]: a distinct value meets its base or"
+                             & " another type only through a conversion",
+                  Related => Syn.Origin (Of_Tree, Site),
+                  Because => "this operator",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Other);
+               return Ty.Ill_Typed;
+            end;
+         end if;
+         if Left_Type = Ty.Aggregate and then Right_Type = Ty.Aggregate
+           and then Distinct_Scalar_Base (Of_Tree, Left) /= Ty.No_Value
+         then
+            declare
+               Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Of_Tree, Left);
+               Base : constant Ty.Type_Kind :=
+                 Distinct_Scalar_Base (Of_Tree, Left);
+            begin
+               if Landin.Checking.Nominal_Of (Types.all, Of_Tree, Right)
+                 /= Nominal
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Right),
+                     Message => "this operator takes two values of one"
+                                & " distinct type, and this is another type",
+                     Note    => "[0650]: a distinct value meets its base or"
+                                & " another type only through a conversion",
+                     Related => Syn.Origin (Of_Tree, Left),
+                     Because => "the other operand",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+                  return Ty.Ill_Typed;
+               elsif Of_Kind in Syn.Equal_To | Syn.Not_Equal_To then
+                  return Ty.Bool;
+               elsif Of_Kind in Syn.Bitwise_And | Syn.Bitwise_Xor
+                                | Syn.Bitwise_Or
+                 and then Base in Ty.U8 .. Ty.U64 | Ty.Usize
+                 and then Syn.Kind (Of_Tree, Site) /= Syn.Assignment
+               then
+                  Landin.Checking.Note_Nominal
+                    (Types.all, Of_Tree, Site, Nominal);
+                  return Ty.Aggregate;
+               else
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Anchor (Of_Tree, Site),
+                     Message => "a distinct type has `==` and `<>`, and"
+                                & " `&`, `^`, `|` and `~` when its base is an"
+                                & " unsigned integer; extract the base for"
+                                & " anything else",
+                     Note    => "[0650]: ordering, arithmetic and shifts are"
+                                & " the base's, written `base(value)`; an"
+                                & " updating assignment is written out",
+                     Related => Syn.Origin (Of_Tree, Site),
+                     Because => "here",
+                     Into    => Found);
+                  return Ty.Ill_Typed;
+               end if;
+            end;
          end if;
 
          --  D200: a comparison takes what fits one register and has one
@@ -22529,6 +22648,21 @@ package body Landin.Stages.Checking is
                     Arithmetic_Operand
                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node));
                begin
+                  --  [0650]: `~` keeps a distinct value of an unsigned base
+                  --  in its type, as `&` and `|` do.
+                  if Under = Ty.Aggregate
+                    and then Syn.Kind (Of_Tree, Node) = Syn.Complement
+                    and then Distinct_Scalar_Base
+                      (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                        in Ty.U8 .. Ty.U64 | Ty.Usize
+                  then
+                     Landin.Checking.Note_Nominal
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Nominal_Of
+                          (Types.all, Of_Tree,
+                           Syn.Operand_Of (Of_Tree, Node)));
+                     return Kept (Ty.Aggregate);
+                  end if;
                   if Under = Ty.Fixed_Array then
                      declare
                         Operand : constant Syn.Node_Id :=
@@ -27464,6 +27598,15 @@ package body Landin.Stages.Checking is
                                                 Landin.Checking.Note_Reference
                                                   (Types.all, Of_Tree, Local,
                                                    Part.Reference);
+                                             when Ty.Atom_Value =>
+                                                --  A returned atom set is
+                                                --  the local's, as a plain
+                                                --  binding's is.
+                                                Landin.Checking.Note_Atom_Set
+                                                  (Types.all, Id, Part.Atoms);
+                                                Landin.Checking.Note_Atom_Set
+                                                  (Types.all, Of_Tree, Local,
+                                                   Part.Atoms);
                                              when others =>
                                                 null;
                                           end case;
@@ -34911,7 +35054,8 @@ package body Landin.Stages.Checking is
 
       --  A bodyless C import of `main` as C's runtime calls it, `(argc,
       --  argv, envp) -> int`: the hosted entry seen from a program-owned
-      --  process entry (hosted/linux's `_landin_start`), not a second `main`.
+      --  process entry (platform/linux's `_landin_start`), not a second
+      --  `main`.
       function Is_C_Entry_View (Id : Res.Declaration_Id) return Boolean;
 
       function Is_C_Entry_View (Id : Res.Declaration_Id) return Boolean is

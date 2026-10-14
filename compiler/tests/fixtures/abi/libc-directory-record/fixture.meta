@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: hosted/libc's struct dirent layout, its open, fstatat and unlinkat flags, AT_FDCWD, EEXIST and the mode and d_type bits agree with each hosted system's own C headers
+summary: platform/libc's struct dirent layout, its open, fstatat and unlinkat flags, AT_FDCWD, EEXIST and the mode and d_type bits agree with each hosted system's own C headers
 program: program.ldn
 root: ../../../../..
 c-sources: peer.c

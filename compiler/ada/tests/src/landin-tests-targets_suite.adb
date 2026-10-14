@@ -1237,6 +1237,9 @@ package body Landin.Tests.Targets_Suite is
          Landin.Testing.Check_Equal
            (Item, Arguments.Element (2), "arm64", "Darwin selects arm64");
          Landin.Testing.Check_Equal
+           (Item, Arguments.Element (3), "-Wl,-dead_strip",
+            "Darwin drops the atoms nothing retained reaches");
+         Landin.Testing.Check_Equal
            (Item, Landin.Backend.Toolchain.Driver_For (Darwin_Arm64, ""),
             "/usr/bin/clang", "Darwin selects the native Apple driver");
       end;

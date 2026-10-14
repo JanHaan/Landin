@@ -70,7 +70,7 @@ package Landin.Driver.Loading is
       Implicit     : String := "");
 
    --  Implicit, in either load, names one library module the program holds
-   --  whether or not an import reaches it: hosted/linux, whose process
+   --  whether or not an import reaches it: platform/linux, whose process
    --  entry a static Linux executable starts at.  It is loaded from the
    --  library after everything the imports reach, unless one already did.
 

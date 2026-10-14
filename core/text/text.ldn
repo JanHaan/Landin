@@ -200,6 +200,64 @@ public bytes: (source: utf8) -> (result: []u8 from source) =
     result = byte_view(source)
 end bytes
 
+--  A host string's representation.  Every system this compiler targets
+--  names files and passes arguments as bytes, so it is the bytes.  A
+--  system that names them in 16-bit units, as Windows does, fixes its own
+--  representation here under `fixed if compiler.os`, and the operations
+--  below keep their meaning over it.
+host_value: type = struct
+    bytes: []u8
+end host_value
+
+--- A host string: a path, a process argument or a directory entry's name,
+--- in the representation its system gives and takes, and not converted on
+--- the way through.  It is bytes on Linux, Darwin and FreeBSD, which need
+--- not be UTF-8; `from_host` is the checked conversion to `utf8`,
+--- `host_bytes` the conversion to bytes, and `host_equal` compares one
+--- with a literal.  It lends what it was made from: an argument lends the
+--- process's storage, an entry its directory's buffer, and `host_over` the
+--- caller's bytes.  A NUL cannot be in a path or an argument, and the
+--- system refuses one when it is given a host string holding one.
+public host_string: type = host_value
+
+--- A host string over the caller's bytes, which it lends.  Any bytes are
+--- one; the system says whether it accepts them when it is given them.
+--- A literal path is `text.host_over("input.txt")`.
+public host_over: (source: []u8) -> (result: host_string from source) =
+    result = (bytes: source)
+end host_over
+
+--- The host string's bytes, as the system gave them, lent.  Nothing is
+--- validated or copied.
+public host_bytes: (source: host_string) -> (result: []u8 from source) =
+    result = source.bytes
+end host_bytes
+
+--- The host string as UTF-8 text, lent: the checked conversion, which
+--- reports `invalid_text` when its bytes are not UTF-8, as `from_bytes`
+--- does.  A host string that is not text is still a working path or
+--- argument; it is only not `utf8`.
+public from_host: (source: host_string)
+                  -> (result: utf8 from source) ! invalid_text =
+    result = try from_bytes(source.bytes)
+end from_host
+
+--- Whether the host string spells exactly the text `literal`, compared as
+--- the system stores it, with no normalization: `--verbose` against an
+--- argument, for one.
+public host_equal: (value: host_string, literal: utf8) -> (yes: bool) =
+    have: []u8 = value.bytes
+    wanted: []u8 = bytes(literal)
+    yes = false
+    return when lenof have <> lenof wanted
+    mut index: usize = 0
+    while index < lenof wanted do
+        return when have[index] <> wanted[index]
+        inc index
+    end while
+    yes = true
+end host_equal
+
 --- Compare UTF-8 values by their encoded bytes. Does not normalize Unicode
 --- spelling.
 ---

@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/frame-origin-under-from/main.ldn:7:1
+  |
+7 | bad: (self: holder) -> (value: []u8 from self) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/frame-origin-under-from/main.ldn:9:5
+  |
+9 |     mut local: [2]u8 = [1, 2]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

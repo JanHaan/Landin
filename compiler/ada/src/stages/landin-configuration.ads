@@ -119,7 +119,7 @@ private
    --  Every node of every inactive subtree is marked, and every stage asks
    --  about nodes and declarations one at a time, so a lookup must not cost
    --  a walk of the marks: a list made each question linear in the inactive
-   --  code, which on hosted/linux and its numbers module was most of the
+   --  code, which on platform/linux and its numbers module was most of the
    --  frontend's time.
    package Entries is new Ada.Containers.Ordered_Sets
      (Element_Type => Inactive_Node);

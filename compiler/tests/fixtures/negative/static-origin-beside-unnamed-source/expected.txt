@@ -1,0 +1,10 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/static-origin-beside-unnamed-source/main.ldn:6:1
+  |
+6 | bad: (left: []u8, right: []u8, pick: bool) -> (value: []u8 from right) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/static-origin-beside-unnamed-source/main.ldn:6:48
+  |
+6 | bad: (left: []u8, right: []u8, pick: bool) -> (value: []u8 from right) =
+  |                                                ^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

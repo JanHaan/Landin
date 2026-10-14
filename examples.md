@@ -1050,10 +1050,13 @@ refills that buffer as the entries are read, so each entry's name is lent
 from the directory [0790] until the next read reuses the buffer [0800]: a
 program that keeps a name past that read is refused, and this one copies
 each name into a `kept` record. An entry with an empty name is the end of
-the directory. A name is bytes, as the system stores it, and need not be
-UTF-8: `text.from_bytes` validates it, and a name that is not prints with
-its other bytes escaped. A file's size is `io.entry_size`, asked of the
-open directory by name, a `u64` that `core/text` writes in decimal; a
+the directory. A name is a host string, as the system stores it, and need
+not be UTF-8: the listing keeps its bytes, `text.host_bytes`, which
+`text.from_bytes` validates, and a name that is not prints with its other
+bytes escaped. A path is a host string too, which the listing builds in a
+buffer of its own and makes with `text.host_over`. A file's size is
+`io.entry_size`, asked of the open directory by the name it read, a `u64`
+that `core/text` writes in decimal; a
 directory's own size differs between file systems, so it prints as `-`.
 The entries come in whatever order the system keeps them, so the program
 sorts its copies with `core/sort`, ordered by the `cmp.ordered` evidence
@@ -1078,7 +1081,8 @@ import hosted/io as hosted
 --  it runs in.
 top: []u8 = "listing-scratch"
 
---  More entries than the listing keeps, or a name longer than it keeps.
+--  More entries than the listing keeps, or a name or a path longer than
+--  it keeps.
 too_many: atom
 too_long: atom
 
@@ -1108,34 +1112,32 @@ end before
 kept is cmp.ordered (less: before)
 
 --  The path of NAME in the top directory, or of the top directory itself
---  when NAME is empty, terminated in SCRATCH.
+--  when NAME is empty, built in SCRATCH.
 joined: (name: []u8, scratch: []mut u8)
-        -> (path: ptr u8 from scratch) ! io.path_too_long =
+        -> (path: text.host_string from scratch) ! too_long =
     mut used: usize = 0
     for byte in top do
-        fail io.path_too_long when used >= lenof scratch
+        fail too_long when used >= lenof scratch
         scratch[used] = byte
         inc used
     end for
     if lenof name > 0 then
-        fail io.path_too_long when used >= lenof scratch
+        fail too_long when used >= lenof scratch
         scratch[used] = 47
         inc used
         for byte in name do
-            fail io.path_too_long when used >= lenof scratch
+            fail too_long when used >= lenof scratch
             scratch[used] = byte
             inc used
         end for
     end if
-    fail io.path_too_long when used >= lenof scratch
-    scratch[used] = 0
-    path = addr scratch[0]
+    path = text.host_over(scratch[0..<used])
 end joined
 
 --  Make the file NAME in the top directory, holding CONTENTS.
 make_file: (host: hosted.system, name: []u8, contents: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    path: ptr u8 = try joined(name, scratch[0..<64])
+    path: text.host_string = try joined(name, scratch[0..<64])
     opened: io.file = try io.open_write(host, path)
     io.write(host, opened, contents) else (problem)
         io.close(host, opened) else (ignored)
@@ -1147,7 +1149,7 @@ make_file: (host: hosted.system, name: []u8, contents: []u8) -> none ! ... =
 end make_file
 
 --  Remove the file PATH names, or with DIRECTORY the empty directory.
-remove: (host: hosted.system, path: ptr u8, directory: bool)
+remove: (host: hosted.system, path: text.host_string, directory: bool)
         -> none ! ... =
     if directory then
         try io.remove_directory(host, path)
@@ -1160,7 +1162,7 @@ end remove
 --  NAME is empty, if it is there.
 forget: (host: hosted.system, name: []u8, directory: bool) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    path: ptr u8 = try joined(name, scratch[0..<64])
+    path: text.host_string = try joined(name, scratch[0..<64])
     remove(host, path, directory) else (problem)
         fail problem when problem <> io.not_found
     end
@@ -1201,7 +1203,7 @@ end build
 list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
     count = 0
     mut scratch: [64]u8 = zeroed
-    path: ptr u8 = try joined("", scratch[0..<64])
+    path: text.host_string = try joined("", scratch[0..<64])
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
         try io.open_directory(host, path, buffer[0..<1024])
@@ -1210,7 +1212,7 @@ list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
     end
     loop do
         item: io.entry = try io.read_entry(host, listing)
-        name: []u8 = item.name
+        name: []u8 = text.host_bytes(item.name)
         break when lenof name == 0
         fail too_many when count == lenof into
         fail too_long when lenof name > 255
@@ -1221,7 +1223,7 @@ list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
         into[count].kind = item.kind
         into[count].size = 0
         if item.kind == io.regular then
-            into[count].size = try io.entry_size(host, listing, name)
+            into[count].size = try io.entry_size(host, listing, item.name)
         end if
         inc count
     end loop

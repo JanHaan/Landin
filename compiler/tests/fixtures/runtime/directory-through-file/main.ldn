@@ -5,6 +5,7 @@
 --  removing a file as a directory.  Making a directory where the file is
 --  finds the name taken: `already_exists`, with EEXIST, 17.
 import core/io
+import core/text
 import hosted/io as hosted
 
 file: []u8 = "through-file-scratch"
@@ -22,11 +23,7 @@ end refused
 --  Opening PATH as a directory is not_found with ENOTDIR.
 not_listed: (host: hosted.system, path: []u8) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    terminated: text.host_string = text.host_over(path)
     mut buffer: [1024]u8 = zeroed
     listing := io.open_directory(host, terminated, buffer[0..<1024])
         else (problem)
@@ -42,11 +39,7 @@ end not_listed
 not_made: (host: hosted.system, path: []u8, wanted: refusal, number: i32)
           -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    terminated: text.host_string = text.host_over(path)
     io.make_directory(host, terminated) else (problem)
         yes = refused(host, problem, wanted, number)
     end
@@ -55,11 +48,7 @@ end not_made
 --  Removing PATH as a directory is not_found with ENOTDIR.
 not_removed: (host: hosted.system, path: []u8) -> (yes: bool) =
     yes = false
-    mut scratch: [64]u8 = zeroed
-    terminated := io.terminate_path(path, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    terminated: text.host_string = text.host_over(path)
     io.remove_directory(host, terminated) else (problem)
         yes = refused(host, problem, io.not_found, 20)
     end
@@ -67,8 +56,7 @@ end not_removed
 
 --  Make the regular file, or remove it when REMOVING.
 scratch_file: (host: hosted.system, removing: bool) -> none ! ... =
-    mut scratch: [64]u8 = zeroed
-    terminated: ptr u8 = try io.terminate_path(file, scratch[0..<64])
+    terminated: text.host_string = text.host_over(file)
     if removing then
         try io.remove_file(host, terminated)
     else

@@ -153,54 +153,128 @@ package body Landin.Backend.Entry_Point is
          return False;
       end Defined;
 
-      procedure Note (Target : Landin.IR.Item_Id);
+      Count : constant Natural := Landin.IR.Item_Count (Of_Unit);
+      Reached : array (1 .. Natural'Max (1, Count)) of Boolean :=
+        [others => False];
+      Pending : array (1 .. Natural'Max (1, Count)) of Landin.IR.Item_Id :=
+        [others => Landin.IR.No_Item];
+      Waiting : Natural := 0;
 
-      procedure Note (Target : Landin.IR.Item_Id) is
+      procedure Reach (Target : Landin.IR.Item_Id);
+      procedure Reach_Name (Name : String);
+      procedure Reach_Evidence (Id : Landin.IR.Evidence_Id);
+
+      --  An external item is an unsatisfied import unless a program item
+      --  defines its name, in which case that item is what it reaches.
+      procedure Reach (Target : Landin.IR.Item_Id) is
       begin
          if Target = Landin.IR.No_Item
-           or else not Landin.IR.Is_External (Of_Unit, Target)
+           or else Reached (Positive (Target))
          then
             return;
          end if;
-         declare
-            Name : constant String := Link_Name (Target);
-         begin
-            if Name /= "" and then not Result.Contains (Name)
-              and then not Defined (Name)
-            then
-               Result.Append (Name);
-            end if;
-         end;
-      end Note;
+         Reached (Positive (Target)) := True;
+         if Landin.IR.Is_External (Of_Unit, Target) then
+            declare
+               Name : constant String := Link_Name (Target);
+            begin
+               if Name = "" then
+                  null;
+               elsif Defined (Name) then
+                  Reach_Name (Name);
+               elsif not Result.Contains (Name) then
+                  Result.Append (Name);
+               end if;
+            end;
+         else
+            Waiting := Waiting + 1;
+            Pending (Waiting) := Target;
+         end if;
+      end Reach;
+
+      procedure Reach_Name (Name : String) is
+      begin
+         for Index in 1 .. Count loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            begin
+               if not Landin.IR.Is_External (Of_Unit, Item)
+                 and then Link_Name (Item) = Name
+               then
+                  Reach (Item);
+               end if;
+            end;
+         end loop;
+      end Reach_Name;
+
+      procedure Reach_Evidence (Id : Landin.IR.Evidence_Id) is
+      begin
+         for Position in 1 .. Landin.IR.Evidence_Entry_Count (Of_Unit, Id)
+         loop
+            Reach (Landin.IR.Evidence_Entry_Target (Of_Unit, Id, Position));
+         end loop;
+      end Reach_Evidence;
    begin
-      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+      --  The roots: the entry, what the entry and the backend call by name,
+      --  every datum, and every evidence table.
+      Reach_Name ("_landin_start");
+      Reach_Name ("main");
+      Reach_Name ("_landin_host_initialize_arguments");
+      Reach_Name ("panic_handler");
+      for Index in 1 .. Count loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
          begin
-            Note (Landin.IR.Function_Target (Of_Unit, Item));
-            if not Landin.IR.Is_External (Of_Unit, Item) then
+            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+              or else Landin.IR.Placement_Of (Of_Unit, Item).Keep
+            then
+               Reach (Item);
+            end if;
+         end;
+      end loop;
+      for Id in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+         Reach_Evidence (Landin.IR.Evidence_Id (Id));
+      end loop;
+
+      while Waiting > 0 loop
+         declare
+            Item : constant Landin.IR.Item_Id := Pending (Waiting);
+         begin
+            Waiting := Waiting - 1;
+            Reach (Landin.IR.Function_Target (Of_Unit, Item));
+            Reach (Landin.IR.Address_Target (Of_Unit, Item));
+            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
+               if Landin.IR.Result_Of (Of_Unit, Item)
+                    in Landin.Types.Aggregate | Landin.Types.Fixed_Array
+                 and then Landin.IR.Has_Image (Of_Unit, Item)
+               then
+                  for Position in 1 .. Landin.IR.Aggregate_Field_Image_Count
+                    (Of_Unit, Item)
+                  loop
+                     Reach (Landin.IR.Nth_Image_Descriptor
+                       (Of_Unit, Item, Position).Target);
+                  end loop;
+               end if;
+            else
                for Position in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
                   declare
                      Value : constant Landin.IR.Value_Id :=
                        Landin.IR.Value_Id (Position);
                   begin
-                     if Landin.IR.Op_Of (Of_Unit, Item, Value)
-                       in Landin.IR.Function_Address | Landin.IR.Call
-                     then
-                        Note (Landin.IR.Callee_Of (Of_Unit, Item, Value));
-                     end if;
+                     case Landin.IR.Op_Of (Of_Unit, Item, Value) is
+                        when Landin.IR.Function_Address | Landin.IR.Call =>
+                           Reach (Landin.IR.Callee_Of (Of_Unit, Item, Value));
+                        when Landin.IR.Evidence_Address
+                           | Landin.IR.Evidence_Function =>
+                           Reach_Evidence
+                             (Landin.IR.Evidence_Of (Of_Unit, Item, Value));
+                        when others =>
+                           null;
+                     end case;
                   end;
                end loop;
             end if;
          end;
-      end loop;
-      for Id in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
-         for Position in 1 .. Landin.IR.Evidence_Entry_Count
-           (Of_Unit, Landin.IR.Evidence_Id (Id))
-         loop
-            Note (Landin.IR.Evidence_Entry_Target
-              (Of_Unit, Landin.IR.Evidence_Id (Id), Position));
-         end loop;
       end loop;
       return Result;
    end Unsatisfied_Imports;

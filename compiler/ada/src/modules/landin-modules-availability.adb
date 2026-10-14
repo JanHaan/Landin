@@ -11,6 +11,13 @@ package body Landin.Modules.Availability is
        and then Logical (Logical'First .. Logical'First + Root'Length) =
          Root & "/"));
 
+   --  platform/linux, platform/libc and platform/posix, with their
+   --  submodules.
+   function POSIX_Module (Logical : String) return Boolean is
+     (Under (Logical, "platform/posix")
+      or else Under (Logical, "platform/linux")
+      or else Under (Logical, "platform/libc"));
+
    function Permitted
      (Logical : String; Facts : Landin.Targets.Target_Facts) return Boolean
    is
@@ -18,6 +25,13 @@ package body Landin.Modules.Availability is
       if Under (Logical, "hosted") then
          return Landin.Targets.Capabilities.Hosted_System_Of (Facts) /=
            Landin.Targets.Capabilities.No_Hosted_System;
+      elsif POSIX_Module (Logical) then
+         --  The system's own interfaces and the POSIX layer over them serve
+         --  the hosted POSIX systems, and would not exist on another.
+         return Landin.Targets.Capabilities.Hosted_System_Of (Facts) in
+           Landin.Targets.Capabilities.Linux
+           | Landin.Targets.Capabilities.Darwin
+           | Landin.Targets.Capabilities.FreeBSD;
       elsif Under (Logical, "platform/cpu") then
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.Cortex_M0;
@@ -39,6 +53,9 @@ package body Landin.Modules.Availability is
    begin
       if Under (Logical, "hosted") then
          return "D267: hosted modules require a hosted target";
+      elsif POSIX_Module (Logical) then
+         return "D267: " & Logical & " requires a hosted POSIX system:"
+           & " Linux, Darwin or FreeBSD";
       elsif Under (Logical, "platform/cpu") then
          return "D267: platform/cpu requires an M-profile target";
       else

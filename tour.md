@@ -1145,7 +1145,14 @@ second: type = distinct f32
 ```
 
 Neither `meter + second` nor adding two `meter` values inherits `f32`'s
-arithmetic. Construct and extract explicitly:
+arithmetic. Two values of one distinct type whose base is a scalar do
+compare with `==` and `<>`: equality is identity, and asks nothing of what
+the base means, so a descriptor is compared without taking its number out.
+Where the base is an unsigned integer, `&`, `^`, `|` and `~` combine values
+into that same type, which is how a set of flags stays one. Ordering,
+arithmetic and shifts stay the base's, and a distinct value meets its base
+or another type only through a conversion. Construct and extract
+explicitly:
 
 ```landin
 length: meter = meter(2.5)
@@ -1672,7 +1679,14 @@ Both halves are checked where the function is written.
 Returning something derived from a parameter without saying
 so is an error, and naming a parameter it did not come from
 is an error too, so the clause cannot drift away from the
-body. For [0480]'s optional pointer this exact comparison is made only on an
+body. Static storage is the one exception to the second half:
+a read-only result that reaches module storage, or storage a
+module binding points to, a literal or an allocation, outlives
+every parameter, so it satisfies a source it does not come
+from. That is what lets a concept entry written `from self`
+be implemented by a provider that lends storage the process
+keeps, the process's own arguments among them. A writable
+result has no such exception, as D222 below says. For [0480]'s optional pointer this exact comparison is made only on an
 edge that actually returns the pointer; an edge provably returning the empty
 atom has no reference origin at all.
 For a result that carries a writable reference, D222 also requires that its
@@ -3261,8 +3275,7 @@ under valid-free use and cannot discover an inner provider's rejection of a
 malformed free.
 
 The separately imported hosted `hosted/heap` provider keeps size classes over
-memory it maps through `hosted/linux` on Linux, and allocates through
-`hosted/libc`'s `malloc` and `free` on Darwin and FreeBSD; it returns
+memory it maps through `platform/posix` on every hosted system; it returns
 independent aligned blocks and really releases each block. It accepts every
 `usize` alignment, treats zero and one as byte alignment, gives a successful
 zero-byte request a distinct non-null freeable token, and reports an unrepresentable request or host refusal
@@ -3866,7 +3879,7 @@ frame on top of the hardware exception frame and return through EXC_RETURN.
 Naked bodies are one assembly block with no compiler prologue; the programmer
 owns stack, registers, calls and return instructions. Falling off that block
 traps. Neither convention implies `keep`. Naked routines are also admitted on
-hosted x86-64, arm64 and RV64, where `hosted/linux`'s process entry is one.
+hosted x86-64, arm64 and RV64, where `platform/linux`'s process entry is one.
 
 ### [1580] Importing from C
 
@@ -4152,12 +4165,12 @@ There is no user-code module initialization [1460].
 Entry point. Hosted, `main` follows the system C ABI at the machine boundary.
 The no-argument Landin form is the ordinary one, because `argc` and `argv` in
 the C shape cannot be indexed without `slice_from`, which is not enabled — so
-the hosted world retains the argument table and offers bounded indexed
-pointer-and-length views instead. When the program imports `hosted/io`, the
-hosted entry calls that module's C-callable
+the hosted world retains the argument table and lends each argument as a
+host string instead. When the program imports `hosted/io`, and so
+`platform/posix`, the hosted entry calls the latter's C-callable
 `void _landin_host_initialize_arguments(int argc, char **argv);` with the real
 incoming carriers before that no-argument source body begins. A Linux
-executable needs no C library: it starts at `hosted/linux`'s `_landin_start`,
+executable needs no C library: it starts at `platform/linux`'s `_landin_start`,
 which calls `main` with the process's arguments, and `--link=libc` links the
 C runtime instead.
 
@@ -4248,13 +4261,7 @@ test_drops_debug: () -> (ok: bool) =
        readable: true, writable: false, opened: false, writing: false)
     mut files: [1]io.memory_file
     files[0] = file
-    level: []u8 = "--level"
-    threshold: []u8 = "ERROR"
-    path: []u8 = "in.log"
-    arguments: [3]io.argument = [
-      (data: addr level[0], length: lenof level),
-      (data: addr threshold[0], length: lenof threshold),
-      (data: addr path[0], length: lenof path)]
+    arguments: [3][]u8 = ["--level", "ERROR", "in.log"]
     mut output: [128]u8 = zeroed
     mut errors: [128]u8 = zeroed
     mut state: io.memory_space = zeroed
@@ -4297,9 +4304,10 @@ routine holding only the world lends its writer with
 `io.writer_of(world)` (D268).
 
 The system provider captures the errno of a failing call immediately, as
-minus a Linux system call's result, or as C's errno through `hosted/libc`,
-which names each system's accessor, on Darwin and FreeBSD, and keeps
-the exact terminal value in the handle's last-error cell, available through
+minus a Linux system call's result, or as C's errno through `platform/libc`,
+which names each system's accessor, on Darwin and FreeBSD; `platform/posix`
+hands it on as an atom whose number it keeps, and the provider keeps that
+exact terminal value in the handle's last-error cell, available through
 `hosted.last_errno`. A handle from `hosted.host()` shares the process's
 cell; one from `hosted.over(space)` keeps it in a `hosted.space` the caller
 declares, which is how two C threads calling into Landin keep theirs apart.
@@ -4325,8 +4333,9 @@ open: this is not an atomic operation. A `files` provider implements
 The bounded library provider is `core/io.memory`, a handle made with
 `memory_over(state, files, arguments, input, output, errors)` over a
 `memory_space` its caller declares `zeroed`. Its caller supplies
-every file name, content buffer, descriptor, the bytes standard input reads
-and output extent, and reads and sets the limits and counters in that state
+every file name, content buffer, descriptor, each argument's bytes, which the
+world lends back as host strings, the bytes standard input reads and output
+extent, and reads and sets the limits and counters in that state
 while the handle is used. Files must already
 exist in the table; opening for writing truncates after checks. Reads stop at
 the initialized length. Memory `write` completes the slice or reports failure
@@ -4350,14 +4359,16 @@ kept lines and selects heterogeneous filters and destinations at runtime. A
 leading level filter discards rejected lines from a bounded prefix. Its derivation
 manifest records exact argument, buffering, retry and cleanup policies.
 
-Both providers expose each user argument as a pointer and byte length, never as
-a guessed C string or forged slice. `copy_argument(argument, scratch)` checks
-the exact capacity before writing, copies into caller-owned initialized
-storage, and returns that genuine scratch prefix. Source backing must stay
-readable with representable addresses and must not overlap the destination.
-Passing the result to
-`text.from_bytes` is the checked route from world arguments to UTF-8. The
-system and memory sequences both begin at the first user argument; neither
+Both providers lend each user argument as a host string, `text.host_string`:
+the bytes the system gave, in the system's representation, never a guessed C
+string and never copied. A path is one too, so an argument passed on as a
+path reaches the system unconverted, whether or not it is UTF-8.
+`text.from_host` is the checked route from an argument to UTF-8, refusing
+bytes that are not with `text.invalid_text`; `text.host_bytes` lends the
+bytes and `text.host_equal` compares one with a literal. A path the caller
+builds is made over its own bytes with `text.host_over`, and the NUL a C
+call needs is added beneath the provider, by `platform/posix`. The system
+and memory sequences both begin at the first user argument; neither
 contains `argv[0]`.
 
 ### [1670] A failed check calls a fixed, never-returning symbol

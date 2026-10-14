@@ -1,0 +1,13 @@
+--  A static Linux link drops every routine the entry does not reach, so a
+--  C import only an unreached routine names needs no C library and is not
+--  refused: the link goes ahead.  A reached one still is
+--  (end-to-end/link-static-unsatisfied-c-import).
+extern(c) puts: (text: cstring) -> (result: i32)
+
+unused: () -> (result: i32) =
+    result = puts("never")
+end unused
+
+public main: () -> (code: i32) =
+    code = 0
+end main

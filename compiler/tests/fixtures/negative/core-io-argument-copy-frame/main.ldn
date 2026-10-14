@@ -1,6 +1,9 @@
-import core/io
+import core/text
 
-bad: (source: io.argument) -> (bytes: []u8) ! io.argument_too_long =
-    mut scratch: [2]u8 = zeroed
-    bytes = try io.copy_argument(source, scratch[0..<2])
+--  An argument's bytes once had to be copied into caller scratch; a host
+--  string made over such scratch still lends it, and cannot outlive the
+--  frame that owns it.
+bad: () -> (value: text.host_string) =
+    mut scratch: [2]u8 = [65, 66]
+    value = text.host_over(scratch[0..<2])
 end bad

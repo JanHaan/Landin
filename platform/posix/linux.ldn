@@ -1,0 +1,189 @@
+--  platform/posix on Linux, over platform/linux's system calls.  A call's
+--  failure is minus its errno in its result, so the errno is read from the
+--  result itself and no cell is shared between threads.  The same calls
+--  serve a program linked with --link=libc, whose C library this module
+--  never calls.
+
+import core/text
+import platform/linux
+
+fixed if compiler.os == linux then
+    --  The flags `openat` takes for `options`.
+    flags_of: (options: open_options) -> (flags: i32) =
+        flags = match options.access
+            read_only: linux.o_rdonly
+            write_only: linux.o_wronly
+            read_write: linux.o_rdwr
+        end match
+        if options.create then flags = flags | linux.o_creat end if
+        if options.exclusive then flags = flags | linux.o_excl end if
+        if options.truncate then flags = flags | linux.o_trunc end if
+        if options.append then flags = flags | linux.o_append end if
+        if options.directory then flags = flags | linux.o_directory end if
+    end flags_of
+
+    system_open: (at: descriptor, path: ptr u8, options: open_options,
+                  permissions: u32) -> (opened: descriptor) ! errno =
+        result: i32 = linux.openat(i32(at), path, flags_of(options),
+                                   permissions)
+        fail errno_of(-result) when result < 0
+        opened = descriptor(result)
+    end system_open
+
+    system_read: (source: descriptor, into: []mut u8)
+                 -> (count: usize) ! errno =
+        mut spare: u8 = 0
+        base: ptr mut u8 = if lenof into > 0 then addr into[0]
+                           else addr spare end if
+        result: isize = linux.read(i32(source), base, lenof into)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_read
+
+    system_write: (to: descriptor, bytes: []u8) -> (count: usize) ! errno =
+        spare: u8 = 0
+        base: ptr u8 = if lenof bytes > 0 then addr bytes[0]
+                       else addr spare end if
+        result: isize = linux.write(i32(to), base, lenof bytes)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_write
+
+    system_close: (closing: descriptor) -> none ! errno =
+        result: i32 = linux.close(i32(closing))
+        fail errno_of(-result) when result < 0
+    end system_close
+
+    --  statx's record is the kernel's own on every architecture, so it
+    --  needs no layout check.
+    system_status: (at: descriptor, path: ptr u8, follow: bool)
+                   -> (result: status) ! errno =
+        mut record: linux.file_status = zeroed
+        flags: i32 = if follow then 0 else linux.at_symlink_nofollow end if
+        outcome: i32 = linux.statx(i32(at), path, flags,
+                                   linux.statx_type | linux.statx_ino
+                                   | linux.statx_size,
+                                   addr record)
+        fail errno_of(-outcome) when outcome < 0
+        result = (device: (u64(record.device_major) << 32)
+                           | u64(record.device_minor),
+                  inode: record.inode, kind: kind_of_mode(u32(record.mode)),
+                  size: record.size)
+    end system_status
+
+    system_open_directory: (at: descriptor, path: ptr u8)
+                           -> (opened: directory_stream) ! errno =
+        result: i32 = linux.openat(i32(at), path,
+                                   linux.o_rdonly | linux.o_directory, 0)
+        fail errno_of(-result) when result < 0
+        opened = (descriptor: descriptor(result), stream: 0, filled: 0,
+                  cursor: 0, finished: false)
+    end system_open_directory
+
+    --  A record's little-endian u16 at `at`.
+    record_u16: (bytes: []u8, at: usize) -> (value: usize) =
+        value = usize(bytes[at]) | (usize(bytes[at + 1]) << 8)
+    end record_u16
+
+    --  The next record in the buffer, refilling it from getdents64 when
+    --  every record in it has been read.  A record is checked to lie
+    --  within what the kernel filled before any byte of it is read, and
+    --  its name to end within it, so a buffer's last record is never read
+    --  past; one that does not is `unlisted`, which no errno describes.
+    system_read_directory: (inout opened: directory_stream, buffer: []mut u8)
+                           -> (item: directory_entry from buffer) ! errno =
+        loop do
+            if opened.cursor >= opened.filled then
+                if opened.finished then
+                    item = (name: text.host_over(buffer[0..<0]),
+                            kind: unknown_kind)
+                    return
+                end if
+                got: isize = linux.getdents64(i32(opened.descriptor),
+                                              addr buffer[0], lenof buffer)
+                fail errno_of(i32(-got)) when got < 0
+                fail unlisted when usize(got) > lenof buffer
+                if got == 0 then
+                    opened.finished = true
+                else
+                    opened.filled = usize(got)
+                    opened.cursor = 0
+                end if
+            else
+                at: usize = opened.cursor
+                --  The fixed part is 19 bytes and the name at least one
+                --  byte and its NUL.
+                fail unlisted when opened.filled - at < 21
+                length: usize = record_u16(buffer, at + 16)
+                fail unlisted when length < 21
+                  or length > opened.filled - at
+                opened.cursor = at + length
+                mut stop: usize = at + 19
+                while stop < at + length and buffer[stop] <> 0 do
+                    inc stop
+                end while
+                fail unlisted when stop == at + length
+                item = (name: text.host_over(buffer[at + 19..<stop]),
+                        kind: kind_of_type(buffer[at + 18]))
+                return
+            end if
+        end loop
+    end system_read_directory
+
+    system_close_directory: (opened: directory_stream) -> none ! errno =
+        try system_close(opened.descriptor)
+    end system_close_directory
+
+    system_make_directory: (at: descriptor, path: ptr u8, permissions: u32)
+                           -> none ! errno =
+        result: i32 = linux.mkdirat(i32(at), path, permissions)
+        fail errno_of(-result) when result < 0
+    end system_make_directory
+
+    system_remove: (at: descriptor, path: ptr u8, directory: bool)
+                   -> none ! errno =
+        result: i32 = linux.unlinkat(i32(at), path,
+                                     if directory then linux.at_removedir
+                                     else 0 end if)
+        fail errno_of(-result) when result < 0
+    end system_remove
+
+    system_map: (length: usize) -> (base: ptr mut u8) ! errno =
+        result: i64 = linux.mmap(0, length, linux.prot_read | linux.prot_write,
+                                 linux.map_private | linux.map_anonymous, -1,
+                                 0)
+        fail errno_of(i32(-result)) when result < 0
+        base = ptr(usize(result))
+    end system_map
+
+    system_unmap: (base: ptr mut u8, length: usize) -> none ! errno =
+        result: i32 = linux.munmap(usize(base), length)
+        fail errno_of(-result) when result < 0
+    end system_unmap
+
+    system_page_size: () -> (bytes: usize) =
+        bytes = linux.page_size()
+    end system_page_size
+
+    system_exit: (status: i32) -> noreturn =
+        linux.exit_group(status)
+    end system_exit
+
+    --  arm64 and RV64 have no `poll` call, so every architecture makes
+    --  `ppoll`, with the milliseconds as its time limit.
+    system_poll: (entries: []mut poll_entry, milliseconds: i32)
+                 -> (ready: usize) ! errno =
+        mut spare: linux.poll_record = zeroed
+        records: ptr mut linux.poll_record =
+            if lenof entries > 0 then ptr(usize(addr entries[0]))
+            else addr spare end if
+        mut limit: linux.timespec = zeroed
+        limit.seconds = i64(milliseconds / 1000)
+        limit.nanoseconds = i64(milliseconds % 1000) * 1000000
+        bound: linux.poll_limit = if milliseconds < 0 then linux.no_limit
+                                  else addr limit end if
+        result: i32 = linux.ppoll(records, lenof entries, bound)
+        fail errno_of(-result) when result < 0
+        ready = usize(result)
+    end system_poll
+end if

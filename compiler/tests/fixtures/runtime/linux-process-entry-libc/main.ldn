@@ -1,11 +1,11 @@
 import core/io
 import hosted/io as hosted
-import hosted/linux
+import platform/linux
 
 --  Under --link=libc the C runtime starts the program, so
---  hosted/linux's entry never runs: it has no environment or auxiliary
+--  platform/linux's entry never runs: it has no environment or auxiliary
 --  vector to report, and the page size falls back to 4 KiB.  hosted/io
---  still reaches the kernel through hosted/linux's system calls and the
+--  still reaches the kernel through platform/linux's system calls and the
 --  arguments still reach its world.
 public main: () -> (code: i32) =
     code = 1

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix lists a directory as POSIX does, `.` and `..` among its entries, tells a kind its record lacks with status_at, and fails with the errno POSIX names, the same atom on every system, for a directory made twice, one removed while it holds a file, a missing one, a file opened as one and a buffer too small for an entry
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

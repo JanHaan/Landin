@@ -17,8 +17,9 @@ explains the package boundaries, not a second work list.
 | frame preflight and emission selection | `Landin.Backend.Dispatch` |
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
 | the hosted entry's argument initializer name | `Landin.Hosted`, shared by checker and backend |
-| each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `hosted/libc`, selected by `compiler.os` (Darwin and FreeBSD providers; Linux under `--link=libc` only) |
-| Linux system calls, the static entry `_landin_start` and the Linux heap's mappings | ordinary `hosted/linux` |
+| POSIX's facilities in Landin types: descriptors, errno atoms and their numbers, paths' terminators, `stat`, directory streams, mappings and `poll` | ordinary `platform/posix`, written over `platform/linux` on Linux and `platform/libc` on Darwin and FreeBSD |
+| each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `platform/libc`, selected by `compiler.os` (beneath `platform/posix` on Darwin and FreeBSD; Linux under `--link=libc` only) |
+| Linux system calls and the static entry `_landin_start` | ordinary `platform/linux` |
 | native driver, archive resolution and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
@@ -66,22 +67,25 @@ followed by `b`; that branch still requires the architecture's 128-MiB reach.
 The recorded broader resource/scaling limitations remain; this adds no
 recovery guarantee for arbitrary exhaustion.
 
-Darwin's hosted providers reach libSystem through `hosted/libc`: argument
-access, malloc-backed aligned allocation, open/read/write/close and immediate
-errno capture through `__error`, with Apple's open flags. `open` is called as
+Darwin's hosted providers reach libSystem through `platform/posix` over
+`platform/libc`: anonymous mappings for the heap's size classes,
+open/read/write/close and immediate errno capture through `__error`, with
+Apple's open flags. `open` is called as
 the variadic function it is, so its mode takes Apple's variadic placement,
 every unnamed argument in its own eight-byte stack slot. The platform's
 ordinary startup and libSystem come from the native Apple driver.
 
-Linux x86-64 emits each routine, datum and conformance table in its own ELF
-input section and links with `-Wl,--gc-sections`. An executable keeps only
-what the entry, a C object or another kept section reaches: a library routine
-that is declared but never called, or reached only from an unreachable
-routine or datum, is absent along with its libc dependency. The hosted entry
-calls `hosted/io`'s C-callable argument initializer when the program defines
-it, and a C-owned startup can call it by the same name. Linux arm64 and
-Darwin arm64 do not yet perform this per-item section collection;
-unreferenced library routines may remain in their executables.
+Every ELF backend, x86-64, arm64 and RV64 on Linux and FreeBSD alike, emits
+each routine, datum and conformance table in its own input section and links
+with `-Wl,--gc-sections`; Cortex-M does the same under its own linker script.
+An executable keeps only what the entry, a C object or another kept section
+reaches: a library routine that is declared but never called, or reached only
+from an unreachable routine or datum, is absent along with its libc
+dependency. Darwin's Mach-O assembly splits into atoms at its symbols
+(`.subsections_via_symbols`) and links with `-Wl,-dead_strip`, which drops
+the same. The hosted entry calls `platform/posix`'s C-callable argument
+initializer when the program defines it, and a C-owned startup can call it
+by the same name.
 
 Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
 and GNU build-id arguments. Darwin queries the selected driver with
@@ -102,24 +106,27 @@ are allocated separately. Existing ELF spelling and golden records remain valid.
 
 `--link=static|libc` chooses how a hosted executable is linked (D280), and
 Linux is the one hosted system with a choice. The default, `static`, links
-the program alone: the driver adds `hosted/linux` from the library beside the
+the program alone: the driver adds `platform/linux` from the library beside the
 compiler as an implicit root, and passes `-nostdlib -static -no-pie
 -Wl,-e,_landin_start` and `-Wl,--gc-sections` to the target's driver, so no C
 runtime object, C library or dynamic loader is linked and the process starts
-at `hosted/linux`'s `_landin_start` (D279). `--link=libc` keeps the C runtime's
+at `platform/linux`'s `_landin_start` (D279). `--link=libc` keeps the C runtime's
 link, `main` called by C's startup, archive requests and libc among them.
 Darwin and FreeBSD reach their systems only through their C libraries, so
 `libc` is their only mode and `--link=static` there is L0002, as is `--link`
 for a target with no hosted system or without `--emit=exe` or `--emit=asm`.
 
 A static request is refused with L0500 before any tool runs, and the note
-names `--link=libc`, when no library holding `hosted/linux` was found, when the
+names `--link=libc`, when no library holding `platform/linux` was found, when the
 program asks for `linker.library`, or when it refers to a bodyless external
-symbol that no program item defines. That last check counts a reference from
-any routine, reached or not: only x86-64 collects per-item sections, so on
-arm64 and RV64 an unreached reference would still reach the linker. `-v`,
+symbol that no program item defines. That last check counts only what the
+entry reaches, as the link keeps it: every Linux backend collects per-item
+sections, so a reference from an unreached routine never reaches the linker.
+It follows calls and addresses taken from `_landin_start`, a C name to the
+routine that defines it, `main`, the argument initializer and the panic
+handler, and counts whatever a datum or an evidence table names whole. `-v`,
 `--dry-run` and the build report name the mode. An emitted `.s` under static
-mode includes `hosted/linux`, and it still links under an ordinary C driver.
+mode includes `platform/linux`, and it still links under an ordinary C driver.
 
 ## Linux arm64
 
@@ -132,7 +139,7 @@ rather than by comparing it with Darwin's:
 |---|---|---|
 | object format (`Object_Format_Of`) | Mach-O: `@PAGE`/`@PAGEOFF`, `@GOTPAGE`, `__TEXT,__const`, `__DATA_CONST,__const`, `.zerofill`, `.private_extern`, `.subsections_via_symbols`, `L` labels, the underscore prefix, dSYM DWARF | ELF: `:lo12:`, `:got:`/`:got_lo12:`, `.rodata`, `.data.rel.ro.local`, `.bss`, `.hidden`, `.type`/`.size`, `.note.GNU-stack`, `.L` labels, no prefix, ELF DWARF |
 | C ABI (`C_ABI_Of`) | Apple's AAPCS64: variadic tails on the stack, named stack scalars and HFAs packed | the standard AAPCS64: variadic arguments assigned as named ones, every stack argument in whole eight-byte slots |
-| hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | system calls through `hosted/linux`; under `--link=libc`, `__errno_location` and `open` flags 577 |
+| hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | system calls through `platform/linux`, beneath `platform/posix`; under `--link=libc` too, with C's `__errno_location` and `open` flags 577 left to a program that calls C |
 
 The driver is `aarch64-linux-gnu-gcc`, the name the pinned aarch64 GNAT
 installs. Under `--link=libc` the program links as a position-independent
@@ -143,7 +150,7 @@ level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
 reserved for assembly blocks, as on Darwin. The hosted entry and the panic
 edges are Darwin's instructions; `hosted/io` makes Linux system calls through
-`hosted/linux`.
+`platform/posix` and `platform/linux`.
 
 ## C aliases and generated bindings
 
@@ -196,7 +203,7 @@ so the level is spelled `generic64` with its extensions; above the baseline
 the linker's `-z x86-64-vN` writes the level into the executable's GNU
 property note. A libc-linked executable is refused by glibc's loader when
 the processor lacks its level; a static Linux executable carries the same
-note, which no loader reads, and `hosted/linux`'s entry refuses it instead,
+note, which no loader reads, and `platform/linux`'s entry refuses it instead,
 before `main`, with status 127 and one line on standard error (D284). Linux
 arm64 and RV64 executables carry no note: a static build is held to its
 level by the entry, through AT_HWCAP and `riscv_hwprobe` (XTheadBa

@@ -703,14 +703,14 @@ package body Landin.Diagnostics.Explanations is
                & "stic and its note identify the cause: the target has no "
                & "backend, its source debug mode is unsupported, firmware "
                & "forbids `linker.library`, a static Linux link cannot be "
-               & "made (no library holding `hosted/linux` was found, or th"
-               & "e program asks for `linker.library` or refers to C symbo"
-               & "ls nothing in it defines), no toolchain is selected, or "
-               & "the named tool is unavailable. Choose a target with a ba"
-               & "ckend, change the debug or firmware configuration, link "
-               & "with `--link=libc`, or select or install a toolchain as "
-               & "the note directs. `--toolchain=` only helps when a toolc"
-               & "hain is absent or unavailable.",
+               & "made (no library holding `platform/linux` was found, or "
+               & "the program asks for `linker.library` or refers to C sym"
+               & "bols nothing in it defines), no toolchain is selected, o"
+               & "r the named tool is unavailable. Choose a target with a "
+               & "backend, change the debug or firmware configuration, lin"
+               & "k with `--link=libc`, or select or install a toolchain a"
+               & "s the note directs. `--toolchain=` only helps when a too"
+               & "lchain is absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"

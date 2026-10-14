@@ -1,5 +1,5 @@
 class: negative
-summary: an argument copy view cannot escape its caller-owned frame scratch
+summary: a host string over caller-owned frame scratch cannot escape that frame
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-io-argument-copy-frame
 status: 1

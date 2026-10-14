@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a read-only result reaching module storage, or storage a module binding points to, satisfies a from clause naming a source it does not derive from, as a concept entry written from self needs when one provider lends program storage
+program: main.ldn
+status: 42
+constructs: 0790, 0840, 1260
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

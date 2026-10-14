@@ -250,7 +250,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R13.18 — The POSIX layer and host strings (planned).**
+**Next roadmap item: R13.19 — Formatting, buffered text and byte blocks (planned).**
 
 ---
 

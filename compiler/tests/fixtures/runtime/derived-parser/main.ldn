@@ -274,7 +274,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    opened := world.open_read(source_argument.data) else (problem)
+    opened := world.open_read(source_argument) else (problem)
         _ = problem
         return
     end

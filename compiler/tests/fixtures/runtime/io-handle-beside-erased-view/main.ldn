@@ -3,8 +3,8 @@
 --  erased view is used again afterwards: the writes reach one provider in
 --  program order.
 import core/io
+import core/text
 
-argument_bytes: [1]u8 = [120]
 
 same_bytes: (actual: []u8, expected: []u8) -> (same: bool) =
     same = false
@@ -17,7 +17,7 @@ end same_bytes
 
 public main: () -> (code: i32) =
     code = 1
-    arguments: [1]io.argument = [(data: addr argument_bytes[0], length: 1)]
+    arguments: [1][]u8 = ["x"]
     files: []mut io.memory_file = []
     mut output: [16]u8 = zeroed
     mut errors: [1]u8 = zeroed

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a destructured result of an atom-set type keeps its atom set for comparison and match, by name and through try, where the checker used to stop with an internal defect
+program: main.ldn
+status: 42
+constructs: 0270, 0920, 0960, 0990, 1030
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

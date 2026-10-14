@@ -1,13 +1,13 @@
 absent: atom
-maybe_pointer: type = absent | ptr u32
-stored: u32 = 42
+maybe_pointer: type = absent | ptr mut u32
+mut stored: u32 = 42
 mut shared: maybe_pointer = absent
 
 replace: () -> none =
     shared = addr stored
 end replace
 
-bad: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+bad: (cell: ptr mut u32) -> (result: maybe_pointer from cell) =
     shared = absent
     replace()
     result = shared

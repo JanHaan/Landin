@@ -797,6 +797,44 @@ package body Landin.Backend is
       return Of_Codes.Codes (Positive (Identity));
    end Atom_Code;
 
+   function Runs_Of
+     (Of_Unit  : Landin.IR.Unit;
+      Of_Codes : Atom_Codes;
+      Set      : Landin.IR.Atom_Set_Id) return Code_Runs
+   is
+      Count : constant Natural := IR.Atom_Count (Of_Unit, Set);
+      Codes : array (1 .. Count) of Positive;
+      Runs  : Code_Runs (1 .. Count) := [others => (Low => 1, High => 1)];
+      Last  : Natural := 0;
+   begin
+      for Index in 1 .. Count loop
+         Codes (Index) :=
+           Atom_Code (Of_Codes, IR.Nth_Atom (Of_Unit, Set, Index));
+      end loop;
+      --  Insertion sort: a set is small, or already nearly in order.
+      for Index in 2 .. Count loop
+         declare
+            Held : constant Positive := Codes (Index);
+            At_Index : Natural := Index - 1;
+         begin
+            while At_Index >= 1 and then Codes (At_Index) > Held loop
+               Codes (At_Index + 1) := Codes (At_Index);
+               At_Index := At_Index - 1;
+            end loop;
+            Codes (At_Index + 1) := Held;
+         end;
+      end loop;
+      for Code of Codes loop
+         if Last > 0 and then Code <= Runs (Last).High + 1 then
+            Runs (Last).High := Positive'Max (Runs (Last).High, Code);
+         else
+            Last := Last + 1;
+            Runs (Last) := (Low => Code, High => Code);
+         end if;
+      end loop;
+      return Runs (1 .. Last);
+   end Runs_Of;
+
    procedure Add (Into : in out Spelling_Counts; Spelling : String) is
       Found : constant Spelling_Maps.Cursor := Into.Held.Find (Spelling);
    begin

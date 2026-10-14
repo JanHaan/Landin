@@ -1,0 +1,71 @@
+--  A read-only result whose reference reaches storage that outlives the
+--  call, module storage or what a module binding points to, satisfies a
+--  `from` clause naming a source it does not derive from: keeping that
+--  source alive asks nothing the storage does not already give.  A concept
+--  written `from self` is implemented here by one provider that lends its
+--  caller's bytes and one that lends the program's own table, as the
+--  hosted I/O provider lends the process's arguments.
+no_names: atom
+names_root: type = no_names | ptr []u8
+
+words: [2][]u8 = ["alpha", "beta"]
+mut root: names_root = no_names
+
+lender: type = concept (provider: type)
+    lend: (self: provider, index: usize) -> (value: []u8 from self)
+end lender
+
+--  Lends the caller's bytes: the result derives from the handle.
+caller: type = struct
+    held: []u8
+end caller
+
+caller_lend: (self: caller, index: usize) -> (value: []u8 from self) =
+    _ = index
+    value = self.held
+end caller_lend
+
+caller is lender (lend: caller_lend)
+
+--  Lends module storage the program keeps: the result derives from no
+--  parameter, and still satisfies `from self`.
+program: type = struct
+    tag: u8
+end program
+
+program_lend: (self: program, index: usize) -> (value: []u8 from self) =
+    _ = self.tag
+    value = words[index % 2]
+end program_lend
+
+program is lender (lend: program_lend)
+
+--  Lends through a pointer read back from a module binding.
+rooted_lend: (self: program, index: usize) -> (value: []u8 from self) =
+    _ = self.tag
+    _ = index
+    value = match root
+        no_names: words[0]
+        ptr (found): found.val
+    end match
+end rooted_lend
+
+first_of: (provider: type is lender, host: provider) -> (byte: u8) =
+    bytes: []u8 = provider.lend(host, 1)
+    byte = bytes[0]
+end first_of
+
+public main: () -> (code: i32) =
+    mut own: [2]u8 = [42, 0]
+    lending: caller = (held: own[0..<2])
+    keeping: program = (tag: 0)
+    code = 1
+    return when first_of(lending) <> 42
+    code = 2
+    return when first_of(keeping) <> 98
+    root = addr words[0]
+    code = 3
+    seen: []u8 = rooted_lend(keeping, 0)
+    return when lenof seen <> 5 or seen[0] <> 97
+    code = 42
+end main

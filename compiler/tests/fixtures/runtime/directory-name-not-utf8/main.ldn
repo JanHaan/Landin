@@ -25,27 +25,21 @@ say: (host: hosted.system, line: []u8) -> none =
     end
 end say
 
-terminated: (path: []u8, scratch: []mut u8)
-            -> (result: ptr u8 from scratch) ! ... =
-    result = try io.terminate_path(path, scratch)
-end terminated
-
 --  Remove what an earlier run may have left.  Where the system refuses
 --  the name, nothing can have been made with it, and the name is not
 --  asked about again.
 clear: (host: hosted.system) -> none ! ... =
-    mut scratch: [64]u8 = zeroed
     if not refuses then
-        try forget(host, try terminated(inside, scratch[0..<64]))
+        try forget(host, text.host_over(inside))
     end if
-    io.remove_directory(host, try terminated(top, scratch[0..<64]))
+    io.remove_directory(host, text.host_over(top))
         else (problem)
         fail problem when problem <> io.not_found
     end
 end clear
 
 --  Remove the file PATH names, if it is there.
-forget: (host: hosted.system, path: ptr u8) -> none ! ... =
+forget: (host: hosted.system, path: text.host_string) -> none ! ... =
     io.remove_file(host, path) else (problem)
         fail problem when problem <> io.not_found
     end
@@ -56,8 +50,7 @@ end forget
 made: (host: hosted.system) -> (taken: bool, number: i32) ! ... =
     taken = false
     number = 0
-    mut scratch: [64]u8 = zeroed
-    path: ptr u8 = try terminated(inside, scratch[0..<64])
+    path: text.host_string = text.host_over(inside)
     opened: io.file = io.open_write(host, path) else (problem)
         fail problem when problem <> io.io_failed
         number = hosted.last_errno(host)
@@ -72,28 +65,28 @@ end made
 listed: (host: hosted.system) -> (count: usize, found: bool) ! ... =
     count = 0
     found = false
-    mut scratch: [64]u8 = zeroed
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
-        try io.open_directory(host, try terminated(top, scratch[0..<64]),
+        try io.open_directory(host, text.host_over(top),
                               buffer[0..<1024])
     defer io.close_directory(host, listing) else (problem)
         _ = problem
     end
     loop do
         item: io.entry = try io.read_entry(host, listing)
-        name: []u8 = item.name
+        name: []u8 = text.host_bytes(item.name)
         break when lenof name == 0
         inc count
         if same(name, invalid) then
-            found = not text.valid(name) and refused_as_text(name)
+            found = not text.valid(name) and refused_as_text(item.name)
         end if
     end loop
 end listed
 
---  Whether core/text refuses NAME as UTF-8 text.
-refused_as_text: (name: []u8) -> (yes: bool) =
-    shown: utf8 = text.from_bytes(name) else (problem)
+--  Whether the checked conversion refuses the host string NAME as UTF-8
+--  text.
+refused_as_text: (name: text.host_string) -> (yes: bool) =
+    shown: utf8 = text.from_host(name) else (problem)
         yes = problem == text.invalid_text
         return
     end
@@ -118,11 +111,7 @@ public main: () -> (code: i32) =
         return
     end
     code = 2
-    mut scratch: [64]u8 = zeroed
-    top_path := terminated(top, scratch[0..<64]) else (problem)
-        _ = problem
-        return
-    end
+    top_path: text.host_string = text.host_over(top)
     io.make_directory(host, top_path) else (problem)
         _ = problem
         return

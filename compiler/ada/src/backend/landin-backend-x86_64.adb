@@ -5426,14 +5426,35 @@ package body Landin.Backend.X86_64 is
                         Emit ("cmpl $0, " & Value_Operand (Value));
                         Emit ("je " & Done);
                      end if;
-                     for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms)
-                     loop
-                        Emit ("cmpl $" & Trimmed (Natural'Image (Atom_Code
-                          (Atoms_Ranked, Landin.IR.Nth_Atom
-                            (Of_Unit, Atoms, Index))))
-                          & ", " & Value_Operand (Value));
-                        Emit ("je " & Done);
-                     end loop;
+                     declare
+                        Runs : constant Code_Runs :=
+                          Runs_Of (Of_Unit, Atoms_Ranked, Atoms);
+                     begin
+                        for Index in Runs'Range loop
+                           declare
+                              Run : constant Code_Run := Runs (Index);
+                              Next : constant String :=
+                                Done & "_" & Trimmed (Positive'Image (Index));
+                           begin
+                              if Run.Low = Run.High then
+                                 Emit ("cmpl $" & Trimmed
+                                   (Positive'Image (Run.Low))
+                                   & ", " & Value_Operand (Value));
+                                 Emit ("je " & Done);
+                              else
+                                 Emit ("cmpl $" & Trimmed
+                                   (Positive'Image (Run.Low))
+                                   & ", " & Value_Operand (Value));
+                                 Emit ("jb " & Next);
+                                 Emit ("cmpl $" & Trimmed
+                                   (Positive'Image (Run.High))
+                                   & ", " & Value_Operand (Value));
+                                 Emit ("jbe " & Done);
+                                 Put (Next & ":");
+                              end if;
+                           end;
+                        end loop;
+                     end;
                      Emit_Panic (Landin.Panics.Bad_Conversion);
                      Put (Done & ":");
                   end;

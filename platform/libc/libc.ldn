@@ -1,10 +1,13 @@
---  The C library, declared as ordinary extern(c) imports on every hosted
---  target.  On Darwin and FreeBSD, whose C library is their system
---  interface, hosted/io and hosted/heap reach the operating system only
---  through these declarations; on Linux they use hosted/linux, and this
---  module serves a program linked with --link=libc.  Every declaration
+--  The C library, declared as ordinary extern(c) imports, raw: the
+--  system's own interface on Darwin and FreeBSD, and C's on Linux.  On
+--  Darwin and FreeBSD, whose C library is their system interface,
+--  platform/posix reaches the operating system only through these
+--  declarations; on Linux it makes platform/linux's system calls, and this
+--  module serves a program linked with --link=libc.  Its scope is the
+--  systems with a C library, Linux, Darwin and FreeBSD.  Every declaration
 --  here is bodyless, so a program that names none of them needs no C
---  library.  Facts that differ between systems are selected by
+--  library, and a static Linux program that names one is refused before it
+--  links (D280).  Facts that differ between systems are selected by
 --  `compiler.os`, record layouts by the C ABI as well, and the native C
 --  headers of each system check them: the `stat` record in
 --  abi/core-io-file-identity, the rest in the hosted runtime and ABI
@@ -31,6 +34,13 @@ public extern(c) read: (descriptor: i32, data: ptr mut u8, length: usize)
 --- means nothing was transferred.
 public extern(c) write: (descriptor: i32, data: ptr u8, length: usize)
                         -> (count: isize)
+
+--- Open `path`, relative to the directory open as `directory` (or
+--- `at_fdcwd`), as `open` does: the new descriptor, or -1 with the reason
+--- in errno.  With `o_creat` the one variadic argument is the permission
+--- bits as an `i32`.
+public extern(c) openat: (directory: i32, path: ptr u8, flags: i32, ...)
+                         -> (descriptor: i32)
 
 --- Close `descriptor`: 0, or -1 with the reason in errno.  The descriptor
 --- may be released even when this fails, so a failed close is never
@@ -86,6 +96,8 @@ public erofs: i32 = 30
 public o_rdonly: i32 = 0
 --- `open` flag: write only.  The same on every hosted system.
 public o_wronly: i32 = 1
+--- `open` flag: read and write.  The same on every hosted system.
+public o_rdwr: i32 = 2
 
 fixed if compiler.os == linux then
     --- `open` flag: create the file if it does not exist.  Linux keeps one
@@ -93,13 +105,75 @@ fixed if compiler.os == linux then
     public o_creat: i32 = 64
     --- `open` flag: truncate an existing regular file to length zero.
     public o_trunc: i32 = 512
+    --- `open` flag: with `o_creat`, fail with EEXIST if the name is taken.
+    public o_excl: i32 = 128
+    --- `open` flag: every write goes to the end of the file.
+    public o_append: i32 = 1024
+    --- `mmap` flag: the mapping is backed by no file and starts zeroed.
+    public map_anonymous: i32 = 32
+    --- `poll`'s count of records, C's `nfds_t`.
+    public poll_count: type = u64
 else
     --- `open` flag: create the file if it does not exist.  Linux keeps one
     --- value on every architecture; Darwin and FreeBSD share the BSD one.
     public o_creat: i32 = 512
     --- `open` flag: truncate an existing regular file to length zero.
     public o_trunc: i32 = 1024
+    --- `open` flag: with `o_creat`, fail with EEXIST if the name is taken.
+    public o_excl: i32 = 2048
+    --- `open` flag: every write goes to the end of the file.
+    public o_append: i32 = 8
+    --- `mmap` flag: the mapping is backed by no file and starts zeroed.
+    public map_anonymous: i32 = 4096
+    --- `poll`'s count of records, C's `nfds_t`.
+    public poll_count: type = u32
 end if
+
+--- `mmap` protection: the pages may be read.  The same on every hosted
+--- system.
+public prot_read: i32 = 1
+--- `mmap` protection: the pages may be written.
+public prot_write: i32 = 2
+--- `mmap` flag: the mapping is private to this process.
+public map_private: i32 = 2
+
+--- Map `length` bytes, at a place of the system's choosing when `address`
+--- is zero: the mapping's address, or `map_failed` with the reason in
+--- errno.  With `map_anonymous` the descriptor is -1 and the offset zero.
+public extern(c) mmap: (address: usize, length: usize, protection: i32,
+                        flags: i32, descriptor: i32, offset: i64)
+                       -> (result: usize)
+
+--- What `mmap` returns when it fails: C's `MAP_FAILED`, all bits set.
+public map_failed: usize = 0 -% 1
+
+--- Unmap the `length` bytes at `address`: 0, or -1 with the reason in
+--- errno.
+public extern(c) munmap: (address: usize, length: usize) -> (status: i32)
+
+--- The size of a page in bytes, 16 KiB on Darwin arm64 and 4 KiB on the
+--- others.
+public extern(c) getpagesize: () -> (bytes: i32)
+
+--- End the process with `status` at once: no `atexit` handler runs and no
+--- C stream is flushed.
+public extern(c) _exit: (status: i32) -> noreturn
+
+--- One record `poll` reads and fills, C's `struct pollfd`: the descriptor
+--- to watch, the events asked about and the events that happened.  A
+--- negative descriptor is ignored.  The same on every hosted system.
+public poll_record: type = struct
+    descriptor: i32
+    events: i16
+    returned: i16
+end poll_record
+
+--- Wait until one of the `count` records at `records` has an event, or
+--- `timeout` milliseconds pass, waiting indefinitely when it is negative:
+--- the number of records with an event, zero when the time passed first,
+--- or -1 with the reason in errno.
+public extern(c) poll: (records: ptr mut poll_record, count: poll_count,
+                        timeout: i32) -> (result: i32)
 
 --- C's `struct timespec`: whole seconds and the nanoseconds after them.
 public timespec: type = struct

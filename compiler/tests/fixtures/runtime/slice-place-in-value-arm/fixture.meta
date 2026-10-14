@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a slice read from an array element or through a pointer is a value arm of a match or an if, where lowering used to stop with an internal defect
+program: main.ldn
+status: 42
+constructs: 0480, 0570, 1080
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

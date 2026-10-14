@@ -318,6 +318,21 @@ package Landin.Backend is
      (Of_Codes : Atom_Codes; Identity : Landin.IR.Declaration_Id)
       return Positive;
 
+   --  An atom set's codes as runs of consecutive codes, ascending.  A set
+   --  declared together, as an errno set of a hundred and fifty atoms is,
+   --  is one run, so a membership check tests each run's two bounds rather
+   --  than comparing with every atom.
+   type Code_Run is record
+      Low, High : Positive;
+   end record;
+
+   type Code_Runs is array (Positive range <>) of Code_Run;
+
+   function Runs_Of
+     (Of_Unit  : Landin.IR.Unit;
+      Of_Codes : Atom_Codes;
+      Set      : Landin.IR.Atom_Set_Id) return Code_Runs;
+
    --  How many of a unit's items hold each linker spelling.  Symbol
    --  allocation asks whether a candidate is held by any item but the one
    --  choosing; counting spellings answers that without walking every
@@ -367,7 +382,7 @@ private
    --  ties in item order.  Every hosted backend reaches a datum through a
    --  bounded PC-relative distance, and an object as large as that reach
    --  admits would otherwise push every datum after it out of reach: the
-   --  hosted/linux roots a static Linux link adds after the program's own
+   --  platform/linux roots a static Linux link adds after the program's own
    --  among them.  Extents (N) is Items (N)'s target extent.
    type Item_Array is array (Positive range <>) of Landin.IR.Item_Id;
    type Extent_Array is

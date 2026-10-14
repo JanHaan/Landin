@@ -1502,7 +1502,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
                --  The C runtime's objects add the baseline to a libc
                --  link's note; a static link has none of them.  The
                --  static image carries the note all the same, though no
-               --  loader reads it: hosted/linux's entry is what refuses
+               --  loader reads it: platform/linux's entry is what refuses
                --  a processor below the level there.
                Landin.Testing.Check
                  (Item, Ada.Strings.Fixed.Index

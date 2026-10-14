@@ -1299,12 +1299,24 @@ package body Landin.Backend.RiscV is
                   then
                      Emit ("beqz " & Register & ", " & Done);
                   end if;
-                  for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms) loop
-                     Immediate ("x30", Pattern (Atom_Code
-                       (Atoms_Ranked,
-                        Landin.IR.Nth_Atom (Of_Unit, Atoms, Index))));
-                     Compare (Register, "x30");
-                     Branch ("eq", Done);
+                  for Run of Runs_Of (Of_Unit, Atoms_Ranked, Atoms) loop
+                     if Run.Low = Run.High then
+                        Immediate ("x30", Pattern (Run.Low));
+                        Compare (Register, "x30");
+                        Branch ("eq", Done);
+                     else
+                        declare
+                           Next : constant String := Fresh;
+                        begin
+                           Immediate ("x30", Pattern (Run.Low));
+                           Compare (Register, "x30");
+                           Branch ("lo", Next);
+                           Immediate ("x30", Pattern (Run.High));
+                           Compare (Register, "x30");
+                           Branch ("ls", Done);
+                           Put (Next & ":");
+                        end;
+                     end if;
                   end loop;
                   Emit ("j " & Trap (Landin.Panics.Bad_Conversion));
                   Put (Done & ":");
@@ -4560,7 +4572,8 @@ package body Landin.Backend.RiscV is
          end if;
          --  An empty datum retains its aligned, zero-sized symbol, without
          --  a zero-count space directive that GNU as diagnoses.
-         Emit (ELF_Spelling.Zero_Section);
+         Emit (ELF_Spelling.Push_Item_Section
+           ("bss", "datum", Positive (Item)));
          Emit (".balign "
            & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Emit (ELF_Spelling.Object_Type (Symbol (Item)));
@@ -4571,7 +4584,7 @@ package body Landin.Backend.RiscV is
          end if;
          Emit (ELF_Spelling.Size
            (Symbol (Item), Trimmed (Landin.Targets.Byte_Count'Image (Size))));
-         Emit (ELF_Spelling.Data_Section);
+         Emit (ELF_Spelling.Pop_Section);
       end Emit_Reserved;
 
       --  The extent the zero-image emitters below reserve for `Item`.
@@ -4821,6 +4834,9 @@ package body Landin.Backend.RiscV is
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then not Landin.IR.Is_External (Of_Unit, Item)
             then
+               --  Every routine and datum is its own input section, so
+               --  --gc-sections drops what nothing retained reaches.
+               Emit (ELF_Spelling.Item_Section ("text", "routine", Index));
                Emit_Routine (Item);
             end if;
          end;
@@ -4834,12 +4850,12 @@ package body Landin.Backend.RiscV is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
-                  Emit (ELF_Spelling.Read_Only_Section);
+                  Emit (ELF_Spelling.Item_Section ("rodata", "datum", Index));
                   Emit_Array_Image_Datum (Item);
                elsif Is_All_Zero (Item) then
                   null;
                else
-                  Emit (".data");
+                  Emit (ELF_Spelling.Item_Section ("data", "datum", Index));
                   if Landin.IR.Result_Of (Of_Unit, Item) =
                     Landin.Types.Aggregate
                   then
@@ -4886,7 +4902,8 @@ package body Landin.Backend.RiscV is
                end if;
             end loop;
             for Item of Landin.Backend.Smallest_First (Items, Extents) loop
-               Emit (".data");
+               Emit (ELF_Spelling.Item_Section
+                 ("data", "datum", Positive (Item)));
                if Landin.IR.Result_Of (Of_Unit, Item) =
                  Landin.Types.Aggregate
                then
@@ -4908,7 +4925,6 @@ package body Landin.Backend.RiscV is
          end;
       end;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Emit (ELF_Spelling.Relocated_Read_Only_Section);
          for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
             declare
                Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
@@ -4924,6 +4940,8 @@ package body Landin.Backend.RiscV is
                Alignment : Landin.Targets.Byte_Alignment;
             begin
                if not Alias_Previous then
+                  Emit (ELF_Spelling.Item_Section
+                    ("data.rel.ro.local", "evidence", Index));
                   Field_Extent
                     (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                      Facts, Bytes, Alignment);

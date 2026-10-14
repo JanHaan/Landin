@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a process argument that is not UTF-8 is lent unchanged as a host string, refused by the checked conversion to utf8, and passed on as a path with the same bytes, which Linux and FreeBSD name a file by and Darwin refuses with EILSEQ kept as the last errno
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0600, 0940, 1650, 1660, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

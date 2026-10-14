@@ -1,4 +1,5 @@
 import core/io
+import core/text
 import core/mem
 import core/vec
 
@@ -13,7 +14,8 @@ public reader: type = struct
 end reader
 
 public open_reader: (provider: type is mem.allocator, memory: provider,
-                     world: any io.world, path: ptr u8, chunk_size: usize)
+                     world: any io.world, path: text.host_string,
+                     chunk_size: usize)
                     -> (value: reader)
                     ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
     fail io.io_failed when chunk_size == 0

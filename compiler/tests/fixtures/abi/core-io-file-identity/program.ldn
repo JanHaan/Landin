@@ -1,22 +1,29 @@
 import core/io
+import core/text
 import hosted/io as hosted
 
 extern(c) identity_select: (scenario: i32) -> none
 extern(c) identity_check: (expected_calls: i32) -> (good: bool)
 extern(c) identity_setup: () -> (good: bool)
-extern(c) identity_path: (which: i32) -> (path: ptr u8)
+extern(c) identity_path: (which: i32) -> (path: cstring)
 extern(c) identity_cleanup: () -> none
+
+--  The peer's path `which` as a host string, lending the peer's storage.
+path_of: (which: i32) -> (path: text.host_string) =
+    named: []u8 = []u8(identity_path(which))
+    path = text.host_over(named)
+end path_of
 
 public main: () -> (code: i32) =
     state: hosted.system = hosted.host()
     world: any io.world = any(addr state)
-    left: [5]u8 = [108, 101, 102, 116, 0]
-    right: [6]u8 = [114, 105, 103, 104, 116, 0]
+    left: text.host_string = text.host_over("left")
+    right: text.host_string = text.host_over("right")
     for scenario in i32(1)..<i32(9) do
         code = scenario
         identity_select(scenario)
         mut failed: bool = false
-        same: bool = world.same_file(addr left[0], addr right[0]) else (problem)
+        same: bool = world.same_file(left, right) else (problem)
             failed = problem == io.io_failed
             false
         end
@@ -46,8 +53,8 @@ public main: () -> (code: i32) =
     identity_select(0)
     for which in i32(0)..<i32(5) do
         mut failed: bool = false
-        same: bool = io.same_file(state, identity_path(0), identity_path(which))
-          else (problem)
+        same: bool = io.same_file(state, path_of(0),
+                                  path_of(which)) else (problem)
             failed = problem == io.io_failed
             false
         end

@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: Linux file identity reads hosted/linux's statx record, which matches the C header and the C library's statx, through hard and symbolic links
+summary: Linux file identity reads platform/linux's statx record, which matches the C header and the C library's statx, through hard and symbolic links
 program: program.ldn
 root: ../../../../..
 c-sources: peer.c

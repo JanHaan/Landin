@@ -1,0 +1,11 @@
+--  Storage that outlives the call satisfies any `from` clause; a frame
+--  array does not, whatever the clause names.
+holder: type = struct
+    tag: u8
+end holder
+
+bad: (self: holder) -> (value: []u8 from self) =
+    _ = self.tag
+    mut local: [2]u8 = [1, 2]
+    value = local[0..<2]
+end bad

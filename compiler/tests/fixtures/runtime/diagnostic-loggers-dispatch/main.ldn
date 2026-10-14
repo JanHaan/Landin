@@ -21,7 +21,7 @@ end same_bytes
 check_position_writes: () -> (ok: bool) =
     ok = false
     files: []mut io.memory_file = []
-    arguments: []io.argument = []
+    arguments: [][]u8 = []
     mut output: [1]u8 = zeroed
     mut errors: [80]u8 = zeroed
     mut state: io.memory_space = zeroed
@@ -242,7 +242,7 @@ public main: () -> (code: i32) =
         _ = argument_failure
         return
     end
-    opened := world.open_read(path.data) else (open_failure)
+    opened := world.open_read(path) else (open_failure)
         _ = open_failure
         return
     end

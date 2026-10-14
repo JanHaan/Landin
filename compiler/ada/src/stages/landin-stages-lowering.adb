@@ -1583,6 +1583,34 @@ package body Landin.Stages.Lowering is
          return Ty.Ill_Typed;
       end Conversion_Scalar;
 
+      --  [0650]: the scalar base of a value of a distinct type whose base
+      --  is a scalar, which `==`, `<>` and an unsigned base's bit
+      --  operators read; No_Value for any other value.
+      function Distinct_Scalar_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
+      function Distinct_Scalar_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Type_At (Of_Tree, Node) /= Ty.Aggregate then
+            return Ty.No_Value;
+         end if;
+         declare
+            Nominal : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
+            Base : Ty.Type_Kind;
+         begin
+            if Nominal = Landin.Checking.No_Nominal_Type
+              or else not Landin.Checking.Is_Distinct (Types.all, Nominal)
+            then
+               return Ty.No_Value;
+            end if;
+            Base := Landin.Checking.Distinct_Base (Types.all, Nominal).Kind;
+            return (if Base in Ty.Scalar_Name then Base else Ty.No_Value);
+         end;
+      end Distinct_Scalar_Base;
+
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name
       is
@@ -1592,6 +1620,8 @@ package body Landin.Stages.Lowering is
             return Ty.Usize;
          elsif Held = Ty.Atom_Value then
             return Ty.U32;
+         elsif Distinct_Scalar_Base (Of_Tree, Node) in Ty.Scalar_Name then
+            return Distinct_Scalar_Base (Of_Tree, Node);
          end if;
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
@@ -4004,6 +4034,24 @@ package body Landin.Stages.Lowering is
       begin
          if Widens_Into_Union (Of_Tree, Node, Shape) then
             Write_Union_Value (Of_Tree, Node, Scope, Shape, Destination);
+         elsif Kind in Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
+                     | Syn.Complement
+           and then Distinct_Scalar_Base (Of_Tree, Node) in Ty.Scalar_Name
+           and then Shape.Kind = IR.Aggregate_Field_Shape
+         then
+            --  [0650]: the base's operator, its answer stored as the
+            --  distinct value's one representation child.
+            declare
+               Value : constant IR.Value_Id :=
+                 Lower_Expression (Of_Tree, Node, Scope);
+            begin
+               if Current /= IR.No_Block then
+                  Store_Shaped_Scalar
+                    (Child_Place (Destination, 1),
+                     IR.Nth_Aggregate_Field (Unit.all, Shape, 1), Value,
+                     Site);
+               end if;
+            end;
          elsif Landin.Checking.Distinct_Conversion_Of
            (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
            and then Shape.Kind /= IR.Scalar_Field_Shape
@@ -4810,7 +4858,8 @@ package body Landin.Stages.Lowering is
              (Type_At (Of_Tree, Node) in Ty.Aggregate | Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node)
                 in Syn.Name_Reference | Syn.Member_Selection
-                   | Syn.Element_Index | Syn.Negation | Syn.Add
+                   | Syn.Element_Index | Syn.Bitwise_And | Syn.Bitwise_Xor
+                   | Syn.Bitwise_Or | Syn.Complement | Syn.Negation | Syn.Add
                    | Syn.Subtract | Syn.Multiply | Syn.Divide | Syn.Remainder
                    | Syn.Wrapping_Add | Syn.Wrapping_Subtract
                    | Syn.Wrapping_Multiply)
@@ -4869,8 +4918,32 @@ package body Landin.Stages.Lowering is
                  (Of_Tree, Node, Scope, Active_Result, Destination,
                   Destination_Field, Destination_Path);
             when others =>
-               raise Landin.Compiler_Defect with
-                 "an expression cannot fill caller-owned storage";
+               --  A slice read from a place, an element of an array of
+               --  slices or one behind a pointer, as a value arm or
+               --  initializer gives it: its two carrier cells, read once.
+               if Type_At (Of_Tree, Node) = Ty.Slice_Value
+                 and then Destination_Field = 0
+                 and then Destination_Path'Length = 0
+               then
+                  declare
+                     Site : constant Landin.Provenance.Origin :=
+                       Site_Of (Of_Tree, Node);
+                     Parts : constant Slice_Values :=
+                       Lower_Slice (Of_Tree, Node, Scope);
+                  begin
+                     if Current /= IR.No_Block then
+                        IR.Emit_Store_Slot_Field
+                          (Unit.all, Filling, Destination, 1, Parts.Base,
+                           Site);
+                        IR.Emit_Store_Slot_Field
+                          (Unit.all, Filling, Destination, 2, Parts.Length,
+                           Site);
+                     end if;
+                  end;
+               else
+                  raise Landin.Compiler_Defect with
+                    "an expression cannot fill caller-owned storage";
+               end if;
          end case;
       end Lower_Stored_Expression;
 
@@ -7913,6 +7986,28 @@ package body Landin.Stages.Lowering is
          end Fixed_Actual_Of;
 
       begin
+         --  [0650]: a value of a distinct scalar type, read for `==` or a
+         --  bit operator, is its base: the value is built in a temporary
+         --  and its one representation child loaded.  A bit operator over
+         --  such values is lowered below as the base's operator.
+         if Distinct_Scalar_Base (Of_Tree, Node) in Ty.Scalar_Name
+           and then Syn.Kind (Of_Tree, Node)
+             not in Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
+                  | Syn.Complement
+         then
+            declare
+               Temporary : constant IR.Slot_Id :=
+                 Shaped_Temporary (Neutral_Value_Shape (Of_Tree, Node), Site);
+            begin
+               Lower_Stored_Expression (Of_Tree, Node, Scope, Temporary);
+               if Current = IR.No_Block then
+                  return IR.No_Value;
+               end if;
+               return IR.Emit_Load_Slot_Field
+                 (Unit.all, Filling, Temporary, 1,
+                  Scalar_At (Of_Tree, Node), Site);
+            end;
+         end if;
          if Is_Utf8_Index (Of_Tree, Node) then
             return Lower_Utf8_Index (Of_Tree, Node, Scope);
          end if;
@@ -11926,6 +12021,18 @@ package body Landin.Stages.Lowering is
                   for Step of Destination_Steps loop
                      Target.Steps.Append (Step);
                   end loop;
+
+                  --  [0650]: a bit operator over a distinct scalar type
+                  --  computes its value; there is no place to copy from.
+                  if Syn.Kind (Of_Tree, Source_Node)
+                       in Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
+                          | Syn.Complement
+                  then
+                     Write_Shaped_Value
+                       (Of_Tree, Source_Node, Scope, Neutral_Body (Wrote),
+                        Target);
+                     return;
+                  end if;
 
                   if Has_Computed_Index (Of_Tree, Source_Node)
                     or else Has_Reference_Storage (Of_Tree, Source_Node)

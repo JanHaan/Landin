@@ -1,0 +1,9 @@
+class: end-to-end
+summary: a static Linux link counts only the C imports the entry reaches, so an import only an unreached routine names is not refused and the link goes ahead
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=exe --dry-run -o out ../tests/fixtures/end-to-end/link-static-unreached-c-import/main.ldn
+status: 0
+stream: output

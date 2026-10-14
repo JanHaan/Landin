@@ -64,7 +64,7 @@ package body Landin.Tests.Driver_Suite is
 
    --  A source and an executable linked as C links one, with C's runtime:
    --  the tool-invocation cases below are about the invocation, and a
-   --  static Linux link would need hosted/linux from a library these fake
+   --  static Linux link would need platform/linux from a library these fake
    --  hosts do not hold.
    function Libc_Executable
      (First : String) return Landin.Platform.Path_List;
@@ -2255,15 +2255,15 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Named_Linker_Reaches_The_Driver;
 
-   --  A static Linux executable starts at hosted/linux's `_landin_start`,
+   --  A static Linux executable starts at platform/linux's `_landin_start`,
    --  which the driver loads from the library beside the program's own
    --  modules.  With no library to load it from, the link would enter at
    --  an undefined symbol, so the request is refused before any tool runs
    --  and before anything is written.
-   procedure A_Static_Link_Needs_Hosted_Linux
+   procedure A_Static_Link_Needs_Platform_Linux
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Static_Link_Needs_Hosted_Linux
+   procedure A_Static_Link_Needs_Platform_Linux
      (Item : in out Landin.Testing.Context)
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
@@ -2285,7 +2285,7 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Contains (Unbounded.To_String (Result.Report),
                             "error[L0500]: a static link of linux-x86-64"
-                            & " starts at hosted/linux's `_landin_start`")
+                            & " starts at platform/linux's `_landin_start`")
               and then Contains (Unbounded.To_String (Result.Report),
                                  "--link=libc"),
             "it names the missing entry and the libc link");
@@ -2294,15 +2294,15 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check_Equal
            (Item, Host.Write_Count, 0, "nothing is written");
       end;
-   end A_Static_Link_Needs_Hosted_Linux;
+   end A_Static_Link_Needs_Platform_Linux;
 
-   --  The default Linux link is static: the library's hosted/linux joins
+   --  The default Linux link is static: the library's platform/linux joins
    --  the program unasked, and the driver links the assembly alone,
    --  entered at `_landin_start`, with no C runtime, library or loader.
-   procedure A_Static_Link_Starts_At_Hosted_Linux
+   procedure A_Static_Link_Starts_At_Platform_Linux
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Static_Link_Starts_At_Hosted_Linux
+   procedure A_Static_Link_Starts_At_Platform_Linux
      (Item : in out Landin.Testing.Context)
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
@@ -2311,10 +2311,10 @@ package body Landin.Tests.Driver_Suite is
    begin
       Host.Add_File ("main.ldn", Entry_Program);
       Host.Add_Directory ("lib");
-      Host.Add_Directory ("lib/hosted");
-      Host.Add_Directory ("lib/hosted/linux");
+      Host.Add_Directory ("lib/platform");
+      Host.Add_Directory ("lib/platform/linux");
       Host.Add_File
-        ("lib/hosted/linux/linux.ldn",
+        ("lib/platform/linux/linux.ldn",
          "fixed if compiler.os == linux then" & LF
          & "    public extern(naked) _landin_start: () -> none =" & LF
          & "        assembler.block(""ud2"")" & LF
@@ -2351,7 +2351,7 @@ package body Landin.Tests.Driver_Suite is
               and then Contains (Host.Written ("main.s"), ".globl main"),
             "the assembly holds the entry and the program's main");
       end;
-   end A_Static_Link_Starts_At_Hosted_Linux;
+   end A_Static_Link_Starts_At_Platform_Linux;
 
    --  [1970] is required before anything is written, so a program that
    --  could never be linked leaves no file behind on the way to saying so.
@@ -5750,6 +5750,14 @@ package body Landin.Tests.Driver_Suite is
       Refused ("cortex-m0", "hosted/heap", True, True);
       Refused ("cortex-m0", "platform/c", True);
       Refused ("synthetic-32", "platform/c", True);
+      --  The POSIX layer and the systems' own interfaces beneath it serve
+      --  the hosted POSIX systems alone.
+      Refused ("cortex-m0", "platform/posix", True);
+      Refused ("cortex-m0", "platform/posix", False);
+      Refused ("cortex-m0", "platform/linux", True, True);
+      Refused ("cortex-m0", "platform/linux/numbers", False);
+      Refused ("cortex-m0", "platform/libc", True);
+      Refused ("synthetic-32", "platform/posix", True);
       Refused ("linux-x86-64", "platform/cpu", True);
       Refused ("linux-x86-64", "platform/cpu", False);
    end Namespace_Availability;
@@ -5944,11 +5952,11 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "a named linker reaches the driver",
          A_Named_Linker_Reaches_The_Driver'Access);
       Landin.Testing.Register
-        (Into, "driver", "a static link needs hosted/linux",
-         A_Static_Link_Needs_Hosted_Linux'Access);
+        (Into, "driver", "a static link needs platform/linux",
+         A_Static_Link_Needs_Platform_Linux'Access);
       Landin.Testing.Register
-        (Into, "driver", "a static link starts at hosted/linux",
-         A_Static_Link_Starts_At_Hosted_Linux'Access);
+        (Into, "driver", "a static link starts at platform/linux",
+         A_Static_Link_Starts_At_Platform_Linux'Access);
       Landin.Testing.Register
         (Into, "driver", "a hosted program needs its entry",
          A_Hosted_Program_Needs_Its_Entry'Access);
