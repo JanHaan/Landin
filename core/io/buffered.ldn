@@ -1,0 +1,104 @@
+--  A buffered writer gathers small writes in a caller's buffer and hands
+--  them to a writer in one call when the buffer is full or the program
+--  flushes it.
+
+import core/mem
+
+buffered_value: type (provider: type) = struct
+    host: provider
+    opened: file
+    buffer: []mut u8
+    used: usize
+end buffered_value
+
+--- Writes to one file, gathered in a buffer the caller supplies and
+--- written through a writer when the buffer fills or `flush` is called: a
+--- value the caller keeps and edits, passing it `inout`.  There are no
+--- destructors, so bytes still in the buffer when the program ends, or when
+--- the writer is dropped, are never written: flush before every way out,
+--- with `defer io.flush(out) else ...` as the idiom, and flush again where
+--- the bytes must be out before something else happens, as before reading
+--- a reply.  `pending` says how many are waiting.
+public buffered_writer: type (provider: type) = buffered_value(provider)
+
+--- A buffered writer over the caller's `buffer`, writing to `opened`
+--- through `host`.  It holds a copy of the writer's handle; keep the
+--- handle's state and the buffer alive while it is used.
+public buffered_over: (provider: type is writer, host: provider,
+                       opened: file, buffer: []mut u8)
+                      -> (out: buffered_writer(provider) from buffer, host) =
+    out = (host: host, opened: opened, buffer: buffer, used: 0)
+end buffered_over
+
+--- Write the waiting bytes to the file.  A failure reports the writer's
+--- `io_failed` and keeps every byte the writer did not take at the front
+--- of the buffer, so a later flush writes each byte exactly once.
+---
+--- Flushing goes through `write_some`, whose failure transfers nothing,
+--- so what the writer took is known exactly; a writer that makes no
+--- progress on nonempty bytes breaks the writer contract and is reported
+--- as failing rather than asked forever.
+public flush: (provider: type is writer,
+               inout out: buffered_writer(provider)) -> none ! io_failed =
+    mut done: usize = 0
+    while done < out.used do
+        wrote: usize = provider.write_some(out.host, out.opened,
+                                           out.buffer[done..<out.used])
+            else (problem)
+            try kept(out, done)
+            fail problem
+        end
+        if wrote == 0 then
+            try kept(out, done)
+            fail io_failed
+        end if
+        done += wrote
+    end while
+    out.used = 0
+end flush
+
+--  Keep the bytes after `done` at the front of the buffer, the copy moving
+--  them down over the ones already written.
+kept: (provider: type, inout out: buffered_writer(provider), done: usize)
+      -> none ! io_failed =
+    remaining: usize = out.used - done
+    mem.copy(out.buffer[0..<remaining], out.buffer[done..<out.used])
+        else (problem)
+        _ = problem
+        fail io_failed
+    end
+    out.used = remaining
+end kept
+
+--- Write `bytes` to the file through the buffer.  Bytes that fit wait in
+--- it; otherwise the waiting ones are flushed first, and then bytes fewer
+--- than the buffer holds wait in it and any more go straight to the writer
+--- in one `write`.  A failure is the writer's `io_failed`: a failed flush
+--- keeps its bytes, as `flush` does, and a failed direct write may follow
+--- partial output, as `io.write` may.
+public put: (provider: type is writer, inout out: buffered_writer(provider),
+             bytes: []u8) -> none ! io_failed =
+    count: usize = lenof bytes
+    return when count == 0
+    room := out.buffer
+    capacity: usize = lenof room
+    if count > capacity - out.used then
+        try flush(out)
+        if count >= capacity then
+            try provider.write(out.host, out.opened, bytes)
+            return
+        end if
+    end if
+    ends: usize = out.used + count
+    mem.copy(out.buffer[out.used..<ends], bytes) else (problem)
+        _ = problem
+        fail io_failed
+    end
+    out.used = ends
+end put
+
+--- How many bytes are waiting in the buffer for the next flush.
+public pending: (provider: type, out: buffered_writer(provider))
+                -> (count: usize) =
+    count = out.used
+end pending

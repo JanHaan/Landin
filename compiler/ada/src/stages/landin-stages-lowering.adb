@@ -5554,6 +5554,25 @@ package body Landin.Stages.Lowering is
                      Given (Formal_Position) := IR.Emit_Storage_Address
                        (Unit.all, Filling, Place, Site_Of (Of_Tree, Argument));
                   end;
+               elsif Landin.Checking.Is_Lent_Array
+                       (Types.all, Of_Tree, Argument)
+               then
+                  --  [0570]: an array lent to a slice parameter passes the
+                  --  slice's two words, made from the array's storage.
+                  declare
+                     Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
+                       (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration,
+                        Site_Of (Of_Tree, Argument));
+                  begin
+                     Lower_Slice_Into (Of_Tree, Argument, Scope, Temporary);
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     Given (Formal_Position) := IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Temporary),
+                        Site_Of (Of_Tree, Argument));
+                  end;
                elsif Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
                        | Ty.Any_Value
@@ -7541,6 +7560,58 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Destination, 1, Data, Site);
                IR.Emit_Store_Slot_Field
                  (Unit.all, Filling, Destination, 2, Table, Site);
+            end;
+            return;
+         end if;
+
+         --  [0570]: an array lent as a slice.  A literal is written into
+         --  caller-frame storage of its own, which the slice views for the
+         --  call; a place is viewed where it is.  Either way the length is
+         --  the whole array's.
+         if Landin.Checking.Is_Lent_Array (Types.all, Of_Tree, Node) then
+            declare
+               Base : IR.Value_Id;
+            begin
+               if Syn.Kind (Of_Tree, Node) = Syn.Array_Literal then
+                  declare
+                     Shape : constant IR.Field_Shape :=
+                       Neutral_Value_Shape (Of_Tree, Node);
+                     Temporary : constant IR.Slot_Id :=
+                       Shaped_Temporary (Shape, Site);
+                     Place : constant IR.Storage :=
+                       (Kind => IR.Frame_Slot, Slot => Temporary);
+                  begin
+                     Write_Shaped_Value
+                       (Of_Tree, Node, Scope, Shape, Stored_At (Place));
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
+                     Base := IR.Emit_Storage_Address
+                       (Unit.all, Filling, Place, Site);
+                  end;
+               else
+                  declare
+                     Place : constant Stored_Place :=
+                       Lower_Stored_Place (Of_Tree, Node, Scope);
+                  begin
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
+                     Base := IR.Emit_Storage_Address
+                       (Unit.all, Filling, Place.Place, Site,
+                        Field => Place.Base, Nested => Stored_Steps (Place));
+                  end;
+               end if;
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 1, Base, Site);
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 2,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize,
+                     Ty.Magnitude
+                       (Landin.Checking.Lent_Length
+                          (Types.all, Of_Tree, Node)), False, Site),
+                  Site);
             end;
             return;
          end if;

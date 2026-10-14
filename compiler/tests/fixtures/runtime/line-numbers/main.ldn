@@ -1,0 +1,55 @@
+--  Number the lines of standard input, as `cat -n` does: each line after
+--  its number, right-aligned in six columns, and a tab.  A line is read
+--  through a buffer of 32 bytes; one too long for it is numbered with a
+--  note in its place, and the lines after it are numbered as usual.  The
+--  output goes through a buffered writer, flushed on every way out.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  Write every line of INPUT to OUT, numbered.
+numbered: (provider: type is io.world, host: provider,
+           inout out: io.buffered_writer(provider))
+          -> none ! ... =
+    mut buffer: [32]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<32])
+    mut room: [16]u8 = zeroed
+    mut prefix := text.over(room[0..<16])
+    mut number: u64 = 0
+    loop do
+        inc number
+        text.clear(prefix)
+        try text.append_u64(prefix, number)
+        try text.align_right(prefix, 0, 6, 32)
+        try text.append_byte(prefix, 9)
+        item: io.line = io.read_line(lines) else (problem)
+            fail problem when problem <> io.line_too_long
+            try io.put(out, text.used(prefix))
+            try io.put(out, "(a line too long to show)\n")
+            continue
+        end
+        break when item.finished
+        try io.put(out, text.used(prefix))
+        try io.put(out, item.bytes)
+        try io.put(out, "\n")
+    end loop
+end numbered
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    code = 1
+    numbered(host, out) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main

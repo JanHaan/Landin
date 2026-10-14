@@ -1,5 +1,22 @@
 # Exploratory formatting API
 
+> **Superseded** by the formatting `core/text` now has, recorded 2026-10-14;
+> the note below is kept as it was written. `core/text` has a `builder` over a
+> caller's buffer, or one an allocator grows, and `text.format(builder, template, values)`
+> fills each `{}` of the template with the next value of a slice of
+> `any text.formattable`, written as an array literal the call lends:
+> `text.format(line, "{} of {}", [any(addr kept), any(addr total)])`. A
+> placeholder is `{}` and nothing else, with `{{` and `}}` for braces. The
+> spec language sketched here was declined: since nothing checks a template
+> at compile time, every part of a placeholder would be one more failure
+> found only when the program runs; its parser would cost flash on
+> Cortex-M0; and a radix or width in the placeholder would have to reach
+> every conformance through the one entry. Width, padding and hexadecimal
+> are typed builder calls the compiler checks instead. A template that
+> disagrees with its values is the error atom `text.invalid_format` and
+> writes nothing, rather than a visible marker in the output, and each call
+> reports `text.no_space` instead of a writer holding a sticky error.
+
 > **Status:** Exploratory design note, recorded 2026-08-24. This document is
 > non-normative. It is not a decision, roadmap commitment, or accepted
 > standard-library surface. `spec.md`, `tour.md`, and `ROADMAP.md` remain the

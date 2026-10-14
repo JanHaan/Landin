@@ -109,12 +109,14 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/word-count/main.ldn"),
     ("Directory listing",
      "compiler/tests/fixtures/runtime/directory-listing/main.ldn"),
+    ("Line numbers",
+     "compiler/tests/fixtures/runtime/line-numbers/main.ldn"),
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads
 #  its standard input is a tool rather than a test: it returns 0, and its
 #  oracle is the output its fixture expects for the input its fixture names.
-READING_EXAMPLES = {"Word count"}
+READING_EXAMPLES = {"Word count", "Line numbers"}
 
 #  A routine a published example shares with the fixtures that run it where
 #  the example cannot: the same declarations, byte for byte, in each.

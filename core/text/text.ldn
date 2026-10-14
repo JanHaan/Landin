@@ -19,10 +19,11 @@ public position: type = position_value
 public past_end: atom
 --- The supplied bytes are not well-formed UTF-8.
 public invalid_text: atom
---- The text is empty or contains a non-decimal digit where an unsigned
---- integer is required.
+--- The bytes are empty or are not the digits the parse reads: a byte
+--- other than a digit, a sign where none is read, or a `-` without digits.
 public invalid_number: atom
---- The parsed unsigned decimal value exceeds the type it is parsed into.
+--- The parsed value is outside the type it is parsed into: above its
+--- maximum, or for a signed type below its minimum.
 public number_overflow: atom
 --- The destination does not have room for the complete requested output.
 public no_space: atom

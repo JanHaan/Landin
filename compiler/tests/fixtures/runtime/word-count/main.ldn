@@ -1,7 +1,7 @@
 --  Count the lines, words and bytes on standard input, as `wc` does when it
 --  is named no file.  The counting asks only for a reader, the narrowest
 --  capability it uses, so the same routine counts a pipe, a file or bytes in
---  memory.  The totals are u64 and core/text writes them in decimal.
+--  memory.  The totals are u64, and core/text formats them into a line.
 import core/io
 import core/text
 import hosted/io as hosted
@@ -42,14 +42,13 @@ count: (provider: type is io.reader, source: provider,
     end loop
 end count
 
---  The three totals in decimal, separated by spaces and ended by a newline.
-render: (totals: counts, into: []mut u8) -> (used: usize) ! text.no_space =
-    used = try text.write_u64(into, 0, totals.lines)
-    used = try text.write_byte(into, used, 32)
-    used = try text.write_u64(into, used, totals.words)
-    used = try text.write_byte(into, used, 32)
-    used = try text.write_u64(into, used, totals.bytes)
-    used = try text.write_byte(into, used, 10)
+--  The three totals in decimal, separated by spaces and ended by a newline,
+--  formatted into LINE.
+render: (totals: counts, inout line: text.builder)
+        -> none ! text.no_space | text.invalid_format =
+    try text.format(line, "{} {} {}\n",
+                    [any(addr totals.lines), any(addr totals.words),
+                     any(addr totals.bytes)])
 end render
 
 public main: () -> (code: i32) =
@@ -67,13 +66,14 @@ public main: () -> (code: i32) =
     end
 
     --  Three twenty-digit totals, two spaces and a newline fit in 64 bytes.
-    mut line: [64]u8 = zeroed
-    used := render(totals, line[0..<64]) else (problem)
+    mut storage: [64]u8 = zeroed
+    mut line := text.over(storage[0..<64])
+    render(totals, line) else (problem)
         _ = problem
         code = 1
         return
     end
-    io.write(host, io.out(host), line[0..<used]) else (problem)
+    io.write(host, io.out(host), text.used(line)) else (problem)
         _ = problem
         code = 1
         return

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: text.format fills each {} with the next value through its formattable conformance, the library's for every integer width, bool, utf8, bytes and host strings and a program's own for a record, writes {{ and }} as braces, refuses a template with fewer or more placeholders than values or a stray brace with invalid_format writing nothing, and puts a builder that fills partway back before reporting no_space
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0520, 0570, 0900, 0940, 0960, 1030, 1230, 1240, 1370, 1380, 1390
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

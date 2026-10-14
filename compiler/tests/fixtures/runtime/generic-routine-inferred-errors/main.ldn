@@ -88,9 +88,9 @@ public main: () -> (code: i32) =
     successful: bool = relay(false, 0) else true
     success_ok: bool = not successful and trace == 1
 
-    invoke(miss, true) else 0
-    invoke(deny, true) else 0
-    invoke(miss, false) else 0
+    invoke(miss, true) else (ignored) _ = ignored end
+    invoke(deny, true) else (ignored) _ = ignored end
+    invoke(miss, false) else (ignored) _ = ignored end
 
     mutual: i32 = left(42, 0) else 0
     recursive: i32 = countdown(42, 3) else 0

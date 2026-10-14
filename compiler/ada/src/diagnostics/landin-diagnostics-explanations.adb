@@ -275,7 +275,16 @@ package body Landin.Diagnostics.Explanations is
                & "tialize an unrelated binding as a standalone value: its "
                & "destination must supply its variant part. A case without"
                & " payload may be bare; write a payload case with labelled"
-               & " fields.",
+               & " fields."
+               & LF
+               & LF
+               & "An array literal [0520] takes its shape from where it is"
+               & " written: an array destination, an inferred binding, or "
+               & "the argument of a read-only slice parameter of a routine"
+               & " that is not generic, which it lends a slice of storage "
+               & "made in the caller's frame for the call. An argument of "
+               & "a generic routine is typed on its own (D138), so there i"
+               & "t needs a named array first.",
             when Catalogue.Not_Known_At_Compile_Time =>
                "A required static value or initial image cannot be estab"
                & "lished before the program runs [1940] (D136, D202). A mo"
@@ -489,11 +498,12 @@ package body Landin.Diagnostics.Explanations is
                "A call's result is used in a way its signature does not "
                & "allow. A result that is handed back must be used or disc"
                & "arded with `_ =` [1020], and a call that returns none ha"
-               & "s no value to use, infer from, or discard [1920] [1930]."
-               & " Destructuring binds the names of a multiple result, eac"
-               & "h at most once [0990]. Discard the result explicitly, us"
-               & "e a call that returns one, or bind the result names the "
-               & "signature declares.",
+               & "s no value to use, infer from, or discard [1920] [1930],"
+               & " nor one for its `else` to yield in place of a result [1"
+               & "030]. Destructuring binds the names of a multiple result"
+               & ", each at most once [0990]. Discard the result explicitl"
+               & "y, use a call that returns one, or bind the result names"
+               & " the signature declares.",
             when Catalogue.Control_Value =>
                "A `break` must carry a value exactly when its target nee"
                & "ds one [1180] [1190]; every value-producing fallthrough "
@@ -526,9 +536,11 @@ package body Landin.Diagnostics.Explanations is
                & "upplies one value for the omitted fields. A variant case"
                & " is written where its part is the destination [0690] (D7"
                & "6). A whole struct or array is copied, passed, returned "
-               & "or discarded whole [0670] [0520]. A repetition prefix le"
-               & "aves a suffix to fill (D36). Write the value in the form"
-               & " the note names, at a position that takes it.",
+               & "or discarded whole [0670] [0520], and an array is lent w"
+               & "hole as the argument of a slice parameter [0570]. A repe"
+               & "tition prefix leaves a suffix to fill (D36). Write the v"
+               & "alue in the form the note names, at a position that take"
+               & "s it.",
             when Catalogue.Pointer_Union_Use =>
                "A union of atoms and one pointer is used as a pointer be"
                & "fore it is matched [0480]. Match it first: the `ptr` arm"

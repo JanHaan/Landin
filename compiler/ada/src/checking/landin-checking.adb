@@ -1690,6 +1690,7 @@ package body Landin.Checking is
                Into.Node_Concepts.Append (No_Concept);
                Into.Node_Result_Shapes.Append (No_Signature);
                Into.Node_Variadic_Parts.Append (0);
+               Into.Node_Lent_Arrays.Append (0);
                Into.Node_Routine_Targets.Append (No_Routine_Instance);
                Into.Node_Evidence.Append (No_Conformance);
                Into.Node_Evidence_Entries.Append (0);
@@ -2987,6 +2988,64 @@ package body Landin.Checking is
       end if;
       return Of_Table.Node_Text_Conversions (Where);
    end Text_Conversion_Of;
+
+   function Lent_Encoding
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural;
+
+   function Lent_Encoding
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Lent_Array
+      then
+         return Of_Table.Node_Overlays (Overlay).Lent_Array;
+      end if;
+      return Of_Table.Node_Lent_Arrays (Where);
+   end Lent_Encoding;
+
+   function Is_Lent_Array
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean is
+     (Lent_Encoding (Of_Table, Of_Tree, Node) /= 0);
+
+   function Lent_Length
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural is
+     (Lent_Encoding (Of_Table, Of_Tree, Node) - 1);
+
+   procedure Note_Lent_Array
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Length  : Natural)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+      Prior : constant Natural := Lent_Encoding (Into, Of_Tree, Node);
+   begin
+      if Prior /= 0 and then Prior /= Length + 1 then
+         raise Landin.Compiler_Defect with
+           "one node was lent as two different arrays";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Lent_Arrays (Where) := Length + 1;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Lent_Array := True;
+            Into.Node_Overlays (Overlay).Lent_Array := Length + 1;
+         end;
+      end if;
+   end Note_Lent_Array;
 
    procedure Note_Text_Conversion
      (Into       : in out Table;

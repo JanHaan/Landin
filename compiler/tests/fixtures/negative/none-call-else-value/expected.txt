@@ -1,0 +1,20 @@
+error[L0331]: this call returns nothing, so its `else` has no result to stand in for
+  --> ../tests/fixtures/negative/none-call-else-value/main.ldn:15:24
+   |
+15 |     attempt(true) else 0
+   |                        ^
+  --> ../tests/fixtures/negative/none-call-else-value/main.ldn:6:1
+  |
+6 | attempt: (flag: bool) -> none ! oops =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
+  = note: [1030]: handle the error in a block, `else (problem) ... end`, which yields no value
+error[L0331]: this call returns nothing, so its `else` has no result to stand in for
+  --> ../tests/fixtures/negative/none-call-else-value/main.ldn:18:9
+   |
+18 |         answer()
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/none-call-else-value/main.ldn:6:1
+  |
+6 | attempt: (flag: bool) -> none ! oops =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
+  = note: [1030]: handle the error in a block, `else (problem) ... end`, which yields no value

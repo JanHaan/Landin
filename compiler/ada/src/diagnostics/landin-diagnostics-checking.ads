@@ -246,7 +246,8 @@ package Landin.Diagnostics.Checking is
       --  own, and that is the recorded boundary.
       Variant_Value,
       --  [0520] declares one.  An array literal or repetition takes its
-      --  shape from a destination or an inferred binding, and a module
+      --  shape from a destination or an inferred binding, a literal also
+      --  from a non-generic slice parameter it is lent to, and a module
       --  image keeps [1940]'s boundary; both are recorded boundaries.
       Array_Value,
       Array_Element,

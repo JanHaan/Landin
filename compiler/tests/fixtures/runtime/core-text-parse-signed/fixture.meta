@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/text parses every signed width and u8 and u16 in decimal and u32, u64 and usize in hexadecimal from bytes at each width's extremes and one past them, refusing malformed input with invalid_number and a value outside the type with number_overflow, whichever the scan from the left meets first, the isize and usize forms following the target's width
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0310, 0570, 0940, 0960, 1030, 1950
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

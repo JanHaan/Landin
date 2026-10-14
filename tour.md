@@ -942,6 +942,23 @@ edit:  []mut f32 = grid[0..<2]      -- writable, since grid is mut
 
 ```
 
+An array passed where a slice parameter is wanted lends a slice of the whole
+array: a named array lends its own storage, and an array literal is made in
+the caller's frame for the call, so a list of values needs no binding of its
+own. A literal lends only read-only elements.
+
+```landin
+added: (values: []f32) -> (sum: f32) =
+    sum = 0.0
+    for value in values do
+        sum += value
+    end for
+end added
+
+both := added(grid) + added([1.0, 2.0])
+
+```
+
 ### [0580] An empty slice still has a base
 
 An empty slice still has a base. It is the lowest positive address aligned for
@@ -2332,6 +2349,9 @@ end
 
 The else clause yields a value, or transfers control out of
 the block that encloses it: return, fail, break, continue.
+On a call that returns nothing there is no value to yield, so
+the clause only handles the error, and the statement after the
+call runs next.
 That is the same rule an if-expression arm follows, so an
 arm that leaves needs no value and nobody has to invent a
 placeholder to satisfy the type.

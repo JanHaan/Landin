@@ -25,7 +25,7 @@ end successful_return
 handled: () -> none ! problem =
     undo mark(1)
     defer mark(2)
-    leaf(true) else 0
+    leaf(true) else (ignored) _ = ignored end
 end handled
 
 direct_failure: () -> none ! problem =
@@ -71,35 +71,35 @@ unreached_registration: () -> none ! problem =
 end unreached_registration
 
 public main: () -> (code: i32) =
-    normal() else 0
+    normal() else (ignored) _ = ignored end
     normal_ok: bool = trace == 2
 
     trace = 0
-    successful_return() else 0
+    successful_return() else (ignored) _ = ignored end
     return_ok: bool = trace == 2
 
     trace = 0
-    handled() else 0
+    handled() else (ignored) _ = ignored end
     handled_ok: bool = trace == 2
 
     trace = 0
-    direct_failure() else 0
+    direct_failure() else (ignored) _ = ignored end
     direct_ok: bool = trace == 21
 
     trace = 0
-    propagated_failure() else 0
+    propagated_failure() else (ignored) _ = ignored end
     propagated_ok: bool = trace == 4321
 
     trace = 0
-    if_value_failure() else 0
+    if_value_failure() else (ignored) _ = ignored end
     if_value_ok: bool = trace == 5
 
     trace = 0
-    match_value_failure() else 0
+    match_value_failure() else (ignored) _ = ignored end
     match_value_ok: bool = trace == 6
 
     trace = 0
-    unreached_registration() else 0
+    unreached_registration() else (ignored) _ = ignored end
     reached_ok: bool = trace == 1
 
     if normal_ok and return_ok and handled_ok and direct_ok

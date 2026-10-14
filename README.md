@@ -358,8 +358,15 @@ This is the maintained inventory of what the compiler does today:
   capability lends standard input beside standard output and error. A fifth,
   directories, lists a directory through a buffer its caller supplies,
   lending each name until the next read, and makes and removes directories
-  and files. Text
-  writes `u32`, `u64` and `usize` decimals and parses them from bytes.
+  and files; a buffered writer gathers output in a caller's buffer until it
+  is flushed, and a line reader lends each line until the next read. Text is
+  built in a builder over a caller's buffer, or one an allocator grows, from
+  bytes, text, host strings, decimals of every integer width and
+  hexadecimal, aligned in a field, and `text.format` fills a template's `{}`
+  with any value that has `formattable` evidence, checked against its
+  values when it runs; every width parses back from bytes, and no locale is
+  consulted. Byte slices copy, with overlap allowed either way, fill,
+  compare and search with their lengths checked.
   Containers share construction and release names, and vectors, spill lists
   and maps lend writable slots with `at` alongside copying `get`. The
   comparison concepts
@@ -478,7 +485,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.19 — Formatting, buffered text and byte blocks (planned).**
+**Next roadmap item: R13.31 — The environment and processes (planned).**
 
 ## License
 

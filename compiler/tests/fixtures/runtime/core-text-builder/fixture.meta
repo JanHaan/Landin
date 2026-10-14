@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/text's builder appends bytes, text, a host string, every width's decimal extremes, hexadecimal and aligned pieces into a caller's buffer, refuses a piece that does not fit with no_space leaving the builder unchanged, a negative number's sign included, and a growing builder doubles through an arena in place and by copying, reports no_space when the arena runs out with its text intact, and releases
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0680, 0900, 0940, 0960, 1030, 1360, 1370, 1380
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

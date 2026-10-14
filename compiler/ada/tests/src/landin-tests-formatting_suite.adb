@@ -656,7 +656,7 @@ package body Landin.Tests.Formatting_Suite is
          end loop;
       end;
       Landin.Testing.Check
-        (Item, Listings = 13, "every running example was read, and"
+        (Item, Listings = 14, "every running example was read, and"
          & Listings'Image & " were");
    end Core_And_Examples_Are_Formatted;
 

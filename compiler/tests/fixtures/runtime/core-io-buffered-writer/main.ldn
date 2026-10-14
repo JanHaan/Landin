@@ -1,0 +1,114 @@
+--  The buffered writer over core/io.memory's standard output, whose writes
+--  can be shortened and made to fail at a chosen call.  Every count below
+--  is of the provider's write calls, so it says when the buffer reached
+--  the writer and in how many pieces.
+import core/io
+import core/mem
+
+mut output: [64]u8 = zeroed
+mut errors: [1]u8 = zeroed
+mut unused: [1]u8 = zeroed
+
+wrote: (state: io.memory_space, expected: []u8) -> (yes: bool) =
+    yes = mem.compare(output[0..<state.output_used], expected) == mem.equal
+end wrote
+
+--  Writes that fit wait for the flush; one that does not flushes first;
+--  one as large as the buffer goes straight through after a flush.
+gathered: (host: io.memory, inout state: io.memory_space)
+          -> (ok: bool) ! io.io_failed =
+    ok = false
+    mut storage: [8]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<8])
+    try io.put(out, "ab")
+    try io.put(out, "cde")
+    try io.put(out, "")
+    return when state.write_calls <> 0 or io.pending(out) <> 5
+    try io.put(out, "fghi")
+    return when state.write_calls <> 1 or io.pending(out) <> 4
+    return when not wrote(state, "abcde")
+    try io.put(out, "12345678")
+    return when state.write_calls <> 3 or io.pending(out) <> 0
+    return when not wrote(state, "abcdefghi12345678")
+    try io.put(out, "xyz")
+    try io.flush(out)
+    try io.flush(out)
+    return when state.write_calls <> 4 or io.pending(out) <> 0
+    ok = wrote(state, "abcdefghi12345678xyz")
+end gathered
+
+--  A flush that fails at once keeps every byte; one that fails after
+--  short transfers keeps the rest, moved to the front of the buffer; the
+--  next flush writes each byte exactly once.
+failing: (host: io.memory, inout state: io.memory_space) -> (ok: bool) =
+    ok = false
+    mut storage: [8]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<8])
+    io.put(out, "1234567") else (problem)
+        _ = problem
+        return
+    end
+    state.fail_write_at = state.write_calls + 1
+    io.flush(out) else (problem)
+        return when problem <> io.io_failed or io.pending(out) <> 7
+        return when state.output_used <> 0
+        state.write_limit = 3
+        state.fail_write_at = state.write_calls + 2
+        io.flush(out) else (again)
+            return when again <> io.io_failed or io.pending(out) <> 4
+            return when not wrote(state, "123")
+            state.fail_write_at = 0
+            io.flush(out) else (last)
+                _ = last
+                return
+            end
+            ok = io.pending(out) == 0 and wrote(state, "1234567")
+            return
+        end
+        return
+    end
+end failing
+
+--  A write too large to wait is the writer's own: its failure is the
+--  writer's io_failed, and the bytes waiting before it are kept.
+direct: (host: io.memory, inout state: io.memory_space) -> (ok: bool) =
+    ok = false
+    mut storage: [4]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<4])
+    io.put(out, "ab") else (problem)
+        _ = problem
+        return
+    end
+    state.fail_write_at = state.write_calls + 1
+    io.put(out, "abcdef") else (problem)
+        ok = problem == io.io_failed and io.pending(out) == 2
+        return
+    end
+end direct
+
+public main: () -> (code: i32) =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    code = 1
+    mut first: io.memory_space = zeroed
+    one := io.memory_over(first, files[0..<1], no_arguments, "",
+                          output[0..<64], errors[0..<1])
+    ok := gathered(one, first) else false
+    return when not ok
+    code = 2
+    mut second: io.memory_space = zeroed
+    two := io.memory_over(second, files[0..<1], no_arguments, "",
+                          output[0..<64], errors[0..<1])
+    return when not failing(two, second)
+    code = 3
+    mut third: io.memory_space = zeroed
+    three := io.memory_over(third, files[0..<1], no_arguments, "",
+                            output[0..<64], errors[0..<1])
+    return when not direct(three, third)
+    code = 42
+end main

@@ -1,0 +1,7 @@
+     1	first line
+     2	second line
+     3	
+     4	fourth, after an empty one
+     5	(a line too long to show)
+     6	sixth
+     7	last, without a newline

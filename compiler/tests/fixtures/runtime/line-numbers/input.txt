@@ -1,0 +1,7 @@
+first line
+second line
+
+fourth, after an empty one
+this line is much longer than the thirty-two bytes the reader holds
+sixth
+last, without a newline

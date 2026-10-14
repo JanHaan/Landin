@@ -1,0 +1,103 @@
+--  Byte blocks with their failure oracles: a copy whose destination begins
+--  after its source and one whose destination begins before it, both inside
+--  one array, so that a byte-at-a-time copy in the wrong direction would
+--  read what it had just written; a destination shorter than its source,
+--  refused before anything is written; and the orders and searches.
+import core/mem
+
+same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = mem.compare(left, right) == mem.equal
+end same
+
+copies: () -> (ok: bool) =
+    ok = false
+    mut bytes: [8]u8 = [1, 2, 3, 4, 5, 6, 7, 8]
+    --  Up by two: the destination begins after the source.
+    mem.copy(bytes[2..<8], bytes[0..<6]) else (problem)
+        _ = problem
+        return
+    end
+    up: [8]u8 = [1, 2, 1, 2, 3, 4, 5, 6]
+    return when not same(bytes[0..<8], up[0..<8])
+    --  Down by three: the destination begins before the source.
+    mem.copy(bytes[0..<5], bytes[3..<8]) else (problem)
+        _ = problem
+        return
+    end
+    down: [8]u8 = [2, 3, 4, 5, 6, 4, 5, 6]
+    return when not same(bytes[0..<8], down[0..<8])
+    --  Onto itself, and an empty copy, change nothing.
+    mem.copy(bytes[0..<8], bytes[0..<8]) else (problem)
+        _ = problem
+        return
+    end
+    mem.copy(bytes[0..<0], bytes[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    unchanged: [8]u8 = [2, 3, 4, 5, 6, 4, 5, 6]
+    return when not same(bytes[0..<8], unchanged[0..<8])
+    --  Into a longer destination: only its prefix is written.
+    mut wide: [6]u8 = [9, 9, 9, 9, 9, 9]
+    mem.copy(wide[0..<6], "abc") else (problem)
+        _ = problem
+        return
+    end
+    prefix: [6]u8 = [97, 98, 99, 9, 9, 9]
+    return when not same(wide[0..<6], prefix[0..<6])
+    ok = true
+end copies
+
+refused: () -> (ok: bool) =
+    ok = false
+    sevens: [3]u8 = [7, 7, 7]
+    mut narrow: [3]u8 = sevens
+    mem.copy(narrow[0..<3], "four") else (problem)
+        ok = problem == mem.out_of_bounds
+             and same(narrow[0..<3], sevens[0..<3])
+        return
+    end
+end refused
+
+filled: () -> (ok: bool) =
+    mut bytes: [5]u8 = [1, 2, 3, 4, 5]
+    mem.fill(bytes[1..<4], 32)
+    mem.fill(bytes[0..<0], 0)
+    expected: [5]u8 = [1, 32, 32, 32, 5]
+    ok = same(bytes[0..<5], expected[0..<5])
+end filled
+
+ordered: () -> (ok: bool) =
+    high: [1]u8 = [200]
+    low: [1]u8 = [100]
+    ok = mem.compare("abc", "abd") == mem.less
+         and mem.compare("abd", "abc") == mem.greater
+         and mem.compare("ab", "abc") == mem.less
+         and mem.compare("abc", "ab") == mem.greater
+         and mem.compare("", "") == mem.equal
+         and mem.compare("", "a") == mem.less
+         and mem.compare(high[0..<1], low[0..<1]) == mem.greater
+         and mem.compare("same", "same") == mem.equal
+end ordered
+
+found: () -> (ok: bool) =
+    line: []u8 = "key=value=more"
+    ok = mem.find(line, 61) == 3
+         and mem.find(line, 107) == 0
+         and mem.find(line, 10) == lenof line
+         and mem.find(line[0..<0], 61) == 0
+end found
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not copies()
+    code = 2
+    return when not refused()
+    code = 3
+    return when not filled()
+    code = 4
+    return when not ordered()
+    code = 5
+    return when not found()
+    code = 42
+end main

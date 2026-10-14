@@ -93,7 +93,7 @@ public main: () -> (code: i32) =
 
     trace = 0
     calls_before_stop := consume_calls
-    attempt(addr first) else 0
+    attempt(addr first) else (ignored) _ = ignored end
 
     code = 1
     if direct == 42 and direct_trace == 12

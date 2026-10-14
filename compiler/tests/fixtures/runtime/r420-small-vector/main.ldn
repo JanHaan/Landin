@@ -100,9 +100,9 @@ larger_inline_capacity: () -> (ok: bool) =
          first_free_size: 0, second_free_size: 0)
     auditor: audit = (state: addr state)
     mut values := spill.new(item: i32, inline_slots: 3)
-    spill.push(values, auditor, 41) else 0
-    spill.push(values, auditor, 42) else 0
-    spill.push(values, auditor, 43) else 0
+    spill.push(values, auditor, 41) else (ignored) _ = ignored end
+    spill.push(values, auditor, 42) else (ignored) _ = ignored end
+    spill.push(values, auditor, 43) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         view[1] = 52
@@ -119,7 +119,7 @@ larger_inline_capacity: () -> (ok: bool) =
     ok = ok and spill.length(addr values) == 0
          and spill.capacity(addr values) == 3
          and state.attempts == 0 and state.frees == 0
-    spill.push(values, auditor, 99) else 0
+    spill.push(values, auditor, 99) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         ok = ok and lenof view == 1 and view[0] == 99
@@ -142,7 +142,7 @@ public main: () -> (code: i32) =
     auditor: audit = (state: addr state)
     mut values := spill.new(item: i32, inline_slots: 1)
 
-    spill.push(values, auditor, 10) else 0
+    spill.push(values, auditor, 10) else (ignored) _ = ignored end
     if state.attempts <> 0 or spill.length(addr values) <> 1
       or spill.capacity(addr values) <> 1
     then
@@ -172,7 +172,7 @@ public main: () -> (code: i32) =
         end if
     end
 
-    spill.push(values, auditor, 12) else 0
+    spill.push(values, auditor, 12) else (ignored) _ = ignored end
     state.fail_next = true
     mut growth_failed: bool = false
     spill.push(values, auditor, 13) else (problem)
@@ -192,7 +192,7 @@ public main: () -> (code: i32) =
         view[1] = 22
     end
 
-    spill.push(values, auditor, 13) else 0
+    spill.push(values, auditor, 13) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         if spill.length(addr values) <> 3 or spill.capacity(addr values) <> 4

@@ -37,6 +37,6 @@ end propagated_failure
 recovered_failure: () -> none ! problem =
     mut local: i32
     undo consume(local)
-    leaf() else 0
+    leaf() else (ignored) _ = ignored end
     return
 end recovered_failure

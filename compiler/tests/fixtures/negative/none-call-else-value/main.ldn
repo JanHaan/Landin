@@ -1,0 +1,24 @@
+--  A call that returns none has no result for its `else` to stand in for:
+--  a value there, written alone or as a block's last line, is refused, and
+--  the error is handled in a block that yields nothing.
+oops: atom
+
+attempt: (flag: bool) -> none ! oops =
+    fail oops when flag
+end attempt
+
+answer: () -> (value: i32) =
+    value = 42
+end answer
+
+handled: () -> (code: i32) =
+    attempt(true) else 0
+    attempt(true) else (problem)
+        _ = problem
+        answer()
+    end
+    attempt(false) else (problem)
+        _ = problem
+    end
+    code = 0
+end handled

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: within a 32 KiB firmware image, a builder over a caller's buffer takes a signed decimal, a zero-filled hexadecimal and a format of two values, then refuses a piece that does not fit with no_space and a template whose placeholders outnumber its values with invalid_format, each leaving the builder as it was
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 0940, 0960, 1370, 1380, 1390
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

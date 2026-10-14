@@ -1,0 +1,43 @@
+--  The builder and format as firmware uses them: a reading formatted into
+--  a fixed line, and the two refusals a bounded line can meet.
+import core/mem
+import core/text
+
+--  A temperature reading from channel three, as one line.
+reading: (inout line: text.builder, values: []any text.formattable)
+         -> none ! text.no_space | text.invalid_format =
+    try text.append_i32(line, -40)
+    try text.append(line, " #")
+    start: usize = text.length(line)
+    try text.append_hex_u32(line, 10)
+    try text.align_right(line, start, 2, 48)
+    try text.format(line, " ch{} {}", values)
+end reading
+
+public main: () -> (code: i32) =
+    code = 1
+    mut storage: [24]u8 = zeroed
+    mut line := text.over(storage[0..<24])
+    channel: u32 = 3
+    unit: []u8 = "C"
+    reading(line, [any(addr channel), any(addr unit)]) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when mem.compare(text.used(line), "-40 #0a ch3 C") <> mem.equal
+    code = 3
+    held: usize = text.length(line)
+    text.append(line, "and more than fits") else (problem)
+        return when problem <> text.no_space or text.length(line) <> held
+        code = 4
+        text.format(line, "{}{}{}", [any(addr channel), any(addr unit)])
+            else (format)
+            return when format <> text.invalid_format
+              or text.length(line) <> held
+            code = 42
+            return
+        end
+        return
+    end
+end main

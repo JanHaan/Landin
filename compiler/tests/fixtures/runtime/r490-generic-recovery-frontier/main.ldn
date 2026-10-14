@@ -67,7 +67,7 @@ public main: () -> (code: i32) =
     end
     deny() else (error)
         observe(copy(error))
-        leaf(true) else (nested)
+        _ = leaf(true) else (nested)
             observe(copy(nested))
             0
         end

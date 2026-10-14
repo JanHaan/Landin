@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: in a generic routine, a static call of a concept entry through its type parameter whose recovery fails with the recovered atom, or tests it, binds the entry's declared error set before any body is checked, rather than leaving error inference with no generic key to wait on
+program: main.ldn
+status: 42
+constructs: 0940, 0960, 1030, 1230, 1260, 1290
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an array literal or a fixed array place passed to a slice parameter lends a slice of the whole array: a literal of scalars, of records and of erased values formed in caller-frame storage in written order and fresh at each call in a loop, a local, a module array, a parameter and an array field lent in place, a mut array lent writable, and a result lent from the parameter used within the caller's frame
+program: main.ldn
+status: 42
+constructs: 0520, 0570, 0900, 0940, 1000, 1150, 1370, 1380
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io's buffered writer gathers small writes in a caller's buffer until a flush, flushes before a write that does not fit, sends a write as large as the buffer straight through, and when a flush fails, at its first transfer or after short ones, reports the writer's io_failed and keeps exactly the bytes not taken, so a second flush writes every byte once
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 0940, 0960, 1030, 1100, 1290, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

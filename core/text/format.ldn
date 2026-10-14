@@ -1,0 +1,160 @@
+--  Formatting: a template whose placeholders take values of any type that
+--  can write itself into a builder.  Nothing runs at compile time, so the
+--  template is checked against its values when it is formatted.
+
+--- The template does not fit its values: its `{}` placeholders and the
+--- values differ in number, or a brace is neither part of a `{}` nor
+--- doubled.
+public invalid_format: atom
+
+--- A value that writes its own text into a builder, which `format` fills
+--- a placeholder with.  The library supplies it for the ten integer types
+--- in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and host
+--- strings as their bytes.  A type of the program's own conforms with a
+--- function that appends its text; a different reading of a supplied type,
+--- hexadecimal for one, is a typed `append` call, or a `distinct` wrapper
+--- with its own conformance [1280].
+public formattable: type = concept (item: type)
+    --- Append the value's text, or report `no_space` and leave the
+    --- builder as it was.
+    append: (self: ptr item, inout into: builder) -> none ! no_space
+end formattable
+
+--  Check the template against the number of values: every `{` begins `{}`
+--  or `{{`, every `}` not closing a placeholder is doubled, and there are
+--  as many placeholders as values.
+checked: (source: []u8, count: usize) -> none ! invalid_format =
+    mut wanted: usize = 0
+    mut at: usize = 0
+    while at < lenof source do
+        current: u8 = source[at]
+        if current == 123 or current == 125 then
+            fail invalid_format when at + 1 >= lenof source
+            following: u8 = source[at + 1]
+            if current == 123 and following == 125 then
+                inc wanted
+            elsif following <> current then
+                fail invalid_format
+            end if
+            at += 2
+        else
+            inc at
+        end if
+    end while
+    fail invalid_format when wanted <> count
+end checked
+
+--  Write a checked template: each run of plain bytes, one brace of each
+--  doubled pair, and each value where its placeholder stands.
+written: (inout into: builder, source: []u8, values: []any formattable)
+         -> none ! no_space =
+    mut run: usize = 0
+    mut at: usize = 0
+    mut next: usize = 0
+    while at < lenof source do
+        current: u8 = source[at]
+        if current == 123 or current == 125 then
+            if current == 123 and source[at + 1] == 125 then
+                try append(into, source[run..<at])
+                value: any formattable = values[next]
+                try value.append(into)
+                inc next
+            else
+                try append(into, source[run..<at + 1])
+            end if
+            at += 2
+            run = at
+        else
+            inc at
+        end if
+    end while
+    try append(into, source[run..<at])
+end written
+
+--- Append `template` with each `{}` replaced by the next of `values`, in
+--- order, written by its own `formattable` conformance; `{{` writes `{`
+--- and `}}` writes `}`.  A placeholder takes nothing else: width, padding
+--- and hexadecimal are the typed `append` and `align` calls.  The template
+--- is checked first, so `invalid_format` writes nothing, and a builder that
+--- fills partway is put back as it was before `no_space` is reported.  No
+--- locale is consulted: the text is the same everywhere.
+---
+--- The values are an array literal of erased addresses, which the call
+--- lends as a slice: `text.format(line, "{} {}\n", [any(addr count),
+--- any(addr name)])`.
+public format: (inout into: builder, template: utf8,
+                values: []any formattable)
+               -> none ! no_space | invalid_format =
+    source: []u8 = bytes(template)
+    try checked(source, lenof values)
+    start: usize = into.used
+    written(into, source, values) else (problem)
+        into.used = start
+        fail problem
+    end
+end format
+
+append_u8_value: (self: ptr u8, inout into: builder) -> none ! no_space =
+    try append_u32(into, u32(self.val))
+end append_u8_value
+append_u16_value: (self: ptr u16, inout into: builder) -> none ! no_space =
+    try append_u32(into, u32(self.val))
+end append_u16_value
+append_u32_value: (self: ptr u32, inout into: builder) -> none ! no_space =
+    try append_u32(into, self.val)
+end append_u32_value
+append_u64_value: (self: ptr u64, inout into: builder) -> none ! no_space =
+    try append_u64(into, self.val)
+end append_u64_value
+append_usize_value: (self: ptr usize, inout into: builder)
+                    -> none ! no_space =
+    try append_usize(into, self.val)
+end append_usize_value
+append_i8_value: (self: ptr i8, inout into: builder) -> none ! no_space =
+    try append_i32(into, i32(self.val))
+end append_i8_value
+append_i16_value: (self: ptr i16, inout into: builder) -> none ! no_space =
+    try append_i32(into, i32(self.val))
+end append_i16_value
+append_i32_value: (self: ptr i32, inout into: builder) -> none ! no_space =
+    try append_i32(into, self.val)
+end append_i32_value
+append_i64_value: (self: ptr i64, inout into: builder) -> none ! no_space =
+    try append_i64(into, self.val)
+end append_i64_value
+append_isize_value: (self: ptr isize, inout into: builder)
+                    -> none ! no_space =
+    try append_isize(into, self.val)
+end append_isize_value
+append_bool_value: (self: ptr bool, inout into: builder) -> none ! no_space =
+    if self.val then
+        try append(into, "true")
+    else
+        try append(into, "false")
+    end if
+end append_bool_value
+append_text_value: (self: ptr utf8, inout into: builder) -> none ! no_space =
+    try append_text(into, self.val)
+end append_text_value
+append_bytes_value: (self: ptr []u8, inout into: builder) -> none ! no_space =
+    try append(into, self.val)
+end append_bytes_value
+append_host_value: (self: ptr host_string, inout into: builder)
+                   -> none ! no_space =
+    try append_host(into, self.val)
+end append_host_value
+
+u8 is formattable (append: append_u8_value)
+u16 is formattable (append: append_u16_value)
+u32 is formattable (append: append_u32_value)
+u64 is formattable (append: append_u64_value)
+usize is formattable (append: append_usize_value)
+i8 is formattable (append: append_i8_value)
+i16 is formattable (append: append_i16_value)
+i32 is formattable (append: append_i32_value)
+i64 is formattable (append: append_i64_value)
+isize is formattable (append: append_isize_value)
+bool is formattable (append: append_bool_value)
+utf8 is formattable (append: append_text_value)
+[]u8 is formattable (append: append_bytes_value)
+host_value is formattable (append: append_host_value)

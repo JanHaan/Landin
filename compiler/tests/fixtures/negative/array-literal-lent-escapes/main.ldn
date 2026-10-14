@@ -1,0 +1,9 @@
+--  A literal lent to a slice parameter is storage in the caller's frame,
+--  so a result `from` that parameter cannot be returned from the caller.
+keep: (values: []u32) -> (view: []u32 from values) =
+    view = values
+end keep
+
+escaped: () -> (view: []u32) =
+    view = keep([1, 2, 3])
+end escaped

@@ -1,0 +1,13 @@
+import core/io
+
+--  A line is lent from its reader until the next read, which may move the
+--  bytes it lies in to the front of the buffer and read over them: keeping
+--  one across that read is refused, and the fix is to copy it first.
+first_byte: (inout lines: io.line_reader(io.memory))
+            -> (first: u8) ! io.line_too_long | io.io_failed =
+    item: io.line = try io.read_line(lines)
+    kept: []u8 = item.bytes
+    following: io.line = try io.read_line(lines)
+    _ = following.finished
+    first = kept[0]
+end first_byte

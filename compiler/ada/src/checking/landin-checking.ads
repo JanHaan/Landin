@@ -834,6 +834,39 @@ package Landin.Checking is
                   and then Conversion /= No_Text_Conversion,
           Post => Text_Conversion_Of (Into, Of_Tree, Node) = Conversion;
 
+   --  An array literal or a fixed-array place written as the argument of
+   --  a slice parameter lends a slice of the whole array: the literal from
+   --  caller-frame storage made for the call, the place from itself.  The
+   --  node keeps its fixed-array type; the fact records the length the
+   --  slice lends, so lowering and origin checking need no second typing.
+   function Is_Lent_Array
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Lent_Length
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node)
+                 and then Is_Lent_Array (Of_Table, Of_Tree, Node);
+
+   procedure Note_Lent_Array
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Length  : Natural)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node),
+          Post => Is_Lent_Array (Into, Of_Tree, Node)
+                  and then Lent_Length (Into, Of_Tree, Node) = Length;
+
    function Reference_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -2758,6 +2791,8 @@ private
       Distinct_Conversion : Nominal_Type_Id := No_Nominal_Type;
       Has_Variadic_Part : Boolean := False;
       Variadic_Part : Natural := 0;
+      Has_Lent_Array : Boolean := False;
+      Lent_Array : Natural := 0;
       Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
       Has_Concept : Boolean := False;
       Concept : Concept_Id := No_Concept;
@@ -2866,6 +2901,9 @@ private
       Node_Concepts : Concept_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       Node_Variadic_Parts : Index_Vectors.Vector;
+      --  Zero where the node lends nothing, else one more than the length
+      --  of the whole array it lends as a slice.
+      Node_Lent_Arrays : Index_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
       Node_Evidence : Conformance_Id_Vectors.Vector;
       Node_Evidence_Entries : Index_Vectors.Vector;

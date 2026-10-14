@@ -1,0 +1,102 @@
+--  The line reader over core/io.memory's standard input, read through an
+--  eight-byte buffer: a line and its ending must fit in it, so seven bytes
+--  is the longest line.  The same input is read whole, three bytes a read
+--  and with a read failing partway, and must give the same lines.
+import core/io
+import core/mem
+
+mut output: [1]u8 = zeroed
+mut errors: [1]u8 = zeroed
+mut unused: [1]u8 = zeroed
+
+input: []u8 = "one\r\ntwo\n\nlone\rcr\ntoolongline\nafter\nexactly\nabcdef\r\nlast"
+
+--  The next line, which must be EXPECTED; a read failure is retried once,
+--  as a caller that knows the failure passes may do.
+next_is: (inout lines: io.line_reader(io.memory), expected: []u8)
+         -> (yes: bool) =
+    yes = false
+    item: io.line = io.read_line(lines) else (problem)
+        return when problem <> io.io_failed
+        again: io.line = io.read_line(lines) else (second)
+            _ = second
+            return
+        end
+        yes = not again.finished
+              and mem.compare(again.bytes, expected) == mem.equal
+        return
+    end
+    yes = not item.finished and mem.compare(item.bytes, expected) == mem.equal
+end next_is
+
+too_long: (inout lines: io.line_reader(io.memory)) -> (yes: bool) =
+    yes = false
+    _ = io.read_line(lines) else (problem)
+        yes = problem == io.line_too_long
+        return
+    end
+end too_long
+
+finished: (inout lines: io.line_reader(io.memory)) -> (yes: bool) =
+    yes = false
+    item: io.line = io.read_line(lines) else (problem)
+        _ = problem
+        return
+    end
+    bytes: []u8 = item.bytes
+    yes = item.finished and lenof bytes == 0
+end finished
+
+--  Read the input with reads of at most LIMIT bytes, the FAIL_AT'th read
+--  failing unless that is zero.
+reads: (limit: usize, fail_at: usize) -> (ok: bool) =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<1], no_arguments, input,
+                           output[0..<1], errors[0..<1])
+    state.read_limit = limit
+    state.fail_read_at = fail_at
+    mut buffer: [8]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<8])
+    ok = next_is(lines, "one") and next_is(lines, "two")
+         and next_is(lines, "") and next_is(lines, "lone\rcr")
+         and too_long(lines) and next_is(lines, "after")
+         and next_is(lines, "exactly") and next_is(lines, "abcdef")
+         and next_is(lines, "last") and finished(lines) and finished(lines)
+end reads
+
+--  A long line at the very end is skipped to the end of input.
+long_last: () -> (ok: bool) =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<1], no_arguments,
+                           "a\nlonger than eight", output[0..<1],
+                           errors[0..<1])
+    mut buffer: [8]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<8])
+    ok = next_is(lines, "a") and too_long(lines) and finished(lines)
+end long_last
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not reads(0 -% 1, 0)
+    code = 2
+    return when not reads(3, 0)
+    code = 3
+    return when not reads(3, 4)
+    code = 4
+    return when not long_last()
+    code = 42
+end main

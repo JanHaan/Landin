@@ -1,0 +1,154 @@
+--  Parsing as the mirror of the builder's appends: a signed value is an
+--  optional `-` and digits, hexadecimal is digits of either case with no
+--  prefix, and each refusal is the first the scan from the left meets.
+import core/text
+
+--  What a parse refuses with.
+refusal: type = text.invalid_number | text.number_overflow
+
+--  Whether the bytes parse as an i8 to the expected value.
+i8_verdict: (source: []u8, expected: i8) -> (yes: bool) =
+    value: i8 = text.parse_i8(source) else (problem)
+        yes = false
+        return
+    end
+    yes = value == expected
+end i8_verdict
+
+i8_refused: (source: []u8, expected: refusal)
+            -> (yes: bool) =
+    yes = false
+    _ = text.parse_i8(source) else (problem)
+        yes = problem == expected
+        return
+    end
+end i8_refused
+
+i64_verdict: (source: []u8, expected: i64) -> (yes: bool) =
+    value: i64 = text.parse_i64(source) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    yes = value == expected
+end i64_verdict
+
+i64_refused: (source: []u8,
+              expected: refusal)
+             -> (yes: bool) =
+    yes = false
+    _ = text.parse_i64(source) else (problem)
+        yes = problem == expected
+        return
+    end
+end i64_refused
+
+narrow: () -> (ok: bool) =
+    ok = i8_verdict("127", 127) and i8_verdict("-128", -128)
+         and i8_verdict("-0", 0) and i8_verdict("007", 7)
+         and i8_refused("128", text.number_overflow)
+         and i8_refused("-129", text.number_overflow)
+         and i8_refused("", text.invalid_number)
+         and i8_refused("-", text.invalid_number)
+         and i8_refused("+5", text.invalid_number)
+         and i8_refused(" 5", text.invalid_number)
+         and i8_refused("--5", text.invalid_number)
+         and i8_refused("1x", text.invalid_number)
+         --  Overflow is met at the fourth digit, before the letter.
+         and i8_refused("1000x", text.number_overflow)
+         --  The letter is met before the value grows too large.
+         and i8_refused("12x000", text.invalid_number)
+end narrow
+
+others: () -> (ok: bool) =
+    ok = false
+    small: u8 = text.parse_u8("255") else 0
+    return when small <> 255
+    _ = text.parse_u8("256") else (problem)
+        return when problem <> text.number_overflow
+        middle: u16 = text.parse_u16("65535") else 0
+        return when middle <> 65535
+        _ = text.parse_u16("65536") else (wide)
+            return when wide <> text.number_overflow
+            short: i16 = text.parse_i16("-32768") else 0
+            return when short <> -32768
+            _ = text.parse_i16("32768") else (larger)
+                return when larger <> text.number_overflow
+                word: i32 = text.parse_i32("-2147483648") else 0
+                top: i32 = text.parse_i32("2147483647") else 0
+                return when word <> -2147483647 - 1 or top <> 2147483647
+                _ = text.parse_i32("-2147483649") else (lower)
+                    ok = lower == text.number_overflow
+                    return
+                end
+                return
+            end
+            return
+        end
+        return
+    end
+end others
+
+long: () -> (ok: bool) =
+    ok = i64_verdict("-9223372036854775808", -9223372036854775807 - 1)
+         and i64_verdict("9223372036854775807", 9223372036854775807)
+         and i64_refused("9223372036854775808", text.number_overflow)
+         and i64_refused("-9223372036854775809", text.number_overflow)
+         and i64_refused("-", text.invalid_number)
+end long
+
+--  isize follows the target: 2^31 parses on a 64-bit target and overflows
+--  on a 32-bit one.
+pointer_width: () -> (ok: bool) =
+    ok = false
+    wide: bool = sizeof usize == 8
+    negative: isize = text.parse_isize("-2147483648") else 0
+    return when negative <> isize(-2147483647) - 1
+    larger: isize = text.parse_isize("2147483648") else (problem)
+        ok = not wide and problem == text.number_overflow
+        return
+    end
+    ok = wide and larger == isize(2147483647) + 1
+end pointer_width
+
+hexadecimal: () -> (ok: bool) =
+    ok = false
+    a: u32 = text.parse_hex_u32("DeadBeef") else 0
+    return when a <> 3735928559
+    b: u32 = text.parse_hex_u32("ffffffff") else 0
+    return when b <> 4294967295
+    c: u64 = text.parse_hex_u64("FFFFFFFFFFFFFFFF") else 0
+    return when c <> 18446744073709551615
+    d: usize = text.parse_hex_usize("0") else 1
+    return when d <> 0
+    _ = text.parse_hex_u32("100000000") else (problem)
+        return when problem <> text.number_overflow
+        _ = text.parse_hex_u64("0x10") else (prefixed)
+            return when prefixed <> text.invalid_number
+            _ = text.parse_hex_u32("") else (empty)
+                return when empty <> text.invalid_number
+                _ = text.parse_hex_u32("12g") else (letter)
+                    ok = letter == text.invalid_number
+                    return
+                end
+                return
+            end
+            return
+        end
+        return
+    end
+end hexadecimal
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not narrow()
+    code = 2
+    return when not others()
+    code = 3
+    return when not long()
+    code = 4
+    return when not pointer_width()
+    code = 5
+    return when not hexadecimal()
+    code = 42
+end main

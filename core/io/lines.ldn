@@ -1,0 +1,137 @@
+--  A line reader reads a file through a caller's buffer and lends it back
+--  a line at a time, as a directory lends its names.
+
+import core/mem
+
+--- A line, its line ending included, does not fit the line reader's
+--- buffer.
+public line_too_long: atom
+
+lines_value: type (provider: type) = struct
+    host: provider
+    opened: file
+    buffer: []mut u8
+    start: usize
+    filled: usize
+    finished: bool
+    skipping: bool
+end lines_value
+
+--- Reads a file a line at a time through a buffer the caller supplies: a
+--- value the caller keeps and edits, passing it `inout` to `read_line`.
+--- Each line is lent from the reader until the next read, which reuses the
+--- buffer it lies in, so a program that keeps a line copies it.
+public line_reader: type (provider: type) = lines_value(provider)
+
+--- One line, lent from its reader: its bytes without the line ending, and
+--- whether the input had already ended, in which case there is no line and
+--- `bytes` is empty.  An empty line is an empty `bytes` that has not
+--- `finished`.
+public line: type = struct
+    bytes: []u8
+    finished: bool
+end line
+
+--- A line reader over the caller's `buffer`, reading `opened` through
+--- `host`.  It holds a copy of the reader's handle; keep the handle's
+--- state and the buffer alive while it is used.  The longest line it reads
+--- is one byte shorter than the buffer, which must hold the line's `\n` as
+--- well.
+public lines_over: (provider: type is reader, host: provider, opened: file,
+                    buffer: []mut u8)
+                   -> (lines: line_reader(provider) from buffer, host) =
+    lines = (host: host, opened: opened, buffer: buffer, start: 0, filled: 0,
+             finished: false, skipping: false)
+end lines_over
+
+--  Move the unread bytes down to the front of the buffer.
+compact: (provider: type, inout lines: line_reader(provider))
+         -> none ! io_failed =
+    return when lines.start == 0
+    remaining: usize = lines.filled - lines.start
+    mem.copy(lines.buffer[0..<remaining],
+             lines.buffer[lines.start..<lines.filled]) else (problem)
+        _ = problem
+        fail io_failed
+    end
+    lines.start = 0
+    lines.filled = remaining
+end compact
+
+--  Read more after the unread bytes, moved to the front; the reader's zero
+--  marks the end of input.
+refill: (provider: type is reader, inout lines: line_reader(provider))
+        -> none ! io_failed =
+    try compact(lines)
+    room := lines.buffer
+    got: usize = try provider.read(lines.host, lines.opened,
+                                   lines.buffer[lines.filled..<lenof room])
+    if got == 0 then
+        lines.finished = true
+    else
+        lines.filled += got
+    end if
+end refill
+
+--- Read the next line, lent from the reader until the next read.  A line
+--- ends at `\n`, and a `\r` just before it is part of the ending, so text
+--- written with `\r\n` reads the same as text written with `\n`; a lone
+--- `\r` is an ordinary byte.  The last line need not end: input that ends
+--- after it gives it, and the next read is `finished`.  End of input is a
+--- line that has `finished`, as an empty read is the end of a file.
+---
+--- A line that does not fit the buffer with its ending reports
+--- `line_too_long`, and the rest of that line is skipped, so the read after
+--- it gives the line that follows.  A reader's failure is its `io_failed`,
+--- and keeps every byte already read for the next call.
+public read_line: (provider: type is reader,
+                   inout lines: line_reader(provider))
+                  -> (item: line from lines)
+                  ! line_too_long | io_failed =
+    loop do
+        if lines.skipping then
+            waiting: usize = lines.filled - lines.start
+            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], 10)
+            if at < waiting then
+                lines.start += at + 1
+                lines.skipping = false
+            else
+                lines.start = 0
+                lines.filled = 0
+                if lines.finished then
+                    lines.skipping = false
+                else
+                    try refill(lines)
+                end if
+            end if
+        else
+            waiting: usize = lines.filled - lines.start
+            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], 10)
+            if at < waiting then
+                begins: usize = lines.start
+                mut ends: usize = begins + at
+                lines.start = ends + 1
+                if ends > begins and lines.buffer[ends - 1] == 13 then
+                    dec ends
+                end if
+                item = (bytes: lines.buffer[begins..<ends], finished: false)
+                return
+            end if
+            if lines.finished then
+                begins: usize = lines.start
+                lines.start = lines.filled
+                item = (bytes: lines.buffer[begins..<lines.filled],
+                        finished: waiting == 0)
+                return
+            end if
+            room := lines.buffer
+            if waiting == lenof room then
+                lines.start = 0
+                lines.filled = 0
+                lines.skipping = true
+                fail line_too_long
+            end if
+            try refill(lines)
+        end if
+    end loop
+end read_line

@@ -1,0 +1,37 @@
+error[L0301]: an array literal lends only a read-only slice, and this parameter writes through it
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:18:10
+   |
+18 |     fill([1, 2])
+   |          ^^^^^^
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:5:8
+  |
+5 | fill: (values: []mut u8) -> none =
+  |        ^^^^^^^^^^^^^^^^ this parameter
+  = note: [0570]: bind the array `mut` and pass the binding, so what is written can be read
+error[L0301]: this array is not writable, and this parameter writes through the slice it lends
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:20:10
+   |
+20 |     fill(still)
+   |          ^^^^^
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:5:8
+  |
+5 | fill: (values: []mut u8) -> none =
+  |        ^^^^^^^^^^^^^^^^ this parameter
+  = note: [0570]: a writable slice is lent only by a `mut` binding or another writable place
+error[L0301]: an array lends an ordinary slice, and this parameter is a text view
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:21:19
+   |
+21 |     count = shown([104, 105]) + pick([1, 2])
+   |                   ^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:9:9
+  |
+9 | shown: (value: utf8) -> (count: usize) =
+  |         ^^^^^^^^^^^ this parameter
+  = note: [0600]: text is validated where it is made; convert the bytes to the view
+error[L0304]: an array literal takes its shape from an array destination, an inferred binding or a non-generic slice parameter
+  --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:21:38
+   |
+21 |     count = shown([104, 105]) + pick([1, 2])
+   |                                      ^^^^^^
+  = note: the tour describes it at [0520]
+  = note: this is a recorded source-form boundary

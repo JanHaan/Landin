@@ -861,6 +861,9 @@ package body Landin.Stages.Checking.References is
       function Evaluate_Fact
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
 
+      function Evaluate_Plain_Fact
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
+
       function Call_Signature
         (Tree : Syn.Tree; Call : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -2368,7 +2371,7 @@ package body Landin.Stages.Checking.References is
          return Result;
       end Fact_Of;
 
-      function Evaluate_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
+      function Evaluate_Plain_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
         return Origin_Fact
       is
          Result : Origin_Fact := No_Origin;
@@ -2818,6 +2821,39 @@ package body Landin.Stages.Checking.References is
          --  positional shape, never an enclosing conversion or constructor.
          Result.Results.Clear;
          Normalize_Scalar_Result;
+         return Result;
+      end Evaluate_Plain_Fact;
+
+      --  [0570]: an array lent as a slice argument is a view of storage,
+      --  never the array's value.  A literal's storage is the caller's
+      --  frame, made for the call, and still carries what its elements
+      --  refer to; a place's is its own, as a range slice of it would be.
+      function Evaluate_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Origin_Fact
+      is
+         Result : Origin_Fact := Evaluate_Plain_Fact (Tree, Node);
+      begin
+         if not Falls_Through
+           or else Node = Syn.No_Node
+           or else not Landin.Checking.Is_Lent_Array (Types.all, Tree, Node)
+         then
+            return Result;
+         end if;
+         if Syn.Kind (Tree, Node) = Syn.Array_Literal then
+            Result.Value.Frame := True;
+            Result.Value.Presence := Unknown_Value;
+         else
+            Result.Value := Result.Storage;
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Root_Declaration (Tree, Node);
+            begin
+               if Id /= Res.No_Declaration and then Local_Of (Id) /= 0 then
+                  Result.Value.Derives (Local_Of (Id)) := True;
+               end if;
+            end;
+         end if;
+         Result.Results.Clear;
          return Result;
       end Evaluate_Fact;
 

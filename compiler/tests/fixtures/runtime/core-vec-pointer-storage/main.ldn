@@ -21,10 +21,10 @@ public main: () -> (code: i32) =
     counted := fault.over(space, arena, allowance)
     mut values := vec.new(item: ptr node)
 
-    vec.push(values, counted, addr first) else 0
-    vec.push(values, counted, addr second) else 0
+    vec.push(values, counted, addr first) else (ignored) _ = ignored end
+    vec.push(values, counted, addr second) else (ignored) _ = ignored end
     wanted: usize = 16
-    vec.reserve(values, counted, wanted) else 0
+    vec.reserve(values, counted, wanted) else (ignored) _ = ignored end
 
     mut failed: bool = false
     too_many: usize = 32
@@ -35,7 +35,7 @@ public main: () -> (code: i32) =
 
     first_index: usize = 0
     second_index: usize = 1
-    vec.push(values, counted, addr third) else 0
+    vec.push(values, counted, addr third) else (ignored) _ = ignored end
     removed: ptr node = vec.pop(values) else addr first
     removed_value: i32 = removed.val.value
     left: ptr node = vec.get(values, first_index) else addr third

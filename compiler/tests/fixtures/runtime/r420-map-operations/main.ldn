@@ -130,21 +130,21 @@ composed_seven_buckets: () -> (ok: bool) =
     --  Allocate the three storages, then retain a valid dead record while
     --  replacing their eight-slot extents with seven-slot extents.
     seed: collision_key = (identity: 1, home: 0)
-    map.insert(value, provider, seed, 10) else 0
-    map.remove(value, seed) else 0
+    map.insert(value, provider, seed, 10) else (ignored) _ = ignored end
+    map.remove(value, seed) else (ignored) _ = ignored end
     seven: usize = 7
-    resize_storage(value.buckets, provider, seven) else 0
-    resize_storage(value.keys, provider, seven) else 0
-    resize_storage(value.values, provider, seven) else 0
+    resize_storage(value.buckets, provider, seven) else (ignored) _ = ignored end
+    resize_storage(value.keys, provider, seven) else (ignored) _ = ignored end
+    resize_storage(value.values, provider, seven) else (ignored) _ = ignored end
 
     --  2^32 is four modulo seven. The three expected homes are four,
     --  zero and zero; masking by six would give zero, two and two.
     first: collision_key = (identity: 2, home: 4294967296)
     second: collision_key = (identity: 3, home: 4294967299)
     third: collision_key = (identity: 4, home: 4294967306)
-    map.insert(value, provider, first, 20) else 0
-    map.insert(value, provider, second, 30) else 0
-    map.insert(value, provider, third, 40) else 0
+    map.insert(value, provider, first, 20) else (ignored) _ = ignored end
+    map.insert(value, provider, second, 30) else (ignored) _ = ignored end
+    map.insert(value, provider, third, 40) else (ignored) _ = ignored end
     mut placed: bool = map.slots(value) == 7
                    and expect_value(value, 2, 4294967296, 20)
                    and expect_value(value, 3, 4294967299, 30)
@@ -174,7 +174,7 @@ composed_seven_buckets: () -> (ok: bool) =
                         and second_seen.key.identity == 3
                         and third_seen.key.identity == 4
     end
-    map.remove(value, first) else 0
+    map.remove(value, first) else (ignored) _ = ignored end
     removed: bool = missing_value(value, 2, 4294967296)
                     and expect_value(value, 3, 4294967299, 30)
                     and expect_value(value, 4, 4294967306, 40)
@@ -184,17 +184,17 @@ composed_seven_buckets: () -> (ok: bool) =
     seventh: collision_key = (identity: 8, home: 4294967301)
     --  Seven slots hold five entries, and the tombstone counts towards them.
     --  The fourth and fifth keys take free buckets five and six.
-    map.insert(value, provider, fourth, 50) else 0
-    map.insert(value, provider, fifth, 60) else 0
+    map.insert(value, provider, fourth, 50) else (ignored) _ = ignored end
+    map.insert(value, provider, fifth, 60) else (ignored) _ = ignored end
     kept: bool = map.slots(value) == 7 and value.tombstones == 1
     --  With one live entry among four tombstones, the seventh key takes free
     --  bucket two. The live entries with it fit in half the capacity, so the
     --  table is rebuilt at its composed size, emptying the tombstones,
     --  rather than grown.
-    map.remove(value, second) else 0
-    map.remove(value, third) else 0
-    map.remove(value, fourth) else 0
-    map.insert(value, provider, seventh, 80) else 0
+    map.remove(value, second) else (ignored) _ = ignored end
+    map.remove(value, third) else (ignored) _ = ignored end
+    map.remove(value, fourth) else (ignored) _ = ignored end
+    map.insert(value, provider, seventh, 80) else (ignored) _ = ignored end
     rebuilt: bool = map.slots(value) == 7 and value.tombstones == 0
                     and map.length(value) == 2
                     and expect_value(value, 6, 4294967298, 60)
@@ -204,13 +204,13 @@ composed_seven_buckets: () -> (ok: bool) =
     --  bucket one passes the third and seventh keys to a free bucket, so it
     --  meets the pressure again, and four live entries do not fit in half
     --  the capacity: the table doubles rather than rebuilding in place.
-    map.insert(value, provider, second, 30) else 0
-    map.insert(value, provider, third, 40) else 0
-    map.remove(value, second) else 0
-    map.insert(value, provider, fourth, 50) else 0
+    map.insert(value, provider, second, 30) else (ignored) _ = ignored end
+    map.insert(value, provider, third, 40) else (ignored) _ = ignored end
+    map.remove(value, second) else (ignored) _ = ignored end
+    map.insert(value, provider, fourth, 50) else (ignored) _ = ignored end
     churned: bool = map.slots(value) == 7 and value.tombstones == 1
                     and map.length(value) == 4
-    map.insert(value, provider, sixth, 70) else 0
+    map.insert(value, provider, sixth, 70) else (ignored) _ = ignored end
     grown: bool = map.slots(value) == 14 and value.tombstones == 0
                   and map.length(value) == 5
                   and missing_value(value, 3, 4294967299)
@@ -230,16 +230,16 @@ tombstone_update: () -> (ok: bool) =
     mut value := map.new(key: collision_key, item: i32)
     a: collision_key = (identity: 1, home: 6)
     b: collision_key = (identity: 2, home: 6)
-    map.insert(value, provider, a, 10) else 0
-    map.insert(value, provider, b, 20) else 0
-    map.remove(value, a) else 0
+    map.insert(value, provider, a, 10) else (ignored) _ = ignored end
+    map.insert(value, provider, b, 20) else (ignored) _ = ignored end
+    map.remove(value, a) else (ignored) _ = ignored end
 
     --  The dead A bucket precedes B in the chain. Updating B must continue
     --  past it, preserve length one, and leave no duplicate to remove twice.
-    map.insert(value, provider, b, 29) else 0
+    map.insert(value, provider, b, 29) else (ignored) _ = ignored end
     first: bool = map.length(value) == 1
                  and expect_value(value, 2, 6, 29)
-    map.remove(value, b) else 0
+    map.remove(value, b) else (ignored) _ = ignored end
     mut second_remove_missing: bool = false
     map.remove(value, b) else (problem)
         _ = problem
@@ -260,12 +260,12 @@ wrap_rehash_and_churn: () -> (ok: bool) =
     k5: collision_key = (identity: 5, home: 6)
     k6: collision_key = (identity: 6, home: 6)
     k7: collision_key = (identity: 7, home: 6)
-    map.insert(value, provider, k1, 101) else 0
-    map.insert(value, provider, k2, 102) else 0
-    map.insert(value, provider, k3, 103) else 0
-    map.insert(value, provider, k4, 104) else 0
-    map.insert(value, provider, k5, 105) else 0
-    map.insert(value, provider, k6, 106) else 0
+    map.insert(value, provider, k1, 101) else (ignored) _ = ignored end
+    map.insert(value, provider, k2, 102) else (ignored) _ = ignored end
+    map.insert(value, provider, k3, 103) else (ignored) _ = ignored end
+    map.insert(value, provider, k4, 104) else (ignored) _ = ignored end
+    map.insert(value, provider, k5, 105) else (ignored) _ = ignored end
+    map.insert(value, provider, k6, 106) else (ignored) _ = ignored end
 
     --  Six colliding keys wrap from bucket six through zero. The missing
     --  lookup traverses that chain and terminates at the first free bucket.
@@ -275,25 +275,25 @@ wrap_rehash_and_churn: () -> (ok: bool) =
                   and missing_value(value, 99, 6)
 
     --  Seven crosses the three-quarter threshold and rehashes all six values.
-    map.insert(value, provider, k7, 107) else 0
+    map.insert(value, provider, k7, 107) else (ignored) _ = ignored end
     grown: bool = map.length(value) == 7
                  and expect_value(value, 1, 6, 101)
                  and expect_value(value, 4, 6, 104)
                  and expect_value(value, 7, 6, 107)
 
-    map.remove(value, k2) else 0
-    map.remove(value, k4) else 0
-    map.remove(value, k6) else 0
+    map.remove(value, k2) else (ignored) _ = ignored end
+    map.remove(value, k4) else (ignored) _ = ignored end
+    map.remove(value, k6) else (ignored) _ = ignored end
     k8: collision_key = (identity: 8, home: 6)
     k9: collision_key = (identity: 9, home: 6)
     k10: collision_key = (identity: 10, home: 6)
     k11: collision_key = (identity: 11, home: 6)
     k12: collision_key = (identity: 12, home: 6)
-    map.insert(value, provider, k8, 108) else 0
-    map.insert(value, provider, k9, 109) else 0
-    map.insert(value, provider, k10, 110) else 0
-    map.insert(value, provider, k11, 111) else 0
-    map.insert(value, provider, k12, 112) else 0
+    map.insert(value, provider, k8, 108) else (ignored) _ = ignored end
+    map.insert(value, provider, k9, 109) else (ignored) _ = ignored end
+    map.insert(value, provider, k10, 110) else (ignored) _ = ignored end
+    map.insert(value, provider, k11, 111) else (ignored) _ = ignored end
+    map.insert(value, provider, k12, 112) else (ignored) _ = ignored end
     churned: bool = map.length(value) == 9
                    and missing_value(value, 2, 6)
                    and missing_value(value, 4, 6)
@@ -315,12 +315,12 @@ bounded_full_and_tombstone_probes: () -> (ok: bool) =
     k4: collision_key = (identity: 4, home: 6)
     k5: collision_key = (identity: 5, home: 6)
     k6: collision_key = (identity: 6, home: 6)
-    map.insert(full, provider, k1, 101) else 0
-    map.insert(full, provider, k2, 102) else 0
-    map.insert(full, provider, k3, 103) else 0
-    map.insert(full, provider, k4, 104) else 0
-    map.insert(full, provider, k5, 105) else 0
-    map.insert(full, provider, k6, 106) else 0
+    map.insert(full, provider, k1, 101) else (ignored) _ = ignored end
+    map.insert(full, provider, k2, 102) else (ignored) _ = ignored end
+    map.insert(full, provider, k3, 103) else (ignored) _ = ignored end
+    map.insert(full, provider, k4, 104) else (ignored) _ = ignored end
+    map.insert(full, provider, k5, 105) else (ignored) _ = ignored end
+    map.insert(full, provider, k6, 106) else (ignored) _ = ignored end
 
     mut full_missing: bool = false
     begin
@@ -340,8 +340,8 @@ bounded_full_and_tombstone_probes: () -> (ok: bool) =
     map.release(full, provider)
 
     mut dead := map.new(key: collision_key, item: i32)
-    map.insert(dead, provider, k1, 101) else 0
-    map.remove(dead, k1) else 0
+    map.insert(dead, provider, k1, 101) else (ignored) _ = ignored end
+    map.remove(dead, k1) else (ignored) _ = ignored end
     mut dead_get_missing: bool = false
     mut dead_remove_missing: bool = false
     begin
@@ -377,18 +377,18 @@ empty_tombstone_misses: () -> (ok: bool) =
     k5: collision_key = (identity: 5, home: 0)
     k6: collision_key = (identity: 6, home: 0)
     absent: collision_key = (identity: 99, home: 0)
-    map.insert(value, provider, k1, 1) else 0
-    map.insert(value, provider, k2, 2) else 0
-    map.insert(value, provider, k3, 3) else 0
-    map.insert(value, provider, k4, 4) else 0
-    map.insert(value, provider, k5, 5) else 0
-    map.insert(value, provider, k6, 6) else 0
-    map.remove(value, k1) else 0
-    map.remove(value, k2) else 0
-    map.remove(value, k3) else 0
-    map.remove(value, k4) else 0
-    map.remove(value, k5) else 0
-    map.remove(value, k6) else 0
+    map.insert(value, provider, k1, 1) else (ignored) _ = ignored end
+    map.insert(value, provider, k2, 2) else (ignored) _ = ignored end
+    map.insert(value, provider, k3, 3) else (ignored) _ = ignored end
+    map.insert(value, provider, k4, 4) else (ignored) _ = ignored end
+    map.insert(value, provider, k5, 5) else (ignored) _ = ignored end
+    map.insert(value, provider, k6, 6) else (ignored) _ = ignored end
+    map.remove(value, k1) else (ignored) _ = ignored end
+    map.remove(value, k2) else (ignored) _ = ignored end
+    map.remove(value, k3) else (ignored) _ = ignored end
+    map.remove(value, k4) else (ignored) _ = ignored end
+    map.remove(value, k5) else (ignored) _ = ignored end
+    map.remove(value, k6) else (ignored) _ = ignored end
     retained: bool = map.length(value) == 0
                      and map.slots(value) == 8
                      and value.tombstones == 6
@@ -403,7 +403,7 @@ empty_tombstone_misses: () -> (ok: bool) =
         remove_missing = true
     end
     skipped: bool = get_missing and remove_missing and hash_calls == 0
-    map.insert(value, provider, absent, 99) else 0
+    map.insert(value, provider, absent, 99) else (ignored) _ = ignored end
     ok = retained and skipped and expect_value(value, 99, 0, 99)
     map.release(value, provider)
 end empty_tombstone_misses
@@ -411,22 +411,22 @@ end empty_tombstone_misses
 pointer_key_and_value: () -> (ok: bool) =
     provider := heap.host()
     mut value := map.new(key: ptr node, item: ptr node)
-    map.insert(value, provider, addr n1, addr n2) else 0
-    map.insert(value, provider, addr n3, addr n4) else 0
-    map.insert(value, provider, addr n5, addr n6) else 0
-    map.insert(value, provider, addr n7, addr n8) else 0
-    map.insert(value, provider, addr n2, addr n3) else 0
-    map.insert(value, provider, addr n4, addr n5) else 0
+    map.insert(value, provider, addr n1, addr n2) else (ignored) _ = ignored end
+    map.insert(value, provider, addr n3, addr n4) else (ignored) _ = ignored end
+    map.insert(value, provider, addr n5, addr n6) else (ignored) _ = ignored end
+    map.insert(value, provider, addr n7, addr n8) else (ignored) _ = ignored end
+    map.insert(value, provider, addr n2, addr n3) else (ignored) _ = ignored end
+    map.insert(value, provider, addr n4, addr n5) else (ignored) _ = ignored end
     --  The seventh distinct pointer key migrates the first six through
     --  mem.transfer without ever claiming their spare storage is initialized.
-    map.insert(value, provider, addr n6, addr n7) else 0
+    map.insert(value, provider, addr n6, addr n7) else (ignored) _ = ignored end
     found: ptr node = map.get(value, addr n1) else addr n1
     other: ptr node = map.get(value, addr n3) else addr n1
     migrated: ptr node = map.get(value, addr n6) else addr n1
     ok = map.length(value) == 7
          and found.val.payload == 22 and other.val.payload == 44
          and migrated.val.payload == 77
-    map.remove(value, addr n3) else 0
+    map.remove(value, addr n3) else (ignored) _ = ignored end
     mut removed_missing: bool = false
     _ = map.get(value, addr n3) else (problem)
         _ = problem

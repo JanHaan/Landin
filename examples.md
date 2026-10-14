@@ -3,7 +3,8 @@
 These are complete Landin programs that the bootstrap compiler accepts,
 lowers, emits, links and runs today on Linux x86-64 and Darwin arm64. They are the same sources
 the runtime suite executes. Each returns 42 only after checking its result,
-except the word count, a tool that reads its standard input and returns 0.
+except the word count and the line numberer, tools that read their standard
+input and return 0.
 
 The implemented hosted language includes aggregate parameters and results,
 fixed arrays [0520], slices [0570], variants [0680], pattern matching [1210],
@@ -31,9 +32,10 @@ Game programs write their official correctness output; the next seven programs
 print nothing. Status 42 means the checks in `main` passed, and any other
 returned status makes the runtime fixture fail. The word count prints the
 totals for whatever its standard input holds and returns 0, and its fixture
-gives it an input of its own and holds the line it prints. The directory
+gives it an input of its own and holds the line it prints; the line numberer
+does the same with the lines it numbers. The directory
 listing builds a directory where it runs, prints its listing, removes it
-and returns 42. The gate checks all six output oracles and all thirteen
+and returns 42. The gate checks all seven output oracles and all fourteen
 programs on each full gate run, on Linux x86-64 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
 exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
@@ -931,9 +933,15 @@ test's memory; `main` hands it the hosted provider and `io.input`, the
 standard-input handle of the process concept beside `io.out` and `io.err`.
 It reads a buffer at a time until a read returns zero, which is end of
 input, carrying whether a word is open from one buffer to the next. The
-totals are `u64`, and `core/text` writes them in decimal into a line the
-program writes once. A failed read is reported on standard error with
-status 1.
+totals are `u64`, and `text.format` writes them into a line the program
+writes once: a builder over a 64-byte buffer, `text.over`, takes the
+template `"{} {} {}\n"` and the three totals, each erased to
+`any text.formattable` from the address of its field [1370] [1380] and
+written as an array literal the call lends as a slice [0570], and fills
+each `{}` with the next in decimal. The template is checked against
+the values when it runs, since nothing runs at compile time, so `render`
+names `text.invalid_format` beside `text.no_space`. A failed read is
+reported on standard error with status 1.
 
 Fixture source: `compiler/tests/fixtures/runtime/word-count/main.ldn`.
 
@@ -941,7 +949,7 @@ Fixture source: `compiler/tests/fixtures/runtime/word-count/main.ldn`.
 --  Count the lines, words and bytes on standard input, as `wc` does when it
 --  is named no file.  The counting asks only for a reader, the narrowest
 --  capability it uses, so the same routine counts a pipe, a file or bytes in
---  memory.  The totals are u64 and core/text writes them in decimal.
+--  memory.  The totals are u64, and core/text formats them into a line.
 import core/io
 import core/text
 import hosted/io as hosted
@@ -982,14 +990,13 @@ count: (provider: type is io.reader, source: provider,
     end loop
 end count
 
---  The three totals in decimal, separated by spaces and ended by a newline.
-render: (totals: counts, into: []mut u8) -> (used: usize) ! text.no_space =
-    used = try text.write_u64(into, 0, totals.lines)
-    used = try text.write_byte(into, used, 32)
-    used = try text.write_u64(into, used, totals.words)
-    used = try text.write_byte(into, used, 32)
-    used = try text.write_u64(into, used, totals.bytes)
-    used = try text.write_byte(into, used, 10)
+--  The three totals in decimal, separated by spaces and ended by a newline,
+--  formatted into LINE.
+render: (totals: counts, inout line: text.builder)
+        -> none ! text.no_space | text.invalid_format =
+    try text.format(line, "{} {} {}\n",
+                    [any(addr totals.lines), any(addr totals.words),
+                     any(addr totals.bytes)])
 end render
 
 public main: () -> (code: i32) =
@@ -1007,13 +1014,14 @@ public main: () -> (code: i32) =
     end
 
     --  Three twenty-digit totals, two spaces and a newline fit in 64 bytes.
-    mut line: [64]u8 = zeroed
-    used := render(totals, line[0..<64]) else (problem)
+    mut storage: [64]u8 = zeroed
+    mut line := text.over(storage[0..<64])
+    render(totals, line) else (problem)
         _ = problem
         code = 1
         return
     end
-    io.write(host, io.out(host), line[0..<used]) else (problem)
+    io.write(host, io.out(host), text.used(line)) else (problem)
         _ = problem
         code = 1
         return
@@ -1049,19 +1057,29 @@ A directory is opened with a buffer the caller supplies, and `io.read_entry`
 refills that buffer as the entries are read, so each entry's name is lent
 from the directory [0790] until the next read reuses the buffer [0800]: a
 program that keeps a name past that read is refused, and this one copies
-each name into a `kept` record. An entry with an empty name is the end of
-the directory. A name is a host string, as the system stores it, and need
-not be UTF-8: the listing keeps its bytes, `text.host_bytes`, which
-`text.from_bytes` validates, and a name that is not prints with its other
-bytes escaped. A path is a host string too, which the listing builds in a
-buffer of its own and makes with `text.host_over`. A file's size is
-`io.entry_size`, asked of the open directory by the name it read, a `u64`
-that `core/text` writes in decimal; a
-directory's own size differs between file systems, so it prints as `-`.
+each name into a `kept` record with `mem.copy`. An entry with an empty name
+is the end of the directory. A name is a host string, as the system stores
+it, and need not be UTF-8: the listing keeps its bytes, `text.host_bytes`,
+and a name that `text.valid` refuses prints with its other bytes escaped as
+`\xHH`, a hexadecimal append right-aligned in two columns with a `0` fill.
+A path is a host string too, which the listing builds with a builder over
+a buffer of its own and makes with `text.host_over`. A file's size is
+`io.entry_size`, asked of the open directory by the name it read, a `u64`;
+a directory's own size differs between file systems, so it prints as `-`.
 The entries come in whatever order the system keeps them, so the program
 sorts its copies with `core/sort`, ordered by the `cmp.ordered` evidence
-it declares for `kept` [1280]. A `defer` closes the directory on every
-way out of `list` [1100].
+it declares for `kept` [1280], which `mem.compare` gives as byte order. A
+`defer` closes the directory on every way out of `list` [1100].
+
+Each line is one `text.format` of three values of different types: the
+kind's word, the size as a `u64` or the dash as bytes, chosen by an `if`,
+and the name as a `shown` record, whose own `text.formattable` conformance
+[1240] writes it as it is or escaped. The lines go to standard output
+through a buffered writer, `io.buffered_over`, which gathers them in a
+512-byte buffer and writes them when it fills. There are no destructors, so
+bytes still waiting when the program ends are never written: `show`
+flushes at the end, which reports a failure, and a `defer` flushes on
+every other way out.
 
 Fixture source: `compiler/tests/fixtures/runtime/directory-listing/main.ldn`.
 
@@ -1073,6 +1091,7 @@ Fixture source: `compiler/tests/fixtures/runtime/directory-listing/main.ldn`.
 --  one, and a name that is not prints with its other bytes escaped.
 import core/cmp
 import core/io
+import core/mem
 import core/sort
 import core/text
 import hosted/io as hosted
@@ -1081,8 +1100,7 @@ import hosted/io as hosted
 --  it runs in.
 top: []u8 = "listing-scratch"
 
---  More entries than the listing keeps, or a name or a path longer than
---  it keeps.
+--  More entries than the listing keeps, or a name longer than it keeps.
 too_many: atom
 too_long: atom
 
@@ -1098,47 +1116,64 @@ end kept
 
 --  Byte order, the order `ls` gives in the C locale.
 before: (left: kept, right: kept) -> (yes: bool) =
-    mut at: usize = 0
-    while at < left.length and at < right.length do
-        if left.name[at] <> right.name[at] then
-            yes = left.name[at] < right.name[at]
-            return
-        end if
-        inc at
-    end while
-    yes = left.length < right.length
+    yes = mem.compare(left.name[0..<left.length],
+                      right.name[0..<right.length]) == mem.less
 end before
 
 kept is cmp.ordered (less: before)
 
---  The path of NAME in the top directory, or of the top directory itself
---  when NAME is empty, built in SCRATCH.
-joined: (name: []u8, scratch: []mut u8)
-        -> (path: text.host_string from scratch) ! too_long =
-    mut used: usize = 0
-    for byte in top do
-        fail too_long when used >= lenof scratch
-        scratch[used] = byte
-        inc used
-    end for
-    if lenof name > 0 then
-        fail too_long when used >= lenof scratch
-        scratch[used] = 47
-        inc used
-        for byte in name do
-            fail too_long when used >= lenof scratch
-            scratch[used] = byte
-            inc used
-        end for
+--  A name as the listing shows it: as it is when it is UTF-8, and
+--  otherwise with each byte outside printable ASCII written as `\xHH`, so
+--  the line stays text.  Its conformance lets `format` write it.
+shown: type = struct
+    name: []u8
+end shown
+
+append_shown: (self: ptr shown, inout into: text.builder)
+              -> none ! text.no_space =
+    start: usize = text.length(into)
+    escaped(self.val.name, into) else (problem)
+        text.truncate(into, start)
+        fail problem
+    end
+end append_shown
+
+shown is text.formattable (append: append_shown)
+
+escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
+    if text.valid(name) then
+        try text.append(into, name)
+        return
     end if
-    path = text.host_over(scratch[0..<used])
+    for byte in name do
+        if byte >= 32 and byte < 127 and byte <> 92 then
+            try text.append_byte(into, byte)
+        else
+            try text.append(into, "\\x")
+            digits: usize = text.length(into)
+            try text.append_hex_u32(into, u32(byte))
+            try text.align_right(into, digits, 2, 48)
+        end if
+    end for
+end escaped
+
+--  The path of NAME in the top directory, or of the top directory itself
+--  when NAME is empty, built in PATH.
+joined: (name: []u8, inout path: text.builder) -> none ! text.no_space =
+    text.clear(path)
+    try text.append(path, top)
+    if lenof name > 0 then
+        try text.append_byte(path, 47)
+        try text.append(path, name)
+    end if
 end joined
 
 --  Make the file NAME in the top directory, holding CONTENTS.
 make_file: (host: hosted.system, name: []u8, contents: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    path: text.host_string = try joined(name, scratch[0..<64])
-    opened: io.file = try io.open_write(host, path)
+    mut path := text.over(scratch[0..<64])
+    try joined(name, path)
+    opened: io.file = try io.open_write(host, text.host_over(text.used(path)))
     io.write(host, opened, contents) else (problem)
         io.close(host, opened) else (ignored)
             _ = ignored
@@ -1162,8 +1197,9 @@ end remove
 --  NAME is empty, if it is there.
 forget: (host: hosted.system, name: []u8, directory: bool) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    path: text.host_string = try joined(name, scratch[0..<64])
-    remove(host, path, directory) else (problem)
+    mut path := text.over(scratch[0..<64])
+    try joined(name, path)
+    remove(host, text.host_over(text.used(path)), directory) else (problem)
         fail problem when problem <> io.not_found
     end
 end forget
@@ -1179,12 +1215,20 @@ clear: (host: hosted.system) -> none ! ... =
     try forget(host, "", true)
 end clear
 
+--  Make the directory NAME in the top directory, or the top directory
+--  itself when NAME is empty.
+make_directory: (host: hosted.system, name: []u8) -> none ! ... =
+    mut scratch: [64]u8 = zeroed
+    mut path := text.over(scratch[0..<64])
+    try joined(name, path)
+    try io.make_directory(host, text.host_over(text.used(path)))
+end make_directory
+
 --  Four files, one of them empty and one with a name beyond ASCII, and a
 --  subdirectory holding a fifth.
 build: (host: hosted.system) -> none ! ... =
     try clear(host)
-    mut scratch: [64]u8 = zeroed
-    try io.make_directory(host, try joined("", scratch[0..<64]))
+    try make_directory(host, "")
     try make_file(host, "alpha.log", "alpha\n")
     line_of_beta: []u8 = "beta\n"
     mut lines: [1000]u8 = zeroed
@@ -1194,7 +1238,7 @@ build: (host: hosted.system) -> none ! ... =
     try make_file(host, "beta.log", lines[0..<1000])
     try make_file(host, "café.log", "café\n")
     try make_file(host, "empty", "")
-    try io.make_directory(host, try joined("nested", scratch[0..<64]))
+    try make_directory(host, "nested")
     try make_file(host, "nested/gamma.log", "gamma\n")
 end build
 
@@ -1202,11 +1246,9 @@ end build
 --  and return how many there are.
 list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
     count = 0
-    mut scratch: [64]u8 = zeroed
-    path: text.host_string = try joined("", scratch[0..<64])
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
-        try io.open_directory(host, path, buffer[0..<1024])
+        try io.open_directory(host, text.host_over(top), buffer[0..<1024])
     defer io.close_directory(host, listing) else (problem)
         _ = problem
     end
@@ -1216,9 +1258,7 @@ list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
         break when lenof name == 0
         fail too_many when count == lenof into
         fail too_long when lenof name > 255
-        for at in usize(0)..<lenof name do
-            into[count].name[at] = name[at]
-        end for
+        try mem.copy(into[count].name[0..<255], name)
         into[count].length = lenof name
         into[count].kind = item.kind
         into[count].size = 0
@@ -1229,75 +1269,50 @@ list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
     end loop
 end list
 
-digits: []u8 = "0123456789abcdef"
-
---  BYTES appended to INTO after its first USED bytes.
-append: (into: []mut u8, used: usize, bytes: []u8)
-        -> (next: usize) ! text.no_space =
-    next = used
-    for byte in bytes do
-        next = try text.write_byte(into, next, byte)
-    end for
-end append
-
---  A name that is UTF-8 as it is; any other with each byte outside
---  printable ASCII written as `\xHH`, so the line stays text.
-append_name: (into: []mut u8, used: usize, name: []u8)
-             -> (next: usize) ! text.no_space =
-    shown: utf8 = text.from_bytes(name) else (problem)
-        _ = problem
-        next = used
-        for byte in name do
-            if byte >= 32 and byte < 127 and byte <> 92 then
-                next = try text.write_byte(into, next, byte)
-            else
-                next = try append(into, next, "\\x")
-                next = try text.write_byte(into, next, digits[usize(byte >> 4)])
-                next = try text.write_byte(into, next, digits[usize(byte & 15)])
-            end if
-        end for
-        return
-    end
-    next = try append(into, used, text.bytes(shown))
-end append_name
-
---  One line per entry: its kind, a file's size or `-`, and its name.
-line: (entry: kept, into: []mut u8) -> (used: usize) ! text.no_space =
+--  One line per entry into LINE: its kind, a file's size or `-`, and its
+--  name as it is shown.
+line: (entry: kept, inout into: text.builder) -> none ! ... =
     word: []u8 = match entry.kind
-        io.regular: "file "
-        io.subdirectory: "directory "
-        io.symbolic_link: "link "
-        io.special: "special "
+        io.regular: "file"
+        io.subdirectory: "directory"
+        io.symbolic_link: "link"
+        io.special: "special"
     end match
-    used = try append(into, 0, word)
-    if entry.kind == io.regular then
-        used = try text.write_u64(into, used, entry.size)
-    else
-        used = try text.write_byte(into, used, 45)
-    end if
-    used = try text.write_byte(into, used, 32)
-    used = try append_name(into, used, entry.name[0..<entry.length])
-    used = try text.write_byte(into, used, 10)
+    dash: []u8 = "-"
+    size: u64 = entry.size
+    amount: any text.formattable =
+        if entry.kind == io.regular then any(addr size) else any(addr dash) end if
+    name: shown = (name: entry.name[0..<entry.length])
+    text.clear(into)
+    try text.format(into, "{} {} {}\n", [any(addr word), amount, any(addr name)])
 end line
 
---  Write the sorted listing and a total of the files' bytes, and say
---  whether it holds what `build` made.
+--  Write the sorted listing and a total of the files' bytes through a
+--  buffered writer, and say whether it holds what `build` made.
 show: (host: hosted.system, entries: []mut kept) -> (ok: bool) ! ... =
     sort.sort(entries)
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    --  Whatever waits is written on every way out; the flush at the end
+    --  is the one whose failure is reported.
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    mut room: [300]u8 = zeroed
+    mut text_line := text.over(room[0..<300])
     mut total: u64 = 0
-    mut text_line: [1100]u8 = zeroed
     for entry in entries do
-        used: usize = try line(entry, text_line[0..<1100])
-        try io.write(host, io.out(host), text_line[0..<used])
+        try line(entry, text_line)
+        try io.put(out, text.used(text_line))
         total += entry.size
     end for
-    mut used: usize = try text.write_usize(text_line[0..<1100], 0,
-                                           lenof entries)
-    used = try append(text_line[0..<1100], used, " entries, ")
-    used = try text.write_u64(text_line[0..<1100], used, total)
-    used = try append(text_line[0..<1100], used, " bytes in files\n")
-    try io.write(host, io.out(host), text_line[0..<used])
-    ok = lenof entries == 5 and total == 1012
+    count: usize = lenof entries
+    text.clear(text_line)
+    try text.format(text_line, "{} entries, {} bytes in files\n",
+                    [any(addr count), any(addr total)])
+    try io.put(out, text.used(text_line))
+    try io.flush(out)
+    ok = count == 5 and total == 1012
 end show
 
 public main: () -> (code: i32) =
@@ -1357,3 +1372,105 @@ reads four hundred names through a buffer of 1024 bytes, each exactly
 once. `runtime/directory-memory` lists `core/io.memory`'s directories with
 every oracle on every hosted target, and
 `runtime/directory-memory-firmware` lists one within a Cortex-M image.
+
+## Line numbers
+
+`cat -n`: the program reads its standard input a line at a time and writes
+each line after its number, right-aligned in six columns, and a tab. It
+reads through `io.lines_over`, a line reader over a 32-byte buffer of its
+own, and `io.read_line` lends each line from that buffer until the next read
+[0790] [0800], without its line ending: a `\n`, or a `\r\n` as Windows
+writes it. The last line need not end, and a line that has `finished` is the
+end of input. A line too long for the buffer is `io.line_too_long`; the
+reader skips the rest of it, and the program numbers it with a note in its
+place and goes on with the next. The number is a `u64` appended to a builder
+and right-aligned with `text.align_right`.
+
+The output goes through a buffered writer, `io.buffered_over`, which
+gathers it in a 256-byte buffer and writes it when the buffer fills. There
+are no destructors, so bytes still waiting when the program ends are never
+written: `main` flushes at the end, which reports a failure as status 1, and
+a `defer` flushes on every other way out [1100].
+
+Fixture source: `compiler/tests/fixtures/runtime/line-numbers/main.ldn`.
+
+```landin
+--  Number the lines of standard input, as `cat -n` does: each line after
+--  its number, right-aligned in six columns, and a tab.  A line is read
+--  through a buffer of 32 bytes; one too long for it is numbered with a
+--  note in its place, and the lines after it are numbered as usual.  The
+--  output goes through a buffered writer, flushed on every way out.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  Write every line of INPUT to OUT, numbered.
+numbered: (provider: type is io.world, host: provider,
+           inout out: io.buffered_writer(provider))
+          -> none ! ... =
+    mut buffer: [32]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<32])
+    mut room: [16]u8 = zeroed
+    mut prefix := text.over(room[0..<16])
+    mut number: u64 = 0
+    loop do
+        inc number
+        text.clear(prefix)
+        try text.append_u64(prefix, number)
+        try text.align_right(prefix, 0, 6, 32)
+        try text.append_byte(prefix, 9)
+        item: io.line = io.read_line(lines) else (problem)
+            fail problem when problem <> io.line_too_long
+            try io.put(out, text.used(prefix))
+            try io.put(out, "(a line too long to show)\n")
+            continue
+        end
+        break when item.finished
+        try io.put(out, text.used(prefix))
+        try io.put(out, item.bytes)
+        try io.put(out, "\n")
+    end loop
+end numbered
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    code = 1
+    numbered(host, out) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main
+```
+
+Pipe text into it:
+
+```sh
+refine compile main.ldn -o numbers
+printf 'one\r\ntwo\n\nlast' | ./numbers
+```
+
+which prints
+
+```text
+     1	one
+     2	two
+     3	
+     4	last
+```
+
+The fixture's input has a line ending in `\r\n`, an empty line, a line
+longer than the buffer and a last line without a newline. The reader's
+other failures run on every target over `core/io.memory`'s standard input
+in `runtime/core-io-line-reader`, a read failing partway and reads three
+bytes long among them, and the buffered writer's in
+`runtime/core-io-buffered-writer` and `runtime/buffered-writer-closed-output`.

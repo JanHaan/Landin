@@ -1,0 +1,154 @@
+--  Formatting and its failure oracles.  A template is checked against its
+--  values when it runs, since nothing runs at compile time: a count that
+--  disagrees, or a brace that is neither part of `{}` nor doubled, is
+--  invalid_format, and nothing is written; a builder that fills partway
+--  through is put back as it was before no_space is reported.
+import core/mem
+import core/text
+
+--  A program's own type writes itself through its own conformance.
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+append_point: (self: ptr point, inout into: text.builder)
+              -> none ! text.no_space =
+    start: usize = text.length(into)
+    written(self.val, into) else (problem)
+        text.truncate(into, start)
+        fail problem
+    end
+end append_point
+
+point is text.formattable (append: append_point)
+
+holds: (line: text.builder, expected: []u8) -> (yes: bool) =
+    yes = mem.compare(text.used(line), expected) == mem.equal
+end holds
+
+every_kind: () -> (ok: bool) ! text.no_space | text.invalid_format =
+    ok = false
+    mut storage: [200]u8 = zeroed
+    mut line := text.over(storage[0..<200])
+    a: u8 = 255
+    b: u16 = 65535
+    c: u32 = 7
+    d: u64 = 18446744073709551615
+    e: usize = 0
+    f: i8 = -128
+    g: i16 = -32768
+    h: i32 = 0 - 1
+    i: i64 = 9223372036854775807
+    j: isize = 0 - 12
+    yes: bool = true
+    no: bool = false
+    word: utf8 = "naïve"
+    raw: []u8 = "bytes"
+    name: text.host_string = text.host_over("host")
+    spot: point = (x: 3, y: 0 - 4)
+    try text.format(line, "{} {} {} {} {}|{} {} {} {} {}|{} {}|{} {} {}|{}",
+                    [any(addr a), any(addr b), any(addr c), any(addr d),
+                     any(addr e), any(addr f), any(addr g), any(addr h),
+                     any(addr i), any(addr j), any(addr yes), any(addr no),
+                     any(addr word), any(addr raw), any(addr name),
+                     any(addr spot)])
+    return when not holds(line, "255 65535 7 18446744073709551615 0|-128 -32768 -1 9223372036854775807 -12|true false|naïve bytes host|(3, -4)")
+    text.clear(line)
+    try text.format(line, "{{}} {{{}}} }}{{", [any(addr c)])
+    return when not holds(line, "{} {7} }{")
+    text.clear(line)
+    try text.format(line, "", [])
+    try text.format(line, "plain", [])
+    return when not holds(line, "plain")
+    ok = true
+end every_kind
+
+--  Each malformed template, against the same values, writes nothing.
+refuses: (inout line: text.builder, template: utf8,
+          values: []any text.formattable) -> (yes: bool) =
+    held: usize = text.length(line)
+    yes = false
+    text.format(line, template, values) else (problem)
+        yes = problem == text.invalid_format and text.length(line) == held
+        return
+    end
+end refuses
+
+mismatches: () -> (ok: bool) =
+    ok = false
+    mut storage: [32]u8 = zeroed
+    mut line := text.over(storage[0..<32])
+    text.append(line, "kept") else (problem)
+        _ = problem
+        return
+    end
+    one: u32 = 1
+    two: u32 = 2
+    values: [2]any text.formattable = [any(addr one), any(addr two)]
+    ok = refuses(line, "{} {} {}", values)
+         and refuses(line, "{}", values)
+         and refuses(line, "none", values)
+         and refuses(line, "{} {", values)
+         and refuses(line, "{} } {}", values)
+         and refuses(line, "{x} {}", values)
+         and refuses(line, "{} {}}", values)
+         and holds(line, "kept")
+end mismatches
+
+--  A value that does not fit, after the text before it did: the builder
+--  is put back as it was.
+partway: () -> (ok: bool) =
+    ok = false
+    mut storage: [12]u8 = zeroed
+    mut line := text.over(storage[0..<12])
+    text.append(line, "ab") else (problem)
+        _ = problem
+        return
+    end
+    big: u64 = 18446744073709551615
+    text.format(line, "value {}", [any(addr big)]) else (problem)
+        ok = problem == text.no_space and holds(line, "ab")
+        return
+    end
+end partway
+
+--  A growing builder formats past its first storage.
+grows: () -> (ok: bool) =
+    ok = false
+    mut backing: [128]u8 = zeroed
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], 128)
+    mut line := text.growing(any(addr arena))
+    count: usize = 3
+    what: utf8 = "entries"
+    text.format(line, "{} {} in a line longer than sixteen bytes",
+                [any(addr count), any(addr what)]) else (problem)
+        _ = problem
+        return
+    end
+    ok = holds(line, "3 entries in a line longer than sixteen bytes")
+    text.release(line)
+end grows
+
+public main: () -> (code: i32) =
+    code = 1
+    first := every_kind() else false
+    return when not first
+    code = 2
+    return when not mismatches()
+    code = 3
+    return when not partway()
+    code = 4
+    return when not grows()
+    code = 42
+end main
+
+--  The point's text: its coordinates in parentheses.
+written: (spot: point, inout into: text.builder) -> none ! text.no_space =
+    try text.append_byte(into, 40)
+    try text.append_i32(into, spot.x)
+    try text.append(into, ", ")
+    try text.append_i32(into, spot.y)
+    try text.append_byte(into, 41)
+end written

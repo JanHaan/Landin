@@ -1844,6 +1844,16 @@ package body Landin.Stages.Checking is
          Element_Nominal : Landin.Checking.Nominal_Type_Id :=
            Landin.Checking.No_Nominal_Type;
          Shape : Landin.Checking.Field_Shape := (others => <>));
+      --  Whether an argument is an array literal or a fixed-array place,
+      --  either of which a read-only slice parameter takes as a slice of
+      --  the whole array.
+      function Lends_An_Array
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      procedure Check_Lent_Array
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Landin.Checking.Reference_Id;
+         Site    : Landin.Provenance.Origin);
       procedure Check_Struct_Literal
         (Of_Tree      : Syn.Tree;
          Literal      : Syn.Node_Id;
@@ -14135,6 +14145,13 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Argument);
                      end if;
                   end;
+               elsif Wants = Ty.Slice_Value
+                 and then Parameter.Convention
+                   in Syn.Implicit_In | Syn.Explicit_In
+                 and then Lends_An_Array (Of_Tree, Argument)
+               then
+                  Check_Lent_Array
+                    (Of_Tree, Argument, Parameter.Reference, Parameter.Site);
                elsif Wants in Ty.Pointer_Value | Ty.Slice_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
@@ -14565,6 +14582,37 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Recovery_Body) = Syn.Block then
                   if Result_Count = 0 then
                      Check_Block (Of_Tree, Recovery_Body, Ty.No_Value);
+                     --  [1030]: a recovery value stands in for the call's
+                     --  result, and a call that returns none has none, so
+                     --  its `else` handles the error and yields nothing.
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Block_Value (Of_Tree, Recovery_Body);
+                     begin
+                        if Value /= Syn.No_Node
+                          and then Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Value)
+                              not in Ty.No_Value | Ty.Ill_Typed
+                                     | Ty.Undecided
+                        then
+                           Bad.Report
+                             (Item    => Bad.Result_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this call returns nothing, so its"
+                                         & " `else` has no result to stand"
+                                         & " in for",
+                              Note    => "[1030]: handle the error in a"
+                                         & " block, `else (problem) ... end`,"
+                                         & " which yields no value",
+                              Related => Landin.Checking.Signature_Origin
+                                (Types.all, Signature),
+                              Because => "this signature returns none",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
+                     end;
                   else
                      Check_Block
                        (Of_Tree, Recovery_Body, Expected.Kind, Expected,
@@ -15202,6 +15250,16 @@ package body Landin.Stages.Checking is
            or else Res.Verdict_Of (Meanings.all, Of_Tree, From) /= Res.Bound
          then
             return Landin.Checking.No_Signature;
+         end if;
+
+         --  Error-set inference may already have selected this entry in this
+         --  view (Select_Evidence_Entry); the selection is the same either
+         --  time, so answer what was noted rather than noting it again.
+         if Landin.Checking.Evidence_Of (Types.all, Of_Tree, Selection)
+              /= Landin.Checking.No_Conformance
+         then
+            return Landin.Checking.Signature_Of
+              (Types.all, Of_Tree, Selection);
          end if;
 
          declare
@@ -19966,7 +20024,8 @@ package body Landin.Stages.Checking is
                                 & " does not take one",
                      Note    => "[0520]: an array is copied, passed,"
                                 & " returned, discarded or computed with"
-                                & " whole, and read by indexing an element",
+                                & " whole, lent whole to a slice parameter,"
+                                & " and read by indexing an element",
                      Related => Syn.Origin
                        (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                         Res.Node_Of (Meanings.all, Means)),
@@ -20339,15 +20398,17 @@ package body Landin.Stages.Checking is
 
             --  D241: a literal, a repetition and an untyped struct literal
             --  take their shape from where they are written.  An array
-            --  destination, an inferred binding or a discard supplies one;
-            --  reaching here means this position did not.
+            --  destination, an inferred binding or a discard supplies one,
+            --  and a slice parameter one for a literal; reaching here means
+            --  this position did not.
             when Syn.Array_Literal =>
                Bad.Report
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message => "an array literal takes its shape from an array"
-                             & " destination or an inferred binding",
+                             & " destination, an inferred binding or a"
+                             & " non-generic slice parameter",
                   Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -23187,6 +23248,164 @@ package body Landin.Stages.Checking is
               (Of_Tree, Syn.Slot (Of_Tree, Where, Slot), Context);
          end loop;
       end Refuse_Static_Image_Subtree;
+
+      function Lends_An_Array
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.Array_Literal =>
+               return True;
+            when Syn.Name_Reference =>
+               if Res.Verdict_Of (Meanings.all, Of_Tree, Node) /= Res.Bound
+               then
+                  return False;
+               end if;
+               declare
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  return Res.Sort_Of (Meanings.all, Means)
+                           in Res.Module_Binding | Res.Local_Binding
+                              | Res.Parameter | Res.Named_Return
+                    and then Settled_Type (Means) = Ty.Fixed_Array;
+               end;
+            when Syn.Member_Selection =>
+               return Admit_Array_Field (Of_Tree, Node);
+            when others =>
+               return False;
+         end case;
+      end Lends_An_Array;
+
+      --  [0570]: an array literal, or a fixed-array place, written where a
+      --  slice parameter is wanted lends a slice of the whole array.  The
+      --  literal is checked as an array of the slice's element type with
+      --  as many elements as it writes, and lowering makes it caller-frame
+      --  storage for the call; a place lends its own storage, and lends a
+      --  writable slice only when it is itself writable.  The node keeps
+      --  its array type, and the lent length is recorded beside it.
+      procedure Check_Lent_Array
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Landin.Checking.Reference_Id;
+         Site    : Landin.Provenance.Origin)
+      is
+         Slice : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of (Types.all, Wanted);
+         Element : constant Landin.Checking.Field_Shape :=
+           Descriptor_Shape
+             ((Kind => Slice.Referent, Nominal => Slice.Nominal,
+               Length => Slice.Length, Element => Slice.Element,
+               Element_Shape => Slice.Element_Shape,
+               Element_Nominal => Slice.Element_Nominal,
+               Reference => Slice.Reference, Signature => Slice.Signature,
+               Concept => Slice.Concept, Atoms => Slice.Atoms,
+               others => <>));
+         Is_Literal : constant Boolean :=
+           Syn.Kind (Of_Tree, Node) = Syn.Array_Literal;
+      begin
+         if Slice.View /= Ty.Ordinary_View then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "an array lends an ordinary slice, and this"
+                          & " parameter is a text view",
+               Note    => "[0600]: text is validated where it is made;"
+                          & " convert the bytes to the view",
+               Related => Site,
+               Because => "this parameter",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+         if Is_Literal then
+            if Slice.Mutable then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "an array literal lends only a read-only slice,"
+                             & " and this parameter writes through it",
+                  Note    => "[0570]: bind the array `mut` and pass the"
+                             & " binding, so what is written can be read",
+                  Related => Site,
+                  Because => "this parameter",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               return;
+            end if;
+            declare
+               Count : constant Natural := Syn.Element_Count (Of_Tree, Node);
+               Whole : constant Value_Context := Context_For_Shape
+                 (Landin.Checking.Make_Array_Field
+                    (Types.all, Landin.Checking.Element_Count (Count),
+                     Element));
+            begin
+               Check_Array_Literal
+                 (Of_Tree, Node, Node, Whole.Length, Whole.Element,
+                  Static_Image => False,
+                  Context_Site => Site,
+                  Element_Nominal => Whole.Element_Nominal,
+                  Shape => Whole.Element_Shape);
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 = Ty.Fixed_Array
+               then
+                  Landin.Checking.Note_Lent_Array
+                    (Types.all, Of_Tree, Node, Count);
+               end if;
+            end;
+            return;
+         end if;
+         declare
+            Got : constant Ty.Type_Kind := Selected_From (Of_Tree, Node);
+         begin
+            if Got = Ty.Ill_Typed then
+               return;
+            end if;
+            if Got /= Ty.Fixed_Array
+              or else not Landin.Checking.Field_Shapes_Agree
+                (Types.all,
+                 Landin.Checking.Array_Element_Shape
+                   (Types.all, Of_Tree, Node),
+                 Element)
+            then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "this array's elements are not the elements of"
+                             & " the slice this parameter takes",
+                  Note    => "[0570]: an array lends a slice of its own"
+                             & " element type",
+                  Related => Site,
+                  Because => "this parameter",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               return;
+            end if;
+            if Slice.Mutable and then not Place_Is_Mutable (Of_Tree, Node)
+            then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "this array is not writable, and this"
+                             & " parameter writes through the slice it lends",
+                  Note    => "[0570]: a writable slice is lent only by a"
+                             & " `mut` binding or another writable place",
+                  Related => Site,
+                  Because => "this parameter",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               return;
+            end if;
+            Landin.Checking.Note_Lent_Array
+              (Types.all, Of_Tree, Node,
+               Natural (Landin.Checking.Array_Length
+                          (Types.all, Of_Tree, Node)));
+         end;
+      end Check_Lent_Array;
 
       procedure Check_Array_Literal
         (Of_Tree         : Syn.Tree;
@@ -33991,6 +34210,92 @@ package body Landin.Stages.Checking is
       end Drain_Pending_Selections;
 
       ------------------------------------------------------------
+      --  [1260]: a concept entry's error set is concrete, so a static call
+      --  through a constrained type parameter, `provider.read`, has a known
+      --  target in each ready instance view before any body is checked.
+      --  A call whose recovery binds the error needs that target during
+      --  error-set inference, and would otherwise wait on a body check that
+      --  itself waits for inference to close.  Select those entries before
+      --  each inference pass, as body checking would, so that a signature
+      --  the selection interns is counted by the pass's tables.
+      ------------------------------------------------------------
+
+      procedure Select_Recovered_Entries;
+
+      procedure Select_Recovered_Entries is
+         procedure Visit (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Visit (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            if Node = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
+            then
+               return;
+            end if;
+            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+            then
+               declare
+                  Callee : constant Syn.Node_Id :=
+                    Syn.Callee_Of (Of_Tree, Node);
+               begin
+                  if Callee /= Syn.No_Node
+                    and then Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+                    and then Effective_Call_Signature (Of_Tree, Node)
+                      = Landin.Checking.No_Signature
+                  then
+                     declare
+                        Selected : constant Landin.Checking.Signature_Id :=
+                          Evidence_Selection_Signature (Of_Tree, Callee);
+                        pragma Unreferenced (Selected);
+                     begin
+                        null;
+                     end;
+                  end if;
+               end;
+            end if;
+            for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               Visit (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
+            end loop;
+         end Visit;
+      begin
+         for Position in 1 .. Landin.Checking.Routine_Instance_Count
+           (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                    = Landin.Checking.Routine_Ready
+               then
+                  declare
+                     Template : constant Res.Declaration_Id :=
+                       Landin.Checking.Routine_Template_Of
+                         (Types.all, Instance);
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Res.Source_Of (Meanings.all, Template));
+                     Previous : Landin.Checking.Routine_Instance_Id;
+                  begin
+                     Activate_Routine_View (Instance, Previous);
+                     Visit
+                       (Of_Tree.all,
+                        Syn.Body_Of
+                          (Of_Tree.all,
+                           Res.Node_Of (Meanings.all, Template)));
+                     Restore_Routine_View (Previous);
+                  exception
+                     when others =>
+                        Restore_Failed_Routine_View (Previous);
+                        raise;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Select_Recovered_Entries;
+
+      ------------------------------------------------------------
       --  [0940]/[0960]: whole-module error-set inference
       ------------------------------------------------------------
 
@@ -36134,6 +36439,7 @@ package body Landin.Stages.Checking is
       --  own views, and rebuild the graph after newly discovered signatures.
       --  Body checks resume once this frontier and the provider queue close.
       loop
+         Select_Recovered_Entries;
          declare
             Count : constant Natural :=
               Landin.Checking.Signature_Count (Types.all);

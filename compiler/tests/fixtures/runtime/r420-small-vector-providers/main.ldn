@@ -9,15 +9,15 @@ pool_provider: type = pool.provider
 heap_path: () -> (ok: bool) =
     host := heap.host()
     mut values := spill.new(item: i32, inline_slots: 0)
-    spill.push(values, host, 1) else 0
-    spill.push(values, host, 2) else 0
-    spill.push(values, host, 3) else 0
-    spill.push(values, host, 4) else 0
-    spill.push(values, host, 5) else 0
-    spill.push(values, host, 6) else 0
-    spill.push(values, host, 7) else 0
-    spill.push(values, host, 8) else 0
-    spill.push(values, host, 9) else 0
+    spill.push(values, host, 1) else (ignored) _ = ignored end
+    spill.push(values, host, 2) else (ignored) _ = ignored end
+    spill.push(values, host, 3) else (ignored) _ = ignored end
+    spill.push(values, host, 4) else (ignored) _ = ignored end
+    spill.push(values, host, 5) else (ignored) _ = ignored end
+    spill.push(values, host, 6) else (ignored) _ = ignored end
+    spill.push(values, host, 7) else (ignored) _ = ignored end
+    spill.push(values, host, 8) else (ignored) _ = ignored end
+    spill.push(values, host, 9) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         view[0] = 11
@@ -42,18 +42,18 @@ arena_path: () -> (ok: bool) =
     arena := mem.arena_over_unchecked
         (space, base, lenof words * sizeof u64)
     mut values := spill.new(item: i32, inline_slots: 2)
-    spill.push(values, arena, 21) else 0
-    spill.push(values, arena, 22) else 0
+    spill.push(values, arena, 21) else (ignored) _ = ignored end
+    spill.push(values, arena, 22) else (ignored) _ = ignored end
     mut inline_free: bool = mem.arena_used(arena) == 0
-    spill.push(values, arena, 23) else 0
+    spill.push(values, arena, 23) else (ignored) _ = ignored end
     spill_extent: usize = mem.arena_used(arena)
     mut spill_address: usize = 0
     begin
         view := spill.used(values)
         spill_address = usize(addr view[0])
     end
-    spill.push(values, arena, 24) else 0
-    spill.push(values, arena, 25) else 0
+    spill.push(values, arena, 24) else (ignored) _ = ignored end
+    spill.push(values, arena, 25) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         ok = inline_free and spill.length(addr values) == 5
@@ -86,9 +86,9 @@ fixed_path: () -> (ok: bool) =
         return
     end
     mut values := spill.new(item: i32, inline_slots: 1)
-    spill.push(values, slab, 31) else 0
-    spill.push(values, slab, 32) else 0
-    spill.push(values, slab, 33) else 0
+    spill.push(values, slab, 31) else (ignored) _ = ignored end
+    spill.push(values, slab, 32) else (ignored) _ = ignored end
+    spill.push(values, slab, 33) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         view[1] = 42
@@ -122,7 +122,7 @@ failing_path: () -> (ok: bool) =
         (inner_provider: pool_provider, state: space, inner: inner,
          allowed_attempts: zero)
     mut values := spill.new(item: i32, inline_slots: 1)
-    spill.push(values, counted, 51) else 0
+    spill.push(values, counted, 51) else (ignored) _ = ignored end
 
     mut first_failed: bool = false
     spill.push(values, counted, 52) else (problem)
@@ -138,7 +138,7 @@ failing_path: () -> (ok: bool) =
     end
 
     fault.permit(counted, one)
-    spill.push(values, counted, 52) else 0
+    spill.push(values, counted, 52) else (ignored) _ = ignored end
     mut growth_failed: bool = false
     spill.push(values, counted, 53) else (problem)
         _ = problem
@@ -155,7 +155,7 @@ failing_path: () -> (ok: bool) =
     end
 
     fault.permit(counted, one)
-    spill.push(values, counted, 53) else 0
+    spill.push(values, counted, 53) else (ignored) _ = ignored end
     begin
         view := spill.used(values)
         ok = ok and spill.length(addr values) == 3

@@ -51,12 +51,12 @@ failure_case: (provider: type is mem.allocator, memory: provider,
     k5: node_ptr = addr n5
     k6: node_ptr = addr n6
     k7: node_ptr = addr n7
-    map.insert(value, budget, k1, addr n1) else 0
-    map.insert(value, budget, k2, addr n2) else 0
-    map.insert(value, budget, k3, addr n3) else 0
-    map.insert(value, budget, k4, addr n4) else 0
-    map.insert(value, budget, k5, addr n5) else 0
-    map.insert(value, budget, k6, addr n6) else 0
+    map.insert(value, budget, k1, addr n1) else (ignored) _ = ignored end
+    map.insert(value, budget, k2, addr n2) else (ignored) _ = ignored end
+    map.insert(value, budget, k3, addr n3) else (ignored) _ = ignored end
+    map.insert(value, budget, k4, addr n4) else (ignored) _ = ignored end
+    map.insert(value, budget, k5, addr n5) else (ignored) _ = ignored end
+    map.insert(value, budget, k6, addr n6) else (ignored) _ = ignored end
 
     mut initial: bool = map.length(value) == 6
                         and fault.attempts(budget) == 3
@@ -68,7 +68,7 @@ failure_case: (provider: type is mem.allocator, memory: provider,
     --  Removing the first colliding key leaves a preceding tombstone, which
     --  permits reuse. With no allocation budget, replacing the last key
     --  must still search, update, and return without consulting the provider.
-    map.remove(value, k1) else 0
+    map.remove(value, k1) else (ignored) _ = ignored end
     zero: usize = 0
     fault.permit(budget, zero)
     map.insert(value, budget, k6, addr n7) else (problem)

@@ -1,0 +1,107 @@
+--  [0570]: an array where a slice parameter is wanted lends a slice of the
+--  whole array.  A literal is made in the caller's frame for the call, its
+--  elements in written order; a place is lent where it is.
+total: (values: []u32) -> (sum: u32) =
+    sum = 0
+    for value in values do
+        sum += value
+    end for
+end total
+
+last: (values: []u32) -> (tail: []u32 from values) =
+    tail = values[lenof values - 1..<lenof values]
+end last
+
+bump_all: (values: []mut u32) -> none =
+    for value in values do
+        inc value
+    end for
+end bump_all
+
+pair: type = struct
+    left: u32
+    right: u32
+end pair
+
+pairs_total: (values: []pair) -> (sum: u32) =
+    sum = 0
+    for value in values do
+        sum += value.left * value.right
+    end for
+end pairs_total
+
+shown: type = concept (item: type)
+    weight: (self: ptr item) -> (value: u32)
+end shown
+
+weight_u32: (self: ptr u32) -> (value: u32) =
+    value = self.val
+end weight_u32
+
+weight_pair: (self: ptr pair) -> (value: u32) =
+    value = self.val.left + self.val.right
+end weight_pair
+
+u32 is shown (weight: weight_u32)
+pair is shown (weight: weight_pair)
+
+weights: (values: []any shown) -> (sum: u32) =
+    sum = 0
+    for value in values do
+        sum += value.weight()
+    end for
+end weights
+
+holder: type = struct
+    numbers: [3]u32
+end holder
+
+mut module_table: [2]u32 = [100, 200]
+mut order: u32 = 0
+
+--  Each call records its place in the order it was made.
+next: (value: u32) -> (result: u32) =
+    inc order
+    result = value * 10 + order
+end next
+
+forwarded: (values: [4]u32) -> (sum: u32) =
+    sum = total(values)
+end forwarded
+
+public main: () -> (code: i32) =
+    code = 1
+    return when total([1, 2, 3]) <> 6
+    code = 2
+    --  Elements are formed in written order.
+    return when total([next(1), next(2)]) <> 33
+    code = 3
+    local: [4]u32 = [10, 20, 30, 40]
+    return when total(local) <> 100 or forwarded(local) <> 100
+    code = 4
+    return when total(module_table) <> 300
+    code = 5
+    kept: holder = (numbers: [5, 6, 7])
+    return when total(kept.numbers) <> 18
+    code = 6
+    mut counts: [3]u32 = [1, 1, 1]
+    bump_all(counts)
+    return when counts[0] <> 2 or counts[2] <> 2
+    code = 7
+    first: pair = (left: 2, right: 3)
+    return when pairs_total([first, (left: 4, right: 5)]) <> 26
+    code = 8
+    n: u32 = 4
+    return when weights([any(addr n), any(addr first)]) <> 9
+    code = 9
+    --  A literal is formed afresh at every call, in a loop as anywhere.
+    mut sum: u32 = 0
+    for step in u32(0)..<u32(3) do
+        sum += total([step, step])
+    end for
+    return when sum <> 6
+    code = 10
+    tail: []u32 = last([7, 8, 9])
+    return when tail[0] <> 9
+    code = 42
+end main

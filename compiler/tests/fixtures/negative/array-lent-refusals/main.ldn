@@ -1,0 +1,22 @@
+--  What an array cannot lend: a literal a writable slice, an immutable
+--  array a writable slice, and either a text view, which is validated
+--  where it is made.  A generic routine's argument is typed on its own,
+--  so a literal there takes no shape from the parameter.
+fill: (values: []mut u8) -> none =
+    values[0] = 1
+end fill
+
+shown: (value: utf8) -> (count: usize) =
+    count = lenof value
+end shown
+
+pick: (item: type, values: []item) -> (count: usize) =
+    count = lenof values
+end pick
+
+refused: () -> (count: usize) =
+    fill([1, 2])
+    still: [2]u8 = [3, 4]
+    fill(still)
+    count = shown([104, 105]) + pick([1, 2])
+end refused

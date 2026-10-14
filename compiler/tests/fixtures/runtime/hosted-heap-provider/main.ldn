@@ -239,15 +239,15 @@ public main: () -> (code: i32) =
     mut growth := new_audit()
     grower: audit = (state: addr growth)
     mut values := vec.new(item: ptr node)
-    vec.push(values, grower, addr node_1) else 0
-    vec.push(values, grower, addr node_2) else 0
-    vec.push(values, grower, addr node_3) else 0
-    vec.push(values, grower, addr node_4) else 0
-    vec.push(values, grower, addr node_5) else 0
-    vec.push(values, grower, addr node_6) else 0
-    vec.push(values, grower, addr node_7) else 0
-    vec.push(values, grower, addr node_8) else 0
-    vec.push(values, grower, addr node_9) else 0
+    vec.push(values, grower, addr node_1) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_2) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_3) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_4) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_5) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_6) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_7) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_8) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_9) else (ignored) _ = ignored end
 
     at_first: usize = 0
     at_eighth: usize = 7

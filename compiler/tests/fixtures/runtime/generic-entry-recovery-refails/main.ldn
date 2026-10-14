@@ -1,0 +1,70 @@
+--  [1260] makes a concept entry's error set concrete, so the recovery of
+--  `provider.take(...)` inside a generic routine knows its atoms in each
+--  instance before that instance's body is checked.  The compiler once left
+--  such a recovery waiting on a body check that waited on error inference,
+--  and reported an internal defect.
+broken: atom
+exhausted: atom
+
+source: type = concept (provider: type)
+    take: (self: provider, count: usize) -> (got: usize) ! broken | exhausted
+end source
+
+counter: type = struct
+    limit: usize
+end counter
+
+counter_take: (self: counter, count: usize)
+              -> (got: usize) ! broken | exhausted =
+    fail exhausted when self.limit == 0
+    fail broken when count > self.limit
+    got = count
+end counter_take
+
+counter is source (take: counter_take)
+
+--  The recovered atom is failed again, after a cleanup of its own.
+drained: (provider: type is source, host: provider, count: usize)
+         -> (got: usize) ! broken | exhausted =
+    mut cleanups: usize = 0
+    got = provider.take(host, count) else (problem)
+        inc cleanups
+        fail problem
+    end
+    _ = cleanups
+end drained
+
+--  The recovered atom is tested and turned into a value.
+tolerant: (provider: type is source, host: provider, count: usize)
+          -> (got: usize) ! broken =
+    got = provider.take(host, count) else (problem)
+        fail broken when problem == broken
+        0
+    end
+end tolerant
+
+public main: () -> (code: i32) =
+    code = 1
+    some: counter = (limit: 3)
+    none_left: counter = (limit: 0)
+    three: usize = drained(some, usize(3)) else 0
+    return when three <> 3
+    code = 2
+    _ = drained(some, usize(4)) else (problem)
+        return when problem <> broken
+        code = 3
+        _ = drained(none_left, usize(1)) else (empty)
+            return when empty <> exhausted
+            code = 4
+            zero: usize = tolerant(none_left, usize(1)) else 9
+            return when zero <> 0
+            code = 5
+            _ = tolerant(some, usize(5)) else (last)
+                code = if last == broken then 42 else 6 end if
+                return
+            end
+            return
+        end
+        return
+    end
+end main

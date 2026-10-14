@@ -1,0 +1,209 @@
+--  Parsing every integer width, the mirror of the builder's appends: what
+--  an append writes, the matching parse reads back.  Each scans from the
+--  left and checks its bound before it multiplies, so a refusal is the
+--  first one the scan meets and no byte past it is read.  A signed value
+--  is an optional `-` and digits, since no append writes a `+`.
+
+--  Decimal digits into a `u32` no greater than `limit`.
+scan_u32: (source: []u8, limit: u32)
+          -> (result: u32) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: u32 = 0
+    for byte in source do
+        fail invalid_number when byte < 48 or byte > 57
+        digit: u32 = u32(byte - 48)
+        fail number_overflow when value > (limit - digit) / 10
+        value = value * 10 + digit
+    end for
+    result = value
+end scan_u32
+
+--  Decimal digits into a `u64` no greater than `limit`.
+scan_u64: (source: []u8, limit: u64)
+          -> (result: u64) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: u64 = 0
+    for byte in source do
+        fail invalid_number when byte < 48 or byte > 57
+        digit: u64 = u64(byte - 48)
+        fail number_overflow when value > (limit - digit) / 10
+        value = value * 10 + digit
+    end for
+    result = value
+end scan_u64
+
+--  Decimal digits into a `usize` no greater than `limit`.
+scan_usize: (source: []u8, limit: usize)
+            -> (result: usize) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: usize = 0
+    for byte in source do
+        fail invalid_number when byte < 48 or byte > 57
+        digit: usize = usize(byte - 48)
+        fail number_overflow when value > (limit - digit) / 10
+        value = value * 10 + digit
+    end for
+    result = value
+end scan_usize
+
+--  The digits after a leading `-`, or all of `source` without one.
+unsigned_part: (source: []u8) -> (digits: []u8 from source) =
+    digits = source
+    if lenof source > 0 and source[0] == 45 then
+        digits = source[1..<lenof source]
+    end if
+end unsigned_part
+
+--  Whether `source` begins with a `-`.
+negative: (source: []u8) -> (yes: bool) =
+    yes = lenof source > 0 and source[0] == 45
+end negative
+
+--- Parse nonempty ASCII decimal digits from bytes into `u8`, refusing as
+--- `parse_u32` does, with `number_overflow` above 255.
+public parse_u8: (source: []u8)
+                 -> (result: u8) ! invalid_number | number_overflow =
+    result = u8(try scan_u32(source, 255))
+end parse_u8
+
+--- Parse nonempty ASCII decimal digits from bytes into `u16`, refusing as
+--- `parse_u32` does, with `number_overflow` above 65,535.
+public parse_u16: (source: []u8)
+                  -> (result: u16) ! invalid_number | number_overflow =
+    result = u16(try scan_u32(source, 65535))
+end parse_u16
+
+--- Parse an `i8` from bytes: an optional `-` and nonempty ASCII decimal
+--- digits.  Refuses an empty slice, a lone `-`, a `+`, whitespace and any
+--- other byte with `invalid_number`, and a value outside -128 to 127 with
+--- `number_overflow`, whichever the scan meets first.
+public parse_i8: (source: []u8)
+                 -> (result: i8) ! invalid_number | number_overflow =
+    if negative(source) then
+        magnitude: u32 = try scan_u32(unsigned_part(source), 128)
+        result = i8(0 - i32(magnitude))
+    else
+        result = i8(try scan_u32(source, 127))
+    end if
+end parse_i8
+
+--- Parse an `i16` from bytes, as `parse_i8` does, within -32,768 to
+--- 32,767.
+public parse_i16: (source: []u8)
+                  -> (result: i16) ! invalid_number | number_overflow =
+    if negative(source) then
+        magnitude: u32 = try scan_u32(unsigned_part(source), 32768)
+        result = i16(0 - i32(magnitude))
+    else
+        result = i16(try scan_u32(source, 32767))
+    end if
+end parse_i16
+
+--- Parse an `i32` from bytes, as `parse_i8` does, within `i32`'s range.
+public parse_i32: (source: []u8)
+                  -> (result: i32) ! invalid_number | number_overflow =
+    if negative(source) then
+        magnitude: u32 = try scan_u32(unsigned_part(source), 2147483648)
+        if magnitude == 2147483648 then
+            result = 0 - 2147483647 - 1
+        else
+            result = 0 - i32(magnitude)
+        end if
+    else
+        result = i32(try scan_u32(source, 2147483647))
+    end if
+end parse_i32
+
+--- Parse an `i64` from bytes, as `parse_i8` does, within `i64`'s range.
+public parse_i64: (source: []u8)
+                  -> (result: i64) ! invalid_number | number_overflow =
+    if negative(source) then
+        magnitude: u64 = try scan_u64(unsigned_part(source),
+                                      9223372036854775808)
+        if magnitude == 9223372036854775808 then
+            result = 0 - 9223372036854775807 - 1
+        else
+            result = 0 - i64(magnitude)
+        end if
+    else
+        result = i64(try scan_u64(source, 9223372036854775807))
+    end if
+end parse_i64
+
+--- Parse an `isize` from bytes, as `parse_i8` does, within the target's
+--- `isize` range, so the same digits can parse on a 64-bit target and
+--- overflow on a 32-bit one.
+public parse_isize: (source: []u8)
+                    -> (result: isize) ! invalid_number | number_overflow =
+    largest: usize = (0 -% 1) >> 1
+    if negative(source) then
+        magnitude: usize = try scan_usize(unsigned_part(source), largest + 1)
+        if magnitude == largest + 1 then
+            result = 0 - isize(largest) - 1
+        else
+            result = 0 - isize(magnitude)
+        end if
+    else
+        result = isize(try scan_usize(source, largest))
+    end if
+end parse_isize
+
+--  A hexadecimal digit's value, or 16 for a byte that is not one.
+hex_value: (byte: u8) -> (value: u8) =
+    value = 16
+    if byte >= 48 and byte <= 57 then
+        value = byte - 48
+    elsif byte >= 97 and byte <= 102 then
+        value = byte - 87
+    elsif byte >= 65 and byte <= 70 then
+        value = byte - 55
+    end if
+end hex_value
+
+--- Parse nonempty hexadecimal digits from bytes into `u32`: `0` to `9`
+--- and `a` to `f` in either case, with no `0x`, sign or space.  Refuses
+--- any other byte or an empty slice with `invalid_number` and a value
+--- above `u32`'s maximum with `number_overflow`, whichever the scan meets
+--- first.
+public parse_hex_u32: (source: []u8)
+                      -> (result: u32) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: u32 = 0
+    for byte in source do
+        digit: u8 = hex_value(byte)
+        fail invalid_number when digit == 16
+        fail number_overflow when value > u32(0 -% 1) >> 4
+        value = (value << 4) | u32(digit)
+    end for
+    result = value
+end parse_hex_u32
+
+--- Parse hexadecimal digits from bytes into `u64`, as `parse_hex_u32`
+--- does.
+public parse_hex_u64: (source: []u8)
+                      -> (result: u64) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: u64 = 0
+    for byte in source do
+        digit: u8 = hex_value(byte)
+        fail invalid_number when digit == 16
+        fail number_overflow when value > u64(0 -% 1) >> 4
+        value = (value << 4) | u64(digit)
+    end for
+    result = value
+end parse_hex_u64
+
+--- Parse hexadecimal digits from bytes into `usize`, as `parse_hex_u32`
+--- does, at the target's width.
+public parse_hex_usize: (source: []u8)
+                        -> (result: usize) ! invalid_number | number_overflow =
+    fail invalid_number when lenof source == 0
+    mut value: usize = 0
+    for byte in source do
+        digit: u8 = hex_value(byte)
+        fail invalid_number when digit == 16
+        fail number_overflow when value > usize(0 -% 1) >> 4
+        value = (value << 4) | usize(digit)
+    end for
+    result = value
+end parse_hex_usize

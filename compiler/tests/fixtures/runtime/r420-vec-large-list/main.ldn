@@ -28,7 +28,7 @@ public main: () -> (code: i32) =
     mut values := vec.new(item: u32)
 
     for index in zero..<total do
-        vec.push(values, counted, u32(index)) else 0
+        vec.push(values, counted, u32(index)) else (ignored) _ = ignored end
     end for
 
     if not (vec.length(values) == total)

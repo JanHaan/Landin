@@ -1,0 +1,84 @@
+--  Byte blocks: copying, filling, comparing and searching byte slices, with
+--  their lengths checked.  Plain loops, one byte at a time; a faster copy is
+--  an optimization that keeps these contracts.
+
+--- The left bytes order before the right ones.
+public less: atom
+--- The two byte strings are the same bytes.
+public equal: atom
+--- The left bytes order after the right ones.
+public greater: atom
+--- How two byte strings order: `less`, `equal` or `greater`.
+public order: type = less | equal | greater
+
+--- Copy every byte of `source` to the start of `into`, as C's `memmove`
+--- does: the two may overlap, in either direction, and `into` then holds
+--- what `source` held before the copy.  Reports `out_of_bounds` before
+--- writing anything when `into` is shorter than `source`; bytes of `into`
+--- past the copy are untouched.
+---
+--- One rule serves every overlap: a destination that begins after its
+--- source is copied from the last byte down, any other from the first byte
+--- up, so no byte is read after it has been overwritten.
+public copy: (into: []mut u8, source: []u8) -> none ! out_of_bounds =
+    count: usize = lenof source
+    fail out_of_bounds when count > lenof into
+    return when count == 0
+    target_address: usize = usize(addr into[0])
+    source_address: usize = usize(addr source[0])
+    if target_address > source_address then
+        mut at: usize = count
+        while at > 0 do
+            dec at
+            into[at] = source[at]
+        end while
+    else
+        mut at: usize = 0
+        while at < count do
+            into[at] = source[at]
+            inc at
+        end while
+    end if
+end copy
+
+--- Set every byte of `into` to `value`.
+public fill: (into: []mut u8, value: u8) -> none =
+    mut at: usize = 0
+    while at < lenof into do
+        into[at] = value
+        inc at
+    end while
+end fill
+
+--- Order two byte strings as unsigned bytes, the first difference
+--- deciding, and a string that is a proper prefix of the other ordering
+--- first: C's `memcmp` with the lengths taken into account, and the order
+--- `ls` gives names in the C locale.
+public compare: (left: []u8, right: []u8) -> (result: order) =
+    mut at: usize = 0
+    while at < lenof left and at < lenof right do
+        if left[at] <> right[at] then
+            result = if left[at] < right[at] then less else greater end if
+            return
+        end if
+        inc at
+    end while
+    if lenof left < lenof right then
+        result = less
+    elsif lenof left > lenof right then
+        result = greater
+    else
+        result = equal
+    end if
+end compare
+
+--- The index of the first byte of `source` equal to `value`, or the length
+--- of `source` when there is none, so that `source[0..<find(source, v)]`
+--- is always the part before it.
+public find: (source: []u8, value: u8) -> (index: usize) =
+    index = 0
+    while index < lenof source do
+        return when source[index] == value
+        inc index
+    end while
+end find

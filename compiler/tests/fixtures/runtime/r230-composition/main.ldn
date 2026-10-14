@@ -214,16 +214,16 @@ public main: () -> (code: i32) =
                            and computed_recovery(1, true) == 42
                            and (computed_try(0) else 0) == 36
 
-    normal_exit() else 0
-    return_exit() else 0
-    handled_exit() else 0
-    direct_failure() else 0
-    try_failure() else 0
-    guarded_exit(false) else 0
-    guarded_exit(true) else 0
-    if_failure() else 0
-    match_failure() else 0
-    late_failure() else 0
+    normal_exit() else (ignored) _ = ignored end
+    return_exit() else (ignored) _ = ignored end
+    handled_exit() else (ignored) _ = ignored end
+    direct_failure() else (ignored) _ = ignored end
+    try_failure() else (ignored) _ = ignored end
+    guarded_exit(false) else (ignored) _ = ignored end
+    guarded_exit(true) else (ignored) _ = ignored end
+    if_failure() else (ignored) _ = ignored end
+    match_failure() else (ignored) _ = ignored end
+    late_failure() else (ignored) _ = ignored end
 
     exits: bool = defer_count == 10 and undo_count == 6
                   and defer_sum == 183 and undo_sum == 139

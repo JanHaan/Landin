@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: a line numberer reads standard input through core/io's line reader and a 32-byte buffer and writes each line after its number right-aligned in six columns through a buffered writer, reading \r\n as \n, keeping an empty line and an unterminated last one, and numbering a line too long for its buffer with a note in its place before going on with the next
+program: main.ldn
+root: ../../../../..
+stdin: input.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0570, 0790, 0800, 0900, 0940, 0960, 1100, 1130, 1290, 1650, 1660, 1680
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

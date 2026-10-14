@@ -59,13 +59,13 @@ Every module spells the same operations the same way (D269):
 | Operation | Spelling | Examples |
 |---|---|---|
 | Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
-| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over` |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
 | A provider's caller-owned state | `space`, declared `zeroed` | `mem.arena_space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
 | A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is locked while the slot lives [0800] |
 | Count and room | `length`, `capacity` | `mem`, `vec`, `spill`, `map`, `diag`'s `length`; a map's `capacity` is the entries that fit before the next new key rebuilds it |
-| Initialized view | `used` | `mem.used`, `vec.used`, `spill.used` |
+| Initialized view | `used` | `mem.used`, `vec.used`, `spill.used`, `text.used` |
 
 A value that is edited, a list, a map, a buffer or raw storage, is passed
 `inout`. A service, an allocator or an I/O provider, is a handle: a small
@@ -140,8 +140,20 @@ until the process ends; a `defer` closes it on every way out. `core/io.memory`'s
 are the parts of its slots' names before a `/`, a slot ending in `/` an
 empty directory, read through the caller's buffer as the hosted provider's
 are; its tree is the caller's slots, so it makes and removes nothing.
-`core/text` writes `u32`, `u64` and `usize` decimals and parses them from
-`[]u8`; a program does not write its own digit loop. The comparison concepts
+`core/text` builds text: a `builder` over the caller's buffer, or one
+growing through an allocator the caller erases, takes typed pieces, bytes,
+text, host strings, decimals of every width and hexadecimal, each whole or
+not at all, and aligns a piece in a field; `format` fills a template's `{}`
+with values of any type that has `text.formattable` evidence, checked
+against them when it runs, since nothing runs at compile time. Parsing is
+its mirror for every integer width, and no locale is consulted anywhere. A
+program does not write its own digit loop. `core/mem` copies, fills,
+compares and searches byte slices with their lengths checked, its copy
+allowing overlap in either direction as `memmove` does. `core/io` adds two
+values a caller edits over a buffer of its own: a buffered writer, flushed
+explicitly because there are no destructors to flush it, and a line reader
+that lends each line until the next read, as a directory lends its
+names. The comparison concepts
 `equatable`, `hashable` and `ordered` live in `core/cmp`, apart from the map
 and the sort that consume them (D273). It ships `equatable` and `hashable` for the integer
 scalars, `bool` and `[]u8` and `ordered` for the integer scalars, and
@@ -160,6 +172,8 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
+| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check with the growth path every builder carries, is about 6.4 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 21.5 KB in all). No allocator is used unless the program builds a growing builder over its own. |
+| `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
@@ -381,6 +395,21 @@ is unchanged except where noted.
 | `io.directory`'s `descriptor: i32` | `handle: usize`, the provider's own |
 | `io.file` as a `distinct i32` | a `distinct usize`, wide enough for any provider's identifier |
 | Darwin and FreeBSD's heap over `malloc` | size classes over `platform/posix`'s mappings, as Linux's were; single-threaded on every system |
+
+## Migrating to formatting and byte blocks
+
+Text is built in a builder, written out through a buffered writer and read
+back a line at a time. Behaviour is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| a loop appending a byte string with `text.write_byte` | `text.append(builder, bytes)` |
+| `used = try text.write_u64(into, used, value)` chains over a slice | `mut line := text.over(buffer)`, then `text.append_u64(line, value)` or `text.format(line, "{} {}\n", [any(addr a), any(addr b)])`, and `text.used(line)` |
+| a decimal with a hand-written sign, or hexadecimal from a table of digits | `text.append_i64`, `text.append_hex_u32` and the others; `text.align_right(line, start, 2, 48)` zero-fills to a width |
+| a parse of a signed number or of hexadecimal by hand | `text.parse_i32`, `text.parse_hex_u64` and the others; `number_overflow` now also means below a signed type's minimum |
+| a byte-by-byte copy, fill or comparison loop | `mem.copy`, which allows overlap, `mem.fill`, `mem.compare` and `mem.find` |
+| `io.write` for each small piece of output | `io.buffered_over(host, io.out(host), buffer)`, `io.put` and `io.flush`, with a `defer` flush on every way out |
+| splitting what `io.read` returns into lines by hand | `io.lines_over(host, io.input(host), buffer)` and `io.read_line`, whose line is lent until the next read |
 
 ## Migrating container providers and indices
 

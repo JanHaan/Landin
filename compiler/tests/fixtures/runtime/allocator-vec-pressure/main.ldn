@@ -226,29 +226,29 @@ public main: () -> (code: i32) =
     mut values: list(ptr node) = (storage: vacant)
     mut trace: i32 = 0
 
-    reserve(values, state, slots) else 0
+    reserve(values, state, slots) else (ignored) _ = ignored end
     if capacity_of(values) == 2 and initialized(values) == 0 then
         trace = trace + 1
     end if
 
-    push(values, state, addr first_node) else 0
+    push(values, state, addr first_node) else (ignored) _ = ignored end
     if capacity_of(values) == 2 and initialized(values) == 1 then
         trace = trace + 2
     end if
 
-    push(values, state, addr second_node) else 0
+    push(values, state, addr second_node) else (ignored) _ = ignored end
     if capacity_of(values) == 2 and initialized(values) == 2 then
         trace = trace + 4
     end if
 
-    push(values, state, addr third_node) else 0
+    push(values, state, addr third_node) else (ignored) _ = ignored end
     if capacity_of(values) == 4 and initialized(values) == 3
       and state.allocations == 2 and state.frees == 1
     then
         trace = trace + 8
     end if
 
-    release_last(values) else 0
+    release_last(values) else (ignored) _ = ignored end
     if capacity_of(values) == 4 and initialized(values) == 2 then
         trace = trace + 16
     end if
@@ -266,7 +266,7 @@ public main: () -> (code: i32) =
         storage: two(block: ptr(0x3000), capacity: 2,
                      first: addr first_node, second: addr second_node)
     )
-    push(failed, state, addr third_node) else 0
+    push(failed, state, addr third_node) else (ignored) _ = ignored end
     if capacity_of(failed) == 2 and initialized(failed) == 2
       and state.allocations == 2 and state.frees == 2
     then

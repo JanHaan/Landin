@@ -473,6 +473,12 @@ constructing the struct. A case cannot initialize an unrelated binding as
 a standalone value: its destination must supply its variant part. A case
 without payload may be bare; write a payload case with labelled fields.
 
+An array literal [0520] takes its shape from where it is written: an array
+destination, an inferred binding, or the argument of a read-only slice
+parameter of a routine that is not generic, which it lends a slice of
+storage made in the caller's frame for the call. An argument of a generic
+routine is typed on its own (D138), so there it needs a named array first.
+
 ```landin
 holder: type = struct
     kind: variant
@@ -856,7 +862,8 @@ end f
 
 A call's result is used in a way its signature does not allow. A result that
 is handed back must be used or discarded with `_ =` [1020], and a call that
-returns none has no value to use, infer from, or discard [1920] [1930].
+returns none has no value to use, infer from, or discard [1920] [1930], nor
+one for its `else` to yield in place of a result [1030].
 Destructuring binds the names of a multiple result, each at most once [0990].
 Discard the result explicitly, use a call that returns one, or bind the
 result names the signature declares.
@@ -915,7 +922,8 @@ A struct, variant or array value is built or used outside its admitted form
 [0700] [0720]. A construction applies a struct type to labelled field values,
 and its fill supplies one value for the omitted fields. A variant case is
 written where its part is the destination [0690] (D76). A whole struct or
-array is copied, passed, returned or discarded whole [0670] [0520]. A
+array is copied, passed, returned or discarded whole [0670] [0520], and an
+array is lent whole as the argument of a slice parameter [0570]. A
 repetition prefix leaves a suffix to fill (D36). Write the value in the form
 the note names, at a position that takes it.
 

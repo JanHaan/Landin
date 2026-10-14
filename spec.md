@@ -1491,9 +1491,29 @@ and the call has the type of the named return. [1975]'s C variadic call is the
 explicit exception to fixed arity and named matching: all actuals are
 positional, every fixed parameter is supplied, and the additional tail uses
 that rule's restricted carriers and default promotions.
+An argument filling a slice parameter `[]T`, passed `in`, may instead be an
+array that the call lends a slice of whole [0570]. A fixed array place, a
+binding, a parameter, a named return or an admitted array field, lends its own
+storage for the length of its type, and its elements must be the slice's;
+a `[]mut T` parameter takes such a place only when the place is writable, as a
+range slice of it would be. A nonempty array literal is checked as an array of
+the slice's element type with as many elements as it writes, formed in
+written order, each time the call runs, in storage the caller's frame keeps
+for that call, and lent read-only: a `[]mut T` parameter never takes a
+literal. A view of it stays valid in the caller's frame after the call and
+sees what the call's latest run formed. Neither form is a
+text view, so a `utf8` parameter takes neither. The lent slice has the
+origin of what it views: a literal's is the caller's frame, so a result
+`from` that parameter cannot leave the caller [0780], and a place's is the
+place's own. A generic routine's argument is typed on its own (D138), before
+its parameter is known, so it lends nothing and takes a named array's range
+slice.
 A call of a function returning none has no successful-result type. It is a
 statement [1810] and nothing else: nothing binds it, no argument is one, and
-[1930] cannot discard it, because there is no result there to discard. A call
+[1930] cannot discard it, because there is no result there to discard. Its
+call-site `else` [1030] therefore has no result to stand in for: it handles
+the error and yields nothing, and a value written there, alone or as the last
+line of its block, is refused. A call
 with one named return has that return's type. A call with two or more has
 [0990]'s anonymous structural aggregate; its fields are selected and
 destructured by the return names. The orthogonal declared error outcome is
@@ -12371,6 +12391,50 @@ first, which still reports one mistake twice.
 `negative/local-shadowing-a-named-return-is-reported-there` and
 `negative/scalar-type-is-not-a-value`.
 
+### D309 — An array is lent whole to a slice parameter
+
+**The tour said** at [0570] that a slice views an array's elements, and an
+array literal or a fixed array as a slice argument was refused, L0304 and
+L0334, so every call that takes a short list, `text.format`'s values among
+them, named an array and sliced it, writing the count twice.
+
+**Chosen:** an array literal, or a fixed-array place, is the argument of a
+slice parameter `[]T` passed `in`. A literal is formed in written order in the
+caller's frame each time the call runs and lent read-only, with frame origin,
+so a result `from` that parameter cannot leave the caller. A place, a binding,
+a module array, a parameter, a named return or an admitted array field, lends
+its own storage for its type's whole length and keeps the place's origin. A
+`[]mut T` parameter takes a writable place, as a range slice of it would, and
+never a literal. A `utf8` parameter takes neither, and a generic routine's
+argument still refuses a literal, because D138 types it before the parameter
+is known.
+
+**The alternatives:** a slice binding, field or return taking a literal, none
+of which has a call whose run bounds the storage; a literal lent to `[]mut T`,
+whose writes nobody could see; lending to a generic parameter, which needs
+arguments typed after deduction; and requiring `[0..<n]`, the count written
+twice.
+
+**Pinned by** `runtime/array-lent-to-slice` on every target,
+`negative/array-literal-lent-escapes` and `negative/array-lent-refusals`.
+
+### D310 — A call that returns nothing takes no value in its `else`
+
+**The tour said** at [1030] that a call's `else` stands in for its result when
+it fails. A call returning `none` has no result, yet `f() else 0` was
+accepted, and the corpus had come to write it 192 times to ignore an error.
+
+**Chosen:** the recovery of a call with no results is checked like any
+statement block: a last line that is a value is L0331, "this call returns
+nothing, so its `else` has no result to stand in for", whose note names the
+block form, `else (problem) ... end`.
+
+**The alternatives:** a code of its own, where L0331 already covers using the
+result of a `none` call; ignoring the value, the defect itself; and refusing
+every `else` on such a call, which is the only way to handle its errors.
+
+**Pinned by** `negative/none-call-else-value`.
+
 ## DECISIONS: CONTROL FLOW
 
 Branches, loops, traversal, the cleanup an edge selects, and what the
@@ -18613,3 +18677,122 @@ per-system code in `hosted/heap` and a thread-safe heap on two systems only.
 
 **Pinned by** `runtime/hosted-heap-provider`, `runtime/posix-memory` and
 `abi/r440-native-hosted` on every hosted target.
+
+### D304 — Byte blocks over slices
+
+**The tour said** at [0570] that a slice carries its length, and `core/mem`
+handled typed storage but not blocks of bytes, so copying, filling and
+comparing were loops written again in each program.
+
+**Chosen:** `mem.copy(into, source)` copies with `memmove`'s rule, from the
+last byte down when the destination starts after the source and from the
+first up otherwise, so overlap is always safe, and fails `out_of_bounds`
+before writing when `into` is shorter; a longer destination keeps its tail.
+`mem.fill` sets every byte. `mem.compare` answers the atom set
+`less | equal | greater`, bytes unsigned and a proper prefix first.
+`mem.find` gives the first match's index or the source's length, so
+`source[0..<find(…)]` is always valid.
+
+**The alternatives:** a separate overlap-unsafe copy, which is a speed question
+for the optimizer; equal lengths required, a trap, or silently copying the
+shorter; an `i32` sign or a `bool` from `compare`; and a `missing` atom or a
+union from `find`.
+
+**Pinned by** `runtime/core-mem-blocks`, both overlaps among its oracles, on
+every target.
+
+### D305 — A text builder writes whole pieces into the caller's buffer
+
+**The tour said** at [1660] that output is bytes a writer takes, and
+`core/text` wrote decimals into a slice and returned how far it got, so every
+program kept its own offsets and appended byte strings by hand.
+
+**Chosen:** `text.builder` is a value the caller edits `inout`.
+`text.over(buffer)` makes one bounded by the caller's buffer, and
+`text.growing(allocator)` one that starts empty and doubles through an
+erased `mem.allocator`, growing in place where it can and given back with
+`text.release`. Bytes, a byte, `utf8`, host strings, signed and unsigned
+decimals of every width and lower-case hexadecimal are appended; each piece
+is written whole or not at all, failing `no_space` with the builder unchanged,
+which is also a growing builder's answer when its allocator refuses.
+`text.align_right` and `text.align_left` pad what was written since an
+earlier `text.length`. The allocator is erased because the `formattable`
+entry must name one builder type.
+
+**The alternatives:** a builder generic over its allocator, which an erased
+entry cannot name (D146); a static refusing allocator inside every bounded
+builder, which D222 refuses; an atom-or-erased union, which D189 does not
+admit; `out_of_memory` in every bounded caller's error set; partial pieces;
+and a width and fill on every typed append.
+
+**Pinned by** `runtime/core-text-builder` and `runtime/core-text-format-firmware`,
+the latter on the Cortex-M0 profiles.
+
+### D306 — `text.format` takes `{}` and checks its count when it runs
+
+**The tour said** that nothing runs at compile time [1290], so a format string
+cannot be checked against its arguments when the program is compiled.
+
+**Chosen:** `text.format(into, template, values)` writes `template` into a
+builder with each `{}` replaced by the next value, an
+`any text.formattable` whose one entry appends the value; `{{` and `}}` are a
+brace. The whole template is checked before anything is written: a count that
+disagrees with the values, or a stray brace, is `invalid_format` and writes
+nothing, and `no_space` part-way restores the builder's earlier length. Width,
+fill and radix are the builder's typed calls, not the template's. The integer
+types, `bool`, `utf8`, `[]u8` and host strings conform. Formatting is the same
+in every locale and keeps no global state.
+
+**The alternatives:** a specification language in the braces, every part of
+it a failure found only when the program runs, its parser flash on Cortex-M0,
+and its radix a parameter every conformance would have to honour; a visible
+marker for a missing value; an error held by the writer; and a byte-string
+template.
+
+**Pinned by** `runtime/core-text-format`, whose oracles include a count that
+disagrees either way, and `runtime/core-text-format-firmware`.
+
+### D307 — Parsing mirrors what the builder writes
+
+**The tour said** nothing of parsing beyond D286's unsigned decimals.
+
+**Chosen:** `core/text` parses signed and unsigned decimals of every width and
+hexadecimal over bytes. A signed value takes an optional `-` and never a `+`,
+because no append writes one, and `-0` is zero; hexadecimal takes either case
+and no prefix. Overflow is found during the scan against the type's own
+limit, so the first problem from the left is the one reported, as
+`number_overflow` or `invalid_number`.
+
+**The alternatives:** a leading `+`, which nothing writes; and checking a signed
+range after an unsigned parse, which changes which refusal comes first.
+
+**Pinned by** `runtime/core-text-parse-signed` on every target.
+
+### D308 — A buffered writer is flushed explicitly, and a line reader lends its lines
+
+**The tour said** that there are no destructors [1100], so nothing runs when a
+value's storage ends.
+
+**Chosen:** `io.buffered_writer(provider)` is a value edited `inout` over a
+writer's handle and a caller's buffer. `io.put` buffers what fits, flushing
+first when it does not, and writes a piece at least the buffer's size
+straight through. `io.flush` writes with `write_some` until the buffer is
+empty, so after a failure exactly the unwritten bytes stay at its front and a
+later flush writes each byte once; a writer that makes no progress is
+`io_failed`. Bytes still buffered when a program ends are never written:
+`defer io.flush(…)` and a final flush whose failure is reported are the
+idiom, documented as a hazard wherever the writer is. `io.line_reader` lends
+each line until the next read, as a directory lends its names (D293): a line
+ends at `\n`, a `\r` before it belongs to the ending, a lone `\r` is a byte,
+and the last line need not end. A line and its ending must fit the buffer;
+a longer one is `io.line_too_long` and is skipped, so the next read gives the
+following line. End of input is a line marked `finished`, asked again as
+often as the reader likes.
+
+**The alternatives:** a flush at exit, which needs global state; a writer
+provider in place of a value; lines delivered in parts, which a naive reader
+takes for whole lines; and an end atom or a kept newline marking the end.
+
+**Pinned by** `runtime/core-io-buffered-writer`, `runtime/buffered-writer-closed-output`,
+`runtime/core-io-line-reader`, `runtime/line-numbers`, the published
+consumer, and `negative/line-outlives-read`.

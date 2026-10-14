@@ -619,7 +619,8 @@ package body Landin.Tests.Checking_Suite is
          & "number_fail: () -> (r: i32) ! problem = fail problem end"
          & " number_fail" & LF
          & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
-         & " local) may_fail() else 0 return end f" & LF,
+         & " local) may_fail() else (ignored) _ = ignored end return end f"
+         & LF,
          Accepted => True);
       Check_Source
         ("nested try",
@@ -3945,9 +3946,9 @@ package body Landin.Tests.Checking_Suite is
         & "    try action(stop)" & LF
         & "end invoke" & LF
         & "use: () -> none =" & LF
-        & "    invoke(miss, true) else 0" & LF
-        & "    invoke(deny, true) else 0" & LF
-        & "    invoke(miss, false) else 0" & LF
+        & "    invoke(miss, true) else (ignored) _ = ignored end" & LF
+        & "    invoke(deny, true) else (ignored) _ = ignored end" & LF
+        & "    invoke(miss, false) else (ignored) _ = ignored end" & LF
         & "end use" & LF;
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -9958,7 +9959,7 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
          & "    undo consume(local)" & LF
-         & "    leaf() else 0" & LF
+         & "    leaf() else (ignored) _ = ignored end" & LF
          & "    return" & LF
          & "end f" & LF,
          Accepted => True);
