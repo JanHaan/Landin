@@ -4021,7 +4021,7 @@ file positive/generic-zero-nominal-array-signatures/program.ldn tokens 188
   616 617 )
   618 621 end
   622 625 use
-file positive/hosted-initializer-normalized/program.ldn tokens 106
+file positive/hosted-initializer-normalized/program.ldn tokens 121
   201 205 byte
   205 206 :
   207 211 type
@@ -4059,75 +4059,90 @@ file positive/hosted-initializer-normalized/program.ldn tokens 106
   355 361 values
   361 362 :
   363 368 table
-  368 369 )
-  370 372 ->
-  373 377 none
-  378 379 =
-  384 385 _
-  386 387 =
-  388 394 values
-  399 403 seen
-  404 405 =
-  406 411 count
-  412 415 end
-  416 449 _landin_host_initialize_arguments
-  451 457 extern
-  457 458 (
-  458 459 c
-  459 460 )
-  461 465 link
-  465 466 (
-  466 472 symbol
-  472 473 :
-  474 509 "_landin_host_initialize_arguments"
-  509 510 )
-  511 516 start
-  516 517 :
-  522 523 (
-  523 528 count
-  528 529 :
-  530 533 i32
-  533 534 ,
-  535 543 escaping
-  544 550 values
-  550 551 :
-  552 555 ptr
-  556 559 ptr
-  560 562 u8
+  368 369 ,
+  370 378 escaping
+  379 390 environment
+  390 391 :
+  392 397 table
+  397 398 )
+  403 405 ->
+  406 410 none
+  411 412 =
+  417 418 _
+  419 420 =
+  421 427 values
+  432 433 _
+  434 435 =
+  436 447 environment
+  452 456 seen
+  457 458 =
+  459 464 count
+  465 468 end
+  469 502 _landin_host_initialize_arguments
+  504 510 extern
+  510 511 (
+  511 512 c
+  512 513 )
+  514 518 link
+  518 519 (
+  519 525 symbol
+  525 526 :
+  527 562 "_landin_host_initialize_arguments"
   562 563 )
-  564 566 ->
-  567 571 none
-  572 578 extern
-  578 579 (
-  579 580 c
-  580 581 )
-  582 609 _landin_host_argument_count
-  609 610 :
-  611 612 (
-  612 613 )
-  614 616 ->
-  617 618 (
-  618 623 count
-  623 624 :
-  625 628 u64
-  628 629 )
-  631 637 public
-  638 642 main
+  564 569 start
+  569 570 :
+  575 576 (
+  576 581 count
+  581 582 :
+  583 586 i32
+  586 587 ,
+  588 596 escaping
+  597 603 values
+  603 604 :
+  605 608 ptr
+  609 612 ptr
+  613 615 u8
+  615 616 ,
+  622 630 escaping
+  631 642 environment
   642 643 :
-  644 645 (
-  645 646 )
-  647 649 ->
-  650 651 (
-  651 655 code
-  655 656 :
-  657 660 i32
-  660 661 )
-  662 663 =
-  668 672 code
-  673 674 =
-  675 679 seen
-  680 683 end
-  684 688 main
+  644 647 ptr
+  648 651 ptr
+  652 654 u8
+  654 655 )
+  656 658 ->
+  659 663 none
+  664 670 extern
+  670 671 (
+  671 672 c
+  672 673 )
+  674 701 _landin_host_argument_count
+  701 702 :
+  703 704 (
+  704 705 )
+  706 708 ->
+  709 710 (
+  710 715 count
+  715 716 :
+  717 720 u64
+  720 721 )
+  723 729 public
+  730 734 main
+  734 735 :
+  736 737 (
+  737 738 )
+  739 741 ->
+  742 743 (
+  743 747 code
+  747 748 :
+  749 752 i32
+  752 753 )
+  754 755 =
+  760 764 code
+  765 766 =
+  767 771 seen
+  772 775 end
+  776 780 main
 file positive/identifier-underscore/program.ldn tokens 10
   0 7 _hidden
   7 8 :
@@ -52220,7 +52235,7 @@ file negative/hex-float-overflows-context/program.ldn tokens 5
   11 14 f32
   15 16 =
   17 32 0x1.ffffffp+127
-file negative/hosted-initializer-optional/program.ldn tokens 46
+file negative/hosted-initializer-optional/program.ldn tokens 51
   0 7 missing
   7 8 :
   9 13 atom
@@ -52264,10 +52279,15 @@ file negative/hosted-initializer-optional/program.ldn tokens 46
   169 170 :
   171 174 ptr
   175 185 maybe_byte
-  185 186 )
-  187 189 ->
-  190 194 none
-file negative/hosted-initializer-permission/program.ldn tokens 37
+  185 186 ,
+  187 198 environment
+  198 199 :
+  200 203 ptr
+  204 214 maybe_byte
+  214 215 )
+  216 218 ->
+  219 223 none
+file negative/hosted-initializer-permission/program.ldn tokens 43
   0 6 public
   7 11 main
   11 12 :
@@ -52300,12 +52320,18 @@ file negative/hosted-initializer-permission/program.ldn tokens 37
   119 120 :
   121 124 ptr
   125 128 ptr
-  129 132 mut
-  133 135 u8
-  135 136 )
-  137 139 ->
-  140 144 none
-file negative/hosted-initializer-referent/program.ldn tokens 36
+  129 131 u8
+  131 132 ,
+  133 144 environment
+  144 145 :
+  146 149 ptr
+  150 153 ptr
+  154 157 mut
+  158 160 u8
+  160 161 )
+  162 164 ->
+  165 169 none
+file negative/hosted-initializer-referent/program.ldn tokens 42
   0 6 public
   7 11 main
   11 12 :
@@ -52339,10 +52365,16 @@ file negative/hosted-initializer-referent/program.ldn tokens 36
   121 124 ptr
   125 128 ptr
   129 132 u32
-  132 133 )
-  134 136 ->
-  137 141 none
-file negative/hosted-initializer-result/program.ldn tokens 55
+  132 133 ,
+  134 145 environment
+  145 146 :
+  147 150 ptr
+  151 154 ptr
+  155 157 u8
+  157 158 )
+  159 161 ->
+  162 166 none
+file negative/hosted-initializer-result/program.ldn tokens 61
   0 6 public
   7 11 main
   11 12 :
@@ -52383,21 +52415,27 @@ file negative/hosted-initializer-result/program.ldn tokens 55
   154 157 ptr
   158 161 ptr
   162 164 u8
-  164 165 )
-  166 168 ->
-  169 170 (
-  170 172 ok
-  172 173 :
-  174 178 bool
-  178 179 )
-  180 181 =
-  186 188 ok
-  189 190 =
-  191 196 count
-  197 198 >
-  199 200 0
-  201 204 end
-  205 210 start
+  164 165 ,
+  166 177 environment
+  177 178 :
+  179 182 ptr
+  183 186 ptr
+  187 189 u8
+  189 190 )
+  191 193 ->
+  194 195 (
+  195 197 ok
+  197 198 :
+  199 203 bool
+  203 204 )
+  205 206 =
+  211 213 ok
+  214 215 =
+  216 221 count
+  222 223 >
+  224 225 0
+  226 229 end
+  230 235 start
 file negative/if-expression-missing-else/program.ldn tokens 22
   0 1 f
   1 2 :

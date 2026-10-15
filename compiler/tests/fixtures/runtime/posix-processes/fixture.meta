@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix makes a pipe whose ends carry bytes and read zero once the writing end is closed, starts /bin/sh from three descriptors with its input and output piped and waits for its exit code, waits for a child a signal ended and gets the signal's number, and fails with enoent for a missing program, einval for a name holding =, echild for a child already waited for and ebadf for a closed descriptor
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

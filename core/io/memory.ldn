@@ -1,3 +1,4 @@
+import core/mem
 import core/text
 
 --- Caller-supplied in-memory file slot holding its path, readable bytes and
@@ -517,9 +518,301 @@ end written_errors
 memory_file_count: (values: []memory_file) -> (count: usize) =
     count = lenof values
 end memory_file_count
+scripted_program_count: (values: []scripted_program) -> (count: usize) =
+    count = lenof values
+end scripted_program_count
 memory_args_count: (values: [][]u8) -> (count: usize) =
     count = lenof values
 end memory_args_count
 memory_bytes_count: (values: []u8) -> (count: usize) =
     count = lenof values
 end memory_bytes_count
+
+--  A memory environment, beside the memory world: an `environment`
+--  provider over the caller's entries.
+
+variables_value: type = struct
+    entries: [][]u8
+end variables_value
+
+--- An environment over the caller's entries, each the bytes of one
+--- `NAME=value` as a process is given them, so a firmware test declares
+--- them as data: a provider of `environment` alone, as a test's process
+--- has one.  The name is the bytes before the first `=`, and an entry
+--- with no `=` is a name with an empty value.  Copies share the entries.
+public memory_variables: type = variables_value
+
+--- An environment over `entries`, which the handle lends; keep them alive
+--- while it is used.
+public variables_over: (entries: [][]u8)
+                       -> (host: memory_variables from entries) =
+    host = (entries: entries)
+end variables_over
+
+--  The bytes of an environment entry before its first `=`, and those
+--  after it; an entry with no `=` is all name.
+memory_split: (entry: []u8) -> (name: []u8 from entry, value: []u8 from entry) =
+    at: usize = mem.find(entry, 61)
+    name = entry[0..<at]
+    value = entry[lenof entry..<lenof entry]
+    if at < lenof entry then value = entry[at + 1..<lenof entry] end if
+end memory_split
+
+memory_variable_count: (self: memory_variables) -> (count: usize) =
+    count = memory_args_count(self.entries)
+end memory_variable_count
+
+memory_variable_at: (self: memory_variables, index: usize)
+                    -> (item: variable from self) ! no_variable =
+    fail no_variable when index >= memory_args_count(self.entries)
+    (name, value) := memory_split(self.entries[index])
+    item = (name: text.host_over(name), value: text.host_over(value))
+end memory_variable_at
+
+memory_variable_named: (self: memory_variables, name: text.host_string)
+                       -> (value: text.host_string from self) ! no_variable =
+    wanted: []u8 = text.host_bytes(name)
+    for at in usize(0)..<memory_args_count(self.entries) do
+        (name: found, value: given) := memory_split(self.entries[at])
+        if memory_same_bytes(found, wanted) then
+            value = text.host_over(given)
+            return
+        end if
+    end for
+    fail no_variable
+end memory_variable_named
+
+memory_variables is environment
+    (variable_count: memory_variable_count, variable_at: memory_variable_at,
+     variable_named: memory_variable_named)
+
+--  Scripted programs, beside the memory world: a `programs` provider whose
+--  children are the caller's records.
+
+scripted_value: type = struct
+    world: memory
+    programs: []mut scripted_program
+end scripted_value
+
+--- A program a scripted provider runs in place of a real one, a scripted
+--- child: what it writes and how it ends are given, and what it was given
+--- is recorded.  `spawn` of a path equal to `path` starts it; it writes
+--- `output` and `errors` all at once when it starts, to the world's own
+--- standard output and error when a stream is inherited, to nothing when
+--- one is discarded, and into its pipe when one is piped, from which
+--- `read_child` reads them, output first; and `wait` reports that it
+--- exited with `code`, or was `signalled` when that is true.  What the
+--- parent writes to its piped input with `write_child` is kept in `input`,
+--- its first `input_length` bytes, and a write that does not fit is
+--- `io_failed`, where a real pipe would wait.  The child's pipes are no
+--- files of the world: `reader` and `writer` refuse them.  The caller sets
+--- those six fields and zeroes the rest, which the provider keeps: how many
+--- times it was started, how many arguments and variables its last start
+--- gave it, how much of its output and errors the parent has read, and
+--- whether it is running.  One record is one child at a time: starting a
+--- running one is `io_failed`.
+public scripted_program: type = struct
+    path: []u8
+    output: []u8
+    errors: []u8
+    code: i32
+    signalled: bool
+    input: []mut u8
+    input_length: usize
+    starts: usize
+    arguments: usize
+    variables: usize
+    output_read: usize
+    errors_read: usize
+    running: bool
+end scripted_program
+
+--- A provider of `programs` whose children are the caller's scripted
+--- records, writing an inherited stream into a memory world's own standard
+--- output or error and counting its reads in that world's state, whose
+--- read limit and failure point apply to them.  Copies share the records.
+public scripted_programs: type = scripted_value
+
+--- Scripted programs over `programs`, beside the memory world `world`,
+--- which the handle copies; keep the records alive while it is used.
+public scripted_over: (world: memory, programs: []mut scripted_program)
+                      -> (host: scripted_programs from world, programs) =
+    host = (world: world, programs: programs)
+end scripted_over
+
+--  A child's pipes are no files of the world: the scripted program's
+--  output and errors are read through read_child alone, and its input is
+--  written through write_child, so a world that runs no program carries
+--  none of it.  The child's files count down from the largest `usize`,
+--  three to a program, so no read or write of the world's takes one for a
+--  slot or a standard stream.
+
+memory_pipe_file: (index: usize, stream: usize) -> (opened: file) =
+    opened = file_value((0 -% 1) - 3 * index - stream)
+end memory_pipe_file
+
+--  Put BYTES after what the world's standard output, or with ERRORS its
+--  standard error, already holds, as an inherited stream would; what does
+--  not fit is lost, as it would be on a full device.
+memory_inherit: (self: scripted_programs, bytes: []u8, errors: bool) -> none =
+    return when lenof bytes == 0
+    state: ptr mut memory_space = self.world.state
+    if errors then
+        return when not state.val.errors_open
+          or state.val.errors_used > memory_bytes_count(self.world.errors)
+        mut n: usize = memory_bytes_count(self.world.errors) - state.val.errors_used
+        if n > lenof bytes then n = lenof bytes end if
+        for at in usize(0)..<n do
+            self.world.errors[state.val.errors_used + at] = bytes[at]
+        end for
+        state.val.errors_used += n
+    else
+        return when not state.val.output_open
+          or state.val.output_used > memory_bytes_count(self.world.output)
+        mut n: usize = memory_bytes_count(self.world.output) - state.val.output_used
+        if n > lenof bytes then n = lenof bytes end if
+        for at in usize(0)..<n do
+            self.world.output[state.val.output_used + at] = bytes[at]
+        end for
+        state.val.output_used += n
+    end if
+end memory_inherit
+
+--  Whether a variable's name is one a child can be given: nonempty, with
+--  no `=` and no NUL, as a real system requires.
+memory_name_valid: (name: []u8) -> (yes: bool) =
+    yes = lenof name > 0 and mem.find(name, 61) == lenof name
+          and mem.find(name, 0) == lenof name
+end memory_name_valid
+
+memory_spawn: (self: scripted_programs, path: text.host_string,
+               arguments: []text.host_string, environment: []variable,
+               streams: child_streams)
+              -> (started: child) ! not_found | no_access | io_failed =
+    inc self.world.state.val.open_calls
+    for item in environment do
+        name: []u8 = text.host_bytes(item.name)
+        fail io_failed when not memory_name_valid(name)
+    end for
+    wanted: []u8 = text.host_bytes(path)
+    for index in usize(0)..<scripted_program_count(self.programs) do
+        program: ptr mut scripted_program = addr self.programs[index]
+        if memory_same_bytes(wanted, program.val.path) then
+            fail io_failed when program.val.running
+            inc program.val.starts
+            program.val.arguments = lenof arguments
+            program.val.variables = lenof environment
+            program.val.input_length = 0
+            program.val.output_read = 0
+            program.val.errors_read = 0
+            program.val.running = true
+            if streams.output == inherited then
+                memory_inherit(self, program.val.output, false)
+            end if
+            if streams.errors == inherited then
+                memory_inherit(self, program.val.errors, true)
+            end if
+            if streams.output <> piped then
+                program.val.output_read = memory_bytes_count(program.val.output)
+            end if
+            if streams.errors <> piped then
+                program.val.errors_read = memory_bytes_count(program.val.errors)
+            end if
+            started = (handle: index, input: memory_pipe_file(index, 0),
+                       output: memory_pipe_file(index, 1),
+                       errors: memory_pipe_file(index, 2),
+                       input_open: streams.input == piped,
+                       output_open: streams.output == piped,
+                       errors_open: streams.errors == piped)
+            return
+        end if
+    end for
+    fail not_found
+end memory_spawn
+
+--  The running program a child is.
+memory_child: (self: scripted_programs, started: child)
+              -> (program: ptr mut scripted_program from self) ! io_failed =
+    fail io_failed when started.handle >= scripted_program_count(self.programs)
+    program = addr self.programs[started.handle]
+    fail io_failed when not program.val.running
+end memory_child
+
+memory_close_input: (self: scripted_programs, inout started: child)
+                    -> none ! io_failed =
+    _ = try memory_child(self, started)
+    fail io_failed when not started.input_open
+    started.input_open = false
+end memory_close_input
+
+--  Take what remains of a program's output or errors after READ into
+--  INTO, as the world's reads take, its read limit and failure point
+--  among them.
+memory_take_child: (self: scripted_programs, source: []u8, read: usize, into: []mut u8)
+                   -> (count: usize) ! io_failed =
+    state: ptr mut memory_space = self.world.state
+    inc state.val.read_calls
+    fail io_failed when state.val.read_calls == state.val.fail_read_at
+    count = try memory_take(source, read, into, state.val.read_limit)
+end memory_take_child
+
+--  The program's output is read before its errors: it wrote both before
+--  the parent could read either.
+memory_read_child: (self: scripted_programs, inout started: child, into: []mut u8)
+                   -> (taken: child_read) ! io_failed =
+    program: ptr mut scripted_program = try memory_child(self, started)
+    taken = (count: 0, errors: false,
+             finished: not started.output_open and not started.errors_open)
+    return when lenof into == 0
+    taken.finished = true
+    if started.output_open then
+        count: usize = try memory_take_child(self, program.val.output,
+                                             program.val.output_read, into)
+        if count > 0 then
+            program.val.output_read += count
+            taken = (count: count, errors: false, finished: false)
+            return
+        end if
+        started.output_open = false
+    end if
+    if started.errors_open then
+        count: usize = try memory_take_child(self, program.val.errors,
+                                             program.val.errors_read, into)
+        if count > 0 then
+            program.val.errors_read += count
+            taken = (count: count, errors: true, finished: false)
+            return
+        end if
+        started.errors_open = false
+    end if
+end memory_read_child
+
+--  Keep what the parent writes to a running program's piped input, which
+--  refuses what does not fit, where a real pipe would wait.
+memory_write_child: (self: scripted_programs, inout started: child, bytes: []u8)
+                    -> none ! io_failed =
+    program: ptr mut scripted_program = try memory_child(self, started)
+    kept: []mut u8 = program.val.input
+    fail io_failed when not started.input_open
+      or program.val.input_length > lenof kept
+      or lenof bytes > lenof kept - program.val.input_length
+    ends: usize = program.val.input_length + lenof bytes
+    mem.copy(kept[program.val.input_length..<ends], bytes) else (problem)
+        _ = problem
+        fail io_failed
+    end
+    program.val.input_length = ends
+end memory_write_child
+
+memory_wait: (self: scripted_programs, sink started: child)
+             -> (ended: ending) ! io_failed =
+    program: ptr mut scripted_program = try memory_child(self, started)
+    program.val.running = false
+    ended = if program.val.signalled then (how: signalled)
+            else (how: exited(code: program.val.code)) end if
+end memory_wait
+
+scripted_programs is programs
+    (spawn: memory_spawn, write_child: memory_write_child,
+     close_input: memory_close_input, read_child: memory_read_child,
+     wait: memory_wait)

@@ -671,11 +671,12 @@ package body Landin.Diagnostics.Explanations is
                & "ymbol denotes one compatible function and at most one de"
                & "finition. Beside a hosted entry, a declaration carrying "
                & "`_landin_host_initialize_arguments` is exactly `extern(c"
-               & ") (count: i32, values: ptr ptr u8) -> none`. Only the en"
-               & "try module's hosted `main` takes the `main` symbol. Cort"
-               & "ex data symbols and sections use the spellings, alignmen"
-               & "ts and vectors [1640] lists. Rename the symbol or correc"
-               & "t the declaration.",
+               & ") (count: i32, values: ptr ptr u8, environment: ptr ptr "
+               & "u8) -> none`, which takes C's `argc`, `argv` and `envp`."
+               & " Only the entry module's hosted `main` takes the `main` "
+               & "symbol. Cortex data symbols and sections use the spellin"
+               & "gs, alignments and vectors [1640] lists. Rename the symb"
+               & "ol or correct the declaration.",
             when Catalogue.Traversal_Source =>
                "A `for` source is not something the loop can traverse [1"
                & "150]. A range traversal runs over integers, an array or "

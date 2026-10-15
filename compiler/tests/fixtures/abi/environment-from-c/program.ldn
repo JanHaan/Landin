@@ -1,0 +1,68 @@
+--  The environment a C main gives the argument root is the process's
+--  environment, read in its order and lent, not copied: names before the
+--  first `=` and values after it as host strings, a value that is not
+--  UTF-8 refused by the checked conversion to `utf8`, an entry with no
+--  `=` a name with an empty value, and the first of a name given twice
+--  found by lookup.
+import core/io
+import core/text
+import hosted/io as hosted
+
+extern(c) c_value_is_entry: (value: ptr u8, length: usize) -> (yes: bool)
+
+--  Whether the variable at INDEX has NAME and VALUE.
+holds: (host: hosted.system, index: usize, name: utf8, value: utf8)
+       -> (yes: bool) =
+    yes = false
+    item: io.variable = io.variable_at(host, index) else (problem)
+        _ = problem
+        return
+    end
+    yes = text.host_equal(item.name, name) and text.host_equal(item.value, value)
+end holds
+
+public extern(c) l_environment: () -> (code: i32) =
+    host := hosted.host()
+    code = 10
+    return when io.variable_count(host) <> 6
+    code = 11
+    return when not holds(host, 0, "TEXT", "hello")
+      or not holds(host, 2, "EQUALS", "a=b") or not holds(host, 3, "EMPTY", "")
+      or not holds(host, 4, "BARE", "") or not holds(host, 5, "TEXT", "second")
+    code = 12
+    found: text.host_string = io.variable_named(host, text.host_over("TEXT"))
+        else (problem)
+        _ = problem
+        return
+    end
+    bytes: []u8 = text.host_bytes(found)
+    return when not c_value_is_entry(addr bytes[0], lenof bytes)
+    code = 13
+    second: io.variable = io.variable_at(host, usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    raw: []u8 = text.host_bytes(second.value)
+    return when lenof raw <> 2 or raw[0] <> 0xff or raw[1] <> 0xfe
+    shown: utf8 = text.from_host(second.value) else (problem)
+        code = if problem == text.invalid_text then 14 else 13 end if
+        ""
+    end
+    _ = shown
+    return when code <> 14
+    code = 15
+    missing: text.host_string = io.variable_named(host,
+                                                  text.host_over("MISSING"))
+        else (problem)
+        code = if problem == io.no_variable then 16 else 15 end if
+        text.host_over("")
+    end
+    _ = missing
+    return when code <> 16
+    code = 17
+    past: io.variable = io.variable_at(host, usize(6)) else (problem)
+        code = if problem == io.no_variable then 42 else 17 end if
+        return
+    end
+    _ = past
+end l_environment

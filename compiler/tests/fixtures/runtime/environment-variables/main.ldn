@@ -1,0 +1,118 @@
+--  A process reads its environment as host strings, in the order it was
+--  given and unconverted.  The program starts itself again, by the name
+--  its own process was given, with an environment it builds: a text
+--  value, one that is not UTF-8, one holding `=`, an empty one and a name
+--  given twice.  The copy lists every variable and looks some up, and its
+--  parent waits for it and passes on how it ended.  On Linux the copy
+--  reads the table the kernel left on its initial stack, and elsewhere,
+--  and under --link=libc, the one the C runtime gave `main`.
+import core/io
+import core/text
+import hosted/io as hosted
+import platform/posix
+
+--  A value as the listing shows it: as it is when it is UTF-8, and
+--  otherwise each byte in hexadecimal.
+show: (host: hosted.system, value: text.host_string) -> none ! ... =
+    out := io.out(host)
+    as_text: utf8 = text.from_host(value) else (problem)
+        _ = problem
+        mut room: [64]u8 = zeroed
+        mut line := text.over(room[0..<64])
+        try text.append(line, "bytes")
+        for byte in text.host_bytes(value) do
+            try text.append_byte(line, 32)
+            try text.append_hex_u32(line, u32(byte))
+        end for
+        try io.write(host, out, text.used(line))
+        return
+    end
+    try io.write(host, out, text.bytes(as_text))
+end show
+
+--  What the started copy does: list its environment and look up names.
+listed: (host: hosted.system) -> none ! ... =
+    out := io.out(host)
+    count: usize = io.variable_count(host)
+    for index in usize(0)..<count do
+        item: io.variable = try io.variable_at(host, index)
+        try io.write(host, out, text.host_bytes(item.name))
+        try io.write(host, out, " = ")
+        try show(host, item.value)
+        try io.write(host, out, "\n")
+    end for
+    past: io.variable = io.variable_at(host, count) else (problem)
+        _ = problem
+        try io.write(host, out, "no variable past the last\n")
+        return
+    end
+    _ = past
+end listed
+
+--  Look NAME up and write what it finds.
+looked: (host: hosted.system, name: []u8) -> none ! ... =
+    out := io.out(host)
+    try io.write(host, out, "looked up ")
+    try io.write(host, out, name)
+    try io.write(host, out, ": ")
+    value: text.host_string = io.variable_named(host, text.host_over(name))
+        else (problem)
+        _ = problem
+        try io.write(host, out, "none\n")
+        return
+    end
+    try show(host, value)
+    try io.write(host, out, "\n")
+end looked
+
+copy: (host: hosted.system) -> none ! ... =
+    try listed(host)
+    try looked(host, "TWICE")
+    try looked(host, "EMPTY")
+    try looked(host, "MISSING")
+    try looked(host, "twice")
+end copy
+
+--  The parent: start the program again, as its own name says it was
+--  started, with the argument `copy`.
+parent: (host: hosted.system) -> (code: i32) ! ... =
+    bytes: [3]u8 = [0xc3, 0x28, 0xff]
+    variables: [6]io.variable =
+        [(name: text.host_over("TEXT"), value: text.host_over("grüße")),
+         (name: text.host_over("BYTES"), value: text.host_over(bytes[0..<3])),
+         (name: text.host_over("TWICE"), value: text.host_over("first")),
+         (name: text.host_over("EQUALS"), value: text.host_over("a=b")),
+         (name: text.host_over("EMPTY"), value: text.host_over("")),
+         (name: text.host_over("TWICE"), value: text.host_over("second"))]
+    arguments: [1]text.host_string = [text.host_over("copy")]
+    child: io.child = try io.spawn(host, posix.program_name(),
+                                   arguments[0..<1], variables[0..<6],
+                                   io.inheriting)
+    ended: io.ending = try io.wait(host, child)
+    code = match ended.how
+        io.exited(given): given
+        io.signalled: 1
+    end match
+end parent
+
+--  The copy's part, which reports how it went as its code.
+copied: (host: hosted.system) -> (code: i32) =
+    code = 1
+    copy(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end copied
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    if io.argument_count(host) <> 0 then
+        code = copied(host)
+        return
+    end if
+    code = parent(host) else (problem)
+        _ = problem
+        3
+    end
+end main

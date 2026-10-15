@@ -1,0 +1,175 @@
+--  platform/posix's pipes, children and waiting, in Landin types.  A pipe
+--  carries what is written to one end to the other and reads zero once
+--  every writing end is closed.  A child is started from three
+--  descriptors: here its input is a pipe the parent writes and its output
+--  another the parent reads, and it echoes one into the other.  Waiting
+--  reports the code it exited with, or the number of the signal that
+--  ended it.  The failure oracles: a missing program is `enoent` with no
+--  child started, a name holding `=` is `einval`, waiting for a child
+--  already waited for is `echild`, and a closed descriptor is `ebadf`.
+import core/io
+import core/mem
+import core/text
+import platform/posix
+
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut room: [32]u8 = zeroed
+    mut line := text.over(room[0..<32])
+    text.append(line, name) else (other)
+        _ = other
+    end
+    number: i32 = posix.number(problem)
+    text.format(line, "={}\n", [any(addr number)]) else (other)
+        _ = other
+    end
+    say(text.used(line))
+end said
+
+--  Close a descriptor whose closing nothing here checks.
+shut: (closing: posix.descriptor) -> none =
+    posix.close(closing) else (problem)
+        _ = problem
+    end
+end shut
+
+--  The shell, started with ARGUMENTS after its name and STREAMS.
+shell: (arguments: []text.host_string, streams: posix.standard_streams)
+       -> (child: posix.process_id) ! posix.errno =
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child = try posix.spawn(text.host_over("/bin/sh"), arguments,
+                            variables[0..<1], streams)
+end shell
+
+public main: () -> (code: i32) =
+    code = 1
+    loop_ends: posix.pipe_ends = posix.pipe() else (problem)
+        said("pipe", problem)
+        return
+    end
+    sent: usize = posix.write(loop_ends.writing, "through") else (problem)
+        said("write", problem)
+        return
+    end
+    mut room: [16]u8 = zeroed
+    got: usize = posix.read(loop_ends.reading, room[0..<16]) else (problem)
+        said("read", problem)
+        return
+    end
+    return when sent <> 7 or got <> 7
+      or mem.compare(room[0..<7], "through") <> mem.equal
+    posix.close(loop_ends.writing) else (problem)
+        said("close", problem)
+        return
+    end
+    ended: usize = posix.read(loop_ends.reading, room[0..<16]) else (problem)
+        said("read", problem)
+        return
+    end
+    return when ended <> 0
+    posix.close(loop_ends.reading) else (problem)
+        said("close", problem)
+        return
+    end
+    code = 2
+    into: posix.pipe_ends = posix.pipe() else (problem)
+        said("pipe", problem)
+        return
+    end
+    back: posix.pipe_ends = posix.pipe() else (problem)
+        said("pipe", problem)
+        return
+    end
+    echo: [2]text.host_string = [text.host_over("-c"),
+                                 text.host_over("read -r line; printf '<%s>' \"$line\"; exit 5")]
+    child: posix.process_id =
+        shell(echo[0..<2], (input: into.reading, output: back.writing,
+                            errors: posix.standard_error)) else (problem)
+            said("spawn", problem)
+            return
+        end
+    shut(into.reading)
+    shut(back.writing)
+    _ = posix.write(into.writing, "piped\n") else 0
+    shut(into.writing)
+    mut echoed: [16]u8 = zeroed
+    mut total: usize = 0
+    loop do
+        part: usize = posix.read(back.reading,
+                                 echoed[total..<16]) else (problem)
+            said("read", problem)
+            return
+        end
+        break when part == 0
+        total += part
+    end loop
+    shut(back.reading)
+    return when mem.compare(echoed[0..<total], "<piped>") <> mem.equal
+    code = 3
+    status: posix.child_status = posix.wait(child) else (problem)
+        said("wait", problem)
+        return
+    end
+    match status.how
+        posix.exited(given): return when given <> 5
+        posix.signalled(number): return when number >= 0
+    end match
+    code = 4
+    again: posix.child_status = posix.wait(child) else (problem)
+        return when problem <> posix.echild
+        posix.child_status(how: posix.exited(code: 0))
+    end
+    _ = again
+    code = 5
+    terminate: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("kill -TERM $$")]
+    killed: posix.process_id =
+        shell(terminate[0..<2], posix.inherited_streams) else (problem)
+            said("spawn", problem)
+            return
+        end
+    ending: posix.child_status = posix.wait(killed) else (problem)
+        said("wait", problem)
+        return
+    end
+    match ending.how
+        posix.exited(given): return when given >= 0
+        posix.signalled(number): return when number <> 15
+    end match
+    code = 6
+    missing: posix.process_id =
+        posix.spawn(text.host_over("/nonexistent/landin-program"), echo[0..<2],
+                    [], posix.inherited_streams) else (problem)
+            return when problem <> posix.enoent
+            child
+        end
+    _ = missing
+    code = 7
+    wrong: [1]io.variable =
+        [(name: text.host_over("A=B"), value: text.host_over("1"))]
+    named: posix.process_id =
+        posix.spawn(text.host_over("/bin/sh"), echo[0..<2], wrong[0..<1],
+                    posix.inherited_streams) else (problem)
+            return when problem <> posix.einval
+            child
+        end
+    _ = named
+    code = 8
+    closed: posix.pipe_ends = posix.pipe() else (problem)
+        said("pipe", problem)
+        return
+    end
+    shut(closed.writing)
+    shut(closed.reading)
+    stale: usize = posix.read(closed.reading, room[0..<16]) else (problem)
+        return when problem <> posix.ebadf
+        0
+    end
+    _ = stale
+    code = 42
+end main

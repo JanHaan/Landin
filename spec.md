@@ -1901,17 +1901,21 @@ read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a public Landin variable.
 
-The hosted argument root belongs to `hosted/io`, which defines the public
+The hosted argument root belongs to `platform/posix`, which defines the public
 C-convention routine `_landin_host_initialize_arguments` with the signature
-`(count: i32, escaping values: ptr ptr u8) -> none`, which C declares as
-`void _landin_host_initialize_arguments(int argc, char **argv);` under the
-platform symbol prefix. When a hosted entry is
+`(count: i32, escaping values: ptr ptr u8, escaping environment: ptr ptr u8)
+-> none`, which C declares as
+`void _landin_host_initialize_arguments(int argc, char **argv, char **envp);`
+under the platform symbol prefix. When a hosted entry is
 selected and the program defines a C routine with that link symbol, the
-selected no-argument Landin entry calls it with the actual incoming C carriers
-before its source body runs; a program that defines none calls nothing. Beside
+selected no-argument Landin entry calls it with the actual incoming C carriers,
+`argc`, `argv` and `envp`, still in the first three argument registers, before
+its source body runs; a program that defines none calls nothing. Beside
 a hosted entry every declaration carrying that symbol must be exactly
-`extern(c) (i32, ptr ptr u8) -> none`, whatever its `escaping` marker, or it is
-refused. A C-owned startup that drives public C-convention Landin routines
+`extern(c) (i32, ptr ptr u8, ptr ptr u8) -> none`, whatever its `escaping`
+markers, or it is refused. The environment table is retained beside the
+argument table without copying, a null table meaning an empty environment, and
+an identical repeat must repeat all three carriers. A C-owned startup that drives public C-convention Landin routines
 calls it explicitly before `hosted.host()` can mint an argument-table
 capability and before starting any thread that may do so. Merely importing
 `core/io` does not perform initialization, and file, stream and heap work,
@@ -15025,7 +15029,8 @@ entry point mints the host capability. It did not say how a C-owned entry starts
 Landin exports, when the argument root exists, or how long its backing lives.
 
 **Chosen:** `hosted/io` defines the public C entry
-`void _landin_host_initialize_arguments(int argc, char **argv);` in source, and
+`void _landin_host_initialize_arguments(int argc, char **argv);` in source,
+which D311 gives the environment's table as a third argument, and
 under D276 the ordinary no-argument Landin `main` calls it before its body when
 the program defines it. A C-owned startup calls it with its real carriers before
 `hosted.host()` or any thread that may acquire the argument capability. Exports
@@ -17897,7 +17902,8 @@ bodyless, so a program naming none of them needs no C library.
 `hosted/io` holds the argument root in two module cells, and since D288 the
 process's last-error cell in a third, and defines in source
 the public C routine `_landin_host_initialize_arguments`, whose signature is
-`(count: i32, escaping values: ptr ptr u8) -> none`. D208's rules are unchanged: the first
+`(count: i32, escaping values: ptr ptr u8) -> none`, to which D311 adds the
+environment's table as a third parameter. D208's rules are unchanged: the first
 nonnegative-count, non-null-table call establishes the root without copying;
 an identical repeat is a no-op; an invalid call, use before initialization or
 replacement traps; the published count is `max(argc - 1, 0)` without
@@ -17909,7 +17915,7 @@ where the bridge reported it at a synthetic site zero.
 The compiler's one hosted contract is that call. When a hosted entry is
 selected and the program defines a C routine with the link symbol
 `_landin_host_initialize_arguments`, the hosted `main` calls it with its
-incoming `argc` and `argv` before its body. A program that defines none calls
+incoming `argc` and `argv`, and since D311 its `envp`, before its body. A program that defines none calls
 nothing, so a hosted program that never imports `hosted/io` links without it.
 Beside a hosted entry every declaration carrying that symbol must be exactly
 `extern(c) (i32, ptr ptr u8) -> none`, with `escaping` immaterial, or it is
@@ -18616,6 +18622,7 @@ calls over a caller's buffer, which list `.` and `..` as POSIX does,
 policy in `hosted/io`. Each path is copied with its NUL into a per-system
 `PATH_MAX` buffer, so the terminator never reaches a caller; a path holding a
 NUL is `einval` and one too long `enametoolong`. The argument root lives here,
+with the environment's table since D311,
 read from the initial stack on a static Linux program and through the C
 runtime otherwise, as a real `ptr ptr u8` (D301).
 
@@ -18796,3 +18803,114 @@ takes for whole lines; and an end atom or a kept newline marking the end.
 **Pinned by** `runtime/core-io-buffered-writer`, `runtime/buffered-writer-closed-output`,
 `runtime/core-io-line-reader`, `runtime/line-numbers`, the published
 consumer, and `negative/line-outlives-read`.
+
+### D311 — The hosted entry hands the argument initializer the environment too
+
+**The tour said** at [1650] that the hosted world keeps the table of arguments
+it was started with. The environment had no carrier: a static Linux program
+finds it on the initial stack, but on Darwin, FreeBSD and under `--link=libc`
+it is C's global `environ`, and a C global cannot be imported.
+
+**Chosen:** `_landin_host_initialize_arguments` takes C's three `main`
+arguments, `(count: i32, escaping values: ptr ptr u8, escaping environment:
+ptr ptr u8) -> none`, and the hosted `main` passes its `envp` with the rest;
+it is already in the third argument register on every architecture, so no
+backend moves anything. A null table is an empty environment, and a repeat
+must repeat all three. A static Linux program's entry passes the initial
+stack's table and the C runtime passes its own, so both reach the
+environment through one routine. The table is counted again on every read,
+because C code may change it in place.
+
+**The alternatives:** reading `environ`, which cannot be imported; `getenv`,
+which cannot iterate; a second initializer, which needs registers moved in
+three backends; and a new symbol name, which would leave an outside caller of
+the two-argument form failing at link time rather than at its check.
+
+**Pinned by** `abi/environment-from-c`, `runtime/environment-variables` and
+`runtime/environment-variables-libc`, and the `hosted-initializer-*`
+negatives, refusing every other signature with L0347.
+
+### D312 — The environment is a read-only concept of its own
+
+**The tour said** at [1660] that a program reaches its host through
+capabilities it is given, and nothing reached the environment.
+
+**Chosen:** `io.environment` is a concept outside `world`, with
+`variable_count`, `variable_at` and `variable_named`, the first match by
+bytes, failing `no_variable`. An `io.variable` is a name and a value, both
+host strings (D299), lent `from self`, which D301's static origin satisfies on
+a hosted system; an entry without `=` is a name with an empty value. There is
+no setter: a program's own environment is not changed beside threads, and a
+child gets the environment its parent builds. `io.variables_over` gives a
+provider over `NAME=value` byte strings that firmware can declare as static
+data.
+
+**The alternatives:** the entries in the process concept, which put about
+6 KiB into every Cortex-M0 memory-world image and pushed six firmware
+fixtures past 32 KiB, where a concept of its own costs nothing until used
+[1260]; a cursor, where an index mirrors the arguments; and a setter.
+
+**Pinned by** `runtime/environment-variables`, `runtime/run-environment`,
+whose values are not UTF-8, and `runtime/run-memory-firmware`.
+
+### D313 — A program is run by its path and reported as ending one of two ways
+
+**The tour said** at [1660] that authority is passed, never ambient, and
+nothing could run another program.
+
+**Chosen:** `io.programs` is a concept outside `world`, shaped like D293.
+`io.spawn(host, path, arguments, environment, streams)` runs the program at
+the path as given, with no search and no shell; its first argument is the
+path, and its environment exactly what the caller built. Each of its three
+streams is `inherited`, `discarded` or `piped`, with presets `inheriting`,
+`capturing` and `discarding`. A running child is a value the caller edits:
+`io.write_child` and `io.close_input` feed it, and `io.read_child` waits on
+both piped outputs and reads whichever is ready, so a child is never stalled
+on a full pipe. `io.wait` takes the child `sink`, closes its pipes and answers
+`io.ending`, `exited(code)` or `signalled`; the signal's number is hosted
+detail, `hosted.last_signal(host)`, kept in a cell of the handle's
+`hosted.space` beside its last error. `io.scripted_over(world, programs)`
+gives scripted children whose output, errors, code and ending are given,
+recording how often each started, its argument and variable counts and the
+input written to it.
+
+**The alternatives:** a shell string, which hands quoting to the program; a
+search of `PATH` in the library, which the caller can do over the
+environment; pipe ends as `world` files, which every memory image would pay
+for; a signal number in a portable signature, which Windows does not have;
+and reading one output at a time, which deadlocks on a child that fills the
+other.
+
+**Pinned by** `runtime/run-shell`, the published consumer, and its twin
+`runtime/run-shell-memory`; `runtime/run-missing-program`, `runtime/run-signalled`,
+`runtime/run-large-output`, a mebibyte on each stream interleaved, and
+`runtime/run-streams`.
+
+### D314 — Every descriptor the POSIX layer makes is closed on exec, and a child starts clean
+
+**The tour said** nothing of what a child inherits.
+
+**Chosen:** `platform/posix` opens every descriptor close-on-exec, files,
+directories and pipes. `posix.pipe` is `pipe2(O_CLOEXEC)` on Linux and
+FreeBSD and `pipe` followed by `fcntl` on Darwin, which has no `pipe2`, so it
+is not atomic there. `posix.spawn` builds the argument and environment tables
+in a temporary mapping and first moves any stream descriptor below 3 that is
+not its own number above 2. On Linux it is a `clone` with SIGCHLD and nothing
+shared, whose child sets its streams with `dup3`, closes the rest with
+`close_range(3, ~0, CLOSE_RANGE_CLOEXEC)` and calls `execve`; an exec failure
+reaches the parent through a close-on-exec pipe and the child is reaped. On
+Darwin and FreeBSD it is `posix_spawn`, with `POSIX_SPAWN_CLOEXEC_DEFAULT` and
+`posix_spawn_file_actions_addinherit_np` on Darwin and
+`posix_spawn_file_actions_addclosefrom_np(3)` on FreeBSD. `posix.wait` is
+`wait4` or `waitpid` and answers `exited(code)` or `signalled(signal)`; the
+hosted provider retries EINTR.
+
+**The alternatives:** `vfork` or `CLONE_VM`, which need a routine Landin cannot
+express that runs on the parent's stack; `posix_spawn` through glibc, which a
+static Linux program does not have; and leaving descriptors inheritable,
+which leaks every open file into every child.
+
+**Pinned by** `runtime/run-no-descriptor-leak`, which reports a leak when
+close-on-exec is removed, `runtime/posix-processes` and
+`abi/libc-process-constants`, which holds each system's constants to its
+headers.

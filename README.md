@@ -358,7 +358,13 @@ This is the maintained inventory of what the compiler does today:
   capability lends standard input beside standard output and error. A fifth,
   directories, lists a directory through a buffer its caller supplies,
   lending each name until the next read, and makes and removes directories
-  and files; a buffered writer gathers output in a caller's buffer until it
+  and files; a sixth lends the read-only environment; a seventh, programs,
+  starts a program by its path with the
+  arguments and environment its parent builds, each standard stream
+  inherited, discarded or piped, reads its output and errors together while
+  it runs and waits for it to exit with a code or be ended by a signal, and
+  caller-backed fakes beside the memory world give both, an environment over
+  data and scripted programs; a buffered writer gathers output in a caller's buffer until it
   is flushed, and a line reader lends each line until the next read. Text is
   built in a builder over a caller's buffer, or one an allocator grows, from
   bytes, text, host strings, decimals of every integer width and
@@ -376,7 +382,8 @@ This is the maintained inventory of what the compiler does today:
   an atom set.
   `hosted/heap` and `hosted/io` supply the hosted heap and
   system I/O capabilities, written once over `platform/posix`, which gives
-  POSIX's files, directories, memory mappings and `poll` in Landin types,
+  POSIX's files, directories, memory mappings, `poll`, pipes, spawning and
+  waiting in Landin types, every descriptor closed on exec,
   with a descriptor handle type and errno atoms that keep their numbers,
   over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
   A path, a process argument and a directory entry's name are host
@@ -485,7 +492,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.31 — The environment and processes (planned).**
+**Next roadmap item: R13.32 — Time and randomness (planned).**
 
 ## License
 

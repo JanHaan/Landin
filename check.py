@@ -111,6 +111,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/directory-listing/main.ldn"),
     ("Line numbers",
      "compiler/tests/fixtures/runtime/line-numbers/main.ldn"),
+    ("Running a shell",
+     "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads
@@ -126,6 +128,10 @@ SHARED_ROUTINES = {
             ("counts", "blank", "count", "render"),
         "compiler/tests/fixtures/runtime/word-count-closed-input/main.ldn":
             ("counts", "blank", "count"),
+    },
+    "compiler/tests/fixtures/runtime/run-shell/main.ldn": {
+        "compiler/tests/fixtures/runtime/run-shell-memory/main.ldn":
+            ("capture", "quoted", "report"),
     },
 }
 

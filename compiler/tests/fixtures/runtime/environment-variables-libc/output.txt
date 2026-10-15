@@ -1,0 +1,11 @@
+TEXT = grüße
+BYTES = bytes c3 28 ff
+TWICE = first
+EQUALS = a=b
+EMPTY = 
+TWICE = second
+no variable past the last
+looked up TWICE: first
+looked up EMPTY: 
+looked up MISSING: none
+looked up twice: none

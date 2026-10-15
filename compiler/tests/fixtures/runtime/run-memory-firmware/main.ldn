@@ -1,0 +1,61 @@
+--  core/io's scripted programs and memory environment within a Cortex-M0
+--  image: a program registered at a path is started with an argument and
+--  a variable, its output is read back through read_child, and it is
+--  waited for with the code it was scripted to end with; an environment
+--  declared as data is looked up by name.
+import core/io
+import core/text
+
+entries: [2][]u8 = ["NAME=landin", "EMPTY="]
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.memory_space = zeroed
+    mut slots: [1]io.memory_file =
+        [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
+          writable: false, opened: false, writing: false)]
+    world := io.memory_over(state, slots[0..<1], [], "", [], [])
+    mut programs: [1]io.scripted_program =
+        [(path: "/bin/tool", output: "done\n", errors: "", code: 3,
+          signalled: false, input: [], input_length: 0, starts: 0,
+          arguments: 0, variables: 0, output_read: 0, errors_read: 0,
+          running: false)]
+    host := io.scripted_over(world, programs[0..<1])
+    environment := io.variables_over(entries[0..<2])
+    name: text.host_string = io.variable_named(environment,
+                                               text.host_over("NAME"))
+        else (problem)
+        _ = problem
+        return
+    end
+    return when not text.host_equal(name, "landin")
+    code = 2
+    arguments: [1]text.host_string = [text.host_over("--quiet")]
+    variables: [1]io.variable = [(name: text.host_over("NAME"), value: name)]
+    mut child: io.child = io.spawn(host, text.host_over("/bin/tool"),
+                                   arguments[0..<1], variables[0..<1],
+                                   io.capturing) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    mut buffer: [8]u8 = zeroed
+    part: io.child_read = io.read_child(host, child,
+                                        buffer[0..<8]) else (problem)
+        _ = problem
+        return
+    end
+    return when part.finished or part.errors or part.count <> 5
+      or buffer[0] <> 100 or buffer[4] <> 10
+    code = 4
+    ended: io.ending = io.wait(host, child) else (problem)
+        _ = problem
+        return
+    end
+    match ended.how
+        io.exited(given): return when given <> 3
+        io.signalled: return
+    end match
+    return when programs[0].arguments <> 1 or programs[0].variables <> 1
+    code = 42
+end main

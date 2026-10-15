@@ -2,6 +2,6 @@ public main: () -> (code: i32) =
     code = 0
 end main
 public extern(c) link(symbol: "_landin_host_initialize_arguments") start:
-    (count: i32, values: ptr ptr u8) -> (ok: bool) =
+    (count: i32, values: ptr ptr u8, environment: ptr ptr u8) -> (ok: bool) =
     ok = count > 0
 end start

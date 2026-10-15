@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a C main hands the argument root an environment table of its own, which Landin lists in order and lends without copying as host strings, names before the first = and values after it, a value that is not UTF-8 refused by the conversion to utf8, an entry with no = a name with an empty value, and lookup finding the first of a name given twice and no_variable for an absent one or an index past the last
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0600, 0940, 1650, 1660, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

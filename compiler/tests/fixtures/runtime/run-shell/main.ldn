@@ -1,0 +1,117 @@
+--  Run a shell with an environment built for it, read what it writes to
+--  its output and its errors while it runs, and report what it said, what
+--  it complained of and how it ended.  The report goes through a buffered
+--  writer, flushed on every way out.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  What the shell runs: it says what its environment holds, complains
+--  once and ends with code 3.  Its environment is only what the program
+--  gives it, so the HOME the program itself has is not among it.
+script: []u8 = """
+    printf 'NAME=%s\n' "$NAME"
+    printf 'GREETING=%s\n' "$GREETING"
+    printf 'HOME is %s\n' "${HOME-not set}"
+    echo 'something went wrong' >&2
+    exit 3
+    """
+
+--  Read what the child writes to its output and its errors into the two
+--  builders, from whichever has something, until both have ended, and
+--  wait for it.  Reading both while it runs is what lets a child write
+--  more than a pipe holds to either.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    mut buffer: [256]u8 = zeroed
+    loop do
+        part: io.child_read = try io.read_child(host, running, buffer[0..<256])
+        break when part.finished
+        if part.errors then
+            try text.append(errors, buffer[0..<part.count])
+        else
+            try text.append(output, buffer[0..<part.count])
+        end if
+    end loop
+    ended = try io.wait(host, running)
+end capture
+
+--  Write each line of BYTES to OUT after a bar.
+quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         bytes: []u8) -> none ! ... =
+    mut start: usize = 0
+    for at in usize(0)..<lenof bytes do
+        if bytes[at] == 10 then
+            try io.put(out, "| ")
+            try io.put(out, bytes[start..<at + 1])
+            start = at + 1
+        end if
+    end for
+    if start < lenof bytes then
+        try io.put(out, "| ")
+        try io.put(out, bytes[start..<lenof bytes])
+        try io.put(out, "\n")
+    end if
+end quoted
+
+--  Report what the child wrote and how it ended.
+report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+    try io.put(out, "the shell said:\n")
+    try quoted(out, output)
+    try io.put(out, "and complained:\n")
+    try quoted(out, errors)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    match ended.how
+        io.exited(code): try text.format(line, "and exited with code {}\n",
+                                         [any(addr code)])
+        io.signalled: try text.append(line, "and was ended by a signal\n")
+    end match
+    try io.put(out, text.used(line))
+end report
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    code = 1
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [2]io.variable =
+        [(name: text.host_over("NAME"), value: text.host_over("landin")),
+         (name: text.host_over("GREETING"),
+          value: text.host_over("hello, world"))]
+    started := io.spawn(host, text.host_over("/bin/sh"),
+                        arguments[0..<2], variables[0..<2],
+                        io.capturing) else (problem)
+        _ = problem
+        return
+    end
+    mut said: [512]u8 = zeroed
+    mut complained: [512]u8 = zeroed
+    mut output := text.over(said[0..<512])
+    mut errors := text.over(complained[0..<512])
+    ended: io.ending = capture(host, started, output, errors) else (problem)
+        _ = problem
+        return
+    end
+    report(out, text.used(output), text.used(errors), ended) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    match ended.how
+        io.exited(status): if status == 3 then code = 42 end if
+        io.signalled: code = 2
+    end match
+end main

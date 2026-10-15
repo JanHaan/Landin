@@ -11,7 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 
-extern void _landin_host_initialize_arguments(int argc, char **argv);
+extern char **environ;
+extern void _landin_host_initialize_arguments(int argc, char **argv,
+                                              char **envp);
 extern int32_t l_pass_through(void);
 
 static char program[] = "host-string-pass-through";
@@ -27,7 +29,7 @@ bool c_argument_is_argv(const unsigned char *bytes, size_t length)
 int main(void)
 {
     unlink(name);
-    _landin_host_initialize_arguments(2, arguments);
+    _landin_host_initialize_arguments(2, arguments, environ);
     int32_t code = l_pass_through();
     if (code != 42)
         return code;

@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: under --link=libc a Linux program reads the environment the C runtime gave main, listing, looking up and refusing exactly as runtime/environment-variables does from the initial stack
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64
+link: libc

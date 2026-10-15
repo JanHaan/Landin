@@ -1,0 +1,7 @@
+the shell said:
+| NAME=landin
+| GREETING=hello, world
+| HOME is not set
+and complained:
+| something went wrong
+and exited with code 3

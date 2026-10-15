@@ -1,0 +1,89 @@
+--  Each of a child's streams inherited, discarded or piped.  A child whose
+--  output is inherited writes where its parent does, here between two
+--  lines of the parent's own; one whose errors are discarded writes them
+--  nowhere, which `stream: output` holds, standard error being empty; a
+--  piped input is what the parent writes to it, ended when the parent
+--  closes it; a discarded input ends at once; and an inherited input is
+--  the parent's own, here the fixture's input file.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  Run SCRIPT in /bin/sh with STREAMS, writing GIVEN to its input when
+--  that is piped, and report the code it exited with.
+ran: (host: hosted.system, script: []u8, streams: io.child_streams,
+      given: []u8) -> (code: i32) ! ... =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    mut child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                       arguments[0..<2], variables[0..<1],
+                                       streams)
+    if child.input_open then
+        try io.write_child(host, child, given)
+        try io.close_input(host, child)
+    end if
+    ended: io.ending = try io.wait(host, child)
+    code = match ended.how
+        io.exited(given_code): given_code
+        io.signalled: -1
+    end match
+end ran
+
+--  Write LINE to standard output at once, before a child writes there.
+say: (host: hosted.system, line: []u8) -> none ! ... =
+    try io.write(host, io.out(host), line)
+end say
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    piped: io.child_streams = (input: io.piped, output: io.inherited,
+                               errors: io.discarded)
+    say(host, "before the children\n") else (problem)
+        _ = problem
+        return
+    end
+    first: i32 = ran(host, """
+        read -r line
+        printf 'read from a pipe: %s\n' "$line"
+        echo 'this goes nowhere' >&2
+        exit 4
+        """, piped, "a line for the child\n") else (problem)
+        _ = problem
+        return
+    end
+    return when first <> 4
+    code = 2
+    discarded: io.child_streams = (input: io.discarded, output: io.inherited,
+                                   errors: io.discarded)
+    second: i32 = ran(host, """
+        if read -r line; then
+            printf 'read %s\n' "$line"
+        else
+            echo 'a discarded input ends at once'
+        fi
+        """, discarded, "") else (problem)
+        _ = problem
+        return
+    end
+    return when second <> 0
+    code = 3
+    inherited: io.child_streams = (input: io.inherited, output: io.inherited,
+                                   errors: io.discarded)
+    third: i32 = ran(host, """
+        read -r line
+        printf 'the parent'"'"'s input: %s\n' "$line"
+        """, inherited, "") else (problem)
+        _ = problem
+        return
+    end
+    return when third <> 0
+    code = 4
+    say(host, "after the children\n") else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

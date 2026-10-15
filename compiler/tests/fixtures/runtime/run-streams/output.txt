@@ -1,0 +1,5 @@
+before the children
+read from a pipe: a line for the child
+a discarded input ends at once
+the parent's input: the first line of the input file
+after the children

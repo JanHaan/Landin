@@ -3517,8 +3517,8 @@ package body Landin.Tests.Driver_Suite is
 
    --  The hosted entry's call to the program's argument initializer is
    --  the one hosted contract left in the compiler: a declaration carrying
-   --  the name in a program with a hosted entry must take C's argc and
-   --  argv and nothing else, and the refusal touches no file or tool.
+   --  the name in a program with a hosted entry must take C's argc, argv
+   --  and envp and nothing else, and the refusal touches no file or tool.
    procedure Hosted_Initializer_Refusals_Have_No_Effects
      (Item : in out Landin.Testing.Context)
    is
@@ -3526,7 +3526,10 @@ package body Landin.Tests.Driver_Suite is
         & "    code = 0" & LF & "end main" & LF;
       Required : constant String :=
         "the hosted entry calls `_landin_host_initialize_arguments` as"
-        & " `extern(c) (count: i32, values: ptr ptr u8) -> none`";
+        & " `extern(c) (count: i32, values: ptr ptr u8, environment: ptr ptr"
+        & " u8) -> none`";
+      Tables : constant String :=
+        " (count: i32, values: ptr ptr u8, environment: ptr ptr u8)";
 
       procedure Check (Source, Message : String; Executable : Boolean);
 
@@ -3572,20 +3575,29 @@ package body Landin.Tests.Driver_Suite is
          Check
            (Entry_Main & "public extern(c) link(symbol:"
             & " ""_landin_host_initialize_arguments"") native:"
-            & " (count: i32, values: ptr ptr u8) -> (ok: bool) =" & LF
+            & Tables & " -> (ok: bool) =" & LF
             & "    ok = count > 0" & LF & "end native" & LF,
             Required, Executable);
          Check
            (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
-            & " (count: i32, values: ptr ptr u32) -> none" & LF,
+            & " (count: i32, values: ptr ptr u8, environment: ptr ptr u32)"
+            & " -> none" & LF,
             Required, Executable);
          Check
            (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
-            & " (count: i32, values: ptr ptr mut u8) -> none" & LF,
+            & " (count: i32, values: ptr ptr mut u8, environment: ptr ptr u8)"
+            & " -> none" & LF,
             Required, Executable);
          Check
            (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
-            & " (count: i32, values: ptr ptr u8, ...) -> none" & LF,
+            & Tables (Tables'First .. Tables'Last - 1) & ", ...) -> none"
+            & LF,
+            Required, Executable);
+         --  The contract before the environment joined it: argc and argv
+         --  alone would leave envp unread.
+         Check
+           (Entry_Main & "extern(c) _landin_host_initialize_arguments:"
+            & " (count: i32, values: ptr ptr u8) -> none" & LF,
             Required, Executable);
       end loop;
    end Hosted_Initializer_Refusals_Have_No_Effects;

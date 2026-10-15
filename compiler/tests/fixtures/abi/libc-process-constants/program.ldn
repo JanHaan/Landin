@@ -1,0 +1,50 @@
+--  The facts platform/libc and platform/linux keep for pipes, spawning
+--  and waiting, handed to a C peer that holds each to the system's own
+--  headers: the close-on-exec flags and commands, and on Darwin and
+--  FreeBSD the size of the spawn objects and Darwin's spawn flag.
+import platform/libc
+import platform/linux
+
+public extern(c) l_o_cloexec: () -> (value: i32) =
+    value = libc.o_cloexec
+end l_o_cloexec
+
+public extern(c) l_f_setfd: () -> (value: i32) =
+    value = libc.f_setfd
+end l_f_setfd
+
+public extern(c) l_fd_cloexec: () -> (value: i32) =
+    value = libc.fd_cloexec
+end l_fd_cloexec
+
+public extern(c) l_f_dupfd_cloexec: () -> (value: i32) =
+    value = libc.f_dupfd_cloexec
+end l_f_dupfd_cloexec
+
+fixed if compiler.os == linux then
+    --  platform/linux's own copies of the same facts, and SIGCHLD.
+    public extern(c) l_linux_agrees: () -> (yes: bool) =
+        yes = linux.o_cloexec == libc.o_cloexec
+              and linux.f_dupfd_cloexec == libc.f_dupfd_cloexec
+              and linux.f_setfd == libc.f_setfd
+              and linux.fd_cloexec == libc.fd_cloexec
+    end l_linux_agrees
+
+    public extern(c) l_sigchld: () -> (value: i64) =
+        value = linux.sigchld
+    end l_sigchld
+
+    public extern(c) l_close_range_cloexec: () -> (value: u32) =
+        value = linux.close_range_cloexec
+    end l_close_range_cloexec
+else
+    public extern(c) l_spawn_object_size: () -> (size: usize) =
+        size = sizeof libc.spawn_object
+    end l_spawn_object_size
+end if
+
+fixed if compiler.os == darwin then
+    public extern(c) l_cloexec_default: () -> (value: i16) =
+        value = libc.posix_spawn_cloexec_default
+    end l_cloexec_default
+end if

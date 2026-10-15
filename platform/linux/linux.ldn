@@ -367,6 +367,98 @@ fixed if compiler.os == linux then
                                  i64(count), i64(address), 0, 8, 0))
     end ppoll
 
+    --- `openat`, `pipe2` and `dup3` flag: the new descriptor is closed when
+    --- the process executes a program, set with the descriptor so no
+    --- other thread's exec can see it without.  The same on every
+    --- architecture.
+    public o_cloexec: i32 = 524288
+
+    --- `fcntl` command: set a descriptor's flags, `fd_cloexec` among them.
+    public f_setfd: i32 = 2
+    --- `fcntl` flag: the descriptor is closed when the process executes a
+    --- program.
+    public fd_cloexec: i32 = 1
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 1030
+
+    --- `close_range` flag: mark the descriptors closed on exec rather than
+    --- closing them now.
+    public close_range_cloexec: u32 = 4
+
+    --- The signal a child sends its parent when it ends, SIGCHLD, which
+    --- `clone` takes as the child's exit signal.  The same on every
+    --- architecture.
+    public sigchld: i64 = 17
+
+    --- Make a pipe and put its reading end in `ends[0]` and its writing end
+    --- in `ends[1]`, with `flags`, `o_cloexec` among them: zero, or minus
+    --- the errno.
+    public link(symbol: "_landin_linux_pipe2") pipe2:
+        (ends: ptr mut i32, flags: i32) -> (result: i32) =
+        result = i32(system_call(pipe2_number, i64(usize(ends)), i64(flags),
+                                 0, 0, 0, 0))
+    end pipe2
+
+    --- Make `target` a duplicate of `source`, closing what `target` was,
+    --- with `flags`: `target`, or minus the errno, EINVAL when the two are
+    --- the same.  arm64 and RV64 have no `dup2`; this is every
+    --- architecture's.
+    public link(symbol: "_landin_linux_dup3") dup3:
+        (source: i32, target: i32, flags: i32) -> (result: i32) =
+        result = i32(system_call(dup3_number, i64(source), i64(target),
+                                 i64(flags), 0, 0, 0))
+    end dup3
+
+    --- `fcntl(descriptor, command, argument)` for a command whose argument
+    --- is an integer: its result, or minus the errno.
+    public link(symbol: "_landin_linux_fcntl") fcntl:
+        (descriptor: i32, command: i32, argument: i64) -> (result: i32) =
+        result = i32(system_call(fcntl_number, i64(descriptor),
+                                 i64(command), argument, 0, 0, 0))
+    end fcntl
+
+    --- Make a child process that is a copy of this one, POSIX's `fork`,
+    --- through `clone` with `sigchld` as its exit signal and nothing
+    --- shared: the child's process ID in the parent, zero in the child,
+    --- or minus the errno.  The child is a copy of the whole address space,
+    --- and of the calling thread alone.  arm64 and RV64 have no `fork`;
+    --- this is every architecture's.
+    public link(symbol: "_landin_linux_fork") fork:
+        () -> (result: i64) =
+        result = system_call(clone_number, sigchld, 0, 0, 0, 0, 0)
+    end fork
+
+    --- Replace this process's program with the one at `path`, given the
+    --- NUL-terminated strings of the null-terminated `arguments` and
+    --- `environment` tables: it does not return when it succeeds, and
+    --- returns minus the errno when it fails.
+    public link(symbol: "_landin_linux_execve") execve:
+        (path: ptr u8, arguments: ptr ptr u8, environment: ptr ptr u8)
+        -> (result: i32) =
+        result = i32(system_call(execve_number, i64(usize(path)),
+                                 i64(usize(arguments)),
+                                 i64(usize(environment)), 0, 0, 0))
+    end execve
+
+    --- Wait for the child `child` to end, or with `options` for less, and
+    --- put its status in `status`, with no resource record: the child's ID,
+    --- or minus the errno, ECHILD when it is not this process's child.
+    public link(symbol: "_landin_linux_wait4") wait4:
+        (child: i32, status: ptr mut i32, options: i32) -> (result: i32) =
+        result = i32(system_call(wait4_number, i64(child),
+                                 i64(usize(status)), i64(options), 0, 0, 0))
+    end wait4
+
+    --- Close, or with `close_range_cloexec` mark closed on exec, the
+    --- descriptors from `first` to `last`: zero, or minus the errno, ENOSYS
+    --- from a kernel older than 5.9 and EINVAL for a flag older than 5.11.
+    public link(symbol: "_landin_linux_close_range") close_range:
+        (first: u32, last: u32, flags: u32) -> (result: i32) =
+        result = i32(system_call(close_range_number, i64(first), i64(last),
+                                 i64(flags), 0, 0, 0))
+    end close_range
+
     --- End every thread of the process with `status`.  It does not return.
     public link(symbol: "_landin_linux_exit_group") exit_group:
         (status: i32) -> noreturn =

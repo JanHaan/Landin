@@ -1,0 +1,33 @@
+--  A variant part another module declares takes each of its cases written
+--  qualified, a payload-free case as much as one with a payload: here
+--  core/io's `ending`, whose `signalled` has none, constructed from either
+--  case, copied and matched.
+import core/io
+
+ended: (code: i32) -> (result: io.ending) =
+    result = if code < 0 then (how: io.signalled)
+             else (how: io.exited(code: code)) end if
+end ended
+
+value: (given: io.ending) -> (code: i32) =
+    code = match given.how
+        io.exited(found): found
+        io.signalled: 100
+    end match
+end value
+
+public main: () -> (code: i32) =
+    first: io.ending = ended(-1)
+    mut second: io.ending = ended(2)
+    code = 1
+    return when value(first) <> 100 or value(second) <> 2
+    second = (how: io.signalled)
+    return when value(second) <> 100
+    mut third: io.ending = first
+    third.how = io.exited(code: 7)
+    return when value(third) <> 7
+    third.how = io.signalled
+    return when value(third) <> 100
+    third.how = io.exited(code: 42)
+    code = value(third)
+end main

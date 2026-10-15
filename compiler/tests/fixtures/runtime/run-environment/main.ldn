@@ -1,0 +1,87 @@
+--  A child's environment is exactly the one its parent builds, its values
+--  passed through unconverted: a value that is not UTF-8 reaches the
+--  shell byte for byte and comes back the same, as do a value holding `=`
+--  and an empty one.  A name that is empty or holds `=`, or a value
+--  holding a NUL, is no variable a system can pass: the spawn is
+--  io_failed with EINVAL and starts nothing.
+import core/io
+import core/mem
+import core/text
+import hosted/io as hosted
+import platform/posix
+
+--  The shell writes each variable between brackets, and whether it has a
+--  variable its parent did not give it.
+script: []u8 = """
+    printf '[%s][%s][%s][%s]' "$BYTES" "$EQUALS" "$EMPTY" "${HOME-none}"
+    """
+
+--  Run the script with VARIABLES and read back what it wrote.
+echoed: (host: hosted.system, variables: []io.variable, into: []mut u8)
+        -> (count: usize) ! ... =
+    count = 0
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    mut child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                       arguments[0..<2], variables,
+                                       io.capturing)
+    loop do
+        part: io.child_read = try io.read_child(host, child,
+                                                into[count..<lenof into])
+        break when part.finished
+        if not part.errors then count += part.count end if
+    end loop
+    ended: io.ending = try io.wait(host, child)
+    _ = ended
+end echoed
+
+--  Whether spawning with VARIABLES is refused with EINVAL.
+refused: (host: hosted.system, variables: []io.variable) -> (yes: bool) =
+    yes = false
+    arguments: [1]text.host_string = [text.host_over("-c")]
+    child: io.child = io.spawn(host, text.host_over("/bin/sh"),
+                               arguments[0..<1], variables,
+                               io.discarding) else (problem)
+        yes = problem == io.io_failed
+              and hosted.last_errno(host) == posix.number(posix.einval)
+        return
+    end
+    ended: io.ending = io.wait(host, child) else (problem)
+        _ = problem
+        return
+    end
+    _ = ended
+end refused
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    bytes: [4]u8 = [0xff, 0xfe, 0x41, 0x80]
+    variables: [3]io.variable =
+        [(name: text.host_over("BYTES"), value: text.host_over(bytes[0..<4])),
+         (name: text.host_over("EQUALS"), value: text.host_over("a=b=c")),
+         (name: text.host_over("EMPTY"), value: text.host_over(""))]
+    mut room: [64]u8 = zeroed
+    count: usize = echoed(host, variables[0..<3], room[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    expected: [24]u8 = [91, 0xff, 0xfe, 0x41, 0x80, 93, 91, 97, 61, 98, 61, 99,
+                        93, 91, 93, 91, 110, 111, 110, 101, 93, 0, 0, 0]
+    return when count <> 21
+    return when mem.compare(room[0..<21], expected[0..<21]) <> mem.equal
+    code = 2
+    nameless: [1]io.variable =
+        [(name: text.host_over(""), value: text.host_over("x"))]
+    return when not refused(host, nameless[0..<1])
+    code = 3
+    equals: [1]io.variable =
+        [(name: text.host_over("A=B"), value: text.host_over("x"))]
+    return when not refused(host, equals[0..<1])
+    code = 4
+    nul: [3]u8 = [97, 0, 98]
+    holding: [1]io.variable =
+        [(name: text.host_over("NUL"), value: text.host_over(nul[0..<3]))]
+    return when not refused(host, holding[0..<1])
+    code = 42
+end main

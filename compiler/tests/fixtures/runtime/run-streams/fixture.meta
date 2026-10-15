@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: a child's piped input reads what the parent writes until the parent closes it, a discarded input ends at once and an inherited one is the parent's own standard input, an inherited output writes between the parent's own lines, and discarded errors reach nothing, standard error staying empty
+program: main.ldn
+root: ../../../../..
+stdin: input.txt
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

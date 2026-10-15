@@ -1,0 +1,85 @@
+--  A child that writes more than a pipe holds to both its output and its
+--  errors finishes only if its parent reads both while it runs: a pipe
+--  holds 64 KiB on Linux and at most 64 KiB on Darwin and FreeBSD, and the
+--  shell here writes one MiB to each, a line to one and then the same line
+--  to the other.  io.read_child reads whichever has something, so neither
+--  pipe stays full; the parent counts every byte of each and its lines.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  The shell writes LINE, given in its environment, 1024 times to each
+--  stream.
+script: []u8 = """
+    i=0
+    while [ "$i" -lt 1024 ]; do
+        printf '%s\n' "$LINE"
+        printf '%s\n' "$LINE" >&2
+        i=$((i + 1))
+    done
+    """
+
+totals: type = struct
+    output: usize
+    errors: usize
+    output_lines: usize
+    errors_lines: usize
+end totals
+
+count: (host: hosted.system, line: []u8) -> (counted: totals) ! ... =
+    counted = (output: 0, errors: 0, output_lines: 0, errors_lines: 0)
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("LINE"), value: text.host_over(line))]
+    mut child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                       arguments[0..<2], variables[0..<1],
+                                       io.capturing)
+    mut buffer: [4096]u8 = zeroed
+    loop do
+        part: io.child_read = try io.read_child(host, child,
+                                                buffer[0..<4096])
+        break when part.finished
+        mut lines: usize = 0
+        for byte in buffer[0..<part.count] do
+            if byte == 10 then inc lines end if
+        end for
+        if part.errors then
+            counted.errors += part.count
+            counted.errors_lines += lines
+        else
+            counted.output += part.count
+            counted.output_lines += lines
+        end if
+    end loop
+    ended: io.ending = try io.wait(host, child)
+    match ended.how
+        io.exited(code): if code <> 0 then counted.output = 0 end if
+        io.signalled: counted.output = 0
+    end match
+end count
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    --  1023 bytes and its newline: a KiB a line.
+    line: [1023]u8 = [1023 of 120]
+    counted: totals = count(host, line[0..<1023]) else (problem)
+        _ = problem
+        return
+    end
+    mut room: [96]u8 = zeroed
+    mut said := text.over(room[0..<96])
+    text.format(said, "output {} bytes in {} lines, errors {} bytes in {} lines\n",
+                [any(addr counted.output), any(addr counted.output_lines),
+                 any(addr counted.errors), any(addr counted.errors_lines)]) else (problem)
+        _ = problem
+        return
+    end
+    io.write(host, io.out(host), text.used(said)) else (problem)
+        _ = problem
+        return
+    end
+    return when counted.output <> 1048576 or counted.errors <> 1048576
+    code = 42
+end main

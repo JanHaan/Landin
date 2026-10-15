@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published process consumer runs /bin/sh by its path with arguments and an environment it builds, reads the shell's output and errors through io.read_child while it runs, waits for it and reports the lines it wrote to each and that it exited with code 3, the parent's own HOME not among what it saw
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0570, 0680, 0790, 0900, 0910, 0940, 1030, 1100, 1210, 1650, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

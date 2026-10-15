@@ -23910,6 +23910,15 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
             Nominal := Value;
+         elsif Syn.Kind (Of_Tree, Value) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Value) = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Value))
+               = Res.Case_Name
+         then
+            --  A bare case of a variant part another module declares is
+            --  written qualified, as its payload cases are.
+            Nominal := Value;
          elsif Syn.Kind (Of_Tree, Value) = Syn.Labeled_Application
            and then Res.Class_Of (Meanings.all, Of_Tree, Value)
                       = Res.Case_Construction
@@ -23978,7 +23987,9 @@ package body Landin.Stages.Checking is
             Count : constant Natural :=
               Syn.Payload_Field_Count (Body_Tree.all, Case_Node);
          begin
-            if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
+            if Syn.Kind (Of_Tree, Value)
+              in Syn.Name_Reference | Syn.Member_Selection
+            then
                if Count > 0 then
                   Bad.Report
                     (Item    => Bad.Aggregate_Form,
@@ -35596,7 +35607,7 @@ package body Landin.Stages.Checking is
               or else Landin.Checking.Signature_Error_Form
                 (Types.all, Signature) /= Landin.Checking.Infallible
               or else Landin.Checking.Signature_Parameter_Count
-                (Types.all, Signature) /= 2
+                (Types.all, Signature) /= 3
               or else Landin.Checking.Signature_Result_Count
                 (Types.all, Signature) /= 0
             then
@@ -35606,16 +35617,26 @@ package body Landin.Stages.Checking is
                Count : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Parameter
                    (Types.all, Signature, 1);
-               Values : constant Landin.Checking.Signature_Part :=
-                 Landin.Checking.Nth_Signature_Parameter
-                   (Types.all, Signature, 2);
+
+               --  argv and envp are both C's `char **`.
+               function Is_Table (Position : Positive) return Boolean;
+
+               function Is_Table (Position : Positive) return Boolean is
+                  Table : constant Landin.Checking.Signature_Part :=
+                    Landin.Checking.Nth_Signature_Parameter
+                      (Types.all, Signature, Position);
+               begin
+                  return Table.Kind = Ty.Pointer_Value
+                    and then Plain_Pointer
+                      (Table.Reference, Ty.Pointer_Value)
+                    and then Plain_Pointer
+                      (Landin.Checking.Descriptor_Of
+                         (Types.all, Table.Reference).Reference, Ty.U8);
+               end Is_Table;
             begin
                return Count.Kind = Ty.I32
-                 and then Values.Kind = Ty.Pointer_Value
-                 and then Plain_Pointer (Values.Reference, Ty.Pointer_Value)
-                 and then Plain_Pointer
-                   (Landin.Checking.Descriptor_Of
-                      (Types.all, Values.Reference).Reference, Ty.U8);
+                 and then Is_Table (2)
+                 and then Is_Table (3);
             end;
          end Initializer_Agrees;
       begin
@@ -35716,7 +35737,8 @@ package body Landin.Stages.Checking is
          end loop;
 
          --  The selected entry calls the program's definition of the
-         --  argument initializer with C's argc and argv before its body.
+         --  argument initializer with C's argc, argv and envp before its
+         --  body.
          --  That call is the one hosted contract left in the compiler, so
          --  every declaration carrying the name must take exactly those
          --  carriers.  Without a hosted entry it is an ordinary C routine.
@@ -35748,10 +35770,11 @@ package body Landin.Stages.Checking is
                      Message => "the hosted entry calls `"
                                 & Landin.Hosted.Argument_Initializer
                                 & "` as `extern(c) (count: i32, values:"
-                                & " ptr ptr u8) -> none`",
+                                & " ptr ptr u8, environment: ptr ptr u8)"
+                                & " -> none`",
                      Note => "[1650]/[1975]: the selected native main passes"
-                             & " C's argc and argv to the program's argument"
-                             & " initializer before its body runs",
+                             & " C's argc, argv and envp to the program's"
+                             & " argument initializer before its body runs",
                      Related => Syn.Origin
                        (Main_Tree.all, Res.Node_Of (Meanings.all, Selected)),
                      Because => "the selected hosted entry", Into => Found);

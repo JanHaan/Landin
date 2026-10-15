@@ -4188,15 +4188,17 @@ the C shape cannot be indexed without `slice_from`, which is not enabled — so
 the hosted world retains the argument table and lends each argument as a
 host string instead. When the program imports `hosted/io`, and so
 `platform/posix`, the hosted entry calls the latter's C-callable
-`void _landin_host_initialize_arguments(int argc, char **argv);` with the real
-incoming carriers before that no-argument source body begins. A Linux
+`void _landin_host_initialize_arguments(int argc, char **argv, char **envp);`
+with the real incoming carriers before that no-argument source body begins,
+so the environment is retained beside the arguments and lent the same way. A Linux
 executable needs no C library: it starts at `platform/linux`'s `_landin_start`,
 which calls `main` with the process's arguments, and `--link=libc` links the
 C runtime instead.
 
 A C-owned `main` that drives exported Landin routines calls the same entry
-explicitly before `hosted.host()` acquires an argument capability and before starting
-a thread that may acquire one. It need not do so for file, stream and heap
+explicitly, with its own `envp` or C's `environ`, before `hosted.host()`
+acquires an argument capability and before starting a thread that may acquire
+one. It need not do so for file, stream and heap
 work, which needs no argument root, merely because `core/io` is linked, and no ordinary export or callback
 initializes or resets the root. Those views derive from the resulting world; a
 caller that must mutate the same backing-aware provider while retaining one
@@ -4256,9 +4258,10 @@ argument lent from it and a note through the logger lock nothing.
 
 `hosted.host()` acquires the real argument-table capability; it does not create or
 copy that storage. The first nonnegative-count, non-null-table startup call
-establishes one exact `(argc, argv)` root. Repeating that exact pair is harmless;
-using the argument services before initialization or trying to replace either
-carrier traps. The C owner therefore keeps the table and the strings it names
+establishes one exact `(argc, argv, envp)` root, a null environment being an
+empty one. Repeating that exact triple is harmless;
+using the argument services before initialization or trying to replace any
+carrier traps. The C owner therefore keeps the tables and the strings they name
 readable for as long as a derived world, view or callback can use them. The
 published sequence starts at `argv[1]`; an ordinary C invocation with only its
 program name consequently gives Landin an empty user-argument sequence.

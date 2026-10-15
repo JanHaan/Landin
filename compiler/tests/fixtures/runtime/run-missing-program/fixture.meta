@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: spawning a path that names nothing is io.not_found with ENOENT kept, a path through a file io.not_found with ENOTDIR, and a directory io.no_access with EACCES, with no child to wait for, while a program that starts leaves the last errno at zero
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

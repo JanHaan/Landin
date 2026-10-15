@@ -1,0 +1,111 @@
+--  A child receives no descriptor but its three streams.  The parent holds
+--  two files and a directory open, and another child's three pipes, while
+--  it starts a shell that tries each of those descriptors, whose numbers it
+--  is given as its arguments, and names any it can read or write; it names
+--  none, since every descriptor the hosted provider makes is closed on
+--  exec, and the spawn closes whatever else is open in the child.  The
+--  hosted provider's file is its descriptor's number, so the parent knows
+--  which numbers to give.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  Each descriptor is duplicated in a subshell by `exec`, which keeps no
+--  copy of what it replaces, so no descriptor the shell saves for itself
+--  takes a number being tried.
+script: []u8 = """
+    for fd in "$@"; do
+        if (exec 2>/dev/null; exec 0<&"$fd"); then
+            echo "descriptor $fd is open"
+        fi
+    done
+    echo "checked $# descriptors"
+    """
+
+--  The decimal of a file's number.
+number: (opened: io.file, room: []mut u8) -> (digits: []u8 from room) ! ... =
+    mut line := text.over(room)
+    try text.append_usize(line, usize(opened))
+    digits = room[0..<text.length(line)]
+end number
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    first: io.file = io.open_read(host, text.host_over("/dev/null")) else (problem)
+        _ = problem
+        return
+    end
+    second: io.file = io.open_write(host, text.host_over("/dev/null")) else (problem)
+        _ = problem
+        return
+    end
+    mut buffer: [1024]u8 = zeroed
+    listed: io.directory = io.open_directory(host, text.host_over("/"),
+                                             buffer[0..<1024]) else (problem)
+        _ = problem
+        return
+    end
+    waiting: [2]text.host_string = [text.host_over("-c"),
+                                    text.host_over("read -r line")]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    piped: io.child_streams = (input: io.piped, output: io.piped,
+                               errors: io.piped)
+    mut other: io.child = io.spawn(host, text.host_over("/bin/sh"),
+                                   waiting[0..<2], variables[0..<1],
+                                   piped) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    mut rooms: [6][4]u8 = zeroed
+    held: [6]io.file = [first, second, io.file(listed.handle), other.input,
+                        other.output, other.errors]
+    mut arguments: [9]text.host_string =
+        [9 of text.host_over("")]
+    arguments[0] = text.host_over("-c")
+    arguments[1] = text.host_over(script)
+    arguments[2] = text.host_over("sh")
+    for at in usize(0)..<6 do
+        digits: []u8 = number(held[at], rooms[at][0..<4]) else (problem)
+            _ = problem
+            return
+        end
+        arguments[3 + at] = text.host_over(digits)
+    end for
+    checked: io.child = io.spawn(host, text.host_over("/bin/sh"),
+                                 arguments[0..<9], variables[0..<1],
+                                 io.inheriting) else (problem)
+        _ = problem
+        return
+    end
+    ended: io.ending = io.wait(host, checked) else (problem)
+        _ = problem
+        return
+    end
+    _ = ended
+    code = 3
+    io.close_input(host, other) else (problem)
+        _ = problem
+        return
+    end
+    finished: io.ending = io.wait(host, other) else (problem)
+        _ = problem
+        return
+    end
+    _ = finished
+    io.close_directory(host, listed) else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, second) else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, first) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

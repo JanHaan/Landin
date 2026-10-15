@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: the close-on-exec flag, F_SETFD and FD_CLOEXEC and F_DUPFD_CLOEXEC that platform/libc keeps, and on Linux platform/linux's copies, SIGCHLD and CLOSE_RANGE_CLOEXEC, and on Darwin and FreeBSD the size of the spawn objects and Darwin's POSIX_SPAWN_CLOEXEC_DEFAULT, each held to the system's own C headers
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the process consumer's capture and report routines run over core/io.memory's scripted programs and write the report runtime/run-shell writes, the scripted child recording its arguments and variables; a path with no program is not_found, an injected read failure is io_failed, a program scripted to be signalled is, one already running cannot start again, piped input is kept and inherited output reaches the world's own, and the world's environment lists, splits and looks up the entries it is given
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0560, 0570, 0680, 0790, 0900, 0910, 0940, 1030, 1210, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

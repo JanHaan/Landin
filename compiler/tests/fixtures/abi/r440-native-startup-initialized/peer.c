@@ -4,7 +4,9 @@
 #include <string.h>
 #include <unistd.h>
 
-extern void _landin_host_initialize_arguments(int argc, char **argv);
+extern char **environ;
+extern void _landin_host_initialize_arguments(int argc, char **argv,
+                                              char **envp);
 extern bool l_plain(int32_t input, int32_t output);
 extern bool l_root(void);
 typedef bool (*callback)(const void *state, int32_t depth);
@@ -46,7 +48,7 @@ bool c_reenter(const void *state, callback visit, int32_t depth)
     ++visits;
     /* An identical startup request is idempotent, including while a world is
        live on a Landin frame. Neither this nor callback entry resets it. */
-    _landin_host_initialize_arguments(original_argc, original_argv);
+    _landin_host_initialize_arguments(original_argc, original_argv, environ);
     return plain_io() && visit(state, depth);
 }
 
@@ -60,8 +62,8 @@ int main(int argc, char **argv)
         return 2;
     original_argc = argc;
     original_argv = argv;
-    _landin_host_initialize_arguments(argc, argv);
-    _landin_host_initialize_arguments(argc, argv);
+    _landin_host_initialize_arguments(argc, argv, environ);
+    _landin_host_initialize_arguments(argc, argv, environ);
     if (!l_root() || visits != 4 || !plain_io())
         return 3;
     puts("native startup ok");

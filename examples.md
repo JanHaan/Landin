@@ -35,7 +35,8 @@ totals for whatever its standard input holds and returns 0, and its fixture
 gives it an input of its own and holds the line it prints; the line numberer
 does the same with the lines it numbers. The directory
 listing builds a directory where it runs, prints its listing, removes it
-and returns 42. The gate checks all seven output oracles and all fourteen
+and returns 42, and the shell runner prints its report of a shell it ran
+and returns 42. The gate checks all eight output oracles and all fifteen
 programs on each full gate run, on Linux x86-64 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
 exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
@@ -1474,3 +1475,187 @@ other failures run on every target over `core/io.memory`'s standard input
 in `runtime/core-io-line-reader`, a read failing partway and reads three
 bytes long among them, and the buffered writer's in
 `runtime/core-io-buffered-writer` and `runtime/buffered-writer-closed-output`.
+
+## Running a shell
+
+The program runs `/bin/sh` and tells it what to do with `-c`, gives it an
+environment of its own, reads what the shell writes while it runs, and
+reports it. A program is started by its path, `io.spawn`, with the
+arguments it sees after its own name and exactly the variables the parent
+builds, each a name and a value, `io.variable`: nothing is looked up on a
+search path, no shell reads anything the parent did not ask for, and the
+parent's own environment, its `HOME` among it, is not passed on, which the
+shell's third line shows. An argument, a name and a value are host strings
+[0790], here made over text with `text.host_over`; the system takes any
+bytes, UTF-8 or not. `io.spawn` is generic over its provider, and a
+generic routine is not lent an array literal or a whole array, so the
+arguments and variables are named arrays given as slices with their
+counts [0570].
+
+Each of a child's three standard streams is inherited, discarded or piped;
+`io.capturing` pipes its output and errors to the parent and discards its
+input. A pipe holds only so much, 64 KiB on Linux, and a child that writes
+more waits until its parent reads, so the parent reads while the child
+runs, and reads both pipes together: `io.read_child` gives whatever either
+has next and says which it came from, so neither pipe stays full while the
+other is read to its end. Here the bytes go into two builders over buffers
+of the program's own, and `io.wait` reports how the child ended, `io.ending`,
+whose variant part [0680] is either `exited` with a code or `signalled`,
+ended from outside; what ended it is the system's detail, which the hosted
+provider keeps as `hosted.last_signal`. `wait` consumes the child [0910],
+with any pipe it still has.
+
+The report goes to standard output through a buffered writer, flushed at
+the end and by a `defer` on every other way out [1100], and the program
+returns 42 when the shell exited with the 3 its script ends with.
+
+Fixture source: `compiler/tests/fixtures/runtime/run-shell/main.ldn`.
+
+```landin
+--  Run a shell with an environment built for it, read what it writes to
+--  its output and its errors while it runs, and report what it said, what
+--  it complained of and how it ended.  The report goes through a buffered
+--  writer, flushed on every way out.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  What the shell runs: it says what its environment holds, complains
+--  once and ends with code 3.  Its environment is only what the program
+--  gives it, so the HOME the program itself has is not among it.
+script: []u8 = """
+    printf 'NAME=%s\n' "$NAME"
+    printf 'GREETING=%s\n' "$GREETING"
+    printf 'HOME is %s\n' "${HOME-not set}"
+    echo 'something went wrong' >&2
+    exit 3
+    """
+
+--  Read what the child writes to its output and its errors into the two
+--  builders, from whichever has something, until both have ended, and
+--  wait for it.  Reading both while it runs is what lets a child write
+--  more than a pipe holds to either.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    mut buffer: [256]u8 = zeroed
+    loop do
+        part: io.child_read = try io.read_child(host, running, buffer[0..<256])
+        break when part.finished
+        if part.errors then
+            try text.append(errors, buffer[0..<part.count])
+        else
+            try text.append(output, buffer[0..<part.count])
+        end if
+    end loop
+    ended = try io.wait(host, running)
+end capture
+
+--  Write each line of BYTES to OUT after a bar.
+quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         bytes: []u8) -> none ! ... =
+    mut start: usize = 0
+    for at in usize(0)..<lenof bytes do
+        if bytes[at] == 10 then
+            try io.put(out, "| ")
+            try io.put(out, bytes[start..<at + 1])
+            start = at + 1
+        end if
+    end for
+    if start < lenof bytes then
+        try io.put(out, "| ")
+        try io.put(out, bytes[start..<lenof bytes])
+        try io.put(out, "\n")
+    end if
+end quoted
+
+--  Report what the child wrote and how it ended.
+report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+    try io.put(out, "the shell said:\n")
+    try quoted(out, output)
+    try io.put(out, "and complained:\n")
+    try quoted(out, errors)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    match ended.how
+        io.exited(code): try text.format(line, "and exited with code {}\n",
+                                         [any(addr code)])
+        io.signalled: try text.append(line, "and was ended by a signal\n")
+    end match
+    try io.put(out, text.used(line))
+end report
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    code = 1
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [2]io.variable =
+        [(name: text.host_over("NAME"), value: text.host_over("landin")),
+         (name: text.host_over("GREETING"),
+          value: text.host_over("hello, world"))]
+    started := io.spawn(host, text.host_over("/bin/sh"),
+                        arguments[0..<2], variables[0..<2],
+                        io.capturing) else (problem)
+        _ = problem
+        return
+    end
+    mut said: [512]u8 = zeroed
+    mut complained: [512]u8 = zeroed
+    mut output := text.over(said[0..<512])
+    mut errors := text.over(complained[0..<512])
+    ended: io.ending = capture(host, started, output, errors) else (problem)
+        _ = problem
+        return
+    end
+    report(out, text.used(output), text.used(errors), ended) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    match ended.how
+        io.exited(status): if status == 3 then code = 42 end if
+        io.signalled: code = 2
+    end match
+end main
+```
+
+which prints
+
+```text
+the shell said:
+| NAME=landin
+| GREETING=hello, world
+| HOME is not set
+and complained:
+| something went wrong
+and exited with code 3
+```
+
+The same `capture` and `report` run over `core/io`'s scripted programs,
+beside a memory world, in `runtime/run-shell-memory`, which writes the same report
+byte for byte and injects the fake's failures. A program that is not there
+is `io.not_found` in `runtime/run-missing-program`; a shell that kills
+itself is `signalled` in `runtime/run-signalled`, with its signal's number
+kept; and in `runtime/run-large-output` a shell writes a mebibyte to each
+of its output and its errors, a line to each in turn, which only reading
+both together lets it finish. `runtime/run-streams` inherits, discards and
+pipes each stream, `runtime/run-environment` passes a value that is not
+UTF-8 through to the shell byte for byte, and
+`runtime/run-no-descriptor-leak` shows a child receives no file of its
+parent's but its three streams. A program reads its own environment through
+the `io.environment` concept, with `io.variable_count`, `io.variable_at` and
+`io.variable_named`, which
+`runtime/environment-variables` shows by starting itself again with an
+environment it builds.

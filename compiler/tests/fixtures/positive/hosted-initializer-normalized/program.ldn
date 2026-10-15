@@ -7,13 +7,16 @@ table: type = ptr text
 mut seen: i32
 
 public extern(c) _landin_host_initialize_arguments:
-    (count: i32, escaping values: table) -> none =
+    (count: i32, escaping values: table, escaping environment: table)
+    -> none =
     _ = values
+    _ = environment
     seen = count
 end _landin_host_initialize_arguments
 
 extern(c) link(symbol: "_landin_host_initialize_arguments") start:
-    (count: i32, escaping values: ptr ptr u8) -> none
+    (count: i32, escaping values: ptr ptr u8,
+     escaping environment: ptr ptr u8) -> none
 extern(c) _landin_host_argument_count: () -> (count: u64)
 
 public main: () -> (code: i32) =

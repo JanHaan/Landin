@@ -95,7 +95,7 @@ package body Landin.Backend.Entry_Point is
                  or else not Landin.IR.Signature_Uses_C_ABI
                    (Of_Unit, Signature)
                  or else Landin.IR.Signature_Parameter_Count
-                   (Of_Unit, Signature) /= 2
+                   (Of_Unit, Signature) /= 3
                  or else Landin.IR.Signature_Result_Count
                    (Of_Unit, Signature) /= 0
                then

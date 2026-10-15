@@ -527,7 +527,7 @@ package body Landin.Backend.X86_64 is
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
       --  The library's argument initializer the hosted entry calls with
-      --  C's argc and argv, when the program defines one.
+      --  C's argc, argv and envp, when the program defines one.
       Initializer : constant Landin.IR.Item_Id :=
         (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
          else Landin.Backend.Entry_Point.Argument_Initializer
@@ -5557,8 +5557,9 @@ package body Landin.Backend.X86_64 is
 
          --  The hosted entry keeps its source-level no-argument shape.  The
          --  frame-pointer push aligned the stack for this C call, before any
-         --  body code can clobber argc/argv.  C-owned startup calls the same
-         --  initializer explicitly; ordinary exports and callbacks never do.
+         --  body code can clobber argc, argv and envp in rdi, rsi and rdx.
+         --  C-owned startup calls the same initializer explicitly; ordinary
+         --  exports and callbacks never do.
          if Item = Hosted_Entry and then Initializer /= Landin.IR.No_Item then
             Emit ("call " & Symbol (Initializer));
          end if;

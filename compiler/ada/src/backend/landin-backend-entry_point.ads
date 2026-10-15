@@ -40,8 +40,8 @@ package Landin.Backend.Entry_Point is
       Names    : Landin.Source.Names.Table) return Landin.IR.Item_Id;
 
    --  The program's C-callable definition of `Landin.Hosted`'s argument
-   --  initializer, which a hosted entry calls with C's argc and argv before
-   --  its body, or `Landin.IR.No_Item` when no module defines one.  The
+   --  initializer, which a hosted entry calls with C's argc, argv and envp
+   --  before its body, or `Landin.IR.No_Item` when no module defines one.  The
    --  library's `hosted/io` defines it, so a hosted program that never
    --  imports that module has no argument root and nothing to call.
    --  Checking has already held the definition to its exact signature.

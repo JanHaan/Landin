@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: a child receives only its three standard streams: two files, a directory and another child's three pipes the parent holds open are closed in it, which a shell given their numbers finds by trying each
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

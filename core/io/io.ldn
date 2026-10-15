@@ -14,6 +14,9 @@ public io_failed: atom
 public no_argument: atom
 --- Something already has the name a directory was to be made at.
 public already_exists: atom
+--- No environment variable has the name asked for, or the index does not
+--- identify one.
+public no_variable: atom
 
 --- A directory entry that is a regular file.
 public regular: atom
@@ -99,6 +102,16 @@ public files: type = concept (provider: type)
            -> none ! io_failed
 end files
 
+--- One environment variable: its name and its value, host strings as the
+--- system keeps them, which need not be UTF-8.  A variable the process was
+--- given is lent from the provider; one built for a child is lent from
+--- the caller's bytes, `(name: text.host_over("LANG"), value:
+--- text.host_over("C"))`.
+public variable: type = struct
+    name: text.host_string
+    value: text.host_string
+end variable
+
 --- Standard streams and argument access. An argument is a host string
 --- whose storage belongs to the provider; stream identifiers have
 --- provider-specific lifetime and closing rules.
@@ -118,10 +131,32 @@ public process: type = concept (provider: type)
               -> (value: text.host_string from self) ! no_argument
 end process
 
+--- The process's environment: its variables, each a name and a value that
+--- are host strings whose storage belongs to the provider, in the order
+--- the provider keeps them.  It is read-only: a process does not change
+--- its own environment, which is not safe beside threads, and gives a
+--- child the one it builds instead (`programs`).  It is a concept of its
+--- own, outside `world`, so a provider that has no environment, and a
+--- firmware image that never asks for one, carries none.
+public environment: type = concept (provider: type)
+    --- Return the count of the environment's variables.
+    variable_count: (self: provider) -> (count: usize)
+    --- Lend the environment variable at an index; the provider retains its
+    --- backing. Report no_variable when out of range.
+    variable_at: (self: provider, index: usize)
+                 -> (item: variable from self) ! no_variable
+    --- Lend the value of the first variable named `name`, compared as the
+    --- system stores names, with no normalization. Report no_variable when
+    --- none has that name.
+    variable_named: (self: provider, name: text.host_string)
+                    -> (value: text.host_string from self) ! no_variable
+end environment
+
 --- Composition of reader, writer, files and process over one provider type.
 --- Consumers should request the narrowest capability they use.
---- `directories` is not part of it: a program that lists, makes or removes
---- directories names that concept as well.
+--- `directories`, `environment` and `programs` are not part of it: a program
+--- that lists a directory, reads its environment or runs another program
+--- names that concept as well.
 public world: type = concept (provider: type) is reader, writer, files, process
 end world
 
@@ -374,3 +409,31 @@ public argument_at: (provider: type is process, host: provider,
                     -> (value: text.host_string from host) ! no_argument =
     value = try provider.argument(host, index)
 end argument_at
+
+--- Return the number of variables in the provider's environment.
+public variable_count: (provider: type is environment, host: provider)
+                       -> (count: usize) =
+    count = provider.variable_count(host)
+end variable_count
+
+--- Lend the environment variable at `index`, from zero, its name and value
+--- host strings.  Reports `no_variable` for an index at or past the count;
+--- the provider's backing must outlive its use.  Every index below
+--- `variable_count` gives one, so a loop over them lists the whole
+--- environment.
+public variable_at: (provider: type is environment, host: provider,
+                     index: usize)
+                    -> (item: variable from host) ! no_variable =
+    item = try provider.variable_at(host, index)
+end variable_at
+
+--- Lend the value of the environment variable named `name`, the first one
+--- when the environment names it twice.  Reports `no_variable` when no
+--- variable has that name.  `text.from_host` is the value's checked
+--- conversion to `utf8`.
+public variable_named: (provider: type is environment, host: provider,
+                        name: text.host_string)
+                       -> (value: text.host_string from host)
+                       ! no_variable =
+    value = try provider.variable_named(host, name)
+end variable_named

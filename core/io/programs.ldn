@@ -1,0 +1,165 @@
+--  Running another program: a seventh concept beside the six, outside
+--  `world`, through which a program starts a child by its path, with the
+--  arguments and the environment it gives it, connects each of the child's
+--  standard streams, reads what the child writes and waits for it to end.
+
+import core/text
+
+--- A child's standard stream is the parent's own: it reads or writes
+--- where the parent does.
+public inherited: atom
+--- A child's standard stream is connected to nothing: its input reads at
+--- once to its end, and what it writes is thrown away.
+public discarded: atom
+--- A child's standard stream is a pipe the parent holds the other end of:
+--- the parent writes the child's input, or reads its output or errors.
+public piped: atom
+--- How one of a child's standard streams is connected: `inherited`,
+--- `discarded` or `piped`.
+public stream_choice: type = inherited | discarded | piped
+
+--- How each of a child's three standard streams is connected.
+public child_streams: type = struct
+    input: stream_choice
+    output: stream_choice
+    errors: stream_choice
+end child_streams
+
+--- Every stream the parent's own: the child reads and writes where the
+--- parent does.
+public inheriting: child_streams = (input: inherited, output: inherited,
+                                    errors: inherited)
+
+--- Every stream connected to nothing: a child run for how it ends.
+public discarding: child_streams = (input: discarded, output: discarded,
+                                    errors: discarded)
+
+--- The child's output and errors piped to the parent, which reads them with
+--- `read_child`, and its input discarded.
+public capturing: child_streams = (input: discarded, output: piped,
+                                   errors: piped)
+
+--- A started child: a value its caller keeps and edits, passing it `inout`
+--- to `write_child`, `close_input` and `read_child`, and `sink` to `wait`,
+--- which consumes it.  Its fields are the provider's: `handle` names the
+--- child, and `input`, `output` and `errors` the parent's ends of its piped
+--- streams, each open while its `*_open` flag says so, which it is only
+--- for a piped stream.  The child owns its pipes: `close_input` closes its
+--- input, `read_child` closes an output it has read to the end, and `wait`
+--- closes the rest.  A provider whose own files they are, as the hosted
+--- one's are its descriptors, may read and write them through `reader` and
+--- `writer` as well, a line reader over a child's output among them; never
+--- close them through `files`.  A child that is never waited for keeps
+--- what its provider holds for it until the process ends: there are no
+--- destructors.
+public child: type = struct
+    handle: usize
+    input: file
+    output: file
+    errors: file
+    input_open: bool
+    output_open: bool
+    errors_open: bool
+end child
+
+--- What `read_child` read: `count` bytes, from the child's errors when
+--- `errors` is true and from its output when it is not, or nothing and
+--- `finished`, once every piped output stream of the child has reached its
+--- end.
+public child_read: type = struct
+    count: usize
+    errors: bool
+    finished: bool
+end child_read
+
+--- How a child ended: it `exited` with the code its program returned, or
+--- it was `signalled`, ended from outside before it returned one.  What
+--- ended it is the system's detail, which its provider keeps; on POSIX it
+--- is a signal.  A POSIX code is the low eight bits of the program's
+--- value, 0 to 255.
+public ending: type = struct
+    how: variant
+        exited: (code: i32) |
+        signalled
+    end how
+end ending
+
+--- Starting programs and waiting for them.  A program is named by its
+--- path, a host string, never looked up on a search path nor given to a
+--- shell; a child is given exactly the arguments and the environment its
+--- parent builds, and inherits no other open file.  Each of its three
+--- standard streams is inherited, discarded or piped (`child_streams`).
+---
+--- A child that writes more than a pipe holds waits for its parent to read
+--- it, so read a piped output while the child runs, and read output and
+--- errors piped together through `read_child`, which reads whichever has
+--- something: reading one to its end first can wait forever while the
+--- child waits to write the other.  Close a piped input before waiting for
+--- a child that reads it to its end.
+public programs: type = concept (provider: type)
+    --- Start the program at `path` with `arguments`, which it sees after
+    --- its own name, and exactly the variables of `environment`.  A
+    --- missing program is `not_found`, one the caller may not run
+    --- `no_access`; on any failure no child was started.
+    spawn: (self: provider, path: text.host_string,
+            arguments: []text.host_string, environment: []variable,
+            streams: child_streams)
+           -> (started: child) ! not_found | no_access | io_failed
+    --- Write all of `bytes` to the child's piped input, waiting while its
+    --- pipe is full.
+    write_child: (self: provider, inout started: child, bytes: []u8)
+                 -> none ! io_failed
+    --- Close the child's piped input, so that it reads to its end.
+    close_input: (self: provider, inout started: child) -> none ! io_failed
+    --- Read what the child wrote next to whichever of its piped output and
+    --- errors has something, into `into`.
+    read_child: (self: provider, inout started: child, into: []mut u8)
+                -> (taken: child_read) ! io_failed
+    --- Wait for the child to end, close every pipe it still has, and
+    --- report how it ended.  The child is consumed even when this fails.
+    wait: (self: provider, sink started: child)
+          -> (ended: ending) ! io_failed
+end programs
+
+--- Start the program at `path` through `programs` evidence, with
+--- `arguments` after its name and exactly the variables of `environment`,
+--- its standard streams connected as `streams` says.  Wait for every child
+--- started.
+public spawn: (provider: type is programs, host: provider,
+               path: text.host_string, arguments: []text.host_string,
+               environment: []variable, streams: child_streams)
+              -> (started: child) ! not_found | no_access | io_failed =
+    started = try provider.spawn(host, path, arguments, environment, streams)
+end spawn
+
+--- Write all of `bytes` to a child's piped input.  A child that is not
+--- reading waits its parent here once its pipe is full, so write a large
+--- input only to a child that reads it as it comes.  Writing to an input
+--- that is not open is `io_failed`.
+public write_child: (provider: type is programs, host: provider,
+                     inout started: child, bytes: []u8) -> none ! io_failed =
+    try provider.write_child(host, started, bytes)
+end write_child
+
+--- Close a child's piped input, which it then reads to its end.  Closing
+--- an input that is not open is `io_failed`.
+public close_input: (provider: type is programs, host: provider,
+                     inout started: child) -> none ! io_failed =
+    try provider.close_input(host, started)
+end close_input
+
+--- Read the next bytes a child wrote to whichever of its piped output and
+--- errors has something, waiting until one has; zero bytes and `finished`
+--- once both have ended.
+public read_child: (provider: type is programs, host: provider,
+                    inout started: child, into: []mut u8)
+                   -> (taken: child_read) ! io_failed =
+    taken = try provider.read_child(host, started, into)
+end read_child
+
+--- Wait for a child to end and report how it did.  The child is consumed,
+--- with every pipe it still had, even when this reports `io_failed`.
+public wait: (provider: type is programs, host: provider,
+              sink started: child) -> (ended: ending) ! io_failed =
+    ended = try provider.wait(host, started)
+end wait

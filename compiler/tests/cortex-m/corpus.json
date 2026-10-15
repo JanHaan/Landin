@@ -20,6 +20,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
     },
+    "abi/environment-from-c": {
+      "mode": "restriction",
+      "reason": "A C main hands Landin an environment table through the hosted argument root; runtime/run-memory-firmware reads core/io's memory environment on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/environment-from-c/fixture.meta"
+    },
     "abi/host-string-pass-through": {
       "mode": "restriction",
       "reason": "A C main hands Landin a process argument through the hosted argument root and checks the file the host system made from it; runtime/r420-memory-world-boundaries passes core/io.memory's arguments as host strings on Cortex-M0.",
@@ -29,6 +34,11 @@
       "mode": "restriction",
       "reason": "The C library's struct dirent and its flags exist only on a hosted system, so the C peer that reads them is hosted; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/libc-directory-record/fixture.meta"
+    },
+    "abi/libc-process-constants": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's process headers exist only on a hosted system, and Cortex-M0 starts no process.",
+      "witness": "compiler/tests/fixtures/abi/libc-process-constants/fixture.meta"
     },
     "abi/linux-file-identity": {
       "mode": "restriction",
@@ -746,6 +756,20 @@
     "runtime/division-by-arguments-at-every-width": {
       "mode": "execute"
     },
+    "runtime/environment-variables": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/environment-variables-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
     "runtime/erased-named-recovery": {
       "mode": "execute"
     },
@@ -963,6 +987,9 @@
       "mode": "execute"
     },
     "runtime/import-contextual-as": {
+      "mode": "execute"
+    },
+    "runtime/imported-bare-case": {
       "mode": "execute"
     },
     "runtime/in-array-argument-precedes-later-argument": {
@@ -1387,6 +1414,13 @@
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
     },
     "runtime/posix-poll": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-processes": {
       "codes": [
         "L0015"
       ],
@@ -2066,8 +2100,65 @@
       "profile_limit": "selected-image",
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
+    "runtime/run-environment": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/run-large-output": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
     "runtime/run-length-encoding": {
       "mode": "execute"
+    },
+    "runtime/run-memory-firmware": {
+      "mode": "execute"
+    },
+    "runtime/run-missing-program": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/run-no-descriptor-leak": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/run-shell": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/run-shell-memory": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The process consumer's routines over core/io's scripted programs beside a memory world, with its report's buffered writer and format and every failure oracle, need about 76 KiB of flash at size/auto, overflowing the 32 KiB profile by 43 KiB; most of it is the Cortex-M0 backend's frame homes and copies between them, as runtime/directory-memory's limit records. Each profile still attempts execution; runtime/run-memory-firmware starts a scripted program and reads the world's environment within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/run-signalled": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+    },
+    "runtime/run-streams": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no standard input and starts no program: source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/run-shell-memory pipes a scripted program's input beside core/io.memory instead."
     },
     "runtime/rv64-assembly-level": {
       "mode": "execute"

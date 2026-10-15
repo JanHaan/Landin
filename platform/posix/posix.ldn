@@ -11,13 +11,18 @@
 --
 --  The calls are POSIX's own, not policy: a call interrupted by a signal
 --  fails with `eintr` and is not retried here, a short read or write is
---  returned as it came, and nothing is closed on the caller's behalf.  A
+--  returned as it came, and nothing is closed on the caller's behalf.
+--  Every descriptor the module makes is closed when the process executes
+--  a program, so a child receives only the standard streams `spawn` gives
+--  it.  A
 --  path is copied into a buffer of the system's PATH_MAX with a NUL after
 --  it on its way to the system, so the terminator is this module's and
 --  never the caller's: a path holding a NUL fails with `einval`, as no
 --  system could be given it, and one too long for the buffer with
 --  `enametoolong`, as the system says of a path longer than it takes.
 
+import core/io
+import core/mem
 import core/text
 
 compiler.assert(compiler.os == linux or compiler.os == darwin
@@ -93,7 +98,8 @@ public writing: open_options = (access: write_only, create: true,
 --- Open the file `path` names, relative to the directory open as `at`
 --- (or `working_directory`), with `options`; a file it creates gets the
 --- permission bits `permissions`, which the process umask filters.  The
---- new descriptor, or the errno: `enoent` for a missing name, `enotdir`
+--- descriptor is closed when the process executes a program, POSIX's
+--- `O_CLOEXEC`, set as it is opened.  The new descriptor, or the errno: `enoent` for a missing name, `enotdir`
 --- when a component is not a directory, `eacces` when refused, `eexist`
 --- for an `exclusive` name that is taken, `eintr` when a signal came
 --- first.
@@ -200,8 +206,9 @@ public directory_entry: type = struct
     kind: file_kind
 end directory_entry
 
---- Open the directory `path` names, relative to `at`, for reading:
---- `enotdir` when it is not a directory, `enoent` when it is missing.
+--- Open the directory `path` names, relative to `at`, for reading, its
+--- descriptor closed on exec as `open_at`'s is: `enotdir` when it is not
+--- a directory, `enoent` when it is missing.
 --- Close it with `close_directory`, which also closes its descriptor.
 public link(symbol: "_landin_posix_open_directory") open_directory:
     (at: descriptor, path: text.host_string)
@@ -369,37 +376,47 @@ argument_string: type = no_string | ptr u8
 --  The argument root: C's argv and argc as the process's entry gave them,
 --  retained without copying.  The table is the pointer the entry gave,
 --  kept in module storage, so what is lent from it outlives every call.
+--  Beside it the environment the entry gave, `no_table` for C's null.
 mut root_values: root_table = no_table
 mut root_count: i32
+mut root_environment: root_table = no_table
 
 word: usize = sizeof usize
 
 --- Establish the process's argument root from C's `main` carriers.  The
---- hosted entry calls this with its own `argc` and `argv` before its body
---- runs; a C `main` that drives Landin exports calls it itself, before
---- it reads an argument and before starting a thread that may.
+--- hosted entry calls this with its own `argc`, `argv` and `envp` before
+--- its body runs; a C `main` that drives Landin exports calls it itself,
+--- with its own or with C's `environ`, before it reads an argument or a
+--- variable and before starting a thread that may.
 ---
 --- The first call needs a nonnegative count and a non-null table, and
---- keeps that exact pair without copying: the caller keeps the table and
---- its strings readable while any argument lent from them is in use.
---- Repeating the identical pair changes nothing; a negative count, a null
---- table or a different pair traps.  The published arguments omit
+--- keeps that exact triple without copying: the caller keeps both tables
+--- and their strings readable while any argument or variable lent from
+--- them is in use.  A null environment is an empty one.  Repeating the
+--- identical triple changes nothing; a negative count, a null argument
+--- table or a different triple traps.  The published arguments omit
 --- `argv[0]`, so their count is `max(argc - 1, 0)`.
 public extern(c) _landin_host_initialize_arguments:
-    (count: i32, escaping values: ptr ptr u8) -> none =
+    (count: i32, escaping values: ptr ptr u8,
+     escaping environment: ptr ptr u8) -> none =
     --  Every misuse of the root stops at compiler.unreachable(), which a
     --  selected panic handler sees as `unreachable` at that site [1560].
     --  C may pass a null table, which no Landin pointer is, so its address
     --  is what is checked.
     given: usize = usize(values)
+    variables: usize = usize(environment)
     held: usize = match root_values
         no_table: usize(0)
         ptr (table): usize(table)
     end match
     if held <> 0 then
-        --  An identical repeat changes nothing; another pair would replace
-        --  a root that lent arguments may still use.
-        if count <> root_count or given <> held then
+        --  An identical repeat changes nothing; another triple would
+        --  replace a root that lent arguments may still use.
+        kept: usize = match root_environment
+            no_table: usize(0)
+            ptr (table): usize(table)
+        end match
+        if count <> root_count or given <> held or variables <> kept then
             compiler.unreachable()
         end if
         return
@@ -409,6 +426,7 @@ public extern(c) _landin_host_initialize_arguments:
     end if
     root_count = count
     root_values = values
+    if variables <> 0 then root_environment = environment end if
 end _landin_host_initialize_arguments
 
 --- The process's arguments as its entry gave them: argv after `argv[0]`
@@ -452,6 +470,289 @@ public link(symbol: "_landin_posix_argument") argument:
                                                 terminated_length(data)))
     end match
 end argument
+
+--- The program's name as the process's entry gave it, `argv[0]`: what
+--- its parent called it, often the path it was started by, as a host
+--- string lending the process's own storage.  It is empty when the
+--- parent gave no arguments at all, and it traps before the argument root
+--- exists, as `arguments` does.
+public link(symbol: "_landin_posix_program_name") program_name:
+    () -> (name: text.host_string) =
+    held: ptr ptr u8 = match root_values
+        no_table: compiler.unreachable()
+        ptr (found): found
+    end match
+    name = text.host_over(no_bytes[0..<0])
+    return when root_count < 1
+    first: ptr argument_string = ptr(usize(held))
+    match first.val
+        no_string: return
+        ptr (data): name = text.host_over(view(data, terminated_length(data)))
+    end match
+end program_name
+
+no_bytes: [1]u8 = [0]
+
+--- The process's environment as its entry gave it: C's `envp`, null
+--- terminated, and the count of its entries before the null, counted when
+--- it is asked for.  `variable` reads it.
+public environment_table: type = struct
+    values: ptr ptr u8
+    count: usize
+end environment_table
+
+--  The table of an empty environment: one null entry.
+empty_environment: [1]usize = [0]
+
+--- The process's environment, read where the entry left it: the initial
+--- stack's on a static Linux program, and what the C runtime gave `main`
+--- otherwise, each `NAME=value` in the order it was given.  It is counted
+--- afresh each time, since C code in the same process may change its own
+--- `environ` in place, which this module never does: changing the
+--- environment is not safe beside threads, and a child is given the one
+--- its parent builds instead.  It traps before the argument root exists,
+--- as `arguments` does.
+public link(symbol: "_landin_posix_environment") environment:
+    () -> (table: environment_table) =
+    _ = arguments()
+    values: ptr ptr u8 = match root_environment
+        no_table: ptr(usize(addr empty_environment[0]))
+        ptr (found): found
+    end match
+    mut count: usize = 0
+    loop do
+        entry: ptr usize = ptr(usize(values) + count * word)
+        break when entry.val == 0
+        inc count
+    end loop
+    table = (values: values, count: count)
+end environment
+
+--- The variable at `index`, from zero, of the environment `table`: the
+--- bytes of its entry before the first `=` as its name and those after it
+--- as its value, host strings lending the process's own storage, which
+--- nothing copies.  An entry with no `=` is a name with an empty value.  An
+--- index at or past the table's `count` traps, as does a null entry, which
+--- a table changed since it was counted may hold.
+public link(symbol: "_landin_posix_variable") variable:
+    (table: environment_table, index: usize)
+    -> (item: io.variable from table) =
+    if index >= table.count then
+        compiler.unreachable()
+    end if
+    entry: ptr argument_string = ptr(usize(table.values) + index * word)
+    match entry.val
+        no_string: compiler.unreachable()
+        ptr (data): begin
+            whole: []u8 = view(data, terminated_length(data))
+            at: usize = mem.find(whole, 61)
+            value: []u8 = if at < lenof whole then whole[at + 1..<lenof whole]
+                          else whole[lenof whole..<lenof whole] end if
+            item = (name: text.host_over(whole[0..<at]),
+                    value: text.host_over(value))
+        end
+    end match
+end variable
+
+--- The two ends of a pipe: what is written to `writing` is read from
+--- `reading`.
+public pipe_ends: type = struct
+    reading: descriptor
+    writing: descriptor
+end pipe_ends
+
+--- Make a pipe, POSIX's `pipe`: its two ends, each closed when the process
+--- executes a program, which Linux and FreeBSD set as the pipe is made,
+--- with `pipe2`, and Darwin, which has none, just after; or the errno,
+--- `emfile` when the process has no descriptor to spare.  A pipe holds 64
+--- KiB on Linux and between 16 and 64 KiB on Darwin and FreeBSD, and a
+--- write to a full one waits until its reader reads.
+public link(symbol: "_landin_posix_pipe") pipe:
+    () -> (ends: pipe_ends) ! errno =
+    ends = try system_pipe()
+end pipe
+
+process_value: type = distinct i32
+
+--- A child process's ID, as `spawn` gives it and `wait` takes it: a
+--- handle, not a number to count with.
+public process_id: type = process_value
+
+--- The descriptors a child's standard input, output and error are made
+--- from: each is duplicated onto the child's descriptor 0, 1 or 2, and one
+--- that already is that number is the parent's own stream, inherited as it
+--- is.
+public standard_streams: type = struct
+    input: descriptor
+    output: descriptor
+    errors: descriptor
+end standard_streams
+
+--- The parent's own three standard streams, inherited.
+public inherited_streams: standard_streams = (input: standard_input,
+                                              output: standard_output,
+                                              errors: standard_error)
+
+--- Start the program at `path` in a child process, POSIX's `posix_spawn`:
+--- the program is given `path` as its name, `argv[0]`, then `arguments`,
+--- and exactly the variables of `environment`, each as `NAME=value`, and
+--- its standard streams are `streams`.  Nothing searches a path for the
+--- program and no shell reads anything.  Every other descriptor is closed
+--- in the child, so it receives no file but its three streams.  The
+--- child's ID, or the errno, with no child started: `enoent` for a missing
+--- program, `eacces` for one that may not be executed, `enoexec` for one
+--- that is no program, `einval` for an argument or a value holding a NUL
+--- or a name that is empty or holds `=` or a NUL, and `e2big` for more than
+--- the system takes.  A child must be waited for, with `wait`, or it keeps
+--- its place in the system's table until this process ends.
+---
+--- On Linux it is a `clone` that copies this process, as `fork` does,
+--- which in the child moves the streams into place and executes the
+--- program, and reports a failure to the parent through a pipe closed on
+--- exec; on Darwin and FreeBSD it is the C library's `posix_spawn`.  The
+--- block of strings and tables the child is given is mapped for the call
+--- and unmapped after it.
+public link(symbol: "_landin_posix_spawn") spawn:
+    (path: text.host_string, arguments: []text.host_string,
+     environment: []io.variable, streams: standard_streams)
+    -> (child: process_id) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    named: []u8 = text.host_bytes(path)
+    --  The tables first, so each pointer is aligned, then every string
+    --  with its NUL: the name, the arguments, and each variable as
+    --  `NAME=value`.
+    entries: usize = (lenof arguments + 2) + (lenof environment + 1)
+    mut size: usize = entries * word + lenof named + 1
+    for argument in arguments do
+        bytes: []u8 = text.host_bytes(argument)
+        fail einval when mem.find(bytes, 0) < lenof bytes
+        size += lenof bytes + 1
+    end for
+    for item in environment do
+        name: []u8 = text.host_bytes(item.name)
+        value: []u8 = text.host_bytes(item.value)
+        fail einval when lenof name == 0 or mem.find(name, 61) < lenof name
+          or mem.find(name, 0) < lenof name or mem.find(value, 0) < lenof value
+        size += lenof name + lenof value + 2
+    end for
+    block: ptr mut u8 = try map(size)
+    defer release(block, size)
+    whole: []mut u8 = writable_view(block, size)
+    mut table: usize = usize(block)
+    mut at: usize = entries * word
+    at = place(whole, at, table, named)
+    table += word
+    for argument in arguments do
+        at = place(whole, at, table, text.host_bytes(argument))
+        table += word
+    end for
+    table += word
+    variables: usize = table
+    for item in environment do
+        start: usize = at
+        at = place(whole, at, table, text.host_bytes(item.name))
+        --  The name's NUL becomes the `=`, and the value follows it.
+        whole[at - 1] = 61
+        at = place(whole, at, table, text.host_bytes(item.value))
+        slot: ptr mut usize = ptr(table)
+        slot.val = usize(block) + start
+        table += word
+    end for
+    (result: input, made: made_input) :=
+        try lifted(streams.input, standard_input)
+    defer forget(input, made_input)
+    (result: output, made: made_output) :=
+        try lifted(streams.output, standard_output)
+    defer forget(output, made_output)
+    (result: errors, made: made_errors) :=
+        try lifted(streams.errors, standard_error)
+    defer forget(errors, made_errors)
+    named_table: ptr ptr u8 = ptr(usize(block))
+    variable_table: ptr ptr u8 = ptr(variables)
+    child = try system_spawn(terminated, named_table, variable_table,
+                             (input: input, output: output, errors: errors))
+end spawn
+
+--  Copy BYTES to WHOLE at AT with a NUL after them, which the mapping
+--  already is, and put their address in the table slot at TABLE: where the
+--  next string goes.
+place: (whole: []mut u8, at: usize, table: usize, bytes: []u8)
+       -> (next: usize) =
+    next = at + lenof bytes + 1
+    mem.copy(whole[at..<at + lenof bytes], bytes) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    slot: ptr mut usize = ptr(table)
+    slot.val = usize(addr whole[0]) + at
+end place
+
+--  Give a mapping back, whatever the system says.
+release: (block: ptr mut u8, size: usize) -> none =
+    unmap(block, size) else (problem)
+        _ = problem
+    end
+end release
+
+--  A stream for the child that is below 3 and not its own number would be
+--  overwritten by another stream moved into place before it is read, so
+--  it is duplicated above 2 for the call, and the duplicate closed after.
+lifted: (source: descriptor, target: descriptor)
+        -> (result: descriptor, made: bool) ! errno =
+    result = source
+    made = false
+    return when source == target or i32(source) >= 3 or i32(source) < 0
+    result = try system_duplicate_above(source, 3)
+    made = true
+end lifted
+
+forget: (made_from: descriptor, made: bool) -> none =
+    return when not made
+    close(made_from) else (problem)
+        _ = problem
+    end
+end forget
+
+--- How a child ended, as `wait` reports it: it `exited` with the code its
+--- program gave `_exit` or returned from `main`, of which the parent sees
+--- the low eight bits, or it was `signalled`, ended by the signal of
+--- that number, a number each system gives its signals: SIGKILL is 9
+--- and SIGTERM 15 on all three, SIGUSR1 10 on Linux and 30 on Darwin and
+--- FreeBSD.
+public child_status: type = struct
+    how: variant
+        exited: (code: i32) |
+        signalled: (signal: i32)
+    end how
+end child_status
+
+--- Wait for the child `child` to end and report how it did, POSIX's
+--- `waitpid`, after which it is gone: or the errno, `echild` for no child
+--- of this process, `eintr` when a signal came first and the child is
+--- still to be waited for.
+public link(symbol: "_landin_posix_wait") wait:
+    (child: process_id) -> (status: child_status) ! errno =
+    word: i32 = try system_wait(child)
+    --  The status word is the same on all three systems: the low seven
+    --  bits are the signal that ended the child, zero when it exited, and
+    --  the next eight its code.
+    ending: i32 = word & 127
+    status = if ending == 0 then (how: exited(code: (word >> 8) & 255))
+             else (how: signalled(signal: ending)) end if
+end wait
+
+--  The `length` bytes at `first`, writable, which this module mapped.
+writable_view: (first: ptr mut u8, length: usize)
+               -> (bytes: []mut u8 from first) =
+    whole: ptr mut [1]u8 = ptr(usize(first))
+    bytes = whole.val[0..<0]
+    if length > 0 then
+        unchecked begin
+            bytes = whole.val[0..<length]
+        end unchecked
+    end if
+end writable_view
 
 --  The bytes before the first NUL at `first`.
 terminated_length: (first: ptr u8) -> (length: usize) =

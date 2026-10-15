@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: a program started again by its own name with an environment it builds lists every variable in order as host strings, a text value, one that is not UTF-8, one holding = and an empty one, finds the first of a name given twice, misses an absent name and one of another case, and refuses an index past the last with no_variable
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

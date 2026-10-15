@@ -444,3 +444,118 @@ public extern(c) closedir: (stream: ptr mut u8) -> (status: i32)
 --- -1 with the reason in errno.
 public extern(c) unlinkat: (directory: i32, path: ptr u8, flags: i32)
                            -> (status: i32)
+
+--- `fcntl` command: set a descriptor's flags, `fd_cloexec` among them.
+--- The same on every hosted system.
+public f_setfd: i32 = 2
+--- `fcntl` flag: the descriptor is closed when the process executes a
+--- program.  The same on every hosted system.
+public fd_cloexec: i32 = 1
+
+fixed if compiler.os == linux then
+    --- `open` and `pipe2` flag: the new descriptor is closed when the
+    --- process executes a program, set with it.
+    public o_cloexec: i32 = 524288
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 1030
+elsif compiler.os == darwin then
+    --- `open` flag: the new descriptor is closed when the process executes
+    --- a program, set with it.  Darwin has no `pipe2`.
+    public o_cloexec: i32 = 16777216
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 67
+else
+    --- `open` and `pipe2` flag: the new descriptor is closed when the
+    --- process executes a program, set with it.
+    public o_cloexec: i32 = 1048576
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 17
+end if
+
+--- `fcntl(descriptor, command, ...)`, declared variadic as C declares it:
+--- for `f_setfd` and `f_dupfd_cloexec` the one variadic argument is an
+--- `i32`.  Its result, or -1 with the reason in errno.
+public extern(c) fcntl: (descriptor: i32, command: i32, ...)
+                        -> (result: i32)
+
+--- Make a pipe and put its reading end in `ends[0]` and its writing end in
+--- `ends[1]`: 0, or -1 with the reason in errno.  The ends are inherited
+--- by a program this process executes unless `fd_cloexec` is set on each;
+--- `pipe2`, where there is one, sets it with them.
+public extern(c) pipe: (ends: ptr mut i32) -> (status: i32)
+
+fixed if compiler.os == linux or compiler.os == freebsd then
+    --- `pipe` with `flags`, `o_cloexec` among them, set as the pipe is
+    --- made: 0, or -1 with the reason in errno.  Darwin has none.
+    public extern(c) pipe2: (ends: ptr mut i32, flags: i32) -> (status: i32)
+end if
+
+--- Wait for the child `child` to end, or with `options` for less, and put
+--- its status in `status`: the child's ID, or -1 with the reason in errno,
+--- ECHILD when it is not this process's child.
+public extern(c) waitpid: (child: i32, status: ptr mut i32, options: i32)
+                          -> (result: i32)
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- A `posix_spawn_file_actions_t` or a `posix_spawnattr_t`: on Darwin
+    --- and FreeBSD a pointer the C library allocates, which its `init` writes
+    --- into the caller's cell and its `destroy` frees.  glibc's are records of
+    --- its own, so these declarations are Darwin's and FreeBSD's alone.
+    public spawn_object: type = usize
+
+    --- Start a list of the actions `posix_spawn` performs in the child before
+    --- it executes the program: 0, or the errno.
+    public extern(c) posix_spawn_file_actions_init:
+        (actions: ptr mut spawn_object) -> (error: i32)
+
+    --- Free a list of actions: 0, or the errno.
+    public extern(c) posix_spawn_file_actions_destroy:
+        (actions: ptr mut spawn_object) -> (error: i32)
+
+    --- Add to `actions` making the child's `target` a duplicate of `source`:
+    --- 0, or the errno.
+    public extern(c) posix_spawn_file_actions_adddup2:
+        (actions: ptr mut spawn_object, source: i32, target: i32) -> (error: i32)
+
+    --- Start a set of attributes for `posix_spawn`: 0, or the errno.
+    public extern(c) posix_spawnattr_init:
+        (attributes: ptr mut spawn_object) -> (error: i32)
+
+    --- Free a set of attributes: 0, or the errno.
+    public extern(c) posix_spawnattr_destroy:
+        (attributes: ptr mut spawn_object) -> (error: i32)
+
+    --- Set the attributes' flags, C's `short`: 0, or the errno.
+    public extern(c) posix_spawnattr_setflags:
+        (attributes: ptr mut spawn_object, flags: i16) -> (error: i32)
+
+    --- Start the program at `path`, with the null-terminated `arguments` and
+    --- `environment` tables, in a child, applying `actions` and `attributes`
+    --- first, and put its ID in `child`: 0, or the errno, which a program
+    --- that could not be executed reports too, its child already reaped.
+    --- Nothing searches a path for the program.
+    public extern(c) posix_spawn:
+        (child: ptr mut i32, path: ptr u8, actions: ptr spawn_object,
+         attributes: ptr spawn_object, arguments: ptr ptr u8,
+         environment: ptr ptr u8) -> (error: i32)
+end if
+
+fixed if compiler.os == darwin then
+    --- `posix_spawnattr_setflags` flag, Darwin's own: every descriptor the
+    --- actions do not name is closed in the child, as though each were
+    --- closed on exec.
+    public posix_spawn_cloexec_default: i16 = 16384
+
+    --- Add to `actions` that the child keeps `descriptor` as it is, which
+    --- `posix_spawn_cloexec_default` would otherwise close: Darwin's own.
+    public extern(c) posix_spawn_file_actions_addinherit_np:
+        (actions: ptr mut spawn_object, descriptor: i32) -> (error: i32)
+elsif compiler.os == freebsd then
+    --- Add to `actions` closing every descriptor of the child from
+    --- `first` up: FreeBSD's own, since 13.1.
+    public extern(c) posix_spawn_file_actions_addclosefrom_np:
+        (actions: ptr mut spawn_object, first: i32) -> (error: i32)
+end if

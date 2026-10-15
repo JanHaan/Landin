@@ -3,4 +3,4 @@ maybe_byte: type = missing | ptr u8
 public main: () -> (code: i32) =
     code = 0
 end main
-extern(c) _landin_host_initialize_arguments: (count: i32, values: ptr maybe_byte) -> none
+extern(c) _landin_host_initialize_arguments: (count: i32, values: ptr maybe_byte, environment: ptr maybe_byte) -> none

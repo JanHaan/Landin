@@ -20,6 +20,7 @@ fixed if compiler.os == linux then
         if options.truncate then flags = flags | linux.o_trunc end if
         if options.append then flags = flags | linux.o_append end if
         if options.directory then flags = flags | linux.o_directory end if
+        flags = flags | linux.o_cloexec
     end flags_of
 
     system_open: (at: descriptor, path: ptr u8, options: open_options,
@@ -74,7 +75,8 @@ fixed if compiler.os == linux then
     system_open_directory: (at: descriptor, path: ptr u8)
                            -> (opened: directory_stream) ! errno =
         result: i32 = linux.openat(i32(at), path,
-                                   linux.o_rdonly | linux.o_directory, 0)
+                                   linux.o_rdonly | linux.o_directory
+                                   | linux.o_cloexec, 0)
         fail errno_of(-result) when result < 0
         opened = (descriptor: descriptor(result), stream: 0, filled: 0,
                   cursor: 0, finished: false)
@@ -186,4 +188,124 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
         ready = usize(result)
     end system_poll
+
+    system_pipe: () -> (ends: pipe_ends) ! errno =
+        mut made: [2]i32 = zeroed
+        result: i32 = linux.pipe2(addr made[0], linux.o_cloexec)
+        fail errno_of(-result) when result < 0
+        ends = (reading: descriptor(made[0]), writing: descriptor(made[1]))
+    end system_pipe
+
+    system_duplicate_above: (source: descriptor, lowest: i32)
+                            -> (result: descriptor) ! errno =
+        made: i32 = linux.fcntl(i32(source), linux.f_dupfd_cloexec,
+                                i64(lowest))
+        fail errno_of(-made) when made < 0
+        result = descriptor(made)
+    end system_duplicate_above
+
+    --  An end of the report pipe moved above the standard streams, so that
+    --  moving them into place in the child cannot overwrite it.
+    report_end: (given: i32) -> (result: i32) ! errno =
+        result = given
+        return when given >= 3
+        moved: i32 = linux.fcntl(given, linux.f_dupfd_cloexec, 3)
+        _ = linux.close(given)
+        fail errno_of(-moved) when moved < 0
+        result = moved
+    end report_end
+
+    --  What the child runs between the copy and the program: it moves the
+    --  streams into place, marks every other descriptor closed on exec and
+    --  executes the program, and when any of that fails writes the errno
+    --  to the report pipe and ends.  It makes system calls and nothing
+    --  else: no allocation, and nothing another thread of the parent could
+    --  have held.
+    start_child: (path: ptr u8, arguments: ptr ptr u8,
+                  environment: ptr ptr u8, streams: standard_streams,
+                  report: i32) -> noreturn =
+        mut result: i32 = 0
+        if streams.input <> standard_input then
+            result = linux.dup3(i32(streams.input), 0, 0)
+        end if
+        if result >= 0 and streams.output <> standard_output then
+            result = linux.dup3(i32(streams.output), 1, 0)
+        end if
+        if result >= 0 and streams.errors <> standard_error then
+            result = linux.dup3(i32(streams.errors), 2, 0)
+        end if
+        if result >= 0 then
+            --  Descriptors this layer made are closed on exec already; this
+            --  closes any a C library or an inherited one left open, and a
+            --  kernel older than 5.11 that refuses it leaves only those.
+            _ = linux.close_range(3, 0 -% 1, linux.close_range_cloexec)
+            result = linux.execve(path, arguments, environment)
+        end if
+        problem: u32 = u32(-result)
+        word: [4]u8 = [u8(problem & 255), u8((problem >> 8) & 255),
+                       u8((problem >> 16) & 255), u8(problem >> 24)]
+        _ = linux.write(report, addr word[0], 4)
+        linux.exit_group(127)
+    end start_child
+
+    --  The child's report: four bytes of the errno that stopped it, or none
+    --  once its exec closed the pipe.  A read interrupted by a signal is
+    --  made again: the child exists either way, and only its report says
+    --  whether it is running the program.
+    read_report: (reading: i32) -> (problem: i32) =
+        mut word: [4]u8 = zeroed
+        mut got: isize = 0
+        loop do
+            got = linux.read(reading, addr word[0], 4)
+            break when got <> -4
+        end loop
+        problem = 0
+        return when got <> 4
+        problem = i32(u32(word[0]) | (u32(word[1]) << 8)
+                      | (u32(word[2]) << 16) | (u32(word[3]) << 24))
+    end read_report
+
+    system_spawn: (path: ptr u8, arguments: ptr ptr u8,
+                   environment: ptr ptr u8, streams: standard_streams)
+                  -> (child: process_id) ! errno =
+        mut made: [2]i32 = zeroed
+        opened: i32 = linux.pipe2(addr made[0], linux.o_cloexec)
+        fail errno_of(-opened) when opened < 0
+        reading: i32 = report_end(made[0]) else (problem)
+            _ = linux.close(made[1])
+            fail problem
+        end
+        writing: i32 = report_end(made[1]) else (problem)
+            _ = linux.close(reading)
+            fail problem
+        end
+        copied: i64 = linux.fork()
+        if copied == 0 then
+            start_child(path, arguments, environment, streams, writing)
+        end if
+        _ = linux.close(writing)
+        if copied < 0 then
+            _ = linux.close(reading)
+            fail errno_of(i32(-copied))
+        end if
+        problem: i32 = read_report(reading)
+        _ = linux.close(reading)
+        child = process_id(i32(copied))
+        return when problem == 0
+        --  The child ended without its program: reap it, so no trace of it
+        --  is left.
+        mut status: i32 = 0
+        loop do
+            reaped: i32 = linux.wait4(i32(copied), addr status, 0)
+            break when reaped <> -4
+        end loop
+        fail errno_of(problem)
+    end system_spawn
+
+    system_wait: (child: process_id) -> (word: i32) ! errno =
+        mut status: i32 = 0
+        result: i32 = linux.wait4(i32(child), addr status, 0)
+        fail errno_of(-result) when result < 0
+        word = status
+    end system_wait
 end if

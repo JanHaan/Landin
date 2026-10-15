@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: a shell writes one MiB to its output and one MiB to its errors, a line to each in turn, more than any hosted system's pipe holds, and io.read_child reads whichever has something so the child never waits on a full pipe, every byte and line of each counted
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0560, 0940, 1030, 1130, 1150, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

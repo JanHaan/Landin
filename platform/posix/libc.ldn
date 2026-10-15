@@ -29,6 +29,7 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
         if options.truncate then flags = flags | libc.o_trunc end if
         if options.append then flags = flags | libc.o_append end if
         if options.directory then flags = flags | libc.o_directory end if
+        flags = flags | libc.o_cloexec
     end flags_of
 
     --  `open`, or `openat` relative to an open directory, with the
@@ -101,7 +102,9 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
     --  descriptor.
     system_open_directory: (at: descriptor, path: ptr u8)
                            -> (opened: directory_stream) ! errno =
-        result: i32 = opened_at(at, path, libc.o_rdonly | libc.o_directory, 0)
+        result: i32 = opened_at(at, path,
+                                libc.o_rdonly | libc.o_directory
+                                | libc.o_cloexec, 0)
         fail failure() when result < 0
         made: libc.directory_stream = libc.fdopendir(result)
         match made
@@ -198,4 +201,129 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
         fail failure() when result < 0
         ready = usize(result)
     end system_poll
+
+    fixed if compiler.os == darwin then
+        --  Darwin has no pipe2, so each end is marked closed on exec just
+        --  after the pipe is made.  A program another thread executes in
+        --  between could inherit the pair; `spawn` closes every descriptor
+        --  it does not give the child either way.
+        system_pipe: () -> (ends: pipe_ends) ! errno =
+            mut made: [2]i32 = zeroed
+            fail failure() when libc.pipe(addr made[0]) <> 0
+            if libc.fcntl(made[0], libc.f_setfd, libc.fd_cloexec) <> 0
+              or libc.fcntl(made[1], libc.f_setfd, libc.fd_cloexec) <> 0
+            then
+                problem: errno = failure()
+                _ = libc.close(made[0])
+                _ = libc.close(made[1])
+                fail problem
+            end if
+            ends = (reading: descriptor(made[0]),
+                    writing: descriptor(made[1]))
+        end system_pipe
+    else
+        system_pipe: () -> (ends: pipe_ends) ! errno =
+            mut made: [2]i32 = zeroed
+            fail failure() when libc.pipe2(addr made[0], libc.o_cloexec) <> 0
+            ends = (reading: descriptor(made[0]),
+                    writing: descriptor(made[1]))
+        end system_pipe
+    end if
+
+    system_duplicate_above: (source: descriptor, lowest: i32)
+                            -> (result: descriptor) ! errno =
+        made: i32 = libc.fcntl(i32(source), libc.f_dupfd_cloexec, lowest)
+        fail failure() when made < 0
+        result = descriptor(made)
+    end system_duplicate_above
+
+    --  The actions that make the child's streams: each stream that is not
+    --  already its number is duplicated onto it.  Darwin closes every
+    --  other descriptor through its own spawn flag, under which a stream
+    --  kept as it is must be named; FreeBSD closes every descriptor from 3
+    --  up as the last action.
+    fixed if compiler.os == darwin then
+        stream_action: (actions: ptr mut libc.spawn_object,
+                        source: descriptor, target: i32) -> (error: i32) =
+            error = if i32(source) == target
+            then libc.posix_spawn_file_actions_addinherit_np(
+                actions, target)
+            else libc.posix_spawn_file_actions_adddup2(
+                actions, i32(source), target) end if
+        end stream_action
+
+        last_actions: (actions: ptr mut libc.spawn_object,
+                       attributes: ptr mut libc.spawn_object)
+                      -> (error: i32) =
+            _ = actions
+            error = libc.posix_spawnattr_setflags(
+                attributes, libc.posix_spawn_cloexec_default)
+        end last_actions
+    else
+        stream_action: (actions: ptr mut libc.spawn_object,
+                        source: descriptor, target: i32) -> (error: i32) =
+            error = 0
+            return when i32(source) == target
+            error = libc.posix_spawn_file_actions_adddup2(actions,
+                                                          i32(source),
+                                                          target)
+        end stream_action
+
+        last_actions: (actions: ptr mut libc.spawn_object,
+                       attributes: ptr mut libc.spawn_object)
+                      -> (error: i32) =
+            _ = attributes
+            error = libc.posix_spawn_file_actions_addclosefrom_np(actions, 3)
+        end last_actions
+    end if
+
+    --  posix_spawn reports its failure as its result rather than in errno.
+    spawn_with: (path: ptr u8, arguments: ptr ptr u8,
+                 environment: ptr ptr u8, streams: standard_streams,
+                 actions: ptr mut libc.spawn_object,
+                 attributes: ptr mut libc.spawn_object)
+                -> (child: process_id) ! errno =
+        mut error: i32 = stream_action(actions, streams.input, 0)
+        if error == 0 then
+            error = stream_action(actions, streams.output, 1)
+        end if
+        if error == 0 then
+            error = stream_action(actions, streams.errors, 2)
+        end if
+        if error == 0 then error = last_actions(actions, attributes) end if
+        fail errno_of(error) when error <> 0
+        mut made: i32 = 0
+        error = libc.posix_spawn(addr made, path, actions, attributes,
+                                 arguments, environment)
+        fail errno_of(error) when error <> 0
+        child = process_id(made)
+    end spawn_with
+
+    system_spawn: (path: ptr u8, arguments: ptr ptr u8,
+                   environment: ptr ptr u8, streams: standard_streams)
+                  -> (child: process_id) ! errno =
+        mut actions: libc.spawn_object = 0
+        mut attributes: libc.spawn_object = 0
+        error: i32 = libc.posix_spawn_file_actions_init(addr actions)
+        fail errno_of(error) when error <> 0
+        given: i32 = libc.posix_spawnattr_init(addr attributes)
+        if given <> 0 then
+            _ = libc.posix_spawn_file_actions_destroy(addr actions)
+            fail errno_of(given)
+        end if
+        child = spawn_with(path, arguments, environment, streams,
+                           addr actions, addr attributes) else (problem)
+            _ = libc.posix_spawnattr_destroy(addr attributes)
+            _ = libc.posix_spawn_file_actions_destroy(addr actions)
+            fail problem
+        end
+        _ = libc.posix_spawnattr_destroy(addr attributes)
+        _ = libc.posix_spawn_file_actions_destroy(addr actions)
+    end system_spawn
+
+    system_wait: (child: process_id) -> (word: i32) ! errno =
+        mut status: i32 = 0
+        fail failure() when libc.waitpid(i32(child), addr status, 0) < 0
+        word = status
+    end system_wait
 end if

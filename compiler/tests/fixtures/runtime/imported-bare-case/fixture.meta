@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a payload-free case of a variant part another module declares is constructed written qualified, io.signalled beside io.exited(code:), in a struct literal, an assignment of the whole and a selected part, and matched back
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0690, 0700, 1210
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

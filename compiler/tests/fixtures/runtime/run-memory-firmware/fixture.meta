@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io.memory starts a scripted program within a 32 KiB firmware image, reading its output through read_child and waiting for the code it was scripted to end with, the program recording the argument and variable it was given, and looks a variable of the world's environment up by name
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0680, 0900, 1030, 1210, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -1,11 +1,12 @@
 --  The provider of every core/io concept on hosted targets: reader,
 --  writer, files and process, and so of their composition, world, and
---  directories beside them.  It is written once, over platform/posix,
+--  directories and programs beside them.  It is written once, over platform/posix,
 --  which reaches Linux through its system calls and Darwin and FreeBSD
 --  through their C library: nothing here is written per system.  Import
 --  this module only at a hosted authority root.
 
 import core/io
+import core/mem
 import core/text
 import platform/posix
 
@@ -15,25 +16,32 @@ created_mode: u32 = 0o666
 --  A directory made by make_directory gets 0777, which the umask filters.
 created_directory_mode: u32 = 0o777
 
---  The process's last-error cell, which every handle from `host` shares.
+--  The process's last-error cell, which every handle from `host` shares,
+--  and its last-signal cell beside it.
 mut process_errno: i32
+mut process_signal: i32
 
 system_value: type = struct
     failure: ptr mut i32
+    signal: ptr mut i32
 end system_value
 
---- Hosted implementation of all four I/O capabilities, `io.world` and
---- `io.directories`, over platform/posix, as a handle: copies share the
---- process's descriptors and arguments, and the last-error cell they were
---- made with. File identifiers belong to this provider; borrowed arguments
+--- Hosted implementation of all four I/O capabilities, `io.world`,
+--- `io.directories`, `io.environment` and `io.programs`, over
+--- platform/posix, as a handle:
+--- copies share the process's descriptors, arguments and environment, and
+--- the last-error and last-signal cells they were made with. File
+--- identifiers belong to this provider; borrowed arguments and variables
 --- refer to process storage.
 public system: type = system_value
 
---- A last-error cell of the caller's own, for code that must not share the
---- process's: a C thread calling into Landin, or a library keeping its own
---- detail. Declare it `zeroed` and make its handle with `over`.
+--- A last-error cell and a last-signal cell of the caller's own, for code
+--- that must not share the process's: a C thread calling into Landin, or
+--- a library keeping its own detail. Declare it `zeroed` and make its
+--- handle with `over`.
 public space: type = struct
     failure: i32
+    signal: i32
 end space
 
 --- Return errno captured for the terminal failing provider call. Read it
@@ -50,6 +58,16 @@ end space
 public last_errno: (host: system) -> (number: i32) =
     number = host.failure.val
 end last_errno
+
+--- Return the number of the signal that ended the child this handle's
+--- cell last saw end through `io.wait`, as POSIX numbers it on this
+--- system: SIGTERM is 15 and SIGKILL 9 on Linux, Darwin and FreeBSD alike.
+--- Zero means that child exited with a code, or that no child has been
+--- waited for.  It is the system's detail behind `io.ending`'s portable
+--- `signalled`, as `last_errno` is behind an error atom.
+public last_signal: (host: system) -> (number: i32) =
+    number = host.signal.val
+end last_signal
 
 --  Keep a failure's errno in the handle's cell; `unlisted`, which no errno
 --  describes, leaves the cell at zero.
@@ -257,6 +275,40 @@ system_argument: (self: system, index: usize)
     value = posix.argument(table, index)
 end system_argument
 
+--  The environment is platform/posix's, read where the process's entry
+--  left it, and lent from storage that outlives every handle, as an
+--  argument is.
+system_variable_count: (self: system) -> (count: usize) =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    count = table.count
+end system_variable_count
+
+system_variable_at: (self: system, index: usize)
+                    -> (item: io.variable from self) ! io.no_variable =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    fail io.no_variable when index >= table.count
+    item = posix.variable(table, index)
+end system_variable_at
+
+system_variable_named: (self: system, name: text.host_string)
+                       -> (value: text.host_string from self)
+                       ! io.no_variable =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    wanted: []u8 = text.host_bytes(name)
+    for index in usize(0)..<table.count do
+        item: io.variable = posix.variable(table, index)
+        found: []u8 = text.host_bytes(item.name)
+        if mem.compare(found, wanted) == mem.equal then
+            value = item.value
+            return
+        end if
+    end for
+    fail io.no_variable
+end system_variable_named
+
 --  The open directory as platform/posix's stream, and the stream's
 --  progress kept back in the directory.  The directory's handle is its
 --  descriptor's number and its stream the C library's, where there is
@@ -456,6 +508,10 @@ system is io.files
 system is io.process
     (input: system_input, out: system_out, err: system_err,
      argument_count: system_argument_count, argument: system_argument)
+system is io.environment
+    (variable_count: system_variable_count,
+     variable_at: system_variable_at,
+     variable_named: system_variable_named)
 system is io.world ()
 system is io.directories
     (open_directory: system_open_directory,
@@ -478,7 +534,7 @@ system is io.directories
 --- traps.
 public host: () -> (handle: system) =
     _ = posix.arguments()
-    handle = (failure: addr process_errno)
+    handle = (failure: addr process_errno, signal: addr process_signal)
 end host
 
 --- Fill `state` and return a handle that records its last error there
@@ -487,6 +543,6 @@ end host
 --- exists traps, as `host` does.
 public over: (inout state: space) -> (handle: system from state) =
     _ = posix.arguments()
-    state = (failure: 0)
-    handle = (failure: addr state.failure)
+    state = (failure: 0, signal: 0)
+    handle = (failure: addr state.failure, signal: addr state.signal)
 end over

@@ -1,0 +1,1 @@
+output 1048576 bytes in 1024 lines, errors 1048576 bytes in 1024 lines

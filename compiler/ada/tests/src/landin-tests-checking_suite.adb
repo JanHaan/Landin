@@ -12156,10 +12156,11 @@ package body Landin.Tests.Checking_Suite is
    end Array_Field_Copies_Compare_Complete_Children;
 
    --  The hosted entry calls the program's argument initializer with C's
-   --  argc and argv, so with a hosted `main` every declaration carrying
-   --  that name must be `extern(c) (i32, ptr ptr u8) -> none`, read through
-   --  aliases.  Without one the name is an ordinary C routine, and the
-   --  retired `_landin_host_*` helper names are ordinary everywhere.
+   --  argc, argv and envp, so with a hosted `main` every declaration
+   --  carrying that name must be `extern(c) (i32, ptr ptr u8, ptr ptr u8)
+   --  -> none`, read through aliases.  Without one the name is an ordinary
+   --  C routine, and the retired `_landin_host_*` helper names are
+   --  ordinary everywhere.
    procedure Hosted_Initializer_Source_Contract
      (Item : in out Landin.Testing.Context);
 
@@ -12171,7 +12172,10 @@ package body Landin.Tests.Checking_Suite is
         & "    code = 0" & LF & "end main" & LF;
       Required : constant String :=
         "the hosted entry calls `" & Name & "` as"
-        & " `extern(c) (count: i32, values: ptr ptr u8) -> none`";
+        & " `extern(c) (count: i32, values: ptr ptr u8, environment: ptr ptr"
+        & " u8) -> none`";
+      --  The third carrier, C's envp, beside the first two as given.
+      Environment : constant String := ", environment: ptr ptr u8";
 
       procedure Refuse (Signature : String; Prefix : String := "");
 
@@ -12186,26 +12190,41 @@ package body Landin.Tests.Checking_Suite is
            (Item, Prefix & "extern(c) " & Name & ": " & Signature & LF);
       end Refuse;
    begin
-      Refuse ("(count: usize, values: ptr ptr u8) -> none");
-      Refuse ("(count: i32, values: usize) -> none");
-      Refuse ("(count: i32, values: ptr u8) -> none");
-      Refuse ("(count: i32, values: ptr ptr u32) -> none");
-      Refuse ("(count: i32, values: ptr mut ptr u8) -> none");
-      Refuse ("(count: i32, values: ptr ptr mut u8) -> none");
+      Refuse ("(count: usize, values: ptr ptr u8" & Environment
+              & ") -> none");
+      Refuse ("(count: i32, values: usize" & Environment & ") -> none");
+      Refuse ("(count: i32, values: ptr u8" & Environment & ") -> none");
+      Refuse ("(count: i32, values: ptr ptr u32" & Environment
+              & ") -> none");
+      Refuse ("(count: i32, values: ptr mut ptr u8" & Environment
+              & ") -> none");
+      Refuse ("(count: i32, values: ptr ptr mut u8" & Environment
+              & ") -> none");
+      Refuse ("(count: i32, values: ptr ptr u8, environment: usize)"
+              & " -> none");
+      Refuse ("(count: i32, values: ptr ptr u8, environment: ptr ptr u32)"
+              & " -> none");
+      Refuse ("(count: i32, values: ptr ptr u8, environment: ptr ptr mut"
+              & " u8) -> none");
       Refuse
-        ("(count: i32, values: maybe_table) -> none",
+        ("(count: i32, values: maybe_table" & Environment & ") -> none",
          "missing: atom" & LF & "maybe_table: type = missing | ptr ptr u8"
          & LF);
       Refuse
-        ("(count: i32, values: ptr maybe_byte) -> none",
+        ("(count: i32, values: ptr maybe_byte" & Environment & ") -> none",
          "missing: atom" & LF & "maybe_byte: type = missing | ptr u8" & LF);
       Refuse ("(count: i32) -> none");
-      Refuse ("(count: i32, values: ptr ptr u8) -> (status: i32)");
-      Refuse ("(count: i32, values: ptr ptr u8, ...) -> none");
+      --  The contract before the environment joined it.
+      Refuse ("(count: i32, values: ptr ptr u8) -> none");
+      Refuse ("(count: i32, values: ptr ptr u8" & Environment
+              & ") -> (status: i32)");
+      Refuse ("(count: i32, values: ptr ptr u8" & Environment
+              & ", ...) -> none");
       --  A definition with a result is refused only beside a hosted entry.
       Check_C_Boundary_Source
         (Item, Main & "extern(c) link(symbol: """ & Name & """) start:"
-         & " (count: i32, values: ptr ptr u8) -> (ok: bool) =" & LF
+         & " (count: i32, values: ptr ptr u8" & Environment
+         & ") -> (ok: bool) =" & LF
          & "    ok = count > 0" & LF & "end start" & LF, Required, "L0347");
       --  The library's definition, through aliases, with an agreeing
       --  import beside it, and with or without `escaping`.
@@ -12213,14 +12232,20 @@ package body Landin.Tests.Checking_Suite is
         (Item, Main & "byte: type = u8" & LF & "text: type = ptr byte" & LF
          & "table: type = ptr text" & LF
          & "public extern(c) " & Name
-         & ": (count: i32, escaping values: table) -> none =" & LF
-         & "    _ = count" & LF & "    _ = values" & LF & "end " & Name & LF
+         & ": (count: i32, escaping values: table, escaping environment:"
+         & " table)"
+         & " -> none =" & LF
+         & "    _ = count" & LF & "    _ = values" & LF
+         & "    _ = environment" & LF & "end " & Name & LF
          & "extern(c) link(symbol: """ & Name & """) start:"
-         & " (count: i32, escaping values: ptr ptr u8) -> none" & LF);
+         & " (count: i32, escaping values: ptr ptr u8, escaping environment:"
+         & " ptr ptr u8) -> none" & LF);
       Check_C_Boundary_Source
         (Item, Main & "public extern(c) " & Name
-         & ": (count: i32, values: ptr ptr u8) -> none =" & LF
-         & "    _ = count" & LF & "    _ = values" & LF & "end " & Name & LF);
+         & ": (count: i32, values: ptr ptr u8" & Environment
+         & ") -> none =" & LF
+         & "    _ = count" & LF & "    _ = values" & LF
+         & "    _ = environment" & LF & "end " & Name & LF);
       --  The retired helper names are ordinary C names now.
       Check_C_Boundary_Source
         (Item, Main & "public extern(c) _landin_host_errno: ()"

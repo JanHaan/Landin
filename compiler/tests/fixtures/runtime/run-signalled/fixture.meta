@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a child ended by SIGTERM or SIGKILL is waited for as io.signalled, which names no signal, and hosted.last_signal keeps the signal's number, 15 and 9 on every hosted system, and zero again after a child that exits with its own code
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

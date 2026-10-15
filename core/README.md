@@ -59,7 +59,7 @@ Every module spells the same operations the same way (D269):
 | Operation | Spelling | Examples |
 |---|---|---|
 | Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
-| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
 | A provider's caller-owned state | `space`, declared `zeroed` | `mem.arena_space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
@@ -140,6 +140,28 @@ until the process ends; a `defer` closes it on every way out. `core/io.memory`'s
 are the parts of its slots' names before a `/`, a slot ending in `/` an
 empty directory, read through the caller's buffer as the hosted provider's
 are; its tree is the caller's slots, so it makes and removes nothing.
+`environment` is a sixth concept, outside `world` as `directories` is, so
+that widening `process` does not put an environment into every firmware
+image that streams through a world: it lends each variable, a name and a
+value that are host strings, by index or the first by name, read-only
+because changing a process's own environment is not safe beside threads.
+`programs` is a seventh, also outside `world`, for running another
+program, D293's shape again: the provider is a handle, and a
+started `child` is a value the caller keeps, edits `inout` and consumes
+with `wait`. A program is named by its path and given exactly the arguments
+and the environment its parent builds; nothing searches a path, no shell
+reads a command line the parent did not write, and a child receives no
+open file of its parent's but its three streams, each inherited, discarded
+or piped. Its input is written with `write_child` and closed with
+`close_input`. A child that writes more than a pipe holds waits for its parent
+to read, so `read_child` reads whichever of its piped output and errors has
+something, and `wait` reports a portable `ending`, exited with a code or
+signalled, keeping what ended it as the provider's detail as `last_errno`
+keeps an errno. Both have caller-backed fakes beside the memory world,
+providers of their own so that a world that runs no program carries none
+of them: `variables_over` an environment of `NAME=value` byte strings, and
+`scripted_over` scripted programs that write what they are given and end
+as they are told, writing an inherited stream into the world's own.
 `core/text` builds text: a `builder` over the caller's buffer, or one
 growing through an allocator the caller erases, takes typed pieces, bytes,
 text, host strings, decimals of every width and hexadecimal, each whole or
@@ -410,6 +432,19 @@ back a line at a time. Behaviour is unchanged except where noted.
 | a byte-by-byte copy, fill or comparison loop | `mem.copy`, which allows overlap, `mem.fill`, `mem.compare` and `mem.find` |
 | `io.write` for each small piece of output | `io.buffered_over(host, io.out(host), buffer)`, `io.put` and `io.flush`, with a `defer` flush on every way out |
 | splitting what `io.read` returns into lines by hand | `io.lines_over(host, io.input(host), buffer)` and `io.read_line`, whose line is lent until the next read |
+
+## Migrating to the environment and processes
+
+A sixth concept reads the environment and a seventh runs programs.
+Behaviour is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `_landin_host_initialize_arguments(argc, argv)` called by a C `main` | `_landin_host_initialize_arguments(argc, argv, envp)`, with `main`'s own `envp` or C's `environ`; a null table is an empty environment, and a declaration of two parameters beside a hosted `main` is L0347 |
+| `platform/linux`'s `environment()`, or `getenv` declared `extern(c)` | `io.variable_named(host, name)` and `io.variable_at(host, index)` through the `io.environment` concept, on every hosted system and under `--link=libc` too; `environment()` still gives the raw table a static Linux entry found |
+| `clone3`, `execve` and `wait4` by number, or `posix_spawn` declared `extern(c)` | `io.spawn`, `io.write_child`, `io.close_input`, `io.read_child` and `io.wait`, or `platform/posix`'s `pipe`, `spawn` and `wait` |
+| a descriptor `platform/posix` opened, inherited by any program the process executed | closed on exec, `O_CLOEXEC`, as every descriptor the module makes is |
+| `hosted.space` holding `failure` | `failure` and `signal`, the cell `hosted.last_signal` reads |
 
 ## Migrating container providers and indices
 

@@ -6792,13 +6792,16 @@ package body Landin.Tests.Backend_Suite is
       Definition : constant String :=
         "mut seen: i32" & LF
         & "public extern(c) _landin_host_initialize_arguments:"
-        & " (count: i32, values: ptr ptr u8) -> none =" & LF
+        & " (count: i32, values: ptr ptr u8, environment: ptr ptr u8)"
+        & " -> none =" & LF
         & "    _ = values" & LF
+        & "    _ = environment" & LF
         & "    seen = count" & LF
         & "end _landin_host_initialize_arguments" & LF;
       Import : constant String :=
         "extern(c) _landin_host_initialize_arguments:"
-        & " (count: i32, values: ptr ptr u8) -> none" & LF;
+        & " (count: i32, values: ptr ptr u8, environment: ptr ptr u8)"
+        & " -> none" & LF;
 
       function Text_For
         (Source : String; Facts : Landin.Targets.Target_Facts)
@@ -7403,8 +7406,10 @@ package body Landin.Tests.Backend_Suite is
                Lower
                  (Work,
                   "public extern(c) _landin_host_initialize_arguments:"
-                  & " (count: i32, values: ptr ptr u8) -> none =" & LF
+                  & " (count: i32, values: ptr ptr u8, environment: ptr ptr"
+                  & " u8) -> none =" & LF
                   & "    _ = count" & LF & "    _ = values" & LF
+                  & "    _ = environment" & LF
                   & "end _landin_host_initialize_arguments" & LF
                   & "public " & (if C_Convention then "extern(c) " else "")
                   & (case Linkage is

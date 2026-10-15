@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a child's environment is exactly the variables its parent builds, a value that is not UTF-8, one holding = and an empty one reaching the shell byte for byte with nothing inherited, and a name that is empty or holds =, or a value holding a NUL, refused io_failed with EINVAL before anything starts
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0560, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -11,8 +11,10 @@ abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/core-io-file-identity | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/darwin-varargs-stack-slots | macos-arm64
+abi/environment-from-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/host-string-pass-through | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-directory-record | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/libc-process-constants | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
 abi/lp64d-main-return | linux-rv64
@@ -1759,6 +1761,8 @@ runtime/directory-through-file | linux-x86-64, linux-arm64, macos-arm64, freebsd
 runtime/distinct-equality-and-flags | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-arguments-at-every-width | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/environment-variables | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/environment-variables-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/erased-named-recovery | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/erased-parameterized-recovery | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/erased-self-snapshot-transport | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1824,6 +1828,7 @@ runtime/hosted-text-traversal | linux-x86-64, linux-arm64, macos-arm64, freebsd-
 runtime/hosted-text-views | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/import-alias-selected-identities | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/import-contextual-as | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/imported-bare-case | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/in-array-argument-precedes-later-argument | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/in-struct-argument-precedes-later-argument | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/indirect-function-abi | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1946,6 +1951,7 @@ runtime/posix-errno | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, fr
 runtime/posix-files | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-poll | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-processes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition-trap | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r250-references | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2131,7 +2137,16 @@ runtime/reference-place-update-recovery | linux-x86-64, linux-arm64, macos-arm64
 runtime/reference-place-updates | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/region-beside-parent | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/region-bounded-pool | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-environment | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-large-output | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/run-length-encoding | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-memory-firmware | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/run-missing-program | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-no-descriptor-leak | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-shell | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-shell-memory | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
+runtime/run-signalled | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/run-streams | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/rv64-assembly-level | linux-rv64
 runtime/rv64-feature-fact | linux-rv64
 runtime/rv64-indexed-address | linux-rv64

@@ -1,0 +1,47 @@
+--  A child ended by a signal reports io.signalled, which names no signal,
+--  and the hosted provider keeps the signal's number as its detail:
+--  SIGTERM is 15 and SIGKILL 9 on every hosted system.  A child that exits
+--  afterwards leaves that detail at zero.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  Run SCRIPT in /bin/sh, with every stream discarded, and report how it
+--  ended: the code it exited with, or -1 when it was signalled.
+ran: (host: hosted.system, script: []u8) -> (code: i32) ! ... =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                   arguments[0..<2], variables[0..<1],
+                                   io.discarding)
+    ended: io.ending = try io.wait(host, child)
+    code = match ended.how
+        io.exited(given): given
+        io.signalled: -1
+    end match
+end ran
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    terminated: i32 = ran(host, "kill -TERM $$") else (problem)
+        _ = problem
+        return
+    end
+    return when terminated <> -1 or hosted.last_signal(host) <> 15
+    code = 2
+    killed: i32 = ran(host, "kill -KILL $$") else (problem)
+        _ = problem
+        return
+    end
+    return when killed <> -1 or hosted.last_signal(host) <> 9
+    code = 3
+    exited: i32 = ran(host, "exit 7") else (problem)
+        _ = problem
+        return
+    end
+    return when exited <> 7 or hosted.last_signal(host) <> 0
+    code = 42
+end main

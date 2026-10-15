@@ -6,8 +6,10 @@
 
 #include <stddef.h>
 
-extern void _landin_host_initialize_arguments(int argc, char **argv);
-extern void r440_explicit_start(int argc, char **argv);
+extern char **environ;
+extern void _landin_host_initialize_arguments(int argc, char **argv,
+                                              char **envp);
+extern void r440_explicit_start(int argc, char **argv, char **envp);
 extern size_t r440_retained_count(void);
 extern int r440_call_renamed(void);
 
@@ -67,10 +69,10 @@ __asm__(".text\n"
 int main(int argc, char **argv)
 {
     if (r440_call_renamed() != 42) return 1;
-    r440_explicit_start(argc, argv);
+    r440_explicit_start(argc, argv, environ);
     if (r440_retained_count() != (size_t)(argc > 0 ? argc - 1 : 0)) return 2;
     if (r440_call_renamed() != 42) return 3;
     if (r440_retained_count() != (size_t)(argc > 0 ? argc - 1 : 0)) return 4;
-    _landin_host_initialize_arguments(argc, argv);
+    _landin_host_initialize_arguments(argc, argv, environ);
     return r440_call_renamed();
 }

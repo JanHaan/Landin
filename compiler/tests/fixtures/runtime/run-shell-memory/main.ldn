@@ -1,0 +1,261 @@
+--  The process consumer's routines over core/io's scripted programs beside
+--  a memory world: a program registered at /bin/sh writes its output and
+--  errors and exits as it is told, and its record keeps what it was
+--  given.  The same `capture` and `report` that run a real
+--  shell in runtime/run-shell write the same report here, byte for byte.
+--  The fake's own failures follow: a path it has no program at is
+--  not_found, a read failure while capturing is io_failed, a scripted
+--  program ends by a signal, its piped input is kept, and one already
+--  running cannot start again.
+import core/io
+import core/mem
+import core/text
+
+--  Read what the child writes to its output and its errors into the two
+--  builders, from whichever has something, until both have ended, and
+--  wait for it.  Reading both while it runs is what lets a child write
+--  more than a pipe holds to either.
+capture: (provider: type is io.programs, host: provider,
+          sink started: io.child, inout output: text.builder,
+          inout errors: text.builder)
+         -> (ended: io.ending) ! ... =
+    mut running: io.child = started
+    mut buffer: [256]u8 = zeroed
+    loop do
+        part: io.child_read = try io.read_child(host, running, buffer[0..<256])
+        break when part.finished
+        if part.errors then
+            try text.append(errors, buffer[0..<part.count])
+        else
+            try text.append(output, buffer[0..<part.count])
+        end if
+    end loop
+    ended = try io.wait(host, running)
+end capture
+
+--  Write each line of BYTES to OUT after a bar.
+quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         bytes: []u8) -> none ! ... =
+    mut start: usize = 0
+    for at in usize(0)..<lenof bytes do
+        if bytes[at] == 10 then
+            try io.put(out, "| ")
+            try io.put(out, bytes[start..<at + 1])
+            start = at + 1
+        end if
+    end for
+    if start < lenof bytes then
+        try io.put(out, "| ")
+        try io.put(out, bytes[start..<lenof bytes])
+        try io.put(out, "\n")
+    end if
+end quoted
+
+--  Report what the child wrote and how it ended.
+report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+    try io.put(out, "the shell said:\n")
+    try quoted(out, output)
+    try io.put(out, "and complained:\n")
+    try quoted(out, errors)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    match ended.how
+        io.exited(code): try text.format(line, "and exited with code {}\n",
+                                         [any(addr code)])
+        io.signalled: try text.append(line, "and was ended by a signal\n")
+    end match
+    try io.put(out, text.used(line))
+end report
+
+--  What the scripted shell writes, and what the report of it is.
+said: []u8 = "NAME=landin\nGREETING=hello, world\nHOME is not set\n"
+
+expected: []u8 = """the shell said:
+    | NAME=landin
+    | GREETING=hello, world
+    | HOME is not set
+    and complained:
+    | something went wrong
+    and exited with code 3
+    """
+
+--  Run the shell over HOST and report it to WORLD's standard output, as
+--  runtime/run-shell does.
+ran: (world: io.memory, host: io.scripted_programs)
+     -> (ended: io.ending) ! ... =
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(world, io.out(world), storage[0..<256])
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("exit 3")]
+    variables: [2]io.variable =
+        [(name: text.host_over("NAME"), value: text.host_over("landin")),
+         (name: text.host_over("GREETING"),
+          value: text.host_over("hello, world"))]
+    started: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                     arguments[0..<2], variables[0..<2],
+                                     io.capturing)
+    mut output_room: [512]u8 = zeroed
+    mut errors_room: [512]u8 = zeroed
+    mut output := text.over(output_room[0..<512])
+    mut errors := text.over(errors_room[0..<512])
+    ended = try capture(host, started, output, errors)
+    try report(out, text.used(output), text.used(errors), ended)
+    try io.flush(out)
+end ran
+
+--  Start the program at PATH over HOST with STREAMS.
+started_at: (host: io.scripted_programs, path: []u8,
+             streams: io.child_streams)
+            -> (started: io.child) ! ... =
+    arguments: [1]text.host_string = [text.host_over("-c")]
+    variables: [1]io.variable =
+        [(name: text.host_over("A"), value: text.host_over("1"))]
+    started = try io.spawn(host, text.host_over(path), arguments[0..<1],
+                           variables[0..<1], streams)
+end started_at
+
+--  A path no program is at is not_found.
+missing: (host: io.scripted_programs) -> (yes: bool) =
+    yes = false
+    started: io.child = started_at(host, "/bin/missing",
+                                   io.capturing) else (problem)
+        yes = problem == io.not_found
+        return
+    end
+    _ = started
+end missing
+
+--  A read the world is told to fail fails read_child.
+read_fails: (host: io.scripted_programs, state: ptr mut io.memory_space)
+            -> (yes: bool) ! ... =
+    yes = false
+    mut started: io.child = try started_at(host, "/bin/sh", io.capturing)
+    state.val.fail_read_at = state.val.read_calls + 1
+    mut buffer: [8]u8 = zeroed
+    part: io.child_read = io.read_child(host, started,
+                                        buffer[0..<8]) else (problem)
+        yes = problem == io.io_failed
+        ended: io.ending = try io.wait(host, started)
+        _ = ended
+        return
+    end
+    _ = part
+end read_fails
+
+--  A program scripted to be signalled is, and a running one cannot start
+--  again until it has been waited for.
+signalled_once: (host: io.scripted_programs) -> (yes: bool) ! ... =
+    yes = false
+    started: io.child = try started_at(host, "/bin/false", io.discarding)
+    again: io.child = started_at(host, "/bin/false",
+                                 io.discarding) else (problem)
+        return when problem <> io.io_failed
+        ended: io.ending = try io.wait(host, started)
+        match ended.how
+            io.exited(code): _ = code
+            io.signalled: yes = true
+        end match
+        return
+    end
+    _ = again
+end signalled_once
+
+--  What the parent writes to a piped input is kept; inherited output is
+--  written to the world's own standard output.
+input_kept: (host: io.scripted_programs, programs: []io.scripted_program)
+            -> (yes: bool) ! ... =
+    yes = false
+    streams: io.child_streams = (input: io.piped, output: io.inherited,
+                                 errors: io.discarded)
+    mut started: io.child = try started_at(host, "/bin/sh", streams)
+    try io.write_child(host, started, "abc")
+    try io.close_input(host, started)
+    ended: io.ending = try io.wait(host, started)
+    _ = ended
+    yes = programs[0].input_length == 3 and programs[0].input[0] == 97
+end input_kept
+
+--  A memory environment is the entries it is given.
+environment_read: () -> (yes: bool) ! ... =
+    yes = false
+    entries: [3][]u8 = ["NAME=landin", "EQUALS=a=b", "BARE"]
+    world := io.variables_over(entries[0..<3])
+    return when io.variable_count(world) <> 3
+    second: io.variable = try io.variable_at(world, usize(1))
+    return when not text.host_equal(second.name, "EQUALS")
+      or not text.host_equal(second.value, "a=b")
+    bare: text.host_string = try io.variable_named(world,
+                                                   text.host_over("BARE"))
+    return when not text.host_equal(bare, "")
+    name: text.host_string = try io.variable_named(world,
+                                                   text.host_over("NAME"))
+    return when not text.host_equal(name, "landin")
+    absent: io.variable = io.variable_at(world, usize(3)) else (problem)
+        yes = problem == io.no_variable
+        return
+    end
+    _ = absent
+end environment_read
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.memory_space = zeroed
+    mut slots: [1]io.memory_file =
+        [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
+          writable: false, opened: false, writing: false)]
+    mut written: [512]u8 = zeroed
+    mut complained: [64]u8 = zeroed
+    world := io.memory_over(state, slots[0..<1], [], "", written[0..<512],
+                            complained[0..<64])
+    mut kept: [32]u8 = zeroed
+    mut programs: [2]io.scripted_program =
+        [(path: "/bin/sh", output: said, errors: "something went wrong\n",
+          code: 3, signalled: false, input: kept[0..<32], input_length: 0,
+          starts: 0, arguments: 0, variables: 0, output_read: 0,
+          errors_read: 0, running: false),
+         (path: "/bin/false", output: "", errors: "", code: 0,
+          signalled: true, input: kept[0..<0], input_length: 0, starts: 0,
+          arguments: 0, variables: 0, output_read: 0, errors_read: 0,
+          running: false)]
+    host := io.scripted_over(world, programs[0..<2])
+    ended: io.ending = ran(world, host) else (problem)
+        _ = problem
+        return
+    end
+    match ended.how
+        io.exited(given): return when given <> 3
+        io.signalled: return
+    end match
+    return when mem.compare(io.written(world), expected) <> mem.equal
+    return when programs[0].starts <> 1 or programs[0].arguments <> 2
+      or programs[0].variables <> 2 or programs[0].running
+    code = 2
+    return when not missing(host)
+    code = 3
+    failing: bool = read_fails(host, addr state) else (problem)
+        _ = problem
+        return
+    end
+    return when not failing or programs[0].running
+    code = 4
+    once: bool = signalled_once(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not once
+    code = 5
+    before: usize = state.output_used
+    given: bool = input_kept(host, programs[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    return when not given or state.output_used - before <> lenof said
+    code = 6
+    read: bool = environment_read() else (problem)
+        _ = problem
+        return
+    end
+    return when not read
+    code = 42
+end main

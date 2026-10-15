@@ -1013,6 +1013,15 @@ package body Landin.Stages.Checking.References is
          return False;
       end Has_References;
 
+      --  Whether a member selection names a case of a variant part, the
+      --  form a payload-free case another module declares is written in.
+      function Is_Qualified_Case
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Res.Verdict_Of (Meanings.all, Tree, Node) = Res.Bound
+            and then Res.Sort_Of
+              (Meanings.all, Res.Bound_To (Meanings.all, Tree, Node))
+                = Res.Case_Name);
+
       function Has_References
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
@@ -1024,9 +1033,12 @@ package body Landin.Stages.Checking.References is
          elsif Kind = Ty.Not_Typed
            and then Syn.Kind (Tree, Node) = Syn.Member_Selection
            and then Landin.Checking.Field_Index (Types.all, Tree, Node) > 0
+           and then not Is_Qualified_Case (Tree, Node)
          then
             --  A variant destination carries a field descriptor rather
-            --  than a general expression type.
+            --  than a general expression type.  A bare case another module
+            --  declares, written qualified, carries the case's index
+            --  instead, and holds no reference.
             return Landin.Checking.Contains_References
               (Types.all, Landin.Checking.Field_Shape_Of
                  (Types.all, Landin.Checking.Nominal_Of
