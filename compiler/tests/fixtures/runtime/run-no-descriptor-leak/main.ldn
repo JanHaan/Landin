@@ -1,26 +1,21 @@
 --  A child receives no descriptor but its three streams.  The parent holds
 --  two files and a directory open, and another child's three pipes, while
---  it starts a shell that tries each of those descriptors, whose numbers it
---  is given as its arguments, and names any it can read or write; it names
---  none, since every descriptor the hosted provider makes is closed on
---  exec, and the spawn closes whatever else is open in the child.  The
---  hosted provider's file is its descriptor's number, so the parent knows
---  which numbers to give.
+--  it starts itself again with the argument `check` and the numbers of
+--  those descriptors; the copy asks `poll` about each, which answers
+--  `poll_invalid` for a closed descriptor and never for an open one, and
+--  names any that is open.  It names none, since every descriptor the
+--  hosted provider makes is closed on exec, and the spawn closes whatever
+--  else is open in the child.  The hosted provider's file is its
+--  descriptor's number, so the parent knows which numbers to give.
+--
+--  A shell trying each number by redirecting from it cannot be the check:
+--  Darwin's /bin/sh copies the descriptor a redirection replaces to the
+--  lowest free number from 10 up while it works, and then finds its own
+--  copy at 10, and dash refuses every number above 9.
 import core/io
 import core/text
 import hosted/io as hosted
-
---  Each descriptor is duplicated in a subshell by `exec`, which keeps no
---  copy of what it replaces, so no descriptor the shell saves for itself
---  takes a number being tried.
-script: []u8 = """
-    for fd in "$@"; do
-        if (exec 2>/dev/null; exec 0<&"$fd"); then
-            echo "descriptor $fd is open"
-        fi
-    done
-    echo "checked $# descriptors"
-    """
+import platform/posix
 
 --  The decimal of a file's number.
 number: (opened: io.file, room: []mut u8) -> (digits: []u8 from room) ! ... =
@@ -29,8 +24,33 @@ number: (opened: io.file, room: []mut u8) -> (digits: []u8 from room) ! ... =
     digits = room[0..<text.length(line)]
 end number
 
-public main: () -> (code: i32) =
-    host := hosted.host()
+--  The copy's part: report each descriptor it was given that is open.
+check: (host: hosted.system) -> none ! ... =
+    out: io.file = io.out(host)
+    given: usize = io.argument_count(host)
+    for at in usize(1)..<given do
+        digits: []u8 = text.host_bytes(try io.argument_at(host, at))
+        found: u32 = try text.parse_u32(digits)
+        mut entries: [1]posix.poll_entry =
+            [posix.watch(posix.descriptor(i32(found)), posix.poll_input)]
+        _ = try posix.poll(entries, 0)
+        events: posix.poll_events = posix.happened(entries[0])
+        if (events & posix.poll_invalid) == posix.poll_no_events then
+            mut room: [48]u8 = zeroed
+            mut line := text.over(room)
+            try text.format(line, "descriptor {} is open\n", [any(addr found)])
+            try io.write(host, out, room[0..<text.length(line)])
+        end if
+    end for
+    checked: usize = given - 1
+    mut room: [32]u8 = zeroed
+    mut line := text.over(room)
+    try text.format(line, "checked {} descriptors\n", [any(addr checked)])
+    try io.write(host, out, room[0..<text.length(line)])
+end check
+
+--  The parent's part.
+parent: (host: hosted.system) -> (code: i32) =
     code = 1
     first: io.file = io.open_read(host, text.host_over("/dev/null")) else (problem)
         _ = problem
@@ -62,20 +82,18 @@ public main: () -> (code: i32) =
     mut rooms: [6][4]u8 = zeroed
     held: [6]io.file = [first, second, io.file(listed.handle), other.input,
                         other.output, other.errors]
-    mut arguments: [9]text.host_string =
-        [9 of text.host_over("")]
-    arguments[0] = text.host_over("-c")
-    arguments[1] = text.host_over(script)
-    arguments[2] = text.host_over("sh")
+    mut arguments: [7]text.host_string =
+        [7 of text.host_over("")]
+    arguments[0] = text.host_over("check")
     for at in usize(0)..<6 do
         digits: []u8 = number(held[at], rooms[at][0..<4]) else (problem)
             _ = problem
             return
         end
-        arguments[3 + at] = text.host_over(digits)
+        arguments[1 + at] = text.host_over(digits)
     end for
-    checked: io.child = io.spawn(host, text.host_over("/bin/sh"),
-                                 arguments[0..<9], variables[0..<1],
+    checked: io.child = io.spawn(host, posix.program_name(),
+                                 arguments[0..<7], variables[0..<1],
                                  io.inheriting) else (problem)
         _ = problem
         return
@@ -84,8 +102,13 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    _ = ended
     code = 3
+    match ended.how
+        io.exited(given):
+            return when given <> 42
+        io.signalled:
+            return
+    end match
     io.close_input(host, other) else (problem)
         _ = problem
         return
@@ -104,6 +127,20 @@ public main: () -> (code: i32) =
         return
     end
     io.close(host, first) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end parent
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    if io.argument_count(host) == 0 then
+        code = parent(host)
+        return
+    end if
+    code = 1
+    check(host) else (problem)
         _ = problem
         return
     end
