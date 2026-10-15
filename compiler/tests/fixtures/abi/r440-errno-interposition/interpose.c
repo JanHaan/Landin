@@ -116,7 +116,7 @@ int __wrap_open(const char *path, int flags, ...)
 
     ++open_calls;
     if (selected == OPEN_READ_RETRY) {
-        if (!path_is(path, "r440-read") || flags != O_RDONLY
+        if (!path_is(path, "r440-read") || flags != (O_RDONLY | O_CLOEXEC)
             || mode != (mode_t)0) {
             mark_fault(11);
         }
@@ -136,7 +136,7 @@ int __wrap_open(const char *path, int flags, ...)
         }
     } else if (selected == OPEN_WRITE_RETRY) {
         if (!path_is(path, "r440-write")
-            || flags != (O_WRONLY | O_CREAT | O_TRUNC)
+            || flags != (O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC)
             || mode != (mode_t)0666) {
             mark_fault(21);
         }
