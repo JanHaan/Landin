@@ -1,5 +1,5 @@
 class: negative
-summary: a distinct type has no ordering, no bit operators over a signed base and no updating assignment
+summary: a distinct type has no bit operators over a signed base, no arithmetic of its own and no updating assignment, though it is ordered
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/distinct-ordering-and-signed-flags
 constructs: 0330, 0350, 0650, 1890

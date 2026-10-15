@@ -321,6 +321,38 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
         _ = libc.posix_spawn_file_actions_destroy(addr actions)
     end system_spawn
 
+    --  Darwin and FreeBSD keep no auxiliary vector here to adopt.
+    system_adopt_start: (count: i32, values: ptr ptr u8,
+                         environment: ptr ptr u8) -> none =
+        _ = count
+        _ = values
+        _ = environment
+    end system_adopt_start
+
+    system_clock_time: (clock: clock_kind) -> (time: time_value) ! errno =
+        number: i32 = match clock
+            monotonic_clock: libc.clock_monotonic
+            realtime_clock: libc.clock_realtime
+        end match
+        mut record: libc.timespec = zeroed
+        fail failure() when libc.clock_gettime(number, addr record) <> 0
+        fail unlisted when record.nanoseconds < 0
+          or record.nanoseconds >= 1000000000
+        time = (seconds: record.seconds, nanoseconds: u32(record.nanoseconds))
+    end system_clock_time
+
+    system_sleep: (span: time_value) -> none ! errno =
+        request: libc.timespec = (seconds: span.seconds,
+                                  nanoseconds: i64(span.nanoseconds))
+        mut remaining: libc.timespec = zeroed
+        fail failure() when libc.nanosleep(addr request, addr remaining) <> 0
+    end system_sleep
+
+    system_random_bytes: (into: []mut u8) -> (count: usize) ! errno =
+        libc.arc4random_buf(addr into[0], lenof into)
+        count = lenof into
+    end system_random_bytes
+
     system_wait: (child: process_id) -> (word: i32) ! errno =
         mut status: i32 = 0
         fail failure() when libc.waitpid(i32(child), addr status, 0) < 0

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io's manual clock runs code written against the clock and wall_clock concepts in no time, each sleep advancing both clocks by exactly what was asked, the wall clock carrying its nanoseconds into seconds and being set back by the test, and spans and instants converting as their nanosecond counts say, the same on every target, Cortex-M0 included
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0650, 0900, 1230, 1290, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

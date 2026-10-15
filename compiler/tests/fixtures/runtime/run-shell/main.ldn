@@ -1,19 +1,21 @@
 --  Run a shell with an environment built for it, read what it writes to
---  its output and its errors while it runs, and report what it said, what
---  it complained of and how it ended.  The report goes through a buffered
---  writer, flushed on every way out.
+--  its output and its errors while it runs, time it, and report what it
+--  said, what it complained of, how it ended and how long it took.  The
+--  report goes through a buffered writer, flushed on every way out.
 import core/io
 import core/text
 import hosted/io as hosted
 
 --  What the shell runs: it says what its environment holds, complains
---  once and ends with code 3.  Its environment is only what the program
---  gives it, so the HOME the program itself has is not among it.
+--  once, sleeps for a second and ends with code 3.  Its environment is
+--  only what the program gives it, so the HOME the program itself has is
+--  not among it; its PATH is, which is how the shell finds `sleep`.
 script: []u8 = """
     printf 'NAME=%s\n' "$NAME"
     printf 'GREETING=%s\n' "$GREETING"
     printf 'HOME is %s\n' "${HOME-not set}"
     echo 'something went wrong' >&2
+    sleep 1
     exit 3
     """
 
@@ -57,22 +59,41 @@ quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     end if
 end quoted
 
---  Report what the child wrote and how it ended.
+--  Report what the child wrote, how it ended and how long it took, which
+--  is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+         output: []u8, errors: []u8, ended: io.ending, took: io.duration)
+        -> none ! ... =
     try io.put(out, "the shell said:\n")
     try quoted(out, output)
     try io.put(out, "and complained:\n")
     try quoted(out, errors)
-    mut room: [48]u8 = zeroed
-    mut line := text.over(room[0..<48])
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
     match ended.how
         io.exited(code): try text.format(line, "and exited with code {}\n",
                                          [any(addr code)])
         io.signalled: try text.append(line, "and was ended by a signal\n")
     end match
+    if took >= io.seconds(1) then
+        try text.append(line, "after a second or more\n")
+    else
+        whole: u64 = io.in_milliseconds(took)
+        try text.format(line, "after only {} ms\n", [any(addr whole)])
+    end if
     try io.put(out, text.used(line))
 end report
+
+--  The parent's own PATH, the one variable of its environment it passes
+--  on, or the directories every hosted system keeps `sleep` in when it
+--  has none.
+search_path: (host: hosted.system) -> (path: text.host_string from host) =
+    path = text.host_over("/bin:/usr/bin")
+    path = io.variable_named(host, text.host_over("PATH")) else (problem)
+        _ = problem
+        return
+    end
+end search_path
 
 public main: () -> (code: i32) =
     host := hosted.host()
@@ -84,12 +105,14 @@ public main: () -> (code: i32) =
     code = 1
     arguments: [2]text.host_string = [text.host_over("-c"),
                                       text.host_over(script)]
-    variables: [2]io.variable =
+    variables: [3]io.variable =
         [(name: text.host_over("NAME"), value: text.host_over("landin")),
          (name: text.host_over("GREETING"),
-          value: text.host_over("hello, world"))]
+          value: text.host_over("hello, world")),
+         (name: text.host_over("PATH"), value: search_path(host))]
+    began: io.instant = io.now(host)
     started := io.spawn(host, text.host_over("/bin/sh"),
-                        arguments[0..<2], variables[0..<2],
+                        arguments[0..<2], variables[0..<3],
                         io.capturing) else (problem)
         _ = problem
         return
@@ -102,7 +125,9 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    report(out, text.used(output), text.used(errors), ended) else (problem)
+    took: io.duration = io.elapsed(began, io.now(host))
+    report(out, text.used(output), text.used(errors), ended,
+           took) else (problem)
         _ = problem
         return
     end

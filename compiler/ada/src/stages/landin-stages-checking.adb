@@ -13032,12 +13032,12 @@ package body Landin.Stages.Checking is
          end if;
 
          --  [0650]/[1890]: two values of one distinct type whose base is
-         --  a scalar compare for equality, which is identity and asks
-         --  nothing of the base's meaning; and where the base is an
-         --  unsigned integer, `&`, `^` and `|` combine them into that same
-         --  type, as a set of flags does.  Ordering, arithmetic and shifts
-         --  belong to the base and need an explicit extraction, and a
-         --  distinct value meets its base or another type only through a
+         --  a scalar compare for equality and are ordered as the base
+         --  orders them, IEEE's comparisons for a floating base; and where
+         --  the base is an unsigned integer, `&`, `^` and `|` combine them
+         --  into that same type, as a set of flags does.  Arithmetic and
+         --  shifts belong to the base and need an explicit extraction, and
+         --  a distinct value meets its base or another type only through a
          --  conversion.
          if (Distinct_Scalar_Base (Of_Tree, Left) /= Ty.No_Value)
            /= (Distinct_Scalar_Base (Of_Tree, Right) /= Ty.No_Value)
@@ -13089,7 +13089,10 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Right);
                   return Ty.Ill_Typed;
-               elsif Of_Kind in Syn.Equal_To | Syn.Not_Equal_To then
+               elsif Of_Kind in Syn.Equal_To | Syn.Not_Equal_To
+                                | Syn.Less_Than | Syn.Less_Or_Equal
+                                | Syn.Greater_Than | Syn.Greater_Or_Equal
+               then
                   return Ty.Bool;
                elsif Of_Kind in Syn.Bitwise_And | Syn.Bitwise_Xor
                                 | Syn.Bitwise_Or
@@ -13104,12 +13107,12 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Type_Mismatch,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Anchor (Of_Tree, Site),
-                     Message => "a distinct type has `==` and `<>`, and"
-                                & " `&`, `^`, `|` and `~` when its base is an"
-                                & " unsigned integer; extract the base for"
-                                & " anything else",
-                     Note    => "[0650]: ordering, arithmetic and shifts are"
-                                & " the base's, written `base(value)`; an"
+                     Message => "a distinct type has `==`, `<>` and its"
+                                & " base's order, and `&`, `^`, `|` and `~`"
+                                & " when its base is an unsigned integer;"
+                                & " extract the base for anything else",
+                     Note    => "[0650]: arithmetic and shifts are the"
+                                & " base's, written `base(value)`; an"
                                 & " updating assignment is written out",
                      Related => Syn.Origin (Of_Tree, Site),
                      Because => "here",

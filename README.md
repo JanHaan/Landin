@@ -364,7 +364,15 @@ This is the maintained inventory of what the compiler does today:
   inherited, discarded or piped, reads its output and errors together while
   it runs and waits for it to exit with a code or be ended by a signal, and
   caller-backed fakes beside the memory world give both, an environment over
-  data and scripted programs; a buffered writer gathers output in a caller's buffer until it
+  data and scripted programs. A monotonic clock with sleeping, a wall clock
+  and the system's entropy are three more, outside `world`, with time in
+  nanoseconds in a `u64` and no floating point; on Linux the clock is read
+  through the vDSO the auxiliary vector names, falling back to the system
+  call, and a manual clock and scripted entropy are their fakes.
+  `core/random` is a deterministic generator, xoshiro256**, seeded from a
+  fixed seed or from entropy, which draws the same sequence on every target,
+  Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered
+  writer gathers output in a caller's buffer until it
   is flushed, and a line reader lends each line until the next read. Text is
   built in a builder over a caller's buffer, or one an allocator grows, from
   bytes, text, host strings, decimals of every integer width and
@@ -492,7 +500,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.32 — Time and randomness (planned).**
+**Next roadmap item: R13.33 — Sockets (planned).**
 
 ## License
 

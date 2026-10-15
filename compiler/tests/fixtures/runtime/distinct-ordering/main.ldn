@@ -1,0 +1,63 @@
+--  Two values of one distinct scalar type are ordered as their base
+--  orders them: a signed base by sign, an unsigned one beyond the signed
+--  range, a narrow one, a floating one by IEEE's comparisons with NaN
+--  unordered, and bool with false first.  Each check that fails returns
+--  its own code.
+offset: type = distinct i32
+stamp: type = distinct u64
+level: type = distinct u8
+reading: type = distinct f64
+flag: type = distinct bool
+
+--  All four orderings of LEFT against RIGHT, as a bit each: <, <=, >, >=.
+signed_order: (left: offset, right: offset) -> (bits: u8) =
+    bits = 0
+    if left < right then bits = bits | 1 end if
+    if left <= right then bits = bits | 2 end if
+    if left > right then bits = bits | 4 end if
+    if left >= right then bits = bits | 8 end if
+end signed_order
+
+stamp_order: (left: stamp, right: stamp) -> (bits: u8) =
+    bits = 0
+    if left < right then bits = bits | 1 end if
+    if left <= right then bits = bits | 2 end if
+    if left > right then bits = bits | 4 end if
+    if left >= right then bits = bits | 8 end if
+end stamp_order
+
+reading_order: (left: reading, right: reading) -> (bits: u8) =
+    bits = 0
+    if left < right then bits = bits | 1 end if
+    if left <= right then bits = bits | 2 end if
+    if left > right then bits = bits | 4 end if
+    if left >= right then bits = bits | 8 end if
+end reading_order
+
+less: u8 = 3
+same: u8 = 10
+more: u8 = 12
+
+public main: () -> (code: i32) =
+    code = 1
+    return when signed_order(offset(-5), offset(3)) <> less
+      or signed_order(offset(3), offset(-5)) <> more
+      or signed_order(offset(-7), offset(-7)) <> same
+    code = 2
+    big: stamp = stamp(18446744073709551615)
+    return when stamp_order(stamp(1), big) <> less
+      or stamp_order(big, stamp(9223372036854775808)) <> more
+      or stamp_order(big, big) <> same
+    code = 3
+    return when not (level(200) > level(7)) or level(7) >= level(200)
+    code = 4
+    zero: f64 = 0.0
+    nan: reading = reading(zero / zero)
+    return when reading_order(reading(-1.5), reading(2.0)) <> less
+      or reading_order(reading(2.0), reading(2.0)) <> same
+      or reading_order(nan, reading(1.0)) <> 0
+      or reading_order(reading(1.0), nan) <> 0
+    code = 5
+    return when not (flag(false) < flag(true)) or flag(true) <= flag(false)
+    code = 42
+end main

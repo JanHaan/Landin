@@ -133,8 +133,8 @@ class ProbeFailures(unittest.TestCase):
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
-             ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool', 'region',
-              'sort', 'spill', 'text', 'tree', 'vec')})
+             ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool', 'random',
+              'region', 'sort', 'spill', 'text', 'tree', 'vec')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):
         from freestanding import MODULES, ROOT

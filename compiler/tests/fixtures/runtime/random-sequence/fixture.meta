@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/random's xoshiro256** draws what the authors' reference implementation draws for three splitmix64-seeded seeds, below draws without modulo bias for bounds from one to the largest u64, shuffle orders ten items and from_entropy reads its state from scripted entropy, all-zero entropy seeding as seed 0 and a dry source failing io_failed, the same on every target, Cortex-M0 included
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0300, 0320, 0330, 0570, 0900, 1290, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

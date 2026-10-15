@@ -181,6 +181,44 @@ public timespec: type = struct
     nanoseconds: i64
 end timespec
 
+--- `clock_gettime` clock: the wall clock.  The same on every hosted
+--- system.
+public clock_realtime: i32 = 0
+
+fixed if compiler.os == linux then
+    --- `clock_gettime` clock: time since a point the system fixes, never
+    --- set back.  Each system numbers it its own way.
+    public clock_monotonic: i32 = 1
+elsif compiler.os == darwin then
+    --- `clock_gettime` clock: time since a point the system fixes, never
+    --- set back.  Each system numbers it its own way.
+    public clock_monotonic: i32 = 6
+else
+    --- `clock_gettime` clock: time since a point the system fixes, never
+    --- set back.  Each system numbers it its own way.
+    public clock_monotonic: i32 = 4
+end if
+
+--- Fill `into` with the clock `clock`'s time, `clock` a C `clockid_t`,
+--- which is an `int` on every hosted system: 0, or -1 with the reason in
+--- errno.
+public extern(c) clock_gettime: (clock: i32, into: ptr mut timespec)
+                                -> (status: i32)
+
+--- Sleep for the time `request` gives: 0 once it has passed, or -1 with
+--- the reason in errno, EINTR when a signal came first, with what was
+--- left in `remaining`.
+public extern(c) nanosleep: (request: ptr timespec,
+                             remaining: ptr mut timespec) -> (status: i32)
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- Fill the `length` bytes at `into` with random bytes from the C
+    --- library's generator, which the kernel's entropy keys and rekeys and
+    --- which is fit for keys.  It never fails.  Darwin's and FreeBSD's.
+    public extern(c) arc4random_buf: (into: ptr mut u8, length: usize)
+                                     -> none
+end if
+
 --  Full records rather than guessed opaque storage, selected by hosted
 --  system and C ABI.  Darwin arm64 uses the ordinary stat symbol with its
 --  64-bit inode ABI.

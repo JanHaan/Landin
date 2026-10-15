@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: two values of one distinct scalar type are ordered with <, <=, > and >= as their base orders them, a signed base by sign, an unsigned one past 2^63, a u8, an f64 by IEEE's comparisons with NaN unordered, and bool with false first
+program: main.ldn
+status: 42
+constructs: 0170, 0650, 1890
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

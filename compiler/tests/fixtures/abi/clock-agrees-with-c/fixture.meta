@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: the clock numbers and the timespec record platform/libc keeps, and on Linux platform/linux's copies, are held to the system's own C headers, and platform/posix's monotonic clock reads between two of the C library's readings a thousand times over, its wall clock agreeing with C's within a second
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

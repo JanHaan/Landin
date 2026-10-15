@@ -1,0 +1,141 @@
+--  core/random's generator reproduces the sequences of xoshiro256**'s
+--  reference implementation, seeded through splitmix64 as its authors
+--  suggest, on every target: 64-bit shifts, rotations and additions on a
+--  32-bit Cortex-M0 give what they give on a 64-bit host.  The expected
+--  values were printed by the authors' unmodified xoshiro256starstar.c and
+--  splitmix64.c, and those of `below`, `shuffle` and `from_entropy` by
+--  the same routines ported to C over them.  Each check that fails
+--  returns its own code.
+import core/io
+import core/random
+
+--  The first eight outputs for seeds 0, 42 and 0x0123456789abcdef.
+seed_zero: [8]u64 = [11091344671253066420, 13793997310169335082,
+                     1900383378846508768, 7684712102626143532,
+                     13521403990117723737, 18442103541295991498,
+                     7788427924976520344, 9881088229871127103]
+seed_answer: [8]u64 = [1546998764402558742, 6990951692964543102,
+                       12544586762248559009, 17057574109182124193,
+                       18295552978065317476, 14199186830065750584,
+                       13267978908934200754, 15679888225317814407]
+seed_pattern: [8]u64 = [11728116837925579837, 431261241542867727,
+                        7088239201150201886, 1991960781942118182,
+                        16071698363884655823, 4123588241367215080,
+                        13086776817198750337, 9243408305086729258]
+
+--  Whether the generator seeded from SEED draws EXPECTED first.
+draws: (seed: u64, expected: []u64) -> (yes: bool) =
+    yes = false
+    mut source := random.new(seed)
+    for value in expected do
+        return when random.next(source) <> value
+    end for
+    yes = true
+end draws
+
+--  Four draws below each of five bounds, one generator after the other,
+--  from seed 0x0123456789abcdef: a bound of one, small ones, one just past
+--  2^63, which rejects nearly half its draws, and the largest.
+bounds: [5]u64 = [1, 6, 1000, 9223372036854775809, 18446744073709551615]
+below_bounds: [20]u64 = [0, 0, 0, 0,
+                         0, 1, 2, 4,
+                         46, 355, 359, 736,
+                         7734768162860382805, 6756903082987012264,
+                         1940808327524255886, 4194713531705948863,
+                         8294363530523727346, 1449972046409666307,
+                         16686400129591613081, 17908642295857891376]
+
+below_matches: () -> (yes: bool) =
+    yes = false
+    mut source := random.new(0x0123456789abcdef)
+    mut at: usize = 0
+    for bound in bounds do
+        for count in usize(0)..<4 do
+            _ = count
+            drawn: u64 = random.below(source, bound)
+            return when drawn <> below_bounds[at] or drawn >= bound
+            inc at
+        end for
+    end for
+    yes = true
+end below_matches
+
+--  The upper halves of seed 42's first three draws.
+upper_halves: [3]u32 = [360188718, 1627707782, 2920764210]
+
+halves_match: () -> (yes: bool) =
+    yes = false
+    mut source := random.new(42)
+    for value in upper_halves do
+        return when random.next_u32(source) <> value
+    end for
+    yes = true
+end halves_match
+
+--  Ten items shuffled from seed 7.
+shuffled: [10]u8 = [9, 5, 3, 8, 4, 1, 7, 0, 6, 2]
+
+shuffle_matches: () -> (yes: bool) =
+    yes = false
+    mut source := random.new(7)
+    mut values: [10]u8 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    random.shuffle(source, values[0..<10])
+    for at in usize(0)..<10 do
+        return when values[at] <> shuffled[at]
+    end for
+    yes = true
+end shuffle_matches
+
+--  Entropy of the bytes 1 to 32 is the state, read little-endian, and
+--  draws these first.
+counted_bytes: [32]u8 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                         16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                         29, 30, 31, 32]
+counted_draws: [3]u64 = [5961681302714436584, 13557399450712486528,
+                         3242939241321077778]
+
+--  Entropy that is all zero, which xoshiro256** cannot leave, seeds as
+--  seed 0 does; entropy that has run dry fails as the provider fails.
+zero_bytes: [32]u8 = zeroed
+
+entropy_seeds: () -> (yes: bool) ! ... =
+    yes = false
+    mut state: io.entropy_space = zeroed
+    counted := io.entropy_over(state, counted_bytes[0..<32])
+    mut source := try random.from_entropy(counted)
+    for value in counted_draws do
+        return when random.next(source) <> value
+    end for
+    return when state.used <> 32 or state.requests <> 1
+    mut empty_state: io.entropy_space = zeroed
+    zero := io.entropy_over(empty_state, zero_bytes[0..<32])
+    mut zeroed_source := try random.from_entropy(zero)
+    return when random.next(zeroed_source) <> seed_zero[0]
+    dry: random.generator = random.from_entropy(zero) else (problem)
+        yes = problem == io.io_failed and empty_state.used == 32
+        return
+    end
+    _ = dry
+end entropy_seeds
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not draws(0, seed_zero[0..<8])
+    code = 2
+    return when not draws(42, seed_answer[0..<8])
+    code = 3
+    return when not draws(0x0123456789abcdef, seed_pattern[0..<8])
+    code = 4
+    return when not below_matches()
+    code = 5
+    return when not halves_match()
+    code = 6
+    return when not shuffle_matches()
+    code = 7
+    seeded: bool = entropy_seeds() else (problem)
+        _ = problem
+        return
+    end
+    return when not seeded
+    code = 42
+end main

@@ -5,3 +5,4 @@ the shell said:
 and complained:
 | something went wrong
 and exited with code 3
+after a second or more

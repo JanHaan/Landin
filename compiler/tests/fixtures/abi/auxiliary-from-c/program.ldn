@@ -1,0 +1,44 @@
+--  What platform/linux adopted from the tables a C `main` handed the
+--  argument initializer: the auxiliary vector's entries, the page size,
+--  the vDSO's clock and the environment, which a C peer compares with the
+--  C library's own `getauxval`.
+import platform/linux
+import platform/posix
+
+--  The auxiliary-vector entry tagged TAG, or zero when there is none.
+public extern(c) l_auxiliary: (tag: u64) -> (value: u64) =
+    (found, value: given) := linux.auxiliary(tag)
+    value = if found then given else 0 end if
+end l_auxiliary
+
+public extern(c) l_page_size: () -> (bytes: usize) =
+    bytes = linux.page_size()
+end l_page_size
+
+--  Whether the vDSO's clock_gettime was found.
+public extern(c) l_vdso: () -> (yes: bool) =
+    (found, address) := linux.vdso_symbol(linux.vdso_clock_name,
+                                          linux.vdso_version)
+    yes = found and address <> 0
+end l_vdso
+
+--  Whether platform/linux holds an environment.
+public extern(c) l_environment: () -> (yes: bool) =
+    yes = false
+    table: linux.environment_table = linux.environment()
+    match table
+        linux.no_environment: return
+        ptr (entries): _ = entries
+    end match
+    yes = true
+end l_environment
+
+--  The monotonic clock in nanoseconds, or -1.
+public extern(c) l_monotonic: () -> (at: i64) =
+    at = -1
+    time: posix.time_value = posix.clock_time(posix.monotonic_clock) else (problem)
+        _ = problem
+        return
+    end
+    at = time.seconds * 1000000000 + i64(time.nanoseconds)
+end l_monotonic

@@ -2,7 +2,9 @@
 --  a memory world: a program registered at /bin/sh writes its output and
 --  errors and exits as it is told, and its record keeps what it was
 --  given.  The same `capture` and `report` that run a real
---  shell in runtime/run-shell write the same report here, byte for byte.
+--  shell in runtime/run-shell write the same report here, byte for byte,
+--  timed on a manual clock that the scripted shell's second of sleep
+--  advances, and a shell that takes a quarter of one is reported so.
 --  The fake's own failures follow: a path it has no program at is
 --  not_found, a read failure while capturing is io_failed, a scripted
 --  program ends by a signal, its piped input is kept, and one already
@@ -51,20 +53,28 @@ quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     end if
 end quoted
 
---  Report what the child wrote and how it ended.
+--  Report what the child wrote, how it ended and how long it took, which
+--  is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+         output: []u8, errors: []u8, ended: io.ending, took: io.duration)
+        -> none ! ... =
     try io.put(out, "the shell said:\n")
     try quoted(out, output)
     try io.put(out, "and complained:\n")
     try quoted(out, errors)
-    mut room: [48]u8 = zeroed
-    mut line := text.over(room[0..<48])
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
     match ended.how
         io.exited(code): try text.format(line, "and exited with code {}\n",
                                          [any(addr code)])
         io.signalled: try text.append(line, "and was ended by a signal\n")
     end match
+    if took >= io.seconds(1) then
+        try text.append(line, "after a second or more\n")
+    else
+        whole: u64 = io.in_milliseconds(took)
+        try text.format(line, "after only {} ms\n", [any(addr whole)])
+    end if
     try io.put(out, text.used(line))
 end report
 
@@ -78,11 +88,23 @@ expected: []u8 = """the shell said:
     and complained:
     | something went wrong
     and exited with code 3
+    after a second or more
+    the shell said:
+    | NAME=landin
+    | GREETING=hello, world
+    | HOME is not set
+    and complained:
+    | something went wrong
+    and exited with code 3
+    after only 250 ms
     """
 
 --  Run the shell over HOST and report it to WORLD's standard output, as
---  runtime/run-shell does.
-ran: (world: io.memory, host: io.scripted_programs)
+--  runtime/run-shell does, timed on CLOCK, which the scripted shell, which
+--  writes everything at once, moves on by SLEPT as a real one would by
+--  sleeping.
+ran: (world: io.memory, host: io.scripted_programs, clock: io.manual_clock,
+      slept: io.duration)
      -> (ended: io.ending) ! ... =
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(world, io.out(world), storage[0..<256])
@@ -92,15 +114,18 @@ ran: (world: io.memory, host: io.scripted_programs)
         [(name: text.host_over("NAME"), value: text.host_over("landin")),
          (name: text.host_over("GREETING"),
           value: text.host_over("hello, world"))]
+    began: io.instant = io.now(clock)
     started: io.child = try io.spawn(host, text.host_over("/bin/sh"),
                                      arguments[0..<2], variables[0..<2],
                                      io.capturing)
+    io.sleep(clock, slept)
     mut output_room: [512]u8 = zeroed
     mut errors_room: [512]u8 = zeroed
     mut output := text.over(output_room[0..<512])
     mut errors := text.over(errors_room[0..<512])
     ended = try capture(host, started, output, errors)
-    try report(out, text.used(output), text.used(errors), ended)
+    took: io.duration = io.elapsed(began, io.now(clock))
+    try report(out, text.used(output), text.used(errors), ended, took)
     try io.flush(out)
 end ran
 
@@ -204,9 +229,9 @@ public main: () -> (code: i32) =
     mut slots: [1]io.memory_file =
         [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
           writable: false, opened: false, writing: false)]
-    mut written: [512]u8 = zeroed
+    mut written: [1024]u8 = zeroed
     mut complained: [64]u8 = zeroed
-    world := io.memory_over(state, slots[0..<1], [], "", written[0..<512],
+    world := io.memory_over(state, slots[0..<1], [], "", written[0..<1024],
                             complained[0..<64])
     mut kept: [32]u8 = zeroed
     mut programs: [2]io.scripted_program =
@@ -219,7 +244,9 @@ public main: () -> (code: i32) =
           arguments: 0, variables: 0, output_read: 0, errors_read: 0,
           running: false)]
     host := io.scripted_over(world, programs[0..<2])
-    ended: io.ending = ran(world, host) else (problem)
+    mut time: io.clock_space = zeroed
+    clock := io.clock_over(time, io.instant(0), (seconds: 0, nanoseconds: 0))
+    ended: io.ending = ran(world, host, clock, io.seconds(1)) else (problem)
         _ = problem
         return
     end
@@ -227,8 +254,14 @@ public main: () -> (code: i32) =
         io.exited(given): return when given <> 3
         io.signalled: return
     end match
+    quick: io.ending = ran(world, host, clock,
+                           io.milliseconds(250)) else (problem)
+        _ = problem
+        return
+    end
+    _ = quick
     return when mem.compare(io.written(world), expected) <> mem.equal
-    return when programs[0].starts <> 1 or programs[0].arguments <> 2
+    return when programs[0].starts <> 2 or programs[0].arguments <> 2
       or programs[0].variables <> 2 or programs[0].running
     code = 2
     return when not missing(host)

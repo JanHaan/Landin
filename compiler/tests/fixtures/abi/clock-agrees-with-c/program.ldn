@@ -1,0 +1,47 @@
+--  The clock facts platform/libc keeps, and on Linux platform/linux's
+--  copies, handed to a C peer that holds each to the system's own
+--  headers, and platform/posix's clocks, which the peer reads its own
+--  around: on Darwin and FreeBSD through the C library, and on Linux, the
+--  C runtime having started the program, through the system call.
+import platform/libc
+import platform/linux
+import platform/posix
+
+public extern(c) l_clock_realtime: () -> (value: i32) =
+    value = libc.clock_realtime
+end l_clock_realtime
+
+public extern(c) l_clock_monotonic: () -> (value: i32) =
+    value = libc.clock_monotonic
+end l_clock_monotonic
+
+public extern(c) l_timespec_size: () -> (size: usize) =
+    size = sizeof libc.timespec
+end l_timespec_size
+
+fixed if compiler.os == linux then
+    --  platform/linux's own copies of the same facts.
+    public extern(c) l_linux_agrees: () -> (yes: bool) =
+        yes = linux.clock_monotonic == libc.clock_monotonic
+              and linux.clock_realtime == libc.clock_realtime
+              and sizeof linux.timespec == sizeof libc.timespec
+    end l_linux_agrees
+end if
+
+--  The clock `clock` in nanoseconds, or -1 when it cannot be read.
+nanoseconds: (clock: posix.clock_kind) -> (at: i64) =
+    at = -1
+    time: posix.time_value = posix.clock_time(clock) else (problem)
+        _ = problem
+        return
+    end
+    at = time.seconds * 1000000000 + i64(time.nanoseconds)
+end nanoseconds
+
+public extern(c) l_monotonic: () -> (at: i64) =
+    at = nanoseconds(posix.monotonic_clock)
+end l_monotonic
+
+public extern(c) l_realtime: () -> (at: i64) =
+    at = nanoseconds(posix.realtime_clock)
+end l_realtime

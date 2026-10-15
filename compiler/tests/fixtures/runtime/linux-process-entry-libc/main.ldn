@@ -3,10 +3,20 @@ import hosted/io as hosted
 import platform/linux
 
 --  Under --link=libc the C runtime starts the program, so
---  platform/linux's entry never runs: it has no environment or auxiliary
---  vector to report, and the page size falls back to 4 KiB.  hosted/io
---  still reaches the kernel through platform/linux's system calls and the
+--  platform/linux's entry never runs, but the argument initializer hands
+--  it the initial stack's tables that C's `main` was given: it reports the
+--  same environment and the auxiliary vector after it, with the kernel's
+--  page size, as a static program's entry finds them.  hosted/io still
+--  reaches the kernel through platform/linux's system calls and the
 --  arguments still reach its world.
+--  Whether the auxiliary vector gives the page size, a power of two of at
+--  least 4 KiB, and page_size is it.
+page_known: () -> (yes: bool) =
+    (found, value) := linux.auxiliary(6)
+    yes = found and value >= 4096 and (value & (value - 1)) == 0
+          and u64(linux.page_size()) == value
+end page_known
+
 public main: () -> (code: i32) =
     code = 1
     state: hosted.system = hosted.host()
@@ -14,17 +24,11 @@ public main: () -> (code: i32) =
     code = 2
     table: linux.environment_table = linux.environment()
     match table
-        linux.no_environment: begin
-        end
-        ptr (entries): begin
-            _ = entries
-            return
-        end
+        linux.no_environment: return
+        ptr (entries): _ = entries
     end match
     code = 3
-    (found, value) := linux.auxiliary(6)
-    return when found or value <> 0
-    return when linux.page_size() <> 4096
+    return when not page_known()
     code = 4
     out: io.file = io.out(state)
     io.write(state, out, "libc entry\n") else (problem)

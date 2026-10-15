@@ -1,5 +1,5 @@
 --  A distinct value meets its base or another type only through a
---  conversion, `==` included.
+--  conversion, `==` and the orderings included.
 handle: type = distinct u32
 other: type = distinct u32
 
@@ -10,3 +10,11 @@ end with_base
 with_other: (value: handle, next: other) -> (same: bool) =
     same = value == next
 end with_other
+
+below_base: (value: handle) -> (lower: bool) =
+    lower = value < u32(1)
+end below_base
+
+above_other: (value: handle, next: other) -> (higher: bool) =
+    higher = value >= next
+end above_other

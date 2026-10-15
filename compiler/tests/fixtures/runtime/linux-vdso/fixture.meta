@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/linux finds the vDSO's clock_gettime by its name and version in the image the auxiliary vector names, its readings fall between system calls made before and after them, and a copy of the image damaged one byte at a time, cut short at every length, stripped of DT_HASH or of its version definitions finds nothing or something inside it and never traps
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0570, 1000, 1975
+targets: linux-x86-64, linux-arm64, linux-rv64

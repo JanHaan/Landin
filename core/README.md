@@ -13,8 +13,9 @@ the documentation convention.
 ## Availability inventory
 
 The shared freestanding modules are `core/cmp`, `core/diag`, `core/fault`,
-`core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/region`,
-`core/sort`, `core/spill`, `core/text`, `core/tree` and `core/vec`. Every public interface is
+`core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/random`,
+`core/region`, `core/sort`, `core/spill`, `core/text`, `core/tree` and
+`core/vec`. Every public interface is
 available on every target. Their providers retain caller-supplied authority.
 
 `hosted/heap` and `hosted/io` require a hosted system. Import the I/O
@@ -162,6 +163,23 @@ providers of their own so that a world that runs no program carries none
 of them: `variables_over` an environment of `NAME=value` byte strings, and
 `scripted_over` scripted programs that write what they are given and end
 as they are told, writing an inherited stream into the world's own.
+Time is two more concepts outside `world`: `clock`, a monotonic clock
+that never goes back and sleeping on it, and `wall_clock`, the system's UTC
+time, which may be set back and so never times anything. A reading is an
+`instant` and a span a `duration`, each a distinct `u64` of nanoseconds,
+584 years of them, with no floating point and the same arithmetic on every
+target; two of a kind compare and are ordered directly, as every
+distinct scalar type is, and `elapsed` traps rather than answer a negative
+span. A sleep never returns early by its own clock. The
+system's random bytes are a third, `entropy`. The fakes are a
+`manual_clock`, which moves only when the test advances it or something
+sleeps on it, by exactly what was asked, and `scripted_entropy`, the
+caller's bytes in order, so a program that times itself, sleeps or seeds
+itself gives the same answer in every test. `core/random` is the
+deterministic generator: xoshiro256**, seeded from a `u64` or from any
+`entropy`, drawing the same sequence for a seed on every target, Cortex-M0
+included, uniform values below a bound without modulo bias and shuffles;
+it is not cryptographic.
 `core/text` builds text: a `builder` over the caller's buffer, or one
 growing through an allocator the caller erases, takes typed pieces, bytes,
 text, host strings, decimals of every width and hexadecimal, each whole or
@@ -196,6 +214,8 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check with the growth path every builder carries, is about 6.4 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 21.5 KB in all). No allocator is used unless the program builds a growing builder over its own. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
+| `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
+| `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
 | `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
@@ -445,6 +465,21 @@ Behaviour is unchanged except where noted.
 | `clone3`, `execve` and `wait4` by number, or `posix_spawn` declared `extern(c)` | `io.spawn`, `io.write_child`, `io.close_input`, `io.read_child` and `io.wait`, or `platform/posix`'s `pipe`, `spawn` and `wait` |
 | a descriptor `platform/posix` opened, inherited by any program the process executed | closed on exec, `O_CLOEXEC`, as every descriptor the module makes is |
 | `hosted.space` holding `failure` | `failure` and `signal`, the cell `hosted.last_signal` reads |
+
+## Migrating to clocks and randomness
+
+Three concepts beside the others give the time, sleeping and the system's
+random bytes, and `core/random` a generator. Behaviour is unchanged except
+where noted.
+
+| Was | Now |
+|---|---|
+| `linux.system_call` with `numbers.clock_gettime_number`, or `clock_gettime` declared `extern(c)` | `io.now(host)` for the monotonic clock and `io.wall_now(host)` for the wall clock, or `platform/posix`'s `clock_time`; on Linux it reads the vDSO, and `linux.clock_gettime` is the system call |
+| `numbers.clock_nanosleep_number`, or `nanosleep` declared `extern(c)`, retried by hand | `io.sleep(host, io.milliseconds(20))`, which sleeps on for what a signal left; `posix.sleep` is the one call |
+| `numbers.getrandom_number`, or `arc4random_buf` declared `extern(c)` | `io.fill_random(host, buffer)`, or `posix.random_bytes` for one call |
+| `linux.auxiliary(25)`'s sixteen bytes as a seed | `random.from_entropy(host)`, or `random.new(seed)` for a fixed sequence |
+| a generator of your own | `core/random`'s `new`, `next`, `below` and `shuffle` |
+| `hosted.system` as `world`, `directories`, `environment` and `programs` | the same, and `clock`, `wall_clock` and `entropy` too |
 
 ## Migrating container providers and indices
 

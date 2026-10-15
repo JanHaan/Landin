@@ -8,6 +8,8 @@ prototype-2 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64
 prototype-3 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
+abi/auxiliary-from-c | linux-x86-64, linux-arm64, linux-rv64
+abi/clock-agrees-with-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/core-io-file-identity | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/darwin-varargs-stack-slots | macos-arm64
@@ -1687,6 +1689,9 @@ runtime/checked-negation-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd
 runtime/checked-overflow-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/checked-subtraction-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/checks-return-after-the-region | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/clock-manual | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/clock-system | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/clock-system-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/comparisons-exit-with-their-verdict | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/compiler-unreachable-dispatches | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/compiler-unreachable-ends-paths | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
@@ -1759,6 +1764,7 @@ runtime/directory-missing-path | linux-x86-64, linux-arm64, macos-arm64, freebsd
 runtime/directory-name-not-utf8 | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/directory-through-file | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/distinct-equality-and-flags | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m
+runtime/distinct-ordering | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-arguments-at-every-width | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/environment-variables | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1863,6 +1869,7 @@ runtime/library-shared-map | linux-x86-64, linux-arm64, linux-rv64, macos-arm64,
 runtime/library-shared-mem | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-panic | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-pool | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/library-shared-random | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-region | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-sort | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/library-shared-spill | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
@@ -1876,6 +1883,7 @@ runtime/linux-level-check | linux-x86-64, linux-arm64, linux-rv64
 runtime/linux-process-entry | linux-x86-64, linux-arm64, linux-rv64
 runtime/linux-process-entry-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/linux-system-calls | linux-x86-64, linux-arm64, linux-rv64
+runtime/linux-vdso | linux-x86-64, linux-arm64, linux-rv64
 runtime/literal-conditions-select-flow | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/local-array-computed-index-reads-and-writes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/local-array-computed-index-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2121,6 +2129,7 @@ runtime/r720-feature-interactions | linux-x86-64, linux-arm64, macos-arm64, free
 runtime/r720-inferred-arrays-hold-references | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r720-labelled-block-transfers | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r720-payload-arrays-take-values | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/random-sequence | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/range-selection-element-is-a-place | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/range-subtype-checks | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/range-subtype-conversion-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

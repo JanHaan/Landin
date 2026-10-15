@@ -285,8 +285,9 @@ end unmap
 
 --- The size of the system's pages in bytes, which `map` aligns to: 16 KiB
 --- on Darwin arm64 and 4 KiB on the others.  On Linux it is what the
---- kernel told a static executable's entry, and 4096 when the C runtime
---- started the program instead.
+--- kernel told a static executable's entry or, under `--link=libc`, what
+--- the auxiliary vector after C `main`'s `envp` says, and 4096 when no
+--- vector was found.
 public link(symbol: "_landin_posix_page_size") page_size:
     () -> (bytes: usize) =
     bytes = system_page_size()
@@ -298,6 +299,59 @@ public link(symbol: "_landin_posix_exit") exit:
     (status: i32) -> noreturn =
     system_exit(status)
 end exit
+
+--- The clock that counts steadily from a point the system fixes, its
+--- start, and is never set: POSIX's `CLOCK_MONOTONIC`.  Only the
+--- difference between two of its readings means anything.
+public monotonic_clock: atom
+--- The wall clock, UTC seconds and nanoseconds since 1970-01-01 without
+--- leap seconds, as the system keeps it, which may be set and so jump
+--- either way: POSIX's `CLOCK_REALTIME`.
+public realtime_clock: atom
+--- Which clock `clock_time` reads: `monotonic_clock` or `realtime_clock`.
+public clock_kind: type = monotonic_clock | realtime_clock
+
+--- A time or a span of time, POSIX's `struct timespec`: whole seconds and
+--- the nanoseconds after them, from 0 to 999,999,999.
+public time_value: type = struct
+    seconds: i64
+    nanoseconds: u32
+end time_value
+
+--- The time the clock `clock` reads now, POSIX's `clock_gettime`, or the
+--- errno.  On Linux it is the vDSO's `clock_gettime` when the auxiliary
+--- vector names a vDSO that has one, which answers without entering the
+--- kernel, under `--link=libc` too, and the system call otherwise; on
+--- Darwin and FreeBSD it is the C library's.
+public link(symbol: "_landin_posix_clock_time") clock_time:
+    (clock: clock_kind) -> (time: time_value) ! errno =
+    time = try system_clock_time(clock)
+end clock_time
+
+--- Sleep for `span`, POSIX's `nanosleep`, measured on the monotonic clock
+--- on Linux and on the system's own clock for sleeping elsewhere: or the
+--- errno, `eintr` when a signal came first, which leaves part of the span
+--- unslept, and `einval` for nanoseconds of a second or more.  It may
+--- return late, never early, of the clock it sleeps on.
+public link(symbol: "_landin_posix_sleep") sleep:
+    (span: time_value) -> none ! errno =
+    fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
+    try system_sleep(span)
+end sleep
+
+--- Fill as much of `into` as the system gives at once with random bytes
+--- from its own source, which is fit for keys: how many, or the errno.  On
+--- Linux it is `getrandom`, which waits while the kernel's pool is not yet
+--- ready, only early in boot, may fill a request over 256 bytes short and
+--- fails `eintr` when a signal came before any byte.  On Darwin and
+--- FreeBSD it is the C library's `arc4random_buf`, which fills all of
+--- `into` and never fails.
+public link(symbol: "_landin_posix_random_bytes") random_bytes:
+    (into: []mut u8) -> (count: usize) ! errno =
+    count = 0
+    return when lenof into == 0
+    count = try system_random_bytes(into)
+end random_bytes
 
 events_value: type = distinct u16
 
@@ -426,7 +480,12 @@ public extern(c) _landin_host_initialize_arguments:
     end if
     root_count = count
     root_values = values
-    if variables <> 0 then root_environment = environment end if
+    if variables <> 0 then
+        root_environment = environment
+        --  On Linux, the auxiliary vector after the initial stack's envp,
+        --  when that is where C's runtime found these tables.
+        system_adopt_start(count, values, environment)
+    end if
 end _landin_host_initialize_arguments
 
 --- The process's arguments as its entry gave them: argv after `argv[0]`

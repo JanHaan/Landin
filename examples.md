@@ -1485,7 +1485,9 @@ arguments it sees after its own name and exactly the variables the parent
 builds, each a name and a value, `io.variable`: nothing is looked up on a
 search path, no shell reads anything the parent did not ask for, and the
 parent's own environment, its `HOME` among it, is not passed on, which the
-shell's third line shows. An argument, a name and a value are host strings
+shell's third line shows. Its `PATH` is the one variable the parent passes
+on, read from its own environment with `io.variable_named`, so that the
+shell finds `sleep`. An argument, a name and a value are host strings
 [0790], here made over text with `text.host_over`; the system takes any
 bytes, UTF-8 or not. `io.spawn` is generic over its provider, and a
 generic routine is not lent an array literal or a whole array, so the
@@ -1505,6 +1507,14 @@ ended from outside; what ended it is the system's detail, which the hosted
 provider keeps as `hosted.last_signal`. `wait` consumes the child [0910],
 with any pipe it still has.
 
+The parent times the child on the monotonic clock, `io.now`, before it
+starts it and after it has ended, and `io.elapsed` is the span between the
+two readings, an `io.duration` of nanoseconds; it would trap were the second
+reading the earlier, which a monotonic clock never gives. The shell sleeps
+for a second, so the span is a second or more however the system schedules
+it, and that bound is what the report says, rather than the time itself,
+which no two runs share.
+
 The report goes to standard output through a buffered writer, flushed at
 the end and by a `defer` on every other way out [1100], and the program
 returns 42 when the shell exited with the 3 its script ends with.
@@ -1513,21 +1523,23 @@ Fixture source: `compiler/tests/fixtures/runtime/run-shell/main.ldn`.
 
 ```landin
 --  Run a shell with an environment built for it, read what it writes to
---  its output and its errors while it runs, and report what it said, what
---  it complained of and how it ended.  The report goes through a buffered
---  writer, flushed on every way out.
+--  its output and its errors while it runs, time it, and report what it
+--  said, what it complained of, how it ended and how long it took.  The
+--  report goes through a buffered writer, flushed on every way out.
 import core/io
 import core/text
 import hosted/io as hosted
 
 --  What the shell runs: it says what its environment holds, complains
---  once and ends with code 3.  Its environment is only what the program
---  gives it, so the HOME the program itself has is not among it.
+--  once, sleeps for a second and ends with code 3.  Its environment is
+--  only what the program gives it, so the HOME the program itself has is
+--  not among it; its PATH is, which is how the shell finds `sleep`.
 script: []u8 = """
     printf 'NAME=%s\n' "$NAME"
     printf 'GREETING=%s\n' "$GREETING"
     printf 'HOME is %s\n' "${HOME-not set}"
     echo 'something went wrong' >&2
+    sleep 1
     exit 3
     """
 
@@ -1571,22 +1583,41 @@ quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     end if
 end quoted
 
---  Report what the child wrote and how it ended.
+--  Report what the child wrote, how it ended and how long it took, which
+--  is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         output: []u8, errors: []u8, ended: io.ending) -> none ! ... =
+         output: []u8, errors: []u8, ended: io.ending, took: io.duration)
+        -> none ! ... =
     try io.put(out, "the shell said:\n")
     try quoted(out, output)
     try io.put(out, "and complained:\n")
     try quoted(out, errors)
-    mut room: [48]u8 = zeroed
-    mut line := text.over(room[0..<48])
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
     match ended.how
         io.exited(code): try text.format(line, "and exited with code {}\n",
                                          [any(addr code)])
         io.signalled: try text.append(line, "and was ended by a signal\n")
     end match
+    if took >= io.seconds(1) then
+        try text.append(line, "after a second or more\n")
+    else
+        whole: u64 = io.in_milliseconds(took)
+        try text.format(line, "after only {} ms\n", [any(addr whole)])
+    end if
     try io.put(out, text.used(line))
 end report
+
+--  The parent's own PATH, the one variable of its environment it passes
+--  on, or the directories every hosted system keeps `sleep` in when it
+--  has none.
+search_path: (host: hosted.system) -> (path: text.host_string from host) =
+    path = text.host_over("/bin:/usr/bin")
+    path = io.variable_named(host, text.host_over("PATH")) else (problem)
+        _ = problem
+        return
+    end
+end search_path
 
 public main: () -> (code: i32) =
     host := hosted.host()
@@ -1598,12 +1629,14 @@ public main: () -> (code: i32) =
     code = 1
     arguments: [2]text.host_string = [text.host_over("-c"),
                                       text.host_over(script)]
-    variables: [2]io.variable =
+    variables: [3]io.variable =
         [(name: text.host_over("NAME"), value: text.host_over("landin")),
          (name: text.host_over("GREETING"),
-          value: text.host_over("hello, world"))]
+          value: text.host_over("hello, world")),
+         (name: text.host_over("PATH"), value: search_path(host))]
+    began: io.instant = io.now(host)
     started := io.spawn(host, text.host_over("/bin/sh"),
-                        arguments[0..<2], variables[0..<2],
+                        arguments[0..<2], variables[0..<3],
                         io.capturing) else (problem)
         _ = problem
         return
@@ -1616,7 +1649,9 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    report(out, text.used(output), text.used(errors), ended) else (problem)
+    took: io.duration = io.elapsed(began, io.now(host))
+    report(out, text.used(output), text.used(errors), ended,
+           took) else (problem)
         _ = problem
         return
     end
@@ -1641,11 +1676,14 @@ the shell said:
 and complained:
 | something went wrong
 and exited with code 3
+after a second or more
 ```
 
 The same `capture` and `report` run over `core/io`'s scripted programs,
 beside a memory world, in `runtime/run-shell-memory`, which writes the same report
-byte for byte and injects the fake's failures. A program that is not there
+byte for byte, timed on `core/io`'s manual clock, which a sleep moves on by
+exactly what it asks and no time passes otherwise, and injects the fake's
+failures. A program that is not there
 is `io.not_found` in `runtime/run-missing-program`; a shell that kills
 itself is `signalled` in `runtime/run-signalled`, with its signal's number
 kept; and in `runtime/run-large-output` a shell writes a mebibyte to each

@@ -15,6 +15,8 @@ fixed if compiler.os == linux then
         wait4_number: i64 = 61
         fcntl_number: i64 = 72
         getdents64_number: i64 = 217
+        clock_gettime_number: i64 = 228
+        clock_nanosleep_number: i64 = 230
         exit_group_number: i64 = 231
         openat_number: i64 = 257
         mkdirat_number: i64 = 258
@@ -22,6 +24,7 @@ fixed if compiler.os == linux then
         ppoll_number: i64 = 271
         dup3_number: i64 = 292
         pipe2_number: i64 = 293
+        getrandom_number: i64 = 318
         statx_number: i64 = 332
         close_range_number: i64 = 436
     elsif compiler.arch == arm64 then
@@ -37,11 +40,14 @@ fixed if compiler.os == linux then
         write_number: i64 = 64
         ppoll_number: i64 = 73
         exit_group_number: i64 = 94
+        clock_gettime_number: i64 = 113
+        clock_nanosleep_number: i64 = 115
         munmap_number: i64 = 215
         clone_number: i64 = 220
         execve_number: i64 = 221
         mmap_number: i64 = 222
         wait4_number: i64 = 260
+        getrandom_number: i64 = 278
         statx_number: i64 = 291
         close_range_number: i64 = 436
     elsif compiler.arch == rv64 then
@@ -57,12 +63,15 @@ fixed if compiler.os == linux then
         write_number: i64 = 64
         ppoll_number: i64 = 73
         exit_group_number: i64 = 94
+        clock_gettime_number: i64 = 113
+        clock_nanosleep_number: i64 = 115
         munmap_number: i64 = 215
         clone_number: i64 = 220
         execve_number: i64 = 221
         mmap_number: i64 = 222
         riscv_hwprobe_number: i64 = 258
         wait4_number: i64 = 260
+        getrandom_number: i64 = 278
         statx_number: i64 = 291
         close_range_number: i64 = 436
     end if

@@ -5,6 +5,16 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/aapcs64-varargs-both-banks/fixture.meta"
     },
+    "abi/auxiliary-from-c": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its initial stack and the C library's getauxval exist only on a hosted Linux system, and Cortex-M0 starts no process.",
+      "witness": "compiler/tests/fixtures/abi/auxiliary-from-c/fixture.meta"
+    },
+    "abi/clock-agrees-with-c": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's clocks exist only on a hosted system; runtime/clock-manual runs core/io's manual clock on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/clock-agrees-with-c/fixture.meta"
+    },
     "abi/core-io-file-identity": {
       "mode": "restriction",
       "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
@@ -426,6 +436,23 @@
     "runtime/checks-return-after-the-region": {
       "mode": "execute"
     },
+    "runtime/clock-manual": {
+      "mode": "execute"
+    },
+    "runtime/clock-system": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no system clock, sleep or entropy. runtime/clock-manual times and sleeps over core/io's manual clock and runtime/random-sequence seeds a generator from core/io's scripted entropy on Cortex-M0 instead."
+    },
+    "runtime/clock-system-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io and platform/linux on the freestanding target before checking declarations: firmware has no system clock and no C runtime."
+    },
     "runtime/comparisons-exit-with-their-verdict": {
       "mode": "execute"
     },
@@ -748,6 +775,9 @@
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/distinct-equality-and-flags": {
+      "mode": "execute"
+    },
+    "runtime/distinct-ordering": {
       "mode": "execute"
     },
     "runtime/division-and-remainder-exit-with-their-results": {
@@ -1102,6 +1132,9 @@
     "runtime/library-shared-pool": {
       "mode": "execute"
     },
+    "runtime/library-shared-random": {
+      "mode": "execute"
+    },
     "runtime/library-shared-region": {
       "mode": "execute"
     },
@@ -1164,6 +1197,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/linux, a Linux module, on the freestanding target before checking declarations."
+    },
+    "runtime/linux-vdso": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/linux on the freestanding target before checking declarations: a vDSO is Linux's."
     },
     "runtime/literal-conditions-select-flow": {
       "mode": "execute"
@@ -2050,6 +2090,9 @@
     "runtime/r720-payload-arrays-take-values": {
       "mode": "execute"
     },
+    "runtime/random-sequence": {
+      "mode": "execute"
+    },
     "runtime/range-selection-element-is-a-place": {
       "mode": "execute"
     },
@@ -2144,7 +2187,7 @@
     "runtime/run-shell-memory": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The process consumer's routines over core/io's scripted programs beside a memory world, with its report's buffered writer and format and every failure oracle, need about 76 KiB of flash at size/auto, overflowing the 32 KiB profile by 43 KiB; most of it is the Cortex-M0 backend's frame homes and copies between them, as runtime/directory-memory's limit records. Each profile still attempts execution; runtime/run-memory-firmware starts a scripted program and reads the world's environment within the image and requires execution; this image limit is not runtime evidence."
+      "reason": "The process consumer's routines over core/io's scripted programs beside a memory world, with its report's buffered writer and format, a manual clock timing it and every failure oracle, need about 78 KiB of flash at size/auto, overflowing the 32 KiB profile by 46 KiB; most of it is the Cortex-M0 backend's frame homes and copies between them, as runtime/directory-memory's limit records. Each profile still attempts execution; runtime/run-memory-firmware starts a scripted program and reads the world's environment within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/run-signalled": {
       "codes": [

@@ -1138,7 +1138,7 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650], which no updating assignment writes |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>` and no ordering |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>`, and `<`, `<=`, `>` and `>=` in the base's order, IEEE's comparisons for a floating base with NaN unordered; never with the base or another type without a conversion |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |
 
@@ -6520,10 +6520,10 @@ user code. A contextual literal receives the base's complete descriptor.
 An integer or float conversion is a separate explicit step: extracting a
 `distinct u32` as `i32` directly is L0301, while `i32(u32(value))` states both
 operations. Copying, assignment, parameter passing and returning preserve the
-identity; arithmetic, ordering, indexing, dereferencing, field selection
-and calls require an explicit extraction first. D302 admits equality between
-two values of one distinct scalar type, and flag operators over an unsigned
-base. No representation field is
+identity; arithmetic, indexing, dereferencing, field selection and calls
+require an explicit extraction first. D302 admits equality and ordering
+between two values of one distinct scalar type, and flag operators over an
+unsigned base. No representation field is
 visible in source. In particular, two values of the same distinct numeric
 type still inherit no arithmetic operation.
 
@@ -6597,20 +6597,29 @@ booleans, because a set of flags had no operators.
 
 **Chosen:** `==` and `<>` take two values of the same distinct type whose base
 is a scalar. `&`, `^`, `|` and `~` take values of the same distinct type
-whose base is an unsigned integer, and their result keeps that type. Ordering,
-arithmetic, shifts and updating assignment stay refused, `|=` with a note to
+whose base is an unsigned integer, and their result keeps that type. `<`,
+`<=`, `>` and `>=` take two values of one distinct type over a scalar, in the
+base's own order, an amendment D315's durations and instants prompted: integers by value and sign,
+`bool` with false first, and floats by IEEE comparison with NaN unordered.
+Arithmetic, shifts and updating assignment stay refused, `|=` with a note to
 write it out. A distinct value never meets its base or another distinct type
 without a conversion, and the refusal says so.
 
 **The alternatives:** equality for every distinct type, though an aggregate
-has none (D200); ordering, though an identifier is not ordered and a type that
-wants order declares `cmp.ordered` evidence; bit operators over any integer
+has none (D200); refusing ordering because an identifier is not ordered, as
+this decision first did, which made every comparison of two durations an
+extraction, `u64(a) < u64(b)`, though ordering two values of one type is
+harmless and useful, as Ada and Go allow for derived types; an opt-in ordered
+declaration, a word in the grammar for an order the base already has; bit
+operators over any integer
 base, though a signed identifier is not a set; and `|=`, which the updating
 path would need of its own.
 
-**Pinned by** `runtime/distinct-equality-and-flags`,
+**Pinned by** `runtime/distinct-equality-and-flags`, `runtime/distinct-ordering`,
 `negative/distinct-compare-across-types` and
-`negative/distinct-ordering-and-signed-flags`.
+`negative/distinct-ordering-and-signed-flags`, which refuses signed flags,
+arithmetic and `|=`. `cmp.ordered` evidence remains the way to give a distinct
+type a different order for maps and sorting.
 
 ### D228 — A packed image holds bits; extraction produces a validated value
 
@@ -18054,8 +18063,21 @@ program's entry: a bodyless `extern(c) link(symbol: "main")` of
 native hosted `main` as the same symbol. It ends the process with
 `exit_group` and main's result. No C library initialisation runs and no
 thread-local storage exists. Under `--link=libc` (D280) the C runtime starts
-the program instead: `environment()` is `no_environment`, `auxiliary` finds
-nothing and `page_size()` falls back to 4096.
+the program, and the argument initializer passes `platform/linux.adopt_start`
+the `argc`, `argv` and `envp` C's `main` was given (D311). It takes the
+environment and the auxiliary vector after `envp`'s null only when the tables
+have the initial stack's layout: `argv` above the calling frame, `envp`
+directly after `argv`'s null, at least one string and every string above the
+tables, AT_NULL within 64 entries below the lowest string with every tag below
+4096, AT_PAGESZ a power of two of at least 4096, and AT_RANDOM's sixteen bytes
+between the vector and the lowest string. Nothing above the lowest string is
+read. Otherwise `environment()` is `no_environment`, `auxiliary` finds nothing
+and `page_size()` falls back to 4096. The alternatives were the C library's
+`getauxval`, which a static link would refuse with L0500 since nothing tells
+the library its link mode; `PR_GET_AUXV`, Linux 6.4's; `/proc/self/auxv`, which
+needs `/proc`; and trusting any `envp`, which `setenv` may have moved and a C
+`main` may have built, sending reads into unmapped memory. `abi/auxiliary-from-c`
+pins the adoption and each refusal.
 
 Naked routines are admitted on hosted x86-64, arm64 and RV64 for this entry.
 Their text is the routine's whole body followed by a trap, keeps [1990]'s
@@ -18914,3 +18936,109 @@ which leaks every open file into every child.
 close-on-exec is removed, `runtime/posix-processes` and
 `abi/libc-process-constants`, which holds each system's constants to its
 headers.
+
+### D315 — Time is a count of nanoseconds, and the wall clock seconds and nanoseconds
+
+**The tour said** nothing of time, and floating-point values are neither written
+nor parsed as text yet.
+
+**Chosen:** `io.duration` and `io.instant` are each a `distinct u64` of
+nanoseconds, about 584 years, and ordered and compared as their base is
+(D302). `io.wall_time` is a record of `seconds: i64` and `nanoseconds: u32`,
+UTC since 1970 without leap seconds. Spans are made with `io.nanoseconds`,
+`io.microseconds`, `io.milliseconds` and `io.seconds`, which trap past the
+range; `io.elapsed` traps when its second reading is the earlier one;
+`io.later` makes a deadline, and `io.in_milliseconds` rounds down. There is no
+other arithmetic on time. Calendars, time zones and their formatting are the
+locale record's in the roadmap's register.
+
+**The alternatives:** a signed duration, which halves the range for spans that
+are never negative; a seconds-and-nanoseconds record for every value, which
+doubles the arithmetic; plain `u64` aliases, which let an instant be added to
+another; 32-bit counts, whose nanoseconds wrap in four seconds; floating-point
+seconds; a saturating or fallible `elapsed`, which hides the mistake it
+reports.
+
+**Pinned by** `runtime/clock-manual` on every target, Cortex-M0 included, and
+`runtime/clock-system`.
+
+### D316 — A clock, a wall clock and entropy are concepts of their own, and a sleep never returns early
+
+**The tour said** at [1660] that authority is passed, and D312 put a facility
+firmware need not pay for outside `world`.
+
+**Chosen:** `io.clock` holds `now` and `sleep` together, because a sleep is
+measured on that clock and its fake must advance it; `io.wall_clock` holds
+`wall_now`, apart, because firmware may count time without knowing the date
+and the wall clock jumps; `io.entropy` holds `fill_random`. All three are
+outside `world`, with fakes in `core/io`: `io.clock_over` gives a
+`manual_clock` a test advances, whose sleep advances it by exactly the span,
+and `io.entropy_over` gives scripted bytes. Reading a clock cannot fail; a
+failure of the system's own is `compiler.unreachable()`. A sleep cannot fail
+and never returns before `now` has reached its start plus the span: the hosted
+provider takes a deadline from the monotonic clock and sleeps for what is
+left, at most a million seconds a call, treating any failure, EINTR among
+them, as a reason to read the clock again; a deadline that would overflow is
+the clock's last instant. Entropy is fallible, and on Linux is `getrandom`
+with no flags, which waits only before the kernel's pool is first ready,
+looping over short reads and EINTR; on Darwin and FreeBSD it is
+`arc4random_buf`, which cannot fail.
+
+**The alternatives:** widening `world`; one concept for all three; a separate
+concept for sleeping; an absolute-deadline sleep, which Darwin's
+`nanosleep` cannot do; a fallible sleep; `GRND_NONBLOCK` with an atom for an
+unready pool; `GRND_INSECURE`; `/dev/urandom`, which needs a descriptor and
+fails in a chroot; and `getentropy`, limited to 256 bytes a call.
+
+**Pinned by** `runtime/clock-system`, whose oracles are monotonic order and a
+sleep's lower bound, `runtime/clock-manual`, `runtime/run-shell`, which times
+its child, `runtime/run-shell-memory` and `abi/clock-agrees-with-c`.
+
+### D317 — Linux reads its clock through the vDSO
+
+**The tour said** nothing of how a clock is read. A system call to read the
+time costs about 270 ns; the kernel's vDSO answers in about 27.
+
+**Chosen:** `platform/linux.vdso_symbol` finds the clock function the
+auxiliary vector's AT_SYSINFO_EHDR names: `__vdso_clock_gettime` at
+`LINUX_2.6` on x86-64, `__kernel_clock_gettime` at `LINUX_2.6.39` on arm64 and
+`__vdso_clock_gettime` at `LINUX_4.15` on RV64. It reads the first load
+segment and the dynamic table, counts symbols from `DT_HASH` or else
+`DT_GNU_HASH`, since only x86 forces both, and requires the version, or the
+name alone where there are no version tables. Every offset is held inside the
+image before it is read, by arithmetic that cannot overflow, and the image is
+bounded by its first page for the headers and its first load segment, at most
+a mebibyte. The function's address is cached in a plain module word on first
+use, single-threaded state like the heap's. A missing symbol, a malformed
+image or a nonzero answer falls back to the system call. Since D279's
+adoption it serves `--link=libc` too, and `io.now` costs about 116 ns either
+way.
+
+**The alternatives:** the system call alone; resolving the vDSO in every static
+program's entry, which carries its 17 KB into every image; and relaxed atomics
+for the cache, which cost about 50 ns a read until threads need them.
+
+**Pinned by** `runtime/linux-vdso`, which also forces the fallback, and
+`runtime/clock-system-libc`, which requires the vDSO under `--link=libc`.
+
+### D318 — `core/random` is xoshiro256**, the same everywhere and not cryptographic
+
+**The tour said** nothing of random numbers.
+
+**Chosen:** `random.generator` is xoshiro256** 1.0 (Blackman and Vigna, 2021),
+whose multiplications by 5 and 9 are shifts and additions, so drawing needs
+no helper on Cortex-M0. `random.new(seed)` seeds it through splitmix64, as its
+authors advise; `random.from_entropy` reads 32 bytes from an `io.entropy`
+provider and replaces the impossible all-zero state with `new(0)`'s.
+`random.below` masks to the bound's width and draws again when the value is
+too large, so it has neither division nor bias, and traps on a bound of zero;
+`random.shuffle` is Fisher and Yates'. A fixed seed's sequence is the same on
+every target. It is not cryptographic, as its documentation says.
+
+**The alternatives:** PCG32, with a 64-bit multiplication every step; Lemire's
+method for `below`, which needs a 128-bit product; and OpenBSD's threshold
+method, with two 64-bit divisions.
+
+**Pinned by** `runtime/random-sequence`, which holds the reference
+implementation's outputs on every target, Cortex-M0 included, and
+`runtime/library-shared-random`.

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: Small shared core/random consumer draws the reference sequence for its seed, keeps bounded draws below their bound and shuffles without losing an item
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+constructs: 0150, 0570, 0900, 1290

@@ -1,0 +1,187 @@
+--  The vDSO the auxiliary vector names: platform/linux finds its
+--  `clock_gettime` by name and version, which reads the same clocks the
+--  system call does, and a copy of the image, damaged one byte at a time
+--  or cut short anywhere, finds nothing or something inside it and never
+--  traps, so a malformed vDSO falls back to the system call.  Without its
+--  version tables the name alone decides, and without DT_HASH the GNU
+--  hash table counts the symbols.  Each check that fails returns its own
+--  code.
+import platform/linux
+
+--  Room for a copy of the image: the kernel's is two pages or so.
+mut copy: [65536]u8
+
+--  The image's length in the copy.
+mut copied: usize
+
+--  The clock `clock` read through the system call, in nanoseconds.
+by_system_call: (clock: i32) -> (at: i64) =
+    mut record: linux.timespec = zeroed
+    at = -1
+    return when linux.clock_gettime(clock, addr record) <> 0
+    at = record.seconds * 1000000000 + record.nanoseconds
+end by_system_call
+
+--  The clock `clock` read through the vDSO function at ADDRESS.
+by_vdso: (address: usize, clock: i32) -> (at: i64) =
+    held: usize = address
+    function: ptr linux.vdso_clock_gettime = ptr(usize(addr held))
+    mut record: linux.timespec = zeroed
+    at = -1
+    return when function.val(clock, addr record) <> 0
+    at = record.seconds * 1000000000 + record.nanoseconds
+end by_vdso
+
+--  Readings through the vDSO fall between system calls made before and
+--  after them, on the monotonic clock, and the realtime clocks agree
+--  within a second.
+agrees: (address: usize) -> (yes: bool) =
+    yes = false
+    for round in usize(0)..<100 do
+        _ = round
+        before: i64 = by_system_call(linux.clock_monotonic)
+        between: i64 = by_vdso(address, linux.clock_monotonic)
+        after: i64 = by_system_call(linux.clock_monotonic)
+        return when before < 0 or between < before or after < between
+    end for
+    wall: i64 = by_vdso(address, linux.clock_realtime)
+    kernel: i64 = by_system_call(linux.clock_realtime)
+    return when wall < 0 or kernel < wall or kernel - wall > 1000000000
+    yes = true
+end agrees
+
+--  Whether a lookup in the first LENGTH bytes of the copy returns without
+--  trapping and, when it finds the clock, finds it inside them.
+holds: (length: usize) -> (yes: bool) =
+    offset: usize = found_at(copy[0..<length], linux.vdso_clock_name,
+                             linux.vdso_version)
+    yes = offset == no_offset or offset < length
+end holds
+
+--  Every byte of the copy set to zero, to every bit, and to itself with
+--  its top bit flipped, one at a time and put back after.
+damaged: () -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<copied do
+        kept: u8 = copy[at]
+        copy[at] = 0
+        return when not holds(copied)
+        copy[at] = 255
+        return when not holds(copied)
+        copy[at] = kept ^ 128
+        return when not holds(copied)
+        copy[at] = kept
+    end for
+    yes = true
+end damaged
+
+--  The copy cut short at every length.
+truncated: () -> (yes: bool) =
+    yes = false
+    for length in usize(0)..<copied do
+        return when not holds(length)
+    end for
+    yes = true
+end truncated
+
+--  The little-endian u64 at AT in the copy, and writing one.
+read_double: (at: usize) -> (value: u64) =
+    value = 0
+    for index in usize(0)..<8 do
+        value = value | (u64(copy[at + index]) << u64(8 * index))
+    end for
+end read_double
+
+write_double: (at: usize, value: u64) -> none =
+    for index in usize(0)..<8 do
+        copy[at + index] = u8((value >> u64(8 * index)) & 255)
+    end for
+end write_double
+
+--  Where in the copy the dynamic entry tagged TAG lies, or zero.
+entry_of: (tag: u64) -> (at: usize) =
+    at = 0
+    headers: usize = usize(read_double(32))
+    count: usize = usize(copy[56]) | (usize(copy[57]) << 8)
+    for index in usize(0)..<count do
+        header: usize = headers + index * 56
+        if copy[header] == 2 and copy[header + 1] == 0 then
+            dynamic: usize = usize(read_double(header + 8))
+            mut entry: usize = dynamic
+            loop do
+                found: u64 = read_double(entry)
+                return when found == 0
+                if found == tag then
+                    at = entry
+                    return
+                end if
+                entry += 16
+            end loop
+        end if
+    end for
+end entry_of
+
+--  A tag no dynamic loader reads, which hides the entry it replaces.
+hidden: u64 = 0x6fffff00
+
+--  Where in BYTES the function NAME of VERSION is, or no_offset.
+no_offset: usize = 0 -% 1
+
+found_at: (bytes: []u8, name: []u8, version: []u8) -> (offset: usize) =
+    (found, offset: at) := linux.vdso_find(bytes, name, version)
+    offset = if found then at else no_offset end if
+end found_at
+
+--  Where the auxiliary vector says the vDSO is.
+vdso_base: () -> (base: usize) =
+    (found: _, value) := linux.auxiliary(linux.at_sysinfo_ehdr)
+    base = usize(value)
+end vdso_base
+
+--  The vDSO's function NAME of VERSION's address, or zero.
+address_of: (name: []u8, version: []u8) -> (address: usize) =
+    (found, address: at) := linux.vdso_symbol(name, version)
+    address = if found then at else 0 end if
+end address_of
+
+public main: () -> (code: i32) =
+    (found: present, image) := linux.vdso_image()
+    code = 1
+    return when not present or lenof image < 64 or lenof image > 65536
+    code = 2
+    name: []u8 = linux.vdso_clock_name
+    version: []u8 = linux.vdso_version
+    offset: usize = found_at(image, name, version)
+    return when offset >= lenof image
+    address: usize = address_of(name, version)
+    return when address <> vdso_base() + offset
+    code = 3
+    return when not agrees(address)
+    code = 4
+    return when found_at(image, name, "LINUX_0.1") <> no_offset
+      or found_at(image, "__vdso_no_such_function", version) <> no_offset
+    code = 5
+    copied = lenof image
+    for at in usize(0)..<copied do
+        copy[at] = image[at]
+    end for
+    return when not damaged()
+    code = 6
+    return when not truncated()
+    code = 7
+    --  Without DT_HASH the GNU hash table counts the symbols, and the same
+    --  function is found where it was.
+    hash: usize = entry_of(4)
+    if hash <> 0 and entry_of(0x6ffffef5) <> 0 then
+        write_double(hash, hidden)
+        return when found_at(copy[0..<copied], name, version) <> offset
+        write_double(hash, 4)
+    end if
+    code = 8
+    --  Without version definitions, the name alone decides.
+    definitions: usize = entry_of(0x6ffffffc)
+    return when definitions == 0
+    write_double(definitions, hidden)
+    return when found_at(copy[0..<copied], name, "LINUX_0.1") <> offset
+    code = 42
+end main

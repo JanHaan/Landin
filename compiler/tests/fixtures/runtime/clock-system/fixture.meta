@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the hosted provider's monotonic clock never goes back across ten thousand readings, sleeps of 20 ms, 1.5 ms and zero last at least what was asked on it, the wall clock reads after 2026-01-01 and moves forward across a sleep, and the system's entropy fills two buffers differently, a large one and an empty one, and seeds two generators apart
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0150, 0650, 0940, 1030, 1660, 1680
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

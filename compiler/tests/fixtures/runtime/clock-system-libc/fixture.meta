@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: linked with --link=libc, a Linux program whose C runtime started it finds the vDSO's clock_gettime through the auxiliary vector after the initial stack's envp, and its clocks never go back, sleep at least what was asked and read a wall time after 2026-01-01
+program: main.ldn
+root: ../../../../..
+link: libc
+status: 42
+constructs: 1650, 1660, 1975
+targets: linux-x86-64, linux-arm64, linux-rv64

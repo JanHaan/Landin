@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a C main hands the argument initializer tables a C program built on its own stack, C's environ after setenv moved it and a heap copy of the real tables, none of which platform/linux adopts, its clock falling back to the system call, and then the initial stack's argv and envp, after which every auxiliary-vector entry it reports is getauxval's, its page size is the kernel's and the vDSO's clock is found
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 1650, 1975
+targets: linux-x86-64, linux-arm64, linux-rv64

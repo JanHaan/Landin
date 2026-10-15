@@ -1,16 +1,16 @@
---  A distinct type has `==` and `<>`, and bit operators only over an
---  unsigned base: ordering is the base's, a signed identifier is no set of
---  flags, and an updating assignment is written out.
+--  A distinct type has `==`, `<>` and its base's order, and bit operators
+--  only over an unsigned base: a signed identifier is no set of flags,
+--  arithmetic is the base's, and an updating assignment is written out.
 descriptor: type = distinct i32
 events: type = distinct u16
-
-ordered: (left: descriptor, right: descriptor) -> (yes: bool) =
-    yes = left < right
-end ordered
 
 signed: (left: descriptor, right: descriptor) -> (both: descriptor) =
     both = left | right
 end signed
+
+summed: (left: descriptor, right: descriptor) -> (total: descriptor) =
+    total = left + right
+end summed
 
 updated: (inout set: events, more: events) -> none =
     set |= more

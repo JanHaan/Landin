@@ -1,0 +1,72 @@
+--  core/io's manual clock, which a test sets and advances: code that
+--  times itself and sleeps, written against the `clock` and `wall_clock`
+--  concepts, runs over it in no time and gives the same answer on every
+--  target, Cortex-M0 included.  A sleep advances the clock by exactly
+--  what was asked, both of its clocks move together, the wall clock
+--  carries its nanoseconds into seconds, and spans and instants convert
+--  as their counts say.  Each check that fails returns its own code.
+import core/io
+
+--  Poll until the clock has moved on by SPAN, sleeping STEP between
+--  readings, and say how many times it slept: a routine that only knows
+--  the `clock` concept.
+waited: (provider: type is io.clock, host: provider, span: io.duration,
+         step: io.duration) -> (sleeps: usize) =
+    start: io.instant = io.now(host)
+    deadline: io.instant = io.later(start, span)
+    sleeps = 0
+    while io.now(host) < deadline do
+        io.sleep(host, step)
+        inc sleeps
+    end while
+end waited
+
+--  How long WORK took, timed on HOST's clock.
+timed: (provider: type is io.clock, host: provider, work: io.duration)
+       -> (took: io.duration) =
+    start: io.instant = io.now(host)
+    io.sleep(host, work)
+    took = io.elapsed(start, io.now(host))
+end timed
+
+public main: () -> (code: i32) =
+    code = 1
+    return when u64(io.nanoseconds(7)) <> 7
+      or u64(io.microseconds(3)) <> 3000
+      or u64(io.milliseconds(250)) <> 250000000
+      or u64(io.seconds(90)) <> 90000000000
+      or io.in_milliseconds(io.nanoseconds(1999999)) <> 1
+      or io.duration(5) <> io.nanoseconds(5)
+    code = 2
+    mut state: io.clock_space = zeroed
+    clock := io.clock_over(state, io.instant(1000),
+                           (seconds: 1767225600, nanoseconds: 999999000))
+    return when u64(io.now(clock)) <> 1000
+    took: io.duration = timed(clock, io.milliseconds(250))
+    return when took <> io.milliseconds(250) or state.sleeps <> 1
+      or state.slept <> 250000000
+    code = 3
+    --  The wall clock moved with it, carrying past a whole second.
+    wall: io.wall_time = io.wall_now(clock)
+    return when wall.seconds <> 1767225601 or wall.nanoseconds <> 249999000
+    code = 4
+    --  Three sleeps of 400 ms pass a second; the third reaches it.
+    sleeps: usize = waited(clock, io.seconds(1), io.milliseconds(400))
+    return when sleeps <> 3 or state.monotonic <> 1000 + 1450000000
+    code = 5
+    --  A sleep of zero does not move the clock; `advance` moves it as a
+    --  test says, and a test may set the wall clock back.
+    before: io.instant = io.now(clock)
+    io.sleep(clock, io.duration(0))
+    return when io.now(clock) <> before
+    io.advance(clock, io.seconds(2))
+    return when u64(io.elapsed(before, io.now(clock))) <> 2000000000
+    state.wall_seconds = 0
+    set_back: io.wall_time = io.wall_now(clock)
+    return when set_back.seconds <> 0 or set_back.nanoseconds <> 449999000
+    code = 6
+    return when state.readings < 10 or state.sleeps <> 5
+    deadline: io.instant = io.later(io.instant(1), io.nanoseconds(2))
+    return when u64(deadline) <> 3
+    code = 42
+end main

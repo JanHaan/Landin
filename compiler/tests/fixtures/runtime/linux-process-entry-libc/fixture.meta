@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Under --link=libc the C runtime starts the program, platform/linux reports no environment or auxiliary vector, and hosted/io still makes its system calls
+summary: Under --link=libc the C runtime starts the program, platform/linux adopts the environment and the auxiliary vector after it from the initial stack's tables C's main was given, reporting the kernel's page size, and hosted/io still makes its system calls
 program: main.ldn
 root: ../../../../..
 run_args: only

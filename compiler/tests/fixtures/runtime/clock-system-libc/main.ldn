@@ -1,0 +1,47 @@
+--  Under --link=libc the C runtime starts the program, and the argument
+--  initializer finds the auxiliary vector after the initial stack's envp
+--  that C's `main` was given, so the clocks are read through the vDSO it
+--  names, as under a static link.  The same oracles hold there: the
+--  monotonic clock never goes back, a sleep lasts at least what was
+--  asked, and the wall clock reads a time after this item was written.
+--  Each check that fails returns its own code.
+import core/io
+import hosted/io as hosted
+import platform/linux
+
+--  Whether a thousand readings of the monotonic clock never go back.
+in_order: (host: hosted.system) -> (yes: bool) =
+    yes = false
+    mut last: io.instant = io.now(host)
+    for round in usize(0)..<1000 do
+        _ = round
+        reading: io.instant = io.now(host)
+        return when reading < last
+        last = reading
+    end for
+    yes = true
+end in_order
+
+--  Whether the vDSO's clock_gettime is found after the C runtime's start.
+vdso_found: () -> (yes: bool) =
+    (found, address) := linux.vdso_symbol(linux.vdso_clock_name,
+                                          linux.vdso_version)
+    yes = found and address <> 0
+end vdso_found
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    return when not vdso_found()
+    code = 2
+    return when not in_order(host)
+    code = 3
+    start: io.instant = io.now(host)
+    io.sleep(host, io.milliseconds(20))
+    took: io.duration = io.elapsed(start, io.now(host))
+    return when took < io.milliseconds(20)
+    code = 4
+    wall: io.wall_time = io.wall_now(host)
+    return when wall.seconds < 1767225600 or wall.nanoseconds >= 1000000000
+    code = 42
+end main

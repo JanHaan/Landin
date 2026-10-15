@@ -1,0 +1,29 @@
+import core/random
+
+--  Seed 42's first two draws as xoshiro256**'s reference implementation
+--  gives them, every draw below six under six, and a bound of one, which
+--  has a single value, giving only zero.
+exercise: () -> (ok: bool) =
+    ok = false
+    mut source := random.new(42)
+    return when random.next(source) <> 1546998764402558742
+      or random.next(source) <> 6990951692964543102
+    for round in usize(0)..<16 do
+        _ = round
+        return when random.below(source, 6) >= 6
+          or random.below(source, 1) <> 0
+    end for
+    mut values: [3]u8 = [1, 2, 3]
+    random.shuffle(source, values[0..<3])
+    ok = values[0] + values[1] + values[2] == 6
+         and values[0] <> values[1] and values[1] <> values[2]
+         and values[0] <> values[2]
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

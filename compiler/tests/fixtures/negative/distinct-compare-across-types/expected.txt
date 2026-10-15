@@ -18,3 +18,23 @@ error[L0301]: this operator takes two values of one distinct type, and this is a
 11 |     same = value == next
    |            ^^^^^ the other operand
   = note: [0650]: a distinct value meets its base or another type only through a conversion
+error[L0301]: this operator takes two values of one distinct type, and this is another type
+  --> ../tests/fixtures/negative/distinct-compare-across-types/main.ldn:15:21
+   |
+15 |     lower = value < u32(1)
+   |                     ^^^^^^
+  --> ../tests/fixtures/negative/distinct-compare-across-types/main.ldn:15:13
+   |
+15 |     lower = value < u32(1)
+   |             ^^^^^^^^^^^^^^ this operator
+  = note: [0650]: a distinct value meets its base or another type only through a conversion
+error[L0301]: this operator takes two values of one distinct type, and this is another type
+  --> ../tests/fixtures/negative/distinct-compare-across-types/main.ldn:19:23
+   |
+19 |     higher = value >= next
+   |                       ^^^^
+  --> ../tests/fixtures/negative/distinct-compare-across-types/main.ldn:19:14
+   |
+19 |     higher = value >= next
+   |              ^^^^^ the other operand
+  = note: [0650]: a distinct value meets its base or another type only through a conversion

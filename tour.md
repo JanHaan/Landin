@@ -1165,10 +1165,12 @@ Neither `meter + second` nor adding two `meter` values inherits `f32`'s
 arithmetic. Two values of one distinct type whose base is a scalar do
 compare with `==` and `<>`: equality is identity, and asks nothing of what
 the base means, so a descriptor is compared without taking its number out.
-Where the base is an unsigned integer, `&`, `^`, `|` and `~` combine values
-into that same type, which is how a set of flags stays one. Ordering,
-arithmetic and shifts stay the base's, and a distinct value meets its base
-or another type only through a conversion. Construct and extract
+They are ordered too, with `<`, `<=`, `>` and `>=` as the base orders them,
+so two `meter` values or two instants of a clock compare directly. Where
+the base is an unsigned integer, `&`, `^`, `|` and `~` combine values into
+that same type, which is how a set of flags stays one. Arithmetic and
+shifts stay the base's, and a distinct value meets its base or another
+type only through a conversion, its ordering included. Construct and extract
 explicitly:
 
 ```landin
