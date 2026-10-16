@@ -222,11 +222,12 @@ end debug_slices
 
 --  [1630]: a block has a line of its own, its output is an ordinary local
 --  after it, and the callee-saved register it declares is saved with CFI,
---  so the caller's frame shows it unchanged.
+--  so the caller's frame shows it unchanged.  It holds the argument plus
+--  one, which the caller has no reason to hold itself, so the two differ.
 fixed if compiler.arch == x86_64 then
     debug_assembly: (assembly_input: u64) -> (result: i32) =
         assembly_sum: u64 = assembler.block(
-            "movq {v}, %rbx\nleaq 5(%rbx), {r}",
+            "leaq 1({v}), %rbx\nleaq 4(%rbx), {r}",
             in v: u64 at general = assembly_input,
             out r: u64 at general, out _ at rbx)
         assembly_ready: i32 = 1
@@ -236,7 +237,7 @@ fixed if compiler.arch == x86_64 then
 else
     debug_assembly: (assembly_input: u64) -> (result: i32) =
         assembly_sum: u64 = assembler.block(
-            "mov x19, {v}\nadd {r}, x19, #5",
+            "add x19, {v}, #1\nadd {r}, x19, #4",
             in v: u64 at general = assembly_input,
             out r: u64 at general, out _ at x19)
         assembly_ready: i32 = 1

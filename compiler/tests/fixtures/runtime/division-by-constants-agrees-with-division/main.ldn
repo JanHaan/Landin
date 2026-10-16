@@ -1,0 +1,203 @@
+-- A divisor known when the program is compiled may be divided by without
+-- a divide instruction.  Every quotient and remainder by such a divisor
+-- here is compared with the same division by an operand known only at run
+-- time, at every width and signedness, over each width's extreme dividends
+-- and a pseudo-random spread of others.  The divisors include each
+-- width's largest, those beside a power of two, and both signs.
+
+quotient_u8: (n: u8, d: u8) -> (q: u8) =
+    q = n / d
+end quotient_u8
+
+remainder_u8: (n: u8, d: u8) -> (r: u8) =
+    r = n % d
+end remainder_u8
+
+agrees_u8: (n: u8) -> (same: bool) =
+    same = n / 3 == quotient_u8(n, 3) and n % 3 == remainder_u8(n, 3)
+           and n / 5 == quotient_u8(n, 5) and n % 5 == remainder_u8(n, 5)
+           and n / 7 == quotient_u8(n, 7) and n % 7 == remainder_u8(n, 7)
+           and n / 10 == quotient_u8(n, 10) and n % 10 == remainder_u8(n, 10)
+           and n / 25 == quotient_u8(n, 25) and n % 25 == remainder_u8(n, 25)
+           and n / 100 == quotient_u8(n, 100) and n % 100 == remainder_u8(n, 100)
+           and n / 129 == quotient_u8(n, 129) and n % 129 == remainder_u8(n, 129)
+           and n / 255 == quotient_u8(n, 255) and n % 255 == remainder_u8(n, 255)
+end agrees_u8
+
+quotient_i8: (n: i8, d: i8) -> (q: i8) =
+    q = n / d
+end quotient_i8
+
+remainder_i8: (n: i8, d: i8) -> (r: i8) =
+    r = n % d
+end remainder_i8
+
+agrees_i8: (n: i8) -> (same: bool) =
+    same = n / 3 == quotient_i8(n, 3) and n % 3 == remainder_i8(n, 3)
+           and n / (-3) == quotient_i8(n, -3) and n % (-3) == remainder_i8(n, -3)
+           and n / 7 == quotient_i8(n, 7) and n % 7 == remainder_i8(n, 7)
+           and n / (-10) == quotient_i8(n, -10) and n % (-10) == remainder_i8(n, -10)
+           and n / 100 == quotient_i8(n, 100) and n % 100 == remainder_i8(n, 100)
+           and n / (-127) == quotient_i8(n, -127) and n % (-127) == remainder_i8(n, -127)
+           and n / 127 == quotient_i8(n, 127) and n % 127 == remainder_i8(n, 127)
+end agrees_i8
+
+quotient_u16: (n: u16, d: u16) -> (q: u16) =
+    q = n / d
+end quotient_u16
+
+remainder_u16: (n: u16, d: u16) -> (r: u16) =
+    r = n % d
+end remainder_u16
+
+agrees_u16: (n: u16) -> (same: bool) =
+    same = n / 3 == quotient_u16(n, 3) and n % 3 == remainder_u16(n, 3)
+           and n / 7 == quotient_u16(n, 7) and n % 7 == remainder_u16(n, 7)
+           and n / 10 == quotient_u16(n, 10) and n % 10 == remainder_u16(n, 10)
+           and n / 641 == quotient_u16(n, 641) and n % 641 == remainder_u16(n, 641)
+           and n / 1000 == quotient_u16(n, 1000) and n % 1000 == remainder_u16(n, 1000)
+           and n / 32769 == quotient_u16(n, 32769) and n % 32769 == remainder_u16(n, 32769)
+           and n / 43691 == quotient_u16(n, 43691) and n % 43691 == remainder_u16(n, 43691)
+           and n / 65535 == quotient_u16(n, 65535) and n % 65535 == remainder_u16(n, 65535)
+end agrees_u16
+
+quotient_i16: (n: i16, d: i16) -> (q: i16) =
+    q = n / d
+end quotient_i16
+
+remainder_i16: (n: i16, d: i16) -> (r: i16) =
+    r = n % d
+end remainder_i16
+
+agrees_i16: (n: i16) -> (same: bool) =
+    same = n / 3 == quotient_i16(n, 3) and n % 3 == remainder_i16(n, 3)
+           and n / (-7) == quotient_i16(n, -7) and n % (-7) == remainder_i16(n, -7)
+           and n / 10 == quotient_i16(n, 10) and n % 10 == remainder_i16(n, 10)
+           and n / (-641) == quotient_i16(n, -641) and n % (-641) == remainder_i16(n, -641)
+           and n / 1000 == quotient_i16(n, 1000) and n % 1000 == remainder_i16(n, 1000)
+           and n / 32767 == quotient_i16(n, 32767) and n % 32767 == remainder_i16(n, 32767)
+           and n / (-32767) == quotient_i16(n, -32767) and n % (-32767) == remainder_i16(n, -32767)
+end agrees_i16
+
+quotient_u32: (n: u32, d: u32) -> (q: u32) =
+    q = n / d
+end quotient_u32
+
+remainder_u32: (n: u32, d: u32) -> (r: u32) =
+    r = n % d
+end remainder_u32
+
+agrees_u32: (n: u32) -> (same: bool) =
+    same = n / 3 == quotient_u32(n, 3) and n % 3 == remainder_u32(n, 3)
+           and n / 7 == quotient_u32(n, 7) and n % 7 == remainder_u32(n, 7)
+           and n / 10 == quotient_u32(n, 10) and n % 10 == remainder_u32(n, 10)
+           and n / 641 == quotient_u32(n, 641) and n % 641 == remainder_u32(n, 641)
+           and n / 139968 == quotient_u32(n, 139968) and n % 139968 == remainder_u32(n, 139968)
+           and n / 1000000007 == quotient_u32(n, 1000000007) and n % 1000000007 == remainder_u32(n, 1000000007)
+           and n / 2147483649 == quotient_u32(n, 2147483649) and n % 2147483649 == remainder_u32(n, 2147483649)
+           and n / 4294967295 == quotient_u32(n, 4294967295) and n % 4294967295 == remainder_u32(n, 4294967295)
+end agrees_u32
+
+quotient_i32: (n: i32, d: i32) -> (q: i32) =
+    q = n / d
+end quotient_i32
+
+remainder_i32: (n: i32, d: i32) -> (r: i32) =
+    r = n % d
+end remainder_i32
+
+agrees_i32: (n: i32) -> (same: bool) =
+    same = n / 3 == quotient_i32(n, 3) and n % 3 == remainder_i32(n, 3)
+           and n / (-3) == quotient_i32(n, -3) and n % (-3) == remainder_i32(n, -3)
+           and n / 7 == quotient_i32(n, 7) and n % 7 == remainder_i32(n, 7)
+           and n / (-10) == quotient_i32(n, -10) and n % (-10) == remainder_i32(n, -10)
+           and n / 139968 == quotient_i32(n, 139968) and n % 139968 == remainder_i32(n, 139968)
+           and n / (-1000000007) == quotient_i32(n, -1000000007) and n % (-1000000007) == remainder_i32(n, -1000000007)
+           and n / 2147483647 == quotient_i32(n, 2147483647) and n % 2147483647 == remainder_i32(n, 2147483647)
+           and n / (-2147483647) == quotient_i32(n, -2147483647) and n % (-2147483647) == remainder_i32(n, -2147483647)
+end agrees_i32
+
+quotient_u64: (n: u64, d: u64) -> (q: u64) =
+    q = n / d
+end quotient_u64
+
+remainder_u64: (n: u64, d: u64) -> (r: u64) =
+    r = n % d
+end remainder_u64
+
+agrees_u64: (n: u64) -> (same: bool) =
+    same = n / 3 == quotient_u64(n, 3) and n % 3 == remainder_u64(n, 3)
+           and n / 7 == quotient_u64(n, 7) and n % 7 == remainder_u64(n, 7)
+           and n / 10 == quotient_u64(n, 10) and n % 10 == remainder_u64(n, 10)
+           and n / 641 == quotient_u64(n, 641) and n % 641 == remainder_u64(n, 641)
+           and n / 139968 == quotient_u64(n, 139968) and n % 139968 == remainder_u64(n, 139968)
+           and n / 6700417 == quotient_u64(n, 6700417) and n % 6700417 == remainder_u64(n, 6700417)
+           and n / 12345678901234567 == quotient_u64(n, 12345678901234567) and n % 12345678901234567 == remainder_u64(n, 12345678901234567)
+           and n / 9223372036854775809 == quotient_u64(n, 9223372036854775809) and n % 9223372036854775809 == remainder_u64(n, 9223372036854775809)
+           and n / 18446744073709551615 == quotient_u64(n, 18446744073709551615) and n % 18446744073709551615 == remainder_u64(n, 18446744073709551615)
+end agrees_u64
+
+quotient_i64: (n: i64, d: i64) -> (q: i64) =
+    q = n / d
+end quotient_i64
+
+remainder_i64: (n: i64, d: i64) -> (r: i64) =
+    r = n % d
+end remainder_i64
+
+agrees_i64: (n: i64) -> (same: bool) =
+    same = n / 3 == quotient_i64(n, 3) and n % 3 == remainder_i64(n, 3)
+           and n / (-3) == quotient_i64(n, -3) and n % (-3) == remainder_i64(n, -3)
+           and n / 7 == quotient_i64(n, 7) and n % 7 == remainder_i64(n, 7)
+           and n / (-7) == quotient_i64(n, -7) and n % (-7) == remainder_i64(n, -7)
+           and n / 10 == quotient_i64(n, 10) and n % 10 == remainder_i64(n, 10)
+           and n / 641 == quotient_i64(n, 641) and n % 641 == remainder_i64(n, 641)
+           and n / (-139968) == quotient_i64(n, -139968) and n % (-139968) == remainder_i64(n, -139968)
+           and n / 6700417 == quotient_i64(n, 6700417) and n % 6700417 == remainder_i64(n, 6700417)
+           and n / 9223372036854775807 == quotient_i64(n, 9223372036854775807) and n % 9223372036854775807 == remainder_i64(n, 9223372036854775807)
+           and n / (-9223372036854775807) == quotient_i64(n, -9223372036854775807) and n % (-9223372036854775807) == remainder_i64(n, -9223372036854775807)
+end agrees_i64
+
+-- The two's-complement reading of a 64-bit pattern.
+signed: (x: u64) -> (value: i64) =
+    if x >= 9223372036854775808 then
+        value = i64(x - 9223372036854775808) - 9223372036854775807 - 1
+    else
+        value = i64(x)
+    end if
+end signed
+
+-- Each width's dividend is the pattern's low bits, a signed one offset by
+-- half its range, so that the extreme patterns are its extreme values.
+agrees: (x: u64) -> (same: bool) =
+    same = agrees_u8(u8(x & 255))
+           and agrees_i8(i8(i64(x & 255) - 128))
+           and agrees_u16(u16(x & 65535))
+           and agrees_i16(i16(i64(x & 65535) - 32768))
+           and agrees_u32(u32(x & 4294967295))
+           and agrees_i32(i32(i64(x & 4294967295) - 2147483648))
+           and agrees_u64(x)
+           and agrees_i64(signed(x))
+end agrees
+
+next: (inout seed: u64) -> (value: u64) =
+    seed = seed *% 6364136223846793005 +% 1442695040888963407
+    value = seed ^ (seed >> 29)
+end next
+
+public main: () -> (code: i32) =
+    edges: [20]u64 = [0, 1, 2, 126, 127, 128, 129, 255, 256, 32767, 32768,
+                      65535, 65536, 2147483647, 2147483648, 4294967295,
+                      4294967296, 9223372036854775807, 9223372036854775808,
+                      18446744073709551615]
+    mut seed: u64 = 1
+    first: usize = 0
+    code = 1
+    for at in first..<20 do
+        return when not agrees(edges[at])
+    end for
+    for round in first..<5000 do
+        return when not agrees(next(seed))
+    end for
+    code = 42
+end main

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a condition, range bound or traversal source whose control expression leaves on every edge reaches nothing after it, under while, for, if, elsif, break, continue, return, fail and a value
+constructs: 0410, 1130, 1150, 1810
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,7 +2,6 @@ with Ada.Strings.Unbounded;
 with Ada.Containers.Vectors;
 with Ada.Containers.Ordered_Maps;
 with Ada.Strings.Fixed;
-with Landin.Backend.Debug_Locations;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets.Layouts;
@@ -208,7 +207,9 @@ package body Landin.Backend.Dwarf is
       Cached_Plan : access function
         (Item : Item_Id) return Placement_Access := null;
       Cached_Frame : access function
-        (Item : Item_Id) return Frame_Access := null)
+        (Item : Item_Id) return Frame_Access := null;
+      Trapped : access function
+        (Item : Item_Id; Value : Value_Id) return Boolean := null)
       return String
    is
       Result, Locations, Ranges : US.Unbounded_String;
@@ -636,6 +637,8 @@ package body Landin.Backend.Dwarf is
            (Scope_Id, Positive);
          Groups : Scope_Vectors.Vector;
          Group_Indices : Scope_Maps.Map;
+         function Has_Trap (Value : Value_Id) return Boolean is
+           (Trapped /= null and then Trapped (Item, Value));
          Root : Scope_Id := Scope_Of (Of_Unit, Item, First_Block);
          Parameters : array (1 .. Slot_Count (Of_Unit, Item)) of Boolean :=
            [others => False];
@@ -705,6 +708,21 @@ package body Landin.Backend.Dwarf is
                   end loop;
                end loop;
                Flush;
+               --  A trap after the body sees what its operation saw.
+               for V in 1 .. Value_Count (Of_Unit, Item) loop
+                  if Live (V) and then Has_Trap (Value_Id (V)) then
+                     declare
+                        E : constant String := Loc & "_trap_" & N (V);
+                     begin
+                        US.Append (Locations,
+                          HT & ".quad " & L ("trap", Item, V) & LF
+                          & HT & ".quad " & L ("trapped", Item, V) & LF
+                          & HT & ".short " & E & "_end-" & E & LF
+                          & E & ":" & LF & US.To_String (Expr)
+                          & E & "_end:" & LF);
+                     end;
+                  end if;
+               end loop;
             end if;
             US.Append (Locations, HT & ".quad 0,0" & LF);
          end Location_List;
@@ -866,9 +884,15 @@ package body Landin.Backend.Dwarf is
                   Expr := US.To_Unbounded_String
                     (Slot_Expression (Plan, Frame_Plan, Slot,
                        Is_Address (Of_Unit, Item, Slot), False));
-                  Location_List (Loc, Expr, Debug_Locations.Available
-                    (Availability, Of_Unit, Meanings, Info,
-                     Item, Slot, Parameter));
+                  declare
+                     Live : Debug_Locations.Flags.Vector :=
+                       Debug_Locations.Available
+                         (Availability, Of_Unit, Meanings, Info,
+                          Item, Slot, Parameter);
+                  begin
+                     Narrow (Of_Unit, Item, Plan, Slot, Live);
+                     Location_List (Loc, Expr, Live);
+                  end;
                end;
             end loop;
          end Variables;
@@ -910,6 +934,19 @@ package body Landin.Backend.Dwarf is
                           & HT & ".quad " & L ("after", Item,
                             Natural (Nth_Value (Of_Unit, Item, Block, Count)))
                           & LF);
+                        for P in 1 .. Count loop
+                           declare
+                              V : constant Natural := Natural
+                                (Nth_Value (Of_Unit, Item, Block, P));
+                           begin
+                              if Has_Trap (Value_Id (V)) then
+                                 US.Append (Ranges, HT & ".quad "
+                                   & L ("trap", Item, V) & LF
+                                   & HT & ".quad " & L ("trapped", Item, V)
+                                   & LF);
+                              end if;
+                           end;
+                        end loop;
                      end if;
                   end;
                end loop;

@@ -1674,9 +1674,11 @@ runtime/assembly-operand-free | linux-x86-64, linux-arm64, macos-arm64, freebsd-
 runtime/assembly-operands | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-saved-registers | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/atom-values-cross-the-abi | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/benchmark-game-binary-trees | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/benchmark-game-fannkuch-redux | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/benchmark-game-fasta | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/benchmark-game-mandelbrot | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/benchmark-game-reverse-complement | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/binary-search | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/bool-to-float-conversions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/bool-to-integer-conversions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1708,6 +1710,7 @@ runtime/computed-aggregate-elements | linux-x86-64, linux-arm64, macos-arm64, fr
 runtime/computed-array-index-reads-and-writes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/computed-array-index-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/condition-declarations | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/conditions-that-leave-on-every-edge | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/constant-return-exits-with-its-code | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/control-expression-aggregate-joins | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/control-expression-edges-keep-source-order | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1720,6 +1723,7 @@ runtime/core-io-line-reader | linux-x86-64, linux-arm64, linux-rv64, macos-arm64
 runtime/core-mem-allocators | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-arena-boundaries | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-blocks | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/core-mem-blocks-alignment | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/core-mem-dispose-empty | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-initialized-objects | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-mem-initialized-prefix | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1772,6 +1776,7 @@ runtime/distinct-equality-and-flags | linux-x86-64, linux-arm64, macos-arm64, fr
 runtime/distinct-ordering | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-arguments-at-every-width | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/division-by-constants-agrees-with-division | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/environment-variables | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/environment-variables-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/erased-named-recovery | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1787,6 +1792,7 @@ runtime/fixed-array-reference-shapes | linux-x86-64, linux-arm64, macos-arm64, f
 runtime/fixed-conditional-generic-runtime | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-conditional-runtime | linux-x86-64, macos-arm64, freebsd-x86-64
 runtime/fizzbuzz | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/float-comparisons-branch-on-nan | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/float-decimal-rounding | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/float-decimal-runtime | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/float-hexadecimal-runtime | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2164,6 +2170,7 @@ runtime/reference-place-update-recovery | linux-x86-64, linux-arm64, macos-arm64
 runtime/reference-place-updates | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/region-beside-parent | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/region-bounded-pool | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/region-ledger-blocks | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/run-environment | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/run-large-output | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/run-length-encoding | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2186,6 +2193,7 @@ runtime/selection-sort | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64,
 runtime/sensors | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/shared-declarations-evaluate-once | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/shifts-fill-with-zeros-beyond-the-width | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/short-circuit-conditions-jump | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/sieve-of-eratosthenes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/signed-division-overflow-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/sizeof-of-nominal-element-array | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

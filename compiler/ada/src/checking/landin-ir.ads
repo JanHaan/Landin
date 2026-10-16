@@ -4288,6 +4288,11 @@ private
    package Assembly_Operand_Vectors is new Ada.Containers.Vectors
      (Positive, Assembly_Operand);
 
+   --  The queries in the body read these tables with Element rather than
+   --  by indexing.  An indexed read elaborates a Constant_Reference, whose
+   --  controlled finalization defers abort and looks up the current
+   --  exception on every read; Element is a plain copy, which the
+   --  optimizer reduces to the component the query names.
    type Unit is tagged limited record
       Caller_Sources : Caller_Source_Vectors.Vector;
       Ready      : Boolean := False;

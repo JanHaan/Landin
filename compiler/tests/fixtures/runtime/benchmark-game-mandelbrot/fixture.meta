@@ -1,10 +1,11 @@
 class: runtime
 profiles: standard
-summary: the Benchmark Game Mandelbrot correctness workload plots a 200 by 200 set as an exact binary portable bitmap
-constructs: 0170, 0210, 0260, 0290, 0310, 0330, 0350, 0390, 0400, 0520, 0570, 0900, 1030, 1140, 1150, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
+summary: the Benchmark Game Mandelbrot workload takes its size as an argument, packs each row into heap memory, and plots the 200 by 200 correctness set as an exact binary portable bitmap through a buffered writer
+constructs: 0170, 0210, 0260, 0290, 0310, 0330, 0350, 0390, 0400, 0520, 0570, 0900, 0940, 0960, 1030, 1100, 1140, 1150, 1290, 1360, 1370, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
 program: main.ldn
 root: ../../../../..
+run_args: 200
 run_expect: output.pbm
-status: 42
+status: 0
 stream: output
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

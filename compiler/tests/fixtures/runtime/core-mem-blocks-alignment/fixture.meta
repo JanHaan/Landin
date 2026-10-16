@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/mem's copy, fill, find and zeroed byte buffers, a word at a time on hosted targets, agree with a byte-at-a-time model at every source and destination offset from 0 to 7 and every length from 0 to 40, copying between two arrays and within one, overlapping up and down, searching at every position past bytes chosen to fool a word-wide test, and touching nothing outside the bytes named
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0370, 0380, 0570, 0940, 1030, 1150
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

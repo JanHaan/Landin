@@ -364,6 +364,13 @@
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },
+    "runtime/benchmark-game-binary-trees": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/heap and hosted/io on the freestanding target before checking declarations."
+    },
     "runtime/benchmark-game-fannkuch-redux": {
       "codes": [
         "L0015"
@@ -383,7 +390,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/heap and hosted/io on the freestanding target before checking declarations."
+    },
+    "runtime/benchmark-game-reverse-complement": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/heap and hosted/io on the freestanding target before checking declarations."
     },
     "runtime/binary-search": {
       "mode": "execute"
@@ -496,6 +510,9 @@
     "runtime/condition-declarations": {
       "mode": "execute"
     },
+    "runtime/conditions-that-leave-on-every-edge": {
+      "mode": "execute"
+    },
     "runtime/constant-return-exits-with-its-code": {
       "mode": "execute"
     },
@@ -534,6 +551,9 @@
       "mode": "execute"
     },
     "runtime/core-mem-blocks": {
+      "mode": "execute"
+    },
+    "runtime/core-mem-blocks-alignment": {
       "mode": "execute"
     },
     "runtime/core-mem-dispose-empty": {
@@ -796,6 +816,11 @@
     "runtime/division-by-arguments-at-every-width": {
       "mode": "execute"
     },
+    "runtime/division-by-constants-agrees-with-division": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+    },
     "runtime/environment-variables": {
       "codes": [
         "L0015"
@@ -860,6 +885,9 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
+    },
+    "runtime/float-comparisons-branch-on-nan": {
+      "mode": "execute"
     },
     "runtime/float-decimal-rounding": {
       "mode": "execute"
@@ -2228,6 +2256,9 @@
       "profile_limit": "selected-image",
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
+    "runtime/region-ledger-blocks": {
+      "mode": "execute"
+    },
     "runtime/run-environment": {
       "codes": [
         "L0015"
@@ -2324,6 +2355,9 @@
       "mode": "execute"
     },
     "runtime/shifts-fill-with-zeros-beyond-the-width": {
+      "mode": "execute"
+    },
+    "runtime/short-circuit-conditions-jump": {
       "mode": "execute"
     },
     "runtime/sieve-of-eratosthenes": {

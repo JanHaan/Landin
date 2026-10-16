@@ -1,15 +1,18 @@
 --  A direct single-threaded implementation of the Benchmark Game workload.
---  Its correctness input is seven; the larger performance input is not a gate.
+--  The order is the program's argument: seven for the correctness output,
+--  twelve for the performance run, and never more than sixteen.
 import core/io
 import core/text
 import hosted/io as hosted
+
+bad_size: atom
 
 score: type = struct
     checksum: i32
     maximum: u32
 end score
 
-reverse_prefix: (inout values: [7]u8) -> none =
+reverse_prefix: (inout values: [16]u8) -> none =
     mut left: usize = 0
     mut right: usize = usize(values[0])
     while left < right do
@@ -21,11 +24,15 @@ reverse_prefix: (inout values: [7]u8) -> none =
     end while
 end reverse_prefix
 
-fannkuch: () -> (result: score) =
-    mut order: [7]u8 = [0, 1, 2, 3, 4, 5, 6]
-    mut rotations: [7]usize = zeroed
-    mut depth: usize = lenof order
+fannkuch: (n: usize) -> (result: score) =
+    mut order: [16]u8 = zeroed
+    mut rotations: [16]usize = zeroed
+    mut depth: usize = n
     mut permutation_index: u32 = 0
+    first: usize = 0
+    for at in first..<n do
+        order[at] = u8(at)
+    end for
     result = zeroed
 
     loop do
@@ -35,7 +42,7 @@ fannkuch: () -> (result: score) =
         end while
 
         if order[0] <> 0 then
-            mut permutation: [7]u8 = order
+            mut permutation: [16]u8 = order
             mut flips: u32 = 0
             loop do
                 break when permutation[0] == 0
@@ -54,17 +61,17 @@ fannkuch: () -> (result: score) =
         end if
 
         loop do
-            if depth == lenof order then
+            if depth == n then
                 return
             end if
 
-            first: u8 = order[0]
+            moved: u8 = order[0]
             mut at: usize = 0
             while at < depth do
                 order[at] = order[at + 1]
                 inc at
             end while
-            order[depth] = first
+            order[depth] = moved
             dec rotations[depth]
             break when rotations[depth] > 0
             inc depth
@@ -73,34 +80,44 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (host: hosted.system, stream: io.file, value: u32)
-           -> none ! io.io_failed | text.no_space =
-    mut digits: [10]u8 = zeroed
-    used: usize = try text.write_u32(digits[0..<10], 0, value)
-    try io.write(host, stream, digits[0..<used])
-end write_u32
+--  The order named by the first argument, one to sixteen.
+order_size: (host: hosted.system)
+            -> (n: usize)
+            ! io.no_argument | text.invalid_number | text.number_overflow
+            | bad_size =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+    fail bad_size when n < 1 or n > 16
+end order_size
 
-write_score: (host: hosted.system, value: score)
-             -> none ! io.io_failed | text.no_space =
-    stream: io.file = io.out(host)
-    try write_u32(host, stream, u32(value.checksum))
-    try io.write(host, stream, "\nPfannkuchen(7) = ")
-    try write_u32(host, stream, value.maximum)
-    try io.write(host, stream, "\n")
-end write_score
+report: (host: hosted.system, n: usize, value: score)
+        -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [64]u8 = zeroed
+    mut line := text.over(storage)
+    try text.format(line, "{}\nPfannkuchen({}) = {}\n",
+                    [any(addr value.checksum), any(addr n),
+                     any(addr value.maximum)])
+    try io.write(host, io.out(host), text.used(line))
+end report
 
 public main: () -> (code: i32) =
-    value: score = fannkuch()
     host := hosted.host()
-    write_score(host, value) else (problem)
+    code = 1
+    n := order_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host),
+                 "usage: fannkuch-redux N, where N is 1 to 16\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if value.checksum == 228 and value.maximum == 16 then
-        code = 42
-    else
-        code = 1
-    end if
+    value: score = fannkuch(n)
+    report(host, n, value) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
 end main

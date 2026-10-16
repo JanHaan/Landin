@@ -5063,6 +5063,18 @@ package body Landin.Stages.Checking is
          end;
       end Normalized_Type;
 
+      --  Field_Names_Are_Unique's holders by name.  The instances are
+      --  here and not in the function so that they are elaborated once and
+      --  not once for every field list checked.
+      package Holder_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Syn.Node_Id);
+      package Holder_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Landin.Source.Names.Name_Id,
+         Element_Type    => Holder_Vectors.Vector,
+         Hash            => Landin.Source.Names.Hash,
+         Equivalent_Keys => Landin.Source.Names."=",
+         "="             => Holder_Vectors."=");
+
       function Field_Names_Are_Unique
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
@@ -5083,14 +5095,6 @@ package body Landin.Stages.Checking is
          --  repeated name is reported against each earlier holder exactly
          --  as comparing every pair in order would, without comparing
          --  every pair.
-         package Holder_Vectors is new Ada.Containers.Vectors
-           (Index_Type => Positive, Element_Type => Syn.Node_Id);
-         package Holder_Maps is new Ada.Containers.Hashed_Maps
-           (Key_Type        => Landin.Source.Names.Name_Id,
-            Element_Type    => Holder_Vectors.Vector,
-            Hash            => Landin.Source.Names.Hash,
-            Equivalent_Keys => Landin.Source.Names."=",
-            "="             => Holder_Vectors."=");
          Holders : Holder_Maps.Map;
       begin
          --  Labels select positions within one structural run.  Separate
@@ -9220,6 +9224,11 @@ package body Landin.Stages.Checking is
          end;
       end Declared_As;
 
+      --  Settled_Type's run of forward aliases, here so that it is
+      --  elaborated once and not on every call that settles one.
+      package Alias_Runs is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Res.Declaration_Id);
+
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind is
       begin
          if Id = Res.No_Declaration then
@@ -9308,9 +9317,6 @@ package body Landin.Stages.Checking is
                   --  Settle that written type now; Infer is only [1790]'s `:=`
                   --  binding and would ask a type declaration for a value.
                   declare
-                     package Alias_Runs is new Ada.Containers.Vectors
-                       (Index_Type => Positive,
-                        Element_Type => Res.Declaration_Id);
                      Chain : Alias_Runs.Vector;
                      Current : Res.Declaration_Id := Id;
                   begin

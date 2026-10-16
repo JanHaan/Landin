@@ -1,4 +1,5 @@
 with Ada.Strings.Fixed;
+with Landin.Backend.Debug_Locations;
 with Landin.Backend.Dwarf;
 
 package body Landin.Backend.X86_64.Dwarf is
@@ -76,9 +77,53 @@ package body Landin.Backend.X86_64.Dwarf is
       return "";
    end Slot_Expression;
 
+   --  A slot the plan holds in a register only over an interval of the
+   --  routine, in the order its blocks are laid out, is there nowhere
+   --  else: the register belongs to other locations before and after.
+   --  An interval opening at a store excludes that store's own
+   --  instruction, which precedes the write; one open from the entry
+   --  includes everything before its last position.
+   procedure Narrow
+     (Of_Unit : Unit; Item : Item_Id; Plan : Allocation.Plan;
+      Slot : Slot_Id;
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector);
+
+   procedure Narrow
+     (Of_Unit : Unit; Item : Item_Id; Plan : Allocation.Plan;
+      Slot : Slot_Id;
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector)
+   is
+      Place : constant Allocation.Location := Plan.Slot (Positive (Slot));
+      Opened : Boolean := Place.From = No_Value;
+      Closed : Boolean := False;
+   begin
+      if Place.From = No_Value and then Place.Through = No_Value then
+         return;
+      end if;
+      for Block in 1 .. Block_Count (Of_Unit, Item) loop
+         for Position in 1 .. Length (Of_Unit, Item, Block_Id (Block)) loop
+            declare
+               Value : constant Value_Id :=
+                 Nth_Value (Of_Unit, Item, Block_Id (Block), Position);
+            begin
+               if Opened and then not Closed then
+                  Closed := Value = Place.Through;
+               else
+                  Live (Positive (Value)) := False;
+                  if Value = Place.From then
+                     Opened := True;
+                     Closed := Place.From = Place.Through;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Narrow;
+
    function Encode is new Landin.Backend.Dwarf.Sections
      (Allocation.Plan, Plan_Access, Frame_Access,
-      Allocation.Make, Frame_For, Slot_Expression, 6, False);
+      Allocation.Make, Frame_For, Slot_Expression, 6, False,
+      Narrow => Narrow);
 
    function Sections
      (Of_Unit : Unit;
@@ -92,7 +137,9 @@ package body Landin.Backend.X86_64.Dwarf is
       Cached_Plan : access function
         (Item : Item_Id) return Plan_Access := null;
       Cached_Frame : access function (Item : Item_Id)
-        return Frame_Access := null)
+        return Frame_Access := null;
+      Trapped : access function
+        (Item : Item_Id; Value : Value_Id) return Boolean := null)
       return String
       renames Encode;
 

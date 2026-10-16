@@ -174,7 +174,16 @@ incoming edges. Storage provides that connection here, including for
 expression results and short-circuit Boolean expressions. For `and`, the
 right operand runs only on the edge where the left operand was true; `or`
 uses the complementary choice. These are branches, not eager arithmetic
-operations.
+operations. When the `and` or `or` is itself the condition of an `if`, a
+`while` or a `when`, no answer crosses a merge: each operand branches
+straight to the block its value decides, and the blocks that test the right
+operands are made before the operands are lowered so that each follows the
+test before it; a `not` over one exchanges the two destinations. A
+condition holding a control expression keeps the slot form, because that
+operand's arms could all leave and strand those blocks. For the same reason a
+loop makes its blocks only after its bounds or source, and a `while` whose
+condition does not jump only after that condition: a block nothing reaches
+is malformed IR.
 
 This makes the initial lowering straightforward and its operand rule cheap
 to check: block membership and instruction order suffice, without computing
@@ -283,14 +292,22 @@ value description or image, including nested contents and function
 relocations where needed. Instructions used to describe a static value are
 not startup code. They do not introduce execution before the entry point.
 
-A program, one whose entry module declares a public `main`, gets a datum only
-for the module bindings something names: a resolved reference from any node
-of any source, the text of an `assembler.block`, a link symbol or a placement.
-Every binding is still checked. A binding nothing names, in a library module
-or the program's own, is not lowered or emitted, so a module of a thousand
-public constants costs a program that uses one of them a single datum. A
-compilation without such an entry keeps every binding, since anything in it
-may be what its consumer came for.
+A program, one whose entry module declares a public `main`, gets an item only
+for the module routines and bindings it can reach (D296), and an evidence
+table only for the conformances it reaches. Lowering walks the checked
+syntax before it creates any item, from the routines the entry module
+defines and from whatever a linker, a C peer or an `assembler.block`'s text
+may name: link symbols on data, public or linked C definitions, machine
+conventions, imports' link names and placements. A reached declaration
+reaches every routine or binding a resolved reference in it names, every
+generic instance its calls select and every conformance its selections,
+`any` constructions and `for` loops read; an instance is walked in its own
+checker view. Everything is still checked. What nothing reaches, in a
+library module or the program's own, is not lowered, simplified, emitted or
+assembled, so a module of a thousand public constants costs a program that
+uses one of them a single datum, and a hello-world over `core/io` 64
+routines rather than 546. A compilation without such an entry keeps
+everything, since anything in it may be what its consumer came for.
 
 ## Calls, evidence and failure
 
@@ -360,11 +377,42 @@ dynamic dispatch must already work without it.
 
 Simplification folds supported constants, forwards eligible local slot
 values, simplifies known branches and removes unused computations when
-their effects allow it. Values remain block-local. The effects model treats
-reads, writes, calls, traps, control flow and required instruction adjacency
-conservatively. An unused result alone is not enough to delete an operation:
-a possible trap is observable. Floating-point reassociation and assumptions
-invented from `unchecked` are outside these rewrites.
+their effects allow it. Values remain block-local. Forwarding hands a load
+the stored value itself, so floating-point and pointer slots forward too:
+the bits, and a pointer's pointee, are the ones the store verified. A
+compiler temporary whose loads were all forwarded, such as the slot that
+carries a binary operation's left operand, loses its stores; a declared
+slot keeps them as its variable's home. A slot is eligible only while
+nothing names it except as a load or store target: any instruction that
+addresses it, reads or writes it through another opcode, or names it as an
+assembly output leaves it in memory. So no call, element or indirect store,
+or memory event can reach an eligible slot, and its forwarded value survives
+them all until the slot's own next store, the end of the block or an
+assembly block, whose text is opaque. A later load of a slot that nothing
+stored to in the block is not replaced by the first one, which would only
+stretch a value across code that has no register left for it, but it is
+numbered the same. Overwritten stores are dropped only between calls,
+because the debugger shows a caller's variables while its callee runs. The
+effects model treats reads, writes, calls, traps, control flow and required
+instruction adjacency conservatively for everything else. An unused result
+alone is not enough to delete an operation: a possible trap is observable.
+Floating-point reassociation and assumptions invented from `unchecked` are
+outside these rewrites.
+
+Within a block, value numbering gives a later pure operation the value of an
+earlier identical one: the same opcode, type, flags and metadata over
+operands numbered the same, hashed so that the pass stays linear. That
+includes checked operations, an index's bounds check among them. By [1960]
+a check that fails stops the program where it stands, so once the earlier
+operation completed, the later one cannot fail; the later one is removed,
+which is a proof, and its unchecked flag is never set to say so. An
+operation in an `unchecked` region proves nothing for a checked one, so the
+flag is part of what must agree. An address through an address slot is the
+same only while no store has changed that slot and nothing else can reach
+it. Loads, stores and calls are never replaced this way. Integer identities
+such as `x + 0`, `x * 1`, `x & x` and `x == x` reduce to their operand or
+answer; none is applied to a float, where `-0.0 + 0.0` and a NaN's
+comparison with itself say otherwise.
 
 These passes expose useful facts to the backend while leaving register
 allocation and machine instruction selection there. The current controls and
@@ -496,13 +544,38 @@ and selected target eligibility. Alignment checks belong to native lowering
 and remain enabled inside unchecked regions.
 
 All memory primitives conservatively carry read/write/call/trap effects, so
-simplification retains discarded accesses and invalidates forwarded slot
-values. Address-taken storage remains pinned by the existing address paths;
-x86 allocation uses its saved-register/scratch discipline. With the speed
-objective, eligible float slots and values in routines without calls or inline
-assembly use XMM8..XMM15; XMM0 remains instruction scratch. Address-observed,
-parameter, result and C transport slots keep stack homes, and source debugger
-locations follow the allocation plan. Argument spills preserve left-to-right
+simplification retains discarded accesses. They cannot reach an eligible
+slot, so its forwarded value survives them; address-taken storage remains
+pinned by the existing address paths;
+x86 allocation uses its saved-register/scratch discipline.
+`Landin.IR.Liveness` gives each slot one live interval over the order the
+blocks are laid out in, found backward from every block whose first mention
+of the slot reads it, and the loop nesting of every block. Its work is the
+routine plus the blocks each slot is live into, bounded by a multiple of the
+routine past which the remaining slots get the whole routine. x86-64 offers
+rbx and r12-r14 to slots over these intervals, heaviest first by references
+weighted with loop depth, so slots whose intervals are disjoint share a
+register; arm64 does the same with x19-x24 at speed. A slot that is an
+address an operation reaches storage through counts each such reach as a
+read and may hold a register too. A load whose value dies before its slot is
+next stored is the slot's register. In a routine without assembly, values
+and compiler temporaries' single-block spans may also take rsi, rdi, r8 and
+r9 wherever no call, copy, clear, fill, leave or fail, and for r8 and r9 no
+conversion or field or element operation, lies in their interval; selection
+uses those registers only there. With the speed objective,
+eligible float slots and values in routines without inline assembly use
+XMM8..XMM15 wherever no call falls inside their interval, since SysV
+preserves no XMM register across one; XMM0 remains instruction scratch. A
+slot loaded and stored in one block only, which stores it before reading
+it, and not given a register for its interval, may still hold one just from
+that store through its last use, as a value does. Size holds a source
+variable it gives a register there for the whole routine, and gives single
+block spans to compiler temporaries alone, so every source variable's
+debugger location covers the routine; at speed a source variable's debugger
+location covers only its interval. Address-observed, parameter-at-a-C-entry,
+result and C transport slots keep stack homes, and source debugger locations
+follow the allocation plan.
+Argument spills preserve left-to-right
 evaluation across later control-flow expressions.
 Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
@@ -600,7 +673,7 @@ through the same table, in its written order, passing over every register the
 block holds or its text names, and fills `{name}` at the operand's width.
 Every implemented backend emits ordinary assembly. The naked and positional
 shorthand forms retain their Cortex-only contracts. x86-64's allocator hands
-out only rbx and r12-r15, and
+out only rbx and r12-r15 in a routine with assembly, and
 never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.
 
@@ -629,7 +702,10 @@ The native debugger gates include a D231/D232 program that enters a selected
 handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
-source line; those native sessions remain separate from Cortex source debugging.
+source line. On x86-64 a failed check's trap is laid out after its routine's body,
+one per operation and kind, so a passing check falls through; each keeps its
+operation's line, variable locations and lexical scopes, and the body's frame
+description. Those native sessions remain separate from Cortex source debugging.
 
 The [generated device consumers](../devices/README.md) add no IR operation.
 Constant addresses and image arithmetic use existing folding; retained data,

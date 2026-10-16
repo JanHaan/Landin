@@ -7,9 +7,9 @@ public allocation: type = struct
     extent: usize
 end allocation
 
---  How many records are in use, and the ledger block a growing region keeps
---  through its parent: its address, zero when there is none, and the
---  records it holds.
+--  How many records are in use, of a bounded ledger or of a growing
+--  ledger's newest block, and that block: its address, zero when there is
+--  none, and the records it holds.
 book_value: type = struct
     used: usize
     address: usize
@@ -65,8 +65,8 @@ region_alloc: (provider: type is mem.allocator,
     end
 end region_alloc
 
---  Keep one record, in the caller's bounded ledger or in the block a growing
---  ledger holds through the parent.
+--  Keep one record, in the caller's bounded ledger or in the newest block of
+--  a growing ledger.
 record_allocation: (provider: type is mem.allocator,
                     self: region(provider), record: allocation)
                    -> none ! mem.out_of_memory =
@@ -81,51 +81,43 @@ record_allocation: (provider: type is mem.allocator,
     if book.val.used == book.val.room then
         try grow_ledger(self)
     end if
+    inc book.val.used
     slot: ptr mut allocation =
         ptr(book.val.address + book.val.used * record_size)
     slot.val = record
-    inc book.val.used
 end record_allocation
 
---  Double a growing ledger, in place when the parent can, otherwise into a
---  fresh block that the records are copied to before the old one is freed.
---  A failure leaves the ledger as it was.
+--  A growing ledger is a chain of blocks taken from the parent, newest
+--  first, so that no record is ever copied.  A block's first record is the
+--  ledger's record of the block before it, zero for the first block, and
+--  the region's records follow.  The first block is seven records long and
+--  each later one twice as long and one more, to at most 255: one record
+--  short of a power of two, so that with a parent's two-word header it
+--  fills a power-of-two size class.  A small region takes little, and a
+--  large one a block per 254 allocations.
+first_block: usize = 7
+largest_block: usize = 255
+
+--  Start a new block in front of the ledger.  A failure leaves the ledger as
+--  it was.
 grow_ledger: (provider: type is mem.allocator, self: region(provider))
              -> none ! mem.out_of_memory =
     book: ptr mut book_value = self.book
-    mut room: usize = 8
+    mut length: usize = first_block
+    mut older: allocation = (address: 0, extent: 0)
     if book.val.room > 0 then
-        maximum: usize = 0 -% 1
-        fail mem.out_of_memory when book.val.room > maximum / 2
-        room = book.val.room * 2
+        length = 2 * (book.val.room + 1) + 1
+        if length > largest_block then length = largest_block end if
+        older = (address: book.val.address,
+                 extent: (book.val.room + 1) * record_size)
     end if
-    maximum: usize = 0 -% 1
-    fail mem.out_of_memory when room > maximum / record_size
-    extent: usize = room * record_size
-    old_extent: usize = book.val.room * record_size
-    if book.val.room > 0 then
-        old: ptr mut u8 = ptr(book.val.address)
-        if provider.grow(self.parent, old, old_extent, extent,
-                         alignof allocation) then
-            book.val.room = room
-            return
-        end if
-    end if
-    fresh: ptr mut u8 = try mem.allocate(self.parent, extent,
+    fresh: ptr mut u8 = try mem.allocate(self.parent, length * record_size,
                                          alignof allocation)
-    mut at: usize = 0
-    while at < book.val.used do
-        from_slot: ptr allocation = ptr(book.val.address + at * record_size)
-        to_slot: ptr mut allocation = ptr(usize(fresh) + at * record_size)
-        to_slot.val = from_slot.val
-        inc at
-    end while
-    if book.val.room > 0 then
-        old: ptr mut u8 = ptr(book.val.address)
-        mem.free(self.parent, old, old_extent)
-    end if
+    first: ptr mut allocation = ptr(usize(fresh))
+    first.val = older
     book.val.address = usize(fresh)
-    book.val.room = room
+    book.val.used = 0
+    book.val.room = length - 1
 end grow_ledger
 
 region_free: (provider: type is mem.allocator, self: region(provider),
@@ -151,30 +143,43 @@ end region_grow
     (alloc: region_alloc, grow: region_grow, free: region_free)
 
 --- Free recorded payloads in reverse order through `parent`, which must be
---- the parent the region was made over, and give a growing ledger's block
+--- the parent the region was made over, and give a growing ledger's blocks
 --- back to it; `state` is then empty and may be given to `over` again. End
 --- every payload use and every use of the region's handle first. An arena
 --- parent keeps the bytes it handed out, since it reclaims nothing until its
 --- backing ends.
 public release: (fixed capacity: usize, provider: type is mem.allocator,
                  inout state: space(capacity), parent: provider) -> none =
-    mut remaining: usize = state.book.used
-    while remaining > 0 do
-        dec remaining
-        mut record: allocation = (address: 0, extent: 0)
-        if capacity > 0 then
-            record = state.records[remaining]
-        else
-            kept: ptr allocation =
-                ptr(state.book.address + remaining * record_size)
-            record = kept.val
-        end if
-        block: ptr mut u8 = ptr(record.address)
-        mem.free(parent, block, record.extent)
-    end while
-    if state.book.room > 0 then
-        ledger: ptr mut u8 = ptr(state.book.address)
-        mem.free(parent, ledger, state.book.room * record_size)
+    if capacity > 0 then
+        mut remaining: usize = state.book.used
+        while remaining > 0 do
+            dec remaining
+            record: allocation = state.records[remaining]
+            block: ptr mut u8 = ptr(record.address)
+            mem.free(parent, block, record.extent)
+        end while
+    else
+        --  Each block's records from the last, then the block itself, whose
+        --  first record gives the block before it; that block is full.
+        mut ledger: allocation =
+            (address: state.book.address,
+             extent: (state.book.room + 1) * record_size)
+        mut filled: usize = state.book.used + 1
+        while ledger.address <> 0 do
+            while filled > 1 do
+                dec filled
+                kept: ptr allocation =
+                    ptr(ledger.address + filled * record_size)
+                payload: ptr mut u8 = ptr(kept.val.address)
+                mem.free(parent, payload, kept.val.extent)
+            end while
+            first: ptr allocation = ptr(ledger.address)
+            older: allocation = first.val
+            held: ptr mut u8 = ptr(ledger.address)
+            mem.free(parent, held, ledger.extent)
+            ledger = older
+            filled = ledger.extent / record_size
+        end while
     end if
     state.book = (used: 0, address: 0, room: 0)
 end release

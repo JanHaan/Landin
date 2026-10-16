@@ -1,0 +1,128 @@
+--  The Benchmark Game's reverse-complement workload: read a FASTA file on
+--  standard input and write each record's header line as it is, then its
+--  sequence reversed, every base replaced by its IUB complement, in lines
+--  of sixty.  A sequence may be as long as the input, so the whole input is
+--  gathered in a builder that grows on the heap, and each sequence is then
+--  read from its last byte back to its first.
+import core/io
+import core/mem
+import core/text
+import hosted/heap
+import hosted/io as hosted
+
+--  Each IUB code and the code it pairs with.  A lowercase code pairs with
+--  the same uppercase complement as its uppercase form.
+codes: []u8 = "ACGTUMRWSYKVHDBN"
+pairs: []u8 = "TGCAAKYWSRMBDHVN"
+
+--  Every byte's complement, at the byte's own index.  A byte that is no
+--  IUB code is its own complement.
+complements: () -> (table: [256]u8) =
+    table = zeroed
+    for at in usize(0)..<256 do
+        table[at] = u8(at)
+    end for
+    for at in usize(0)..<lenof codes do
+        table[usize(codes[at])] = pairs[at]
+        table[usize(codes[at]) + 32] = pairs[at]
+    end for
+end complements
+
+--  Append all of standard input to WHOLE, a read at a time.
+read_all: (host: hosted.system, inout whole: text.builder)
+          -> none ! io.io_failed | text.no_space =
+    input: io.file = io.input(host)
+    mut chunk: [65536]u8 = zeroed
+    loop do
+        got: usize = try io.read(host, input, chunk[0..<65536])
+        break when got == 0
+        try text.append(whole, chunk[0..<got])
+    end loop
+end read_all
+
+--  Write SEQUENCE to OUT from its last base to its first, each replaced by
+--  its complement, leaving out its line breaks and breaking it again into
+--  lines of sixty.
+write_reversed: (inout out: io.buffered_writer(hosted.system),
+                 sequence: []u8, table: [256]u8) -> none ! io.io_failed =
+    mut line: [61]u8 = zeroed
+    mut width: usize = 0
+    mut at: usize = lenof sequence
+    while at > 0 do
+        dec at
+        base: u8 = sequence[at]
+        continue when base == 10
+        line[width] = table[usize(base)]
+        inc width
+        if width == 60 then
+            line[60] = 10
+            try io.put(out, line[0..<61])
+            width = 0
+        end if
+    end while
+    if width > 0 then
+        line[width] = 10
+        try io.put(out, line[0..<width + 1])
+    end if
+end write_reversed
+
+--  Write every record of INPUT to OUT: its header line, which begins with
+--  `>`, as it is, and then its sequence, every line up to the next header,
+--  turned around.
+records: (inout out: io.buffered_writer(hosted.system), input: []u8)
+         -> none ! io.io_failed =
+    table: [256]u8 = complements()
+    mut at: usize = 0
+    while at < lenof input do
+        if input[at] == 62 then
+            ends: usize = at + mem.find(input[at..<lenof input], 10)
+            try io.put(out, input[at..<ends])
+            try io.put(out, "\n")
+            at = ends
+            if at < lenof input then inc at end if
+        end if
+        ends: usize = at + mem.find(input[at..<lenof input], 62)
+        try write_reversed(out, input[at..<ends], table)
+        at = ends
+    end while
+end records
+
+--  Say on standard error why the program stopped.
+complain: (host: hosted.system, message: []u8) -> none =
+    io.write(host, io.err(host), message) else (ignored)
+        _ = ignored
+    end
+end complain
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    memory := heap.host()
+    mut storage: [65536]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<65536])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    mut whole := text.growing(any(addr memory))
+    defer text.release(whole)
+    code = 1
+
+    read_all(host, whole) else (problem)
+        if problem == text.no_space then
+            complain(host, "revcomp: out of memory\n")
+        else
+            complain(host, "revcomp: standard input could not be read\n")
+        end if
+        return
+    end
+    records(out, text.used(whole)) else (problem)
+        _ = problem
+        complain(host, "revcomp: standard output could not be written\n")
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        complain(host, "revcomp: standard output could not be written\n")
+        return
+    end
+    code = 0
+end main

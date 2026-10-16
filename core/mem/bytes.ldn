@@ -26,20 +26,29 @@ public new_bytes: (provider: type is allocator, memory: provider,
         return
     end if
     block: ptr mut u8 = try provider.alloc(memory, count, alignof u8)
+    --  Zero all `count` bytes the provider returned, a word at a time,
+    --  before the prefix claims them.
+    first: ptr mut [1]u8 = ptr(usize(block))
+    mut zeroes: []mut u8 = first.val[0..<1]
+    unchecked begin
+        --  The provider's block holds `count` bytes.
+        zeroes = zeroes[0..<count]
+    end unchecked
+    fill(zeroes, 0)
     mut fresh := storage_over(item: u8, base: block, slots: count)
-    mut index: usize = 0
     initial: u8 = 0
-    while index < count do
-        admitted: usize = admit(fresh, initial) else (problem)
-            --  Refusal is unreachable for this private state. If it occurs,
-            --  release the saved allocation without trusting damaged counts.
-            _ = problem
-            provider.free(memory, block, count)
-            fail out_of_memory
-        end
-        _ = admitted
-        inc index
-    end while
+    admitted: usize = admit(fresh, initial) else (problem)
+        --  Refusal is unreachable for this private state. If it occurs,
+        --  release the saved allocation without trusting damaged counts.
+        _ = problem
+        provider.free(memory, block, count)
+        fail out_of_memory
+    end
+    _ = admitted
+    unchecked begin
+        --  Every one of the `count` slots now holds a zero.
+        fresh.prefix = fresh.prefix[0..<count]
+    end unchecked
     result = (values: fresh, extent: count)
 end new_bytes
 

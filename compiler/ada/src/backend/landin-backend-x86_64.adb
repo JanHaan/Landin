@@ -15,6 +15,7 @@ with Landin.Targets.Capabilities;
 with Landin.Backend.C_ABI;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Reciprocals;
 with Landin.Backend.Work_Arrays;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Dwarf;
@@ -51,6 +52,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Value_Id;
+   use type Landin.Panics.Kind;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -138,6 +140,23 @@ package body Landin.Backend.X86_64 is
             when Landin.Targets.Byte_2 => "%ax",
             when Landin.Targets.Byte_4 => "%eax",
             when Landin.Targets.Byte_8 => "%rax");
+
+   --  A general register's 32-bit name, or "" for anything else: memory,
+   --  an immediate, an XMM register or `%ah`, which has none.
+   function Doubleword (Register : String) return String
+     is (if Register'Length >= 4
+           and then Register (Register'First .. Register'First + 1) = "%r"
+           and then Register (Register'First + 2) in '0' .. '9'
+         then (if Register (Register'Last) in 'b' | 'w' | 'd'
+               then Register (Register'First .. Register'Last - 1) & "d"
+               else Register & "d")
+         elsif Register in "%al" | "%ax" | "%eax" | "%rax" then "%eax"
+         elsif Register in "%bl" | "%bx" | "%ebx" | "%rbx" then "%ebx"
+         elsif Register in "%cl" | "%cx" | "%ecx" | "%rcx" then "%ecx"
+         elsif Register in "%dl" | "%dx" | "%edx" | "%rdx" then "%edx"
+         elsif Register in "%sil" | "%si" | "%esi" | "%rsi" then "%esi"
+         elsif Register in "%dil" | "%di" | "%edi" | "%rdi" then "%edi"
+         else "");
 
    --  The internal scalar convention uses the System V integer registers
    --  in their ordinary order, then one eight-byte stack slot per remaining
@@ -232,16 +251,50 @@ package body Landin.Backend.X86_64 is
       Largest_Displacement : constant Landin.Targets.Byte_Count :=
         2 ** 31 - 1;
       Layout : Frame;
+
+      --  Whether the reference frame, in which every slot and every scalar
+      --  value has a home of its own, leaves room for anything allocation
+      --  can add to it.  An allocated frame places a subset of the same
+      --  slot cells in the same order, which ends no lower; then at most
+      --  one spill home per value and one save per saved register, each
+      --  at most eight bytes padded to an alignment the stack's divides;
+      --  then the frame's own rounding.  So a frame within the bound is
+      --  addressable without being allocated twice, once here and once
+      --  by emission, and only one outside it needs the exact answer.
+      function Within_Reference_Bound return Boolean;
+      function Within_Reference_Bound return Boolean is
+         Cell : constant Landin.Targets.Byte_Count :=
+           8 + Landin.Targets.Byte_Count
+             (Landin.Targets.Stack_Alignment (Facts));
+         --  The rounding is counted as one more cell.
+         Cells : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count (Landin.IR.Value_Count (Of_Unit, Item))
+           + Allocation.Register_Set'Length + 1;
+      begin
+         if Cells > Largest_Displacement / Cell then
+            return False;
+         end if;
+         return Extent
+           (Laid_Out (Of_Unit, Item, Facts, Largest_Displacement
+                        - Cells * Cell))
+           <= Largest_Displacement - Cells * Cell;
+      exception
+         when Stack_Limit_Exceeded =>
+            --  Over the bound is no answer: the exact frame may fit.
+            return False;
+      end Within_Reference_Bound;
    begin
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Allocation.Frame_For
-        (Of_Unit, Item, Facts,
-         Allocation.Make (Of_Unit, Item, Facts, Options), Options,
-         Largest_Displacement);
-      if Extent (Layout) > Largest_Displacement then
-         return False;
+      if not Within_Reference_Bound then
+         Layout := Allocation.Frame_For
+           (Of_Unit, Item, Facts,
+            Allocation.Make (Of_Unit, Item, Facts, Options), Options,
+            Largest_Displacement);
+         if Extent (Layout) > Largest_Displacement then
+            return False;
+         end if;
       end if;
       if Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
         and then Landin.IR.Signature_Uses_C_ABI
@@ -329,6 +382,22 @@ package body Landin.Backend.X86_64 is
       return Unbounded.To_String (Assembly);
    end Text;
 
+   --  Per-routine scratch of Emit's.  Instantiated here, once, rather than
+   --  in each routine's emission: every instance elaborates a controlled
+   --  type, and registering a tagged type per routine is not free.
+   package Use_Buffers is new Work_Arrays (Natural, Use_Counts, 0);
+
+   --  A failed check's trap is laid out after the routine's body, so a
+   --  passing check falls through instead of branching over it.  One trap
+   --  serves every guard of one operation and kind: D232 gives those
+   --  guards one site.
+   type Pending_Trap is record
+      Value : Landin.IR.Value_Id;
+      Reason : Landin.Panics.Kind;
+   end record;
+   package Trap_Vectors is new Ada.Containers.Vectors
+     (Positive, Pending_Trap);
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -369,15 +438,24 @@ package body Landin.Backend.X86_64 is
         (Allocation.Plan, Dwarf.Plan_Access);
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Dwarf.Frame_Access);
+      --  Which of a routine's values have traps after its body, by value.
+      type Trap_Mask is access Home_Mask;
+      type Trap_Array is array (Positive range <>) of Trap_Mask;
+      procedure Free_Traps is new Ada.Unchecked_Deallocation
+        (Home_Mask, Trap_Mask);
       type Retained_Facts (Last : Natural) is
         new Ada.Finalization.Limited_Controlled with record
          Plans : Plan_Array (1 .. Last) := [others => null];
          Frames : Frame_Array (1 .. Last) := [others => null];
+         Traps : Trap_Array (1 .. Last) := [others => null];
       end record;
       overriding procedure Finalize (Owned : in out Retained_Facts);
       overriding procedure Finalize (Owned : in out Retained_Facts) is
       begin
          for Index in Owned.Plans'Range loop
+            if Owned.Traps (Index) /= null then
+               Free_Traps (Owned.Traps (Index));
+            end if;
             --  Frame_For can fail after the plan has been retained.
             if Owned.Frames (Index) /= null then
                Free_Frame (Owned.Frames (Index));
@@ -405,6 +483,11 @@ package body Landin.Backend.X86_64 is
         return Dwarf.Plan_Access is (Saved.Plans (Positive (Item)));
       function Cached_Frame (Item : Landin.IR.Item_Id)
         return Dwarf.Frame_Access is (Saved.Frames (Positive (Item)));
+      function Trapped
+        (Item : Landin.IR.Item_Id; Value : Landin.IR.Value_Id)
+         return Boolean
+        is (Saved.Traps (Positive (Item)) /= null
+            and then Saved.Traps (Positive (Item)) (Positive (Value)));
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id) is
       begin
@@ -476,6 +559,18 @@ package body Landin.Backend.X86_64 is
       --  moves rather than a string instruction, whose startup dominates
       --  a few words.  x86-64 needs no alignment for them.
       Unrolled_Transfer : constant Landin.Targets.Byte_Count := 32;
+
+      --  Speed spends code on the same trade for every fixed extent through
+      --  Speed_Transfer bytes, wherever one would take a string instruction.
+      --  The moves stay at most eight bytes wide: a wider load spanning two
+      --  narrower stores just made, as a slice's two words are, cannot be
+      --  forwarded from them and stalls for longer than the string startup.
+      Speed_Transfer : constant Landin.Targets.Byte_Count := 64;
+
+      function Speed_Unrolled
+        (Bytes : Landin.Targets.Byte_Count) return Boolean
+        is (Options.Optimize = Landin.Optimization.Speed
+            and then Bytes in 1 .. Speed_Transfer);
 
       --  Copy Bytes from (%rsi) to (%rdi) through %rax, or store the zero
       --  already in %rax, widest moves first.  The ranges are disjoint.
@@ -1335,16 +1430,33 @@ package body Landin.Backend.X86_64 is
               C_ABI.Signature_Plan
                 (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts)
             else (Count => 0, others => <>));
-         type Use_Counts is array (Positive range <>) of Natural;
-         package Use_Buffers is new Work_Arrays (Natural, Use_Counts, 0);
          Use_Data : Use_Buffers.Buffer
            (if Optimized then Landin.IR.Value_Count (Of_Unit, Item) else 0);
          Uses : Use_Counts renames Use_Data.Data.all;
+         --  How many instructions name each slot, at size and speed.
+         Reference_Data : Use_Buffers.Buffer
+           (if Optimized then Landin.IR.Slot_Count (Of_Unit, Item) else 0);
+         References : Use_Counts renames Reference_Data.Data.all;
+         Current_Position : Natural := 0;
          Current_Block : Landin.IR.Block_Id := Landin.IR.No_Block;
          Next_Instruction : Landin.IR.Value_Id := Landin.IR.No_Value;
          Fused_Branch : Landin.IR.Value_Id := Landin.IR.No_Value;
+         --  An element address whose one use is the next instruction's
+         --  indirect access is not formed: that access reads through the
+         --  memory operand Folded_Address instead.
+         Folded_User : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Folded_Address : Unbounded.Unbounded_String;
+         --  Lowering carries a checked address to its access through an
+         --  address slot, the access's type witness.  When that slot is a
+         --  compiler temporary named by just the one store and the one
+         --  load between, neither moves anything the fold leaves behind.
+         Skipped_Store, Skipped_Load : Landin.IR.Value_Id :=
+           Landin.IR.No_Value;
          Exit_Count : Natural := 0;
          Shared_Epilogue : constant String := Label (Item, 1) & "_epilogue";
+
+         --  Each failed check's trap, laid out after the body.
+         Traps : Trap_Vectors.Vector;
 
          function Size_Of_Value
            (Value : Landin.IR.Value_Id) return Held_Size
@@ -1367,11 +1479,62 @@ package body Landin.Backend.X86_64 is
          procedure Load_Value (Value : Landin.IR.Value_Id);
          function Value_Label (Value : Landin.IR.Value_Id) return String;
          procedure Store_Value (Value : Landin.IR.Value_Id; From : String);
+         function Source_Operand (Value : Landin.IR.Value_Id) return String;
 
          function Is_XMM (Operand : String) return Boolean is
            (Operand'Length >= 4
             and then Operand (Operand'First .. Operand'First + 3)
               = "%xmm");
+
+         --  One float move.  Between two XMM registers it copies the
+         --  whole register: movss and movsd merge into the destination's
+         --  upper lanes and so wait for whatever wrote it last, which is
+         --  a dependence the scalar value never had.  A move with a memory
+         --  side stays scalar, the width that place holds.
+         function Float_Move
+           (Single : Boolean; From, To : String) return String
+           is ((if Is_XMM (From) and then Is_XMM (To)
+                then (if Single then "movaps " else "movapd ")
+                else (if Single then "movss " else "movsd "))
+               & From & ", " & To);
+
+         --  An immediate's image as the unsigned pattern of one or two
+         --  bytes it stands for, so a 32-bit move of it zero-extends.
+         function Unsigned_Image
+           (Size : Held_Size; Immediate : String) return String;
+
+         function Unsigned_Image
+           (Size : Held_Size; Immediate : String) return String
+         is
+            Number : constant Landin.Types.Folded := Landin.Types.Folded'Value
+              (Immediate (Immediate'First + 1 .. Immediate'Last));
+            Modulus : constant Landin.Types.Folded :=
+              (if Size = Landin.Targets.Byte_1 then 2 ** 8 else 2 ** 16);
+         begin
+            return Trimmed (Landin.Types.Folded'Image
+              (if Number < 0 then Number + Modulus else Number));
+         end Unsigned_Image;
+
+         --  One general move at one width.  Size and speed write a one- or
+         --  two-byte value moving into a register to the whole of its
+         --  32-bit name, zero-extended: a narrower write merges into the
+         --  register and so waits for whatever wrote it last.  Every
+         --  reader names that register at the value's own width, and the
+         --  accumulator so loaded holds the value zero-extended.
+         function Move (Size : Held_Size; From, To : String) return String
+           is (if Optimized
+                 and then Size in Landin.Targets.Byte_1
+                                | Landin.Targets.Byte_2
+                 and then Doubleword (To) /= ""
+                 and then From /= "%ah"
+               then (if From = To then ""
+                     elsif From (From'First) = '$'
+                     then "movl $" & Unsigned_Image (Size, From)
+                       & ", " & Doubleword (To)
+                     else (if Size = Landin.Targets.Byte_1 then "movzbl "
+                           else "movzwl ")
+                       & From & ", " & Doubleword (To))
+               else "mov" & Suffix (Size) & " " & From & ", " & To);
 
          function Value_Operand
            (Value : Landin.IR.Value_Id; Width : Held_Size) return String
@@ -1423,6 +1586,19 @@ package body Landin.Backend.X86_64 is
             return Cell (Slot_Offset (Layout, Slot));
          end Slot_Address;
 
+         --  A value as an instruction's source operand: size and speed
+         --  write an integer constant as its immediate where it fits one.
+         function Source_Operand (Value : Landin.IR.Value_Id) return String
+         is
+            Constant_Image : constant String :=
+              (if Optimized
+               then Allocation.Immediate (Of_Unit, Item, Value, Facts)
+               else "");
+         begin
+            return (if Constant_Image /= "" then Constant_Image
+                    else Value_Operand (Value));
+         end Source_Operand;
+
          procedure Load_Value (Value : Landin.IR.Value_Id) is
             Held : constant Held_Size := Size_Of_Value (Value);
          begin
@@ -1433,10 +1609,49 @@ package body Landin.Backend.X86_64 is
                       else "movq ") & Value_Operand (Value)
                      & ", " & Accumulator (Held));
             else
-               Emit ("mov" & Suffix (Held) & " " & Value_Operand (Value)
-                     & ", " & Accumulator (Held));
+               Emit (Move (Held, Source_Operand (Value), Accumulator (Held)));
             end if;
          end Load_Value;
+
+         --  %rax compared with Bound at 64 bits.  Size and speed write a
+         --  bound that fits a sign-extended imm32 as one, which is the
+         --  same 64-bit number at either signedness.
+         procedure Compare_Accumulator (Bound : Landin.Types.Folded);
+
+         procedure Compare_Accumulator (Bound : Landin.Types.Folded) is
+            Image : constant String :=
+              Trimmed (Landin.Types.Folded'Image (Bound));
+         begin
+            if Optimized and then Bound in -(2 ** 31) .. 2 ** 31 - 1 then
+               Emit ("cmpq $" & Image & ", %rax");
+            else
+               Emit ("movabsq $" & Image & ", %rcx");
+               Emit ("cmpq %rcx, %rax");
+            end if;
+         end Compare_Accumulator;
+
+         --  Value zero-extended into the whole of %rax from Width.
+         procedure Load_Unsigned
+           (Value : Landin.IR.Value_Id; Width : Held_Size);
+
+         procedure Load_Unsigned
+           (Value : Landin.IR.Value_Id; Width : Held_Size) is
+         begin
+            if Optimized then
+               Emit ((case Width is
+                         when Landin.Targets.Byte_1 => "movzbl ",
+                         when Landin.Targets.Byte_2 => "movzwl ",
+                         when Landin.Targets.Byte_4 => "movl ",
+                         when Landin.Targets.Byte_8 => "movq ")
+                     & Value_Operand (Value)
+                     & (if Width = Landin.Targets.Byte_8 then ", %rax"
+                        else ", %eax"));
+            else
+               Emit ("movq $0, %rax");
+               Emit ("mov" & Suffix (Width) & " " & Value_Operand (Value)
+                     & ", " & Accumulator (Width));
+            end if;
+         end Load_Unsigned;
 
          procedure Store_Value (Value : Landin.IR.Value_Id; From : String) is
             Held : constant Held_Size := Size_Of_Value (Value);
@@ -1455,8 +1670,7 @@ package body Landin.Backend.X86_64 is
                Emit ("movb %ah, %al");
                Emit ("movb %al, " & Value_Operand (Value));
             else
-               Emit ("mov" & Suffix (Held) & " " & From & ", "
-                     & Value_Operand (Value));
+               Emit (Move (Held, From, Value_Operand (Value)));
             end if;
          end Store_Value;
 
@@ -1916,8 +2130,38 @@ package body Landin.Backend.X86_64 is
            is (Local_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
                & "_V" & Trimmed (Landin.IR.Value_Id'Image (Value)));
 
+         function Trap_Label
+           (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind)
+            return String
+           is (Value_Label (Value) & "_trap_"
+               & (case Reason is
+                     when Landin.Panics.Out_Of_Range => "range",
+                     when Landin.Panics.Overflow => "overflow",
+                     when Landin.Panics.Bad_Conversion => "conversion",
+                     when Landin.Panics.Unreachable => "unreachable"));
+
+         --  Value's trap for Reason is queued once, however many of its
+         --  guards branch to it.  One instruction's guards are emitted
+         --  together, so its traps are the last ones queued.
+         procedure Queue_Trap
+           (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind);
+
+         procedure Queue_Trap
+           (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind) is
+         begin
+            for Index in reverse 1 .. Traps.Last_Index loop
+               exit when Traps (Index).Value /= Value;
+               if Traps (Index).Reason = Reason then
+                  return;
+               end if;
+            end loop;
+            Traps.Append (Pending_Trap'(Value => Value, Reason => Reason));
+         end Queue_Trap;
+
          --  A move through the accumulator, at one width.  Every value
-         --  that crosses an instruction crosses it this way.
+         --  that crosses an instruction crosses it this way.  Size and
+         --  speed move directly when either side is a register or the
+         --  source is an immediate.
          procedure Carry (Size : Held_Size; From, To : String);
 
          procedure Carry (Size : Held_Size; From, To : String) is
@@ -1931,27 +2175,51 @@ package body Landin.Backend.X86_64 is
                   raise Landin.Compiler_Defect with
                     "a non-float carrier reached an XMM register";
                end if;
-               Emit
-                 ((if (Is_XMM (From) and then not Is_XMM (To)
-                        and then To (To'First) = '%')
-                       or else (Is_XMM (To) and then not Is_XMM (From)
-                         and then From (From'First) = '%')
-                   then (if Size = Landin.Targets.Byte_4
+               if (Is_XMM (From) and then not Is_XMM (To)
+                    and then To (To'First) = '%')
+                 or else (Is_XMM (To) and then not Is_XMM (From)
+                   and then From (From'First) = '%')
+               then
+                  Emit ((if Size = Landin.Targets.Byte_4
                          then "movd " else "movq ")
-                   else (if Size = Landin.Targets.Byte_4
-                         then "movss " else "movsd "))
-                  & From & ", " & To);
+                        & From & ", " & To);
+               else
+                  Emit (Float_Move (Size = Landin.Targets.Byte_4, From, To));
+               end if;
             elsif Optimized
-              and then (From (From'First) = '%' or else To (To'First) = '%')
+              and then (From (From'First) in '%' | '$'
+                        or else To (To'First) = '%')
             then
-               Emit ("mov" & Suffix (Size) & " " & From & ", " & To);
+               Emit (Move (Size, From, To));
             else
-               Emit ("mov" & Suffix (Size) & " " & From & ", "
-                     & Accumulator (Size));
+               Emit (Move (Size, From, Accumulator (Size)));
                Emit ("mov" & Suffix (Size) & " " & Accumulator (Size)
                      & ", " & To);
             end if;
          end Carry;
+
+         --  %r11 at one width: the scratch a store stages a value from
+         --  memory through when the accumulator is part of its address.
+         function Staging (Size : Held_Size) return String
+           is (case Size is
+                  when Landin.Targets.Byte_1 => "%r11b",
+                  when Landin.Targets.Byte_2 => "%r11w",
+                  when Landin.Targets.Byte_4 => "%r11d",
+                  when Landin.Targets.Byte_8 => "%r11");
+
+         --  A store to a memory operand that may name the accumulator,
+         --  which size and speed address elements with.
+         procedure Store_Through (Size : Held_Size; From, To : String);
+
+         procedure Store_Through (Size : Held_Size; From, To : String) is
+         begin
+            if not Optimized or else From (From'First) in '%' | '$' then
+               Carry (Size, From, To);
+            else
+               Carry (Size, From, Staging (Size));
+               Carry (Size, Staging (Size), To);
+            end if;
+         end Store_Through;
 
          function Displacement
            (Offset : Landin.Targets.Byte_Count; Base : String) return String
@@ -1962,9 +2230,11 @@ package body Landin.Backend.X86_64 is
          --  versus 13/15 for the string path.  All other extents through
          --  eight bytes save code with scalar chunks.  Keep this path bounded
          --  so large arrays never make emitted code proportional to extent.
+         --  Speed's own bound is Speed_Transfer.
          function Use_Scalar_Transfer
            (Bytes : Landin.Targets.Byte_Count) return Boolean
-           is (Bytes in 1 .. 6 or else Bytes = 8);
+           is (Bytes in 1 .. 6 or else Bytes = 8
+               or else Speed_Unrolled (Bytes));
 
          function Transfer_Chunk
            (Remaining : Landin.Targets.Byte_Count) return Held_Size
@@ -2166,11 +2436,15 @@ package body Landin.Backend.X86_64 is
                      Emit ("leaq " & Displacement
                            (16 + Place.Stack_At, "%rbp") & ", %rsi");
                      Emit ("leaq " & Slot_Address (Slot) & ", %rdi");
-                     Emit ("movabsq $" & Trimmed
-                           (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
-                           & ", %rcx");
-                     Emit ("cld");
-                     Emit ("rep movsb");
+                     if Speed_Unrolled (Place.Shape.Size) then
+                        Emit_Small_Copy (Place.Shape.Size);
+                     else
+                        Emit ("movabsq $" & Trimmed
+                              (Landin.Targets.Byte_Count'Image
+                                 (Place.Shape.Size)) & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                     end if;
                   else
                      Emit ("leaq " & Slot_Address (Slot) & ", %r11");
                      for Chunk in 1 .. Place.Shape.Count loop
@@ -2229,11 +2503,15 @@ package body Landin.Backend.X86_64 is
                               & ", %rsi");
                         Emit ("leaq " & Displacement
                               (Place.Stack_At, "%rsp") & ", %rdi");
-                        Emit ("movabsq $" & Trimmed
-                              (Landin.Targets.Byte_Count'Image
-                                 (Place.Shape.Size)) & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep movsb");
+                        if Speed_Unrolled (Place.Shape.Size) then
+                           Emit_Small_Copy (Place.Shape.Size);
+                        else
+                           Emit ("movabsq $" & Trimmed
+                                 (Landin.Targets.Byte_Count'Image
+                                    (Place.Shape.Size)) & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep movsb");
+                        end if;
                      else
                         Load_C_Scalar (Argument (Index));
                         Emit ("movq %r10, "
@@ -2322,11 +2600,15 @@ package body Landin.Backend.X86_64 is
                      (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rdi");
                Emit ("leaq " & Slot_Address
                      (Landin.IR.Result_Slot (Of_Unit, Item)) & ", %rsi");
-               Emit ("movabsq $" & Trimmed
-                     (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
-                     & ", %rcx");
-               Emit ("cld");
-               Emit ("rep movsb");
+               if Speed_Unrolled (Place.Shape.Size) then
+                  Emit_Small_Copy (Place.Shape.Size);
+               else
+                  Emit ("movabsq $" & Trimmed
+                        (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
+                        & ", %rcx");
+                  Emit ("cld");
+                  Emit ("rep movsb");
+               end if;
                Emit ("movq " & Slot_Cell
                      (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rax");
                return;
@@ -2451,6 +2733,95 @@ package body Landin.Backend.X86_64 is
             Emit ("ret");
          end Emit_Epilogue_Body;
 
+         --  D232: a selected handler receives the failed check's kind and
+         --  site; the default handler is the trap instruction itself.
+         procedure Emit_Panic
+           (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind);
+         procedure Emit_Traps;
+
+         procedure Emit_Panic
+           (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind) is
+         begin
+            if Panic /= null and then Landin.Panics.Handler (Panic.all)
+              /= Landin.IR.No_Item
+            then
+               Emit ("movl $" & Trimmed (Positive'Image
+                 (Landin.Panics.Code (Panic.all, Reason))) & ", %edi");
+               Emit ("movl $" & Trimmed (Landin.Panics.Site_Number'Image
+                 (Landin.Panics.Site (Panic.all, Landin.IR.Origin_Of
+                   (Of_Unit, Item, Value), Reason))) & ", %esi");
+               Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            end if;
+            Emit ("ud2");
+         end Emit_Panic;
+
+         --  The queued traps follow the body with its frame unchanged.
+         --  Each keeps its operation's line, and the debug labels around
+         --  one operation's traps let its variables and scopes cover them.
+         procedure Emit_Traps is
+            First : Positive := 1;
+         begin
+            for Index in 1 .. Traps.Last_Index loop
+               declare
+                  Trap : constant Pending_Trap := Traps (Index);
+               begin
+                  if Debug /= null and then Index = First then
+                     if Saved.Traps (Positive (Item)) = null then
+                        Saved.Traps (Positive (Item)) := new Home_Mask'
+                          (1 .. Landin.IR.Value_Count (Of_Unit, Item)
+                             => False);
+                     end if;
+                     Saved.Traps (Positive (Item)) (Positive (Trap.Value))
+                       := True;
+                     Put (Dwarf.Label_Name
+                       (Local_Prefix, "trap", Item, Natural (Trap.Value))
+                       & ":");
+                     Put (Dwarf.Source_Line
+                       (Debug.all, Landin.IR.Origin_Of
+                          (Of_Unit, Item, Trap.Value)));
+                  end if;
+                  Put (Trap_Label (Trap.Value, Trap.Reason) & ":");
+                  Emit_Panic (Trap.Value, Trap.Reason);
+                  if Index = Traps.Last_Index
+                    or else Traps (Index + 1).Value /= Trap.Value
+                  then
+                     if Debug /= null then
+                        Put (Dwarf.Label_Name
+                          (Local_Prefix, "trapped", Item,
+                           Natural (Trap.Value)) & ":");
+                     end if;
+                     First := Index + 1;
+                  end if;
+               end;
+            end loop;
+         end Emit_Traps;
+
+         function Threaded
+           (Block : Landin.IR.Block_Id) return Landin.IR.Block_Id;
+
+         --  Speed sends a jump straight past blocks that only jump on.  It
+         --  never shortens code, so size keeps each jump where it was.  A
+         --  chain is followed at most once round, so a cycle still ends.
+         function Threaded
+           (Block : Landin.IR.Block_Id) return Landin.IR.Block_Id
+         is
+            Target : Landin.IR.Block_Id := Block;
+         begin
+            if Options.Optimize = Landin.Optimization.Speed then
+               for Hop in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+                  exit when Landin.IR.Length (Of_Unit, Item, Target) /= 1
+                    or else Landin.IR.Op_Of
+                      (Of_Unit, Item,
+                       Landin.IR.Nth_Value (Of_Unit, Item, Target, 1))
+                      /= Landin.IR.Jump;
+                  Target := Landin.IR.Target_Of
+                    (Of_Unit, Item,
+                     Landin.IR.Nth_Value (Of_Unit, Item, Target, 1));
+               end loop;
+            end if;
+            return Target;
+         end Threaded;
+
          procedure Conditional_Branch
            (Condition : String; Yes, No : Landin.IR.Block_Id);
 
@@ -2473,11 +2844,11 @@ package body Landin.Backend.X86_64 is
                  "unknown branch condition");
          begin
             if Optimized and then Yes = Following then
-               Emit ("j" & Inverse & " " & Label (Item, No));
+               Emit ("j" & Inverse & " " & Label (Item, Threaded (No)));
             else
-               Emit ("j" & Condition & " " & Label (Item, Yes));
+               Emit ("j" & Condition & " " & Label (Item, Threaded (Yes)));
                if not Optimized or else No /= Following then
-                  Emit ("jmp " & Label (Item, No));
+                  Emit ("jmp " & Label (Item, Threaded (No)));
                end if;
             end if;
          end Conditional_Branch;
@@ -2594,22 +2965,20 @@ package body Landin.Backend.X86_64 is
               is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
             procedure Emit_Panic (Reason : Landin.Panics.Kind);
             procedure Emit_Panic;
+            procedure Trap_On (Jump : String; Reason : Landin.Panics.Kind);
+            procedure Trap_On (Jump : String);
+            function Trap (Reason : Landin.Panics.Kind) return String
+              is (Trap_Label (Value, Reason));
+            function Trap return String
+              is (Trap (Landin.Panics.For_Value (Of_Unit, Item, Value)));
             procedure Emit_Fixed_Bounds_Check
-              (Length : Landin.IR.Element_Total; Safe : String);
+              (Length : Landin.IR.Element_Total;
+               Index : String := "%rax");
 
+            --  A panic in line, where no passing path falls into it.
             procedure Emit_Panic (Reason : Landin.Panics.Kind) is
             begin
-               if Panic /= null and then Landin.Panics.Handler (Panic.all)
-                 /= Landin.IR.No_Item
-               then
-                  Emit ("movl $" & Trimmed (Positive'Image
-                    (Landin.Panics.Code (Panic.all, Reason))) & ", %edi");
-                  Emit ("movl $" & Trimmed (Landin.Panics.Site_Number'Image
-                    (Landin.Panics.Site (Panic.all, Landin.IR.Origin_Of
-                      (Of_Unit, Item, Value), Reason))) & ", %esi");
-                  Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
-               end if;
-               Emit ("ud2");
+               Emit_Panic (Value, Reason);
             end Emit_Panic;
 
             procedure Emit_Panic is
@@ -2617,8 +2986,22 @@ package body Landin.Backend.X86_64 is
                Emit_Panic (Landin.Panics.For_Value (Of_Unit, Item, Value));
             end Emit_Panic;
 
+            --  A check's failed edge: Jump branches to this operation's
+            --  trap after the body, and the passing path falls through.
+            procedure Trap_On (Jump : String; Reason : Landin.Panics.Kind) is
+            begin
+               Queue_Trap (Value, Reason);
+               Emit (Jump & " " & Trap (Reason));
+            end Trap_On;
+
+            procedure Trap_On (Jump : String) is
+            begin
+               Trap_On (Jump, Landin.Panics.For_Value (Of_Unit, Item, Value));
+            end Trap_On;
+
             procedure Emit_Fixed_Bounds_Check
-              (Length : Landin.IR.Element_Total; Safe : String) is
+              (Length : Landin.IR.Element_Total;
+               Index : String := "%rax") is
             begin
                --  cmpq sign-extends its imm32 operand.  A larger unsigned
                --  length must still be loaded as a full 64-bit value.
@@ -2626,16 +3009,333 @@ package body Landin.Backend.X86_64 is
                  (Landin.Targets.Byte_Count (Length))
                then
                   Emit ("cmpq $" & Trimmed
-                    (Landin.IR.Element_Total'Image (Length)) & ", %rax");
+                    (Landin.IR.Element_Total'Image (Length)) & ", "
+                    & Index);
                else
                   Emit ("movabsq $" & Trimmed
                     (Landin.IR.Element_Total'Image (Length)) & ", %rdx");
-                  Emit ("cmpq %rdx, %rax");
+                  Emit ("cmpq %rdx, " & Index);
                end if;
-               Emit ("jb " & Safe);
-               Emit_Panic;
-               Put (Safe & ":");
+               Trap_On ("jae");
             end Emit_Fixed_Bounds_Check;
+
+            --  Size and speed reach element Index of an array as one
+            --  memory operand, `disp(%base,%index,scale)`, rather than
+            --  forming its address with a multiply and two adds.  The
+            --  bounds check comes first, as [0580] has it, on the index
+            --  where it lives when that is a register; a stride that is
+            --  no scale is multiplied into %rax after the check.  A frame
+            --  array is addressed from %rbp and an array behind an address
+            --  slot from that slot's register, when the place needs no
+            --  further offset; any other base is formed in %rcx.
+            function Indexed_Operand
+              (Place : Landin.IR.Storage;
+               Field : Natural;
+               Which : Natural;
+               Payload_Field : Natural;
+               Nested : Landin.IR.Path_Step_Array;
+               Index : Landin.IR.Value_Id;
+               Length : Landin.IR.Element_Total;
+               Stride : Landin.Targets.Byte_Count;
+               Inside : Landin.Targets.Byte_Count) return String;
+
+            function Indexed_Operand
+              (Place : Landin.IR.Storage;
+               Field : Natural;
+               Which : Natural;
+               Payload_Field : Natural;
+               Nested : Landin.IR.Path_Step_Array;
+               Index : Landin.IR.Value_Id;
+               Length : Landin.IR.Element_Total;
+               Stride : Landin.Targets.Byte_Count;
+               Inside : Landin.Targets.Byte_Count) return String
+            is
+               use type Landin.IR.Storage_Kind;
+               Own : constant Boolean :=
+                 Allocation_Plan.Value (Positive (Index)).Kind
+                   = Allocation.GP;
+               Scaled : constant Boolean := Stride in 1 | 2 | 4 | 8;
+               Checked : constant String :=
+                 (if Own then Value_Operand (Index) else "%rax");
+               Plain : constant Boolean :=
+                 Nested'Length = 0 and then Payload_Field = 0
+                 and then Machine.Fits_Arithmetic_Immediate (Inside);
+               Frame_Base : constant Boolean :=
+                 Plain and then Place.Kind = Landin.IR.Frame_Slot;
+               Slot_Base : constant Boolean :=
+                 Plain and then Place.Kind = Landin.IR.Runtime_Address
+                 and then Field = 0
+                 and then Allocation_Plan.Slot (Positive (Place.Address)).Kind
+                   = Allocation.GP;
+               Frame_Offset : constant Landin.Targets.Byte_Count :=
+                 (if not Frame_Base then 0
+                  elsif Field = 0
+                  then Landin.Backend.Slot_Offset (Layout, Place.Slot)
+                  else Landin.Backend.Field_Offset
+                    (Of_Unit, Item, Layout, Place.Slot,
+                     Landin.IR.Part_Position (Field), Facts));
+               Displacement : constant Landin.Types.Folded :=
+                 (if Plain then Landin.Types.Folded (Inside) else 0)
+                 - Landin.Types.Folded (Frame_Offset);
+               Base : constant String :=
+                 (if Frame_Base then "%rbp"
+                  elsif Slot_Base then Slot_Cell (Place.Address)
+                  else "%rcx");
+            begin
+               if not Own then
+                  Emit ("movq " & Value_Operand (Index) & ", %rax");
+               end if;
+               if not Unchecked then
+                  Emit_Fixed_Bounds_Check (Length, Checked);
+               end if;
+               if Scaled then
+                  null;
+               elsif Machine.Fits_Arithmetic_Immediate (Stride) then
+                  Emit ("imulq $"
+                        & Trimmed (Landin.Targets.Byte_Count'Image (Stride))
+                        & ", " & Checked & ", %rax");
+               else
+                  if Own then
+                     Emit ("movq " & Checked & ", %rax");
+                  end if;
+                  Emit ("movabsq $"
+                        & Trimmed (Landin.Targets.Byte_Count'Image (Stride))
+                        & ", %rdx");
+                  Emit ("imulq %rdx, %rax");
+               end if;
+               if Frame_Base and then not Has_Slot_Home (Layout, Place.Slot)
+               then
+                  raise Landin.Compiler_Defect with
+                    "an unhomed storage slot was addressed";
+               elsif not Frame_Base and then not Slot_Base then
+                  Storage_Address
+                    (Place, Field, "%rcx", Which, Payload_Field, Nested);
+                  if not Plain then
+                     Add_Storage_Offset (Inside, "%rcx");
+                  end if;
+               end if;
+               return (if Displacement = 0 then ""
+                       else Trimmed (Landin.Types.Folded'Image
+                                       (Displacement)))
+                 & "(" & Base & ","
+                 & (if Scaled and then Own then Checked else "%rax")
+                 & (if Scaled and then Stride > 1
+                    then "," & Trimmed (Landin.Targets.Byte_Count'Image
+                                          (Stride))
+                    else "")
+                 & ")";
+            end Indexed_Operand;
+
+            --  An address this instruction computes, as Address, a memory
+            --  operand: handed to the next instruction when that is the
+            --  one indirect access through it, else formed with `leaq`.
+            procedure Deliver_Address (Address : String);
+
+            --  The memory operand an indirect access reads or writes
+            --  through: the address an earlier instruction folded into it,
+            --  or at size and speed the register its address lives in, or
+            --  else %rcx loaded with that address.
+            function Indirect_Operand return String;
+
+            --  Size and speed form a place's address where its value
+            --  lives, or hand it to the one access using it.
+            procedure Place_Address
+              (Place : Landin.IR.Storage;
+               Field : Natural;
+               Nested : Landin.IR.Path_Step_Array);
+
+            procedure Deliver_Address (Address : String) is
+               Fold : constant Address_Fold :=
+                 Fold_Of (Of_Unit, Item, Current_Block, Current_Position,
+                          Uses, References);
+            begin
+               if Fold.Access_Value /= Landin.IR.No_Value then
+                  Skipped_Store := Fold.Store;
+                  Skipped_Load := Fold.Load;
+                  Folded_User := Fold.Access_Value;
+                  Folded_Address := Unbounded.To_Unbounded_String (Address);
+               elsif Allocation_Plan.Value (Positive (Value)).Kind
+                 = Allocation.GP
+               then
+                  Emit ("leaq " & Address & ", " & Value_Operand (Value));
+               else
+                  Emit ("leaq " & Address & ", %rax");
+                  Carry (Landin.Targets.Byte_8, "%rax", Value_Operand (Value));
+               end if;
+            end Deliver_Address;
+
+            procedure Place_Address
+              (Place : Landin.IR.Storage;
+               Field : Natural;
+               Nested : Landin.IR.Path_Step_Array)
+            is
+               use type Landin.IR.Storage_Kind;
+               --  What Storage_Address adds to an address slot's address:
+               --  the field, then the run below it.
+               Offset : constant Landin.Targets.Byte_Count :=
+                 (if Place.Kind /= Landin.IR.Runtime_Address then 0
+                  else (if Field = 0 then 0
+                        else Path_Offset
+                          (Landin.IR.Address_Shape
+                             (Of_Unit, Item, Place.Address),
+                           [1 => (Field => Landin.IR.Part_Position (Field),
+                                  Case_Index => 0)]))
+                     + (if Nested'Length = 0 then 0
+                        else Path_Offset
+                          (Root_Shape_Of (Place, Field), Nested)));
+            begin
+               if Fold_Of (Of_Unit, Item, Current_Block, Current_Position,
+                           Uses, References).Access_Value
+                 /= Landin.IR.No_Value
+               then
+                  if Place.Kind = Landin.IR.Runtime_Address
+                    and then Allocation_Plan.Slot
+                      (Positive (Place.Address)).Kind = Allocation.GP
+                    and then Machine.Fits_Arithmetic_Immediate (Offset)
+                  then
+                     Deliver_Address
+                       ((if Offset = 0 then ""
+                         else Trimmed
+                           (Landin.Targets.Byte_Count'Image (Offset)))
+                        & "(" & Slot_Cell (Place.Address) & ")");
+                  else
+                     Storage_Address (Place, Field, "%rcx", Nested => Nested);
+                     Deliver_Address ("(%rcx)");
+                  end if;
+               elsif Allocation_Plan.Value (Positive (Value)).Kind
+                 = Allocation.GP
+               then
+                  Storage_Address
+                    (Place, Field, Value_Operand (Value), Nested => Nested);
+               else
+                  Storage_Address (Place, Field, "%rax", Nested => Nested);
+                  Carry (Landin.Targets.Byte_8, "%rax", Value_Operand (Value));
+               end if;
+            end Place_Address;
+
+            function Indirect_Operand return String is
+            begin
+               if Folded_User = Value then
+                  Folded_User := Landin.IR.No_Value;
+                  return Unbounded.To_String (Folded_Address);
+               elsif Optimized
+                 and then Allocation_Plan.Value (Positive (Operand (1))).Kind
+                   = Allocation.GP
+               then
+                  return "(" & Value_Operand (Operand (1)) & ")";
+               end if;
+               Emit ("movq " & Value_Operand (Operand (1)) & ", %rcx");
+               return "(%rcx)";
+            end Indirect_Operand;
+
+            --  Size and speed compute an operation where its result lives
+            --  when that is a register: the left operand moves there and
+            --  the operation applies the right one to it, so nothing passes
+            --  through the accumulator.  That register is never one where
+            --  an operand still to be read lives: a result in the right
+            --  operand's register applies the left one instead when the
+            --  operation commutes, and is otherwise computed in the
+            --  accumulator, as a result in memory is.  A product by an
+            --  immediate is `imul`'s three-operand form.  Check, when not
+            --  empty, branches to this operation's trap straight after the
+            --  operation, on the flags it set, wherever it computed.
+            procedure Integer_Binary
+              (Instruction : String; Commutes : Boolean; Check : String);
+
+            --  The same for one operand, Instruction naming the operation
+            --  up to the register it applies to.
+            procedure Integer_Unary (Instruction : String; Check : String);
+
+            --  The same for SSE arithmetic, whose operations are not
+            --  commuted: with both operands NaN, the first one's payload is
+            --  the one that survives.
+            procedure Float_Binary (Instruction : String);
+
+            procedure Integer_Binary
+              (Instruction : String; Commutes : Boolean; Check : String)
+            is
+               Held : constant Held_Size := Size_Of_Value (Value);
+               Left : constant String := Value_Operand (Operand (1));
+               Right : constant String := Source_Operand (Operand (2));
+               Into : constant String := Value_Operand (Value);
+               In_Place : constant Boolean := Optimized
+                 and then Allocation_Plan.Value (Positive (Value)).Kind
+                   = Allocation.GP;
+               Operation : constant String :=
+                 Instruction & Suffix (Held) & " ";
+               Immediate_Product : constant Boolean :=
+                 Instruction = "imul" and then Right (Right'First) = '$';
+               Clear : constant Boolean := Right /= Into or else Left = Into;
+               Direct : constant Boolean :=
+                 In_Place and then (Clear or else Commutes);
+               Target : constant String :=
+                 (if Direct then Into else Accumulator (Held));
+            begin
+               if Immediate_Product then
+                  Emit (Operation & Right & ", " & Left & ", " & Target);
+               elsif Direct and then Clear then
+                  Carry (Held, Left, Into);
+                  Emit (Operation & Right & ", " & Into);
+               elsif Direct then
+                  Emit (Operation & Left & ", " & Into);
+               else
+                  Load_Value (Operand (1));
+                  Emit (Operation & Right & ", " & Target);
+               end if;
+               if Check /= "" then
+                  Trap_On (Check);
+               end if;
+               if not Direct then
+                  Store_Value (Value, Target);
+               end if;
+            end Integer_Binary;
+
+            procedure Integer_Unary (Instruction : String; Check : String)
+            is
+               Held : constant Held_Size := Size_Of_Value (Value);
+               Into : constant String := Value_Operand (Value);
+               In_Place : constant Boolean := Optimized
+                 and then Allocation_Plan.Value (Positive (Value)).Kind
+                   = Allocation.GP;
+               Target : constant String :=
+                 (if In_Place then Into else Accumulator (Held));
+            begin
+               if In_Place then
+                  Carry (Held, Value_Operand (Operand (1)), Into);
+               else
+                  Load_Value (Operand (1));
+               end if;
+               if Instruction /= "" then
+                  Emit (Instruction & Target);
+               end if;
+               if Check /= "" then
+                  Trap_On (Check);
+               end if;
+               if not In_Place then
+                  Store_Value (Value, Target);
+               end if;
+            end Integer_Unary;
+
+            procedure Float_Binary (Instruction : String) is
+               Held : constant Held_Size := Size_Of_Value (Value);
+               Single : constant Boolean := Held = Landin.Targets.Byte_4;
+               Left : constant String := Value_Operand (Operand (1));
+               Right : constant String := Value_Operand (Operand (2));
+               Into : constant String := Value_Operand (Value);
+            begin
+               if Optimized
+                 and then Allocation_Plan.Value (Positive (Value)).Kind
+                   = Allocation.SSE
+                 and then (Right /= Into or else Left = Into)
+               then
+                  Carry (Held, Left, Into);
+                  Emit (Instruction & " " & Right & ", " & Into);
+               else
+                  Emit (Float_Move (Single, Left, "%xmm0"));
+                  Emit (Instruction & " " & Right & ", %xmm0");
+                  Emit (Float_Move (Single, "%xmm0", Into));
+               end if;
+            end Float_Binary;
 
             procedure Packed_Atom
               (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
@@ -2645,7 +3345,6 @@ package body Landin.Backend.X86_64 is
             is
                use type Landin.Packed.Image;
                Done : constant String := Value_Label (Value) & "_encoded";
-               Bad : constant String := Done & "_bad";
                Table : constant String := Done & "_table";
                Search : constant String := Done & "_search";
                Lower : constant String := Done & "_lower";
@@ -2687,15 +3386,23 @@ package body Landin.Backend.X86_64 is
                           (Landin.Packed.Image'Image (Mappings (Index).From))
                           & ", %r11");
                         Emit ("cmpq %r11, %rax");
-                        Emit ("jne " & Next);
+                        if Index = Mappings'Last then
+                           Trap_On ("jne", Landin.Panics.Bad_Conversion);
+                        else
+                           Emit ("jne " & Next);
+                        end if;
                         Emit ("movabsq $" & Trimmed
                           (Landin.Packed.Image'Image (Mappings (Index).Into))
                           & ", %rax");
-                        Emit ("jmp " & Done);
-                        Put (Next & ":");
+                        if Index < Mappings'Last then
+                           Emit ("jmp " & Done);
+                           Put (Next & ":");
+                        end if;
                      end;
                   end loop;
-                  Emit_Panic (Landin.Panics.Bad_Conversion);
+                  if Count = 0 then
+                     Emit_Panic (Landin.Panics.Bad_Conversion);
+                  end if;
                   Put (Done & ":");
                   return;
                end if;
@@ -2738,7 +3445,7 @@ package body Landin.Backend.X86_64 is
                begin
                   Put (Loop_Label & ":");
                   Emit ("cmpq %rdx, %r8");
-                  Emit ("jae " & Bad);
+                  Trap_On ("jae", Landin.Panics.Bad_Conversion);
                   Emit ("leaq (%r8,%rdx), %r9");
                   Emit ("shrq $1, %r9");
                   Emit ("shlq $4, %r9");
@@ -2755,12 +3462,12 @@ package body Landin.Backend.X86_64 is
                end;
                Put (Found & ":");
                Emit ("movq 8(%r11,%r9), %rax");
-               Emit ("jmp " & Done);
-               Put (Bad & ":");
-               Emit_Panic (Landin.Panics.Bad_Conversion);
                Put (Done & ":");
             end Packed_Atom;
          begin
+            if Value = Skipped_Store or else Value = Skipped_Load then
+               return;
+            end if;
             case Op is
                when Landin.IR.Assembly =>
                   Emit_Assembly (Value);
@@ -2793,12 +3500,39 @@ package body Landin.Backend.X86_64 is
                           or else Digits_Of = 0
                         then Digits_Of
                         else Highest - Digits_Of + 1);
+                     Place : Allocation.Location renames
+                       Allocation_Plan.Value (Positive (Value));
+                     Constant_Image : constant String :=
+                       Source_Operand (Value);
                   begin
-                     Emit ("movabsq $"
-                           & Trimmed
-                               (Landin.Types.Magnitude'Image (Pattern))
-                           & ", %rax");
-                     Store_Value (Value, Accumulator (Held));
+                     --  Size and speed put a constant straight where it
+                     --  lives: one used only as an immediate lives nowhere,
+                     --  one that fits an immediate is moved as one, and a
+                     --  zero float is cleared in its XMM register.
+                     if Optimized and then Place.Kind = Allocation.Absent then
+                        null;
+                     elsif Optimized
+                       and then Constant_Image (Constant_Image'First) = '$'
+                     then
+                        Emit (Move (Held, Constant_Image,
+                                    Value_Operand (Value)));
+                     elsif Optimized and then Place.Kind = Allocation.GP then
+                        Emit ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image (Pattern))
+                              & ", " & Value_Operand (Value));
+                     elsif Optimized and then Place.Kind = Allocation.SSE
+                       and then Pattern = 0
+                     then
+                        Emit ("xorps " & Value_Operand (Value) & ", "
+                              & Value_Operand (Value));
+                     else
+                        Emit ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image (Pattern))
+                              & ", %rax");
+                        Store_Value (Value, Accumulator (Held));
+                     end if;
                   end;
 
                when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
@@ -2855,6 +3589,10 @@ package body Landin.Backend.X86_64 is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                   begin
+                     if Optimized then
+                        Place_Address (Place, Field, Nested);
+                        return;
+                     end if;
                      Storage_Address
                        (Place, Field, "%rax", Nested => Nested);
                      Carry
@@ -2870,7 +3608,12 @@ package body Landin.Backend.X86_64 is
                      Nested : constant Landin.IR.Path_Step_Array :=
                        Landin.IR.Path_Of (Of_Unit, Item, Value);
                   begin
-                     if not Landin.IR.Storage_Address_Has_Index
+                     if Optimized and then not
+                       Landin.IR.Storage_Address_Has_Index
+                         (Of_Unit, Item, Value)
+                     then
+                        Place_Address (Place, Field, Nested);
+                     elsif not Landin.IR.Storage_Address_Has_Index
                        (Of_Unit, Item, Value)
                      then
                         Storage_Address
@@ -2878,6 +3621,15 @@ package body Landin.Backend.X86_64 is
                         Carry
                           (Landin.Targets.Byte_8, "%rax",
                            Value_Operand (Value));
+                     elsif Optimized then
+                        Deliver_Address
+                          (Indexed_Operand
+                             (Place, Field, 0, 0, Nested, Operand (1),
+                              Array_Length_Of
+                                (Place, Field, Nested => Nested),
+                              Element_Bytes_Of
+                                (Place, Field, Nested => Nested),
+                              0));
                      else
                         Storage_Address
                           (Place, Field, "%rcx", Nested => Nested);
@@ -2890,15 +3642,13 @@ package body Landin.Backend.X86_64 is
                            Stride : constant Landin.Targets.Byte_Count :=
                              Element_Bytes_Of
                                (Place, Field, Nested => Nested);
-                           Safe : constant String :=
-                             Value_Label (Value) & "_index";
                         begin
                            Emit ("movq " & Value_Operand (Index) & ", %rax");
                            --  D187 leaves the access at the computed
                            --  address, which is [0430]'s existing pointer
                            --  non-guarantee and nothing worse.
                            if not Unchecked then
-                              Emit_Fixed_Bounds_Check (Length, Safe);
+                              Emit_Fixed_Bounds_Check (Length);
                            end if;
                            if Stride = 1 then
                               null;
@@ -2956,19 +3706,21 @@ package body Landin.Backend.X86_64 is
                                  Value_Operand (Value));
                            elsif From = Landin.Types.F32 then
                               Emit
-                                ("movss " & Value_Operand (Source)
-                                 & ", %xmm0");
+                                (Float_Move
+                                   (True, Value_Operand (Source), "%xmm0"));
                               Emit ("cvtss2sd %xmm0, %xmm0");
                               Emit
-                                ("movsd %xmm0, " & Value_Operand (Value));
+                                (Float_Move
+                                   (False, "%xmm0", Value_Operand (Value)));
                            else
                               declare
                                  Safe : constant String :=
                                    Value_Label (Value) & "_finite";
                               begin
                                  Emit
-                                   ("movsd " & Value_Operand (Source)
-                                    & ", %xmm0");
+                                   (Float_Move
+                                      (False, Value_Operand (Source),
+                                       "%xmm0"));
                                  Emit ("cvtsd2ss %xmm0, %xmm0");
                                  --  Infinity and NaN are values of both
                                  --  widths.  Only a finite source which
@@ -2985,11 +3737,11 @@ package body Landin.Backend.X86_64 is
                                  Emit ("movq %rdx, %rcx");
                                  Emit ("andq %rax, %rcx");
                                  Emit ("cmpq %rax, %rcx");
-                                 Emit ("je " & Safe);
-                                 Emit_Panic;
+                                 Trap_On ("jne");
                                  Put (Safe & ":");
                                  Emit
-                                   ("movss %xmm0, " & Value_Operand (Value));
+                                   (Float_Move
+                                      (True, "%xmm0", Value_Operand (Value)));
                               end;
                            end if;
                         end;
@@ -3002,15 +3754,13 @@ package body Landin.Backend.X86_64 is
                            Convert : constant String :=
                              (if Into_Type = Landin.Types.F32
                               then "cvtsi2ssq" else "cvtsi2sdq");
-                           Store : constant String :=
-                             (if Into_Type = Landin.Types.F32
-                              then "movss" else "movsd");
                         begin
-                           Emit ("movq $0, %rax");
-                           Emit ("movb " & Value_Operand (Source) & ", %al");
+                           Load_Unsigned (Source, Landin.Targets.Byte_1);
                            Emit (Convert & " %rax, %xmm0");
                            Emit
-                             (Store & " %xmm0, " & Value_Operand (Value));
+                             (Float_Move
+                                (Into_Type = Landin.Types.F32,
+                                 "%xmm0", Value_Operand (Value)));
                         end;
                      elsif Into_Kind in Landin.Types.Float_Name then
                         declare
@@ -3030,9 +3780,6 @@ package body Landin.Backend.X86_64 is
                            Add : constant String :=
                              (if Into_Type = Landin.Types.F32
                               then "addss" else "addsd");
-                           Store : constant String :=
-                             (if Into_Type = Landin.Types.F32
-                              then "movss" else "movsd");
                         begin
                            if Landin.Types.Is_Signed (From) then
                               Emit
@@ -3043,10 +3790,7 @@ package body Landin.Backend.X86_64 is
                                     when Landin.Targets.Byte_8 => "movq ")
                                  & Value_Operand (Source) & ", %rax");
                            else
-                              Emit ("movq $0, %rax");
-                              Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Operand (Source) & ", "
-                                    & Accumulator (From_Size));
+                              Load_Unsigned (Source, From_Size);
                            end if;
 
                            if not Landin.Types.Is_Signed (From)
@@ -3072,7 +3816,9 @@ package body Landin.Backend.X86_64 is
                               Emit (Convert & " %rax, %xmm0");
                            end if;
                            Emit
-                             (Store & " %xmm0, " & Value_Operand (Value));
+                             (Float_Move
+                                (Into_Type = Landin.Types.F32,
+                                 "%xmm0", Value_Operand (Value)));
                         end;
                      elsif Into_Kind = Landin.Types.Bool then
                         if From_Kind in Landin.Types.Float_Name then
@@ -3081,8 +3827,6 @@ package body Landin.Backend.X86_64 is
                                 Landin.Types.Float_Name (From_Kind);
                               False_Value : constant String :=
                                 Value_Label (Value) & "_false";
-                              True_Value : constant String :=
-                                Value_Label (Value) & "_true";
                               Store : constant String :=
                                 Value_Label (Value) & "_bool";
                               Magnitude_Mask : constant
@@ -3121,13 +3865,11 @@ package body Landin.Backend.X86_64 is
                                      (Landin.Types.Magnitude'Image (One))
                                  & ", %rcx");
                               Emit ("cmpq %rcx, %rax");
-                              Emit ("je " & True_Value);
-                              Emit_Panic;
+                              Trap_On ("jne");
+                              Emit ("movq $1, %rax");
+                              Emit ("jmp " & Store);
                               Put (False_Value & ":");
                               Emit ("movq $0, %rax");
-                              Emit ("jmp " & Store);
-                              Put (True_Value & ":");
-                              Emit ("movq $1, %rax");
                               Put (Store & ":");
                               Emit
                                 ("movb %al, " & Value_Operand (Value));
@@ -3138,17 +3880,10 @@ package body Landin.Backend.X86_64 is
                                 Landin.Types.Integer_Name (From_Kind);
                               From_Size : constant Held_Size :=
                                 Size_Of (From, Facts);
-                              Safe : constant String :=
-                                Value_Label (Value) & "_bool";
                            begin
-                              Emit ("movq $0, %rax");
-                              Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Operand (Source) & ", "
-                                    & Accumulator (From_Size));
+                              Load_Unsigned (Source, From_Size);
                               Emit ("cmpq $1, %rax");
-                              Emit ("jbe " & Safe);
-                              Emit_Panic;
-                              Put (Safe & ":");
+                              Trap_On ("ja");
                               Emit
                                 ("movb %al, " & Value_Operand (Value));
                            end;
@@ -3160,9 +3895,7 @@ package body Landin.Backend.X86_64 is
                            Into_Size : constant Held_Size :=
                              Size_Of (Into_Type, Facts);
                         begin
-                           Emit ("movq $0, %rax");
-                           Emit
-                             ("movb " & Value_Operand (Source) & ", %al");
+                           Load_Unsigned (Source, Landin.Targets.Byte_1);
                            Emit ("mov" & Suffix (Into_Size) & " "
                                  & Accumulator (Into_Size) & ", "
                                  & Value_Operand (Value));
@@ -3211,16 +3944,16 @@ package body Landin.Backend.X86_64 is
                              Value_Label (Value) & "_zero";
                            Store : constant String :=
                              Value_Label (Value) & "_store";
-                           Trap : constant String :=
-                             Value_Label (Value) & "_trap";
-                           Done : constant String :=
-                             Value_Label (Value) & "_done";
                         begin
                            --  Decode the IEEE carrier rather than relying on
                            --  cvttss2si/cvttsd2si: those instructions cannot
                            --  distinguish every valid u64 result from their
                            --  indefinite overflow result.  This is exactly
                            --  the target-neutral truncation and range check.
+                           --  Every failed edge below branches to one trap.
+                           Queue_Trap
+                             (Value,
+                              Landin.Panics.For_Value (Of_Unit, Item, Value));
                            Load_Value (Source);
                            if Options.Optimize = Landin.Optimization.Size
                            then
@@ -3348,10 +4081,6 @@ package body Landin.Backend.X86_64 is
                            Emit ("mov" & Suffix (Into_Size) & " "
                                  & Accumulator (Into_Size) & ", "
                                  & Value_Operand (Value));
-                           Emit ("jmp " & Done);
-                           Put (Trap & ":");
-                           Emit_Panic;
-                           Put (Done & ":");
                         end;
                      else
                         declare
@@ -3365,10 +4094,6 @@ package body Landin.Backend.X86_64 is
                              Size_Of (Into_Type, Facts);
                            Into_Bits : constant Landin.Targets.Bit_Width :=
                              Landin.Types.Width (Into_Type, Facts);
-                           Safe_Lower : constant String :=
-                             Value_Label (Value) & "_lower";
-                           Safe_Upper : constant String :=
-                             Value_Label (Value) & "_upper";
                         begin
                            if Landin.Types.Is_Signed (From) then
                               Emit
@@ -3379,10 +4104,7 @@ package body Landin.Backend.X86_64 is
                                     when Landin.Targets.Byte_8 => "movq ")
                                  & Value_Operand (Source) & ", %rax");
                            else
-                              Emit ("movq $0, %rax");
-                              Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Operand (Source) & ", "
-                                    & Accumulator (From_Size));
+                              Load_Unsigned (Source, From_Size);
                            end if;
 
                            --  D187 removes the destination-range edge of
@@ -3398,36 +4120,19 @@ package body Landin.Backend.X86_64 is
                                    2 ** (Natural (Into_Bits) - 1) - 1;
                               begin
                                  if Landin.Types.Is_Signed (From) then
-                                    Emit
-                                      ("movabsq $-"
-                                       & Trimmed
-                                           (Landin.Types.Magnitude'Image
-                                              (Maximum + 1))
-                                       & ", %rcx");
-                                    Emit ("cmpq %rcx, %rax");
-                                    Emit ("jge " & Safe_Lower);
-                                    Emit_Panic;
-                                    Put (Safe_Lower & ":");
+                                    Compare_Accumulator
+                                      (-Landin.Types.Folded (Maximum + 1));
+                                    Trap_On ("jl");
                                  end if;
-                                 Emit
-                                   ("movabsq $"
-                                    & Trimmed
-                                        (Landin.Types.Magnitude'Image
-                                           (Maximum))
-                                    & ", %rcx");
-                                 Emit ("cmpq %rcx, %rax");
-                                 Emit
-                                   ((if Landin.Types.Is_Signed (From)
-                                     then "jle " else "jbe ")
-                                    & Safe_Upper);
-                                 Emit_Panic;
-                                 Put (Safe_Upper & ":");
+                                 Compare_Accumulator
+                                   (Landin.Types.Folded (Maximum));
+                                 Trap_On
+                                   (if Landin.Types.Is_Signed (From)
+                                    then "jg" else "ja");
                               end;
                            elsif Landin.Types.Is_Signed (From) then
                               Emit ("testq %rax, %rax");
-                              Emit ("jns " & Safe_Lower);
-                              Emit_Panic;
-                              Put (Safe_Lower & ":");
+                              Trap_On ("js");
                            end if;
 
                            if not Unchecked
@@ -3438,16 +4143,9 @@ package body Landin.Backend.X86_64 is
                                  Maximum : constant Landin.Types.Magnitude :=
                                    2 ** Natural (Into_Bits) - 1;
                               begin
-                                 Emit
-                                   ("movabsq $"
-                                    & Trimmed
-                                        (Landin.Types.Magnitude'Image
-                                           (Maximum))
-                                    & ", %rcx");
-                                 Emit ("cmpq %rcx, %rax");
-                                 Emit ("jbe " & Safe_Upper);
-                                 Emit_Panic;
-                                 Put (Safe_Upper & ":");
+                                 Compare_Accumulator
+                                   (Landin.Types.Folded (Maximum));
+                                 Trap_On ("ja");
                               end;
                            end if;
                            Emit ("mov" & Suffix (Into_Size) & " "
@@ -3477,10 +4175,6 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Range_Upper (Of_Unit, Item, Value);
                      Signed : constant Boolean :=
                        Landin.Types.Is_Signed (Kind);
-                     Safe_Lower : constant String :=
-                       Value_Label (Value) & "_lower";
-                     Safe_Upper : constant String :=
-                       Value_Label (Value) & "_upper";
                   begin
                      if Signed then
                         Emit
@@ -3491,29 +4185,14 @@ package body Landin.Backend.X86_64 is
                               when Landin.Targets.Byte_8 => "movq ")
                            & Value_Operand (Source) & ", %rax");
                      else
-                        Emit ("movq $0, %rax");
-                        Emit ("mov" & Suffix (Width) & " "
-                              & Value_Operand (Source) & ", "
-                              & Accumulator (Width));
+                        Load_Unsigned (Source, Width);
                      end if;
 
-                     Emit
-                       ("movabsq $"
-                        & Trimmed (Landin.Types.Folded'Image (Lower))
-                        & ", %rcx");
-                     Emit ("cmpq %rcx, %rax");
-                     Emit ((if Signed then "jge " else "jae ") & Safe_Lower);
-                     Emit_Panic;
-                     Put (Safe_Lower & ":");
+                     Compare_Accumulator (Lower);
+                     Trap_On (if Signed then "jl" else "jb");
 
-                     Emit
-                       ("movabsq $"
-                        & Trimmed (Landin.Types.Folded'Image (Upper))
-                        & ", %rcx");
-                     Emit ("cmpq %rcx, %rax");
-                     Emit ((if Signed then "jle " else "jbe ") & Safe_Upper);
-                     Emit_Panic;
-                     Put (Safe_Upper & ":");
+                     Compare_Accumulator (Upper);
+                     Trap_On (if Signed then "jg" else "ja");
 
                      Emit ("mov" & Suffix (Width) & " "
                            & Accumulator (Width) & ", "
@@ -3522,10 +4201,6 @@ package body Landin.Backend.X86_64 is
 
                when Landin.IR.Slice_Address =>
                   declare
-                     Safe_Upper : constant String :=
-                       Value_Label (Value) & "_upper";
-                     Safe_Lower : constant String :=
-                       Value_Label (Value) & "_lower";
                      Element : constant Landin.IR.Field_Shape :=
                        Landin.IR.Slice_Element_Shape
                          (Of_Unit, Item, Value);
@@ -3545,20 +4220,50 @@ package body Landin.Backend.X86_64 is
                           ("movq " & Value_Operand (Operand (4)) & ", %rax");
                         Emit
                           ("cmpq " & Value_Operand (Operand (2)) & ", %rax");
-                        Emit
-                          ((if Landin.IR.Slice_Is_Inclusive
-                                 (Of_Unit, Item, Value)
-                            then "jb " else "jbe ") & Safe_Upper);
-                        Emit_Panic;
-                        Put (Safe_Upper & ":");
+                        Trap_On
+                          (if Landin.IR.Slice_Is_Inclusive
+                                (Of_Unit, Item, Value)
+                           then "jae" else "ja");
                      end if;
                      Emit ("movq " & Value_Operand (Operand (3)) & ", %rcx");
-                     if not Unchecked then
+                     --  Lower and upper read from one place hold one value,
+                     --  so the lower edge cannot fail: `a[i..i]`, or two
+                     --  values the allocator gave one register.  The upper
+                     --  edge above is still checked.
+                     if not Unchecked
+                       and then Value_Operand (Operand (3))
+                         /= Value_Operand (Operand (4))
+                     then
                         Emit
                           ("cmpq " & Value_Operand (Operand (4)) & ", %rcx");
-                        Emit ("jbe " & Safe_Lower);
-                        Emit_Panic;
-                        Put (Safe_Lower & ":");
+                        Trap_On ("ja");
+                     end if;
+                     --  Size and speed scale the lower bound in the memory
+                     --  operand when the stride is a scale, from the base
+                     --  where it lives when that is a register.
+                     if Optimized and then Stride in 0 .. 8
+                       and then Stride not in 3 | 5 | 6 | 7
+                     then
+                        declare
+                           Base : constant String :=
+                             (if Allocation_Plan.Value
+                                   (Positive (Operand (1))).Kind
+                                 = Allocation.GP
+                              then Value_Operand (Operand (1)) else "%rax");
+                        begin
+                           if Base = "%rax" then
+                              Emit ("movq " & Value_Operand (Operand (1))
+                                    & ", %rax");
+                           end if;
+                           Deliver_Address
+                             ("(" & Base & ",%rcx"
+                              & (if Stride > 1
+                                 then "," & Trimmed
+                                   (Landin.Targets.Byte_Count'Image (Stride))
+                                 else "")
+                              & ")");
+                        end;
+                        return;
                      end if;
                      if Stride > 1 then
                         if Machine.Fits_Arithmetic_Immediate (Stride) then
@@ -3609,8 +4314,6 @@ package body Landin.Backend.X86_64 is
                        (Landin.IR.Memory_Scalar (Of_Unit, Item, Value), Facts);
                      S : constant String := Suffix (Size);
                      A : constant String := Accumulator (Size);
-                     Ready : constant String := Value_Label (Value)
-                       & "_aligned";
                   begin
                      if Landin.Memory.Operands (M) = 0 then
                         if M /= Compiler_Barrier then
@@ -3622,9 +4325,7 @@ package body Landin.Backend.X86_64 is
                         if Size /= Landin.Targets.Byte_1 then
                            Emit ("testq $" & Trimmed (Positive'Image
                              (Landin.Targets.Bytes (Size) - 1)) & ", %rcx");
-                           Emit ("jz " & Ready);
-                           Emit_Panic;
-                           Put (Ready & ":");
+                           Trap_On ("jnz");
                         end if;
                         if M not in Volatile_Load | Volatile_Store then
                            Emit ("mfence");
@@ -3673,22 +4374,15 @@ package body Landin.Backend.X86_64 is
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
-                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rcx");
-                     Emit ("mov" & Suffix (Held) & " (%rcx), "
-                           & Accumulator (Held));
-                     Store_Value (Value, Accumulator (Held));
+                     Carry (Held, Indirect_Operand, Value_Operand (Value));
                   end;
 
                when Landin.IR.Store_Indirect =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Operand (2));
                   begin
-                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rcx");
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Operand (Operand (2)) & ", "
-                           & Accumulator (Held));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", (%rcx)");
+                     Store_Through
+                       (Held, Source_Operand (Operand (2)), Indirect_Operand);
                   end;
 
                when Landin.IR.Load =>
@@ -3704,9 +4398,33 @@ package body Landin.Backend.X86_64 is
                   declare
                      Slot : constant Landin.IR.Slot_Id :=
                        Landin.IR.Slot_Of (Of_Unit, Item, Value);
+                     Pair : constant Address_Fold :=
+                       (if Optimized
+                        then Carried (Of_Unit, Item, Current_Block,
+                                      Current_Position, Uses, References)
+                        else (others => <>));
                   begin
+                     --  An address another use keeps formed still reaches
+                     --  its access through the temporary carrying it, so
+                     --  the access reads through it where it lives.
+                     if Pair.Access_Value /= Landin.IR.No_Value then
+                        Skipped_Load := Pair.Load;
+                        Folded_User := Pair.Access_Value;
+                        if Allocation_Plan.Value (Positive (Operand (1))).Kind
+                          = Allocation.GP
+                        then
+                           Folded_Address := Unbounded.To_Unbounded_String
+                             ("(" & Value_Operand (Operand (1)) & ")");
+                        else
+                           Emit ("movq " & Source_Operand (Operand (1))
+                                 & ", %rcx");
+                           Folded_Address :=
+                             Unbounded.To_Unbounded_String ("(%rcx)");
+                        end if;
+                        return;
+                     end if;
                      Carry (Size_Of_Slot (Slot),
-                            Value_Operand (Operand (1)), Slot_Cell (Slot));
+                            Source_Operand (Operand (1)), Slot_Cell (Slot));
                   end;
 
                when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
@@ -3726,8 +4444,6 @@ package body Landin.Backend.X86_64 is
                        Landin.Types.Is_Signed (Kind);
                      Bits : constant Landin.Targets.Bit_Width :=
                        Landin.Types.Width (Kind, Facts);
-                     Not_Negative : constant String :=
-                       Value_Label (Value) & "_nonnegative";
                      In_Range : constant String :=
                        Value_Label (Value) & "_inrange";
                      Done : constant String :=
@@ -3750,15 +4466,15 @@ package body Landin.Backend.X86_64 is
                               Emit ("mov" & Suffix (Held) & " $0, "
                                     & Value_Operand (Value));
                            else
-                              Load_Value (Operand (1));
-                              if Amount > 0 then
-                                 Emit (Instruction & Suffix (Held) & " $"
-                                       & Trimmed
-                                         (Landin.Types.Magnitude'Image
-                                            (Amount))
-                                       & ", " & Accumulator (Held));
-                              end if;
-                              Store_Value (Value, Accumulator (Held));
+                              Integer_Unary
+                                ((if Amount > 0
+                                  then Instruction & Suffix (Held) & " $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Amount))
+                                    & ", "
+                                  else ""),
+                                 Check => "");
                            end if;
                            return;
                         end;
@@ -3770,9 +4486,7 @@ package body Landin.Backend.X86_64 is
                      if Signed then
                         Emit ("cmp" & Suffix (Held) & " $0, "
                               & Accumulator (Held));
-                        Emit ("jge " & Not_Negative);
-                        Emit_Panic;
-                        Put (Not_Negative & ":");
+                        Trap_On ("jl");
                      end if;
 
                      --  Every remaining amount is at or above zero, so the
@@ -3824,33 +4538,21 @@ package body Landin.Backend.X86_64 is
                   --  [0330] gives each of these its own integer type back, so
                   --  every pattern they produce is one the type holds and
                   --  neither signedness nor a flag has anything to say.
-                  declare
-                     Held : constant Held_Size := Size_Of_Value (Value);
-                     Instruction : constant String :=
-                       (case Op is
-                           when Landin.IR.Bitwise_And => "and",
-                           when Landin.IR.Bitwise_Xor => "xor",
-                           when Landin.IR.Bitwise_Or => "or",
-                           when others =>
-                             raise Landin.Compiler_Defect
-                               with "an unreachable operator case");
-                  begin
-                     Load_Value (Operand (1));
-                     Emit (Instruction & Suffix (Held) & " "
-                           & Value_Operand (Operand (2)) & ", "
-                           & Accumulator (Held));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
-                  end;
+                  Integer_Binary
+                    ((case Op is
+                         when Landin.IR.Bitwise_And => "and",
+                         when Landin.IR.Bitwise_Xor => "xor",
+                         when Landin.IR.Bitwise_Or => "or",
+                         when others =>
+                           raise Landin.Compiler_Defect
+                             with "an unreachable operator case"),
+                     Commutes => True, Check => "");
 
                when Landin.IR.Logical_Not =>
                   --  [1870] fixes a bool at zero or one, so the low bit is
                   --  the whole value and `not` over the byte would give 254
                   --  for `not false`.
-                  Emit ("movb " & Value_Operand (Operand (1)) & ", %al");
-                  Emit ("xorb $1, %al");
-                  Emit ("movb %al, " & Value_Operand (Value));
+                  Integer_Unary ("xorb $1, ", Check => "");
 
                when Landin.IR.Negation =>
                   --  [1890] gives unary minus its own integer type back, so
@@ -3861,7 +4563,6 @@ package body Landin.Backend.X86_64 is
                      Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
-                     Next : constant String := Value_Label (Value);
                   begin
                      if Kind in Landin.Types.Float_Name then
                         Emit ("mov" & Suffix (Held) & " "
@@ -3877,33 +4578,22 @@ package body Landin.Backend.X86_64 is
                         return;
                      end if;
 
-                     Load_Value (Operand (1));
-                     Emit ("neg" & Suffix (Held) & " " & Accumulator (Held));
-                     if not Unchecked then
-                        Emit ((if Landin.Types.Is_Signed
-                                      (Landin.Types.Integer_Name (Kind))
-                               then "jno " else "jnc ") & Next);
-                        Emit_Panic;
-                        Put (Next & ":");
-                     end if;
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
+                     Integer_Unary
+                       ("neg" & Suffix (Held) & " ",
+                        Check =>
+                          (if Unchecked then ""
+                           elsif Landin.Types.Is_Signed
+                             (Landin.Types.Integer_Name (Kind))
+                           then "jo" else "jc"));
                   end;
 
                when Landin.IR.Complement =>
                   --  [0330]'s `~` gives its own type back, so every pattern
                   --  it can produce is one the type holds and no edge is
                   --  needed.
-                  declare
-                     Held : constant Held_Size := Size_Of_Value (Value);
-                  begin
-                     Load_Value (Operand (1));
-                     Emit ("not" & Suffix (Held) & " " & Accumulator (Held));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
-                  end;
+                  Integer_Unary
+                    ("not" & Suffix (Size_Of_Value (Value)) & " ",
+                     Check => "");
 
                when Landin.IR.Copy_Array =>
                   --  D20/D50 move bytes directly between storage places.
@@ -4124,14 +4814,18 @@ package body Landin.Backend.X86_64 is
                                (Landin.Targets.Byte_Count'Image (Offset))
                            & ", %rcx");
                         Emit ("addq %rcx, %rdi");
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Size))
-                           & ", %rcx");
-                        Emit ("xorl %eax, %eax");
-                        Emit ("cld");
-                        Emit ("rep stosb");
+                        if Speed_Unrolled (Size) then
+                           Emit_Small_Clear (Size);
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Size))
+                              & ", %rcx");
+                           Emit ("xorl %eax, %eax");
+                           Emit ("cld");
+                           Emit ("rep stosb");
+                        end if;
                      end if;
 
                      --  Form the part base for the source-order tag.
@@ -4258,7 +4952,7 @@ package body Landin.Backend.X86_64 is
                      if Op = Landin.IR.Load_Datum then
                         Carry (Held, Place, Value_Operand (Value));
                      else
-                        Carry (Held, Value_Operand (Operand (1)), Place);
+                        Carry (Held, Source_Operand (Operand (1)), Place);
                      end if;
                   end;
 
@@ -4317,7 +5011,6 @@ package body Landin.Backend.X86_64 is
                      Inside : constant Landin.Targets.Byte_Count :=
                        Path_Offset (Element, Below);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
-                     Safe : constant String := Value_Label (Value) & "_index";
                      Shape : constant Landin.IR.Field_Shape :=
                        Reached_Shape (Place, Field, Nested);
                   begin
@@ -4328,8 +5021,6 @@ package body Landin.Backend.X86_64 is
                                (Shape.Packing.Storage);
                            Mask : constant Landin.Packed.Image :=
                              Landin.Packed.Mask (Shape.Packing.Bits);
-                           Fit : constant String :=
-                             Value_Label (Value) & "_packed_fit";
                         begin
                            Storage_Address
                              (Place, Field, "%r10", Nested => Nested);
@@ -4338,9 +5029,7 @@ package body Landin.Backend.X86_64 is
                            Emit ("cmpq $" & Trimmed
                              (Landin.IR.Element_Total'Image (Length))
                              & ", %rcx");
-                           Emit ("jb " & Safe);
-                           Emit_Panic;
-                           Put (Safe & ":");
+                           Trap_On ("jae");
                            Emit ("imulq $" & Trimmed
                              (Natural'Image (Shape.Packing.Bits))
                              & ", %rcx");
@@ -4368,9 +5057,8 @@ package body Landin.Backend.X86_64 is
                                  Emit ("shrq $" & Trimmed
                                    (Natural'Image (Shape.Packing.Bits))
                                    & ", %rdx");
-                                 Emit ("je " & Fit);
-                                 Emit_Panic (Landin.Panics.Bad_Conversion);
-                                 Put (Fit & ":");
+                                 Trap_On
+                                   ("jne", Landin.Panics.Bad_Conversion);
                               end if;
                               Emit ("shlq %cl, %rax");
                               Emit ("movq %rax, %rdx");
@@ -4390,9 +5078,27 @@ package body Landin.Backend.X86_64 is
                         end;
                         return;
                      end if;
+                     if Optimized then
+                        declare
+                           Access_Operand : constant String :=
+                             Indexed_Operand
+                               (Place, Field, Which, Payload_Field, Nested,
+                                Index, Length, Stride, Inside);
+                        begin
+                           if Op = Landin.IR.Load_Element then
+                              Carry
+                                (Held, Access_Operand, Value_Operand (Value));
+                           else
+                              Store_Through
+                                (Held, Source_Operand (Operand (2)),
+                                 Access_Operand);
+                           end if;
+                        end;
+                        return;
+                     end if;
                      Emit ("movq " & Value_Operand (Index) & ", %rax");
                      if not Unchecked then
-                        Emit_Fixed_Bounds_Check (Length, Safe);
+                        Emit_Fixed_Bounds_Check (Length);
                      end if;
                      --  An `imul` immediate is a signed 32-bit field, and
                      --  D121's element may be wider than one, so a stride
@@ -4428,7 +5134,7 @@ package body Landin.Backend.X86_64 is
                         Carry (Held, "(%rcx)", Value_Operand (Value));
                      else
                         Carry
-                          (Held, Value_Operand (Operand (2)), "(%rcx)");
+                          (Held, Source_Operand (Operand (2)), "(%rcx)");
                      end if;
                   end;
 
@@ -4466,8 +5172,6 @@ package body Landin.Backend.X86_64 is
                              Landin.Packed.Mask (Shape.Packing.Bits);
                            Shift : constant String := Trimmed
                              (Natural'Image (Shape.Packing.First));
-                           Fit : constant String :=
-                             Value_Label (Value) & "_packed_fit";
                         begin
                            Storage_Address
                              (Place, Natural (Which), "%rcx",
@@ -4485,19 +5189,18 @@ package body Landin.Backend.X86_64 is
                               Store_Value (Value, Accumulator
                                 (Size_Of_Value (Value)));
                            else
-                              Emit ("mov" & Suffix
-                                (Size_Of_Value (Operand (1))) & " "
-                                & Value_Operand (Operand (1)) & ", "
-                                & Accumulator (Size_Of_Value (Operand (1))));
+                              Emit (Move
+                                (Size_Of_Value (Operand (1)),
+                                 Source_Operand (Operand (1)),
+                                 Accumulator (Size_Of_Value (Operand (1)))));
                               Packed_Atom (Shape.Atoms, Encode => True);
                               if Shape.Packing.Bits < 64 then
                                  Emit ("movq %rax, %rdx");
                                  Emit ("shrq $" & Trimmed
                                    (Natural'Image (Shape.Packing.Bits))
                                    & ", %rdx");
-                                 Emit ("je " & Fit);
-                                 Emit_Panic (Landin.Panics.Bad_Conversion);
-                                 Put (Fit & ":");
+                                 Trap_On
+                                   ("jne", Landin.Panics.Bad_Conversion);
                               end if;
                               Emit ("shlq $" & Shift & ", %rax");
                               Emit ("movq %rax, %rdx");
@@ -4551,7 +5254,7 @@ package body Landin.Backend.X86_64 is
                                    (Held, "(%rcx)", Value_Operand (Value));
                               else
                                  Carry
-                                   (Held, Value_Operand (Operand (1)),
+                                   (Held, Source_Operand (Operand (1)),
                                     "(%rcx)");
                               end if;
                               return;
@@ -4588,7 +5291,8 @@ package body Landin.Backend.X86_64 is
                            if Op = Landin.IR.Load_Field then
                               Carry (Held, Place, Value_Operand (Value));
                            else
-                              Carry (Held, Value_Operand (Operand (1)), Place);
+                              Carry
+                                (Held, Source_Operand (Operand (1)), Place);
                            end if;
                         end;
                      end;
@@ -4647,7 +5351,7 @@ package body Landin.Backend.X86_64 is
                            Carry (Held, "(%rcx)", Value_Operand (Value));
                         else
                            Carry
-                             (Held, Value_Operand (Operand (1)), "(%rcx)");
+                             (Held, Source_Operand (Operand (1)), "(%rcx)");
                         end if;
                      else
                         declare
@@ -4664,7 +5368,7 @@ package body Landin.Backend.X86_64 is
                               Carry (Held, Place, Value_Operand (Value));
                            else
                               Carry
-                                (Held, Value_Operand (Operand (1)), Place);
+                                (Held, Source_Operand (Operand (1)), Place);
                            end if;
                         end;
                      end if;
@@ -4674,65 +5378,39 @@ package body Landin.Backend.X86_64 is
                   declare
                      Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
-                     Held : constant Held_Size := Size_Of_Value (Value);
-                     Next : constant String := Value_Label (Value);
                   begin
                      if Kind in Landin.Types.Float_Name then
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & Value_Operand (Operand (1)) & ", %xmm0");
-                        Emit ((if Op = Landin.IR.Add then "add" else "sub")
-                              & (if Kind = Landin.Types.F32
-                                 then "ss " else "sd ")
-                              & Value_Operand (Operand (2)) & ", %xmm0");
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Operand (Value));
+                        Float_Binary
+                          ((if Op = Landin.IR.Add then "add" else "sub")
+                           & (if Kind = Landin.Types.F32 then "ss"
+                              else "sd"));
                         return;
                      end if;
 
-                     Load_Value (Operand (1));
-                     Emit ((if Op = Landin.IR.Add then "add" else "sub")
-                           & Suffix (Held) & " "
-                           & Value_Operand (Operand (2)) & ", "
-                           & Accumulator (Held));
-                     --  D187 leaves [0320]'s two's-complement result in
-                     --  the accumulator, which is what the wrapping
+                     --  D187 leaves [0320]'s two's-complement result
+                     --  where it was computed, which is what the wrapping
                      --  operators already mean on every target.
-                     if not Unchecked then
-                        Emit ((if Landin.Types.Is_Signed
-                                      (Landin.Types.Integer_Name (Kind))
-                               then "jno " else "jnc ") & Next);
-                        Emit_Panic;
-                        Put (Next & ":");
-                     end if;
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
+                     Integer_Binary
+                       ((if Op = Landin.IR.Add then "add" else "sub"),
+                        Commutes => Op = Landin.IR.Add,
+                        Check =>
+                          (if Unchecked then ""
+                           elsif Landin.Types.Is_Signed
+                             (Landin.Types.Integer_Name (Kind))
+                           then "jo" else "jc"));
                   end;
 
                when Landin.IR.Wrapping_Add
                   | Landin.IR.Wrapping_Subtract =>
-                  declare
-                     Held : constant Held_Size := Size_Of_Value (Value);
-                  begin
-                     Load_Value (Operand (1));
-                     Emit ((if Op = Landin.IR.Wrapping_Add
-                            then "add" else "sub") & Suffix (Held) & " "
-                           & Value_Operand (Operand (2)) & ", "
-                           & Accumulator (Held));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Operand (Value));
-                  end;
+                  Integer_Binary
+                    ((if Op = Landin.IR.Wrapping_Add then "add" else "sub"),
+                     Commutes => Op = Landin.IR.Wrapping_Add, Check => "");
 
                when Landin.IR.Divide | Landin.IR.Remainder =>
                   declare
                      Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
-                     Nonzero : constant String :=
-                       Value_Label (Value) & "_nonzero";
                      Divide : constant String :=
                        Value_Label (Value) & "_divide";
                      Done : constant String :=
@@ -4743,15 +5421,15 @@ package body Landin.Backend.X86_64 is
                            raise Compiler_Defect with
                              "float remainder passed IR verification";
                         end if;
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & Value_Operand (Operand (1)) & ", %xmm0");
+                        Emit (Float_Move
+                                (Kind = Landin.Types.F32,
+                                 Value_Operand (Operand (1)), "%xmm0"));
                         Emit ((if Kind = Landin.Types.F32
                                then "divss " else "divsd ")
                               & Value_Operand (Operand (2)) & ", %xmm0");
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Operand (Value));
+                        Emit (Float_Move
+                                (Kind = Landin.Types.F32,
+                                 "%xmm0", Value_Operand (Value)));
                         return;
                      end if;
 
@@ -4817,9 +5495,7 @@ package body Landin.Backend.X86_64 is
                               Emit ("cmp" & Suffix (Held) & " "
                                     & Data_Register & ", "
                                     & Accumulator (Held));
-                              Emit ("jne " & Divide);
-                              Emit_Panic;
-                              Put (Divide & ":");
+                              Trap_On ("je");
                            end if;
                            if not Signed and then
                              Op = Landin.IR.Remainder
@@ -4892,12 +5568,120 @@ package body Landin.Backend.X86_64 is
                            return;
                         end if;
 
+                        --  Speed multiplies by any other known divisor's
+                        --  reciprocal: a high multiply and a shift or two,
+                        --  where `div` takes tens of cycles.  The divisor
+                        --  is not zero, and minus one is a power of two
+                        --  above, so this division has no trap to keep.
+                        --  The dividend is widened into RCX, which the
+                        --  remainder subtracts from; RDX holds the
+                        --  quotient.
+                        if Fixed and then Magnitude /= 0
+                          and then Options.Optimize
+                            = Landin.Optimization.Speed
+                        then
+                           declare
+                              package Reciprocals renames
+                                Landin.Backend.Reciprocals;
+                              Bits : constant Reciprocals.Dividend_Bits :=
+                                Natural (Landin.Types.Width
+                                  (Integer_Kind, Facts));
+                              Inverse : constant Reciprocals.Reciprocal :=
+                                (if Signed
+                                 then Reciprocals.Signed_Reciprocal
+                                   (Reciprocals.Word (Magnitude), Bits)
+                                 else Reciprocals.Unsigned_Reciprocal
+                                   (Reciprocals.Word (Magnitude), Bits));
+                              Widen : constant String :=
+                                (if Signed then
+                                   (case Held is
+                                       when Landin.Targets.Byte_1 =>
+                                         "movsbq ",
+                                       when Landin.Targets.Byte_2 =>
+                                         "movswq ",
+                                       when Landin.Targets.Byte_4 =>
+                                         "movslq ",
+                                       when Landin.Targets.Byte_8 =>
+                                         "movq ")
+                                 else
+                                   (case Held is
+                                       when Landin.Targets.Byte_1 =>
+                                         "movzbl ",
+                                       when Landin.Targets.Byte_2 =>
+                                         "movzwl ",
+                                       when Landin.Targets.Byte_4 =>
+                                         "movl ",
+                                       when Landin.Targets.Byte_8 =>
+                                         "movq "));
+                           begin
+                              Emit (Widen & Value_Operand (Operand (1))
+                                    & ", "
+                                    & (if Signed
+                                         or else Held = Landin.Targets.Byte_8
+                                       then "%rcx" else "%ecx"));
+                              Emit ("movabsq $"
+                                    & Trimmed (Reciprocals.Word'Image
+                                        (Inverse.Multiplier))
+                                    & ", %rax");
+                              Emit ((if Signed then "imulq" else "mulq")
+                                    & " %rcx");
+                              if Inverse.Add and then Signed then
+                                 Emit ("addq %rcx, %rdx");
+                              elsif Inverse.Add then
+                                 --  (N - T) / 2 + T is (N + T) / 2
+                                 --  without the 65th bit.
+                                 Emit ("movq %rcx, %rax");
+                                 Emit ("subq %rdx, %rax");
+                                 Emit ("shrq $1, %rax");
+                                 Emit ("addq %rax, %rdx");
+                              end if;
+                              if Inverse.Shift > 0 then
+                                 Emit ((if Signed then "sarq $" else "shrq $")
+                                       & Trimmed (Natural'Image
+                                           (Inverse.Shift))
+                                       & ", %rdx");
+                              end if;
+                              if Signed then
+                                 --  Floor to truncation: a negative
+                                 --  quotient is one too low.
+                                 Emit ("movq %rdx, %rax");
+                                 Emit ("shrq $63, %rax");
+                                 Emit ("addq %rax, %rdx");
+                              end if;
+                              if Op = Landin.IR.Remainder then
+                                 --  N - Q * |d| has the dividend's sign
+                                 --  whatever the divisor's.
+                                 if Magnitude <= 2 ** 31 - 1 then
+                                    Emit ("imulq $"
+                                          & Trimmed
+                                              (Landin.Types.Magnitude'Image
+                                                 (Magnitude))
+                                          & ", %rdx, %rdx");
+                                 else
+                                    Emit ("movabsq $"
+                                          & Trimmed
+                                              (Landin.Types.Magnitude'Image
+                                                 (Magnitude))
+                                          & ", %rax");
+                                    Emit ("imulq %rax, %rdx");
+                                 end if;
+                                 Emit ("subq %rdx, %rcx");
+                                 Store_Value (Value, Counter_Register);
+                              else
+                                 if Negative then
+                                    Emit ("neg" & Suffix (Held) & " "
+                                          & Data_Register);
+                                 end if;
+                                 Store_Value (Value, Data_Register);
+                              end if;
+                              return;
+                           end;
+                        end if;
+
                         if not Fixed or else Magnitude = 0 then
                            Emit ("cmp" & Suffix (Held) & " $0, "
                                  & Value_Operand (Operand (2)));
-                           Emit ("jne " & Nonzero);
-                           Emit_Panic;
-                           Put (Nonzero & ":");
+                           Trap_On ("je");
                         end if;
 
                         if Signed and then not Fixed then
@@ -4912,10 +5696,10 @@ package body Landin.Backend.X86_64 is
                            Emit ("cmp" & Suffix (Held) & " "
                                  & Value_Operand (Operand (1)) & ", "
                                  & Accumulator (Held));
-                           Emit ("jne " & Divide);
                            if Op = Landin.IR.Divide then
-                              Emit_Panic;
+                              Trap_On ("je");
                            else
+                              Emit ("jne " & Divide);
                               Emit ("mov" & Suffix (Held) & " $0, "
                                     & Value_Operand (Value));
                               Emit ("jmp " & Done);
@@ -4969,18 +5753,11 @@ package body Landin.Backend.X86_64 is
                      Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
-                     Next : constant String := Value_Label (Value);
                   begin
                      if Kind in Landin.Types.Float_Name then
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & Value_Operand (Operand (1)) & ", %xmm0");
-                        Emit ((if Kind = Landin.Types.F32
-                               then "mulss " else "mulsd ")
-                              & Value_Operand (Operand (2)) & ", %xmm0");
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Operand (Value));
+                        Float_Binary
+                          (if Kind = Landin.Types.F32 then "mulss"
+                           else "mulsd");
                         return;
                      end if;
 
@@ -4989,6 +5766,18 @@ package body Landin.Backend.X86_64 is
                           Landin.Types.Is_Signed
                             (Landin.Types.Integer_Name (Kind));
                      begin
+                        --  Size and speed take a signed product in the
+                        --  two- or three-operand `imul`, whose overflow
+                        --  flag is the one-operand form's; an unsigned one
+                        --  needs `mul`'s high half, and a byte has neither.
+                        if Optimized and then Signed
+                          and then Held /= Landin.Targets.Byte_1
+                        then
+                           Integer_Binary
+                             ("imul", Commutes => True,
+                              Check => (if Unchecked then "" else "jo"));
+                           return;
+                        end if;
                         Emit ("mov" & Suffix (Held) & " "
                               & Value_Operand (Operand (1)) & ", "
                               & Accumulator (Held));
@@ -4996,10 +5785,7 @@ package body Landin.Backend.X86_64 is
                               & Suffix (Held) & " "
                               & Value_Operand (Operand (2)));
                         if not Unchecked then
-                           Emit
-                             ((if Signed then "jno " else "jnc ") & Next);
-                           Emit_Panic;
-                           Put (Next & ":");
+                           Trap_On (if Signed then "jo" else "jc");
                         end if;
                         Emit ("mov" & Suffix (Held) & " "
                               & Accumulator (Held) & ", "
@@ -5013,6 +5799,13 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
+                     --  The low half is the same product at either
+                     --  signedness, and `imul` has it without a high one.
+                     if Optimized and then Held /= Landin.Targets.Byte_1 then
+                        Integer_Binary
+                          ("imul", Commutes => True, Check => "");
+                        return;
+                     end if;
                      Load_Value (Operand (1));
                      Emit ((if Landin.Types.Is_Signed (Kind)
                             then "imul" else "mul")
@@ -5053,11 +5846,97 @@ package body Landin.Backend.X86_64 is
                            when others =>
                              raise Landin.Compiler_Defect
                                with "an unreachable operator case");
+                     --  A comparison whose one use is the branch right
+                     --  after it leaves its verdict in the flags.
+                     Fuses : constant Boolean :=
+                       Optimized and then Uses (Positive (Value)) = 1
+                       and then Next_Instruction /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of
+                         (Of_Unit, Item, Next_Instruction) = Landin.IR.Branch
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Instruction, 1) = Value;
+
+                     procedure Ordered_Equal_Branch
+                       (Equal, Other : Landin.IR.Block_Id);
+
+                     --  Equality is ZF set with PF clear: an unordered
+                     --  pair sets both.
+                     procedure Ordered_Equal_Branch
+                       (Equal, Other : Landin.IR.Block_Id)
+                     is
+                        Following : constant Landin.IR.Block_Id :=
+                          Current_Block + 1;
+                     begin
+                        Emit ("jne " & Label (Item, Threaded (Other)));
+                        if Equal = Following then
+                           Emit ("jp " & Label (Item, Threaded (Other)));
+                        else
+                           Emit ("jnp " & Label (Item, Threaded (Equal)));
+                           if Other /= Following then
+                              Emit ("jmp " & Label (Item, Threaded (Other)));
+                           end if;
+                        end if;
+                     end Ordered_Equal_Branch;
                   begin
-                     if Kind in Landin.Types.Float_Name then
-                        Emit ((if Kind = Landin.Types.F32
-                               then "movss " else "movsd ")
-                              & Value_Operand (Operand (1)) & ", %xmm0");
+                     if Kind in Landin.Types.Float_Name and then Fuses then
+                        --  D162's comparisons are false for an unordered
+                        --  NaN, except inequality.  ucomis sets ZF, PF and
+                        --  CF for one, so "above" and "above or equal",
+                        --  which need CF clear, are false without a parity
+                        --  test, and less and less-or-equal swap their
+                        --  operands to be those.  The left operand is
+                        --  compared where it lives when that is a register.
+                        declare
+                           Swapped : constant Boolean :=
+                             Op in Landin.IR.Less_Than
+                                 | Landin.IR.Less_Or_Equal;
+                           Left : constant String :=
+                             Value_Operand
+                               (if Swapped then Operand (2)
+                                else Operand (1));
+                           Right : constant String :=
+                             Value_Operand
+                               (if Swapped then Operand (1)
+                                else Operand (2));
+                           Yes : constant Landin.IR.Block_Id :=
+                             Landin.IR.Target_Of
+                               (Of_Unit, Item, Next_Instruction);
+                           No : constant Landin.IR.Block_Id :=
+                             Landin.IR.Alternative_Of
+                               (Of_Unit, Item, Next_Instruction);
+                        begin
+                           if not Is_XMM (Left) then
+                              Emit (Float_Move
+                                      (Kind = Landin.Types.F32,
+                                       Left, "%xmm0"));
+                           end if;
+                           Emit ((if Kind = Landin.Types.F32
+                                  then "ucomiss " else "ucomisd ")
+                                 & Right & ", "
+                                 & (if Is_XMM (Left) then Left
+                                    else "%xmm0"));
+                           case Op is
+                              when Landin.IR.Less_Than
+                                 | Landin.IR.Greater_Than =>
+                                 Conditional_Branch ("a", Yes, No);
+                              when Landin.IR.Less_Or_Equal
+                                 | Landin.IR.Greater_Or_Equal =>
+                                 Conditional_Branch ("ae", Yes, No);
+                              when Landin.IR.Equal_To =>
+                                 Ordered_Equal_Branch (Yes, No);
+                              when Landin.IR.Not_Equal_To =>
+                                 Ordered_Equal_Branch (No, Yes);
+                              when others =>
+                                 raise Compiler_Defect with
+                                   "non-comparison in comparison emission";
+                           end case;
+                        end;
+                        Fused_Branch := Next_Instruction;
+                        return;
+                     elsif Kind in Landin.Types.Float_Name then
+                        Emit (Float_Move
+                                (Kind = Landin.Types.F32,
+                                 Value_Operand (Operand (1)), "%xmm0"));
                         Emit ((if Kind = Landin.Types.F32
                                then "ucomiss " else "ucomisd ")
                               & Value_Operand (Operand (2)) & ", %xmm0");
@@ -5093,13 +5972,7 @@ package body Landin.Backend.X86_64 is
                      Emit ("cmp" & Suffix (Held) & " "
                            & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
-                     if Optimized and then Uses (Positive (Value)) = 1
-                       and then Next_Instruction /= Landin.IR.No_Value
-                       and then Landin.IR.Op_Of
-                         (Of_Unit, Item, Next_Instruction) = Landin.IR.Branch
-                       and then Landin.IR.Nth_Operand
-                         (Of_Unit, Item, Next_Instruction, 1) = Value
-                     then
+                     if Fuses then
                         Conditional_Branch
                           (Condition (Condition'First + 3 .. Condition'Last),
                            Landin.IR.Target_Of
@@ -5336,8 +6209,8 @@ package body Landin.Backend.X86_64 is
                   if not Optimized or else Landin.IR.Target_Of
                     (Of_Unit, Item, Value) /= Current_Block + 1
                   then
-                     Emit ("jmp " & Label (Item,
-                           Landin.IR.Target_Of (Of_Unit, Item, Value)));
+                     Emit ("jmp " & Label (Item, Threaded
+                           (Landin.IR.Target_Of (Of_Unit, Item, Value))));
                   end if;
 
                when Landin.IR.Branch =>
@@ -5378,13 +6251,17 @@ package body Landin.Backend.X86_64 is
                         Storage_Address
                           ((Kind => Landin.IR.Frame_Slot,
                             Slot => Return_Value), 0, "%rsi");
-                        Emit
-                          ("movabsq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Bytes))
-                           & ", %rcx");
-                        Emit ("cld");
-                        Emit ("rep movsb");
+                        if Speed_Unrolled (Bytes) then
+                           Emit_Small_Copy (Bytes);
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Bytes))
+                              & ", %rcx");
+                           Emit ("cld");
+                           Emit ("rep movsb");
+                        end if;
                         Emit ("movq " & Slot_Cell (Return_Address)
                               & ", %rax");
                      end;
@@ -5430,32 +6307,52 @@ package body Landin.Backend.X86_64 is
                         Runs : constant Code_Runs :=
                           Runs_Of (Of_Unit, Atoms_Ranked, Atoms);
                      begin
+                        --  A code outside the last run fails, so a valid
+                        --  code there falls through to the load's use.
                         for Index in Runs'Range loop
                            declare
                               Run : constant Code_Run := Runs (Index);
                               Next : constant String :=
                                 Done & "_" & Trimmed (Positive'Image (Index));
+                              Last : constant Boolean := Index = Runs'Last;
                            begin
                               if Run.Low = Run.High then
                                  Emit ("cmpl $" & Trimmed
                                    (Positive'Image (Run.Low))
                                    & ", " & Value_Operand (Value));
-                                 Emit ("je " & Done);
+                                 if Last then
+                                    Trap_On
+                                      ("jne", Landin.Panics.Bad_Conversion);
+                                 else
+                                    Emit ("je " & Done);
+                                 end if;
                               else
                                  Emit ("cmpl $" & Trimmed
                                    (Positive'Image (Run.Low))
                                    & ", " & Value_Operand (Value));
-                                 Emit ("jb " & Next);
+                                 if Last then
+                                    Trap_On
+                                      ("jb", Landin.Panics.Bad_Conversion);
+                                 else
+                                    Emit ("jb " & Next);
+                                 end if;
                                  Emit ("cmpl $" & Trimmed
                                    (Positive'Image (Run.High))
                                    & ", " & Value_Operand (Value));
-                                 Emit ("jbe " & Done);
-                                 Put (Next & ":");
+                                 if Last then
+                                    Trap_On
+                                      ("ja", Landin.Panics.Bad_Conversion);
+                                 else
+                                    Emit ("jbe " & Done);
+                                    Put (Next & ":");
+                                 end if;
                               end if;
                            end;
                         end loop;
+                        if Runs'Length = 0 then
+                           Emit_Panic (Landin.Panics.Bad_Conversion);
+                        end if;
                      end;
-                     Emit_Panic (Landin.Panics.Bad_Conversion);
                      Put (Done & ":");
                   end;
                end if;
@@ -5691,7 +6588,9 @@ package body Landin.Backend.X86_64 is
                            0, "%rdi");
                         Emit ("testq %rsi, %rsi");
                         Emit ("jz " & Zero_Label);
-                        if Bytes <= Unrolled_Transfer then
+                        if Bytes <= Unrolled_Transfer
+                          or else Speed_Unrolled (Bytes)
+                        then
                            Move_Unrolled (Bytes, Copy => True);
                         else
                            Emit
@@ -5705,7 +6604,9 @@ package body Landin.Backend.X86_64 is
                         Emit ("jmp " & Done_Label);
                         Put (Zero_Label & ":");
                         Emit ("xorl %eax, %eax");
-                        if Bytes <= Unrolled_Transfer then
+                        if Bytes <= Unrolled_Transfer
+                          or else Speed_Unrolled (Bytes)
+                        then
                            Move_Unrolled (Bytes, Copy => False);
                         else
                            Emit
@@ -5723,19 +6624,9 @@ package body Landin.Backend.X86_64 is
             end loop;
          end if;
 
-         for Index in Uses'Range loop
-            for Position in 1 .. Landin.IR.Operand_Count
-              (Of_Unit, Item, Landin.IR.Value_Id (Index))
-            loop
-               declare
-                  Operand : constant Positive := Positive
-                    (Landin.IR.Nth_Operand
-                       (Of_Unit, Item, Landin.IR.Value_Id (Index), Position));
-               begin
-                  Uses (Operand) := Uses (Operand) + 1;
-               end;
-            end loop;
-         end loop;
+         if Optimized then
+            Count_Uses (Of_Unit, Item, Uses, References);
+         end if;
          for Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             declare
                Block : constant Landin.IR.Block_Id :=
@@ -5747,6 +6638,7 @@ package body Landin.Backend.X86_64 is
                for Position in 1 .. Landin.IR.Length
                                       (Of_Unit, Item, Block)
                loop
+                  Current_Position := Position;
                   Next_Instruction :=
                     (if Position < Landin.IR.Length (Of_Unit, Item, Block)
                      then Landin.IR.Nth_Value
@@ -5777,8 +6669,16 @@ package body Landin.Backend.X86_64 is
 
          if Exit_Count > 1 then
             Put (Shared_Epilogue & ":");
+            --  The traps after this teardown run in the body's frame.
+            if Debug /= null and then not Traps.Is_Empty then
+               Emit (".cfi_remember_state");
+            end if;
             Emit_Epilogue_Body;
+            if Debug /= null and then not Traps.Is_Empty then
+               Emit (".cfi_restore_state");
+            end if;
          end if;
+         Emit_Traps;
 
          if Debug /= null then
             Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
@@ -7520,7 +8420,7 @@ package body Landin.Backend.X86_64 is
          Unbounded.Append (Out_Text, Dwarf.Sections
            (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
             Local_Prefix, Symbol'Access, Cached_Plan'Access,
-            Cached_Frame'Access));
+            Cached_Frame'Access, Trapped'Access));
       end if;
       Put (Character'Val (9) & ELF.No_Executable_Stack);
       if Panic /= null and then Landin.Panics.Handler (Panic.all)

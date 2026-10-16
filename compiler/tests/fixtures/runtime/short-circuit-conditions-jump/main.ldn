@@ -1,0 +1,144 @@
+-- Every `and` and `or` here is the condition of a branch: an `if` or
+-- `elsif`, a `while`, or a `when` on `break`, `continue`, `return` or
+-- `fail`.  Each operand appends its own digit to a log as it runs, so a
+-- log is the order the operands ran in and shows which were skipped:
+-- [0410] evaluates the left first and the right only when the left did
+-- not decide.  Each check hands back its log, then a digit for the way the
+-- flow went.
+problem: atom
+problems: type = problem
+
+note: (inout log: u32, turn: u32, answer: bool) -> (result: bool) =
+    log = log * 10 + turn
+    result = answer
+end note
+
+both: (first: bool, second: bool) -> (outcome: u32) =
+    mut log: u32 = 0
+    mut way: u32 = 2
+    if note(log, 1, first) and note(log, 2, second) then
+        way = 1
+    end if
+    outcome = log * 10 + way
+end both
+
+either: (first: bool, second: bool) -> (outcome: u32) =
+    mut log: u32 = 0
+    mut way: u32 = 2
+    if note(log, 1, first) or note(log, 2, second) then
+        way = 1
+    end if
+    outcome = log * 10 + way
+end either
+
+either_then_both: (first: bool, second: bool, third: bool)
+                  -> (outcome: u32) =
+    mut log: u32 = 0
+    mut way: u32 = 2
+    if (note(log, 1, first) or note(log, 2, second))
+        and note(log, 3, third)
+    then
+        way = 1
+    end if
+    outcome = log * 10 + way
+end either_then_both
+
+both_or_else: (first: bool, second: bool, third: bool) -> (outcome: u32) =
+    mut log: u32 = 0
+    mut way: u32 = 2
+    if (note(log, 1, first) and note(log, 2, second))
+        or note(log, 3, third)
+    then
+        way = 1
+    end if
+    outcome = log * 10 + way
+end both_or_else
+
+-- The arms' conditions are tested in turn, each only when every one
+-- before it was false.
+arms: (first: bool, second: bool, third: bool, fourth: bool)
+      -> (outcome: u32) =
+    mut log: u32 = 0
+    mut way: u32 = 0
+    if note(log, 1, first) and note(log, 2, second) then
+        way = 1
+    elsif note(log, 3, third) or note(log, 4, fourth) then
+        way = 2
+    elsif not (note(log, 5, first) or note(log, 6, third)) then
+        way = 3
+    else
+        way = 4
+    end if
+    outcome = log * 10 + way
+end arms
+
+-- The condition is tested afresh before every pass.
+counted: (limit: u32) -> (outcome: u32) =
+    mut log: u32 = 0
+    mut passes: u32 = 0
+    while note(log, 1, passes < limit) and note(log, 2, true) do
+        inc passes
+    end while
+    outcome = log * 10 + passes
+end counted
+
+leaves: (stop: u32, skip: u32) -> (outcome: u32) =
+    mut log: u32 = 0
+    mut passes: u32 = 0
+    mut kept: u32 = 0
+    loop do
+        inc passes
+        continue when note(log, 1, passes == skip) and note(log, 2, true)
+        break when note(log, 3, passes == stop) or note(log, 4, false)
+        inc kept
+    end loop
+    outcome = log * 10 + kept
+end leaves
+
+early: (first: bool, second: bool) -> (outcome: u32) =
+    mut log: u32 = 0
+    outcome = 9
+    return when note(log, 1, first) or note(log, 2, second)
+    outcome = log * 10
+end early
+
+refused: (first: bool, second: bool) -> (outcome: u32) ! problems =
+    mut log: u32 = 0
+    fail problem when note(log, 1, first) and note(log, 2, second)
+    outcome = log * 10
+end refused
+
+public main: () -> (code: i32) =
+    if both(false, true) == 12
+      and both(true, false) == 122
+      and both(true, true) == 121
+      and either(true, false) == 11
+      and either(false, true) == 121
+      and either(false, false) == 122
+      and either_then_both(false, false, true) == 122
+      and either_then_both(true, false, false) == 132
+      and either_then_both(false, true, true) == 1231
+      and both_or_else(true, true, false) == 121
+      and both_or_else(false, false, true) == 131
+      and both_or_else(true, false, false) == 1232
+      and arms(true, true, false, false) == 121
+      and arms(true, false, true, false) == 1232
+      and arms(false, false, false, true) == 1342
+      and arms(false, false, false, false) == 134563
+      and arms(true, false, false, false) == 123454
+      and counted(0) == 10
+      and counted(2) == 121212
+      and leaves(3, 9) == 134134132
+      and leaves(3, 2) == 13412131
+      and early(true, false) == 9
+      and early(false, true) == 9
+      and early(false, false) == 120
+      and (refused(false, true) else 7) == 10
+      and (refused(true, false) else 7) == 120
+      and (refused(true, true) else 7) == 7
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -72,6 +72,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/server.md",
                      "docs/ir.md",
                      "docs/targets.md",
+                     "docs/benchmarks.md",
                      "compiler/ada/README.md",
                      "core/README.md",
                      "devices/README.md",
@@ -105,6 +106,11 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.ldn"),
     ("Benchmark Game FASTA",
      "compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn"),
+    ("Benchmark Game reverse-complement",
+     "compiler/tests/fixtures/runtime/benchmark-game-reverse-complement/"
+     "main.ldn"),
+    ("Benchmark Game binary-trees",
+     "compiler/tests/fixtures/runtime/benchmark-game-binary-trees/main.ldn"),
     ("Word count",
      "compiler/tests/fixtures/runtime/word-count/main.ldn"),
     ("Directory listing",
@@ -118,9 +124,15 @@ RUNNING_EXAMPLES = [
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads
-#  its standard input is a tool rather than a test: it returns 0, and its
-#  oracle is the output its fixture expects for the input its fixture names.
-READING_EXAMPLES = {"Word count", "Line numbers"}
+#  its standard input, or takes its size as an argument as a Benchmark Game
+#  program does, is a tool rather than a test: it returns 0, and its oracle
+#  is the output its fixture expects for the input or the arguments its
+#  fixture names.
+READING_EXAMPLES = {"Word count", "Line numbers",
+                    "Benchmark Game reverse-complement"}
+ARGUMENT_EXAMPLES = {"Benchmark Game fannkuch-redux",
+                     "Benchmark Game Mandelbrot", "Benchmark Game FASTA",
+                     "Benchmark Game binary-trees"}
 
 #  A routine a published example shares with the fixtures that run it where
 #  the example cannot: the same declarations, byte for byte, in each.
@@ -153,6 +165,14 @@ BENCHMARK_GAME_ORACLES = {
         "97610473750700638fc63d13cfa49d339b67c18e7f26b3f9c9acb61e746472d5",
     "compiler/tests/fixtures/runtime/benchmark-game-fasta/output.txt":
         "62d1e8d0df7938d2aefda9a37887e0389231ea72c099c29a51afb6edca1bdc73",
+    "compiler/tests/fixtures/runtime/benchmark-game-reverse-complement/"
+    "input.txt":
+        "62d1e8d0df7938d2aefda9a37887e0389231ea72c099c29a51afb6edca1bdc73",
+    "compiler/tests/fixtures/runtime/benchmark-game-reverse-complement/"
+    "output.txt":
+        "549dcdcc7df2685145e6cbdfd682469bd9c12ff1beec93c270f8ba447acd4855",
+    "compiler/tests/fixtures/runtime/benchmark-game-binary-trees/output.txt":
+        "b7f92c56b5d8aeb0a4d698842d1d87a57b4909865c3c84e5e10313e16663c3cb",
 }
 
 #  Every word the language reserves. Kept here rather than imported from
@@ -6453,8 +6473,9 @@ def check_running_examples(full_run):
             os.path.join(ROOT, os.path.dirname(source), "fixture.meta"),
             encoding="utf-8").read().splitlines()
         reads = title in READING_EXAMPLES
+        takes = title in ARGUMENT_EXAMPLES
         required = ["class: runtime", "program: main.ldn",
-                    "status: 0" if reads else "status: 42"]
+                    "status: 0" if reads or takes else "status: 42"]
         for line in required:
             if line not in metadata:
                 out.append((source, 1,
@@ -6468,12 +6489,20 @@ def check_running_examples(full_run):
                         "%s reads its input, so its metadata names the "
                         "input it is given and the output expected"
                         % title))
+        if takes and not (any(line.startswith("run_args: ")
+                              for line in metadata)
+                          and any(line.startswith("run_expect: ")
+                                  for line in metadata)):
+            out.append((source, 1,
+                        "%s takes its size as an argument, so its metadata "
+                        "names the arguments it is given and the output "
+                        "expected" % title))
 
     return out
 
 
 def check_benchmark_game_oracles(full_run):
-    """The three correctness outputs stay byte-for-byte canonical."""
+    """The correctness files stay byte-for-byte canonical."""
     if not full_run:
         return []
 

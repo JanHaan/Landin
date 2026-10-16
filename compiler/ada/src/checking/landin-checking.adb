@@ -146,7 +146,7 @@ package body Landin.Checking is
    is
       Position : constant Positive :=
         Routine_Identities.Position (Of_Table, Instance);
-      First : constant Natural := Of_Table.Runs
+      First : constant Natural := Of_Table.Runs.Element
         (Positive (Landin.Syntax.Source_Of (Of_Tree))).First;
       Limit : constant Natural := Landin.Syntax.Node_Count (Of_Tree);
       Found : Node_List (1 .. 0);
@@ -163,7 +163,7 @@ package body Landin.Checking is
          for Overlay of Made loop
             declare
                Where : constant Positive :=
-                 Of_Table.Node_Overlays (Overlay).Where;
+                 Of_Table.Node_Overlays.Element (Overlay).Where;
             begin
                if Where > First and then Where - First <= Limit then
                   Count := Count + 1;
@@ -577,7 +577,7 @@ package body Landin.Checking is
       for Index in 1 .. Members.Count loop
          if not Actuals_Agree
            (Of_Table,
-            Of_Table.Conformance_Actuals (Members.First + Index),
+            Of_Table.Conformance_Actuals.Element (Members.First + Index),
             Actuals.Members (Index))
          then
             return False;
@@ -615,12 +615,12 @@ package body Landin.Checking is
 
    function Concept_Declaration
      (Of_Table : Table; Id : Concept_Id) return Declaration_Id
-     is (Of_Table.Concepts
+     is (Of_Table.Concepts.Element
            (Concept_Identities.Position (Of_Table, Id)).Declaration);
 
    function Is_Compiler_Concept
      (Of_Table : Table; Id : Concept_Id) return Boolean
-     is (Of_Table.Concepts
+     is (Of_Table.Concepts.Element
            (Concept_Identities.Position (Of_Table, Id)).Compiler_Supplied);
 
    function Conformance_Count (Of_Table : Table) return Natural
@@ -671,7 +671,8 @@ package body Landin.Checking is
       Target   : Actual_Key;
       Inputs   : Actual_Tuple) return Boolean
    is
-      Held : constant Conformance_Record := Of_Table.Conformances (Position);
+      Held : constant Conformance_Record :=
+        Of_Table.Conformances.Element (Position);
    begin
       return Held.Concept = Concept
         and then Actuals_Agree (Of_Table, Held.Target, Target)
@@ -811,64 +812,64 @@ package body Landin.Checking is
 
    function Conformance_Concept
      (Of_Table : Table; Id : Conformance_Id) return Concept_Id
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Concept);
 
    function Conformance_Target
      (Of_Table : Table; Id : Conformance_Id) return Actual_Key
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Target);
 
    function Conformance_Input_Count
      (Of_Table : Table; Id : Conformance_Id) return Natural
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Inputs.Count);
 
    function Nth_Conformance_Input
      (Of_Table : Table; Id : Conformance_Id; Position : Positive)
       return Actual_Key
    is
-      Members : constant Run := Of_Table.Conformances
+      Members : constant Run := Of_Table.Conformances.Element
         (Conformance_Identities.Position (Of_Table, Id)).Inputs;
    begin
-      return Of_Table.Conformance_Actuals (Members.First + Position);
+      return Of_Table.Conformance_Actuals.Element (Members.First + Position);
    end Nth_Conformance_Input;
 
    function Conformance_Binding_Count
      (Of_Table : Table; Id : Conformance_Id) return Natural
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Bindings.Count);
 
    function Nth_Conformance_Binding
      (Of_Table : Table; Id : Conformance_Id; Position : Positive)
       return Actual_Key
    is
-      Members : constant Run := Of_Table.Conformances
+      Members : constant Run := Of_Table.Conformances.Element
         (Conformance_Identities.Position (Of_Table, Id)).Bindings;
    begin
-      return Of_Table.Conformance_Actuals (Members.First + Position);
+      return Of_Table.Conformance_Actuals.Element (Members.First + Position);
    end Nth_Conformance_Binding;
 
    function Conformance_Source
      (Of_Table : Table; Id : Conformance_Id)
       return Landin.Source.Source_Id
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Source);
 
    function Conformance_Node
      (Of_Table : Table; Id : Conformance_Id)
       return Landin.Syntax.Node_Id
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Node);
 
    function Conformance_Origin_Of
      (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Origin);
 
    function Conformance_Entry_Count
      (Of_Table : Table; Id : Conformance_Id) return Natural
-     is (Of_Table.Conformances
+     is (Of_Table.Conformances.Element
            (Conformance_Identities.Position (Of_Table, Id)).Providers.Count);
 
    procedure Set_Conformance_Entry_Count
@@ -911,10 +912,10 @@ package body Landin.Checking is
      (Of_Table : Table; Id : Conformance_Id; Position : Positive)
       return Declaration_Id
    is
-      Members : constant Run := Of_Table.Conformances
+      Members : constant Run := Of_Table.Conformances.Element
         (Conformance_Identities.Position (Of_Table, Id)).Providers;
    begin
-      return Of_Table.Conformance_Providers
+      return Of_Table.Conformance_Providers.Element
         (Members.First + Position).Declaration;
    end Conformance_Provider_Declaration;
 
@@ -922,10 +923,10 @@ package body Landin.Checking is
      (Of_Table : Table; Id : Conformance_Id; Position : Positive)
       return Routine_Instance_Id
    is
-      Members : constant Run := Of_Table.Conformances
+      Members : constant Run := Of_Table.Conformances.Element
         (Conformance_Identities.Position (Of_Table, Id)).Providers;
    begin
-      return Of_Table.Conformance_Providers
+      return Of_Table.Conformance_Providers.Element
         (Members.First + Position).Instance;
    end Conformance_Provider_Instance;
 
@@ -1422,7 +1423,7 @@ package body Landin.Checking is
    function Union_Spelling
      (Of_Table : Table; Id : Nominal_Type_Id)
       return Landin.Source.Names.Name_Id
-     is (Of_Table.Nominal_Spellings
+     is (Of_Table.Nominal_Spellings.Element
            (Nominal_Identities.Position (Of_Table, Id)));
 
    procedure Note_Union_Spelling
@@ -1435,7 +1436,7 @@ package body Landin.Checking is
 
    function Instance_Actual_Count
      (Of_Table : Table; Id : Nominal_Type_Id) return Natural
-     is (Of_Table.Nominal_Actual_Runs
+     is (Of_Table.Nominal_Actual_Runs.Element
            (Nominal_Identities.Position (Of_Table, Id)).Count);
 
    function Nth_Instance_Actual
@@ -1443,10 +1444,10 @@ package body Landin.Checking is
       Id       : Nominal_Type_Id;
       Position : Positive) return Actual_Key
    is
-      Members : constant Run := Of_Table.Nominal_Actual_Runs
+      Members : constant Run := Of_Table.Nominal_Actual_Runs.Element
         (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Nominal_Actuals (Members.First + Position);
+      return Of_Table.Nominal_Actuals.Element (Members.First + Position);
    end Nth_Instance_Actual;
 
    function Intern_Routine_Instance
@@ -1514,12 +1515,12 @@ package body Landin.Checking is
 
    function Routine_Template_Of
      (Of_Table : Table; Id : Routine_Instance_Id) return Declaration_Id
-     is (Of_Table.Routine_Instances
+     is (Of_Table.Routine_Instances.Element
            (Routine_Identities.Position (Of_Table, Id)).Template);
 
    function Routine_Actual_Count
      (Of_Table : Table; Id : Routine_Instance_Id) return Natural
-     is (Of_Table.Routine_Instances
+     is (Of_Table.Routine_Instances.Element
            (Routine_Identities.Position (Of_Table, Id)).Actuals.Count);
 
    function Nth_Routine_Actual
@@ -1527,15 +1528,15 @@ package body Landin.Checking is
       Id       : Routine_Instance_Id;
       Position : Positive) return Actual_Key
    is
-      Members : constant Run := Of_Table.Routine_Instances
+      Members : constant Run := Of_Table.Routine_Instances.Element
         (Routine_Identities.Position (Of_Table, Id)).Actuals;
    begin
-      return Of_Table.Routine_Actuals (Members.First + Position);
+      return Of_Table.Routine_Actuals.Element (Members.First + Position);
    end Nth_Routine_Actual;
 
    function Routine_Evidence_Count
      (Of_Table : Table; Id : Routine_Instance_Id) return Natural
-     is (Of_Table.Routine_Instances
+     is (Of_Table.Routine_Instances.Element
            (Routine_Identities.Position (Of_Table, Id)).Evidence.Count);
 
    procedure Add_Routine_Evidence
@@ -1567,10 +1568,10 @@ package body Landin.Checking is
       Id       : Routine_Instance_Id;
       Position : Positive) return Conformance_Id
    is
-      Members : constant Run := Of_Table.Routine_Instances
+      Members : constant Run := Of_Table.Routine_Instances.Element
         (Routine_Identities.Position (Of_Table, Id)).Evidence;
    begin
-      return Of_Table.Routine_Evidence
+      return Of_Table.Routine_Evidence.Element
         (Members.First + Position).Conformance;
    end Nth_Routine_Evidence;
 
@@ -1579,16 +1580,17 @@ package body Landin.Checking is
       Id       : Routine_Instance_Id;
       Position : Positive) return Positive
    is
-      Members : constant Run := Of_Table.Routine_Instances
+      Members : constant Run := Of_Table.Routine_Instances.Element
         (Routine_Identities.Position (Of_Table, Id)).Evidence;
    begin
-      return Of_Table.Routine_Evidence (Members.First + Position).Formal;
+      return
+        Of_Table.Routine_Evidence.Element (Members.First + Position).Formal;
    end Nth_Routine_Evidence_Formal;
 
    function Routine_State_Of
      (Of_Table : Table; Id : Routine_Instance_Id)
       return Routine_Instance_State
-     is (Of_Table.Routine_Instances
+     is (Of_Table.Routine_Instances.Element
            (Routine_Identities.Position (Of_Table, Id)).State);
 
    procedure Begin_Routine_Instance
@@ -1609,7 +1611,7 @@ package body Landin.Checking is
 
    function Routine_Signature_Of
      (Of_Table : Table; Id : Routine_Instance_Id) return Signature_Id
-     is (Of_Table.Routine_Instances
+     is (Of_Table.Routine_Instances.Element
            (Routine_Identities.Position (Of_Table, Id)).Signature);
 
    procedure Finish_Routine_Instance
@@ -1640,7 +1642,7 @@ package body Landin.Checking is
      (Of_Table : Table; Id : Landin.Source.Source_Id) return Natural
      is (if Id /= Landin.Source.No_Source
            and then Natural (Id) <= Source_Count (Of_Table)
-         then Of_Table.Runs (Positive (Id)).Count
+         then Of_Table.Runs.Element (Positive (Id)).Count
          else 0);
 
    function Declaration_Limit (Of_Table : Table) return Natural
@@ -1652,7 +1654,7 @@ package body Landin.Checking is
          and then Natural (Landin.Syntax.Source_Of (Of_Tree))
            <= Source_Count (Of_Table)
          and then Landin.Serials."="
-           (Of_Table.Tree_Serials
+           (Of_Table.Tree_Serials.Element
               (Positive (Landin.Syntax.Source_Of (Of_Tree))),
             Landin.Syntax.Identity (Of_Tree))
          and then Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
@@ -1841,7 +1843,7 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Positive
-     is (Of_Table.Runs
+     is (Of_Table.Runs.Element
            (Positive (Landin.Syntax.Source_Of (Of_Tree))).First
          + Positive (Node));
 
@@ -1959,10 +1961,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Type then
-         return Of_Table.Node_Overlays (Overlay).Answer;
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Type
+      then
+         return Of_Table.Node_Overlays.Element (Overlay).Answer;
       end if;
-      return Of_Table.Node_Types (Where);
+      return Of_Table.Node_Types.Element (Where);
    end Type_Of;
 
    function Nominal_Type_Count (Of_Table : Table) return Natural
@@ -1977,13 +1981,13 @@ package body Landin.Checking is
 
    function Is_Distinct
      (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
-     is (Of_Table.Distinct_Bases
+     is (Of_Table.Distinct_Bases.Element
            (Nominal_Identities.Position (Of_Table, Id)).Kind
          /= Landin.Types.No_Value);
 
    function Distinct_Base
      (Of_Table : Table; Id : Nominal_Type_Id) return Signature_Part
-     is (Of_Table.Distinct_Bases
+     is (Of_Table.Distinct_Bases.Element
            (Nominal_Identities.Position (Of_Table, Id)));
 
    procedure Note_Distinct_Base
@@ -1995,22 +1999,22 @@ package body Landin.Checking is
 
    function Template_Of
      (Of_Table : Table; Id : Nominal_Type_Id) return Declaration_Id
-     is (Of_Table.Nominal_Templates
+     is (Of_Table.Nominal_Templates.Element
            (Nominal_Identities.Position (Of_Table, Id)));
 
    function Empty_Nominal_Instance
      (Of_Table : Table; Template : Declaration_Id) return Nominal_Type_Id
      is (if Template = No_Declaration then No_Nominal_Type
-         else Of_Table.Empty_Nominals (Positive (Template)));
+         else Of_Table.Empty_Nominals.Element (Positive (Template)));
 
    function Instance_State_Of
      (Of_Table : Table; Id : Nominal_Type_Id) return Instance_State
-     is (Of_Table.Layouts
+     is (Of_Table.Layouts.Element
            (Nominal_Identities.Position (Of_Table, Id)).State);
 
    function Instance_Attempt_Count
      (Of_Table : Table; Id : Nominal_Type_Id) return Natural
-     is (Of_Table.Layouts
+     is (Of_Table.Layouts.Element
            (Nominal_Identities.Position (Of_Table, Id)).Attempts);
 
    procedure Begin_Instance
@@ -2048,11 +2052,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Nominal
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Nominal
       then
-         return Of_Table.Node_Overlays (Overlay).Nominal;
+         return Of_Table.Node_Overlays.Element (Overlay).Nominal;
       end if;
-      return Of_Table.Node_Nominals (Where);
+      return Of_Table.Node_Nominals.Element (Where);
    end Nominal_Of;
 
    function Nominal_Of
@@ -2065,11 +2070,11 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Nominal_Type;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Nominal
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Nominal
       then
-         return Of_Table.Declaration_Overlays (Overlay).Nominal;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Nominal;
       end if;
-      return Of_Table.Declaration_Nominals (Positive (Id));
+      return Of_Table.Declaration_Nominals.Element (Positive (Id));
    end Nominal_Of;
 
    procedure Note_Nominal
@@ -2185,26 +2190,27 @@ package body Landin.Checking is
 
    function Encoding_Width
      (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
-     is (Of_Table.Atom_Sets (Positive (Set_Id)).Encoding_Bits);
+     is (Of_Table.Atom_Sets.Element (Positive (Set_Id)).Encoding_Bits);
 
    function Nth_Encoding
      (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
       return Landin.Packed.Image
-     is (Of_Table.Encodings
-       (Of_Table.Atom_Sets (Positive (Set_Id)).Encodings_First + Index));
+     is (Of_Table.Encodings.Element
+           (Of_Table.Atom_Sets.Element (Positive (Set_Id)).Encodings_First
+            + Index));
 
    function Atom_Count
      (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
-     is (Of_Table.Atom_Sets (Positive (Set_Id)).Members.Count);
+     is (Of_Table.Atom_Sets.Element (Positive (Set_Id)).Members.Count);
 
    function Nth_Atom
      (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
       return Declaration_Id
    is
       Members : constant Run :=
-        Of_Table.Atom_Sets (Positive (Set_Id)).Members;
+        Of_Table.Atom_Sets.Element (Positive (Set_Id)).Members;
    begin
-      return Of_Table.Atoms (Members.First + Index);
+      return Of_Table.Atoms.Element (Members.First + Index);
    end Nth_Atom;
 
    function Contains_Atom
@@ -2261,10 +2267,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Atoms then
-         return Of_Table.Node_Overlays (Overlay).Atoms;
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Atoms
+      then
+         return Of_Table.Node_Overlays.Element (Overlay).Atoms;
       end if;
-      return Of_Table.Node_Atom_Sets (Where);
+      return Of_Table.Node_Atom_Sets.Element (Where);
    end Atom_Set_Of;
 
    function Atom_Set_Of
@@ -2277,11 +2285,11 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Atom_Set;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Atoms
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Atoms
       then
-         return Of_Table.Declaration_Overlays (Overlay).Atoms;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Atoms;
       end if;
-      return Of_Table.Declaration_Atom_Sets (Positive (Id));
+      return Of_Table.Declaration_Atom_Sets.Element (Positive (Id));
    end Atom_Set_Of;
 
    procedure Note_Atom_Set
@@ -2353,7 +2361,7 @@ package body Landin.Checking is
 
    function Bounds_Of
      (Of_Table : Table; Id : Constraint_Id) return Constraint_Descriptor
-     is (Of_Table.Constraints (Positive (Id)));
+     is (Of_Table.Constraints.Element (Positive (Id)));
 
    function Contains
      (Of_Table : Table; Outer, Inner : Constraint_Id) return Boolean
@@ -2371,12 +2379,12 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Constraint_Id
-     is (Of_Table.Node_Constraints (Slot (Of_Table, Of_Tree, Node)));
+     is (Of_Table.Node_Constraints.Element (Slot (Of_Table, Of_Tree, Node)));
 
    function Constraint_Of
      (Of_Table : Table; Id : Declaration_Id) return Constraint_Id
      is (if Id = No_Declaration then No_Constraint
-         else Of_Table.Declaration_Constraints (Positive (Id)));
+         else Of_Table.Declaration_Constraints.Element (Positive (Id)));
 
    procedure Note_Constraint
      (Into       : in out Table;
@@ -2418,11 +2426,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Owed_Check
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Owed_Check
       then
-         return Of_Table.Node_Overlays (Overlay).Owed_Check;
+         return Of_Table.Node_Overlays.Element (Overlay).Owed_Check;
       end if;
-      return Of_Table.Node_Owed_Checks (Where);
+      return Of_Table.Node_Owed_Checks.Element (Where);
    end Owed_Check;
 
    procedure Note_Owed_Check
@@ -2465,10 +2473,10 @@ package body Landin.Checking is
         Node_Overlay_Position (Of_Table, Slot (Of_Table, Of_Tree, Node));
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Match
+        and then Of_Table.Node_Overlays.Element (Overlay).Match
           /= Landin.Resolution.Call_Not_Matched
       then
-         return Of_Table.Node_Overlays (Overlay).Match;
+         return Of_Table.Node_Overlays.Element (Overlay).Match;
       end if;
       return Landin.Resolution.Match_Of (Meanings, Of_Tree, Node);
    end Match_Of;
@@ -2483,9 +2491,10 @@ package body Landin.Checking is
         Node_Overlay_Position (Of_Table, Slot (Of_Table, Of_Tree, Argument));
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Argument_Position /= 0
+        and then
+          Of_Table.Node_Overlays.Element (Overlay).Argument_Position /= 0
       then
-         return Of_Table.Node_Overlays (Overlay).Argument_Position;
+         return Of_Table.Node_Overlays.Element (Overlay).Argument_Position;
       end if;
       return Landin.Resolution.Position_Of (Meanings, Of_Tree, Argument);
    end Position_Of;
@@ -2571,7 +2580,7 @@ package body Landin.Checking is
 
    function Descriptor_Of
      (Of_Table : Table; Id : Reference_Id) return Reference_Descriptor
-     is (Of_Table.References (Positive (Id)));
+     is (Of_Table.References.Element (Positive (Id)));
 
    function Text_Reference_Of
      (Of_Table : Table; View : Landin.Types.Text_View) return Reference_Id
@@ -2668,7 +2677,7 @@ package body Landin.Checking is
          then
             return False;
          end if;
-         Current := Of_Table.Field_Shapes (Current.Payloads_First);
+         Current := Of_Table.Field_Shapes.Element (Current.Payloads_First);
          if Current.Kind /= Fixed_Array_Field
            and then (Current.Kind /= Scalar_Field
                      or else (Current.Signature = No_Signature
@@ -2769,7 +2778,7 @@ package body Landin.Checking is
          raise Landin.Compiler_Defect with "an array child run is malformed";
       end if;
       if Shape.Cases = 1 then
-         return Of_Table.Field_Shapes (Shape.Payloads_First);
+         return Of_Table.Field_Shapes.Element (Shape.Payloads_First);
       end if;
       return (if Shape.Reference /= No_Reference
               then (Kind => Reference_Field, Reference => Shape.Reference,
@@ -2966,11 +2975,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Reference
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Reference
       then
-         return Of_Table.Node_Overlays (Overlay).Reference;
+         return Of_Table.Node_Overlays.Element (Overlay).Reference;
       end if;
-      return Of_Table.Node_References (Where);
+      return Of_Table.Node_References.Element (Where);
    end Reference_Of;
 
    function Text_Conversion_Of
@@ -2982,11 +2991,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Text_Conversion
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Text_Conversion
       then
-         return Of_Table.Node_Overlays (Overlay).Text_Conversion;
+         return Of_Table.Node_Overlays.Element (Overlay).Text_Conversion;
       end if;
-      return Of_Table.Node_Text_Conversions (Where);
+      return Of_Table.Node_Text_Conversions.Element (Where);
    end Text_Conversion_Of;
 
    function Lent_Encoding
@@ -3003,11 +3012,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Lent_Array
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Lent_Array
       then
-         return Of_Table.Node_Overlays (Overlay).Lent_Array;
+         return Of_Table.Node_Overlays.Element (Overlay).Lent_Array;
       end if;
-      return Of_Table.Node_Lent_Arrays (Where);
+      return Of_Table.Node_Lent_Arrays.Element (Where);
    end Lent_Encoding;
 
    function Is_Lent_Array
@@ -3082,11 +3091,12 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Distinct_Conversion
+        and then
+          Of_Table.Node_Overlays.Element (Overlay).Has_Distinct_Conversion
       then
-         return Of_Table.Node_Overlays (Overlay).Distinct_Conversion;
+         return Of_Table.Node_Overlays.Element (Overlay).Distinct_Conversion;
       end if;
-      return Of_Table.Node_Distinct_Conversions (Where);
+      return Of_Table.Node_Distinct_Conversions.Element (Where);
    end Distinct_Conversion_Of;
 
    procedure Note_Distinct_Conversion
@@ -3125,11 +3135,11 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Reference;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Reference
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Reference
       then
-         return Of_Table.Declaration_Overlays (Overlay).Reference;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Reference;
       end if;
-      return Of_Table.Declaration_References (Positive (Id));
+      return Of_Table.Declaration_References.Element (Positive (Id));
    end Reference_Of;
 
    procedure Note_Reference
@@ -3192,11 +3202,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Concept
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Concept
       then
-         return Of_Table.Node_Overlays (Overlay).Concept;
+         return Of_Table.Node_Overlays.Element (Overlay).Concept;
       end if;
-      return Of_Table.Node_Concepts (Where);
+      return Of_Table.Node_Concepts.Element (Where);
    end Any_Concept_Of;
 
    function Any_Concept_Of
@@ -3209,11 +3220,11 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Concept;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Concept
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Concept
       then
-         return Of_Table.Declaration_Overlays (Overlay).Concept;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Concept;
       end if;
-      return Of_Table.Declaration_Concepts (Positive (Id));
+      return Of_Table.Declaration_Concepts.Element (Positive (Id));
    end Any_Concept_Of;
 
    procedure Note_Any_Concept
@@ -3364,11 +3375,11 @@ package body Landin.Checking is
             when Variant_Field =>
                for Which in 1 .. Item.Cases loop
                   declare
-                     Payload : constant Case_Run := Of_Table.Case_Runs
+                     Payload : constant Case_Run := Of_Table.Case_Runs.Element
                        (Item.Payloads_First + Which - 1);
                   begin
                      for Part in 1 .. Payload.Count loop
-                        if Visit (Of_Table.Field_Shapes
+                        if Visit (Of_Table.Field_Shapes.Element
                           (Payload.First + Part - 1))
                         then
                            return True;
@@ -3479,11 +3490,11 @@ package body Landin.Checking is
             when Variant_Field =>
                for Which in 1 .. Item.Cases loop
                   declare
-                     Payload : constant Case_Run := Of_Table.Case_Runs
+                     Payload : constant Case_Run := Of_Table.Case_Runs.Element
                        (Item.Payloads_First + Which - 1);
                   begin
                      for Index in 1 .. Payload.Count loop
-                        if Visit (Of_Table.Field_Shapes
+                        if Visit (Of_Table.Field_Shapes.Element
                           (Payload.First + Index - 1))
                         then
                            return True;
@@ -3619,24 +3630,25 @@ package body Landin.Checking is
    function Signature_Never_Returns
      (Of_Table : Table; Signature : Signature_Id) return Boolean
      is (Holds (Of_Table, Signature)
-         and then Of_Table.Signatures (Positive (Signature)).Nonreturning);
+         and then
+           Of_Table.Signatures.Element (Positive (Signature)).Nonreturning);
 
    function Signature_Machine
      (Of_Table : Table; Signature : Signature_Id)
       return Landin.Machine.Convention is
      (if Holds (Of_Table, Signature)
-      then Of_Table.Signatures (Positive (Signature)).Machine
+      then Of_Table.Signatures.Element (Positive (Signature)).Machine
       else Landin.Machine.Ordinary);
 
    function Signature_Uses_C_ABI
      (Of_Table : Table; Signature : Signature_Id) return Boolean
      is (Holds (Of_Table, Signature)
-         and then Of_Table.Signatures (Positive (Signature)).C_ABI);
+         and then Of_Table.Signatures.Element (Positive (Signature)).C_ABI);
 
    function Signature_Is_Variadic
      (Of_Table : Table; Signature : Signature_Id) return Boolean
      is (Holds (Of_Table, Signature)
-         and then Of_Table.Signatures (Positive (Signature)).Variadic);
+         and then Of_Table.Signatures.Element (Positive (Signature)).Variadic);
 
    procedure Note_Link_Symbol
      (Into   : in out Table;
@@ -3663,7 +3675,7 @@ package body Landin.Checking is
      is (if not Is_Prepared (Of_Table) or else Id = No_Declaration
            or else Natural (Id) > Declaration_Limit (Of_Table)
          then Landin.Source.Names.No_Name
-         else Of_Table.Link_Names (Positive (Id)));
+         else Of_Table.Link_Names.Element (Positive (Id)));
 
    function Signature_Of
      (Of_Table : Table;
@@ -3674,11 +3686,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Signature
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Signature
       then
-         return Of_Table.Node_Overlays (Overlay).Signature;
+         return Of_Table.Node_Overlays.Element (Overlay).Signature;
       end if;
-      return Of_Table.Node_Signatures (Where);
+      return Of_Table.Node_Signatures.Element (Where);
    end Signature_Of;
 
    function Signature_Of
@@ -3691,11 +3703,11 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Signature;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Signature
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Signature
       then
-         return Of_Table.Declaration_Overlays (Overlay).Signature;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Signature;
       end if;
-      return Of_Table.Declaration_Signatures (Positive (Id));
+      return Of_Table.Declaration_Signatures.Element (Positive (Id));
    end Signature_Of;
 
    procedure Note_Signature
@@ -3750,30 +3762,30 @@ package body Landin.Checking is
 
    function Signature_Parameter_Count
      (Of_Table : Table; Signature : Signature_Id) return Natural
-     is (Of_Table.Signatures (Positive (Signature)).Parameters.Count);
+     is (Of_Table.Signatures.Element (Positive (Signature)).Parameters.Count);
 
    function Nth_Signature_Parameter
      (Of_Table : Table; Signature : Signature_Id; Index : Positive)
       return Signature_Part
    is
       Parameters : constant Run :=
-        Of_Table.Signatures (Positive (Signature)).Parameters;
+        Of_Table.Signatures.Element (Positive (Signature)).Parameters;
    begin
-      return Of_Table.Signature_Parts (Parameters.First + Index);
+      return Of_Table.Signature_Parts.Element (Parameters.First + Index);
    end Nth_Signature_Parameter;
 
    function Signature_Result_Count
      (Of_Table : Table; Signature : Signature_Id) return Natural
-     is (Of_Table.Signatures (Positive (Signature)).Results.Count);
+     is (Of_Table.Signatures.Element (Positive (Signature)).Results.Count);
 
    function Nth_Signature_Result
      (Of_Table : Table; Signature : Signature_Id; Index : Positive)
       return Signature_Part
    is
       Results : constant Run :=
-        Of_Table.Signatures (Positive (Signature)).Results;
+        Of_Table.Signatures.Element (Positive (Signature)).Results;
    begin
-      return Of_Table.Signature_Parts (Results.First + Index);
+      return Of_Table.Signature_Parts.Element (Results.First + Index);
    end Nth_Signature_Result;
 
    function Signature_Return_Source_Count
@@ -3781,11 +3793,12 @@ package body Landin.Checking is
       return Natural
    is
       Sources : constant Run :=
-        Of_Table.Signatures (Positive (Signature)).Sources;
+        Of_Table.Signatures.Element (Positive (Signature)).Sources;
       Count : Natural := 0;
    begin
       for Index in 1 .. Sources.Count loop
-         if Of_Table.Return_Sources (Sources.First + Index).Result = Result
+         if Of_Table.Return_Sources.Element (Sources.First + Index).Result
+              = Result
          then
             Count := Count + 1;
          end if;
@@ -3800,13 +3813,13 @@ package body Landin.Checking is
       Index     : Positive) return Positive
    is
       Sources : constant Run :=
-        Of_Table.Signatures (Positive (Signature)).Sources;
+        Of_Table.Signatures.Element (Positive (Signature)).Sources;
       Seen : Natural := 0;
    begin
       for Position in 1 .. Sources.Count loop
          declare
             Source : constant Return_Source_Association :=
-              Of_Table.Return_Sources (Sources.First + Position);
+              Of_Table.Return_Sources.Element (Sources.First + Position);
          begin
             if Source.Result = Result then
                Seen := Seen + 1;
@@ -3836,15 +3849,15 @@ package body Landin.Checking is
    function Signature_Origin
      (Of_Table : Table; Signature : Signature_Id)
       return Landin.Provenance.Origin
-     is (Of_Table.Signatures (Positive (Signature)).Site);
+     is (Of_Table.Signatures.Element (Positive (Signature)).Site);
 
    function Signature_Error_Form
      (Of_Table : Table; Signature : Signature_Id) return Error_Set_Form
-     is (Of_Table.Signatures (Positive (Signature)).Error_Form);
+     is (Of_Table.Signatures.Element (Positive (Signature)).Error_Form);
 
    function Signature_Errors
      (Of_Table : Table; Signature : Signature_Id) return Atom_Set_Id
-     is (Of_Table.Signatures (Positive (Signature)).Errors);
+     is (Of_Table.Signatures.Element (Positive (Signature)).Errors);
 
    procedure Finalize_Inferred_Errors
      (Into      : in out Table;
@@ -4315,12 +4328,12 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
       Part : constant Natural :=
         (if Overlay /= 0
-           and then Of_Table.Node_Overlays (Overlay).Has_Variadic_Part
-         then Of_Table.Node_Overlays (Overlay).Variadic_Part
-         else Of_Table.Node_Variadic_Parts (Where));
+           and then Of_Table.Node_Overlays.Element (Overlay).Has_Variadic_Part
+         then Of_Table.Node_Overlays.Element (Overlay).Variadic_Part
+         else Of_Table.Node_Variadic_Parts.Element (Where));
    begin
       return (if Part = 0 then (others => <>)
-              else Of_Table.Signature_Parts (Part));
+              else Of_Table.Signature_Parts.Element (Part));
    end Variadic_Argument_Of;
 
    procedure Note_Variadic_Argument
@@ -4365,11 +4378,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Result_Shape
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Result_Shape
       then
-         return Of_Table.Node_Overlays (Overlay).Result_Shape;
+         return Of_Table.Node_Overlays.Element (Overlay).Result_Shape;
       end if;
-      return Of_Table.Node_Result_Shapes (Where);
+      return Of_Table.Node_Result_Shapes.Element (Where);
    end Result_Shape_Of;
 
    function Result_Shape_Of
@@ -4382,11 +4395,12 @@ package body Landin.Checking is
       if Id = No_Declaration then
          return No_Signature;
       elsif Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Result_Shape
+        and then
+          Of_Table.Declaration_Overlays.Element (Overlay).Has_Result_Shape
       then
-         return Of_Table.Declaration_Overlays (Overlay).Result_Shape;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Result_Shape;
       end if;
-      return Of_Table.Declaration_Result_Shapes (Positive (Id));
+      return Of_Table.Declaration_Result_Shapes.Element (Positive (Id));
    end Result_Shape_Of;
 
    procedure Note_Result_Shape
@@ -4448,11 +4462,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Routine_Target
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Routine_Target
       then
-         return Of_Table.Node_Overlays (Overlay).Routine_Target;
+         return Of_Table.Node_Overlays.Element (Overlay).Routine_Target;
       end if;
-      return Of_Table.Node_Routine_Targets (Where);
+      return Of_Table.Node_Routine_Targets.Element (Where);
    end Routine_Target_Of;
 
    procedure Note_Routine_Target
@@ -4489,11 +4503,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Evidence
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Evidence
       then
-         return Of_Table.Node_Overlays (Overlay).Evidence;
+         return Of_Table.Node_Overlays.Element (Overlay).Evidence;
       end if;
-      return Of_Table.Node_Evidence (Where);
+      return Of_Table.Node_Evidence.Element (Where);
    end Evidence_Of;
 
    function Evidence_Entry_Of
@@ -4504,11 +4519,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Evidence
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Evidence
       then
-         return Of_Table.Node_Overlays (Overlay).Evidence_Entry;
+         return Of_Table.Node_Overlays.Element (Overlay).Evidence_Entry;
       end if;
-      return Of_Table.Node_Evidence_Entries (Where);
+      return Of_Table.Node_Evidence_Entries.Element (Where);
    end Evidence_Entry_Of;
 
    function Evidence_Run_Position_Of
@@ -4520,8 +4536,9 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       return (if Overlay /= 0
-                and then Of_Table.Node_Overlays (Overlay).Has_Evidence
-              then Of_Table.Node_Overlays (Overlay).Evidence_Run_Position
+                and then Of_Table.Node_Overlays.Element (Overlay).Has_Evidence
+              then
+                Of_Table.Node_Overlays.Element (Overlay).Evidence_Run_Position
               else 0);
    end Evidence_Run_Position_Of;
 
@@ -4667,13 +4684,13 @@ package body Landin.Checking is
    function Has_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      is (Holds (Of_Table, Id)
-         and then Of_Table.Layouts
+         and then Of_Table.Layouts.Element
            (Nominal_Identities.Position (Of_Table, Id)).State
                      = Instance_Ready);
 
    function Layout_Of (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Layouts.Policy
-     is (Of_Table.Layouts
+     is (Of_Table.Layouts.Element
            (Nominal_Identities.Position (Of_Table, Id)).Policy);
 
    function Has_C_Layout (Of_Table : Table; Id : Nominal_Type_Id)
@@ -4683,7 +4700,7 @@ package body Landin.Checking is
 
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
-     is (Of_Table.Layouts
+     is (Of_Table.Layouts.Element
            (Nominal_Identities.Position (Of_Table, Id)).Count);
 
    --  The same interpretation serves nominal layout and standalone array
@@ -5047,9 +5064,9 @@ package body Landin.Checking is
       return Field_Shape
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
+        Of_Table.Layouts.Element (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Field_Shapes (Layout.Shape_First + Field - 1);
+      return Of_Table.Field_Shapes.Element (Layout.Shape_First + Field - 1);
    end Field_Shape_Of;
 
    function Variant_Case_Field_Count
@@ -5061,7 +5078,7 @@ package body Landin.Checking is
       Shape : constant Field_Shape := Field_Shape_Of
         (Of_Table, Id, Field);
    begin
-      return Of_Table.Case_Runs
+      return Of_Table.Case_Runs.Element
         (Shape.Payloads_First + Which - 1).Count;
    end Variant_Case_Field_Count;
 
@@ -5074,10 +5091,10 @@ package body Landin.Checking is
    is
       Shape : constant Field_Shape := Field_Shape_Of
         (Of_Table, Id, Field);
-      Run : constant Case_Run := Of_Table.Case_Runs
+      Run : constant Case_Run := Of_Table.Case_Runs.Element
         (Shape.Payloads_First + Which - 1);
    begin
-      return Of_Table.Field_Shapes (Run.First + Payload_Field - 1);
+      return Of_Table.Field_Shapes.Element (Run.First + Payload_Field - 1);
    end Nth_Variant_Case_Field;
 
    function Field_Offset
@@ -5086,9 +5103,9 @@ package body Landin.Checking is
       Field    : Positive) return Landin.Targets.Byte_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
+        Of_Table.Layouts.Element (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Field_Offsets (Layout.First + Field - 1);
+      return Of_Table.Field_Offsets.Element (Layout.First + Field - 1);
    end Field_Offset;
 
    function Field_Type
@@ -5097,9 +5114,9 @@ package body Landin.Checking is
       Field    : Positive) return Landin.Types.Scalar_Name
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
+        Of_Table.Layouts.Element (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Field_Shapes
+      return Of_Table.Field_Shapes.Element
         (Layout.Shape_First + Field - 1).Element;
    end Field_Type;
 
@@ -5109,9 +5126,9 @@ package body Landin.Checking is
       Field    : Positive) return Field_Kind
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
+        Of_Table.Layouts.Element (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Field_Shapes
+      return Of_Table.Field_Shapes.Element
         (Layout.Shape_First + Field - 1).Kind;
    end Field_Kind_Of;
 
@@ -5121,28 +5138,28 @@ package body Landin.Checking is
       Field    : Positive) return Element_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
+        Of_Table.Layouts.Element (Nominal_Identities.Position (Of_Table, Id));
    begin
-      return Of_Table.Field_Shapes
+      return Of_Table.Field_Shapes.Element
         (Layout.Shape_First + Field - 1).Length;
    end Field_Array_Length;
 
    function Layout_Extent (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Extent_Of
-           (Of_Table.Layouts
+           (Of_Table.Layouts.Element
               (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Layout_Alignment (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Alignment
      is (Landin.Targets.Alignment_Of
-           (Of_Table.Layouts
+           (Of_Table.Layouts.Element
               (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Layout_Size (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Size_Of
-           (Of_Table.Layouts
+           (Of_Table.Layouts.Element
               (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Field_Index
@@ -5153,10 +5170,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Field then
-         return Of_Table.Node_Overlays (Overlay).Field;
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Field
+      then
+         return Of_Table.Node_Overlays.Element (Overlay).Field;
       end if;
-      return Of_Table.Node_Fields (Where);
+      return Of_Table.Node_Fields.Element (Where);
    end Field_Index;
 
    procedure Note_Field
@@ -5187,10 +5206,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array then
-         return Of_Table.Node_Overlays (Overlay).Shape.Length;
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Array
+      then
+         return Of_Table.Node_Overlays.Element (Overlay).Shape.Length;
       end if;
-      return Of_Table.Node_Shapes (Where).Length;
+      return Of_Table.Node_Shapes.Element (Where).Length;
    end Array_Length;
 
    function Array_Element
@@ -5201,10 +5222,12 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
-      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array then
-         return Of_Table.Node_Overlays (Overlay).Shape.Element;
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Array
+      then
+         return Of_Table.Node_Overlays.Element (Overlay).Shape.Element;
       end if;
-      return Of_Table.Node_Shapes (Where).Element;
+      return Of_Table.Node_Shapes.Element (Where).Element;
    end Array_Element;
 
    procedure Note_Array
@@ -5255,11 +5278,11 @@ package body Landin.Checking is
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
    begin
       if Overlay /= 0
-        and then Of_Table.Node_Overlays (Overlay).Has_Array_Nominal
+        and then Of_Table.Node_Overlays.Element (Overlay).Has_Array_Nominal
       then
-         return Of_Table.Node_Overlays (Overlay).Array_Nominal;
+         return Of_Table.Node_Overlays.Element (Overlay).Array_Nominal;
       end if;
-      return Of_Table.Node_Shapes (Where).Element_Nominal;
+      return Of_Table.Node_Shapes.Element (Where).Element_Nominal;
    end Array_Element_Nominal;
 
    procedure Note_Array_Element_Nominal
@@ -5347,9 +5370,10 @@ package body Landin.Checking is
       Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
       Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
       Shape : constant Array_Shape :=
-        (if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array
-         then Of_Table.Node_Overlays (Overlay).Shape
-         else Of_Table.Node_Shapes (Where));
+        (if Overlay /= 0
+              and then Of_Table.Node_Overlays.Element (Overlay).Has_Array
+         then Of_Table.Node_Overlays.Element (Overlay).Shape
+         else Of_Table.Node_Shapes.Element (Where));
       Nominal : constant Nominal_Type_Id :=
         Array_Element_Nominal (Of_Table, Of_Tree, Node);
    begin
@@ -5399,11 +5423,11 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
    begin
       if Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Array
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Array
       then
-         return Of_Table.Declaration_Overlays (Overlay).Shape.Length;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Shape.Length;
       end if;
-      return Of_Table.Shapes (Natural (Id)).Length;
+      return Of_Table.Shapes.Element (Natural (Id)).Length;
    end Array_Length;
 
    function Array_Element
@@ -5414,11 +5438,11 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
    begin
       if Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Array
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Array
       then
-         return Of_Table.Declaration_Overlays (Overlay).Shape.Element;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Shape.Element;
       end if;
-      return Of_Table.Shapes (Natural (Id)).Element;
+      return Of_Table.Shapes.Element (Natural (Id)).Element;
    end Array_Element;
 
    procedure Note_Array
@@ -5463,11 +5487,12 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
    begin
       if Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Array_Nominal
+        and then
+          Of_Table.Declaration_Overlays.Element (Overlay).Has_Array_Nominal
       then
-         return Of_Table.Declaration_Overlays (Overlay).Array_Nominal;
+         return Of_Table.Declaration_Overlays.Element (Overlay).Array_Nominal;
       end if;
-      return Of_Table.Shapes (Natural (Id)).Element_Nominal;
+      return Of_Table.Shapes.Element (Natural (Id)).Element_Nominal;
    end Array_Element_Nominal;
 
    procedure Note_Array_Element_Nominal
@@ -5495,9 +5520,10 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
       Shape : constant Array_Shape :=
         (if Overlay /= 0
-              and then Of_Table.Declaration_Overlays (Overlay).Has_Array
-         then Of_Table.Declaration_Overlays (Overlay).Shape
-         else Of_Table.Shapes (Natural (Id)));
+              and then
+                Of_Table.Declaration_Overlays.Element (Overlay).Has_Array
+         then Of_Table.Declaration_Overlays.Element (Overlay).Shape
+         else Of_Table.Shapes.Element (Natural (Id)));
       Nominal : constant Nominal_Type_Id :=
         Array_Element_Nominal (Of_Table, Id);
    begin
@@ -5648,11 +5674,12 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
    begin
       if Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Settlement
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Settlement
       then
-         return Of_Table.Declaration_Overlays (Overlay).Settlement_Fact.State;
+         return Of_Table.Declaration_Overlays.Element
+           (Overlay).Settlement_Fact.State;
       end if;
-      return Of_Table.Declarations (Positive (Id)).State;
+      return Of_Table.Declarations.Element (Positive (Id)).State;
    end State_Of;
 
    function Type_Of (Of_Table : Table; Id : Declaration_Id)
@@ -5662,11 +5689,12 @@ package body Landin.Checking is
         Declaration_Overlay_Position (Of_Table, Id);
    begin
       if Overlay /= 0
-        and then Of_Table.Declaration_Overlays (Overlay).Has_Settlement
+        and then Of_Table.Declaration_Overlays.Element (Overlay).Has_Settlement
       then
-         return Of_Table.Declaration_Overlays (Overlay).Settlement_Fact.Answer;
+         return Of_Table.Declaration_Overlays.Element
+           (Overlay).Settlement_Fact.Answer;
       end if;
-      return Of_Table.Declarations (Positive (Id)).Answer;
+      return Of_Table.Declarations.Element (Positive (Id)).Answer;
    end Type_Of;
 
    procedure Begin_Inference

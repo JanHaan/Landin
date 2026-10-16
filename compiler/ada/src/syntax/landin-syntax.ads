@@ -1589,8 +1589,8 @@ private
    --  element type indefinite, and would fix a node's shape at the moment
    --  it is created, which a parser that has to turn a half-read construct
    --  into a hole cannot promise.  The payload fields are the union of what
-   --  any one kind needs, which is a fixed size of about six words that is
-   --  never copied out of the table.
+   --  any one kind needs, which is a fixed size; a query reads only the
+   --  component it names, as Tree says.
    type Node is record
       Kind       : Node_Kind := Error_Expression;
       Extent     : Landin.Source.Span := Landin.Source.Empty_Span;
@@ -1640,6 +1640,11 @@ private
    package Slot_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Node_Id);
 
+   --  The queries in the body read these vectors with Element rather than
+   --  by indexing.  An indexed read elaborates a Constant_Reference, whose
+   --  controlled finalization defers abort and looks up the current
+   --  exception on every read; Element is a plain copy, which the
+   --  optimizer reduces to the component the query names.
    type Tree is limited record
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
       Serial : Landin.Serials.Serial := Landin.Serials.Next;

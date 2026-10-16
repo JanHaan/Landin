@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the Benchmark Game binary-trees workload takes its maximum depth as an argument, the correctness input ten, builds, walks and frees perfect binary trees whose every node is its own allocation through a region over the host heap, keeps one long-lived tree beside them, and emits each depth's node count through text.format
+constructs: 0050, 0130, 0160, 0260, 0290, 0310, 0320, 0350, 0380, 0390, 0400, 0430, 0480, 0520, 0540, 0570, 0630, 0670, 0710, 0900, 0940, 0960, 1020, 1030, 1050, 1080, 1100, 1140, 1210, 1290, 1350, 1360, 1370, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
+program: main.ldn
+root: ../../../../..
+run_args: 10
+run_expect: output.txt
+status: 0
+stream: output
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

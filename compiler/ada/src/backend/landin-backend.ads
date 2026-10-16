@@ -298,6 +298,57 @@ package Landin.Backend is
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)
      return Landin.Targets.Byte_Count;
 
+   --  What a backend needs to fold an indexed address into the one
+   --  indirect access that uses it.  Uses counts the operands naming each
+   --  value; References counts the instructions naming each slot, and
+   --  [1630]'s text, which may name any, counts twice against every one.
+   type Use_Counts is array (Positive range <>) of Natural;
+
+   procedure Count_Uses
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Uses : out Use_Counts;
+      References : out Use_Counts)
+     with Pre => Uses'First = 1
+                 and then Uses'Last = Landin.IR.Value_Count (Of_Unit, Item)
+                 and then References'First = 1
+                 and then References'Last
+                   = Landin.IR.Slot_Count (Of_Unit, Item);
+
+   --  The Load_Indirect or Store_Indirect an address reaches as its one
+   --  use, either as the very next instruction or through the address
+   --  slot lowering carries it in as the access's type witness: the next
+   --  instruction stores it there, the one after loads it back, and the
+   --  access follows, when the slot is an undeclared temporary that no
+   --  other instruction names.  Store and Load are that pair, which then
+   --  moves nothing a folded access needs.  Access is No_Value when the
+   --  address has to be formed.
+   type Address_Fold is record
+      Access_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+      Store, Load : Landin.IR.Value_Id := Landin.IR.No_Value;
+   end record;
+
+   function Fold_Of
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Block : Landin.IR.Block_Id;
+      Position : Positive;
+      Uses : Use_Counts;
+      References : Use_Counts) return Address_Fold
+     with Pre => Position <= Landin.IR.Length (Of_Unit, Item, Block);
+
+   --  The same pair seen from its store at Position, whatever else uses
+   --  the address stored: the access may then read through the stored
+   --  address where it lives rather than a copy in the slot.
+   function Carried
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Block : Landin.IR.Block_Id;
+      Position : Positive;
+      Uses : Use_Counts;
+      References : Use_Counts) return Address_Fold
+     with Pre => Position <= Landin.IR.Length (Of_Unit, Item, Block);
+
    --  How much room one of [1790]'s scalars needs.  Not a width: a width
    --  is bits and comes from Landin.Types, and bool has none.
    function Size_Of

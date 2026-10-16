@@ -105,7 +105,7 @@ package body Landin.Syntax is
             when Block                    => 1);
 
    function Element (Of_Tree : Tree; Id : Node_Id) return Node
-     is (Of_Tree.Items (Positive (Id)));
+     is (Of_Tree.Items.Element (Positive (Id)));
 
    function Run_Length (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Element (Of_Tree, Id).Slots
@@ -191,11 +191,11 @@ package body Landin.Syntax is
 
    function Machine_Convention (Of_Tree : Tree; Id : Node_Id)
      return Landin.Machine.Convention is
-     (Of_Tree.Items (Positive (Id)).Machine);
+     (Of_Tree.Items.Element (Positive (Id)).Machine);
 
    function Attributes (Of_Tree : Tree; Id : Node_Id)
      return Machine_Attributes
-     is (Of_Tree.Items (Positive (Id)).Attributes);
+     is (Of_Tree.Items.Element (Positive (Id)).Attributes);
 
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
@@ -238,7 +238,7 @@ package body Landin.Syntax is
 
    function Slot (Of_Tree : Tree; Id : Node_Id; Index : Positive)
      return Node_Id
-     is (Of_Tree.Links (Element (Of_Tree, Id).First_Slot + Index));
+     is (Of_Tree.Links.Element (Element (Of_Tree, Id).First_Slot + Index));
 
    function Declaration_Count (Of_Tree : Tree) return Natural
      is (Run_Length (Of_Tree, Root (Of_Tree)) - Import_Count (Of_Tree));
@@ -574,7 +574,7 @@ package body Landin.Syntax is
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (if Element (Of_Tree, Id).Signature_First = 0
          then Nth_Item (Of_Tree, Id, Index)
-         else Of_Tree.Signature_Links
+         else Of_Tree.Signature_Links.Element
            (Element (Of_Tree, Id).Signature_First + Index - 1));
 
    function Generic_Formal_Count (Of_Tree : Tree; Id : Node_Id)
@@ -585,7 +585,7 @@ package body Landin.Syntax is
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (if Element (Of_Tree, Id).Signature_First = 0
          then Nth_Item (Of_Tree, Id, Index)
-         else Of_Tree.Signature_Links
+         else Of_Tree.Signature_Links.Element
            (Element (Of_Tree, Id).Signature_First
             + Element (Of_Tree, Id).Runtime_Count + Index - 1));
 

@@ -1,10 +1,11 @@
 class: runtime
 profiles: standard
-summary: the Benchmark Game fannkuch-redux correctness workload enumerates every permutation of seven values and emits its checksum and maximum flip count
-constructs: 0260, 0290, 0310, 0350, 0390, 0400, 0520, 0570, 0710, 0900, 1030, 1130, 1140, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
+summary: the Benchmark Game fannkuch-redux workload takes its order as an argument, enumerates every permutation of the correctness input seven, and emits its checksum and maximum flip count through text.format
+constructs: 0260, 0290, 0310, 0350, 0390, 0400, 0520, 0570, 0630, 0710, 0900, 0940, 0960, 1030, 1130, 1140, 1290, 1370, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
 program: main.ldn
 root: ../../../../..
+run_args: 7
 run_expect: output.txt
-status: 42
+status: 0
 stream: output
 targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2883,6 +2883,11 @@ private
       Hash            => Hash,
       Equivalent_Keys => "=");
 
+   --  The queries in the body read these tables with Element rather than
+   --  by indexing.  An indexed read elaborates a Constant_Reference, whose
+   --  controlled finalization defers abort and looks up the current
+   --  exception on every read; Element is a plain copy, which the
+   --  optimizer reduces to the component the query names.
    type Table is tagged limited record
       --  Which table a key was made by; see Landin.Serials.
       Serial       : Landin.Serials.Serial := Landin.Serials.Next;

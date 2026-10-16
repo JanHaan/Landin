@@ -1,3 +1,4 @@
+with Ada.Containers.Generic_Array_Sort;
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
 with Ada.Finalization;
@@ -401,6 +402,16 @@ package body Landin.IR.Verifier is
 
       package Flags is new Scratch_Arrays (Boolean, False);
       package Indices is new Scratch_Arrays (Natural, 0);
+      package Images is new Scratch_Arrays (Landin.Packed.Image, 0);
+      --  A pointer read Pointer_Provenance traces.  Instantiated once per
+      --  walk rather than per routine: each instance elaborates a tagged
+      --  owner type, and registering one is not free.
+      type Use_Record is record
+         Block, Position : Positive;
+         Needs_Entry : Boolean;
+         Next : Natural;
+      end record;
+      package Uses is new Scratch_Arrays (Use_Record, (1, 1, False, 0));
 
       function Run_Fits (Held : Run; Total : Natural) return Boolean
         is (Held.First <= Total
@@ -1564,7 +1575,7 @@ package body Landin.IR.Verifier is
         (Shape : Field_Shape; Field : Positive) return Field_Shape
         is (if Shape.Cases = 0
             then Nth_Aggregate_Field (Of_Unit, Shape, Field)
-            else Of_Unit.Variant_Fields
+            else Of_Unit.Variant_Fields.Element
               (Shape.Payloads_First + Field - 1));
 
       function Packed_Element_Fits
@@ -1907,9 +1918,9 @@ package body Landin.IR.Verifier is
          end if;
          declare
             Concrete : constant Signature_Record :=
-              Of_Unit.Signatures (Positive (Provider.Signature));
+              Of_Unit.Signatures.Element (Positive (Provider.Signature));
             Dispatch : constant Signature_Record :=
-              Of_Unit.Signatures (Positive (Provider.Dispatch));
+              Of_Unit.Signatures.Element (Positive (Provider.Dispatch));
          begin
             if Concrete.Parameters.Count = 0
               or else Concrete.Parameters.Count /= Dispatch.Parameters.Count
@@ -1967,8 +1978,10 @@ package body Landin.IR.Verifier is
                end if;
             end loop;
             for Index in 1 .. Concrete.Sources.Count loop
-               if Of_Unit.Return_Sources (Concrete.Sources.First + Index)
-                 /= Of_Unit.Return_Sources (Dispatch.Sources.First + Index)
+               if Of_Unit.Return_Sources.Element
+                    (Concrete.Sources.First + Index)
+                 /= Of_Unit.Return_Sources.Element
+                      (Dispatch.Sources.First + Index)
                then
                   return False;
                end if;
@@ -2713,8 +2726,9 @@ package body Landin.IR.Verifier is
       function Pointer_Fault
         (Item : Item_Id; Value : Value_Id) return Fault_Kind
       is
-         Code : constant Instruction := Of_Unit.Code
-           (Of_Unit.Items (Positive (Item)).Values.First + Positive (Value));
+         Code : constant Instruction := Of_Unit.Code.Element
+           (Of_Unit.Items.Element (Positive (Item)).Values.First
+            + Positive (Value));
          Expected : constant Pointee_Id := Pointee_Of (Of_Unit, Item, Value);
          Source : Value_Id;
       begin
@@ -2823,6 +2837,20 @@ package body Landin.IR.Verifier is
          Values : constant Natural := Value_Count (Of_Unit, Item);
          Live, Stores_In_Block : Flags.Owner;
          Queue : Indices.Owner;
+         --  Each block's two successors, read once from its terminator:
+         --  the walks below follow every edge once per slot they trace.
+         Target, Alternative : Indices.Owner;
+         --  Runs were checked before this walk, so a block's values are
+         --  consecutive, and each instruction is copied out once per value
+         --  rather than, with its item's record, once per field asked of it.
+         First_Value : constant Natural :=
+           Of_Unit.Items.Element (Positive (Item)).Values.First;
+         First_Of_Block : constant Natural :=
+           Of_Unit.Items.Element (Positive (Item)).Blocks.First;
+         function Value_In (Block, Position : Positive) return Value_Id
+           is (Value_Id
+                 (Of_Unit.Blocks.Element (First_Of_Block + Block).First_Value
+                  - First_Value + Position));
          Use_Total : Natural := 0;
          Failure_Block, Failure_Position : Natural := 0;
 
@@ -2837,20 +2865,33 @@ package body Landin.IR.Verifier is
 
          --  Runs, terminators and target IDs were checked before this walk.
          --  Read their successors directly; no predecessor index is needed.
-         function Successor (Block, Index : Positive) return Block_Id;
-         function Successor (Block, Index : Positive) return Block_Id is
-            Last : constant Value_Id := Nth_Value
-              (Of_Unit, Item, Block_Id (Block),
-               Length (Of_Unit, Item, Block_Id (Block)));
-            Op : constant Opcode := Op_Of (Of_Unit, Item, Last);
+         procedure Find_Successors;
+         procedure Find_Successors is
          begin
-            if Index = 1 and then Op in Jump | Branch then
-               return Target_Of (Of_Unit, Item, Last);
-            elsif Index = 2 and then Op = Branch then
-               return Alternative_Of (Of_Unit, Item, Last);
-            end if;
-            return No_Block;
-         end Successor;
+            Indices.Allocate (Target, Blocks);
+            Indices.Allocate (Alternative, Blocks);
+            for B in 1 .. Blocks loop
+               declare
+                  Last : constant Value_Id := Nth_Value
+                    (Of_Unit, Item, Block_Id (B),
+                     Length (Of_Unit, Item, Block_Id (B)));
+                  Op : constant Opcode := Op_Of (Of_Unit, Item, Last);
+               begin
+                  if Op in Jump | Branch then
+                     Target.Data (B) :=
+                       Natural (Target_Of (Of_Unit, Item, Last));
+                  end if;
+                  if Op = Branch then
+                     Alternative.Data (B) :=
+                       Natural (Alternative_Of (Of_Unit, Item, Last));
+                  end if;
+               end;
+            end loop;
+         end Find_Successors;
+
+         function Successor (Block, Index : Positive) return Block_Id
+           is (Block_Id (if Index = 1 then Target.Data (Block)
+                         else Alternative.Data (Block)));
 
          procedure Enqueue (Used : in out Natural; Block : Block_Id);
          procedure Enqueue (Used : in out Natural; Block : Block_Id) is
@@ -2876,17 +2917,14 @@ package body Landin.IR.Verifier is
 
          procedure Analyze;
          procedure Analyze is
-            type Use_Record is record
-               Block, Position : Positive;
-               Needs_Entry : Boolean;
-               Next : Natural;
-            end record;
-            package Uses is new Scratch_Arrays
-              (Use_Record, (1, 1, False, 0));
             Reads : Uses.Owner;
             Number, First_Store, First_Use, Next_Store,
               Last_Store_Here : Indices.Owner;
             Entry_Initialized : Flags.Owner;
+            --  Whether some read of the slot precedes every store to it in
+            --  its own block, the only read a path from entry can reach
+            --  uninitialized.  A slot without one needs no trace at all.
+            Entry_Read : Flags.Owner;
             Tracked_Count, Use_Added : Natural := 0;
 
             procedure Record_Use
@@ -2902,6 +2940,9 @@ package body Landin.IR.Verifier is
                     (Block, Position, Last_Store_Here.Data (S) /= Block,
                      First_Use.Data (S));
                   First_Use.Data (S) := Use_Added;
+                  if Reads.Data (Use_Added).Needs_Entry then
+                     Entry_Read.Data (S) := True;
+                  end if;
                end if;
             end Record_Use;
          begin
@@ -2919,11 +2960,13 @@ package body Landin.IR.Verifier is
             Indices.Allocate (Last_Store_Here, Tracked_Count);
             Indices.Allocate (Next_Store, Values);
             Flags.Allocate (Entry_Initialized, Tracked_Count);
+            Flags.Allocate (Entry_Read, Tracked_Count);
             Flags.Allocate (Stores_In_Block, Blocks);
             Uses.Allocate (Reads, Use_Total);
             if Blocks = 1 then
                Flags.Allocate (Live, Blocks);
                Indices.Allocate (Queue, Blocks);
+               Find_Successors;
             end if;
             for P in 1 .. Parameter_Count (Of_Unit, Item) loop
                declare
@@ -2938,11 +2981,9 @@ package body Landin.IR.Verifier is
             for B in 1 .. Blocks loop
                for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
                   declare
-                     V : constant Value_Id := Nth_Value
-                       (Of_Unit, Item, Block_Id (B), P);
-                     Code : constant Instruction := Of_Unit.Code
-                       (Of_Unit.Items (Positive (Item)).Values.First
-                        + Positive (V));
+                     V : constant Value_Id := Value_In (B, P);
+                     Code : constant Instruction :=
+                       Of_Unit.Code.Element (First_Value + Positive (V));
                   begin
                      if Code.Source.Kind = Runtime_Address then
                         Record_Use (Code.Source.Address, B, P);
@@ -2971,14 +3012,16 @@ package body Landin.IR.Verifier is
                   end;
                end loop;
             end loop;
+            --  Each trace below starts from nothing live and unmarks what
+            --  it marked; the reachability walk left every block live.
+            for B in 1 .. Blocks loop
+               Live.Data (B) := False;
+            end loop;
             for S in 1 .. Tracked_Count loop
                if First_Use.Data (S) /= 0
                  and then not Entry_Initialized.Data (S)
+                 and then Entry_Read.Data (S)
                then
-                  for B in 1 .. Blocks loop
-                     Stores_In_Block.Data (B) := False;
-                     Live.Data (B) := False;
-                  end loop;
                   declare
                      Store_Value : Natural := First_Store.Data (S);
                      Read_At : Natural := 0;
@@ -3037,6 +3080,21 @@ package body Landin.IR.Verifier is
                            Use_Index := Use_At.Next;
                         end;
                      end loop;
+                     --  The queue holds exactly the blocks this trace
+                     --  marked live, and the store chain the blocks it
+                     --  marked as storing: unmark only those, so a trace
+                     --  costs what it reached rather than every block.
+                     for Index in 1 .. Used loop
+                        Live.Data (Queue.Data (Index)) := False;
+                     end loop;
+                     Store_Value := First_Store.Data (S);
+                     while Store_Value /= 0 loop
+                        Stores_In_Block.Data (Positive
+                          (Block_Of
+                             (Of_Unit, Item, Value_Id (Store_Value)))) :=
+                            False;
+                        Store_Value := Next_Store.Data (Store_Value);
+                     end loop;
                   end;
                end if;
             end loop;
@@ -3053,6 +3111,7 @@ package body Landin.IR.Verifier is
          if Blocks > 1 then
             Flags.Allocate (Live, Blocks);
             Indices.Allocate (Queue, Blocks);
+            Find_Successors;
             Live.Data (1) := True;
             Queue.Data (1) := 1;
             declare
@@ -3088,11 +3147,9 @@ package body Landin.IR.Verifier is
          for B in 1 .. Blocks loop
             for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
                declare
-                  V : constant Value_Id := Nth_Value
-                    (Of_Unit, Item, Block_Id (B), P);
-                  Code : constant Instruction := Of_Unit.Code
-                    (Of_Unit.Items (Positive (Item)).Values.First
-                     + Positive (V));
+                  V : constant Value_Id := Value_In (B, P);
+                  Code : constant Instruction :=
+                    Of_Unit.Code.Element (First_Value + Positive (V));
                begin
                   if Code.Source.Kind = Runtime_Address then
                      Count_Use (Code.Source.Address);
@@ -3127,11 +3184,9 @@ package body Landin.IR.Verifier is
             begin
                for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
                   declare
-                     V : constant Value_Id := Nth_Value
-                       (Of_Unit, Item, Block_Id (B), P);
-                     Code : constant Instruction := Of_Unit.Code
-                       (Of_Unit.Items (Positive (Item)).Values.First
-                        + Positive (V));
+                     V : constant Value_Id := Value_In (B, P);
+                     Code : constant Instruction :=
+                       Of_Unit.Code.Element (First_Value + Positive (V));
                      Bad : constant Fault_Kind := Pointer_Fault (Item, V);
                   begin
                      if Bad /= Nothing_Wrong then
@@ -3161,7 +3216,7 @@ package body Landin.IR.Verifier is
       --  on those accessors are not a release-build validation boundary.
       for Which in 1 .. Item_Count (Of_Unit) loop
          declare
-            Held : constant Item_Record := Of_Unit.Items (Which);
+            Held : constant Item_Record := Of_Unit.Items.Element (Which);
             Id : constant Item_Id := Item_Id (Which);
             Accounted : Natural := 0;
          begin
@@ -3214,7 +3269,7 @@ package body Landin.IR.Verifier is
             for Index in 1 .. Held.Parameters.Count loop
                declare
                   Slot : constant Slot_Id :=
-                    Of_Unit.Parameters (Held.Parameters.First + Index);
+                    Of_Unit.Parameters.Element (Held.Parameters.First + Index);
                begin
                   if not Holds (Of_Unit, Id, Slot) then
                      return (Kind => Slot_Out_Of_Range,
@@ -3229,7 +3284,7 @@ package body Landin.IR.Verifier is
             for Index in 1 .. Held.Blocks.Count loop
                declare
                   Block : constant Block_Record :=
-                    Of_Unit.Blocks (Held.Blocks.First + Index);
+                    Of_Unit.Blocks.Element (Held.Blocks.First + Index);
                begin
                   if not Run_Fits
                     ((First => Block.First_Value, Count => Block.Values),
@@ -3254,7 +3309,7 @@ package body Landin.IR.Verifier is
                   end if;
                   Accounted := Accounted + Block.Values;
                   for Offset in 1 .. Block.Values loop
-                     if Of_Unit.Code
+                     if Of_Unit.Code.Element
                        (Block.First_Value + Offset).In_Block
                          /= Block_Id (Index)
                      then
@@ -3432,10 +3487,19 @@ package body Landin.IR.Verifier is
          Members : Natural := 0;
          Encodings : Natural := 0;
          Runs : Encoding_Run_Vectors.Vector;
+         --  Which declarations the set being read has named so far, so a
+         --  repeated member is found in one pass over the set rather than
+         --  by comparing it with every member before it.  Each set clears
+         --  the marks it made, so the whole walk stays linear in members.
+         Named : Flags.Owner;
       begin
+         if Atom_Set_Count (Of_Unit) > 0 then
+            Flags.Allocate (Named, Declaration_Limit (Of_Unit));
+         end if;
          for Which in 1 .. Atom_Set_Count (Of_Unit) loop
             declare
-               Held : constant Atom_Set_Record := Of_Unit.Atom_Sets (Which);
+               Held : constant Atom_Set_Record :=
+                 Of_Unit.Atom_Sets.Element (Which);
             begin
                if Held.Members.Count = 0
                  or else Held.Members.First /= Members
@@ -3469,46 +3533,52 @@ package body Landin.IR.Verifier is
                        (First => Held.Encodings_First,
                         Count => Held.Members.Count));
                   Encodings := Encodings + Held.Members.Count;
-                  for Index in 1 .. Held.Members.Count loop
-                     declare
-                        use type Landin.Packed.Image;
-                        Value : constant Landin.Packed.Image :=
-                          Of_Unit.Encodings
-                            (Held.Encodings_First + Index);
-                     begin
-                        if not Landin.Packed.Fits
-                          (Value, Held.Encoding_Bits)
-                        then
-                           return (Kind => Atom_Set_Malformed, others => <>);
-                        end if;
-                        for Prior in 1 .. Index - 1 loop
-                           if Value = Of_Unit.Encodings
-                             (Held.Encodings_First + Prior)
-                           then
-                              return
-                                (Kind => Atom_Set_Malformed, others => <>);
-                           end if;
-                        end loop;
-                     end;
-                  end loop;
-               end if;
-               for Index in 1 .. Held.Members.Count loop
+                  --  Every encoding fits and no two are equal: sorted, two
+                  --  equal ones are neighbours, so the set costs a sort
+                  --  rather than a comparison of every pair.
                   declare
-                     Atom : constant Declaration_Id :=
-                       Of_Unit.Atoms (Held.Members.First + Index);
+                     use type Landin.Packed.Image;
+                     procedure Sort is new Ada.Containers.Generic_Array_Sort
+                       (Index_Type => Positive,
+                        Element_Type => Landin.Packed.Image,
+                        Array_Type => Images.Elements);
+                     Sorted : Images.Owner;
                   begin
-                     if Atom = No_Declaration
-                       or else Natural (Atom) > Declaration_Limit (Of_Unit)
-                     then
-                        return (Kind => Atom_Set_Malformed, others => <>);
-                     end if;
-                     for Prior in 1 .. Index - 1 loop
-                        if Of_Unit.Atoms (Held.Members.First + Prior) = Atom
+                     Images.Allocate (Sorted, Held.Members.Count);
+                     for Index in 1 .. Held.Members.Count loop
+                        Sorted.Data (Index) := Of_Unit.Encodings.Element
+                          (Held.Encodings_First + Index);
+                        if not Landin.Packed.Fits
+                          (Sorted.Data (Index), Held.Encoding_Bits)
                         then
                            return (Kind => Atom_Set_Malformed, others => <>);
                         end if;
                      end loop;
+                     Sort (Sorted.Data.all);
+                     for Index in 2 .. Held.Members.Count loop
+                        if Sorted.Data (Index) = Sorted.Data (Index - 1) then
+                           return (Kind => Atom_Set_Malformed, others => <>);
+                        end if;
+                     end loop;
                   end;
+               end if;
+               for Index in 1 .. Held.Members.Count loop
+                  declare
+                     Atom : constant Declaration_Id :=
+                       Of_Unit.Atoms.Element (Held.Members.First + Index);
+                  begin
+                     if Atom = No_Declaration
+                       or else Natural (Atom) > Declaration_Limit (Of_Unit)
+                       or else Named.Data (Positive (Atom))
+                     then
+                        return (Kind => Atom_Set_Malformed, others => <>);
+                     end if;
+                     Named.Data (Positive (Atom)) := True;
+                  end;
+               end loop;
+               for Index in 1 .. Held.Members.Count loop
+                  Named.Data (Positive (Of_Unit.Atoms.Element
+                    (Held.Members.First + Index))) := False;
                end loop;
                Members := Members + Held.Members.Count;
             end;
@@ -3543,7 +3613,7 @@ package body Landin.IR.Verifier is
          for Which in 1 .. Signature_Count (Of_Unit) loop
             declare
                Held : constant Signature_Record :=
-                 Of_Unit.Signatures (Which);
+                 Of_Unit.Signatures.Element (Which);
             begin
                if Held.Nonreturning
                  and then (Held.Results.Count /= 0
@@ -3572,7 +3642,7 @@ package body Landin.IR.Verifier is
                end if;
                for Index in 1 .. Held.Parameters.Count loop
                   if Signature_Part_Is_Malformed
-                    (Of_Unit.Signature_Parts
+                    (Of_Unit.Signature_Parts.Element
                        (Held.Parameters.First + Index))
                   then
                      return
@@ -3596,7 +3666,7 @@ package body Landin.IR.Verifier is
                end if;
                for Index in 1 .. Held.Results.Count loop
                   if Signature_Part_Is_Malformed
-                    (Of_Unit.Signature_Parts
+                    (Of_Unit.Signature_Parts.Element
                        (Held.Results.First + Index))
                   then
                      return
@@ -3620,7 +3690,8 @@ package body Landin.IR.Verifier is
                for Index in 1 .. Held.Sources.Count loop
                   declare
                      Source : constant Return_Source_Association :=
-                       Of_Unit.Return_Sources (Held.Sources.First + Index);
+                       Of_Unit.Return_Sources.Element
+                         (Held.Sources.First + Index);
                   begin
                      if Source.Result > Held.Results.Count
                        or else Source.Parameter > Held.Parameters.Count
@@ -3969,7 +4040,8 @@ package body Landin.IR.Verifier is
       begin
          for Which in 1 .. Evidence_Count (Of_Unit) loop
             declare
-               Held : constant Evidence_Record := Of_Unit.Evidence (Which);
+               Held : constant Evidence_Record :=
+                 Of_Unit.Evidence.Element (Which);
             begin
                if Field_Shape_Is_Malformed
                  (Held.Represented, Aggregate_Allowed => True)
@@ -3990,7 +4062,7 @@ package body Landin.IR.Verifier is
                for Which in 1 .. Held.Entries.Count loop
                   declare
                      Provider : constant Evidence_Entry_Record :=
-                       Of_Unit.Evidence_Entries
+                       Of_Unit.Evidence_Entries.Element
                          (Held.Entries.First + Which);
                   begin
                      if not Holds (Of_Unit, Provider.Target)
@@ -4036,7 +4108,7 @@ package body Landin.IR.Verifier is
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
                Held : constant Item_Record :=
-                 Of_Unit.Items (Which);
+                 Of_Unit.Items.Element (Which);
             begin
                if Held.Slots.Count /= 0
                  and then Held.Slots.First /= Slots
@@ -4115,7 +4187,7 @@ package body Landin.IR.Verifier is
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
                Held : constant Item_Record :=
-                 Of_Unit.Items (Which);
+                 Of_Unit.Items.Element (Which);
             begin
                if Held.Image.Count /= 0 then
                   --  Subtraction-safe against Natural overflow, so a
@@ -4164,7 +4236,7 @@ package body Landin.IR.Verifier is
       begin
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
-               Held : constant Item_Record := Of_Unit.Items (Which);
+               Held : constant Item_Record := Of_Unit.Items.Element (Which);
             begin
                if Held.Aggregate_Images.Count /= 0 then
                   if Held.Aggregate_Images.First > Total
@@ -4204,7 +4276,7 @@ package body Landin.IR.Verifier is
       begin
          for Position in 1 .. Natural (Of_Unit.Code.Length) loop
             declare
-               What : constant Instruction := Of_Unit.Code (Position);
+               What : constant Instruction := Of_Unit.Code.Element (Position);
             begin
                if What.Args /= 0 and then What.First_Arg /= Seen then
                   return (Kind => Operand_Runs_Overlap, others => <>);
@@ -4225,7 +4297,7 @@ package body Landin.IR.Verifier is
       begin
          for Position in 1 .. Natural (Of_Unit.Code.Length) loop
             declare
-               What : constant Instruction := Of_Unit.Code (Position);
+               What : constant Instruction := Of_Unit.Code.Element (Position);
             begin
                if What.Assembly_Run.Count /= 0
                  and then What.Assembly_Run.First /= Seen
@@ -5914,6 +5986,14 @@ package body Landin.IR.Verifier is
                declare
                   Block : constant Block_Id := Block_Id (B);
                   Last  : constant Natural := Length (Of_Unit, Id, Block);
+                  --  The runs were checked before any item, so the walk
+                  --  reads each instruction once, and its operands directly,
+                  --  rather than copying both out again for every field.
+                  First_Value : constant Natural :=
+                    Of_Unit.Items.Element (Positive (Id)).Values.First;
+                  Before : constant Natural := Of_Unit.Blocks.Element
+                    (Of_Unit.Items.Element (Positive (Id)).Blocks.First + B)
+                    .First_Value - First_Value;
                begin
                   if Last = 0 then
                      return (Kind => Empty_Block, Item => Id,
@@ -5922,18 +6002,19 @@ package body Landin.IR.Verifier is
 
                   for Position in 1 .. Last loop
                      declare
-                        V : constant Value_Id :=
-                          Nth_Value (Of_Unit, Id, Block, Position);
-                        Op : constant Opcode := Op_Of (Of_Unit, Id, V);
+                        V : constant Value_Id := Value_Id (Before + Position);
+                        Code : constant Instruction :=
+                          Of_Unit.Code.Element (First_Value + Positive (V));
+                        Op : constant Opcode := Code.Op;
                         Ends : constant Boolean := Op in Terminator_Kind;
                      begin
-                        if Checks_Representation (Of_Unit, Id, V)
+                        if Code.Representation_Check
                           and then Op /= Range_Check
                         then
                            return (Kind => Result_Disagrees,
                                    Item => Id, Block => Block, Value => V);
                         end if;
-                        if (Assembly_Text (Of_Unit, Id, V)
+                        if (Code.Assembly_Name
                               /= Landin.Source.Names.No_Name)
                           /= (Op = Assembly)
                         then
@@ -5956,7 +6037,7 @@ package body Landin.IR.Verifier is
                         --  carries one -- which its opcode alone does not
                         --  decide -- and never inside [1940]'s module
                         --  value, which executes nothing at all.
-                        if Is_Unchecked (Of_Unit, Id, V)
+                        if Code.Unchecked
                           and then (Is_Datum
                                     or else not Check_Is_Removable
                                                   (Of_Unit, Id, V))
@@ -6891,8 +6972,8 @@ package body Landin.IR.Verifier is
                                      then 1 else 0),
                                  when others => Wanted (Op));
                         begin
-                           if Operand_Count (Of_Unit, Id, V) < Expect
-                             or else (Operand_Count (Of_Unit, Id, V) > Expect
+                           if Code.Args < Expect
+                             or else (Code.Args > Expect
                                and then not
                                  (Op in Call | Indirect_Call
                                   and then Signature_Is_Variadic
@@ -6909,12 +6990,11 @@ package body Landin.IR.Verifier is
                         --  block already defined.  Block-local and above
                         --  the use, which is the invariant that lets one
                         --  comparison stand in for a dominance relation.
-                        for Index in
-                          1 .. Operand_Count (Of_Unit, Id, V)
-                        loop
+                        for Index in 1 .. Code.Args loop
                            declare
                               Arg : constant Value_Id :=
-                                Nth_Operand (Of_Unit, Id, V, Index);
+                                Of_Unit.Operands.Element
+                                  (Code.First_Arg + Index);
                            begin
                               if not Holds (Of_Unit, Id, Arg) then
                                  return (Kind => Operand_Out_Of_Range,
@@ -6929,14 +7009,18 @@ package body Landin.IR.Verifier is
                                     Value => V);
                               end if;
 
-                              if Block_Of (Of_Unit, Id, Arg) /= Block then
+                              if Of_Unit.Code.Element
+                                (First_Value + Positive (Arg)).In_Block
+                                /= Block
+                              then
                                  return (Kind => Operand_In_Another_Block,
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
 
                               if Defines_Nothing
-                                   (Op_Of (Of_Unit, Id, Arg))
+                                   (Of_Unit.Code.Element
+                                      (First_Value + Positive (Arg)).Op)
                               then
                                  return (Kind => Operand_Defines_Nothing,
                                          Item => Id, Block => Block,
@@ -6968,21 +7052,15 @@ package body Landin.IR.Verifier is
                         --  Marked descriptors are transient dispatch types.
                         --  In particular, no slot reload or ordinary code
                         --  address can recover an erased callable.
-                        declare
-                           Code : constant Instruction := Of_Unit.Code
-                             (Of_Unit.Items (Positive (Id)).Values.First
-                              + Positive (V));
-                        begin
-                           if Holds (Of_Unit, Code.Signature)
-                             and then Signature_Has_Erased_Self
-                               (Of_Unit, Code.Signature)
-                             and then Op not in Evidence_Function
-                               | Indirect_Call
-                           then
-                              return (Kind => Erased_Dispatch_Malformed,
-                                      Item => Id, Block => Block, Value => V);
-                           end if;
-                        end;
+                        if Holds (Of_Unit, Code.Signature)
+                          and then Signature_Has_Erased_Self
+                            (Of_Unit, Code.Signature)
+                          and then Op not in Evidence_Function
+                            | Indirect_Call
+                        then
+                           return (Kind => Erased_Dispatch_Malformed,
+                                   Item => Id, Block => Block, Value => V);
+                        end if;
 
                         --  Step four: the types [1890].
                         case Op is
@@ -8092,9 +8170,6 @@ package body Landin.IR.Verifier is
                               declare
                                  Bound : constant Value_Id :=
                                    Nth_Operand (Of_Unit, Id, V, 1);
-                                 Code : constant Instruction := Of_Unit.Code
-                                   (Of_Unit.Items (Positive (Id)).Values.First
-                                    + Positive (V));
                               begin
                                  if not Is_Erased_Function (Id, Bound)
                                    or else Bound /= V - 1

@@ -385,11 +385,14 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "addb "),
             "u8 addition uses a byte instruction");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jnc .L1_V"),
-            "no carry reaches the successful continuation");
+           (Item, Contains (Text, HT & "jc .L1_V5_trap_overflow" & LF
+                                  & HT & "movb %al, "),
+            "carry branches to the trap before the result is stored");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
-            "carry reaches an explicit trap before the result is stored");
+           (Item, Contains (Text, HT & "ret" & LF
+                                  & ".L1_V5_trap_overflow:" & LF
+                                  & HT & "ud2" & LF),
+            "the trap is explicit and after the body");
       end;
    end Unsigned_Add_Uses_Carry_To_Trap;
 
@@ -420,11 +423,14 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "subw "),
             "u16 subtraction uses a word instruction");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jnc .L1_V"),
-            "no borrow reaches the successful continuation");
+           (Item, Contains (Text, HT & "jc .L1_V5_trap_overflow" & LF
+                                  & HT & "movw %ax, "),
+            "borrow branches to the trap before the result is stored");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
-            "borrow reaches an explicit trap before the result is stored");
+           (Item, Contains (Text, HT & "ret" & LF
+                                  & ".L1_V5_trap_overflow:" & LF
+                                  & HT & "ud2" & LF),
+            "the trap is explicit and after the body");
       end;
    end Unsigned_Subtract_Uses_Borrow_To_Trap;
 
@@ -455,10 +461,10 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "addl "),
             "i32 addition uses a long instruction");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jno .L1_V"),
-            "no signed overflow reaches the successful continuation");
+           (Item, Contains (Text, HT & "jo .L1_V"),
+            "signed overflow branches to the trap");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & "jnc .L1_V"),
+           (Item, not Contains (Text, HT & "jc .L1_V"),
             "signed addition does not use unsigned carry");
       end;
    end Signed_Add_Uses_Overflow_To_Trap;
@@ -490,7 +496,7 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "subq "),
             "isize subtraction follows the target's 64-bit width");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jno .L1_V"),
+           (Item, Contains (Text, HT & "jo .L1_V"),
             "signed subtraction tests the overflow flag");
       end;
    end Signed_Subtract_Follows_The_Target_Width;
@@ -557,16 +563,16 @@ package body Landin.Tests.Backend_Suite is
          Expected : constant String :=
            HT & "movb -3(%rbp), %al" & LF
            & HT & "negb %al" & LF
-           & HT & "jno .L1_V2" & LF
-           & HT & "ud2" & LF
-           & ".L1_V2:" & LF
+           & HT & "jo .L1_V2_trap_overflow" & LF
            & HT & "movb %al, -4(%rbp)" & LF;
       begin
          Landin.Testing.Check
-           (Item, Contains (Text, Expected),
+           (Item, Contains (Text, Expected)
+                  and then Contains (Text, ".L1_V2_trap_overflow:" & LF
+                                           & HT & "ud2" & LF),
             "i8 negation traps before storing an unrepresentable result");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & "jnc .L1_V2"),
+           (Item, not Contains (Text, HT & "jc .L1_V2"),
             "signed negation does not use unsigned carry");
       end;
    end Signed_Negation_Traps_On_The_Lowest_Value;
@@ -598,10 +604,10 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "negq %rax"),
             "usize negation follows the target's 64-bit width");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jnc .L1_V2"),
+           (Item, Contains (Text, HT & "jc .L1_V2"),
             "unsigned negation tests carry");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & "jno .L1_V2"),
+           (Item, not Contains (Text, HT & "jo .L1_V2"),
             "unsigned negation does not use signed overflow");
       end;
    end Unsigned_Negation_Uses_Carry_To_Trap;
@@ -773,9 +779,7 @@ package body Landin.Tests.Backend_Suite is
          Guard : constant String :=
            HT & "movl -24(%rbp), %eax" & LF
            & HT & "cmpl $0, %eax" & LF
-           & HT & "jge .L1_V5_nonnegative" & LF
-           & HT & "ud2" & LF
-           & ".L1_V5_nonnegative:" & LF
+           & HT & "jl .L1_V5_trap_range" & LF
            & HT & "cmpl $32, %eax" & LF
            & HT & "jb .L1_V5_inrange" & LF;
       begin
@@ -4473,8 +4477,8 @@ package body Landin.Tests.Backend_Suite is
             and then Occurrences (Text, HT & "imulq $16, %rcx, %rcx") = 1,
             "unit stride is free and wider elements scale the lower bound");
          Landin.Testing.Check
-           (Item, Occurrences (Text, "_upper:") = 3
-            and then Occurrences (Text, "_lower:") = 3
+           (Item, Occurrences (Text, HT & "ja .L") = 6
+            and then Occurrences (Text, "_trap_range:") = 3
             and then Occurrences (Text, HT & "addq %rcx, %rax") = 3,
             "each checked slice keeps both bounds and its base addition");
       end;
@@ -4972,6 +4976,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
+         Branch : constant Natural := Index (Text, HT & "jae .L");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural := Index (Text, HT & "imulq $4, %rax, %rax");
          Address : constant Natural :=
@@ -4979,15 +4984,17 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Compare > 0 and then Compare < Trap
-            and then Trap < Scale and then Scale < Address,
-            "the unsigned bounds check and trap precede scaling and address");
+            Compare > 0 and then Compare < Branch
+            and then Branch < Scale and then Scale < Address
+            and then Address < Trap,
+            "the unsigned bounds check precedes scaling and address,"
+            & " and its trap follows the body");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "the store and load each check the runtime index");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, HT & "jb "), 2,
-            "both checks use unsigned below");
+           (Item, Occurrences (Text, HT & "jae .L"), 2,
+            "both checks trap at or above the length, unsigned");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "ud2"), 2,
             "both out-of-bounds paths trap deliberately");
@@ -5076,6 +5083,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Compare : constant Natural := Index (Text, HT & "cmpq $4, %rax");
+         Branch : constant Natural := Index (Text, HT & "jae .L");
          Trap : constant Natural := Index (Text, HT & "ud2");
          Scale : constant Natural :=
            Index (Text, HT & "imulq $4, %rax, %rax");
@@ -5088,9 +5096,11 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Compare > 0 and then Compare < Trap
-            and then Trap < Scale and then Scale < Address,
-            "the trap and scaling precede the frame-slot address");
+            Compare > 0 and then Compare < Branch
+            and then Branch < Scale and then Scale < Address
+            and then Address < Trap,
+            "the check and scaling precede the frame-slot address,"
+            & " and the trap follows the body");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "cmpq $4, %rax"), 2,
             "both the store and the load check the runtime index");
@@ -5646,9 +5656,7 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
          Guard : constant String :=
            HT & "cmpb $0, -6(%rbp)" & LF
-           & HT & "jne .L1_V5_nonzero" & LF
-           & HT & "ud2" & LF
-           & ".L1_V5_nonzero:" & LF;
+           & HT & "je .L1_V5_trap_overflow" & LF;
          Operation : constant String :=
            HT & "movb -7(%rbp), %al" & LF
            & HT & "movb $0, %ah" & LF
@@ -5656,7 +5664,9 @@ package body Landin.Tests.Backend_Suite is
            & HT & "movb %al, -8(%rbp)" & LF;
       begin
          Landin.Testing.Check
-           (Item, Contains (Text, Guard),
+           (Item, Contains (Text, Guard)
+                  and then Contains (Text, ".L1_V5_trap_overflow:" & LF
+                                           & HT & "ud2" & LF),
             "a runtime zero divisor reaches an explicit trap");
          Landin.Testing.Check
            (Item, Contains (Text, Operation),
@@ -5692,8 +5702,7 @@ package body Landin.Tests.Backend_Suite is
            & HT & "jne .L1_V5_divide" & LF
            & HT & "movabsq $128, %rax" & LF
            & HT & "cmpb -7(%rbp), %al" & LF
-           & HT & "jne .L1_V5_divide" & LF
-           & HT & "ud2" & LF;
+           & HT & "je .L1_V5_trap_overflow" & LF;
          Operation : constant String :=
            ".L1_V5_divide:" & LF
            & HT & "movb -7(%rbp), %al" & LF
@@ -5702,7 +5711,9 @@ package body Landin.Tests.Backend_Suite is
            & HT & "movb %al, -8(%rbp)" & LF;
       begin
          Landin.Testing.Check
-           (Item, Contains (Text, Overflow),
+           (Item, Contains (Text, Overflow)
+                  and then Contains (Text, ".L1_V5_trap_overflow:" & LF
+                                           & HT & "ud2" & LF),
             "signed minimum divided by minus one reaches an explicit trap");
          Landin.Testing.Check
            (Item, Contains (Text, Operation),
@@ -5859,13 +5870,13 @@ package body Landin.Tests.Backend_Suite is
          Operation : constant String :=
            HT & "movb -7(%rbp), %al" & LF
            & HT & "mulb -6(%rbp)" & LF
-           & HT & "jnc .L1_V";
+           & HT & "jc .L1_V";
       begin
          Landin.Testing.Check
            (Item, Contains (Text, Operation),
             "u8 multiply checks the full unsigned product immediately");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+           (Item, Contains (Text, "_trap_overflow:" & LF & HT & "ud2" & LF),
             "unsigned overflow reaches an explicit trap");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "movb %al, -8(%rbp)"),
@@ -5899,16 +5910,16 @@ package body Landin.Tests.Backend_Suite is
          Operation : constant String :=
            HT & "movb -7(%rbp), %al" & LF
            & HT & "imulb -6(%rbp)" & LF
-           & HT & "jno .L1_V";
+           & HT & "jo .L1_V";
       begin
          Landin.Testing.Check
            (Item, Contains (Text, Operation),
             "i8 multiply tests signed overflow immediately");
          Landin.Testing.Check
-           (Item, not Contains (Text, HT & "jnc .L1_V"),
+           (Item, not Contains (Text, HT & "jc .L1_V"),
             "signed multiply does not use unsigned carry");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+           (Item, Contains (Text, "_trap_overflow:" & LF & HT & "ud2" & LF),
             "signed overflow reaches an explicit trap");
       end;
    end Signed_Multiply_Uses_Overflow_To_Trap;
@@ -6258,7 +6269,9 @@ package body Landin.Tests.Backend_Suite is
          Main_At : constant Positive :=
            Positive (Index (Whole, "main:" & LF));
          Text : constant String := Whole (Main_At .. Whole'Last);
-         Trap_At : constant Natural := Index (Text, HT & "ud2" & LF);
+         Edge_At : constant Natural := Index (Text, "_trap_overflow" & LF);
+         Trap_At : constant Natural :=
+           Index (Text, "_trap_overflow:" & LF & HT & "ud2" & LF);
          Second_At : constant Natural :=
            Index (Text, HT & "call second" & LF);
          First_At : constant Natural :=
@@ -6266,9 +6279,9 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Trap_At > 0 and then Second_At > Trap_At
-              and then First_At > Second_At,
-            "the trap stops before normal reverse-order cleanup calls");
+            Edge_At > 0 and then Second_At > Edge_At
+              and then First_At > Second_At and then Trap_At > First_At,
+            "the trap edge leaves before normal reverse-order cleanup calls");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, HT & "call second" & LF), 1,
             "the later defer emits one call");
@@ -7660,6 +7673,78 @@ package body Landin.Tests.Backend_Suite is
               (Item, True, "the concrete emitter refuses Darwin facts");
       end;
    end Helper_Membership_Is_Exact;
+
+   --  Size and speed on arm64 leave a checked element's scaled index to
+   --  the access, `[x10, x13, lsl #n]`, and an indexed or slice address
+   --  whose one use is an indirect access to that access, through the
+   --  address slot lowering carries it in.  None forms every address.
+   procedure Arm64_Elements_Use_Register_Offsets
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Elements_Use_Register_Offsets
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_Arm64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "public words_at: (words: []u64, i: usize) -> (r: u64) =" & LF
+         & "    mut local: [4]u64 = zeroed" & LF
+         & "    local[i] = words[i]" & LF
+         & "    r = local[i] + words[i]" & LF
+         & "end words_at" & LF
+         & "public flip: (inout values: [16]u8, i: usize) -> none =" & LF
+         & "    saved: u8 = values[i]" & LF
+         & "    values[i] = values[0]" & LF
+         & "    values[0] = saved" & LF
+         & "end flip" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "element source lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      for Reference in Boolean loop
+         declare
+            Assembly : Ada.Strings.Unbounded.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Landin.Backend.Arm64.Emit
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Stages.Target (Work),
+               (if Reference then Landin.Optimization.Reference_Options
+                else Landin.Optimization.Default_Options),
+               Assembly, Report);
+            declare
+               Text : constant String :=
+                 Ada.Strings.Unbounded.To_String (Assembly);
+            begin
+               if Reference then
+                  Landin.Testing.Check
+                    (Item, Occurrences (Text, "[x10, x13") = 0
+                     and then Occurrences (Text, "[x11, x10") = 0
+                     and then Occurrences (Text, "madd x9, x10, x11, x9")
+                       = 2,
+                     "none forms every element address");
+               else
+                  Landin.Testing.Check
+                    (Item, Occurrences (Text, "ldr x9, [x11, x10, lsl #3]")
+                       = 2
+                     and then Occurrences
+                       (Text, "str x9, [x10, x13, lsl #3]") = 1
+                     and then Occurrences
+                       (Text, "ldr x9, [x10, x13, lsl #3]") = 1
+                     and then Occurrences (Text, "ldrb w9, [x10, x13]") = 1
+                     and then Occurrences (Text, "madd x9, x10, x11, x9")
+                       = 0,
+                     "size leaves scaled indexes to the accesses");
+               end if;
+            end;
+         end;
+      end loop;
+   end Arm64_Elements_Use_Register_Offsets;
 
    procedure Darwin_Wide_Parts_Keep_Target_Offsets
      (Item : in out Landin.Testing.Context);
@@ -9245,6 +9330,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 elements use register offsets",
+         Arm64_Elements_Use_Register_Offsets'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin variadic tails take ordered slots",
          Darwin_Variadic_Tails_Take_Ordered_Slots'Access);

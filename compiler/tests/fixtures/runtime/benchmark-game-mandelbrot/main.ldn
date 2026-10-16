@@ -1,6 +1,11 @@
---  The Benchmark Game correctness image is 200 by 200.  Each membership bit
---  is packed most-significant first and written in binary PBM format.
+--  The image's size is the program's argument: 200 for the correctness
+--  output, 16000 for the performance run.  Each membership bit is packed
+--  most-significant first and written in binary PBM format; a row whose
+--  width is not a multiple of eight pads its last byte with zero bits.
 import core/io
+import core/mem
+import core/text
+import hosted/heap
 import hosted/io as hosted
 
 in_set: (real_coordinate: f64, imaginary_coordinate: f64)
@@ -23,51 +28,87 @@ in_set: (real_coordinate: f64, imaginary_coordinate: f64)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (host: hosted.system) -> (members: u32) ! io.io_failed =
-    size: usize = 200
-    coordinate_size: f64 = f64(size)
-    bytes_per_row: usize = size / 8
-    bits_per_byte: usize = 8
+--  Pack one row of the N by N image into ROW, eight pixels to a byte.
+pack_row: (n: usize, imaginary_coordinate: f64, row: []mut u8) -> none =
+    coordinate_size: f64 = f64(n)
     first: usize = 0
-    mut real_coordinates: [200]f64 = zeroed
-    stream: io.file = io.out(host)
-    mut row_bytes: [25]u8 = zeroed
-    members = 0
-    for pixel_x in first..<size do
-        real_coordinates[pixel_x] = 2.0 * f64(pixel_x) / coordinate_size - 1.5
-    end for
-
-    try io.write(host, stream, "P4\n200 200\n")
-    for row in first..<size do
-        imaginary_coordinate: f64 = 2.0 * f64(row) / coordinate_size - 1.0
-        for byte_column in first..<bytes_per_row do
-            mut packed: u8 = 0
-            for offset in first..<bits_per_byte do
-                packed <<= 1
-                pixel_x: usize = byte_column * bits_per_byte + offset
-                if in_set(real_coordinates[pixel_x], imaginary_coordinate) then
-                    packed |= 1
-                    inc members
-                end if
-            end for
-            row_bytes[byte_column] = packed
+    for byte_column in first..<lenof row do
+        start: usize = byte_column * 8
+        mut bits: usize = n - start
+        if bits > 8 then
+            bits = 8
+        end if
+        mut packed: u8 = 0
+        for offset in first..<bits do
+            packed <<= 1
+            pixel_x: usize = start + offset
+            real_coordinate: f64 = 2.0 * f64(pixel_x) / coordinate_size - 1.5
+            if in_set(real_coordinate, imaginary_coordinate) then
+                packed |= 1
+            end if
         end for
-        output: []u8 = row_bytes[0..<lenof row_bytes]
-        try io.write(host, stream, output)
+        row[byte_column] = packed << u8(8 - bits)
+    end for
+end pack_row
+
+render: (inout out: io.buffered_writer(hosted.system), n: usize, row: []mut u8)
+        -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut room: [48]u8 = zeroed
+    mut header := text.over(room)
+    try text.format(header, "P4\n{} {}\n", [any(addr n), any(addr n)])
+    try io.put(out, text.used(header))
+
+    coordinate_size: f64 = f64(n)
+    first: usize = 0
+    for y in first..<n do
+        pack_row(n, 2.0 * f64(y) / coordinate_size - 1.0, row)
+        try io.put(out, row)
     end for
 end render
 
+--  The image size named by the first argument.
+image_size: (host: hosted.system)
+            -> (n: usize)
+            ! io.no_argument | text.invalid_number | text.number_overflow =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+end image_size
+
 public main: () -> (code: i32) =
     host := hosted.host()
-    members := render(host) else (problem)
+    memory := heap.host()
+    code = 1
+    n := image_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host), "usage: mandelbrot N\n") else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if members == 15899 then
-        code = 42
-    else
-        code = 1
-    end if
+    mut row := mem.new_bytes(memory, (n + 7) / 8) else (problem)
+        _ = problem
+        io.write(host, io.err(host), "mandelbrot: out of memory\n")
+            else (ignored)
+            _ = ignored
+        end
+        return
+    end
+    defer mem.delete_bytes(memory, row)
+
+    mut storage: [16384]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    render(out, n, mem.bytes(row)) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
 end main

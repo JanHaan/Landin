@@ -1,0 +1,199 @@
+--  Every alignment core/mem's word loops meet, held to a byte-at-a-time
+--  model, and on firmware, whose loops move bytes, the same oracles:
+--  copies between two arrays from every source offset to every destination
+--  offset from 0 to 7, copies within one array between every pair of
+--  offsets from 0 to 11, so that they overlap up and down by every distance
+--  shorter than the copy, fills, finds and zeroed byte buffers, each at
+--  every length from 0 to 40.  Every check reads the whole array, so a byte
+--  written outside the bytes named fails it as a wrong one does.  The
+--  patterns are built once, so that the checks run within a Cortex-M0
+--  emulator's time.
+import core/mem
+
+--  The bytes of a copy's source: never zero, and each unlike its
+--  neighbours.
+sources: () -> (bytes: [64]u8) =
+    bytes = zeroed
+    for at in usize(0)..<64 do
+        bytes[at] = u8(at + 1)
+    end for
+end sources
+
+--  The bytes a copy or fill must leave alone, unlike every source byte.
+backgrounds: () -> (bytes: [64]u8) =
+    bytes = zeroed
+    for at in usize(0)..<64 do
+        bytes[at] = u8(255 - at)
+    end for
+end backgrounds
+
+between: () -> (ok: bool) =
+    ok = false
+    source: [64]u8 = sources()
+    background: [64]u8 = backgrounds()
+    mut room: [64]u8 = background
+    for start in usize(0)..<8 do
+        for to in usize(0)..<8 do
+            for count in usize(0)..40 do
+                room = background
+                mem.copy(room[to..<64], source[start..<start + count])
+                    else (problem)
+                    _ = problem
+                    return
+                end
+                for at in usize(0)..<64 do
+                    mut expected: u8 = background[at]
+                    if at >= to and at < to + count then
+                        expected = source[start + at - to]
+                    end if
+                    return when room[at] <> expected
+                end for
+            end for
+        end for
+    end for
+    ok = true
+end between
+
+within: () -> (ok: bool) =
+    ok = false
+    source: [64]u8 = sources()
+    mut room: [64]u8 = source
+    for start in usize(0)..<12 do
+        for to in usize(0)..<12 do
+            for count in usize(0)..40 do
+                room = source
+                mem.copy(room[to..<64], room[start..<start + count])
+                    else (problem)
+                    _ = problem
+                    return
+                end
+                for at in usize(0)..<64 do
+                    mut expected: u8 = source[at]
+                    if at >= to and at < to + count then
+                        expected = source[start + at - to]
+                    end if
+                    return when room[at] <> expected
+                end for
+            end for
+        end for
+    end for
+    ok = true
+end within
+
+filled: () -> (ok: bool) =
+    ok = false
+    values: [3]u8 = [0, 128, 165]
+    background: [64]u8 = backgrounds()
+    mut room: [64]u8 = background
+    for which in usize(0)..<3 do
+        value: u8 = values[which]
+        for to in usize(0)..<8 do
+            for count in usize(0)..40 do
+                room = background
+                mem.fill(room[to..<to + count], value)
+                for at in usize(0)..<64 do
+                    mut expected: u8 = background[at]
+                    if at >= to and at < to + count then
+                        expected = value
+                    end if
+                    return when room[at] <> expected
+                end for
+            end for
+        end for
+    end for
+    ok = true
+end filled
+
+--  Bytes a word-at-a-time search could take for `value`: a zero, the high
+--  bit alone and its neighbours, and the neighbours of `value` itself,
+--  never `value`.
+decoys: [10]u8 = [0, 1, 127, 128, 129, 254, 255, 9, 10, 11]
+
+--  The searched bytes are decoys with `value` at `position` and again
+--  three bytes later, and every byte outside them is `value` too, so a
+--  search that reads outside them or finds the second one is caught.  At a
+--  position equal to the count there is none.
+found: () -> (ok: bool) =
+    ok = false
+    values: [4]u8 = [0, 10, 128, 255]
+    for which in usize(0)..<4 do
+        value: u8 = values[which]
+        mut flooded: [56]u8 = zeroed
+        mut decoyed: [56]u8 = zeroed
+        for at in usize(0)..<56 do
+            flooded[at] = value
+            decoyed[at] = decoys[at % 10]
+            if decoyed[at] == value then
+                decoyed[at] = value ^ 1
+            end if
+        end for
+        mut hay: [56]u8 = flooded
+        for start in usize(0)..<8 do
+            for count in usize(0)..40 do
+                hay = flooded
+                for at in usize(0)..<count do
+                    hay[start + at] = decoyed[at]
+                end for
+                for position in usize(0)..count do
+                    second: usize = position + 3
+                    if position < count then
+                        hay[start + position] = value
+                    end if
+                    if second < count then
+                        hay[start + second] = value
+                    end if
+                    searched: []u8 = hay[start..<start + count]
+                    return when mem.find(searched, value) <> position
+                    if position < count then
+                        hay[start + position] = decoyed[position]
+                    end if
+                    if second < count then
+                        hay[start + second] = decoyed[second]
+                    end if
+                end for
+            end for
+        end for
+    end for
+    ok = true
+end found
+
+--  Byte buffers carved one after another from an arena over dirty bytes,
+--  so that each begins at the next byte offset: each is zero throughout
+--  and the byte after it is still dirty.
+zeroes: () -> (ok: bool) =
+    ok = false
+    dirty: u8 = 165
+    mut backing: [1024]u8 = zeroed
+    for at in usize(0)..<1024 do
+        backing[at] = dirty
+    end for
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], 1024)
+    for count in usize(1)..40 do
+        buffer := mem.new_bytes(arena, count) else (problem)
+            _ = problem
+            return
+        end
+        view := mem.bytes(buffer)
+        return when lenof view <> count
+        for at in usize(0)..<count do
+            return when view[at] <> 0
+        end for
+        return when backing[mem.arena_used(arena)] <> dirty
+    end for
+    ok = true
+end zeroes
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not between()
+    code = 2
+    return when not within()
+    code = 3
+    return when not filled()
+    code = 4
+    return when not found()
+    code = 5
+    return when not zeroes()
+    code = 42
+end main

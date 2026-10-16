@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an and or an or that is a branch's condition runs its left operand first and its right only on the edge the left left undecided, under if, elif, while, break, continue, return and fail
+constructs: 0340, 0410, 0890, 1130, 1150, 1810
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

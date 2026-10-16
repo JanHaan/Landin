@@ -34,24 +34,15 @@ word: usize = sizeof usize
 --  The largest extent either host takes: PTRDIFF_MAX.
 largest: usize = (0 -% 1) >> 1
 
---  The words just before a block are written and read a byte at a time:
---  for an alignment that is not a multiple of the word, the words
---  themselves are not aligned.
+--  A header word, at a multiple of the word.
 store_word: (at: usize, value: usize) -> none =
-    mut rest: usize = value
-    for offset in usize(0)..<word do
-        cell: ptr mut u8 = ptr(at + offset)
-        cell.val = u8(rest & 255)
-        rest = rest >> 8
-    end for
+    cell: ptr mut usize = ptr(at)
+    cell.val = value
 end store_word
 
 load_word: (at: usize) -> (value: usize) =
-    value = 0
-    for offset in usize(0)..<word do
-        cell: ptr u8 = ptr(at + word - offset - 1)
-        value = (value << 8) | usize(cell.val)
-    end for
+    cell: ptr usize = ptr(at)
+    value = cell.val
 end load_word
 
 --  The first address at or above `first` that is a multiple of `unit`.
@@ -65,6 +56,15 @@ end align_up
 --  class has the class's extent; anything larger than the largest class
 --  is a mapping of its own, unmapped when it is freed.
 header: usize = 2 * word
+
+--  Where a block's two words are: at the multiple of the word at or below
+--  a header before the block, so that they are aligned whatever the
+--  block's alignment.  A slot or mapping starts at a multiple of the word
+--  and its block is at least a header past that start, so the words never
+--  reach below it.
+header_at: (block: usize) -> (at: usize) =
+    at = (block - header) & (0 -% word)
+end header_at
 
 --  Eight classes, of 32 to 4096 bytes.  A class with no free slot maps a
 --  chunk and divides it into slots.  A freed slot goes back on its class's
@@ -124,8 +124,12 @@ take_slot: (index: usize, size: usize) -> (slot: usize) =
     free_slots[index] = link.val
 end take_slot
 
+--  Slots and mappings start at multiples of the smallest class, so a unit
+--  that divides the header has the block a header past the start aligned
+--  already; any other unit may need up to unit - 1 bytes more.
 host_alloc: (size: usize, unit: usize) -> (block: usize) =
-    extent: usize = size + (unit - 1) + header
+    slack: usize = if header % unit == 0 then 0 else unit - 1 end if
+    extent: usize = size + slack + header
     mut origin: usize = 0
     mut held: usize = 0
     if extent <= largest_class then
@@ -142,13 +146,15 @@ host_alloc: (size: usize, unit: usize) -> (block: usize) =
         return
     end if
     block = align_up(origin + header, unit)
-    store_word(block - header, origin)
-    store_word(block - word, held)
+    at: usize = header_at(block)
+    store_word(at, origin)
+    store_word(at + word, held)
 end host_alloc
 
 host_free: (block: usize) -> none =
-    origin: usize = load_word(block - header)
-    held: usize = load_word(block - word)
+    at: usize = header_at(block)
+    origin: usize = load_word(at)
+    held: usize = load_word(at + word)
     if held <= largest_class then
         (index, size: _) := class_of(held)
         link: ptr mut usize = ptr(origin)

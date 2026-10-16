@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: every float comparison is false for an unordered NaN except inequality, alike as a bool value and as a branch's own condition, at both widths
+constructs: 0170, 0240, 0410, 1130, 1810, 1890
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

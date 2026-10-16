@@ -1,0 +1,104 @@
+--  A growing region keeps its ledger in a chain of blocks.  Seven hundred
+--  allocations run it past its largest block twice; releasing it gives
+--  every payload and every block back with the address and extent each was
+--  allocated with.  A parent that refuses any one of the first forty
+--  attempts, a payload's or a ledger block's, leaves nothing live either.
+import core/fault
+import core/mem
+import core/region
+
+mut backing: [2048]usize
+
+--  This fixture-local provider counts what it hands out over an arena and
+--  sums each block's address and extent, so a free of the wrong block or
+--  extent leaves a trace.  It is not the reusable `core/fault`.
+tally_state: type = struct
+    inner: mem.arena
+    live: usize
+    addresses: usize
+    extents: usize
+end tally_state
+
+tally: type = struct
+    state: ptr mut tally_state
+end tally
+
+tally_alloc: (self: tally, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    state: ptr mut tally_state = self.state
+    block = try mem.allocate(state.val.inner, size, alignment)
+    inc state.val.live
+    state.val.addresses = state.val.addresses +% usize(block)
+    state.val.extents = state.val.extents +% size
+end tally_alloc
+
+tally_free: (self: tally, block: ptr mut u8, size: usize) -> none =
+    state: ptr mut tally_state = self.state
+    state.val.live = state.val.live -% 1
+    state.val.addresses = state.val.addresses -% usize(block)
+    state.val.extents = state.val.extents -% size
+    mem.free(state.val.inner, block, size)
+end tally_free
+
+tally_grow: (self: tally, block: ptr mut u8,
+             old_size: usize, new_size: usize, alignment: usize)
+            -> (grown: bool) =
+    _ = self.state
+    _ = block
+    _ = old_size
+    _ = new_size
+    _ = alignment
+    grown = false
+end tally_grow
+
+tally is mem.allocator (alloc: tally_alloc, grow: tally_grow,
+                        free: tally_free)
+
+--  Ask a region over the tally for `count` one-byte payloads, with
+--  `core/fault` letting `budget` attempts through, then release it: how
+--  many payloads the region made, and whether everything came back.
+run: (count: usize, budget: usize) -> (made: usize, clean: bool) =
+    made = 0
+    clean = false
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut arena_space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(arena_space, base,
+                                      lenof backing * sizeof usize)
+    mut state: tally_state = (inner: arena, live: 0, addresses: 0,
+                              extents: 0)
+    counter: tally = (state: addr state)
+    mut fault_space: fault.space = zeroed
+    counted := fault.over(fault_space, counter, budget)
+    mut ledger: region.space(0) = zeroed
+    program := region.over(ledger, counted)
+    mut refused: bool = false
+    while made < count and not refused do
+        payload: ptr mut u8 = mem.allocate(program, usize(1), usize(1))
+            else (problem)
+            refused = problem == mem.out_of_memory
+            base
+        end
+        if not refused then
+            payload.val = u8(made % 251)
+            inc made
+        end if
+    end while
+    region.release(ledger, counted)
+    clean = state.live == 0 and state.addresses == 0 and state.extents == 0
+            and fault.live(counted) == 0
+            and fault.successes(counted) == fault.frees(counted)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    (made, clean) := run(usize(700), usize(1000))
+    return when made <> 700 or not clean
+    code = 2
+    mut budget: usize = 0
+    while budget < 40 do
+        (made: refused_made, clean: refused_clean) := run(usize(40), budget)
+        return when refused_made >= 40 or not refused_clean
+        inc budget
+    end while
+    code = 42
+end main

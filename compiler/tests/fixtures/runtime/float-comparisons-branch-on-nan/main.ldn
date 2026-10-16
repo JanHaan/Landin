@@ -1,0 +1,187 @@
+-- D162: equality is false for an unordered NaN, inequality true and every
+-- ordered comparison false.  A comparison that a branch tests directly is
+-- never materialized as a bool, so each one is checked both ways, against
+-- ordered pairs, signed zeros, infinities and NaNs on either side.  The
+-- bits are 1 for ==, 2 for <>, 4 for <, 8 for <=, 16 for > and 32 for >=.
+weight: (holds: bool, value: u32) -> (bits: u32) =
+    bits = 0
+    if holds then
+        bits = value
+    end if
+end weight
+
+-- One bit for each comparison of two f64 values that holds, each the
+-- condition of its own branch.
+branched_64: (a: f64, b: f64) -> (bits: u32) =
+    bits = 0
+    if a == b then
+        bits |= 1
+    end if
+    if a <> b then
+        bits |= 2
+    end if
+    if a < b then
+        bits |= 4
+    end if
+    if a <= b then
+        bits |= 8
+    end if
+    if a > b then
+        bits |= 16
+    end if
+    if a >= b then
+        bits |= 32
+    end if
+end branched_64
+
+-- The same bits, each comparison first a bool value.
+valued_64: (a: f64, b: f64) -> (bits: u32) =
+    bits = weight(a == b, 1)
+    bits |= weight(a <> b, 2)
+    bits |= weight(a < b, 4)
+    bits |= weight(a <= b, 8)
+    bits |= weight(a > b, 16)
+    bits |= weight(a >= b, 32)
+end valued_64
+
+-- The same bits again, each comparison the right operand of an `and`
+-- that a loop tests before each pass.
+looped_64: (a: f64, b: f64) -> (bits: u32) =
+    mut passes: u32 = 0
+    bits = 0
+    while passes < 1 and a == b do
+        bits |= 1
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a <> b do
+        bits |= 2
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a < b do
+        bits |= 4
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a <= b do
+        bits |= 8
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a > b do
+        bits |= 16
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a >= b do
+        bits |= 32
+        inc passes
+    end while
+end looped_64
+
+agrees_64: (a: f64, b: f64, bits: u32) -> (same: bool) =
+    same = branched_64(a, b) == bits and valued_64(a, b) == bits
+           and looped_64(a, b) == bits
+end agrees_64
+
+-- One bit for each comparison of two f32 values that holds, each the
+-- condition of its own branch.
+branched_32: (a: f32, b: f32) -> (bits: u32) =
+    bits = 0
+    if a == b then
+        bits |= 1
+    end if
+    if a <> b then
+        bits |= 2
+    end if
+    if a < b then
+        bits |= 4
+    end if
+    if a <= b then
+        bits |= 8
+    end if
+    if a > b then
+        bits |= 16
+    end if
+    if a >= b then
+        bits |= 32
+    end if
+end branched_32
+
+-- The same bits, each comparison first a bool value.
+valued_32: (a: f32, b: f32) -> (bits: u32) =
+    bits = weight(a == b, 1)
+    bits |= weight(a <> b, 2)
+    bits |= weight(a < b, 4)
+    bits |= weight(a <= b, 8)
+    bits |= weight(a > b, 16)
+    bits |= weight(a >= b, 32)
+end valued_32
+
+-- The same bits again, each comparison the right operand of an `and`
+-- that a loop tests before each pass.
+looped_32: (a: f32, b: f32) -> (bits: u32) =
+    mut passes: u32 = 0
+    bits = 0
+    while passes < 1 and a == b do
+        bits |= 1
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a <> b do
+        bits |= 2
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a < b do
+        bits |= 4
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a <= b do
+        bits |= 8
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a > b do
+        bits |= 16
+        inc passes
+    end while
+    passes = 0
+    while passes < 1 and a >= b do
+        bits |= 32
+        inc passes
+    end while
+end looped_32
+
+agrees_32: (a: f32, b: f32, bits: u32) -> (same: bool) =
+    same = branched_32(a, b) == bits and valued_32(a, b) == bits
+           and looped_32(a, b) == bits
+end agrees_32
+
+public main: () -> (code: i32) =
+    if agrees_64(1.0, 2.0, 14)
+      and agrees_64(2.0, 1.0, 50)
+      and agrees_64(1.0, 1.0, 41)
+      and agrees_64(0.0, -0.0, 41)
+      and agrees_64(-f64.infinity, f64.infinity, 14)
+      and agrees_64(f64.nan, 1.0, 2)
+      and agrees_64(1.0, f64.nan, 2)
+      and agrees_64(f64.nan, f64.nan, 2)
+      and agrees_64(f64.infinity, -f64.nan, 2)
+      and agrees_32(1.0, 2.0, 14)
+      and agrees_32(2.0, 1.0, 50)
+      and agrees_32(1.0, 1.0, 41)
+      and agrees_32(-0.0, 0.0, 41)
+      and agrees_32(f32.infinity, -f32.infinity, 50)
+      and agrees_32(f32.nan, 1.0, 2)
+      and agrees_32(1.0, f32.nan, 2)
+      and agrees_32(-f32.nan, f32.nan, 2)
+      and agrees_32(f32.nan, -f32.infinity, 2)
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -1,0 +1,175 @@
+-- A condition, a loop's bounds or its source may hold a control expression
+-- whose arms all leave the routine.  Where that operand runs, nothing after
+-- it is reached: not the body it guards, nor the flow after the statement.
+-- Each routine sets its result to 7, so a return from inside a condition
+-- hands back 7; where `x` lets an `and` or `or` skip the leaving operand,
+-- the statement runs on and the result says how far it got.
+problem: atom
+problems: type = problem
+
+same: (b: bool) -> (r: bool) =
+    r = b
+end same
+
+while_leaves: (c: bool) -> (r: u32) =
+    r = 7
+    while (if c then return else return end if) do
+        r = 1
+    end while
+    r = 2
+end while_leaves
+
+while_left_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    while (if c then return else return end if) and x do
+        r = 1
+    end while
+    r = 2
+end while_left_leaves
+
+while_right_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    while x and (if c then return else return end if) do
+        r = 1
+    end while
+    r = 2
+end while_right_leaves
+
+while_argument_leaves: (c: bool) -> (r: u32) =
+    r = 7
+    while same((if c then return else return end if)) do
+        r = 1
+    end while
+    r = 2
+end while_argument_leaves
+
+while_complete_leaves: (c: bool) -> (r: u32) =
+    r = 7
+    while (if c then return else return end if) do
+        r = 1
+    complete
+        r = 3
+    end while
+    r = r + 2
+end while_complete_leaves
+
+while_binding_leaves: (c: bool) -> (r: u32) =
+    r = 7
+    while held: bool = (if c then return else return end if) do
+        r = 1
+        break
+    end while
+    r = 2
+end while_binding_leaves
+
+while_not_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    while not (x and (if c then return else return end if)) do
+        r = r + 1
+        break
+    end while
+    r = r * 10
+end while_not_leaves
+
+upper_leaves: (c: bool, n: u32) -> (r: u32) =
+    r = 7
+    for i in n..<(if c then return else return end if) do
+        r = i
+    end for
+    r = 2
+end upper_leaves
+
+inclusive_upper_leaves: (c: bool, n: u32) -> (r: u32) =
+    r = 7
+    for i in n..(if c then return else return end if) do
+        r = i
+    end for
+    r = 2
+end inclusive_upper_leaves
+
+source_leaves: (c: bool) -> (r: u32) =
+    r = 7
+    for e in (if c then return else return end if) do
+        r = e
+    end for
+    r = 2
+end source_leaves
+
+if_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    if not x then
+        r = 1
+    elsif (if c then return else return end if) then
+        r = 2
+    end if
+    r = r * 10
+end if_leaves
+
+if_or_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    if x or (if c then return else return end if) then
+        r = 1
+    end if
+    r = r * 10
+end if_or_leaves
+
+transfers_leave: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    mut passes: u32 = 0
+    loop do
+        inc passes
+        continue when passes == 1
+          and (x or (if c then return else return end if))
+        break when not x or (if c then return else return end if)
+    end loop
+    r = passes
+end transfers_leave
+
+return_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    return when x and (if c then return else return end if)
+    r = 2
+end return_leaves
+
+fail_leaves: (c: bool, x: bool) -> (r: u32) ! problems =
+    r = 7
+    fail problem when x and (if c then return else return end if)
+    r = 2
+end fail_leaves
+
+value_leaves: (c: bool, x: bool) -> (r: u32) =
+    r = 7
+    held: bool = x and (if c then return else return end if)
+    r = if held or (if c then return else return end if) then 1 else 2 end if
+end value_leaves
+
+public main: () -> (code: i32) =
+    if while_leaves(true) == 7 and while_leaves(false) == 7
+      and while_left_leaves(true, false) == 7
+      and while_right_leaves(false, true) == 7
+      and while_right_leaves(true, false) == 2
+      and while_argument_leaves(true) == 7
+      and while_complete_leaves(false) == 7
+      and while_binding_leaves(true) == 7
+      and while_not_leaves(true, true) == 7
+      and while_not_leaves(true, false) == 80
+      and upper_leaves(true, 3) == 7
+      and inclusive_upper_leaves(false, 3) == 7
+      and source_leaves(true) == 7
+      and if_leaves(true, false) == 10
+      and if_leaves(true, true) == 7
+      and if_or_leaves(false, true) == 10
+      and if_or_leaves(false, false) == 7
+      and transfers_leave(true, true) == 7
+      and transfers_leave(true, false) == 7
+      and return_leaves(true, true) == 7
+      and return_leaves(true, false) == 2
+      and (fail_leaves(true, true) else 9) == 7
+      and (fail_leaves(true, false) else 9) == 2
+      and value_leaves(true, false) == 7
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

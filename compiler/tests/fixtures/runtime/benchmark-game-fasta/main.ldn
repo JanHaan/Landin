@@ -1,6 +1,8 @@
---  The official correctness input is 1000.  The probability search remains
+--  The sequence length is the program's argument: 1000 for the correctness
+--  output, 25000000 for the performance run.  The probability search remains
 --  linear and the naïve LCG advances once for every random nucleotide.
 import core/io
+import core/text
 import hosted/io as hosted
 
 alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
@@ -50,7 +52,7 @@ select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
     end for
 end select_symbol
 
-write_repeated: (host: hosted.system, stream: io.file,
+write_repeated: (inout out: io.buffered_writer(hosted.system),
                  source: []u8, count: usize) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut emitted: usize = 0
@@ -67,13 +69,12 @@ write_repeated: (host: hosted.system, stream: io.file,
             end if
         end for
         line[width] = 10
-        output: []u8 = line[0..<width + 1]
-        try io.write(host, stream, output)
+        try io.put(out, line[0..<width + 1])
         emitted += width
     end while
 end write_repeated
 
-write_random: (host: hosted.system, stream: io.file, symbols: []u8,
+write_random: (inout out: io.buffered_writer(hosted.system), symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
@@ -87,47 +88,60 @@ write_random: (host: hosted.system, stream: io.file, symbols: []u8,
             line[at] = select_symbol(symbols, cumulative, random)
         end for
         line[width] = 10
-        output: []u8 = line[0..<width + 1]
-        try io.write(host, stream, output)
+        try io.put(out, line[0..<width + 1])
         emitted += width
     end while
 end write_random
 
-run: (host: hosted.system) -> (final_seed: u32) ! io.io_failed =
-    sample_size: usize = 1000
-    stream: io.file = io.out(host)
+--  The three sequences for N, written through OUT.
+fasta: (inout out: io.buffered_writer(hosted.system), n: usize)
+       -> none ! io.io_failed =
     mut seed: u32 = 42
     mut iub: [15]f64 = iub_probabilities
     mut human: [4]f64 = human_probabilities
-    iub_write: []mut f64 = iub[0..<lenof iub]
-    human_write: []mut f64 = human[0..<lenof human]
-    make_cumulative(iub_write)
-    make_cumulative(human_write)
-    iub_read: []f64 = iub[0..<lenof iub]
-    human_read: []f64 = human[0..<lenof human]
+    make_cumulative(iub)
+    make_cumulative(human)
 
-    try io.write(host, stream, ">ONE Homo sapiens alu\n")
-    try write_repeated(host, stream, alu, sample_size * 2)
-    try io.write(host, stream, ">TWO IUB ambiguity codes\n")
-    try write_random(host, stream, iub_symbols, iub_read,
-                     seed, sample_size * 3)
-    try io.write(host, stream, ">THREE Homo sapiens frequency\n")
-    try write_random(host, stream, human_symbols, human_read,
-                     seed, sample_size * 5)
-    final_seed = seed
-end run
+    try io.put(out, ">ONE Homo sapiens alu\n")
+    try write_repeated(out, alu, n * 2)
+    try io.put(out, ">TWO IUB ambiguity codes\n")
+    try write_random(out, iub_symbols, iub, seed, n * 3)
+    try io.put(out, ">THREE Homo sapiens frequency\n")
+    try write_random(out, human_symbols, human, seed, n * 5)
+end fasta
+
+--  The sequence length named by the first argument.
+sequence_size: (host: hosted.system)
+               -> (n: usize)
+               ! io.no_argument | text.invalid_number | text.number_overflow =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+end sequence_size
 
 public main: () -> (code: i32) =
     host := hosted.host()
-    final_seed := run(host) else (problem)
+    code = 1
+    n := sequence_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host), "usage: fasta N\n") else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if final_seed == 111466 then
-        code = 42
-    else
-        code = 1
-    end if
+    mut storage: [16384]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    fasta(out, n) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
 end main

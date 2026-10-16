@@ -102,7 +102,7 @@ package body Landin.IR is
 
    function Caller_Source
      (Of_Unit : Unit; Position : Positive) return Landin.Source.Source_Id
-     is (Of_Unit.Caller_Sources (Position));
+     is (Of_Unit.Caller_Sources.Element (Position));
 
    package body Nominal_Identities is
       function None return Id is (0);
@@ -136,7 +136,7 @@ package body Landin.IR is
    ------------------------------------------------------------------
 
    function Element (Of_Unit : Unit; Item : Item_Id) return Item_Record
-     is (Of_Unit.Items (Positive (Item)));
+     is (Of_Unit.Items.Element (Positive (Item)));
 
    function Slot_At
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Positive
@@ -195,13 +195,13 @@ package body Landin.IR is
 
    function Is_Pointer_Union
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
-     is (Of_Unit.Nominal_Templates
+     is (Of_Unit.Nominal_Templates.Element
            (Nominal_Identities.Position (Of_Unit, Id)) = No_Declaration);
 
    function Union_Spelling
      (Of_Unit : Unit; Id : Nominal_Type_Id)
       return Landin.Source.Names.Name_Id
-     is (Of_Unit.Nominal_Spellings
+     is (Of_Unit.Nominal_Spellings.Element
            (Nominal_Identities.Position (Of_Unit, Id)));
 
    function Has_Nominal_Shape
@@ -209,7 +209,7 @@ package body Landin.IR is
      is (Holds (Of_Unit, Id)
          and then Nominal_Identities.Position (Of_Unit, Id)
            <= Natural (Of_Unit.Nominal_Shapes.Length)
-         and then Of_Unit.Nominal_Shapes
+         and then Of_Unit.Nominal_Shapes.Element
            (Nominal_Identities.Position (Of_Unit, Id)).Present);
 
    function Nominal_Field_Run_Is_Valid
@@ -220,7 +220,7 @@ package body Landin.IR is
          return False;
       end if;
       declare
-         Fields : constant Run := Of_Unit.Nominal_Shapes
+         Fields : constant Run := Of_Unit.Nominal_Shapes.Element
            (Nominal_Identities.Position (Of_Unit, Id)).Fields;
          Limit : constant Natural := Natural (Of_Unit.Nominal_Fields.Length);
       begin
@@ -235,7 +235,7 @@ package body Landin.IR is
       if not Nominal_Field_Run_Is_Valid (Of_Unit, Id) then
          raise Landin.Compiler_Defect with "invalid nominal layout query";
       end if;
-      return Of_Unit.Nominal_Shapes
+      return Of_Unit.Nominal_Shapes.Element
         (Nominal_Identities.Position (Of_Unit, Id)).Policy;
    end Layout_Of;
 
@@ -264,7 +264,7 @@ package body Landin.IR is
    function Layout_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Landin.Layouts.Policy
-     is (Of_Unit.Code
+     is (Of_Unit.Code.Element
            (Value_At (Of_Unit, Item, Value)).Measurement_Layout);
 
    function Has_C_Layout
@@ -278,7 +278,7 @@ package body Landin.IR is
       if not Nominal_Field_Run_Is_Valid (Of_Unit, Id) then
          raise Landin.Compiler_Defect with "invalid nominal field run";
       end if;
-      return Of_Unit.Nominal_Shapes
+      return Of_Unit.Nominal_Shapes.Element
         (Nominal_Identities.Position (Of_Unit, Id)).Fields.Count;
    end Nominal_Field_Count;
 
@@ -292,8 +292,8 @@ package body Landin.IR is
       then
          raise Landin.Compiler_Defect with "invalid nominal field index";
       end if;
-      return Of_Unit.Nominal_Fields
-        (Of_Unit.Nominal_Shapes
+      return Of_Unit.Nominal_Fields.Element
+        (Of_Unit.Nominal_Shapes.Element
            (Nominal_Identities.Position (Of_Unit, Id)).Fields.First + Index);
    end Nth_Nominal_Field;
 
@@ -411,7 +411,7 @@ package body Landin.IR is
 
    function Template_Of
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Declaration_Id
-     is (Of_Unit.Nominal_Templates
+     is (Of_Unit.Nominal_Templates.Element
            (Nominal_Identities.Position (Of_Unit, Id)));
 
    function Item_Count (Of_Unit : Unit) return Natural
@@ -495,7 +495,7 @@ package body Landin.IR is
       if not Holds (Of_Unit, Id) then
          raise Landin.Compiler_Defect with "invalid reached pointer shape";
       end if;
-      return Of_Unit.Pointees (Positive (Id));
+      return Of_Unit.Pointees.Element (Positive (Id));
    end Pointee_Shape;
 
    function Pointee_Of
@@ -510,7 +510,7 @@ package body Landin.IR is
 
    function Pointee_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Pointee);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Pointee);
 
    --  Scalar access metadata is derived from storage, never selected by a
    --  load's caller. The verifier proves the same runs before using this
@@ -521,7 +521,7 @@ package body Landin.IR is
    function Access_Pointee
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
    is
-      Code : constant Instruction := Of_Unit.Code
+      Code : constant Instruction := Of_Unit.Code.Element
         (Value_At (Of_Unit, Item, Value));
       Place : Storage;
       Field : constant Element_Total :=
@@ -653,7 +653,7 @@ package body Landin.IR is
    function Pointee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
    is
-      Code : constant Instruction := Of_Unit.Code
+      Code : constant Instruction := Of_Unit.Code.Element
         (Value_At (Of_Unit, Item, Value));
    begin
       case Code.Op is
@@ -769,26 +769,27 @@ package body Landin.IR is
 
    function Encoding_Width
      (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
-     is (Of_Unit.Atom_Sets (Positive (Set_Id)).Encoding_Bits);
+     is (Of_Unit.Atom_Sets.Element (Positive (Set_Id)).Encoding_Bits);
 
    function Nth_Encoding
      (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
       return Landin.Packed.Image
-     is (Of_Unit.Encodings
-       (Of_Unit.Atom_Sets (Positive (Set_Id)).Encodings_First + Index));
+     is (Of_Unit.Encodings.Element
+           (Of_Unit.Atom_Sets.Element (Positive (Set_Id)).Encodings_First
+            + Index));
 
    function Atom_Count
      (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
-     is (Of_Unit.Atom_Sets (Positive (Set_Id)).Members.Count);
+     is (Of_Unit.Atom_Sets.Element (Positive (Set_Id)).Members.Count);
 
    function Nth_Atom
      (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
       return Declaration_Id
    is
       Members : constant Run :=
-        Of_Unit.Atom_Sets (Positive (Set_Id)).Members;
+        Of_Unit.Atom_Sets.Element (Positive (Set_Id)).Members;
    begin
-      return Of_Unit.Atoms (Members.First + Index);
+      return Of_Unit.Atoms.Element (Members.First + Index);
    end Nth_Atom;
 
    function Contains_Atom
@@ -981,56 +982,58 @@ package body Landin.IR is
    function Signature_Never_Returns
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
      is (Holds (Of_Unit, Signature)
-         and then Of_Unit.Signatures (Positive (Signature)).Nonreturning);
+         and then
+           Of_Unit.Signatures.Element (Positive (Signature)).Nonreturning);
 
    function Signature_Machine
      (Of_Unit : Unit; Signature : Signature_Id)
       return Landin.Machine.Convention is
      (if Holds (Of_Unit, Signature)
-      then Of_Unit.Signatures (Positive (Signature)).Machine
+      then Of_Unit.Signatures.Element (Positive (Signature)).Machine
       else Landin.Machine.Ordinary);
 
    function Signature_Uses_C_ABI
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
      is (Holds (Of_Unit, Signature)
-         and then Of_Unit.Signatures (Positive (Signature)).C_ABI);
+         and then Of_Unit.Signatures.Element (Positive (Signature)).C_ABI);
 
    function Signature_Has_Erased_Self
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
      is (Holds (Of_Unit, Signature)
-         and then Of_Unit.Signatures (Positive (Signature)).Erased_Self);
+         and then
+           Of_Unit.Signatures.Element (Positive (Signature)).Erased_Self);
 
    function Signature_Is_Variadic
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
      is (Holds (Of_Unit, Signature)
-         and then Of_Unit.Signatures (Positive (Signature)).Variadic);
+         and then Of_Unit.Signatures.Element (Positive (Signature)).Variadic);
 
    function Signature_Parameter_Count
      (Of_Unit : Unit; Signature : Signature_Id) return Natural
-     is (Of_Unit.Signatures (Positive (Signature)).Parameters.Count);
+     is (Of_Unit.Signatures.Element (Positive (Signature)).Parameters.Count);
 
    function Nth_Signature_Parameter
      (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
       return Signature_Part
    is
       Parameters : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Parameters;
+        Of_Unit.Signatures.Element (Positive (Signature)).Parameters;
    begin
-      return Of_Unit.Signature_Parts (Parameters.First + Index);
+      return Of_Unit.Signature_Parts.Element (Parameters.First + Index);
    end Nth_Signature_Parameter;
 
    function Signature_Result_Count
      (Of_Unit : Unit; Signature : Signature_Id) return Natural
-     is (Of_Unit.Signatures (Positive (Signature)).Results.Count);
+     is (Of_Unit.Signatures.Element (Positive (Signature)).Results.Count);
 
    function Nth_Signature_Result
      (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
       return Signature_Part
    is
       Results : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Results;
+        Of_Unit.Signatures.Element (Positive (Signature)).Results;
    begin
-      return Of_Unit.Signature_Parts (Results.First + Index);
+      return Of_Unit.Signature_Parts.Element (Results.First + Index);
    end Nth_Signature_Result;
 
    function Signature_Return_Source_Count
@@ -1038,12 +1041,12 @@ package body Landin.IR is
       return Natural
    is
       Runs : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Source_Runs;
+        Of_Unit.Signatures.Element (Positive (Signature)).Source_Runs;
    begin
       if Runs.Count = 0 then
          return 0;
       end if;
-      return Of_Unit.Return_Source_Runs (Runs.First + Result).Count;
+      return Of_Unit.Return_Source_Runs.Element (Runs.First + Result).Count;
    end Signature_Return_Source_Count;
 
    function Nth_Signature_Return_Source
@@ -1053,11 +1056,11 @@ package body Landin.IR is
       Index     : Positive) return Positive
    is
       Runs : constant Run :=
-        Of_Unit.Signatures (Positive (Signature)).Source_Runs;
+        Of_Unit.Signatures.Element (Positive (Signature)).Source_Runs;
       Sources : constant Run :=
-        Of_Unit.Return_Source_Runs (Runs.First + Result);
+        Of_Unit.Return_Source_Runs.Element (Runs.First + Result);
    begin
-      return Of_Unit.Return_Sources (Sources.First + Index).Parameter;
+      return Of_Unit.Return_Sources.Element (Sources.First + Index).Parameter;
    end Nth_Signature_Return_Source;
 
    function Signature_Result
@@ -1072,7 +1075,7 @@ package body Landin.IR is
 
    function Signature_Errors
      (Of_Unit : Unit; Signature : Signature_Id) return Atom_Set_Id
-     is (Of_Unit.Signatures (Positive (Signature)).Errors);
+     is (Of_Unit.Signatures.Element (Positive (Signature)).Errors);
 
    function Same_Shape
      (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural;
@@ -1248,15 +1251,15 @@ package body Landin.IR is
    function Evidence_Is_Erased
      (Of_Unit : Unit; Id : Evidence_Id) return Boolean
      is (Holds (Of_Unit, Id)
-         and then Of_Unit.Evidence (Positive (Id)).Erased);
+         and then Of_Unit.Evidence.Element (Positive (Id)).Erased);
 
    function Evidence_Represented
      (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
-     is (Of_Unit.Evidence (Positive (Id)).Represented);
+     is (Of_Unit.Evidence.Element (Positive (Id)).Represented);
 
    function Evidence_Entry_Count
      (Of_Unit : Unit; Id : Evidence_Id) return Natural
-     is (Of_Unit.Evidence (Positive (Id)).Entries.Count);
+     is (Of_Unit.Evidence.Element (Positive (Id)).Entries.Count);
 
    procedure Add_Evidence_Entry
      (Into      : in out Unit;
@@ -1325,27 +1328,31 @@ package body Landin.IR is
    function Evidence_Entry_Target
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive) return Item_Id
    is
-      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+      Members : constant Run :=
+        Of_Unit.Evidence.Element (Positive (Id)).Entries;
    begin
-      return Of_Unit.Evidence_Entries (Members.First + Which).Target;
+      return Of_Unit.Evidence_Entries.Element (Members.First + Which).Target;
    end Evidence_Entry_Target;
 
    function Evidence_Entry_Signature
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
       return Signature_Id
    is
-      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+      Members : constant Run :=
+        Of_Unit.Evidence.Element (Positive (Id)).Entries;
    begin
-      return Of_Unit.Evidence_Entries (Members.First + Which).Signature;
+      return
+        Of_Unit.Evidence_Entries.Element (Members.First + Which).Signature;
    end Evidence_Entry_Signature;
 
    function Evidence_Entry_Dispatch_Signature
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
       return Signature_Id
    is
-      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+      Members : constant Run :=
+        Of_Unit.Evidence.Element (Positive (Id)).Entries;
    begin
-      return Of_Unit.Evidence_Entries (Members.First + Which).Dispatch;
+      return Of_Unit.Evidence_Entries.Element (Members.First + Which).Dispatch;
    end Evidence_Entry_Dispatch_Signature;
 
    function Add_Item
@@ -1435,7 +1442,8 @@ package body Landin.IR is
       if not Holds (Of_Unit, Item, Slot) then
          raise Landin.Compiler_Defect with "invalid evidence slot query";
       end if;
-      return Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Concrete_Evidence;
+      return Of_Unit.Slots.Element
+        (Slot_At (Of_Unit, Item, Slot)).Concrete_Evidence;
    end Bound_Evidence;
 
    procedure Bind_Evidence_Parameter
@@ -1550,7 +1558,7 @@ package body Landin.IR is
          for Index in 1 .. Held.Slots.Count loop
             declare
                Slot : constant Slot_Record :=
-                 Of_Unit.Slots (Held.Slots.First + Index);
+                 Of_Unit.Slots.Element (Held.Slots.First + Index);
                Bound : constant Evidence_Id := Slot.Concrete_Evidence;
             begin
                if Bound /= No_Evidence
@@ -1602,7 +1610,7 @@ package body Landin.IR is
       --  hint.  Transformations that build images directly remain covered.
       for Index in 1 .. Item_Count (Of_Unit) loop
          declare
-            Entry_Item : constant Item_Record := Of_Unit.Items (Index);
+            Entry_Item : constant Item_Record := Of_Unit.Items.Element (Index);
          begin
             if Entry_Item.Address_Exposed or else Entry_Item.External then
                Note (Item_Id (Index));
@@ -1667,7 +1675,7 @@ package body Landin.IR is
       then
          raise Landin.Compiler_Defect with "invalid call depth query";
       end if;
-      return Of_Unit.Code (Value_At (Of_Unit, Item, Value)).Call_Depth;
+      return Of_Unit.Code.Element (Value_At (Of_Unit, Item, Value)).Call_Depth;
    end Call_Loop_Depth;
 
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
@@ -1713,7 +1721,7 @@ package body Landin.IR is
 
    function Placement_Of (Of_Unit : Unit; Item : Item_Id)
      return Landin.Machine.Placement
-     is (Of_Unit.Items (Positive (Item)).Placement);
+     is (Of_Unit.Items.Element (Positive (Item)).Placement);
 
    procedure Set_Placement
      (Into : in out Unit; Item : Item_Id; Value : Landin.Machine.Placement) is
@@ -1814,7 +1822,7 @@ package body Landin.IR is
 
    function Item_For (Of_Unit : Unit; Declared : Declaration_Id)
      return Item_Id
-     is (Of_Unit.Standing (Positive (Declared)));
+     is (Of_Unit.Standing.Element (Positive (Declared)));
 
    ------------------------------------------------------------------
    --  An aggregate item's fields
@@ -1831,7 +1839,7 @@ package body Landin.IR is
    function Nth_Field_Shape
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
       return Field_Shape
-     is (Of_Unit.Fields
+     is (Of_Unit.Fields.Element
            (Element (Of_Unit, Item).Fields.First + Index));
 
    ------------------------------------------------------------------
@@ -1915,18 +1923,19 @@ package body Landin.IR is
 
    function Nth_Source_Alias
      (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Source_Alias
-     is (Of_Unit.Aliases (Element (Of_Unit, Item).Aliases.First + Index).Info);
+     is (Of_Unit.Aliases.Element
+           (Element (Of_Unit, Item).Aliases.First + Index).Info);
 
    function Source_Alias_Path
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
       return Path_Step_Array
    is
-      Path : constant Run := Of_Unit.Aliases
+      Path : constant Run := Of_Unit.Aliases.Element
         (Element (Of_Unit, Item).Aliases.First + Index).Path;
       Result : Path_Step_Array (1 .. Path.Count);
    begin
       for Step in Result'Range loop
-         Result (Step) := Of_Unit.Paths (Path.First + Step);
+         Result (Step) := Of_Unit.Paths.Element (Path.First + Step);
       end loop;
       return Result;
    end Source_Alias_Path;
@@ -2324,7 +2333,7 @@ package body Landin.IR is
    function Nth_Image_Descriptor
      (Of_Unit : Unit; Item : Item_Id; Position : Positive)
       return Aggregate_Field_Image
-     is (Of_Unit.Aggregate_Images
+     is (Of_Unit.Aggregate_Images.Element
            (Element (Of_Unit, Item).Aggregate_Images.First + Position));
 
    function Field_Image_Of
@@ -2344,7 +2353,7 @@ package body Landin.IR is
    function Nth_Aggregate_Image_Element
      (Of_Unit : Unit; Item : Item_Id; Position : Part_Position)
       return Landin.Types.Folded
-     is (Of_Unit.Images
+     is (Of_Unit.Images.Element
            (Element (Of_Unit, Item).Image.First
             + Field_Count (Of_Unit, Item)
             + Positive (Position)));
@@ -2354,7 +2363,7 @@ package body Landin.IR is
       Item    : Item_Id;
       Image   : Aggregate_Field_Image;
       Position : Part_Position) return Landin.Types.Folded
-     is (Of_Unit.Images
+     is (Of_Unit.Images.Element
            (Element (Of_Unit, Item).Image.First
             + Field_Count (Of_Unit, Item)
             + Image.Offset
@@ -2403,7 +2412,7 @@ package body Landin.IR is
    function Nth_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Field : Positive)
       return Landin.Types.Folded
-     is (Of_Unit.Images
+     is (Of_Unit.Images.Element
            (Element (Of_Unit, Item).Image.First + Field));
 
    procedure Set_Array_Image
@@ -2507,7 +2516,7 @@ package body Landin.IR is
 
    function Repeated_Image_Value
      (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
-     is (Of_Unit.Images
+     is (Of_Unit.Images.Element
            (Element (Of_Unit, Item).Image.First
             + Element (Of_Unit, Item).Image.Count));
 
@@ -2525,20 +2534,20 @@ package body Landin.IR is
               and then Element_Total (Index)
                        > Image_Prefix_Length (Of_Unit, Item)
          then Repeated_Image_Value (Of_Unit, Item)
-         else Of_Unit.Images
+         else Of_Unit.Images.Element
                 (Element (Of_Unit, Item).Image.First + Positive (Index)));
 
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Aggregate);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Aggregate);
 
    function Is_Address
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Addressed);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Addressed);
 
    function Address_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Element);
 
    function Add_Array_Slot
      (Into     : in out Unit;
@@ -2591,22 +2600,23 @@ package body Landin.IR is
 
    function Is_Array
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Array_Shape);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Array_Shape);
 
    function Slot_Array_Element
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
       return Landin.Types.Scalar_Name
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element.Element);
+     is (Of_Unit.Slots.Element
+           (Slot_At (Of_Unit, Item, Slot)).Element.Element);
 
    function Slot_Array_Element_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Element);
 
    function Whole_Slot_Array_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
    is
       Held : Slot_Record renames
-        Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot));
+        Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot));
    begin
       return
         (Kind           => Array_Field_Shape,
@@ -2621,7 +2631,7 @@ package body Landin.IR is
 
    function Slot_Array_Length
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Length);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Length);
 
    function Slot_Part_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
@@ -2651,7 +2661,7 @@ package body Landin.IR is
 
    function Slot_Field_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Fields.Count);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Fields.Count);
 
    procedure Add_Slot_Field
      (Into    : in out Unit;
@@ -2716,8 +2726,8 @@ package body Landin.IR is
       Item    : Item_Id;
       Slot    : Slot_Id;
       Index   : Positive) return Field_Shape
-     is (Of_Unit.Slot_Fields
-           (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Fields.First
+     is (Of_Unit.Slot_Fields.Element
+           (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Fields.First
             + Index));
 
    function Nth_Slot_Field
@@ -2832,7 +2842,7 @@ package body Landin.IR is
 
    function Nth_Parameter
      (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Slot_Id
-     is (Of_Unit.Parameters
+     is (Of_Unit.Parameters.Element
            (Element (Of_Unit, Item).Parameters.First + Index));
 
    procedure Set_Result_Slot
@@ -2849,29 +2859,29 @@ package body Landin.IR is
 
    function Type_Of (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Landin.Types.Scalar_Name
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Of_Type);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Of_Type);
 
    function Signature_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Signature_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Signature);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Signature);
 
    function Atom_Set_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Atom_Set_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Atom_Set);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Atom_Set);
 
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Declaration_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Declaration);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Declaration);
 
    function Nominal_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Nominal_Type_Id
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Nominal);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Nominal);
 
    function Origin_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Landin.Provenance.Origin
-     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Site);
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Site);
 
    ------------------------------------------------------------------
    --  Blocks
@@ -2963,16 +2973,16 @@ package body Landin.IR is
 
    function Scope_Of
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Scope_Id
-     is (Of_Unit.Blocks (Block_At (Of_Unit, Item, Block)).Scope);
+     is (Of_Unit.Blocks.Element (Block_At (Of_Unit, Item, Block)).Scope);
 
    function Origin_Of
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id)
      return Landin.Provenance.Origin
-     is (Of_Unit.Blocks (Block_At (Of_Unit, Item, Block)).Site);
+     is (Of_Unit.Blocks.Element (Block_At (Of_Unit, Item, Block)).Site);
 
    function Length
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Natural
-     is (Of_Unit.Blocks (Block_At (Of_Unit, Item, Block)).Values);
+     is (Of_Unit.Blocks.Element (Block_At (Of_Unit, Item, Block)).Values);
 
    function Nth_Value
      (Of_Unit : Unit;
@@ -2980,7 +2990,7 @@ package body Landin.IR is
       Block   : Block_Id;
       Index   : Positive) return Value_Id
      is (Value_Id
-           (Of_Unit.Blocks
+           (Of_Unit.Blocks.Element
               (Block_At (Of_Unit, Item, Block)).First_Value
             - Element (Of_Unit, Item).Values.First
             + Index));
@@ -2994,7 +3004,7 @@ package body Landin.IR is
 
    function Held (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Instruction
-     is (Of_Unit.Code (Value_At (Of_Unit, Item, Value)));
+     is (Of_Unit.Code.Element (Value_At (Of_Unit, Item, Value)));
 
    function Op_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Opcode
@@ -3080,7 +3090,7 @@ package body Landin.IR is
       then
          raise Landin.Compiler_Defect with "invalid variadic type index";
       end if;
-      return Of_Unit.Signature_Parts
+      return Of_Unit.Signature_Parts.Element
         (Held (Of_Unit, Item, Call).Variadic_Types.First + Index);
    end Nth_Call_Variadic_Type;
 
@@ -3153,7 +3163,7 @@ package body Landin.IR is
       Item    : Item_Id;
       Value   : Value_Id;
       Index   : Positive) return Value_Id
-     is (Of_Unit.Operands
+     is (Of_Unit.Operands.Element
            (Held (Of_Unit, Item, Value).First_Arg + Index));
 
    function Slot_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -3179,7 +3189,7 @@ package body Landin.IR is
       Made : Path_Step_Array (1 .. Where.Count);
    begin
       for Step in Made'Range loop
-         Made (Step) := Of_Unit.Paths (Where.First + Step);
+         Made (Step) := Of_Unit.Paths.Element (Where.First + Step);
       end loop;
       return Made;
    end Steps_Of;
@@ -3351,7 +3361,7 @@ package body Landin.IR is
       First : constant Natural :=
         Held (Of_Unit, Item, Value).First_Measurement_Field;
    begin
-      return Of_Unit.Measurement_Fields (First + Field);
+      return Of_Unit.Measurement_Fields.Element (First + Field);
    end Nth_Measurement_Field;
 
    function Variant_Case_Run_Count (Of_Unit : Unit) return Natural
@@ -3400,7 +3410,7 @@ package body Landin.IR is
       elsif Has_Nominal_Shape (Of_Unit, Shape.Nominal) then
          return Nth_Nominal_Field (Of_Unit, Shape.Nominal, Field);
       end if;
-      return Of_Unit.Variant_Fields
+      return Of_Unit.Variant_Fields.Element
         (Shape.Payloads_First + Field - 1);
    end Nth_Aggregate_Field;
 
@@ -3461,7 +3471,7 @@ package body Landin.IR is
            "an array has a malformed child run";
       end if;
       if Array_Element_Is_Aggregate (Of_Unit, Shape) then
-         return Of_Unit.Variant_Fields (Shape.Payloads_First);
+         return Of_Unit.Variant_Fields.Element (Shape.Payloads_First);
       end if;
       return
         (Kind => Scalar_Field_Shape, Element => Shape.Element, Length => 1,
@@ -3639,7 +3649,7 @@ package body Landin.IR is
          return False;
       end if;
       declare
-         Run : constant Case_Run := Of_Unit.Variant_Cases
+         Run : constant Case_Run := Of_Unit.Variant_Cases.Element
            (Shape.Payloads_First + Which - 1);
       begin
          return (if Run.Count = 0
@@ -3654,7 +3664,7 @@ package body Landin.IR is
    function Variant_Case_Field_Count
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
       return Natural
-     is (Of_Unit.Variant_Cases
+     is (Of_Unit.Variant_Cases.Element
            (Shape.Payloads_First + Which - 1).Count);
 
    function Nth_Variant_Case_Field
@@ -3663,10 +3673,10 @@ package body Landin.IR is
       Which   : Positive;
       Field   : Positive) return Field_Shape
    is
-      Run : constant Case_Run := Of_Unit.Variant_Cases
+      Run : constant Case_Run := Of_Unit.Variant_Cases.Element
         (Shape.Payloads_First + Which - 1);
    begin
-      return Of_Unit.Variant_Fields (Run.First + Field - 1);
+      return Of_Unit.Variant_Fields.Element (Run.First + Field - 1);
    end Nth_Variant_Case_Field;
 
    function Number_Of
@@ -3702,7 +3712,7 @@ package body Landin.IR is
             return What.Result in Landin.Types.Integer_Name
               and then Held
                          (Of_Unit, Item,
-                          Of_Unit.Operands (What.First_Arg + 1)).Result
+                          Of_Unit.Operands.Element (What.First_Arg + 1)).Result
                        in Landin.Types.Integer_Name;
 
          --  An address whose index is static carries no edge to remove.
@@ -4188,7 +4198,7 @@ package body Landin.IR is
    function Nth_Assembly_Operand
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Index : Positive)
       return Assembly_Operand
-     is (Of_Unit.Assembly_Operands
+     is (Of_Unit.Assembly_Operands.Element
            (Held (Of_Unit, Item, Value).Assembly_Run.First + Index));
 
    function Assembly_Text

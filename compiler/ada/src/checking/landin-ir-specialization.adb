@@ -85,11 +85,12 @@ package body Landin.IR.Specialization is
       end Invalidate;
 
       function Code_At (Item : Item_Id; Value : Value_Id) return Instruction
-        is (Into.Code (Into.Items (Positive (Item)).Values.First
-                      + Positive (Value)));
+        is (Into.Code.Element
+              (Into.Items.Element (Positive (Item)).Values.First
+               + Positive (Value)));
 
       function Original (Item : Item_Id; Value : Value_Id) return Value_Id
-        is (Aliases (Into.Items (Positive (Item)).Values.First
+        is (Aliases (Into.Items.Element (Positive (Item)).Values.First
                      + Positive (Value)));
 
       function Static_Table
@@ -105,7 +106,8 @@ package body Landin.IR.Specialization is
             return Code.Evidence;
          elsif Code.Op = Load and then Proven (Positive (Item))
            and then Stable_Slots
-             (Into.Items (Positive (Item)).Slots.First + Positive (Code.Slot))
+             (Into.Items.Element (Positive (Item)).Slots.First
+              + Positive (Code.Slot))
          then
             return Bound_Evidence (Into, Item, Code.Slot);
          else
@@ -125,12 +127,13 @@ package body Landin.IR.Specialization is
          end if;
          declare
             Projection : constant Instruction := Code_At
-              (Item, Original (Item, Into.Operands (Code.First_Arg + 1)));
+              (Item,
+               Original (Item, Into.Operands.Element (Code.First_Arg + 1)));
          begin
             if Projection.Op /= Evidence_Function
               or else Evidence_Is_Erased (Into, Projection.Evidence)
               or else Static_Table
-                (Item, Into.Operands (Projection.First_Arg + 1))
+                (Item, Into.Operands.Element (Projection.First_Arg + 1))
                   /= Projection.Evidence
             then
                return No_Item;
@@ -178,10 +181,10 @@ package body Landin.IR.Specialization is
                   Pin (Item, Code.Source);
                   Pin (Item, Code.Destination);
                   if Code.Slot /= No_Slot and then Code.Op not in Load then
-                     Stable_Slots (Into.Items (I).Slots.First
+                     Stable_Slots (Into.Items.Element (I).Slots.First
                                    + Positive (Code.Slot)) := False;
                      if Code.Op /= Store then
-                        Private_Slots (Into.Items (I).Slots.First
+                        Private_Slots (Into.Items.Element (I).Slots.First
                                        + Positive (Code.Slot)) := False;
                      end if;
                   end if;
@@ -194,7 +197,7 @@ package body Landin.IR.Specialization is
                           (Code.Assembly_Run.First + A).Output;
                      begin
                         if Output /= No_Slot then
-                           Stable_Slots (Into.Items (I).Slots.First
+                           Stable_Slots (Into.Items.Element (I).Slots.First
                                          + Positive (Output)) := False;
                         end if;
                      end;
@@ -210,7 +213,7 @@ package body Landin.IR.Specialization is
       for I in 1 .. Count loop
          declare
             Item : constant Item_Id := Item_Id (I);
-            Held : constant Item_Record := Into.Items (I);
+            Held : constant Item_Record := Into.Items.Element (I);
             Stored : array (1 .. Held.Slots.Count) of Value_Id :=
               [others => No_Value];
             Blocks : array (Stored'Range) of Block_Id := [others => No_Block];
@@ -226,7 +229,7 @@ package body Landin.IR.Specialization is
                   then
                      if Code.Op = Store then
                         Stored (Positive (Code.Slot)) := Original
-                          (Item, Into.Operands (Code.First_Arg + 1));
+                          (Item, Into.Operands.Element (Code.First_Arg + 1));
                         Blocks (Positive (Code.Slot)) := Code.In_Block;
                      elsif Code.Op = Load
                        and then Blocks (Positive (Code.Slot)) = Code.In_Block
@@ -445,7 +448,7 @@ package body Landin.IR.Specialization is
          if Decisions (I).Action = Reports.Specialized then
             declare
                Item : constant Item_Id := Item_Id (I);
-               Held : constant Item_Record := Into.Items (I);
+               Held : constant Item_Record := Into.Items.Element (I);
                Targets : array (1 .. Held.Values.Count) of Item_Id;
             begin
                --  Freeze targets before changing projections used by more
@@ -458,7 +461,7 @@ package body Landin.IR.Specialization is
                      declare
                         Code : Instruction := Code_At (Item, Value_Id (V));
                         Projection_Id : constant Value_Id := Original
-                          (Item, Into.Operands (Code.First_Arg + 1));
+                          (Item, Into.Operands.Element (Code.First_Arg + 1));
                         Projection : Instruction := Code_At
                           (Item, Projection_Id);
                      begin

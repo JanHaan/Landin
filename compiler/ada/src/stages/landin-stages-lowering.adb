@@ -3,10 +3,9 @@ with Landin.Layouts;
 with Landin.Packed;
 with Landin.Stages.Folding;
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
-with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -160,13 +159,15 @@ package body Landin.Stages.Lowering is
       Has_Distinct_Image : array (Module_Image_Index) of Boolean :=
         [others => False];
 
-      --  A module binding nothing names is neither lowered nor
-      --  emitted, whatever module declares it.  It is still checked: a
-      --  module's errors are errors whether or not a program uses it.
-      --  Filled before pass one; see Retain_Module_Data.
+      --  A module routine or binding the program cannot reach is neither
+      --  lowered nor emitted, whatever module declares it.  It is still
+      --  checked: a module's errors are errors whether or not a program
+      --  uses it.  Filled before pass one; see Retain_Reachable.
       Retained : array (Module_Image_Index) of Boolean := [others => False];
 
-      --  Whether module binding ID becomes a datum of this program.
+      --  Whether module routine or binding ID becomes an item of this
+      --  program.  A generic template is retained when its body is, which
+      --  gives it no item: its ready instances own those.
       function Is_Retained (Id : Res.Declaration_Id) return Boolean
       is (Id in Module_Image_Index and then Retained (Id));
 
@@ -360,6 +361,50 @@ package body Landin.Stages.Lowering is
           [others => (others => <>)];
       Anonymous_Count : Natural := 0;
 
+      --  Where each source's nodes start in one run over every tree, so a
+      --  node's place in Live is its source's offset plus its own index.
+      type Node_Offsets is array (Positive range <>) of Natural;
+
+      function Source_Offsets return Node_Offsets;
+
+      function Source_Offsets return Node_Offsets is
+         Last : Natural := 0;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            Last := Natural'Max (Last, Natural (Nth_Source (Context, Index)));
+         end loop;
+         declare
+            Offsets : Node_Offsets (1 .. Natural'Max (1, Last)) :=
+              [others => 0];
+            Total : Natural := 0;
+         begin
+            for Index in 1 .. Source_Count (Context) loop
+               Offsets (Positive (Nth_Source (Context, Index))) := Total;
+               Total := Total + Natural (Syn.Last_Node
+                 (Tree_For (Nth_Source (Context, Index)).all));
+            end loop;
+            return Offsets;
+         end;
+      end Source_Offsets;
+
+      Live_Offsets : constant Node_Offsets := Source_Offsets;
+
+      --  Which nodes lie in code this program keeps: a reached routine,
+      --  generic template or datum, or a module declaration that is
+      --  neither.  Lowering visits no other node.  Filled before pass one;
+      --  see Retain_Reachable.  A compilation that keeps everything
+      --  leaves it empty and says so in Keep_Everything.
+      Live : array (1 .. Positive'Max (1, Total_Syntax_Nodes)) of Boolean :=
+        [others => False];
+      Keep_Everything : Boolean := True;
+
+      function Live_Position
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive
+      is (Live_Offsets (Positive (Syn.Source_Of (Of_Tree))) + Natural (Node));
+
+      function Is_Live (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is (Keep_Everything or else Live (Live_Position (Of_Tree, Node)));
+
       function Anonymous_Item
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
 
@@ -491,6 +536,13 @@ package body Landin.Stages.Lowering is
       Evidence_Use_Count : array (Source_Routine_Instance) of Natural :=
         [others => 0];
 
+      --  Which ready generic instances and which conformances' tables this
+      --  program can reach, by checker interning position, beside Retained.
+      Instance_Retained : array (Source_Routine_Instance) of Boolean :=
+        [others => False];
+      Evidence_Retained : array (Source_Evidence) of Boolean :=
+        [others => False];
+
       function Needed_Evidence_Count
         (Instance : Landin.Checking.Routine_Instance_Id) return Natural
       is (Evidence_Use_Count
@@ -579,6 +631,109 @@ package body Landin.Stages.Lowering is
          end if;
          return Any_Evidence (Position);
       end Any_Evidence_For;
+
+      --  The checker concept a concept reference in a concept's own
+      --  declaration names, or No_Concept.
+      function Concept_For
+        (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
+         return Landin.Checking.Concept_Id;
+
+      function Concept_For
+        (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
+         return Landin.Checking.Concept_Id
+      is
+      begin
+         if Res.Verdict_Of (Meanings.all, Of_Tree, Reference) /= Res.Bound
+         then
+            return Landin.Checking.No_Concept;
+         end if;
+         declare
+            Declaration : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, Reference);
+         begin
+            for Position in 1 .. Landin.Checking.Concept_Count
+              (Types.all)
+            loop
+               declare
+                  Candidate : constant Landin.Checking.Concept_Id :=
+                    Landin.Checking.Concept_Identities.Nth
+                      (Types.all, Position);
+               begin
+                  if not Landin.Checking.Is_Compiler_Concept
+                    (Types.all, Candidate)
+                    and then Landin.Checking.Concept_Declaration
+                      (Types.all, Candidate) = Declaration
+                  then
+                     return Candidate;
+                  end if;
+               end;
+            end loop;
+            return Landin.Checking.No_Concept;
+         end;
+      end Concept_For;
+
+      --  D145: a flattened runtime table over ROW also carries the entries
+      --  of the conformance of ROW's target to each concept ROW's concept
+      --  is built on: the represented formal's constraint first, then each
+      --  parent in written order.  Action receives each such conformance.
+      generic
+         with procedure Action (Parent_Row : Landin.Checking.Conformance_Id);
+      procedure For_Each_Parent_Row (Row : Landin.Checking.Conformance_Id);
+
+      procedure For_Each_Parent_Row (Row : Landin.Checking.Conformance_Id) is
+         Concept : constant Landin.Checking.Concept_Id :=
+           Landin.Checking.Conformance_Concept (Types.all, Row);
+      begin
+         if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
+            return;
+         end if;
+         declare
+            Declaration : constant Res.Declaration_Id :=
+              Landin.Checking.Concept_Declaration (Types.all, Concept);
+            Concept_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Declaration));
+            Concept_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Declaration);
+
+            procedure Add_Parent (Reference : Syn.Node_Id);
+
+            procedure Add_Parent (Reference : Syn.Node_Id) is
+               Parent : constant Landin.Checking.Concept_Id :=
+                 Concept_For (Concept_Tree.all, Reference);
+               Parent_Row : Landin.Checking.Conformance_Id :=
+                 Landin.Checking.No_Conformance;
+            begin
+               if Parent = Landin.Checking.No_Concept then
+                  return;
+               end if;
+               Parent_Row := Landin.Checking.Find_Conformance
+                 (Types.all, Parent,
+                  Landin.Checking.Conformance_Target (Types.all, Row),
+                  Landin.Checking.Empty_Actuals);
+               if Parent_Row = Landin.Checking.No_Conformance then
+                  raise Landin.Compiler_Defect with
+                    "an any conformance closure has no parent table";
+               end if;
+               Action (Parent_Row);
+            end Add_Parent;
+
+            Represented : constant Syn.Node_Id :=
+              Syn.Nth_Concept_Formal (Concept_Tree.all, Concept_Node, 1);
+            Required : constant Syn.Node_Id :=
+              Syn.Constraint_Of (Concept_Tree.all, Represented);
+         begin
+            if Required /= Syn.No_Node then
+               Add_Parent (Required);
+            end if;
+            for Parent in 1 .. Syn.Concept_Parent_Count
+              (Concept_Tree.all, Concept_Node)
+            loop
+               Add_Parent
+                 (Syn.Nth_Concept_Parent
+                    (Concept_Tree.all, Concept_Node, Parent));
+            end loop;
+         end;
+      end For_Each_Parent_Row;
 
       function Neutral_Element
         (Part : Landin.Checking.Signature_Part;
@@ -1393,6 +1548,39 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return IR.Value_Id;
+
+      function Is_Short_Circuit
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Jumps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Fresh_Rests
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Block_Id;
+
+      procedure Branch_On
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Taken       : in out IR.Block_Id;
+         Otherwise   : in out IR.Block_Id;
+         Taken_Newer : Boolean;
+         Spare       : in out IR.Block_Id;
+         Site        : Landin.Provenance.Origin);
+
+      procedure Branch_On_Condition
+        (Of_Tree     : Syn.Tree;
+         Condition   : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Taken_Node  : Syn.Node_Id;
+         Taken_Scope : Res.Scope_Id;
+         Other_Node  : Syn.Node_Id;
+         Other_Scope : Res.Scope_Id;
+         Site        : Landin.Provenance.Origin;
+         Taken       : out IR.Block_Id;
+         Otherwise   : out IR.Block_Id);
 
       function Lower_Control_Expression
         (Of_Tree : Syn.Tree;
@@ -4734,6 +4922,224 @@ package body Landin.Stages.Lowering is
             end;
          end;
       end Lower_Short_Circuit;
+
+      --  A branch's condition needs no answer slot: an `and` or `or` there
+      --  is jumping code, each operand branching straight to where its
+      --  value decides the flow goes.  The order and the short circuit are
+      --  [0410]'s, as above: the left first, the right only on the edge
+      --  where the left did not decide.  A `not` over one of these is the
+      --  same code with its destinations exchanged.  A value context still
+      --  uses the slot.
+      function Is_Short_Circuit
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is ((Syn.Kind (Of_Tree, Node) in Syn.Logical_And | Syn.Logical_Or
+           or else
+             (Syn.Kind (Of_Tree, Node) = Syn.Logical_Not
+              and then Is_Short_Circuit
+                (Of_Tree, Syn.Operand_Of (Of_Tree, Node))))
+          and then Distinct_Scalar_Base (Of_Tree, Node)
+                     not in Ty.Scalar_Name
+          and then Landin.Checking.Owed_Check (Types.all, Of_Tree, Node)
+                     = Landin.Checking.No_Constraint);
+
+      --  Every block the jumping form makes is made before its operands
+      --  are lowered, so that the right one follows each test, and a
+      --  block nothing reached would be malformed.  So the form is taken
+      --  only when no operand holds a control expression, the one operand
+      --  whose arms could all leave and strand the blocks after it.  The
+      --  walk visits each node of the condition once.
+      function Jumps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         function Stays (Part : Syn.Node_Id) return Boolean;
+
+         function Stays (Part : Syn.Node_Id) return Boolean is
+         begin
+            if Part = Syn.No_Node then
+               return True;
+            elsif Syn.Kind (Of_Tree, Part)
+              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+               | Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement
+            then
+               return False;
+            end if;
+            for Index in 1 .. Syn.Slot_Count (Of_Tree, Part) loop
+               if not Stays (Syn.Slot (Of_Tree, Part, Index)) then
+                  return False;
+               end if;
+            end loop;
+            return True;
+         end Stays;
+      begin
+         return Is_Short_Circuit (Of_Tree, Node) and then Stays (Node);
+      end Jumps;
+
+      --  One block for each `and` and `or` of a jumping condition, the
+      --  block its right operand is tested in, made in the order those
+      --  operands are written.  They are consecutive; the first is
+      --  returned.
+      function Fresh_Rests
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Block_Id
+      is
+         First : IR.Block_Id := IR.No_Block;
+         Last  : IR.Block_Id := IR.No_Block;
+
+         procedure Walk (Part : Syn.Node_Id);
+
+         procedure Walk (Part : Syn.Node_Id) is
+         begin
+            if Is_Short_Circuit (Of_Tree, Part)
+              and then Syn.Kind (Of_Tree, Part) = Syn.Logical_Not
+            then
+               Walk (Syn.Operand_Of (Of_Tree, Part));
+            elsif Is_Short_Circuit (Of_Tree, Part) then
+               Walk (Syn.Left_Of (Of_Tree, Part));
+               declare
+                  Made : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Part, Scope);
+               begin
+                  if First = IR.No_Block then
+                     First := Made;
+                  elsif Made /= Last + 1 then
+                     raise Landin.Compiler_Defect with
+                       "a jumping condition's blocks are not consecutive";
+                  end if;
+                  Last := Made;
+               end;
+               Walk (Syn.Right_Of (Of_Tree, Part));
+            end if;
+         end Walk;
+      begin
+         Walk (Node);
+         return First;
+      end Fresh_Rests;
+
+      --  Taken and Otherwise are where the condition sends true and false.
+      --  An `and` sends its left's truth to the block its right is tested
+      --  in, an `or` its left's falsehood; that block is the next one of
+      --  Spare's, taken when an operand first branches to it.  The two
+      --  destinations newest first are taken in written order, so each
+      --  test's block follows the one before it.
+      procedure Branch_On
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Taken       : in out IR.Block_Id;
+         Otherwise   : in out IR.Block_Id;
+         Taken_Newer : Boolean;
+         Spare       : in out IR.Block_Id;
+         Site        : Landin.Provenance.Origin)
+      is
+         procedure Reach (Target : in out IR.Block_Id);
+
+         procedure Reach (Target : in out IR.Block_Id) is
+         begin
+            if Target = IR.No_Block then
+               Target := Spare;
+               Spare := Spare + 1;
+            end if;
+         end Reach;
+      begin
+         if Is_Short_Circuit (Of_Tree, Node)
+           and then Syn.Kind (Of_Tree, Node) = Syn.Logical_Not
+         then
+            Branch_On
+              (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope,
+               Otherwise, Taken, not Taken_Newer, Spare, Site);
+            return;
+         elsif Is_Short_Circuit (Of_Tree, Node) then
+            declare
+               Rest : IR.Block_Id := IR.No_Block;
+            begin
+               if Syn.Kind (Of_Tree, Node) = Syn.Logical_And then
+                  Branch_On
+                    (Of_Tree, Syn.Left_Of (Of_Tree, Node), Scope,
+                     Rest, Otherwise, True, Spare, Site);
+               else
+                  Branch_On
+                    (Of_Tree, Syn.Left_Of (Of_Tree, Node), Scope,
+                     Taken, Rest, False, Spare, Site);
+               end if;
+               Open (Rest);
+               Branch_On
+                 (Of_Tree, Syn.Right_Of (Of_Tree, Node), Scope,
+                  Taken, Otherwise, Taken_Newer, Spare, Site);
+            end;
+            return;
+         end if;
+
+         declare
+            Test : constant IR.Value_Id :=
+              Lower_Expression (Of_Tree, Node, Scope);
+         begin
+            if Current = IR.No_Block then
+               raise Landin.Compiler_Defect with
+                 "an operand of a jumping condition ended the flow";
+            end if;
+            if Taken_Newer then
+               Reach (Taken);
+               Reach (Otherwise);
+            else
+               Reach (Otherwise);
+               Reach (Taken);
+            end if;
+            IR.Emit_Branch
+              (Unit.all, Filling, Test, Taken, Otherwise, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+         end;
+      end Branch_On;
+
+      --  A guarded statement's condition, ending the current block with
+      --  its branch to two new blocks made for the outcomes, in that order
+      --  and after any the condition made.  Both are No_Block when the
+      --  condition left on every edge and so reached neither.
+      procedure Branch_On_Condition
+        (Of_Tree     : Syn.Tree;
+         Condition   : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Taken_Node  : Syn.Node_Id;
+         Taken_Scope : Res.Scope_Id;
+         Other_Node  : Syn.Node_Id;
+         Other_Scope : Res.Scope_Id;
+         Site        : Landin.Provenance.Origin;
+         Taken       : out IR.Block_Id;
+         Otherwise   : out IR.Block_Id) is
+      begin
+         if Jumps (Of_Tree, Condition) then
+            declare
+               Spare : IR.Block_Id :=
+                 Fresh_Rests (Of_Tree, Condition, Scope);
+            begin
+               Taken := Fresh (Of_Tree, Taken_Node, Taken_Scope);
+               Otherwise := Fresh (Of_Tree, Other_Node, Other_Scope);
+               Branch_On
+                 (Of_Tree, Condition, Scope, Taken, Otherwise, True, Spare,
+                  Site);
+            end;
+            return;
+         end if;
+
+         declare
+            Test : constant IR.Value_Id :=
+              Lower_Condition (Of_Tree, Condition, Scope);
+         begin
+            if Current = IR.No_Block then
+               Taken := IR.No_Block;
+               Otherwise := IR.No_Block;
+               return;
+            end if;
+            Taken := Fresh (Of_Tree, Taken_Node, Taken_Scope);
+            Otherwise := Fresh (Of_Tree, Other_Node, Other_Scope);
+            IR.Emit_Branch
+              (Unit.all, Filling, Test, Taken, Otherwise, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+         end;
+      end Branch_On_Condition;
 
       function Lower_Control_Expression
         (Of_Tree : Syn.Tree;
@@ -9239,11 +9645,13 @@ package body Landin.Stages.Lowering is
                Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, This);
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
-               Test : constant IR.Value_Id :=
-                 Lower_Condition
-                   (Of_Tree, Syn.Condition_Of (Of_Tree, This), Scope);
+               Taken : IR.Block_Id;
+               Next : IR.Block_Id;
             begin
-               if Current = IR.No_Block then
+               Branch_On_Condition
+                 (Of_Tree, Syn.Condition_Of (Of_Tree, This), Scope,
+                  Runs, Inside, Node, Scope, Site, Taken, Next);
+               if Taken = IR.No_Block then
                   --  Earlier arms may already continue at this merge.
                   --  Only the remaining tests and arms are unreachable.
                   if Merge /= IR.No_Block then
@@ -9251,31 +9659,18 @@ package body Landin.Stages.Lowering is
                   end if;
                   return;
                end if;
-               pragma Assert (Test /= IR.No_Value);
 
-               declare
-                  Taken : constant IR.Block_Id :=
-                    Fresh (Of_Tree, Runs, Inside);
-                  Next : constant IR.Block_Id :=
-                    Fresh (Of_Tree, Node, Scope);
-               begin
-                  IR.Emit_Branch
-                    (Unit.all, Filling, Test, Taken, Next, Site);
-                  IR.Leave_Block (Unit.all, Filling);
-                  Current := IR.No_Block;
+               Open (Taken);
+               Lower_Statements
+                 (Of_Tree, Runs, Inside, Result, Destination,
+                  Destination_Field, Destination_Path);
 
-                  Open (Taken);
-                  Lower_Statements
-                    (Of_Tree, Runs, Inside, Result, Destination,
-                     Destination_Field, Destination_Path);
+               if Current /= IR.No_Block then
+                  Close_To_Merge;
+               end if;
 
-                  if Current /= IR.No_Block then
-                     Close_To_Merge;
-                  end if;
-
-                  --  The next arm's test, or the `else`, is written here.
-                  Open (Next);
-               end;
+               --  The next arm's test, or the `else`, is written here.
+               Open (Next);
             end;
          end loop;
 
@@ -10109,28 +10504,56 @@ package body Landin.Stages.Lowering is
          Is_Storage_Collection : constant Boolean :=
            Is_Collection and then not Is_Evidence and then not Is_Text;
          Is_Range : constant Boolean := Is_For and then not Is_Collection;
-         Head : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
-         Body_Block : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
+         --  A block nothing reaches is malformed, so the loop's blocks are
+         --  made only once the code before them has been lowered without
+         --  leaving on every edge: a traversal's bounds or source, and a
+         --  `while`'s condition unless it jumps.  A jumping condition's
+         --  tests are made between the head and the body, which they fall
+         --  through into; Jumps has held its operands to staying.
+         Jumping : constant Boolean :=
+           Is_While
+           and then Jumps (Of_Tree, Syn.Condition_Of (Of_Tree, Node));
          Has_Complete : constant Boolean :=
            (Is_While or else Is_For)
            and then Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node;
-         Exit_Block : IR.Block_Id :=
-           (if (Is_While or else Is_For) and then not Has_Complete
-            then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
-         Complete_Block : constant IR.Block_Id :=
-           (if Has_Complete
-            then Fresh
-              (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Scope)
-            else IR.No_Block);
-         Natural_Exit : constant IR.Block_Id :=
-           (if Has_Complete then Complete_Block else Exit_Block);
-         Step_Block : constant IR.Block_Id :=
-           (if Is_For then Fresh (Of_Tree, Node, Inside) else IR.No_Block);
-         Entry_Block : constant IR.Block_Id :=
-           (if Is_For then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
-         Increment_Block : constant IR.Block_Id :=
-           (if Is_Range and then Syn.Traversal_Is_Inclusive (Of_Tree, Node)
-            then Fresh (Of_Tree, Node, Inside) else Step_Block);
+         Head : IR.Block_Id := IR.No_Block;
+         Head_Rests : IR.Block_Id := IR.No_Block;
+         Body_Block : IR.Block_Id := IR.No_Block;
+         Exit_Block : IR.Block_Id := IR.No_Block;
+         Complete_Block : IR.Block_Id := IR.No_Block;
+         Natural_Exit : IR.Block_Id := IR.No_Block;
+         Step_Block : IR.Block_Id := IR.No_Block;
+         Entry_Block : IR.Block_Id := IR.No_Block;
+         Increment_Block : IR.Block_Id := IR.No_Block;
+
+         --  Every block after the head, in this order.
+         procedure Make_Blocks;
+
+         procedure Make_Blocks is
+         begin
+            if Jumping then
+               Head_Rests := Fresh_Rests
+                 (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
+            end if;
+            Body_Block := Fresh (Of_Tree, Runs, Inside);
+            if (Is_While or else Is_For) and then not Has_Complete then
+               Exit_Block := Fresh (Of_Tree, Node, Scope);
+            end if;
+            if Has_Complete then
+               Complete_Block := Fresh
+                 (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Scope);
+            end if;
+            Natural_Exit :=
+              (if Has_Complete then Complete_Block else Exit_Block);
+            if Is_For then
+               Step_Block := Fresh (Of_Tree, Node, Inside);
+               Entry_Block := Fresh (Of_Tree, Node, Scope);
+            end if;
+            Increment_Block :=
+              (if Is_Range and then Syn.Traversal_Is_Inclusive (Of_Tree, Node)
+               then Fresh (Of_Tree, Node, Inside) else Step_Block);
+         end Make_Blocks;
+
          Element_Node : constant Syn.Node_Id :=
            (if Is_For
             then Syn.Traversal_Element (Of_Tree, Node) else Syn.No_Node);
@@ -11026,6 +11449,24 @@ package body Landin.Stages.Lowering is
             end;
          end Decode_Text_Item;
       begin
+         --  The checker leaves a control expression whose arms all leave
+         --  undecided, and as a traversal's source it leaves before
+         --  any of the loop is reached.
+         if Is_Collection
+           and then Type_At (Of_Tree, Collection_Source) = Ty.Undecided
+         then
+            declare
+               Left : constant IR.Value_Id :=
+                 Lower_Expression (Of_Tree, Collection_Source, Scope);
+            begin
+               if Left /= IR.No_Value or else Current /= IR.No_Block then
+                  raise Landin.Compiler_Defect with
+                    "an untyped traversal source did not leave";
+               end if;
+               return;
+            end;
+         end if;
+
          if Is_Storage_Collection then
             declare
                Source : constant Syn.Node_Id :=
@@ -11270,6 +11711,10 @@ package body Landin.Stages.Lowering is
             end;
          end if;
 
+         Head := Fresh (Of_Tree, Node, Scope);
+         if not Is_While or else Jumping then
+            Make_Blocks;
+         end if;
          Close_With_Jump ((if Is_For then Entry_Block else Head), Site);
          if Is_For then
             --  The step is `continue`'s target.  Keep it in the verified CFG
@@ -11288,18 +11733,33 @@ package body Landin.Stages.Lowering is
          end if;
          IR.Set_Loop_Depth (Unit.all, Filling, Enclosing_Depth + 1);
          Open (Head);
-         if Is_While then
+         if Head_Rests /= IR.No_Block then
+            declare
+               Spare : IR.Block_Id := Head_Rests;
+               Taken : IR.Block_Id := Body_Block;
+               Otherwise : IR.Block_Id := Natural_Exit;
+            begin
+               Branch_On
+                 (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope,
+                  Taken, Otherwise, True, Spare, Site);
+            end;
+         elsif Is_While then
             declare
                Test : constant IR.Value_Id :=
                  Lower_Condition
                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
             begin
-               if Current /= IR.No_Block then
-                  IR.Emit_Branch
-                    (Unit.all, Filling, Test, Body_Block, Natural_Exit, Site);
-                  IR.Leave_Block (Unit.all, Filling);
-                  Current := IR.No_Block;
+               if Current = IR.No_Block then
+                  --  The condition left on every edge, so neither the body
+                  --  nor the flow after the loop is reached.
+                  IR.Set_Loop_Depth (Unit.all, Filling, Enclosing_Depth);
+                  return;
                end if;
+               Make_Blocks;
+               IR.Emit_Branch
+                 (Unit.all, Filling, Test, Body_Block, Natural_Exit, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
             end;
          elsif Is_Storage_Collection then
             declare
@@ -11677,25 +12137,16 @@ package body Landin.Stages.Lowering is
             Transfer;
          else
             declare
-               Test : constant IR.Value_Id :=
-                 Lower_Expression
-                   (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
+               Goes : IR.Block_Id;
+               Stays : IR.Block_Id;
             begin
-               if Current /= IR.No_Block then
-                  declare
-                     Goes : constant IR.Block_Id :=
-                       Fresh (Of_Tree, Node, Scope);
-                     Stays : constant IR.Block_Id :=
-                       Fresh (Of_Tree, Node, Scope);
-                  begin
-                     IR.Emit_Branch
-                       (Unit.all, Filling, Test, Goes, Stays, Site);
-                     IR.Leave_Block (Unit.all, Filling);
-                     Current := IR.No_Block;
-                     Open (Goes);
-                     Transfer;
-                     Open (Stays);
-                  end;
+               Branch_On_Condition
+                 (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope,
+                  Node, Scope, Node, Scope, Site, Goes, Stays);
+               if Goes /= IR.No_Block then
+                  Open (Goes);
+                  Transfer;
+                  Open (Stays);
                end if;
             end;
          end if;
@@ -14585,40 +15036,29 @@ package body Landin.Stages.Lowering is
                         end;
                      else
                         declare
-                           Test : constant IR.Value_Id :=
-                             Lower_Expression
-                               (Of_Tree,
-                                Syn.Condition_Of (Of_Tree, Stmt), Scope);
+                           Goes : IR.Block_Id;
+                           Stays : IR.Block_Id;
                         begin
-                           if Current /= IR.No_Block then
+                           Branch_On_Condition
+                             (Of_Tree, Syn.Condition_Of (Of_Tree, Stmt),
+                              Scope, Stmt, Scope, Stmt, Scope, Site,
+                              Goes, Stays);
+                           if Goes /= IR.No_Block then
+                              Open (Goes);
                               declare
-                                 Goes : constant IR.Block_Id :=
-                                   Fresh (Of_Tree, Stmt, Scope);
-                                 Stays : constant IR.Block_Id :=
-                                   Fresh (Of_Tree, Stmt, Scope);
+                                 Error : constant IR.Value_Id :=
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Value_Of (Of_Tree, Stmt),
+                                      Scope);
                               begin
-                                 IR.Emit_Branch
-                                   (Unit.all, Filling, Test, Goes, Stays,
-                                    Site);
-                                 IR.Leave_Block (Unit.all, Filling);
-                                 Current := IR.No_Block;
-
-                                 Open (Goes);
-                                 declare
-                                    Error : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Value_Of (Of_Tree, Stmt),
-                                         Scope);
-                                 begin
-                                    if Current /= IR.No_Block then
-                                       Fail_Through_Cleanups
-                                         (Of_Tree, Error, Site);
-                                    end if;
-                                 end;
-
-                                 Open (Stays);
+                                 if Current /= IR.No_Block then
+                                    Fail_Through_Cleanups
+                                      (Of_Tree, Error, Site);
+                                 end if;
                               end;
+
+                              Open (Stays);
                            end if;
                         end;
                      end if;
@@ -14633,30 +15073,19 @@ package body Landin.Stages.Lowering is
                         --  flow below it is reachable and the guard is a
                         --  branch into a block that leaves.
                         declare
-                           Test : constant IR.Value_Id :=
-                             Lower_Expression
-                               (Of_Tree,
-                                Syn.Condition_Of (Of_Tree, Stmt), Scope);
+                           Goes : IR.Block_Id;
+                           Stays : IR.Block_Id;
                         begin
-                           if Current /= IR.No_Block then
-                              declare
-                                 Goes : constant IR.Block_Id :=
-                                   Fresh (Of_Tree, Stmt, Scope);
-                                 Stays : constant IR.Block_Id :=
-                                   Fresh (Of_Tree, Stmt, Scope);
-                              begin
-                                 IR.Emit_Branch
-                                   (Unit.all, Filling, Test, Goes, Stays,
-                                    Site);
-                                 IR.Leave_Block (Unit.all, Filling);
-                                 Current := IR.No_Block;
+                           Branch_On_Condition
+                             (Of_Tree, Syn.Condition_Of (Of_Tree, Stmt),
+                              Scope, Stmt, Scope, Stmt, Scope, Site,
+                              Goes, Stays);
+                           if Goes /= IR.No_Block then
+                              Open (Goes);
+                              Leave_Through_Cleanups
+                                (Of_Tree, Result, Site);
 
-                                 Open (Goes);
-                                 Leave_Through_Cleanups
-                                   (Of_Tree, Result, Site);
-
-                                 Open (Stays);
-                              end;
+                              Open (Stays);
                            end if;
                         end;
                      end if;
@@ -15353,68 +15782,378 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  Which module bindings this program uses.  A use is any
-      --  resolved reference to the binding from a node of any source, in any
-      --  position: a read, a write, an `addr`, another datum's initializer,
-      --  a type's length, a routine's body whether or not that routine is
-      --  itself used, and a generic template, whose instances share its
-      --  nodes.  A binding whose own spelling carries a link symbol or a
-      --  placement is used as well, since a C peer, a linker script or a
-      --  kept section may name it (a binding is never `extern`), and so is
-      --  one whose name appears as a word in the text of any
-      --  `assembler.block`, which reaches data by symbol where the resolver
-      --  cannot see it.  `public` alone is not an export, so a public
-      --  binding nothing names is dropped like a private one.  The
-      --  count over-approximates, never under: a reference from a datum
-      --  that is itself unused, or from code a branch never reaches, keeps
-      --  its target.  Item numbering follows declaration order among what
-      --  is kept, so the emitted program stays a function of its sources.
-      --  Only a program is pruned: one whose entry module declares a public
-      --  `main`, which is what roots it.  A compilation with no such entry,
-      --  assembly for an object or a firmware image entered elsewhere,
-      --  keeps every binding, since anything in it may be what a consumer
-      --  came for.
-      Retain_Module_Data :
+      --  Which routines, generic instances, evidence tables and module
+      --  bindings this program can reach.  Only a program is pruned: one
+      --  whose entry module declares a public `main`, which is what roots
+      --  it.  A compilation with no such entry, assembly for an object or
+      --  a firmware image entered elsewhere, keeps everything, since
+      --  anything in it may be what a consumer came for.
+      --
+      --  The roots are every routine the entry module defines, `main`
+      --  among them, with D232's `panic_handler` and the firmware entry
+      --  the driver selects by name only after this stage; and, in any
+      --  module, what a C peer, a linker script, a kept section or the
+      --  process entry may name: a binding with a link symbol, a C
+      --  definition that is public, which [1975] names by its spelling, or
+      --  has a link symbol, a definition in a machine convention, such as
+      --  platform/linux's naked `_landin_start`, a definition whose link
+      --  name a bodyless import names, a routine or binding with a
+      --  placement, and one whose name or link name, or either with Mach-O's
+      --  leading `_`, stands as a word in the text of any `assembler.block`,
+      --  which reaches code and data by symbol where the resolver cannot
+      --  see it.  A module declaration that is neither a routine nor a
+      --  binding, a type whose length names a constant among them, is
+      --  walked as a root as well.  `public` alone is not an export, so a
+      --  public declaration nothing reaches is dropped like a private one;
+      --  nor is a native routine's link symbol, which [1975] makes its
+      --  linker identity and platform/posix gives every public routine so
+      --  that none is mistaken for C's.
+      --
+      --  A reached declaration reaches what its nodes name: the routine or
+      --  binding any resolved reference binds, in any position, the
+      --  generic instance a call selects, and the conformance whose table
+      --  a constrained or erased selection, an `any` construction or a
+      --  `for` reads.  A ready instance is walked in its own checker view
+      --  and reaches its template and the conformances its hidden
+      --  evidence parameters receive.  A conformance reaches its entries'
+      --  providers, and, once an erased table is built over it, D145's
+      --  parent conformances.  A conformance declaration's own entries are
+      --  not uses: its providers are reached with its table.
+      --
+      --  The walk over-approximates, never under: a reference from code a
+      --  branch never reaches keeps its target, and a template is also
+      --  walked in the global view.  What is kept is a fixed point no walk
+      --  order changes, and item and table numbering follow declaration
+      --  and interning order among it, so the emitted program stays a
+      --  function of its sources.  Each declaration is walked once, and
+      --  each reached instance once over its template, which is what
+      --  lowering costs anyway.
+      Retain_Reachable :
       declare
          Default : constant Landin.Machine.Placement := (others => <>);
          use type Landin.Machine.Placement;
-         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         use type Landin.Machine.Convention;
 
-         --  Whether WORD stands in some assembly text as a symbol of its
-         --  own, with no symbol character on either side.
-         function Named_In_Assembly (Word : String) return Boolean;
+         --  Every run of symbol characters in every `assembler.block`'s
+         --  text.  A name stands in the text as a symbol of its own,
+         --  with no symbol character on either side, exactly when it is
+         --  one of these words.
+         package Word_Sets is new Ada.Containers.Indefinite_Ordered_Sets
+           (Element_Type => String);
+         Assembly_Words : Word_Sets.Set;
 
-         function Named_In_Assembly (Word : String) return Boolean is
-            Text : constant String :=
-              Ada.Strings.Unbounded.To_String (Assembly);
-            From : Natural := Text'First;
+         procedure Note_Words (Text : String);
+
+         procedure Note_Words (Text : String) is
             function Symbolic (C : Character) return Boolean is
               (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | '$');
+            First : Natural := 0;
          begin
-            if Word'Length = 0 then
-               return False;
-            end if;
-            loop
-               declare
-                  At_Index : constant Natural :=
-                    Ada.Strings.Fixed.Index (Text (From .. Text'Last), Word);
-               begin
-                  exit when At_Index = 0;
-                  if (At_Index = Text'First
-                      or else not Symbolic (Text (At_Index - 1)))
-                    and then (At_Index + Word'Length > Text'Last
-                      or else not Symbolic (Text (At_Index + Word'Length)))
-                  then
-                     return True;
+            for Index in Text'Range loop
+               if Symbolic (Text (Index)) then
+                  if First = 0 then
+                     First := Index;
                   end if;
-                  From := At_Index + 1;
-               end;
+               elsif First /= 0 then
+                  Assembly_Words.Include (Text (First .. Index - 1));
+                  First := 0;
+               end if;
             end loop;
-            return False;
+            if First /= 0 then
+               Assembly_Words.Include (Text (First .. Text'Last));
+            end if;
+         end Note_Words;
+
+         --  The name a linker sees for declaration ID, before any
+         --  platform prefix: its link symbol, or else its own spelling.
+         function Link_Name_Of (Id : Res.Declaration_Id) return String
+         is (Landin.Source.Names.Spelling
+               (Spellings.all,
+                (if Landin.Checking.Link_Symbol (Types.all, Id)
+                      /= Landin.Source.Names.No_Name
+                 then Landin.Checking.Link_Symbol (Types.all, Id)
+                 else Res.Name_Of (Meanings.all, Id))));
+
+         function Named_In_Assembly (Id : Res.Declaration_Id) return Boolean;
+
+         function Named_In_Assembly (Id : Res.Declaration_Id) return Boolean
+         is
+            Name : constant String := Landin.Source.Names.Spelling
+              (Spellings.all, Res.Name_Of (Meanings.all, Id));
+            Linked : constant String := Link_Name_Of (Id);
+         begin
+            --  Mach-O spells a C-level symbol with a leading `_`.
+            return Name'Length /= 0
+              and then (Assembly_Words.Contains (Name)
+                        or else Assembly_Words.Contains ("_" & Name)
+                        or else Assembly_Words.Contains (Linked)
+                        or else Assembly_Words.Contains ("_" & Linked));
          end Named_In_Assembly;
+
+         --  The link name of every bodyless import.  A definition of the
+         --  same name is what the import reaches at link time, as
+         --  platform/linux's C view of `main` reaches the entry.
+         Imported : Word_Sets.Set;
+
+         procedure Note_Import (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Note_Import (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
+              and then Syn.Is_External (Of_Tree, Node)
+            then
+               Imported.Include
+                 (Link_Name_Of
+                    (Declaration_At (Syn.Source_Of (Of_Tree), Node)));
+            end if;
+         end Note_Import;
+
          Grouped : constant not null access Landin.Modules.Table :=
            Landin.Stages.Modules (Context);
          Rooted : Boolean := False;
+
+         --  What remains to be walked: a reached declaration in the
+         --  global view, or a reached instance's template in its own.
+         type Pending_Walk is record
+            Declaration : Res.Declaration_Id := Res.No_Declaration;
+            Instance    : Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.No_Routine_Instance;
+         end record;
+         package Walk_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Pending_Walk);
+         Pending : Walk_Vectors.Vector;
+
+         --  Which reached conformances have had D145's parents reached.
+         Closed : array (Source_Evidence) of Boolean := [others => False];
+
+         procedure Reach_Declaration (Id : Res.Declaration_Id);
+         procedure Reach_Instance
+           (Instance : Landin.Checking.Routine_Instance_Id);
+         procedure Reach_Conformance
+           (Row : Landin.Checking.Conformance_Id; Erased : Boolean);
+
+         procedure Reach_Declaration (Id : Res.Declaration_Id) is
+         begin
+            if Id in Module_Image_Index
+              and then Natural (Id) <= Res.Declaration_Count (Meanings.all)
+              and then Res.Sort_Of (Meanings.all, Id)
+                in Res.Module_Function | Res.Module_Binding
+              and then not Retained (Id)
+            then
+               Retained (Id) := True;
+               Pending.Append (Pending_Walk'(Declaration => Id, others => <>));
+            end if;
+         end Reach_Declaration;
+
+         procedure Reach_Instance
+           (Instance : Landin.Checking.Routine_Instance_Id)
+         is
+            Position : constant Positive :=
+              Landin.Checking.Routine_Identities.Position
+                (Types.all, Instance);
+         begin
+            if Instance_Retained (Position)
+              or else Landin.Checking.Routine_State_Of (Types.all, Instance)
+                /= Landin.Checking.Routine_Ready
+            then
+               return;
+            end if;
+            Instance_Retained (Position) := True;
+            Pending.Append (Pending_Walk'(Instance => Instance, others => <>));
+            Reach_Declaration
+              (Landin.Checking.Routine_Template_Of (Types.all, Instance));
+            for Index in 1 .. Landin.Checking.Routine_Evidence_Count
+              (Types.all, Instance)
+            loop
+               Reach_Conformance
+                 (Landin.Checking.Nth_Routine_Evidence
+                    (Types.all, Instance, Index),
+                  Erased => False);
+            end loop;
+         end Reach_Instance;
+
+         procedure Reach_Conformance
+           (Row : Landin.Checking.Conformance_Id; Erased : Boolean)
+         is
+            Position : constant Positive :=
+              Landin.Checking.Conformance_Identities.Position
+                (Types.all, Row);
+
+            procedure Reach_Parent
+              (Parent_Row : Landin.Checking.Conformance_Id);
+
+            procedure Reach_Parent
+              (Parent_Row : Landin.Checking.Conformance_Id) is
+            begin
+               Reach_Conformance (Parent_Row, Erased => True);
+            end Reach_Parent;
+
+            procedure Reach_Parents is new For_Each_Parent_Row (Reach_Parent);
+         begin
+            if not Evidence_Retained (Position) then
+               Evidence_Retained (Position) := True;
+               for Entry_Position in
+                 1 .. Landin.Checking.Conformance_Entry_Count (Types.all, Row)
+               loop
+                  declare
+                     Provider : constant Landin.Checking.Routine_Instance_Id
+                       := Landin.Checking.Conformance_Provider_Instance
+                         (Types.all, Row, Entry_Position);
+                  begin
+                     if Provider /= Landin.Checking.No_Routine_Instance then
+                        Reach_Instance (Provider);
+                     else
+                        Reach_Declaration
+                          (Landin.Checking.Conformance_Provider_Declaration
+                             (Types.all, Row, Entry_Position));
+                     end if;
+                  end;
+               end loop;
+            end if;
+            if Erased and then not Closed (Position) then
+               Closed (Position) := True;
+               Reach_Parents (Row);
+            end if;
+         end Reach_Conformance;
+
+         --  What one node names, in the checker view now active.  PROVIDERS
+         --  is false only in a conformance declaration's own entries.
+         procedure Examine
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Providers : Boolean);
+
+         procedure Examine
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Providers : Boolean)
+         is
+            Bound : constant Boolean :=
+              Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound;
+            Target : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Target_Of (Types.all, Of_Tree, Node);
+            Selected : constant Landin.Checking.Conformance_Id :=
+              Landin.Checking.Evidence_Of (Types.all, Of_Tree, Node);
+            Traversed : constant Landin.Checking.Conformance_Id :=
+              Landin.Checking.Traversal_Evidence_Of
+                (Types.all, Of_Tree, Node);
+         begin
+            if Bound then
+               declare
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  if Providers
+                    or else Res.Sort_Of (Meanings.all, Means)
+                      /= Res.Module_Function
+                  then
+                     Reach_Declaration (Means);
+                  end if;
+               end;
+            end if;
+            if Target /= Landin.Checking.No_Routine_Instance then
+               Reach_Instance (Target);
+            end if;
+            --  An erased table is built where Collect_Any_Evidence below
+            --  finds an `any` construction or an erased selection.
+            if Selected /= Landin.Checking.No_Conformance then
+               Reach_Conformance
+                 (Selected,
+                  Erased => Syn.Kind (Of_Tree, Node) = Syn.Any_Construction
+                    or else
+                      (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+                       and then not Bound
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                           = Ty.Any_Value));
+            end if;
+            if Traversed /= Landin.Checking.No_Conformance then
+               Reach_Conformance (Traversed, Erased => False);
+            end if;
+         end Examine;
+
+         --  Every node under NODE is live and examined: its slots, and an
+         --  application's [1030] recovery clause, which is carried beside
+         --  them.  An anonymous function is code wherever it is written, so
+         --  its own nodes name providers too.
+         procedure Visit
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Providers : Boolean);
+
+         procedure Visit
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Providers : Boolean)
+         is
+            Inner : constant Boolean :=
+              Providers
+              or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function;
+         begin
+            Live (Live_Position (Of_Tree, Node)) := True;
+            Examine (Of_Tree, Node, Inner);
+            for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               declare
+                  Child : constant Syn.Node_Id :=
+                    Syn.Slot (Of_Tree, Node, Index);
+               begin
+                  if Child /= Syn.No_Node then
+                     Visit (Of_Tree, Child, Inner);
+                  end if;
+               end;
+            end loop;
+            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+            then
+               Visit (Of_Tree, Syn.Recovery_Of (Of_Tree, Node), Inner);
+            end if;
+         end Visit;
+
+         procedure Root_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Root_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         is
+            Src : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
+            use type Landin.Modules.Module_Id;
+         begin
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Function_Declaration | Syn.Binding =>
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At (Src, Node);
+                     Routine : constant Boolean :=
+                       Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration;
+                     Linked : constant Boolean :=
+                       Landin.Checking.Link_Symbol (Types.all, Id)
+                         /= Landin.Source.Names.No_Name;
+                     Defined : constant Boolean :=
+                       Routine
+                       and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+                       and then not Syn.Is_External (Of_Tree, Node);
+                  begin
+                     if (Defined
+                         and then Natural (Src)
+                           <= Landin.Modules.Source_Count (Grouped.all)
+                         and then Landin.Modules.Module_Of (Grouped.all, Src)
+                           = Landin.Modules.Entry_Module)
+                       or else (not Routine and then Linked)
+                       or else
+                         (Defined
+                          and then
+                            ((Syn.Uses_C_ABI (Of_Tree, Node)
+                              and then (Linked
+                                        or else Syn.Is_Public (Of_Tree, Node)))
+                             or else Syn.Machine_Convention (Of_Tree, Node)
+                               /= Landin.Machine.Ordinary
+                             or else Imported.Contains (Link_Name_Of (Id))))
+                       or else Landin.Configuration.Placement_Of
+                         (Source (Context, Src), Of_Tree, Node,
+                          Spellings.all) /= Default
+                       or else Named_In_Assembly (Id)
+                     then
+                        Reach_Declaration (Id);
+                     end if;
+                  end;
+               when Syn.Conformance_Declaration =>
+                  Visit (Of_Tree, Node, Providers => False);
+               when others =>
+                  Visit (Of_Tree, Node, Providers => True);
+            end case;
+         end Root_Declaration;
       begin
          for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
             declare
@@ -15438,98 +16177,126 @@ package body Landin.Stages.Lowering is
                end if;
             end;
          end loop;
+
          if not Rooted then
             Retained := [others => True];
-         end if;
+            for Position in
+              1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+            loop
+               Instance_Retained (Position) :=
+                 Landin.Checking.Routine_State_Of
+                   (Types.all,
+                    Landin.Checking.Routine_Identities.Nth
+                      (Types.all, Position))
+                   = Landin.Checking.Routine_Ready;
+            end loop;
+            Evidence_Retained := [others => True];
+         else
+            Keep_Everything := False;
 
-         for Index in 1 .. Source_Count (Context) loop
-            exit when not Rooted;
-            declare
-               Src : constant Landin.Source.Source_Id :=
-                 Nth_Source (Context, Index);
-               Of_Tree : constant not null access constant Syn.Tree :=
-                 Tree_For (Src);
-            begin
-               for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
-               loop
-                  if Landin.Configuration.Assembly_Call
-                    (Spellings.all, Of_Tree.all, Node)
-                  then
-                     for Which in 1 .. Syn.Argument_Count (Of_Tree.all, Node)
-                     loop
-                        declare
-                           Written : constant Syn.Node_Id :=
-                             Syn.Nth_Argument (Of_Tree.all, Node, Which);
-                           Argument : constant Syn.Node_Id :=
-                             (if Syn.Kind (Of_Tree.all, Written)
-                                   = Syn.Call_Argument
-                              then Syn.Expression_Projection
-                                (Of_Tree.all, Written)
-                              else Written);
-                        begin
-                           if Argument /= Syn.No_Node
-                             and then Syn.Kind (Of_Tree.all, Argument)
-                               in Syn.Text_Literal | Syn.Raw_Literal
-                           then
-                              Ada.Strings.Unbounded.Append
-                                (Assembly,
-                                 Landin.Configuration.Fixed_Text
-                                   (Source (Context, Src), Of_Tree.all,
-                                    Argument) & ASCII.LF);
-                           end if;
-                        end;
-                     end loop;
-                  end if;
-                  if Res.Verdict_Of (Meanings.all, Of_Tree.all, Node)
-                       = Res.Bound
-                  then
-                     declare
-                        Means : constant Res.Declaration_Id :=
-                          Res.Bound_To (Meanings.all, Of_Tree.all, Node);
-                     begin
-                        if Means in Module_Image_Index
-                          and then Res.Sort_Of (Meanings.all, Means)
-                                     = Res.Module_Binding
-                        then
-                           Retained (Means) := True;
-                        end if;
-                     end;
-                  end if;
-               end loop;
-            end;
-         end loop;
-
-         for Id in Module_Image_Index loop
-            if Natural (Id) <= Res.Declaration_Count (Meanings.all)
-              and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
-              and then not Retained (Id)
-            then
+            for Index in 1 .. Source_Count (Context) loop
                declare
                   Src : constant Landin.Source.Source_Id :=
-                    Res.Source_Of (Meanings.all, Id);
+                    Nth_Source (Context, Index);
                   Of_Tree : constant not null access constant Syn.Tree :=
                     Tree_For (Src);
-                  Node : constant Syn.Node_Id :=
-                    Res.Node_Of (Meanings.all, Id);
                begin
-                  Retained (Id) :=
-                    Landin.Checking.Link_Symbol (Types.all, Id)
-                      /= Landin.Source.Names.No_Name
-                    or else Named_In_Assembly
-                      (Landin.Source.Names.Spelling
-                         (Spellings.all, Res.Name_Of (Meanings.all, Id)))
-                    --  Mach-O spells a C-level symbol with a leading `_`.
-                    or else Named_In_Assembly
-                      ("_" & Landin.Source.Names.Spelling
-                         (Spellings.all, Res.Name_Of (Meanings.all, Id)))
-                    or else (Syn.Kind (Of_Tree.all, Node) = Syn.Binding
-                      and then Landin.Configuration.Placement_Of
-                        (Source (Context, Src), Of_Tree.all, Node,
-                         Spellings.all) /= Default);
+                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+                  loop
+                     if Landin.Configuration.Assembly_Call
+                       (Spellings.all, Of_Tree.all, Node)
+                     then
+                        for Which in
+                          1 .. Syn.Argument_Count (Of_Tree.all, Node)
+                        loop
+                           declare
+                              Written : constant Syn.Node_Id :=
+                                Syn.Nth_Argument (Of_Tree.all, Node, Which);
+                              Argument : constant Syn.Node_Id :=
+                                (if Syn.Kind (Of_Tree.all, Written)
+                                      = Syn.Call_Argument
+                                 then Syn.Expression_Projection
+                                   (Of_Tree.all, Written)
+                                 else Written);
+                           begin
+                              if Argument /= Syn.No_Node
+                                and then Syn.Kind (Of_Tree.all, Argument)
+                                  in Syn.Text_Literal | Syn.Raw_Literal
+                              then
+                                 Note_Words
+                                   (Landin.Configuration.Fixed_Text
+                                      (Source (Context, Src), Of_Tree.all,
+                                       Argument));
+                              end if;
+                           end;
+                        end loop;
+                     end if;
+                  end loop;
                end;
-            end if;
-         end loop;
-      end Retain_Module_Data;
+            end loop;
+
+            for Index in 1 .. Source_Count (Context) loop
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Nth_Source (Context, Index));
+                  procedure Walk is new
+                    Landin.Configuration.For_Each_Active_Declaration
+                      (Note_Import);
+               begin
+                  Walk (Activity.all, Of_Tree.all);
+               end;
+            end loop;
+
+            for Index in 1 .. Source_Count (Context) loop
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Nth_Source (Context, Index));
+                  procedure Walk is new
+                    Landin.Configuration.For_Each_Active_Declaration
+                      (Root_Declaration);
+               begin
+                  Walk (Activity.all, Of_Tree.all);
+               end;
+            end loop;
+
+            while not Pending.Is_Empty loop
+               declare
+                  Next : constant Pending_Walk := Pending.Last_Element;
+               begin
+                  Pending.Delete_Last;
+                  if Next.Instance = Landin.Checking.No_Routine_Instance then
+                     Visit
+                       (Tree_For
+                          (Res.Source_Of (Meanings.all, Next.Declaration)).all,
+                        Res.Node_Of (Meanings.all, Next.Declaration),
+                        Providers => True);
+                  else
+                     declare
+                        Template : constant Res.Declaration_Id :=
+                          Landin.Checking.Routine_Template_Of
+                            (Types.all, Next.Instance);
+                        Previous : Landin.Checking.Routine_Instance_Id;
+                     begin
+                        Landin.Checking.Activate_Routine_View
+                          (Types.all, Next.Instance, Previous);
+                        Visit
+                          (Tree_For
+                             (Res.Source_Of (Meanings.all, Template)).all,
+                           Res.Node_Of (Meanings.all, Template),
+                           Providers => True);
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                     exception
+                        when others =>
+                           Landin.Checking.Restore_Routine_View
+                             (Types.all, Previous);
+                           raise;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
+      end Retain_Reachable;
 
       --  Pass one: every active item, over every tree, before any is
       --  filled.  D139's shared declaration traversal flattens selected
@@ -15551,6 +16318,10 @@ package body Landin.Stages.Lowering is
          begin
             case Syn.Kind (Of_Tree, Node) is
             when Syn.Function_Declaration =>
+               if not Is_Retained (Id) then
+                  Made := IR.No_Item;
+                  return;
+               end if;
                declare
                   Count : constant Natural :=
                     Syn.Return_Count (Of_Tree, Node);
@@ -15762,9 +16533,7 @@ package body Landin.Stages.Lowering is
             Instance : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Routine_Identities.Nth (Types.all, Position);
          begin
-            if Landin.Checking.Routine_State_Of (Types.all, Instance)
-              = Landin.Checking.Routine_Ready
-            then
+            if Instance_Retained (Position) then
                declare
                   Template : constant Res.Declaration_Id :=
                     Landin.Checking.Routine_Template_Of
@@ -15853,9 +16622,7 @@ package body Landin.Stages.Lowering is
             Source : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Routine_Identities.Nth (Types.all, Position);
          begin
-            if Landin.Checking.Routine_State_Of (Types.all, Source)
-              = Landin.Checking.Routine_Ready
-            then
+            if Instance_Retained (Position) then
                declare
                   Template : constant Res.Declaration_Id :=
                     Landin.Checking.Routine_Template_Of (Types.all, Source);
@@ -15929,6 +16696,7 @@ package body Landin.Stages.Lowering is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
                if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                 and then Is_Live (Of_Tree.all, Node)
                  and then Landin.Configuration.Is_Active
                    (Activity.all, Syn.Source_Of (Of_Tree.all), Node)
                then
@@ -15994,44 +16762,6 @@ package body Landin.Stages.Lowering is
       declare
          type Boolean_Array is array (Positive range <>) of Boolean;
 
-         function Concept_For
-           (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
-            return Landin.Checking.Concept_Id;
-
-         function Concept_For
-           (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
-            return Landin.Checking.Concept_Id
-         is
-         begin
-            if Res.Verdict_Of (Meanings.all, Of_Tree, Reference) /= Res.Bound
-            then
-               return Landin.Checking.No_Concept;
-            end if;
-            declare
-               Declaration : constant Res.Declaration_Id :=
-                 Res.Bound_To (Meanings.all, Of_Tree, Reference);
-            begin
-               for Position in 1 .. Landin.Checking.Concept_Count
-                 (Types.all)
-               loop
-                  declare
-                     Candidate : constant Landin.Checking.Concept_Id :=
-                       Landin.Checking.Concept_Identities.Nth
-                         (Types.all, Position);
-                  begin
-                     if not Landin.Checking.Is_Compiler_Concept
-                       (Types.all, Candidate)
-                       and then Landin.Checking.Concept_Declaration
-                         (Types.all, Candidate) = Declaration
-                     then
-                        return Candidate;
-                     end if;
-                  end;
-               end loop;
-               return Landin.Checking.No_Concept;
-            end;
-         end Concept_For;
-
          Used_Any_Evidence : Boolean_Array
            (1 .. Landin.Checking.Conformance_Count (Types.all)) :=
              [others => False];
@@ -16089,7 +16819,9 @@ package body Landin.Stages.Lowering is
          procedure Collect_Any_Evidence (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
-               Collect_Any_Evidence (Of_Tree, Node);
+               if Is_Live (Of_Tree, Node) then
+                  Collect_Any_Evidence (Of_Tree, Node);
+               end if;
             end loop;
          end Collect_Any_Evidence;
 
@@ -16222,11 +16954,21 @@ package body Landin.Stages.Lowering is
             Row         : Landin.Checking.Conformance_Id;
             Seen        : in out Boolean_Array)
          is
-            Concept : constant Landin.Checking.Concept_Id :=
-              Landin.Checking.Conformance_Concept (Types.all, Row);
             Concept_Position : constant Positive :=
               Landin.Checking.Concept_Identities.Position
-                (Types.all, Concept);
+                (Types.all, Landin.Checking.Conformance_Concept
+                   (Types.all, Row));
+
+            procedure Add_Parent
+              (Parent_Row : Landin.Checking.Conformance_Id);
+
+            procedure Add_Parent
+              (Parent_Row : Landin.Checking.Conformance_Id) is
+            begin
+               Add_Closure (To_Evidence, Parent_Row, Seen);
+            end Add_Parent;
+
+            procedure Add_Parents is new For_Each_Parent_Row (Add_Parent);
          begin
             if Seen (Concept_Position) then
                return;
@@ -16237,58 +16979,7 @@ package body Landin.Stages.Lowering is
             loop
                Add_Provider (To_Evidence, Row, Position);
             end loop;
-            if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
-               return;
-            end if;
-            declare
-               Declaration : constant Res.Declaration_Id :=
-                 Landin.Checking.Concept_Declaration (Types.all, Concept);
-               Concept_Tree : constant not null access constant Syn.Tree :=
-                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
-               Concept_Node : constant Syn.Node_Id :=
-                 Res.Node_Of (Meanings.all, Declaration);
-
-               procedure Add_Parent (Reference : Syn.Node_Id);
-
-               procedure Add_Parent (Reference : Syn.Node_Id) is
-                  Parent : constant Landin.Checking.Concept_Id :=
-                    Concept_For (Concept_Tree.all, Reference);
-                  Parent_Row : Landin.Checking.Conformance_Id :=
-                    Landin.Checking.No_Conformance;
-               begin
-                  if Parent = Landin.Checking.No_Concept then
-                     return;
-                  end if;
-                  Parent_Row := Landin.Checking.Find_Conformance
-                    (Types.all, Parent,
-                     Landin.Checking.Conformance_Target (Types.all, Row),
-                     Landin.Checking.Empty_Actuals);
-                  if Parent_Row = Landin.Checking.No_Conformance then
-                     raise Landin.Compiler_Defect with
-                       "an any conformance closure has no parent table";
-                  end if;
-                  Add_Closure (To_Evidence, Parent_Row, Seen);
-               end Add_Parent;
-            begin
-               declare
-                  Represented : constant Syn.Node_Id :=
-                    Syn.Nth_Concept_Formal
-                      (Concept_Tree.all, Concept_Node, 1);
-                  Required : constant Syn.Node_Id :=
-                    Syn.Constraint_Of (Concept_Tree.all, Represented);
-               begin
-                  if Required /= Syn.No_Node then
-                     Add_Parent (Required);
-                  end if;
-               end;
-               for Parent in 1 .. Syn.Concept_Parent_Count
-                 (Concept_Tree.all, Concept_Node)
-               loop
-                  Add_Parent
-                    (Syn.Nth_Concept_Parent
-                       (Concept_Tree.all, Concept_Node, Parent));
-               end loop;
-            end;
+            Add_Parents (Row);
          end Add_Closure;
       begin
          --  Generic erased uses carry their evidence in the concrete
@@ -16305,9 +16996,7 @@ package body Landin.Stages.Lowering is
                  Landin.Checking.Routine_Identities.Nth
                    (Types.all, Position);
             begin
-               if Landin.Checking.Routine_State_Of (Types.all, Instance)
-                 = Landin.Checking.Routine_Ready
-               then
+               if Instance_Retained (Position) then
                   declare
                      Template : constant Res.Declaration_Id :=
                        Landin.Checking.Routine_Template_Of
@@ -16351,39 +17040,43 @@ package body Landin.Stages.Lowering is
 
          for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
          loop
-            declare
-               Source : constant Landin.Checking.Conformance_Id :=
-                 Landin.Checking.Conformance_Identities.Nth
-                   (Types.all, Position);
-               Actual : constant Landin.Checking.Actual_Key :=
-                 Landin.Checking.Conformance_Target (Types.all, Source);
-               Represented : constant IR.Field_Shape :=
-                 Evidence_Shape (Actual);
-            begin
-               Evidence (Position) :=
-                 IR.Add_Evidence (Unit.all, Represented);
-               for Provider_Position in
-                 1 .. Landin.Checking.Conformance_Entry_Count
-                        (Types.all, Source)
-               loop
-                  Add_Provider
-                    (Evidence (Position), Source, Provider_Position);
-               end loop;
+            --  A conformance nothing reached has no table; see
+            --  Retain_Reachable.
+            if Evidence_Retained (Position) then
+               declare
+                  Source : constant Landin.Checking.Conformance_Id :=
+                    Landin.Checking.Conformance_Identities.Nth
+                      (Types.all, Position);
+                  Actual : constant Landin.Checking.Actual_Key :=
+                    Landin.Checking.Conformance_Target (Types.all, Source);
+                  Represented : constant IR.Field_Shape :=
+                    Evidence_Shape (Actual);
+               begin
+                  Evidence (Position) :=
+                    IR.Add_Evidence (Unit.all, Represented);
+                  for Provider_Position in
+                    1 .. Landin.Checking.Conformance_Entry_Count
+                           (Types.all, Source)
+                  loop
+                     Add_Provider
+                       (Evidence (Position), Source, Provider_Position);
+                  end loop;
 
-               if Used_Any_Evidence (Position) then
-                  declare
-                     Seen : Boolean_Array
-                       (1 .. Positive'Max
-                         (1, Landin.Checking.Concept_Count (Types.all))) :=
-                           [others => False];
-                  begin
-                     Any_Evidence (Position) :=
-                       IR.Add_Evidence
-                         (Unit.all, Represented, Erased => True);
-                     Add_Closure (Any_Evidence (Position), Source, Seen);
-                  end;
-               end if;
-            end;
+                  if Used_Any_Evidence (Position) then
+                     declare
+                        Seen : Boolean_Array
+                          (1 .. Positive'Max
+                            (1, Landin.Checking.Concept_Count (Types.all))) :=
+                              [others => False];
+                     begin
+                        Any_Evidence (Position) :=
+                          IR.Add_Evidence
+                            (Unit.all, Represented, Erased => True);
+                        Add_Closure (Any_Evidence (Position), Source, Seen);
+                     end;
+                  end if;
+               end;
+            end if;
          end loop;
       end;
 
@@ -16412,7 +17105,9 @@ package body Landin.Stages.Lowering is
          procedure Register_Texts (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
-               Register_Text (Of_Tree, Node);
+               if Is_Live (Of_Tree, Node) then
+                  Register_Text (Of_Tree, Node);
+               end if;
             end loop;
          end Register_Texts;
       begin
@@ -16428,9 +17123,7 @@ package body Landin.Stages.Lowering is
                  Landin.Checking.Routine_Identities.Nth
                    (Types.all, Position);
             begin
-               if Landin.Checking.Routine_State_Of (Types.all, Instance)
-                 = Landin.Checking.Routine_Ready
-               then
+               if Instance_Retained (Position) then
                   declare
                      Template : constant Res.Declaration_Id :=
                        Landin.Checking.Routine_Template_Of
@@ -19520,6 +20213,8 @@ package body Landin.Stages.Lowering is
                when Syn.Function_Declaration =>
                   if Syn.Generic_Formal_Count (Of_Tree, Node) = 0
                     and then not Syn.Is_External (Of_Tree, Node)
+                    and then Is_Retained
+                      (Declaration_At (Syn.Source_Of (Of_Tree), Node))
                   then
                      Lower_Routine (Of_Tree, Node);
                   end if;
@@ -19553,9 +20248,7 @@ package body Landin.Stages.Lowering is
             Source : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Routine_Identities.Nth (Types.all, Position);
          begin
-            if Landin.Checking.Routine_State_Of (Types.all, Source)
-              = Landin.Checking.Routine_Ready
-            then
+            if Instance_Retained (Position) then
                declare
                   Template : constant Res.Declaration_Id :=
                     Landin.Checking.Routine_Template_Of (Types.all, Source);

@@ -46,6 +46,232 @@ package body Landin.Stages.Checking.Flow is
    package Call_Places is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Syn.Node_Id);
 
+   --  A field's declaration-order number, zero for the name itself.  The
+   --  numbers a compilation tracks stop at its widest struct, known only
+   --  once the forest is read, so Check_Function bounds them in its own
+   --  Tracked_Field.  The facts below are declared here rather than in
+   --  Check_Function so that their containers are elaborated once and not
+   --  once per routine checked.
+   subtype Field_Number is Natural;
+
+   --  D118's neutral path, on this side of the compiler: the run of
+   --  declaration-order field identities from a tracked name down to
+   --  the part a fact is about.  An empty run is the name itself, one
+   --  step is a field of it, and [0420] puts no limit on the rest.
+   --
+   --  A run and not a pair packed into one integer.  Packing was what
+   --  D88-D90 did with the parent and the child, and it stops working
+   --  as soon as the field count raised to the depth leaves what a
+   --  Natural holds -- silently, and with the wrong answer.
+   package Field_Paths is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Field_Number);
+
+   subtype Field_Path is Field_Paths.Vector;
+
+   use type Field_Paths.Vector;
+
+   No_Path : constant Field_Path := Field_Paths.Empty_Vector;
+
+   function One (Field : Field_Number) return Field_Path
+   is (Field_Paths.To_Vector (Field, 1));
+
+   --  Lexicographic, so a set orders paths the way the source nests
+   --  them and a shorter run sorts before anything extending it.
+   function "<" (Left, Right : Field_Path) return Boolean;
+
+   function "<" (Left, Right : Field_Path) return Boolean is
+      Shorter : constant Natural :=
+        Natural'Min (Natural (Left.Length), Natural (Right.Length));
+   begin
+      for Step in 1 .. Shorter loop
+         if Left (Step) /= Right (Step) then
+            return Left (Step) < Right (Step);
+         end if;
+      end loop;
+      return Natural (Left.Length) < Natural (Right.Length);
+   end "<";
+
+   function Prefix (Parent, Child : Field_Path) return Boolean;
+
+   function Prefix (Parent, Child : Field_Path) return Boolean is
+   begin
+      if Parent.Length > Child.Length then
+         return False;
+      end if;
+      for Step in 1 .. Natural (Parent.Length) loop
+         if Parent (Step) /= Child (Step) then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Prefix;
+
+   function Last (Path : Field_Path) return Field_Number
+   is (Path (Positive (Path.Length)));
+
+   --  One fact per declaration and field that holds, copied at a branch
+   --  and merged after it.  A set and not a counter, because [1910] is
+   --  about paths: a name assigned in one arm and not another is not
+   --  assigned after the branch, and nothing but the per-declaration
+   --  answer says that.  A set of what holds rather than a table of
+   --  every declaration in the program, so a copy costs what this
+   --  function has assigned and not the size of the program.
+   --
+   --  D16 makes a field of a struct local its own answer, so a name is
+   --  field zero and its fields the fields after it.  A scalar uses zero
+   --  alone; a struct never uses it, because a value of one is not a
+   --  thing this kernel can read.  D88's nested leaves use the sparse
+   --  parent/child set below rather than flattening the nominal child
+   --  into these facts.
+   type Field_Fact is record
+      Declaration : Res.Declaration_Id;
+      Field       : Field_Number;
+   end record;
+
+   function "<" (Left, Right : Field_Fact) return Boolean
+   is (Left.Declaration < Right.Declaration
+       or else
+         (Left.Declaration = Right.Declaration
+          and then Left.Field < Right.Field));
+
+   package Field_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Field_Fact);
+
+   --  D121: an element of an array of ordinary structs is assigned a
+   --  part at a time, exactly as a local struct is, so a fact names
+   --  the run inside the element as well as the position.  An empty
+   --  run is the whole element, which is what every array had before.
+   type Element_Fact is record
+      Declaration : Res.Declaration_Id;
+      Path        : Field_Path;
+      Position    : Ty.Magnitude;
+      Below       : Field_Path;
+   end record;
+
+   function "<" (Left, Right : Element_Fact) return Boolean
+   is (Left.Declaration < Right.Declaration
+       or else
+         (Left.Declaration = Right.Declaration
+          and then
+            (Left.Path < Right.Path
+             or else
+               (Left.Path = Right.Path
+                and then
+                  (Left.Position < Right.Position
+                   or else
+                     (Left.Position = Right.Position
+                      and then Left.Below < Right.Below))))));
+
+   package Element_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Element_Fact);
+
+   type Array_Fact is record
+      Declaration : Res.Declaration_Id;
+      Path        : Field_Path;
+   end record;
+
+   function "<" (Left, Right : Array_Fact) return Boolean
+   is (Left.Declaration < Right.Declaration
+       or else
+         (Left.Declaration = Right.Declaration
+          and then Left.Path < Right.Path));
+
+   package Array_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Array_Fact);
+
+   --  A part reached by a run of two steps or more: a scalar leaf, or
+   --  since D119 a whole child written as one.  The depth-one facts
+   --  stay in the dense table above, which is the same question asked
+   --  where it can be answered by indexing.
+   type Nested_Fact is record
+      Declaration : Res.Declaration_Id;
+      Path        : Field_Path;
+   end record;
+
+   function "<" (Left, Right : Nested_Fact) return Boolean
+   is (Left.Declaration < Right.Declaration
+       or else
+         (Left.Declaration = Right.Declaration
+          and then Left.Path < Right.Path));
+
+   package Nested_Sets is new Ada.Containers.Ordered_Sets
+     (Element_Type => Nested_Fact);
+
+   type Assigned_Set is record
+      Fields       : Field_Sets.Set;
+      Elements     : Element_Sets.Set;
+      Whole_Arrays : Array_Sets.Set;
+      Nested       : Nested_Sets.Set;
+      --  [0910]'s use-after-consume facts are separate from ordinary
+      --  definite assignment: initialized locals and parameters are live
+      --  without appearing in Fields, but a sink makes one exact place
+      --  dead until a later assignment revives it.
+      Dead_Fields  : Field_Sets.Set;
+      Dead_Elements : Element_Sets.Set;
+      Dead_Nested  : Nested_Sets.Set;
+   end record;
+
+   Nothing_Assigned : constant Assigned_Set :=
+     (Fields        => Field_Sets.Empty_Set,
+      Elements      => Element_Sets.Empty_Set,
+      Whole_Arrays  => Array_Sets.Empty_Set,
+      Nested        => Nested_Sets.Empty_Set,
+      Dead_Fields   => Field_Sets.Empty_Set,
+      Dead_Elements => Element_Sets.Empty_Set,
+      Dead_Nested   => Nested_Sets.Empty_Set);
+
+   --  D124 replaces the old Boolean "this block exits" summary.  A
+   --  guarded return has both edges, an unconditional return only the
+   --  second, and a value-producing block only needs an answer on the
+   --  first.  The assignment state below always describes that explicit
+   --  fallthrough edge; returned edges have already been validated where
+   --  the return occurred.
+   type Edge_Facts is record
+      Falls_Through : Boolean := False;
+      Returns       : Boolean := False;
+   end record;
+
+   No_Edges : constant Edge_Facts := (others => False);
+   Fallthrough_Edge : constant Edge_Facts :=
+     (Falls_Through => True, Returns => False);
+
+   --  A lexical cleanup stack contains syntax, not evaluated arguments.
+   --  Reaching defer or undo appends its call; an applicable block edge
+   --  walks active entries in reverse and only then evaluates each call.
+   --  Active is cleared before an entry runs so a return from one of its
+   --  arguments unwinds the still-pending entries without repeating it.
+   type Cleanup_Entry is record
+      Kind   : Cleanup.Cleanup_Kind := Cleanup.Deferred_Call;
+      Call   : Syn.Node_Id := Syn.No_Node;
+      Active : Boolean := True;
+   end record;
+
+   package Cleanup_Entries is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Cleanup_Entry);
+
+   package Cleanup_Indexes is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Positive);
+
+   --  One loop being analysed.  Its `break` edges are joined into
+   --  Exit_State and its `continue` edges into Back_State; the loop
+   --  handler joins the latter with the body's fallthrough to form the
+   --  back edge.  [1180]'s labelled bare block is an entry too: only a
+   --  `break` naming it selects it, and its Exit_State meets the
+   --  block's fallthrough after its `end`.
+   type Loop_Cleanup_Entry is record
+      Label        : Landin.Source.Names.Name_Id :=
+        Landin.Source.Names.No_Name;
+      Cleanup_Base : Natural := 0;
+      Exits        : Boolean := False;
+      Exit_State   : Assigned_Set := Nothing_Assigned;
+      Continues    : Boolean := False;
+      Back_State   : Assigned_Set := Nothing_Assigned;
+      Is_Block     : Boolean := False;
+   end record;
+
+   package Loop_Cleanup_Entries is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Loop_Cleanup_Entry);
+
    --  Read from the trees rather than from the layouts, because this sizes
    --  a type and so is elaborated before the pass that lays anything out; a
    --  struct body is [0750]'s field list either way.
@@ -202,227 +428,10 @@ package body Landin.Stages.Checking.Flow is
 
       --  The forest is fixed for this invocation, and the caller worked
       --  out the widest struct in it once.
-      subtype Tracked_Field is Natural range 0 .. Widest;
+      subtype Tracked_Field is Field_Number range 0 .. Widest;
 
-      --  D118's neutral path, on this side of the compiler: the run of
-      --  declaration-order field identities from a tracked name down to
-      --  the part a fact is about.  An empty run is the name itself, one
-      --  step is a field of it, and [0420] puts no limit on the rest.
-      --
-      --  A run and not a pair packed into one integer.  Packing was what
-      --  D88-D90 did with the parent and the child, and it stops working
-      --  as soon as the field count raised to the depth leaves what a
-      --  Natural holds -- silently, and with the wrong answer.
-      package Field_Paths is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Tracked_Field);
-
-      subtype Field_Path is Field_Paths.Vector;
-
-      use type Field_Paths.Vector;
-
-      No_Path : constant Field_Path := Field_Paths.Empty_Vector;
-
-      function One (Field : Tracked_Field) return Field_Path
-      is (Field_Paths.To_Vector (Field, 1));
-
-      --  Lexicographic, so a set orders paths the way the source nests
-      --  them and a shorter run sorts before anything extending it.
-      function "<" (Left, Right : Field_Path) return Boolean;
-
-      function "<" (Left, Right : Field_Path) return Boolean is
-         Shorter : constant Natural :=
-           Natural'Min (Natural (Left.Length), Natural (Right.Length));
-      begin
-         for Step in 1 .. Shorter loop
-            if Left (Step) /= Right (Step) then
-               return Left (Step) < Right (Step);
-            end if;
-         end loop;
-         return Natural (Left.Length) < Natural (Right.Length);
-      end "<";
-
-      function Prefix (Parent, Child : Field_Path) return Boolean;
-
-      function Prefix (Parent, Child : Field_Path) return Boolean is
-      begin
-         if Parent.Length > Child.Length then
-            return False;
-         end if;
-         for Step in 1 .. Natural (Parent.Length) loop
-            if Parent (Step) /= Child (Step) then
-               return False;
-            end if;
-         end loop;
-         return True;
-      end Prefix;
-
-      function Last (Path : Field_Path) return Tracked_Field
-      is (Path (Positive (Path.Length)));
-
-      --  One fact per declaration and field that holds, copied at a branch
-      --  and merged after it.  A set and not a counter, because [1910] is
-      --  about paths: a name assigned in one arm and not another is not
-      --  assigned after the branch, and nothing but the per-declaration
-      --  answer says that.  A set of what holds rather than a table of
-      --  every declaration in the program, so a copy costs what this
-      --  function has assigned and not the size of the program.
-      --
-      --  D16 makes a field of a struct local its own answer, so a name is
-      --  field zero and its fields the fields after it.  A scalar uses zero
-      --  alone; a struct never uses it, because a value of one is not a
-      --  thing this kernel can read.  D88's nested leaves use the sparse
-      --  parent/child set below rather than flattening the nominal child
-      --  into these facts.
-      type Field_Fact is record
-         Declaration : Res.Declaration_Id;
-         Field       : Tracked_Field;
-      end record;
-
-      function "<" (Left, Right : Field_Fact) return Boolean
-      is (Left.Declaration < Right.Declaration
-          or else
-            (Left.Declaration = Right.Declaration
-             and then Left.Field < Right.Field));
-
-      package Field_Sets is new Ada.Containers.Ordered_Sets
-        (Element_Type => Field_Fact);
-
-      --  D121: an element of an array of ordinary structs is assigned a
-      --  part at a time, exactly as a local struct is, so a fact names
-      --  the run inside the element as well as the position.  An empty
-      --  run is the whole element, which is what every array had before.
-      type Element_Fact is record
-         Declaration : Res.Declaration_Id;
-         Path        : Field_Path;
-         Position    : Ty.Magnitude;
-         Below       : Field_Path;
-      end record;
-
-      function "<" (Left, Right : Element_Fact) return Boolean
-      is (Left.Declaration < Right.Declaration
-          or else
-            (Left.Declaration = Right.Declaration
-             and then
-               (Left.Path < Right.Path
-                or else
-                  (Left.Path = Right.Path
-                   and then
-                     (Left.Position < Right.Position
-                      or else
-                        (Left.Position = Right.Position
-                         and then Left.Below < Right.Below))))));
-
-      package Element_Sets is new Ada.Containers.Ordered_Sets
-        (Element_Type => Element_Fact);
-
-      type Array_Fact is record
-         Declaration : Res.Declaration_Id;
-         Path        : Field_Path;
-      end record;
-
-      function "<" (Left, Right : Array_Fact) return Boolean
-      is (Left.Declaration < Right.Declaration
-          or else
-            (Left.Declaration = Right.Declaration
-             and then Left.Path < Right.Path));
-
-      package Array_Sets is new Ada.Containers.Ordered_Sets
-        (Element_Type => Array_Fact);
-
-      --  A part reached by a run of two steps or more: a scalar leaf, or
-      --  since D119 a whole child written as one.  The depth-one facts
-      --  stay in the dense table above, which is the same question asked
-      --  where it can be answered by indexing.
-      type Nested_Fact is record
-         Declaration : Res.Declaration_Id;
-         Path        : Field_Path;
-      end record;
-
-      function "<" (Left, Right : Nested_Fact) return Boolean
-      is (Left.Declaration < Right.Declaration
-          or else
-            (Left.Declaration = Right.Declaration
-             and then Left.Path < Right.Path));
-
-      package Nested_Sets is new Ada.Containers.Ordered_Sets
-        (Element_Type => Nested_Fact);
-
-      type Assigned_Set is record
-         Fields       : Field_Sets.Set;
-         Elements     : Element_Sets.Set;
-         Whole_Arrays : Array_Sets.Set;
-         Nested       : Nested_Sets.Set;
-         --  [0910]'s use-after-consume facts are separate from ordinary
-         --  definite assignment: initialized locals and parameters are live
-         --  without appearing in Fields, but a sink makes one exact place
-         --  dead until a later assignment revives it.
-         Dead_Fields  : Field_Sets.Set;
-         Dead_Elements : Element_Sets.Set;
-         Dead_Nested  : Nested_Sets.Set;
-      end record;
-
-      Nothing_Assigned : constant Assigned_Set :=
-        (Fields        => Field_Sets.Empty_Set,
-         Elements      => Element_Sets.Empty_Set,
-         Whole_Arrays  => Array_Sets.Empty_Set,
-         Nested        => Nested_Sets.Empty_Set,
-         Dead_Fields   => Field_Sets.Empty_Set,
-         Dead_Elements => Element_Sets.Empty_Set,
-         Dead_Nested   => Nested_Sets.Empty_Set);
-
-      --  D124 replaces the old Boolean "this block exits" summary.  A
-      --  guarded return has both edges, an unconditional return only the
-      --  second, and a value-producing block only needs an answer on the
-      --  first.  The assignment state below always describes that explicit
-      --  fallthrough edge; returned edges have already been validated where
-      --  the return occurred.
-      type Edge_Facts is record
-         Falls_Through : Boolean := False;
-         Returns       : Boolean := False;
-      end record;
-
-      No_Edges : constant Edge_Facts := (others => False);
-      Fallthrough_Edge : constant Edge_Facts :=
-        (Falls_Through => True, Returns => False);
-
-      --  A lexical cleanup stack contains syntax, not evaluated arguments.
-      --  Reaching defer or undo appends its call; an applicable block edge
-      --  walks active entries in reverse and only then evaluates each call.
-      --  Active is cleared before an entry runs so a return from one of its
-      --  arguments unwinds the still-pending entries without repeating it.
-      type Cleanup_Entry is record
-         Kind   : Cleanup.Cleanup_Kind := Cleanup.Deferred_Call;
-         Call   : Syn.Node_Id := Syn.No_Node;
-         Active : Boolean := True;
-      end record;
-
-      package Cleanup_Entries is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Cleanup_Entry);
-
-      package Cleanup_Indexes is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Positive);
-
+      --  The lexical cleanup stack; see Cleanup_Entry.
       Cleanup_Stack : Cleanup_Entries.Vector;
-
-      --  One loop being analysed.  Its `break` edges are joined into
-      --  Exit_State and its `continue` edges into Back_State; the loop
-      --  handler joins the latter with the body's fallthrough to form the
-      --  back edge.  [1180]'s labelled bare block is an entry too: only a
-      --  `break` naming it selects it, and its Exit_State meets the
-      --  block's fallthrough after its `end`.
-      type Loop_Cleanup_Entry is record
-         Label        : Landin.Source.Names.Name_Id :=
-           Landin.Source.Names.No_Name;
-         Cleanup_Base : Natural := 0;
-         Exits        : Boolean := False;
-         Exit_State   : Assigned_Set := Nothing_Assigned;
-         Continues    : Boolean := False;
-         Back_State   : Assigned_Set := Nothing_Assigned;
-         Is_Block     : Boolean := False;
-      end record;
-
-      package Loop_Cleanup_Entries is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Loop_Cleanup_Entry);
 
       --  The cleanup depth outside each active loop.  A transfer unwinds
       --  only lexical frames entered since that loop began, then either

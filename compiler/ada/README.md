@@ -134,6 +134,7 @@ different responsibilities.
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
 | `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Control_Flow` | linear-space adjacency and entry reachability of structurally checked IR | assume reachability or store represented object bytes |
+| `Landin.IR.Liveness` | each slot's live interval over the laid-out order of a routine's values, in work bounded linearly in the routine, and each block's loop depth | choose a location, a register or which slots one may hold |
 | `Landin.Panics` | canonical entry-hook validation, source-byte site spaces and final nonzero atom codes | runtime reporting or allocation |
 | `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
@@ -143,8 +144,9 @@ different responsibilities.
 | `Landin.IR.Specialization_Policy` | bounded benefit and profitability estimates | claim assembled-byte costs or depend on host word width |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
-| `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, the target-byte replay of scalar, fixed-array and unfolded variant runs, each atom's dense code and how many items hold each linker spelling | name a machine, choose a register, or ask the host a width |
+| `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, the target-byte replay of scalar, fixed-array and unfolded variant runs, each atom's dense code, how many items hold each linker spelling, and which indirect access an indexed address folds into | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
+| `Landin.Backend.Reciprocals` | the multiplier, shift and 65-bit correction that divide every dividend of one width by one known divisor that is neither zero nor a power of two | choose instructions or registers, or ask the host a width |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
 | `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations, ELF assembly and line/function CFI from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or promise full variable/type debugging |
@@ -157,7 +159,7 @@ different responsibilities.
 | `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry's initializer call, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
-| `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
+| `Landin.Backend.X86_64.Allocation` | deterministic stack homes, the five available SysV callee-save GP registers, slots' registers over their live intervals, and the four caller-saved registers selection leaves alone between two operations | give a location a register selection writes inside its interval, or allocate failure registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
@@ -758,8 +760,10 @@ used-formal wrappers, lazy recursive promotion from interned concrete actual
 tuples, substituted per-instance layout, bounded repeated-invalid replay,
 D137/L0313 by-value recursion separation, and checking-stage diagnostic order.
 
-**`Landin.Stages.Lowering`** owns the walk that eagerly maps checker nominal,
-conformance and ready routine-instance identities into deterministic IR order,
+**`Landin.Stages.Lowering`** owns the walk that first finds which routines,
+ready instances, conformances and module bindings a program reaches (D296),
+then eagerly maps checker nominal identities and the reached conformance and
+routine-instance identities into deterministic IR order,
 registers D161/D181's width-keyed content-pooled read-only text datums and
 static slice or cstring relocations, lowers D182's utf8 ordinal scan with
 D259's `usize` counter and D182's checked direct position access, D183's
@@ -1210,7 +1214,10 @@ The native debugger gates include a D231/D232 program that enters a selected
 handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
-source line; those native sessions remain separate from Cortex line/function debugging.
+source line. On x86-64 a failed check's trap is laid out after its routine's body,
+one per operation and kind, so a passing check falls through; each keeps its
+operation's line, variable locations and lexical scopes, and the body's frame
+description. Those native sessions remain separate from Cortex line/function debugging.
 
 The [device modules](../../devices/README.md) use the existing frontend,
 packed/volatile IR and Cortex firmware path without compiler changes. Vendor

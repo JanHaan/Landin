@@ -950,9 +950,6 @@ item 1 ROUTINE f result bool signature 1 params 2 slots 4 blocks 1 values 8
 file positive/compiler-zeroable-conformances/main.ldn
 unit signatures 1 items 1
 signature 1 () -> i32
-evidence 1 concrete represents i32
-evidence 2 concrete represents [2]i32
-evidence 3 concrete represents struct (i32)
 item 1 ROUTINE main result i32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 code i32 return
   block 1 scope 6 BLOCK length 4
@@ -1029,9 +1026,6 @@ signature 3 (in i32) -> i32
 signature 4 (in i32) -> i32
 evidence 1 concrete represents i32
   entry 1 target 1 provider 1 dispatch 1
-evidence 2 concrete represents i32
-evidence 3 concrete represents i32
-evidence 4 concrete represents i32
 item 1 ROUTINE less_i32 result bool signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 left i32 param 1
   slot 2 right i32 param 2
@@ -1918,11 +1912,9 @@ item 5 ROUTINE - result array signature 7 params 3 slots 5 blocks 1 values 7
     6 INDIRECT_CALL none signature 8 <- 5 4 3
     7 LEAVE
 file positive/hosted-initializer-normalized/program.ldn
-unit signatures 4 items 5
+unit signatures 2 items 3
 signature 1 extern(c) (in i32, escaping in usize, escaping in usize) -> none
-signature 2 extern(c) (in i32, escaping in usize, escaping in usize) -> none
-signature 3 extern(c) () -> u64
-signature 4 () -> i32
+signature 2 () -> i32
 item 1 DATUM seen result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 0
@@ -1937,9 +1929,7 @@ item 2 ROUTINE _landin_host_initialize_arguments result none signature 1 link _l
     3 LOAD i32 slot 1
     4 STORE_DATUM datum 1 seen <- 3
     5 LEAVE
-item 3 ROUTINE start result none signature 2 extern(c) link _landin_host_initialize_arguments params 0 slots 0 blocks 0 values 0
-item 4 ROUTINE _landin_host_argument_count result u64 signature 3 extern(c) link _landin_host_argument_count params 0 slots 0 blocks 0 values 0
-item 5 ROUTINE main result i32 signature 4 params 0 slots 1 blocks 1 values 4
+item 3 ROUTINE main result i32 signature 2 params 0 slots 1 blocks 1 values 4
   slot 1 code i32 return
   block 1 scope 11 BLOCK length 4
     1 LOAD_DATUM i32 datum 1 seen
@@ -4369,8 +4359,7 @@ signature 2 (in struct box, in struct box) -> bool
 signature 3 (in struct box, in struct box) -> bool
 signature 4 (in struct box) -> i32
 signature 5 (in struct box) -> i32
-evidence 1 concrete represents struct ([2]u8)
-evidence 2 concrete represents struct (i32)
+evidence 1 concrete represents struct (i32)
   entry 1 target 2 provider 2 dispatch 2
 item 1 ROUTINE main result i32 signature 1 params 0 slots 2 blocks 1 values 7
   slot 1 code i32 return
@@ -5861,7 +5850,7 @@ item 5 ROUTINE covered result bool signature 5 params 1 slots 3 blocks 5 values 
     11 TRUTH bool false
     12 STORE slot 2 <- 11
     13 JUMP target 4
-item 6 ROUTINE use result u32 signature 6 params 0 slots 10 blocks 11 values 52
+item 6 ROUTINE use result u32 signature 6 params 0 slots 8 blocks 9 values 44
   slot 1 total u32 return
   slot 2 cell u32
   slot 3 held usize
@@ -5869,10 +5858,8 @@ item 6 ROUTINE use result u32 signature 6 params 0 slots 10 blocks 11 values 52
   slot 5 gone usize
   slot 6 read usize
   slot 7 - usize
-  slot 8 - bool
-  slot 9 - bool
-  slot 10 - u32
-  block 1 scope 21 BLOCK length 21
+  slot 8 - u32
+  block 1 scope 21 BLOCK length 20
     1 NUMBER u32 41
     2 STORE slot 2 <- 1
     3 PLACE_ADDRESS usize
@@ -5892,49 +5879,39 @@ item 6 ROUTINE use result u32 signature 6 params 0 slots 10 blocks 11 values 52
     17 STORE slot 1 <- 16
     18 LOAD usize slot 3
     19 CALL bool callee 4 discard signature 4 <- 18
-    20 STORE slot 9 <- 19
-    21 BRANCH target 2 alternative 3 <- 19
-  block 2 scope 21 BLOCK length 4
-    22 LOAD usize slot 4
-    23 CALL bool callee 4 discard signature 4 <- 22
-    24 STORE slot 9 <- 23
-    25 JUMP target 3
-  block 3 scope 21 BLOCK length 3
-    26 LOAD bool slot 9
-    27 STORE slot 8 <- 26
-    28 BRANCH target 4 alternative 5 <- 26
-  block 4 scope 21 BLOCK length 5
-    29 LOAD usize slot 5
-    30 CALL bool callee 4 discard signature 4 <- 29
-    31 LOGICAL_NOT bool <- 30
-    32 STORE slot 8 <- 31
-    33 JUMP target 5
-  block 5 scope 21 BLOCK length 2
-    34 LOAD bool slot 8
-    35 BRANCH target 6 alternative 7 <- 34
-  block 6 scope 22 BLOCK length 7
-    36 LOAD u32 slot 1
-    37 STORE slot 10 <- 36
-    38 NUMBER u32 1
-    39 LOAD u32 slot 10
-    40 ADD u32 <- 39 38
-    41 STORE slot 1 <- 40
-    42 JUMP target 8
-  block 7 scope 21 BLOCK length 1
-    43 JUMP target 8
-  block 8 scope 21 BLOCK length 3
-    44 LOAD usize slot 5
-    45 CALL bool callee 5 covered signature 5 <- 44
-    46 BRANCH target 9 alternative 10 <- 45
-  block 9 scope 23 BLOCK length 3
-    47 NUMBER u32 0
-    48 STORE slot 1 <- 47
-    49 JUMP target 11
-  block 10 scope 21 BLOCK length 1
-    50 JUMP target 11
-  block 11 scope 21 BLOCK length 2
-    51 LOAD u32 slot 1
-    52 LEAVE <- 51
+    20 BRANCH target 2 alternative 5 <- 19
+  block 2 scope 21 BLOCK length 3
+    21 LOAD usize slot 4
+    22 CALL bool callee 4 discard signature 4 <- 21
+    23 BRANCH target 3 alternative 5 <- 22
+  block 3 scope 21 BLOCK length 4
+    24 LOAD usize slot 5
+    25 CALL bool callee 4 discard signature 4 <- 24
+    26 LOGICAL_NOT bool <- 25
+    27 BRANCH target 4 alternative 5 <- 26
+  block 4 scope 22 BLOCK length 7
+    28 LOAD u32 slot 1
+    29 STORE slot 8 <- 28
+    30 NUMBER u32 1
+    31 LOAD u32 slot 8
+    32 ADD u32 <- 31 30
+    33 STORE slot 1 <- 32
+    34 JUMP target 6
+  block 5 scope 21 BLOCK length 1
+    35 JUMP target 6
+  block 6 scope 21 BLOCK length 3
+    36 LOAD usize slot 5
+    37 CALL bool callee 5 covered signature 5 <- 36
+    38 BRANCH target 7 alternative 8 <- 37
+  block 7 scope 23 BLOCK length 3
+    39 NUMBER u32 0
+    40 STORE slot 1 <- 39
+    41 JUMP target 9
+  block 8 scope 21 BLOCK length 1
+    42 JUMP target 9
+  block 9 scope 21 BLOCK length 2
+    43 LOAD u32 slot 1
+    44 LEAVE <- 43
 file positive/precedence-alternation-over-comparison/program.ldn
 unit signatures 1 items 1
 signature 1 () -> bool
@@ -7181,26 +7158,26 @@ item 3 ROUTINE while_empty result usize signature 3 params 2 slots 6 blocks 6 va
     4 STORE slot 5 <- 3
     5 JUMP target 2
   block 2 scope 14 BLOCK length 1
-    6 JUMP target 5
-  block 3 scope 16 BLOCK length 4
-    14 LOAD usize slot 1
-    15 STORE slot 3 <- 14
-    16 LOAD usize slot 3
-    17 LEAVE <- 16
-  block 4 scope 14 BLOCK length 4
-    18 LOAD usize slot 5
-    19 STORE slot 3 <- 18
-    20 LOAD usize slot 3
-    21 LEAVE <- 20
-  block 5 scope 15 BLOCK length 5
+    6 JUMP target 3
+  block 3 scope 15 BLOCK length 5
     7 NUMBER usize 0
     8 STORE slot 5 <- 7
     9 LOAD bool slot 2
     10 STORE slot 6 <- 9
-    11 JUMP target 6
-  block 6 scope 14 BLOCK length 2
+    11 JUMP target 4
+  block 4 scope 14 BLOCK length 2
     12 LOAD bool slot 6
-    13 BRANCH target 3 alternative 4 <- 12
+    13 BRANCH target 5 alternative 6 <- 12
+  block 5 scope 16 BLOCK length 4
+    14 LOAD usize slot 1
+    15 STORE slot 3 <- 14
+    16 LOAD usize slot 3
+    17 LEAVE <- 16
+  block 6 scope 14 BLOCK length 4
+    18 LOAD usize slot 5
+    19 STORE slot 3 <- 18
+    20 LOAD usize slot 3
+    21 LEAVE <- 20
 item 4 ROUTINE complete_empty result usize signature 4 params 2 slots 6 blocks 7 values 22
   slot 1 cell usize param 1
   slot 2 choose bool param 2
@@ -7217,23 +7194,23 @@ item 4 ROUTINE complete_empty result usize signature 4 params 2 slots 6 blocks 7
     6 STORE slot 3 <- 5
     7 JUMP target 2
   block 2 scope 18 BLOCK length 1
-    8 JUMP target 5
-  block 3 scope 20 BLOCK length 2
-    16 LOAD usize slot 3
-    17 LEAVE <- 16
-  block 4 scope 18 BLOCK length 3
-    18 LOAD usize slot 5
-    19 STORE slot 3 <- 18
-    20 JUMP target 7
-  block 5 scope 19 BLOCK length 5
+    8 JUMP target 3
+  block 3 scope 19 BLOCK length 5
     9 NUMBER usize 0
     10 STORE slot 5 <- 9
     11 LOAD bool slot 2
     12 STORE slot 6 <- 11
-    13 JUMP target 6
-  block 6 scope 18 BLOCK length 2
+    13 JUMP target 4
+  block 4 scope 18 BLOCK length 2
     14 LOAD bool slot 6
-    15 BRANCH target 3 alternative 4 <- 14
+    15 BRANCH target 5 alternative 6 <- 14
+  block 5 scope 20 BLOCK length 2
+    16 LOAD usize slot 3
+    17 LEAVE <- 16
+  block 6 scope 18 BLOCK length 3
+    18 LOAD usize slot 5
+    19 STORE slot 3 <- 18
+    20 JUMP target 7
   block 7 scope 18 BLOCK length 2
     21 LOAD usize slot 3
     22 LEAVE <- 21
@@ -8235,10 +8212,6 @@ unit signatures 3 items 3
 signature 1 (in i32, in i32) -> i32
 signature 2 (in i32, in u32) -> i32
 signature 3 () -> i32
-evidence 1 concrete represents i32
-  entry 1 target 1 provider 1 dispatch 1
-evidence 2 concrete represents i32
-  entry 1 target 2 provider 2 dispatch 2
 item 1 ROUTINE signed_get result i32 signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 value i32 param 1
   slot 2 at i32 param 2
@@ -9568,59 +9541,59 @@ item 2 ROUTINE condition_effect result i32 signature 2 params 0 slots 2 blocks 6
   block 1 scope 9 BLOCK length 1
     1 JUMP target 2
   block 2 scope 9 BLOCK length 1
-    2 JUMP target 5
-  block 3 scope 11 BLOCK length 1
-    10 JUMP target 2
-  block 4 scope 9 BLOCK length 2
-    11 LOAD i32 slot 1
-    12 LEAVE <- 11
-  block 5 scope 10 BLOCK length 5
+    2 JUMP target 3
+  block 3 scope 10 BLOCK length 5
     3 NUMBER i32 1
     4 STORE slot 1 <- 3
     5 TRUTH bool false
     6 STORE slot 2 <- 5
-    7 JUMP target 6
-  block 6 scope 9 BLOCK length 2
+    7 JUMP target 4
+  block 4 scope 9 BLOCK length 2
     8 LOAD bool slot 2
-    9 BRANCH target 3 alternative 4 <- 8
+    9 BRANCH target 5 alternative 6 <- 8
+  block 5 scope 11 BLOCK length 1
+    10 JUMP target 2
+  block 6 scope 9 BLOCK length 2
+    11 LOAD i32 slot 1
+    12 LEAVE <- 11
 item 3 ROUTINE bound_effect result i32 signature 3 params 0 slots 4 blocks 8 values 25
   slot 1 r i32 return
   slot 2 i i32
   slot 3 - i32
   slot 4 - i32
   block 1 scope 13 BLOCK length 1
-    1 JUMP target 7
-  block 2 scope 13 BLOCK length 4
-    14 LOAD i32 slot 2
-    15 LOAD i32 slot 4
-    16 LESS_THAN bool <- 14 15
-    17 BRANCH target 3 alternative 4 <- 16
-  block 3 scope 15 BLOCK length 1
-    18 JUMP target 5
-  block 4 scope 13 BLOCK length 2
-    24 LOAD i32 slot 1
-    25 LEAVE <- 24
-  block 5 scope 15 BLOCK length 5
-    19 LOAD i32 slot 2
-    20 NUMBER i32 1
-    21 ADD i32 <- 19 20
-    22 STORE slot 2 <- 21
-    23 JUMP target 2
-  block 6 scope 13 BLOCK length 2
-    12 TRUTH bool false
-    13 BRANCH target 5 alternative 2 <- 12
-  block 7 scope 14 BLOCK length 5
+    1 JUMP target 2
+  block 2 scope 14 BLOCK length 5
     2 NUMBER i32 1
     3 STORE slot 1 <- 2
     4 NUMBER i32 0
     5 STORE slot 3 <- 4
-    6 JUMP target 8
-  block 8 scope 13 BLOCK length 5
+    6 JUMP target 3
+  block 3 scope 13 BLOCK length 5
     7 LOAD i32 slot 3
     8 STORE slot 2 <- 7
     9 NUMBER i32 1
     10 STORE slot 4 <- 9
-    11 JUMP target 6
+    11 JUMP target 8
+  block 4 scope 13 BLOCK length 4
+    14 LOAD i32 slot 2
+    15 LOAD i32 slot 4
+    16 LESS_THAN bool <- 14 15
+    17 BRANCH target 5 alternative 6 <- 16
+  block 5 scope 15 BLOCK length 1
+    18 JUMP target 7
+  block 6 scope 13 BLOCK length 2
+    24 LOAD i32 slot 1
+    25 LEAVE <- 24
+  block 7 scope 15 BLOCK length 5
+    19 LOAD i32 slot 2
+    20 NUMBER i32 1
+    21 ADD i32 <- 19 20
+    22 STORE slot 2 <- 21
+    23 JUMP target 4
+  block 8 scope 13 BLOCK length 2
+    12 TRUTH bool false
+    13 BRANCH target 7 alternative 4 <- 12
 item 4 ROUTINE loop_value result array signature 4 params 1 slots 3 blocks 4 values 9
   elements 2 of i32
   slot 1 loop_value usize param 1
@@ -10380,44 +10353,44 @@ item 7 ROUTINE conditional_lower result usize signature 7 params 2 slots 6 block
     1 NUMBER usize 0
     2 STORE slot 3 <- 1
     3 LOAD bool slot 1
-    4 BRANCH target 7 alternative 8 <- 3
-  block 2 scope 23 BLOCK length 4
-    19 LOAD usize slot 4
-    20 LOAD usize slot 6
-    21 LESS_THAN bool <- 19 20
-    22 BRANCH target 3 alternative 4 <- 21
-  block 3 scope 26 BLOCK length 3
-    23 LOAD usize slot 4
-    24 STORE slot 3 <- 23
-    25 JUMP target 5
-  block 4 scope 23 BLOCK length 2
-    31 LOAD usize slot 3
-    32 LEAVE <- 31
-  block 5 scope 26 BLOCK length 5
-    26 LOAD usize slot 4
-    27 NUMBER usize 1
-    28 ADD usize <- 26 27
-    29 STORE slot 4 <- 28
-    30 JUMP target 2
-  block 6 scope 23 BLOCK length 2
-    17 TRUTH bool false
-    18 BRANCH target 5 alternative 2 <- 17
-  block 7 scope 24 BLOCK length 3
+    4 BRANCH target 2 alternative 3 <- 3
+  block 2 scope 24 BLOCK length 3
     5 NUMBER usize 0
     6 STORE slot 5 <- 5
-    7 JUMP target 9
-  block 8 scope 23 BLOCK length 1
-    8 JUMP target 10
-  block 9 scope 23 BLOCK length 5
+    7 JUMP target 4
+  block 3 scope 23 BLOCK length 1
+    8 JUMP target 5
+  block 4 scope 23 BLOCK length 5
     12 LOAD usize slot 5
     13 STORE slot 4 <- 12
     14 LOAD usize slot 2
     15 STORE slot 6 <- 14
-    16 JUMP target 6
-  block 10 scope 25 BLOCK length 3
+    16 JUMP target 10
+  block 5 scope 25 BLOCK length 3
     9 NUMBER usize 1
     10 STORE slot 5 <- 9
-    11 JUMP target 9
+    11 JUMP target 4
+  block 6 scope 23 BLOCK length 4
+    19 LOAD usize slot 4
+    20 LOAD usize slot 6
+    21 LESS_THAN bool <- 19 20
+    22 BRANCH target 7 alternative 8 <- 21
+  block 7 scope 26 BLOCK length 3
+    23 LOAD usize slot 4
+    24 STORE slot 3 <- 23
+    25 JUMP target 9
+  block 8 scope 23 BLOCK length 2
+    31 LOAD usize slot 3
+    32 LEAVE <- 31
+  block 9 scope 26 BLOCK length 5
+    26 LOAD usize slot 4
+    27 NUMBER usize 1
+    28 ADD usize <- 26 27
+    29 STORE slot 4 <- 28
+    30 JUMP target 6
+  block 10 scope 23 BLOCK length 2
+    17 TRUTH bool false
+    18 BRANCH target 9 alternative 6 <- 17
 file positive/r491-sink-call-entry/program.ldn
 unit signatures 14 items 13
 atom set 1 atoms {unavailable}
@@ -10775,10 +10748,10 @@ nominal 1 good layout(c) struct (u32,usize,[2]u32,struct (u32),usize signature 1
 nominal 2 cbox layout(c) struct (u32)
 signature 1 extern(c) (in u32) -> none
 file positive/r491-tour-allocator-examples/main.ldn
-unit signatures 43 items 29
+unit signatures 45 items 35
 atom set 1 atoms {out_of_memory}
-atom set 2 atoms {out_of_bounds}
-atom set 3 atoms {less, equal, greater}
+atom set 2 atoms {less, equal, greater}
+atom set 3 atoms {out_of_bounds}
 atom set 4 atoms {out_of_memory}
 atom set 5 atoms {out_of_memory}
 atom set 6 atoms {out_of_memory}
@@ -10787,10 +10760,10 @@ atom set 8 atoms {full}
 atom set 9 atoms {not_empty, empty}
 atom set 10 atoms {out_of_memory}
 atom set 11 atoms {out_of_memory}
-atom set 12 atoms {out_of_bounds}
-atom set 13 atoms {less}
-atom set 14 atoms {greater}
-atom set 15 atoms {equal}
+atom set 12 atoms {less}
+atom set 13 atoms {greater}
+atom set 14 atoms {equal}
+atom set 15 atoms {out_of_bounds}
 atom set 16 atoms {out_of_memory}
 atom set 17 atoms {full}
 atom set 18 atoms {not_empty}
@@ -10799,45 +10772,47 @@ signature 1 (in usize, in usize) -> none
 signature 2 (in usize, in u32, in u32) -> none
 signature 3 (in usize) -> none
 signature 4 (in struct arena_value) -> none errors atoms {out_of_memory}
-signature 5 (in [2]usize, in [2]usize) -> none errors atoms {out_of_bounds}
-signature 6 (in [2]usize, in u8) -> none
-signature 7 (in [2]usize, in [2]usize) -> u32 atoms {less, equal, greater}
-signature 8 (in [2]usize, in u8) -> usize
-signature 9 (in struct buffer) -> [2]usize from 1
-signature 10 (in usize, in usize, in usize, in usize, in usize) -> usize errors atoms {out_of_memory}
-signature 11 (inout usize, escaping in usize, in usize) -> struct arena_value from 1, 2
-signature 12 (inout usize, in usize, in usize) -> struct arena_value from 1, 2
-signature 13 (in struct arena_value) -> usize
-signature 14 (in struct arena_value, in usize, in usize) -> usize errors atoms {out_of_memory}
-signature 15 (in struct arena_value, in usize, in usize) -> none
-signature 16 (in struct arena_value, in usize, in usize, in usize, in usize) -> bool
-signature 17 (in struct arena_value, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
-signature 18 (in struct arena_value, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
-signature 19 (in struct arena_value, in usize) -> struct buffer errors atoms {out_of_memory}
-signature 20 (in usize, in struct arena_value, in usize) -> struct buffer errors atoms {out_of_memory}
-signature 21 () -> struct raw
-signature 22 () -> struct raw
-signature 23 (in usize, in usize) -> struct raw from 1
-signature 24 (in usize, in usize) -> struct raw from 1
-signature 25 (inout usize, escaping in u8) -> usize errors atoms {full}
-signature 26 (inout usize, escaping in u8) -> usize errors atoms {full}
-signature 27 (in struct raw) -> usize
-signature 28 (in struct raw) -> usize
-signature 29 (in struct arena_value, inout usize) -> none
-signature 30 (in usize, in struct arena_value, inout usize) -> none
-signature 31 (inout usize) -> none
-signature 32 (inout usize) -> none
-signature 33 (inout usize) -> usize from 1 errors atoms {not_empty, empty}
-signature 34 (inout usize) -> usize from 1 errors atoms {not_empty, empty}
-signature 35 (in struct arena_value) -> [2]usize errors atoms {out_of_memory}
-signature 36 (in struct arena_value) -> [2]usize errors atoms {out_of_memory}
-signature 37 (in struct arena_value, escaping in struct button) -> usize errors atoms {out_of_memory}
-signature 38 (in usize, in struct arena_value, escaping in struct button) -> usize errors atoms {out_of_memory}
-signature 39 (in struct raw) -> [2]usize from 1
-signature 40 (in struct raw) -> [2]usize from 1
-signature 41 erased-self (in usize) -> none
-signature 42 erased-self (in usize, in usize) -> none
-signature 43 erased-self (in usize, in u32, in u32) -> none
+signature 5 (in [2]usize, in [2]usize) -> u32 atoms {less, equal, greater}
+signature 6 (in [2]usize, in [2]usize) -> none errors atoms {out_of_bounds}
+signature 7 (in [2]usize, in [2]usize, in usize) -> none
+signature 8 (in [2]usize, in [2]usize, in usize) -> none
+signature 9 (in [2]usize, in u8) -> none
+signature 10 (in [2]usize, in u8) -> usize
+signature 11 (in struct buffer) -> [2]usize from 1
+signature 12 (in usize, in usize, in usize, in usize, in usize) -> usize errors atoms {out_of_memory}
+signature 13 (inout usize, escaping in usize, in usize) -> struct arena_value from 1, 2
+signature 14 (inout usize, in usize, in usize) -> struct arena_value from 1, 2
+signature 15 (in struct arena_value) -> usize
+signature 16 (in struct arena_value, in usize, in usize) -> usize errors atoms {out_of_memory}
+signature 17 (in struct arena_value, in usize, in usize) -> none
+signature 18 (in struct arena_value, in usize, in usize, in usize, in usize) -> bool
+signature 19 (in struct arena_value, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
+signature 20 (in struct arena_value, in usize) -> (struct buffer, struct buffer, struct buffer) errors atoms {out_of_memory}
+signature 21 (in struct arena_value, in usize) -> struct buffer errors atoms {out_of_memory}
+signature 22 (in usize, in struct arena_value, in usize) -> struct buffer errors atoms {out_of_memory}
+signature 23 () -> struct raw
+signature 24 () -> struct raw
+signature 25 (in usize, in usize) -> struct raw from 1
+signature 26 (in usize, in usize) -> struct raw from 1
+signature 27 (inout usize, escaping in u8) -> usize errors atoms {full}
+signature 28 (inout usize, escaping in u8) -> usize errors atoms {full}
+signature 29 (in struct raw) -> usize
+signature 30 (in struct raw) -> usize
+signature 31 (in struct arena_value, inout usize) -> none
+signature 32 (in usize, in struct arena_value, inout usize) -> none
+signature 33 (inout usize) -> none
+signature 34 (inout usize) -> none
+signature 35 (inout usize) -> usize from 1 errors atoms {not_empty, empty}
+signature 36 (inout usize) -> usize from 1 errors atoms {not_empty, empty}
+signature 37 (in struct arena_value) -> [2]usize errors atoms {out_of_memory}
+signature 38 (in struct arena_value) -> [2]usize errors atoms {out_of_memory}
+signature 39 (in struct arena_value, escaping in struct button) -> usize errors atoms {out_of_memory}
+signature 40 (in usize, in struct arena_value, escaping in struct button) -> usize errors atoms {out_of_memory}
+signature 41 (in struct raw) -> [2]usize from 1
+signature 42 (in struct raw) -> [2]usize from 1
+signature 43 erased-self (in usize) -> none
+signature 44 erased-self (in usize, in usize) -> none
+signature 45 erased-self (in usize, in u32, in u32) -> none
 evidence 1 concrete represents struct ([2]usize)
   entry 1 target 1 provider 1 dispatch 1
 evidence 2 concrete represents struct ([2]usize)
@@ -10845,13 +10820,13 @@ evidence 2 concrete represents struct ([2]usize)
 evidence 3 concrete represents struct ([2]usize)
   entry 1 target 3 provider 3 dispatch 3
 evidence 4 erased represents struct ([2]usize)
-  entry 1 target 3 provider 3 dispatch 41
-  entry 2 target 1 provider 1 dispatch 42
-  entry 3 target 2 provider 2 dispatch 43
+  entry 1 target 3 provider 3 dispatch 43
+  entry 2 target 1 provider 1 dispatch 44
+  entry 3 target 2 provider 2 dispatch 45
 evidence 5 concrete represents struct (usize,usize)
-  entry 1 target 14 provider 14 dispatch 14
-  entry 2 target 16 provider 16 dispatch 16
-  entry 3 target 15 provider 15 dispatch 15
+  entry 1 target 20 provider 16 dispatch 16
+  entry 2 target 22 provider 18 dispatch 18
+  entry 3 target 21 provider 17 dispatch 17
 item 1 ROUTINE button_draw result none signature 1 params 2 slots 4 blocks 1 values 9
   slot 1 self usize param 1
   slot 2 target usize param 2
@@ -10898,7 +10873,7 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
     4 CONVERSION usize <- 3
     5 LOAD usize slot 4
     6 STORAGE_ADDRESS usize storage slot 2
-    7 CALL none callee 17 - signature 18 failure slot 3 <- 6 5 4
+    7 CALL none callee 23 - signature 20 failure slot 3 <- 6 5 4
     8 LOAD u32 slot 3
     9 FAILURE_TEST bool <- 8
     10 BRANCH target 2 alternative 3 <- 9
@@ -10910,7 +10885,7 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
   block 3 scope 26 BLOCK length 6
     15 STORAGE_ADDRESS usize storage slot 1
     16 STORAGE_ADDRESS usize storage slot 6
-    17 CALL none callee 26 - signature 36 failure slot 7 <- 16 15
+    17 CALL none callee 32 - signature 38 failure slot 7 <- 16 15
     18 LOAD u32 slot 7
     19 FAILURE_TEST bool <- 18
     20 BRANCH target 4 alternative 5 <- 19
@@ -10925,29 +10900,221 @@ item 4 ROUTINE probe result none signature 4 params 1 slots 13 blocks 5 values 5
     27 COPY_ARRAY from slot 6 to slot 10
     28 PLACE_ADDRESS usize
     29 STORAGE_ADDRESS usize storage slot 10
-    30 EVIDENCE_FUNCTION usize erased receiver evidence 4 entry 2 signature 42 <- 29
+    30 EVIDENCE_FUNCTION usize erased receiver evidence 4 entry 2 signature 44 <- 29
     31 EVIDENCE_SELF usize bound function <- 30
-    32 INDIRECT_CALL none signature 42 <- 30 31 28
+    32 INDIRECT_CALL none signature 44 <- 30 31 28
     33 STORAGE_ADDRESS usize storage slot 1
     34 STORE slot 11 <- 33
     35 PLACE_ADDRESS usize
     36 LOAD usize slot 11
     37 EVIDENCE_ADDRESS usize evidence 5
-    38 CALL none callee 23 - signature 30 <- 37 36 35
+    38 CALL none callee 29 - signature 32 <- 37 36 35
     39 STORAGE_ADDRESS usize storage slot 1
     40 STORE slot 12 <- 39
     41 PLACE_ADDRESS usize
     42 LOAD usize slot 12
     43 EVIDENCE_ADDRESS usize evidence 5
-    44 CALL none callee 23 - signature 30 <- 43 42 41
+    44 CALL none callee 29 - signature 32 <- 43 42 41
     45 STORAGE_ADDRESS usize storage slot 1
     46 STORE slot 13 <- 45
     47 PLACE_ADDRESS usize
     48 LOAD usize slot 13
     49 EVIDENCE_ADDRESS usize evidence 5
-    50 CALL none callee 23 - signature 30 <- 49 48 47
+    50 CALL none callee 29 - signature 32 <- 49 48 47
     51 LEAVE
-item 5 ROUTINE copy result none signature 5 params 2 slots 31 blocks 15 values 127
+item 5 ROUTINE compare result u32 atoms {less, equal, greater} signature 5 params 2 slots 23 blocks 18 values 114
+  slot 1 left elements 2 of usize param 1
+  slot 2 right elements 2 of usize param 2
+  slot 3 result u32 atoms {less, equal, greater} return
+  slot 4 at usize
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 - usize
+  slot 8 - usize
+  slot 9 - address of u8
+  slot 10 - u8
+  slot 11 - usize
+  slot 12 - usize
+  slot 13 - address of u8
+  slot 14 - u32 atoms {less, equal, greater}
+  slot 15 - usize
+  slot 16 - usize
+  slot 17 - address of u8
+  slot 18 - u8
+  slot 19 - usize
+  slot 20 - usize
+  slot 21 - address of u8
+  slot 22 - usize
+  slot 23 - usize
+  block 1 scope 32 BLOCK length 3
+    1 NUMBER usize 0
+    2 STORE slot 4 <- 1
+    3 JUMP target 2
+  block 2 scope 32 BLOCK length 7
+    4 LOAD usize slot 4
+    5 STORE slot 5 <- 4
+    6 LOAD_FIELD usize slot 1 field 1
+    7 LOAD_FIELD usize slot 1 field 2
+    8 LOAD usize slot 5
+    9 LESS_THAN bool <- 8 7
+    10 BRANCH target 3 alternative 5 <- 9
+  block 3 scope 32 BLOCK length 7
+    11 LOAD usize slot 4
+    12 STORE slot 6 <- 11
+    13 LOAD_FIELD usize slot 2 field 1
+    14 LOAD_FIELD usize slot 2 field 2
+    15 LOAD usize slot 6
+    16 LESS_THAN bool <- 15 14
+    17 BRANCH target 4 alternative 5 <- 16
+  block 4 scope 33 BLOCK length 26
+    18 LOAD_FIELD usize slot 1 field 1
+    19 LOAD_FIELD usize slot 1 field 2
+    20 STORE slot 7 <- 18
+    21 STORE slot 8 <- 19
+    22 LOAD usize slot 4
+    23 LOAD usize slot 7
+    24 LOAD usize slot 8
+    25 SLICE_ADDRESS usize <- 23 24 22 22
+    26 STORE slot 9 <- 25
+    27 LOAD usize slot 9
+    28 LOAD_INDIRECT u8 address slot 9 <- 27
+    29 STORE slot 10 <- 28
+    30 LOAD_FIELD usize slot 2 field 1
+    31 LOAD_FIELD usize slot 2 field 2
+    32 STORE slot 11 <- 30
+    33 STORE slot 12 <- 31
+    34 LOAD usize slot 4
+    35 LOAD usize slot 11
+    36 LOAD usize slot 12
+    37 SLICE_ADDRESS usize <- 35 36 34 34
+    38 STORE slot 13 <- 37
+    39 LOAD usize slot 13
+    40 LOAD_INDIRECT u8 address slot 13 <- 39
+    41 LOAD u8 slot 10
+    42 NOT_EQUAL_TO bool <- 41 40
+    43 BRANCH target 6 alternative 7 <- 42
+  block 5 scope 32 BLOCK length 8
+    87 LOAD_FIELD usize slot 1 field 1
+    88 LOAD_FIELD usize slot 1 field 2
+    89 STORE slot 22 <- 88
+    90 LOAD_FIELD usize slot 2 field 1
+    91 LOAD_FIELD usize slot 2 field 2
+    92 LOAD usize slot 22
+    93 LESS_THAN bool <- 92 91
+    94 BRANCH target 13 alternative 14 <- 93
+  block 6 scope 34 BLOCK length 26
+    44 LOAD_FIELD usize slot 1 field 1
+    45 LOAD_FIELD usize slot 1 field 2
+    46 STORE slot 15 <- 44
+    47 STORE slot 16 <- 45
+    48 LOAD usize slot 4
+    49 LOAD usize slot 15
+    50 LOAD usize slot 16
+    51 SLICE_ADDRESS usize <- 49 50 48 48
+    52 STORE slot 17 <- 51
+    53 LOAD usize slot 17
+    54 LOAD_INDIRECT u8 address slot 17 <- 53
+    55 STORE slot 18 <- 54
+    56 LOAD_FIELD usize slot 2 field 1
+    57 LOAD_FIELD usize slot 2 field 2
+    58 STORE slot 19 <- 56
+    59 STORE slot 20 <- 57
+    60 LOAD usize slot 4
+    61 LOAD usize slot 19
+    62 LOAD usize slot 20
+    63 SLICE_ADDRESS usize <- 61 62 60 60
+    64 STORE slot 21 <- 63
+    65 LOAD usize slot 21
+    66 LOAD_INDIRECT u8 address slot 21 <- 65
+    67 LOAD u8 slot 18
+    68 LESS_THAN bool <- 67 66
+    69 BRANCH target 8 alternative 9 <- 68
+  block 7 scope 33 BLOCK length 1
+    81 JUMP target 12
+  block 8 scope 35 BLOCK length 3
+    70 ATOM u32 identity less atoms {less}
+    71 STORE slot 14 <- 70
+    72 JUMP target 10
+  block 9 scope 34 BLOCK length 1
+    73 JUMP target 11
+  block 10 scope 34 BLOCK length 4
+    77 LOAD u32 slot 14
+    78 STORE slot 3 <- 77
+    79 LOAD u32 slot 3
+    80 LEAVE <- 79
+  block 11 scope 36 BLOCK length 3
+    74 ATOM u32 identity greater atoms {greater}
+    75 STORE slot 14 <- 74
+    76 JUMP target 10
+  block 12 scope 33 BLOCK length 5
+    82 LOAD usize slot 4
+    83 NUMBER usize 1
+    84 ADD usize <- 82 83
+    85 STORE slot 4 <- 84
+    86 JUMP target 2
+  block 13 scope 37 BLOCK length 3
+    95 ATOM u32 identity less atoms {less}
+    96 STORE slot 3 <- 95
+    97 JUMP target 15
+  block 14 scope 32 BLOCK length 8
+    98 LOAD_FIELD usize slot 1 field 1
+    99 LOAD_FIELD usize slot 1 field 2
+    100 STORE slot 23 <- 99
+    101 LOAD_FIELD usize slot 2 field 1
+    102 LOAD_FIELD usize slot 2 field 2
+    103 LOAD usize slot 23
+    104 GREATER_THAN bool <- 103 102
+    105 BRANCH target 16 alternative 17 <- 104
+  block 15 scope 32 BLOCK length 2
+    113 LOAD u32 slot 3
+    114 LEAVE <- 113
+  block 16 scope 38 BLOCK length 3
+    106 ATOM u32 identity greater atoms {greater}
+    107 STORE slot 3 <- 106
+    108 JUMP target 15
+  block 17 scope 32 BLOCK length 1
+    109 JUMP target 18
+  block 18 scope 39 BLOCK length 3
+    110 ATOM u32 identity equal atoms {equal}
+    111 STORE slot 3 <- 110
+    112 JUMP target 15
+item 6 DATUM word result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_SIZE usize measured usize
+    2 LEAVE <- 1
+item 7 DATUM word_mask result usize params 0 slots 1 blocks 1 values 6
+  slot 1 - usize
+  block 1 scope 1 PROGRAM length 6
+    1 LOAD_DATUM usize datum 6 word
+    2 STORE slot 1 <- 1
+    3 NUMBER usize 1
+    4 LOAD usize slot 1
+    5 SUBTRACT usize <- 4 3
+    6 LEAVE <- 5
+item 8 DATUM ones result usize params 0 slots 2 blocks 1 values 10
+  slot 1 - usize
+  slot 2 - usize
+  block 1 scope 1 PROGRAM length 10
+    1 NUMBER usize 0
+    2 STORE slot 1 <- 1
+    3 NUMBER usize 1
+    4 LOAD usize slot 1
+    5 WRAPPING_SUBTRACT usize <- 4 3
+    6 STORE slot 2 <- 5
+    7 NUMBER usize 255
+    8 LOAD usize slot 2
+    9 DIVIDE usize <- 8 7
+    10 LEAVE <- 9
+item 9 DATUM highs result usize params 0 slots 1 blocks 1 values 6
+  slot 1 - usize
+  block 1 scope 1 PROGRAM length 6
+    1 LOAD_DATUM usize datum 8 ones
+    2 STORE slot 1 <- 1
+    3 NUMBER usize 7
+    4 LOAD usize slot 1
+    5 SHIFT_LEFT usize <- 4 3
+    6 LEAVE <- 5
+item 10 ROUTINE copy result none signature 6 params 2 slots 25 blocks 10 values 85
   slot 1 into elements 2 of usize param 1
   slot 2 source elements 2 of usize param 2
   slot 3 count usize
@@ -10963,23 +11130,17 @@ item 5 ROUTINE copy result none signature 5 params 2 slots 31 blocks 15 values 1
   slot 13 - usize
   slot 14 - address of u8
   slot 15 - usize
-  slot 16 at usize
+  slot 16 - usize
   slot 17 - usize
-  slot 18 - usize
-  slot 19 - usize
-  slot 20 - address of u8
-  slot 21 - usize
-  slot 22 - usize
-  slot 23 - address of u8
-  slot 24 at usize
-  slot 25 - usize
-  slot 26 - usize
-  slot 27 - usize
-  slot 28 - address of u8
-  slot 29 - usize
-  slot 30 - usize
-  slot 31 - address of u8
-  block 1 scope 32 BLOCK length 10
+  slot 18 - elements 2 of usize
+  slot 19 - address of [2]usize
+  slot 20 - elements 2 of usize
+  slot 21 - address of [2]usize
+  slot 22 - elements 2 of usize
+  slot 23 - address of [2]usize
+  slot 24 - elements 2 of usize
+  slot 25 - address of [2]usize
+  block 1 scope 41 BLOCK length 10
     1 LOAD_FIELD usize slot 2 field 1
     2 LOAD_FIELD usize slot 2 field 2
     3 STORE slot 3 <- 2
@@ -10990,21 +11151,21 @@ item 5 ROUTINE copy result none signature 5 params 2 slots 31 blocks 15 values 1
     8 LOAD usize slot 4
     9 GREATER_THAN bool <- 8 7
     10 BRANCH target 2 alternative 3 <- 9
-  block 2 scope 32 BLOCK length 4
+  block 2 scope 41 BLOCK length 4
     11 ATOM u32 identity out_of_bounds atoms {out_of_bounds}
     12 STORE slot 5 <- 11
     13 LOAD u32 slot 5
     14 FAIL <- 13
-  block 3 scope 32 BLOCK length 6
+  block 3 scope 41 BLOCK length 6
     15 LOAD usize slot 3
     16 STORE slot 6 <- 15
     17 NUMBER usize 0
     18 LOAD usize slot 6
     19 EQUAL_TO bool <- 18 17
     20 BRANCH target 4 alternative 5 <- 19
-  block 4 scope 32 BLOCK length 1
+  block 4 scope 41 BLOCK length 1
     21 LEAVE
-  block 5 scope 32 BLOCK length 30
+  block 5 scope 41 BLOCK length 30
     22 LOAD_FIELD usize slot 1 field 1
     23 LOAD_FIELD usize slot 1 field 2
     24 STORE slot 8 <- 22
@@ -11034,356 +11195,1136 @@ item 5 ROUTINE copy result none signature 5 params 2 slots 31 blocks 15 values 1
     48 LOAD usize slot 11
     49 LOAD usize slot 15
     50 GREATER_THAN bool <- 49 48
-    51 BRANCH target 6 alternative 7 <- 50
-  block 6 scope 33 BLOCK length 3
-    52 LOAD usize slot 3
+    51 BRANCH target 6 alternative 8 <- 50
+  block 6 scope 41 BLOCK length 10
+    52 LOAD usize slot 7
     53 STORE slot 16 <- 52
-    54 JUMP target 8
-  block 7 scope 32 BLOCK length 1
-    89 JUMP target 12
-  block 8 scope 33 BLOCK length 6
+    54 LOAD usize slot 11
     55 LOAD usize slot 16
-    56 STORE slot 17 <- 55
-    57 NUMBER usize 0
-    58 LOAD usize slot 17
-    59 GREATER_THAN bool <- 58 57
-    60 BRANCH target 9 alternative 10 <- 59
-  block 9 scope 34 BLOCK length 27
-    61 LOAD usize slot 16
-    62 NUMBER usize 1
-    63 SUBTRACT usize <- 61 62
-    64 STORE slot 16 <- 63
-    65 LOAD_FIELD usize slot 1 field 1
-    66 LOAD_FIELD usize slot 1 field 2
-    67 STORE slot 18 <- 65
-    68 STORE slot 19 <- 66
-    69 LOAD usize slot 16
-    70 LOAD usize slot 18
-    71 LOAD usize slot 19
-    72 SLICE_ADDRESS usize <- 70 71 69 69
-    73 STORE slot 20 <- 72
-    74 LOAD_FIELD usize slot 2 field 1
-    75 LOAD_FIELD usize slot 2 field 2
-    76 STORE slot 21 <- 74
-    77 STORE slot 22 <- 75
-    78 LOAD usize slot 16
-    79 LOAD usize slot 21
-    80 LOAD usize slot 22
-    81 SLICE_ADDRESS usize <- 79 80 78 78
-    82 STORE slot 23 <- 81
-    83 LOAD usize slot 23
-    84 LOAD_INDIRECT u8 address slot 23 <- 83
-    85 LOAD usize slot 20
-    86 STORE_INDIRECT address slot 20 <- 85 84
-    87 JUMP target 8
-  block 10 scope 33 BLOCK length 1
-    88 JUMP target 11
-  block 11 scope 32 BLOCK length 1
-    127 LEAVE
-  block 12 scope 35 BLOCK length 3
-    90 NUMBER usize 0
-    91 STORE slot 24 <- 90
-    92 JUMP target 13
-  block 13 scope 35 BLOCK length 6
-    93 LOAD usize slot 24
-    94 STORE slot 25 <- 93
-    95 LOAD usize slot 3
-    96 LOAD usize slot 25
-    97 LESS_THAN bool <- 96 95
-    98 BRANCH target 14 alternative 15 <- 97
-  block 14 scope 36 BLOCK length 27
-    99 LOAD_FIELD usize slot 1 field 1
-    100 LOAD_FIELD usize slot 1 field 2
-    101 STORE slot 26 <- 99
-    102 STORE slot 27 <- 100
-    103 LOAD usize slot 24
-    104 LOAD usize slot 26
-    105 LOAD usize slot 27
-    106 SLICE_ADDRESS usize <- 104 105 103 103
-    107 STORE slot 28 <- 106
-    108 LOAD_FIELD usize slot 2 field 1
-    109 LOAD_FIELD usize slot 2 field 2
-    110 STORE slot 29 <- 108
-    111 STORE slot 30 <- 109
-    112 LOAD usize slot 24
-    113 LOAD usize slot 29
-    114 LOAD usize slot 30
-    115 SLICE_ADDRESS usize <- 113 114 112 112
-    116 STORE slot 31 <- 115
-    117 LOAD usize slot 31
-    118 LOAD_INDIRECT u8 address slot 31 <- 117
-    119 LOAD usize slot 28
-    120 STORE_INDIRECT address slot 28 <- 119 118
-    121 LOAD usize slot 24
-    122 NUMBER usize 1
-    123 ADD usize <- 121 122
-    124 STORE slot 24 <- 123
-    125 JUMP target 13
-  block 15 scope 35 BLOCK length 1
-    126 JUMP target 11
-item 6 ROUTINE fill result none signature 6 params 2 slots 7 blocks 4 values 28
+    56 SUBTRACT usize <- 55 54
+    57 STORE slot 17 <- 56
+    58 LOAD usize slot 3
+    59 LOAD usize slot 17
+    60 LESS_THAN bool <- 59 58
+    61 BRANCH target 7 alternative 8 <- 60
+  block 7 scope 42 BLOCK length 11
+    62 COPY_ARRAY from slot 1 to slot 18
+    63 STORAGE_ADDRESS usize storage slot 18
+    64 STORE slot 19 <- 63
+    65 COPY_ARRAY from slot 2 to slot 20
+    66 STORAGE_ADDRESS usize storage slot 20
+    67 STORE slot 21 <- 66
+    68 LOAD usize slot 3
+    69 LOAD usize slot 19
+    70 LOAD usize slot 21
+    71 CALL none callee 12 copy_down signature 8 <- 69 70 68
+    72 JUMP target 9
+  block 8 scope 41 BLOCK length 1
+    73 JUMP target 10
+  block 9 scope 41 BLOCK length 1
+    85 LEAVE
+  block 10 scope 43 BLOCK length 11
+    74 COPY_ARRAY from slot 1 to slot 22
+    75 STORAGE_ADDRESS usize storage slot 22
+    76 STORE slot 23 <- 75
+    77 COPY_ARRAY from slot 2 to slot 24
+    78 STORAGE_ADDRESS usize storage slot 24
+    79 STORE slot 25 <- 78
+    80 LOAD usize slot 3
+    81 LOAD usize slot 23
+    82 LOAD usize slot 25
+    83 CALL none callee 11 copy_up signature 7 <- 81 82 80
+    84 JUMP target 9
+item 11 ROUTINE copy_up result none signature 7 params 3 slots 83 blocks 27 values 348
   slot 1 into elements 2 of usize param 1
-  slot 2 value u8 param 2
-  slot 3 at usize
-  slot 4 - usize
+  slot 2 source elements 2 of usize param 2
+  slot 3 count usize param 3
+  slot 4 target_address usize
   slot 5 - usize
   slot 6 - usize
   slot 7 - address of u8
-  block 1 scope 38 BLOCK length 3
-    1 NUMBER usize 0
-    2 STORE slot 3 <- 1
-    3 JUMP target 2
-  block 2 scope 38 BLOCK length 7
-    4 LOAD usize slot 3
-    5 STORE slot 4 <- 4
-    6 LOAD_FIELD usize slot 1 field 1
-    7 LOAD_FIELD usize slot 1 field 2
-    8 LOAD usize slot 4
-    9 LESS_THAN bool <- 8 7
-    10 BRANCH target 3 alternative 4 <- 9
-  block 3 scope 39 BLOCK length 17
-    11 LOAD_FIELD usize slot 1 field 1
-    12 LOAD_FIELD usize slot 1 field 2
-    13 STORE slot 5 <- 11
-    14 STORE slot 6 <- 12
-    15 LOAD usize slot 3
-    16 LOAD usize slot 5
-    17 LOAD usize slot 6
-    18 SLICE_ADDRESS usize <- 16 17 15 15
-    19 STORE slot 7 <- 18
-    20 LOAD u8 slot 2
-    21 LOAD usize slot 7
-    22 STORE_INDIRECT address slot 7 <- 21 20
-    23 LOAD usize slot 3
-    24 NUMBER usize 1
-    25 ADD usize <- 23 24
-    26 STORE slot 3 <- 25
+  slot 8 source_address usize
+  slot 9 - usize
+  slot 10 - usize
+  slot 11 - address of u8
+  slot 12 at usize
+  slot 13 - usize
+  slot 14 - usize
+  slot 15 - usize
+  slot 16 - usize
+  slot 17 - usize
+  slot 18 - usize
+  slot 19 - address of u8
+  slot 20 - usize
+  slot 21 - usize
+  slot 22 - address of u8
+  slot 23 skew usize
+  slot 24 - usize
+  slot 25 - usize
+  slot 26 - usize
+  slot 27 - usize
+  slot 28 - usize
+  slot 29 source_word usize
+  slot 30 - usize
+  slot 31 target_word usize
+  slot 32 - usize
+  slot 33 - address of usize
+  slot 34 - address of usize
+  slot 35 - usize
+  slot 36 - usize
+  slot 37 - usize
+  slot 38 - usize
+  slot 39 - usize
+  slot 40 stop usize
+  slot 41 - usize
+  slot 42 - usize
+  slot 43 - usize
+  slot 44 - usize
+  slot 45 - address of u8
+  slot 46 - usize
+  slot 47 - usize
+  slot 48 - address of u8
+  slot 49 shift usize
+  slot 50 - usize
+  slot 51 back usize
+  slot 52 - usize
+  slot 53 - usize
+  slot 54 low_address usize
+  slot 55 - usize
+  slot 56 - usize
+  slot 57 low_word usize
+  slot 58 low usize
+  slot 59 - address of usize
+  slot 60 reach usize
+  slot 61 - usize
+  slot 62 - usize
+  slot 63 - usize
+  slot 64 - usize
+  slot 65 high_word usize
+  slot 66 - usize
+  slot 67 high usize
+  slot 68 - address of usize
+  slot 69 target_word usize
+  slot 70 - usize
+  slot 71 - address of usize
+  slot 72 - usize
+  slot 73 - usize
+  slot 74 - usize
+  slot 75 - usize
+  slot 76 - usize
+  slot 77 - usize
+  slot 78 - usize
+  slot 79 - usize
+  slot 80 - address of u8
+  slot 81 - usize
+  slot 82 - usize
+  slot 83 - address of u8
+  block 1 scope 45 BLOCK length 27
+    1 LOAD_FIELD usize slot 1 field 1
+    2 LOAD_FIELD usize slot 1 field 2
+    3 STORE slot 5 <- 1
+    4 STORE slot 6 <- 2
+    5 NUMBER usize 0
+    6 LOAD usize slot 5
+    7 LOAD usize slot 6
+    8 SLICE_ADDRESS usize <- 6 7 5 5
+    9 STORE slot 7 <- 8
+    10 PLACE_ADDRESS usize
+    11 CONVERSION usize <- 10
+    12 STORE slot 4 <- 11
+    13 LOAD_FIELD usize slot 2 field 1
+    14 LOAD_FIELD usize slot 2 field 2
+    15 STORE slot 9 <- 13
+    16 STORE slot 10 <- 14
+    17 NUMBER usize 0
+    18 LOAD usize slot 9
+    19 LOAD usize slot 10
+    20 SLICE_ADDRESS usize <- 18 19 17 17
+    21 STORE slot 11 <- 20
+    22 PLACE_ADDRESS usize
+    23 CONVERSION usize <- 22
+    24 STORE slot 8 <- 23
+    25 NUMBER usize 0
+    26 STORE slot 12 <- 25
     27 JUMP target 2
-  block 4 scope 38 BLOCK length 1
-    28 LEAVE
-item 7 ROUTINE compare result u32 atoms {less, equal, greater} signature 7 params 2 slots 24 blocks 19 values 118
-  slot 1 left elements 2 of usize param 1
-  slot 2 right elements 2 of usize param 2
-  slot 3 result u32 atoms {less, equal, greater} return
-  slot 4 at usize
-  slot 5 - bool
+  block 2 scope 46 BLOCK length 1
+    28 JUMP target 3
+  block 3 scope 46 BLOCK length 6
+    29 LOAD usize slot 12
+    30 STORE slot 13 <- 29
+    31 LOAD usize slot 3
+    32 LOAD usize slot 13
+    33 LESS_THAN bool <- 32 31
+    34 BRANCH target 4 alternative 6 <- 33
+  block 4 scope 46 BLOCK length 14
+    35 LOAD usize slot 4
+    36 STORE slot 14 <- 35
+    37 LOAD usize slot 12
+    38 LOAD usize slot 14
+    39 ADD usize <- 38 37 unchecked
+    40 STORE slot 15 <- 39
+    41 LOAD_DATUM usize datum 7 word_mask
+    42 LOAD usize slot 15
+    43 BITWISE_AND usize <- 42 41
+    44 STORE slot 16 <- 43
+    45 NUMBER usize 0
+    46 LOAD usize slot 16
+    47 NOT_EQUAL_TO bool <- 46 45
+    48 BRANCH target 5 alternative 6 <- 47
+  block 5 scope 47 BLOCK length 27
+    49 LOAD_FIELD usize slot 1 field 1
+    50 LOAD_FIELD usize slot 1 field 2
+    51 STORE slot 17 <- 49
+    52 STORE slot 18 <- 50
+    53 LOAD usize slot 12
+    54 LOAD usize slot 17
+    55 LOAD usize slot 18
+    56 SLICE_ADDRESS usize <- 54 55 53 53 unchecked
+    57 STORE slot 19 <- 56
+    58 LOAD_FIELD usize slot 2 field 1
+    59 LOAD_FIELD usize slot 2 field 2
+    60 STORE slot 20 <- 58
+    61 STORE slot 21 <- 59
+    62 LOAD usize slot 12
+    63 LOAD usize slot 20
+    64 LOAD usize slot 21
+    65 SLICE_ADDRESS usize <- 63 64 62 62 unchecked
+    66 STORE slot 22 <- 65
+    67 LOAD usize slot 22
+    68 LOAD_INDIRECT u8 address slot 22 <- 67
+    69 LOAD usize slot 19
+    70 STORE_INDIRECT address slot 19 <- 69 68
+    71 LOAD usize slot 12
+    72 NUMBER usize 1
+    73 ADD usize <- 71 72 unchecked
+    74 STORE slot 12 <- 73
+    75 JUMP target 3
+  block 6 scope 46 BLOCK length 16
+    76 LOAD usize slot 8
+    77 STORE slot 24 <- 76
+    78 LOAD usize slot 12
+    79 LOAD usize slot 24
+    80 ADD usize <- 79 78 unchecked
+    81 STORE slot 25 <- 80
+    82 LOAD_DATUM usize datum 7 word_mask
+    83 LOAD usize slot 25
+    84 BITWISE_AND usize <- 83 82
+    85 STORE slot 23 <- 84
+    86 LOAD usize slot 23
+    87 STORE slot 26 <- 86
+    88 NUMBER usize 0
+    89 LOAD usize slot 26
+    90 EQUAL_TO bool <- 89 88
+    91 BRANCH target 7 alternative 8 <- 90
+  block 7 scope 48 BLOCK length 1
+    92 JUMP target 9
+  block 8 scope 46 BLOCK length 14
+    137 LOAD usize slot 3
+    138 STORE slot 36 <- 137
+    139 LOAD usize slot 12
+    140 LOAD usize slot 36
+    141 SUBTRACT usize <- 140 139 unchecked
+    142 STORE slot 37 <- 141
+    143 NUMBER usize 3
+    144 STORE slot 38 <- 143
+    145 LOAD_DATUM usize datum 6 word
+    146 LOAD usize slot 38
+    147 MULTIPLY usize <- 146 145 unchecked
+    148 LOAD usize slot 37
+    149 GREATER_OR_EQUAL bool <- 148 147
+    150 BRANCH target 13 alternative 14 <- 149
+  block 9 scope 48 BLOCK length 10
+    93 LOAD usize slot 3
+    94 STORE slot 27 <- 93
+    95 LOAD usize slot 12
+    96 LOAD usize slot 27
+    97 SUBTRACT usize <- 96 95 unchecked
+    98 STORE slot 28 <- 97
+    99 LOAD_DATUM usize datum 6 word
+    100 LOAD usize slot 28
+    101 GREATER_OR_EQUAL bool <- 100 99
+    102 BRANCH target 10 alternative 11 <- 101
+  block 10 scope 49 BLOCK length 33
+    103 LOAD usize slot 8
+    104 STORE slot 30 <- 103
+    105 LOAD usize slot 12
+    106 LOAD usize slot 30
+    107 ADD usize <- 106 105 unchecked
+    108 CONVERSION usize <- 107 unchecked
+    109 RANGE_CHECK usize <- 108 range 1 .. 18446744073709551615 representation
+    110 STORE slot 29 <- 109
+    111 LOAD usize slot 4
+    112 STORE slot 32 <- 111
+    113 LOAD usize slot 12
+    114 LOAD usize slot 32
+    115 ADD usize <- 114 113 unchecked
+    116 CONVERSION usize <- 115 unchecked
+    117 RANGE_CHECK usize <- 116 range 1 .. 18446744073709551615 representation
+    118 STORE slot 31 <- 117
+    119 LOAD usize slot 31
+    120 POINTER_ADDRESS usize <- 119
+    121 STORE slot 33 <- 120
+    122 LOAD usize slot 29
+    123 POINTER_ADDRESS usize <- 122
+    124 STORE slot 34 <- 123
+    125 LOAD usize slot 34
+    126 LOAD_INDIRECT usize address slot 34 <- 125
+    127 LOAD usize slot 33
+    128 STORE_INDIRECT address slot 33 <- 127 126
+    129 LOAD usize slot 12
+    130 STORE slot 35 <- 129
+    131 LOAD_DATUM usize datum 6 word
+    132 LOAD usize slot 35
+    133 ADD usize <- 132 131 unchecked
+    134 STORE slot 12 <- 133
+    135 JUMP target 9
+  block 11 scope 48 BLOCK length 1
+    136 JUMP target 12
+  block 12 scope 46 BLOCK length 1
+    313 JUMP target 24
+  block 13 scope 50 BLOCK length 6
+    151 LOAD usize slot 12
+    152 STORE slot 39 <- 151
+    153 LOAD usize slot 23
+    154 LOAD usize slot 39
+    155 LESS_THAN bool <- 154 153
+    156 BRANCH target 15 alternative 16 <- 155
+  block 14 scope 46 BLOCK length 1
+    312 JUMP target 12
+  block 15 scope 51 BLOCK length 7
+    157 LOAD usize slot 12
+    158 STORE slot 41 <- 157
+    159 LOAD_DATUM usize datum 6 word
+    160 LOAD usize slot 41
+    161 ADD usize <- 160 159 unchecked
+    162 STORE slot 40 <- 161
+    163 JUMP target 17
+  block 16 scope 50 BLOCK length 1
+    198 JUMP target 20
+  block 17 scope 51 BLOCK length 6
+    164 LOAD usize slot 12
+    165 STORE slot 42 <- 164
+    166 LOAD usize slot 40
+    167 LOAD usize slot 42
+    168 LESS_THAN bool <- 167 166
+    169 BRANCH target 18 alternative 19 <- 168
+  block 18 scope 52 BLOCK length 27
+    170 LOAD_FIELD usize slot 1 field 1
+    171 LOAD_FIELD usize slot 1 field 2
+    172 STORE slot 43 <- 170
+    173 STORE slot 44 <- 171
+    174 LOAD usize slot 12
+    175 LOAD usize slot 43
+    176 LOAD usize slot 44
+    177 SLICE_ADDRESS usize <- 175 176 174 174 unchecked
+    178 STORE slot 45 <- 177
+    179 LOAD_FIELD usize slot 2 field 1
+    180 LOAD_FIELD usize slot 2 field 2
+    181 STORE slot 46 <- 179
+    182 STORE slot 47 <- 180
+    183 LOAD usize slot 12
+    184 LOAD usize slot 46
+    185 LOAD usize slot 47
+    186 SLICE_ADDRESS usize <- 184 185 183 183 unchecked
+    187 STORE slot 48 <- 186
+    188 LOAD usize slot 48
+    189 LOAD_INDIRECT u8 address slot 48 <- 188
+    190 LOAD usize slot 45
+    191 STORE_INDIRECT address slot 45 <- 190 189
+    192 LOAD usize slot 12
+    193 NUMBER usize 1
+    194 ADD usize <- 192 193 unchecked
+    195 STORE slot 12 <- 194
+    196 JUMP target 17
+  block 19 scope 51 BLOCK length 1
+    197 JUMP target 20
+  block 20 scope 50 BLOCK length 47
+    199 NUMBER usize 8
+    200 STORE slot 50 <- 199
+    201 LOAD usize slot 23
+    202 LOAD usize slot 50
+    203 MULTIPLY usize <- 202 201 unchecked
+    204 STORE slot 49 <- 203
+    205 NUMBER usize 8
+    206 STORE slot 52 <- 205
+    207 LOAD_DATUM usize datum 6 word
+    208 LOAD usize slot 52
+    209 MULTIPLY usize <- 208 207 unchecked
+    210 STORE slot 53 <- 209
+    211 LOAD usize slot 49
+    212 LOAD usize slot 53
+    213 SUBTRACT usize <- 212 211 unchecked
+    214 STORE slot 51 <- 213
+    215 LOAD usize slot 8
+    216 STORE slot 55 <- 215
+    217 LOAD usize slot 12
+    218 LOAD usize slot 55
+    219 ADD usize <- 218 217 unchecked
+    220 STORE slot 56 <- 219
+    221 LOAD usize slot 23
+    222 LOAD usize slot 56
+    223 SUBTRACT usize <- 222 221 unchecked
+    224 STORE slot 54 <- 223
+    225 LOAD usize slot 54
+    226 CONVERSION usize <- 225 unchecked
+    227 RANGE_CHECK usize <- 226 range 1 .. 18446744073709551615 representation
+    228 STORE slot 57 <- 227
+    229 LOAD usize slot 57
+    230 POINTER_ADDRESS usize <- 229
+    231 STORE slot 59 <- 230
+    232 LOAD usize slot 59
+    233 LOAD_INDIRECT usize address slot 59 <- 232
+    234 STORE slot 58 <- 233
+    235 NUMBER usize 2
+    236 STORE slot 61 <- 235
+    237 LOAD_DATUM usize datum 6 word
+    238 LOAD usize slot 61
+    239 MULTIPLY usize <- 238 237 unchecked
+    240 STORE slot 62 <- 239
+    241 LOAD usize slot 23
+    242 LOAD usize slot 62
+    243 SUBTRACT usize <- 242 241 unchecked
+    244 STORE slot 60 <- 243
+    245 JUMP target 21
+  block 21 scope 50 BLOCK length 10
+    246 LOAD usize slot 3
+    247 STORE slot 63 <- 246
+    248 LOAD usize slot 12
+    249 LOAD usize slot 63
+    250 SUBTRACT usize <- 249 248 unchecked
+    251 STORE slot 64 <- 250
+    252 LOAD usize slot 60
+    253 LOAD usize slot 64
+    254 GREATER_OR_EQUAL bool <- 253 252
+    255 BRANCH target 22 alternative 23 <- 254
+  block 22 scope 53 BLOCK length 55
+    256 LOAD usize slot 54
+    257 STORE slot 66 <- 256
+    258 LOAD_DATUM usize datum 6 word
+    259 LOAD usize slot 66
+    260 ADD usize <- 259 258 unchecked
+    261 CONVERSION usize <- 260 unchecked
+    262 RANGE_CHECK usize <- 261 range 1 .. 18446744073709551615 representation
+    263 STORE slot 65 <- 262
+    264 LOAD usize slot 65
+    265 POINTER_ADDRESS usize <- 264
+    266 STORE slot 68 <- 265
+    267 LOAD usize slot 68
+    268 LOAD_INDIRECT usize address slot 68 <- 267
+    269 STORE slot 67 <- 268
+    270 LOAD usize slot 4
+    271 STORE slot 70 <- 270
+    272 LOAD usize slot 12
+    273 LOAD usize slot 70
+    274 ADD usize <- 273 272 unchecked
+    275 CONVERSION usize <- 274 unchecked
+    276 RANGE_CHECK usize <- 275 range 1 .. 18446744073709551615 representation
+    277 STORE slot 69 <- 276
+    278 LOAD usize slot 69
+    279 POINTER_ADDRESS usize <- 278
+    280 STORE slot 71 <- 279
+    281 LOAD usize slot 58
+    282 STORE slot 72 <- 281
+    283 LOAD usize slot 49
+    284 LOAD usize slot 72
+    285 SHIFT_RIGHT usize <- 284 283
+    286 STORE slot 73 <- 285
+    287 LOAD usize slot 67
+    288 STORE slot 74 <- 287
+    289 LOAD usize slot 51
+    290 LOAD usize slot 74
+    291 SHIFT_LEFT usize <- 290 289
+    292 LOAD usize slot 73
+    293 BITWISE_OR usize <- 292 291
+    294 LOAD usize slot 71
+    295 STORE_INDIRECT address slot 71 <- 294 293
+    296 LOAD usize slot 67
+    297 STORE slot 58 <- 296
+    298 LOAD usize slot 54
+    299 STORE slot 75 <- 298
+    300 LOAD_DATUM usize datum 6 word
+    301 LOAD usize slot 75
+    302 ADD usize <- 301 300 unchecked
+    303 STORE slot 54 <- 302
+    304 LOAD usize slot 12
+    305 STORE slot 76 <- 304
+    306 LOAD_DATUM usize datum 6 word
+    307 LOAD usize slot 76
+    308 ADD usize <- 307 306 unchecked
+    309 STORE slot 12 <- 308
+    310 JUMP target 21
+  block 23 scope 50 BLOCK length 1
+    311 JUMP target 12
+  block 24 scope 46 BLOCK length 6
+    314 LOAD usize slot 12
+    315 STORE slot 77 <- 314
+    316 LOAD usize slot 3
+    317 LOAD usize slot 77
+    318 LESS_THAN bool <- 317 316
+    319 BRANCH target 25 alternative 26 <- 318
+  block 25 scope 54 BLOCK length 27
+    320 LOAD_FIELD usize slot 1 field 1
+    321 LOAD_FIELD usize slot 1 field 2
+    322 STORE slot 78 <- 320
+    323 STORE slot 79 <- 321
+    324 LOAD usize slot 12
+    325 LOAD usize slot 78
+    326 LOAD usize slot 79
+    327 SLICE_ADDRESS usize <- 325 326 324 324 unchecked
+    328 STORE slot 80 <- 327
+    329 LOAD_FIELD usize slot 2 field 1
+    330 LOAD_FIELD usize slot 2 field 2
+    331 STORE slot 81 <- 329
+    332 STORE slot 82 <- 330
+    333 LOAD usize slot 12
+    334 LOAD usize slot 81
+    335 LOAD usize slot 82
+    336 SLICE_ADDRESS usize <- 334 335 333 333 unchecked
+    337 STORE slot 83 <- 336
+    338 LOAD usize slot 83
+    339 LOAD_INDIRECT u8 address slot 83 <- 338
+    340 LOAD usize slot 80
+    341 STORE_INDIRECT address slot 80 <- 340 339
+    342 LOAD usize slot 12
+    343 NUMBER usize 1
+    344 ADD usize <- 342 343 unchecked
+    345 STORE slot 12 <- 344
+    346 JUMP target 24
+  block 26 scope 46 BLOCK length 1
+    347 JUMP target 27
+  block 27 scope 45 BLOCK length 1
+    348 LEAVE
+item 12 ROUTINE copy_down result none signature 8 params 3 slots 40 blocks 16 values 167
+  slot 1 into elements 2 of usize param 1
+  slot 2 source elements 2 of usize param 2
+  slot 3 count usize param 3
+  slot 4 target_address usize
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 - address of u8
+  slot 8 source_address usize
+  slot 9 - usize
+  slot 10 - usize
+  slot 11 - address of u8
+  slot 12 at usize
+  slot 13 - usize
+  slot 14 - usize
+  slot 15 - usize
+  slot 16 - usize
+  slot 17 - usize
+  slot 18 - usize
+  slot 19 - address of u8
+  slot 20 - usize
+  slot 21 - usize
+  slot 22 - address of u8
+  slot 23 - usize
+  slot 24 - usize
+  slot 25 - usize
+  slot 26 - usize
+  slot 27 - usize
+  slot 28 source_word usize
+  slot 29 - usize
+  slot 30 target_word usize
+  slot 31 - usize
+  slot 32 - address of usize
+  slot 33 - address of usize
+  slot 34 - usize
+  slot 35 - usize
+  slot 36 - usize
+  slot 37 - address of u8
+  slot 38 - usize
+  slot 39 - usize
+  slot 40 - address of u8
+  block 1 scope 56 BLOCK length 27
+    1 LOAD_FIELD usize slot 1 field 1
+    2 LOAD_FIELD usize slot 1 field 2
+    3 STORE slot 5 <- 1
+    4 STORE slot 6 <- 2
+    5 NUMBER usize 0
+    6 LOAD usize slot 5
+    7 LOAD usize slot 6
+    8 SLICE_ADDRESS usize <- 6 7 5 5
+    9 STORE slot 7 <- 8
+    10 PLACE_ADDRESS usize
+    11 CONVERSION usize <- 10
+    12 STORE slot 4 <- 11
+    13 LOAD_FIELD usize slot 2 field 1
+    14 LOAD_FIELD usize slot 2 field 2
+    15 STORE slot 9 <- 13
+    16 STORE slot 10 <- 14
+    17 NUMBER usize 0
+    18 LOAD usize slot 9
+    19 LOAD usize slot 10
+    20 SLICE_ADDRESS usize <- 18 19 17 17
+    21 STORE slot 11 <- 20
+    22 PLACE_ADDRESS usize
+    23 CONVERSION usize <- 22
+    24 STORE slot 8 <- 23
+    25 LOAD usize slot 3
+    26 STORE slot 12 <- 25
+    27 JUMP target 2
+  block 2 scope 57 BLOCK length 1
+    28 JUMP target 3
+  block 3 scope 57 BLOCK length 6
+    29 LOAD usize slot 12
+    30 STORE slot 13 <- 29
+    31 NUMBER usize 0
+    32 LOAD usize slot 13
+    33 GREATER_THAN bool <- 32 31
+    34 BRANCH target 4 alternative 6 <- 33
+  block 4 scope 57 BLOCK length 14
+    35 LOAD usize slot 4
+    36 STORE slot 14 <- 35
+    37 LOAD usize slot 12
+    38 LOAD usize slot 14
+    39 ADD usize <- 38 37 unchecked
+    40 STORE slot 15 <- 39
+    41 LOAD_DATUM usize datum 7 word_mask
+    42 LOAD usize slot 15
+    43 BITWISE_AND usize <- 42 41
+    44 STORE slot 16 <- 43
+    45 NUMBER usize 0
+    46 LOAD usize slot 16
+    47 NOT_EQUAL_TO bool <- 46 45
+    48 BRANCH target 5 alternative 6 <- 47
+  block 5 scope 58 BLOCK length 27
+    49 LOAD usize slot 12
+    50 NUMBER usize 1
+    51 SUBTRACT usize <- 49 50 unchecked
+    52 STORE slot 12 <- 51
+    53 LOAD_FIELD usize slot 1 field 1
+    54 LOAD_FIELD usize slot 1 field 2
+    55 STORE slot 17 <- 53
+    56 STORE slot 18 <- 54
+    57 LOAD usize slot 12
+    58 LOAD usize slot 17
+    59 LOAD usize slot 18
+    60 SLICE_ADDRESS usize <- 58 59 57 57 unchecked
+    61 STORE slot 19 <- 60
+    62 LOAD_FIELD usize slot 2 field 1
+    63 LOAD_FIELD usize slot 2 field 2
+    64 STORE slot 20 <- 62
+    65 STORE slot 21 <- 63
+    66 LOAD usize slot 12
+    67 LOAD usize slot 20
+    68 LOAD usize slot 21
+    69 SLICE_ADDRESS usize <- 67 68 66 66 unchecked
+    70 STORE slot 22 <- 69
+    71 LOAD usize slot 22
+    72 LOAD_INDIRECT u8 address slot 22 <- 71
+    73 LOAD usize slot 19
+    74 STORE_INDIRECT address slot 19 <- 73 72
+    75 JUMP target 3
+  block 6 scope 57 BLOCK length 14
+    76 LOAD usize slot 8
+    77 STORE slot 23 <- 76
+    78 LOAD usize slot 12
+    79 LOAD usize slot 23
+    80 ADD usize <- 79 78 unchecked
+    81 STORE slot 24 <- 80
+    82 LOAD_DATUM usize datum 7 word_mask
+    83 LOAD usize slot 24
+    84 BITWISE_AND usize <- 83 82
+    85 STORE slot 25 <- 84
+    86 NUMBER usize 0
+    87 LOAD usize slot 25
+    88 EQUAL_TO bool <- 87 86
+    89 BRANCH target 7 alternative 8 <- 88
+  block 7 scope 59 BLOCK length 1
+    90 JUMP target 9
+  block 8 scope 57 BLOCK length 1
+    131 JUMP target 12
+  block 9 scope 59 BLOCK length 6
+    91 LOAD usize slot 12
+    92 STORE slot 26 <- 91
+    93 LOAD_DATUM usize datum 6 word
+    94 LOAD usize slot 26
+    95 GREATER_OR_EQUAL bool <- 94 93
+    96 BRANCH target 10 alternative 11 <- 95
+  block 10 scope 60 BLOCK length 33
+    97 LOAD usize slot 12
+    98 STORE slot 27 <- 97
+    99 LOAD_DATUM usize datum 6 word
+    100 LOAD usize slot 27
+    101 SUBTRACT usize <- 100 99 unchecked
+    102 STORE slot 12 <- 101
+    103 LOAD usize slot 8
+    104 STORE slot 29 <- 103
+    105 LOAD usize slot 12
+    106 LOAD usize slot 29
+    107 ADD usize <- 106 105 unchecked
+    108 CONVERSION usize <- 107 unchecked
+    109 RANGE_CHECK usize <- 108 range 1 .. 18446744073709551615 representation
+    110 STORE slot 28 <- 109
+    111 LOAD usize slot 4
+    112 STORE slot 31 <- 111
+    113 LOAD usize slot 12
+    114 LOAD usize slot 31
+    115 ADD usize <- 114 113 unchecked
+    116 CONVERSION usize <- 115 unchecked
+    117 RANGE_CHECK usize <- 116 range 1 .. 18446744073709551615 representation
+    118 STORE slot 30 <- 117
+    119 LOAD usize slot 30
+    120 POINTER_ADDRESS usize <- 119
+    121 STORE slot 32 <- 120
+    122 LOAD usize slot 28
+    123 POINTER_ADDRESS usize <- 122
+    124 STORE slot 33 <- 123
+    125 LOAD usize slot 33
+    126 LOAD_INDIRECT usize address slot 33 <- 125
+    127 LOAD usize slot 32
+    128 STORE_INDIRECT address slot 32 <- 127 126
+    129 JUMP target 9
+  block 11 scope 59 BLOCK length 1
+    130 JUMP target 12
+  block 12 scope 57 BLOCK length 1
+    132 JUMP target 13
+  block 13 scope 57 BLOCK length 6
+    133 LOAD usize slot 12
+    134 STORE slot 34 <- 133
+    135 NUMBER usize 0
+    136 LOAD usize slot 34
+    137 GREATER_THAN bool <- 136 135
+    138 BRANCH target 14 alternative 15 <- 137
+  block 14 scope 61 BLOCK length 27
+    139 LOAD usize slot 12
+    140 NUMBER usize 1
+    141 SUBTRACT usize <- 139 140 unchecked
+    142 STORE slot 12 <- 141
+    143 LOAD_FIELD usize slot 1 field 1
+    144 LOAD_FIELD usize slot 1 field 2
+    145 STORE slot 35 <- 143
+    146 STORE slot 36 <- 144
+    147 LOAD usize slot 12
+    148 LOAD usize slot 35
+    149 LOAD usize slot 36
+    150 SLICE_ADDRESS usize <- 148 149 147 147 unchecked
+    151 STORE slot 37 <- 150
+    152 LOAD_FIELD usize slot 2 field 1
+    153 LOAD_FIELD usize slot 2 field 2
+    154 STORE slot 38 <- 152
+    155 STORE slot 39 <- 153
+    156 LOAD usize slot 12
+    157 LOAD usize slot 38
+    158 LOAD usize slot 39
+    159 SLICE_ADDRESS usize <- 157 158 156 156 unchecked
+    160 STORE slot 40 <- 159
+    161 LOAD usize slot 40
+    162 LOAD_INDIRECT u8 address slot 40 <- 161
+    163 LOAD usize slot 37
+    164 STORE_INDIRECT address slot 37 <- 163 162
+    165 JUMP target 13
+  block 15 scope 57 BLOCK length 1
+    166 JUMP target 16
+  block 16 scope 56 BLOCK length 1
+    167 LEAVE
+item 13 ROUTINE fill result none signature 9 params 2 slots 28 blocks 15 values 128
+  slot 1 into elements 2 of usize param 1
+  slot 2 value u8 param 2
+  slot 3 count usize
+  slot 4 - usize
+  slot 5 target_address usize
   slot 6 - usize
   slot 7 - usize
-  slot 8 - usize
-  slot 9 - usize
-  slot 10 - address of u8
-  slot 11 - u8
+  slot 8 - address of u8
+  slot 9 pattern usize
+  slot 10 - usize
+  slot 11 at usize
   slot 12 - usize
   slot 13 - usize
-  slot 14 - address of u8
-  slot 15 - u32 atoms {less, equal, greater}
+  slot 14 - usize
+  slot 15 - usize
+  slot 16 - usize
+  slot 17 - usize
+  slot 18 - address of u8
+  slot 19 - usize
+  slot 20 - usize
+  slot 21 target_word usize
+  slot 22 - usize
+  slot 23 - address of usize
+  slot 24 - usize
+  slot 25 - usize
+  slot 26 - usize
+  slot 27 - usize
+  slot 28 - address of u8
+  block 1 scope 63 BLOCK length 9
+    1 LOAD_FIELD usize slot 1 field 1
+    2 LOAD_FIELD usize slot 1 field 2
+    3 STORE slot 3 <- 2
+    4 LOAD usize slot 3
+    5 STORE slot 4 <- 4
+    6 NUMBER usize 0
+    7 LOAD usize slot 4
+    8 EQUAL_TO bool <- 7 6
+    9 BRANCH target 2 alternative 3 <- 8
+  block 2 scope 63 BLOCK length 1
+    10 LEAVE
+  block 3 scope 63 BLOCK length 22
+    11 LOAD_FIELD usize slot 1 field 1
+    12 LOAD_FIELD usize slot 1 field 2
+    13 STORE slot 6 <- 11
+    14 STORE slot 7 <- 12
+    15 NUMBER usize 0
+    16 LOAD usize slot 6
+    17 LOAD usize slot 7
+    18 SLICE_ADDRESS usize <- 16 17 15 15
+    19 STORE slot 8 <- 18
+    20 PLACE_ADDRESS usize
+    21 CONVERSION usize <- 20
+    22 STORE slot 5 <- 21
+    23 LOAD u8 slot 2
+    24 CONVERSION usize <- 23
+    25 STORE slot 10 <- 24
+    26 LOAD_DATUM usize datum 8 ones
+    27 LOAD usize slot 10
+    28 MULTIPLY usize <- 27 26
+    29 STORE slot 9 <- 28
+    30 NUMBER usize 0
+    31 STORE slot 11 <- 30
+    32 JUMP target 4
+  block 4 scope 64 BLOCK length 1
+    33 JUMP target 5
+  block 5 scope 64 BLOCK length 6
+    34 LOAD usize slot 11
+    35 STORE slot 12 <- 34
+    36 LOAD usize slot 3
+    37 LOAD usize slot 12
+    38 LESS_THAN bool <- 37 36
+    39 BRANCH target 6 alternative 8 <- 38
+  block 6 scope 64 BLOCK length 14
+    40 LOAD usize slot 5
+    41 STORE slot 13 <- 40
+    42 LOAD usize slot 11
+    43 LOAD usize slot 13
+    44 ADD usize <- 43 42 unchecked
+    45 STORE slot 14 <- 44
+    46 LOAD_DATUM usize datum 7 word_mask
+    47 LOAD usize slot 14
+    48 BITWISE_AND usize <- 47 46
+    49 STORE slot 15 <- 48
+    50 NUMBER usize 0
+    51 LOAD usize slot 15
+    52 NOT_EQUAL_TO bool <- 51 50
+    53 BRANCH target 7 alternative 8 <- 52
+  block 7 scope 65 BLOCK length 17
+    54 LOAD_FIELD usize slot 1 field 1
+    55 LOAD_FIELD usize slot 1 field 2
+    56 STORE slot 16 <- 54
+    57 STORE slot 17 <- 55
+    58 LOAD usize slot 11
+    59 LOAD usize slot 16
+    60 LOAD usize slot 17
+    61 SLICE_ADDRESS usize <- 59 60 58 58 unchecked
+    62 STORE slot 18 <- 61
+    63 LOAD u8 slot 2
+    64 LOAD usize slot 18
+    65 STORE_INDIRECT address slot 18 <- 64 63
+    66 LOAD usize slot 11
+    67 NUMBER usize 1
+    68 ADD usize <- 66 67 unchecked
+    69 STORE slot 11 <- 68
+    70 JUMP target 5
+  block 8 scope 64 BLOCK length 1
+    71 JUMP target 9
+  block 9 scope 64 BLOCK length 10
+    72 LOAD usize slot 3
+    73 STORE slot 19 <- 72
+    74 LOAD usize slot 11
+    75 LOAD usize slot 19
+    76 SUBTRACT usize <- 75 74 unchecked
+    77 STORE slot 20 <- 76
+    78 LOAD_DATUM usize datum 6 word
+    79 LOAD usize slot 20
+    80 GREATER_OR_EQUAL bool <- 79 78
+    81 BRANCH target 10 alternative 11 <- 80
+  block 10 scope 66 BLOCK length 21
+    82 LOAD usize slot 5
+    83 STORE slot 22 <- 82
+    84 LOAD usize slot 11
+    85 LOAD usize slot 22
+    86 ADD usize <- 85 84 unchecked
+    87 CONVERSION usize <- 86 unchecked
+    88 RANGE_CHECK usize <- 87 range 1 .. 18446744073709551615 representation
+    89 STORE slot 21 <- 88
+    90 LOAD usize slot 21
+    91 POINTER_ADDRESS usize <- 90
+    92 STORE slot 23 <- 91
+    93 LOAD usize slot 9
+    94 LOAD usize slot 23
+    95 STORE_INDIRECT address slot 23 <- 94 93
+    96 LOAD usize slot 11
+    97 STORE slot 24 <- 96
+    98 LOAD_DATUM usize datum 6 word
+    99 LOAD usize slot 24
+    100 ADD usize <- 99 98 unchecked
+    101 STORE slot 11 <- 100
+    102 JUMP target 9
+  block 11 scope 64 BLOCK length 1
+    103 JUMP target 12
+  block 12 scope 64 BLOCK length 6
+    104 LOAD usize slot 11
+    105 STORE slot 25 <- 104
+    106 LOAD usize slot 3
+    107 LOAD usize slot 25
+    108 LESS_THAN bool <- 107 106
+    109 BRANCH target 13 alternative 14 <- 108
+  block 13 scope 67 BLOCK length 17
+    110 LOAD_FIELD usize slot 1 field 1
+    111 LOAD_FIELD usize slot 1 field 2
+    112 STORE slot 26 <- 110
+    113 STORE slot 27 <- 111
+    114 LOAD usize slot 11
+    115 LOAD usize slot 26
+    116 LOAD usize slot 27
+    117 SLICE_ADDRESS usize <- 115 116 114 114 unchecked
+    118 STORE slot 28 <- 117
+    119 LOAD u8 slot 2
+    120 LOAD usize slot 28
+    121 STORE_INDIRECT address slot 28 <- 120 119
+    122 LOAD usize slot 11
+    123 NUMBER usize 1
+    124 ADD usize <- 122 123 unchecked
+    125 STORE slot 11 <- 124
+    126 JUMP target 12
+  block 14 scope 64 BLOCK length 1
+    127 JUMP target 15
+  block 15 scope 63 BLOCK length 1
+    128 LEAVE
+item 14 ROUTINE find result usize signature 10 params 2 slots 36 blocks 21 values 166
+  slot 1 source elements 2 of usize param 1
+  slot 2 value u8 param 2
+  slot 3 index usize return
+  slot 4 count usize
+  slot 5 - usize
+  slot 6 source_address usize
+  slot 7 - usize
+  slot 8 - usize
+  slot 9 - address of u8
+  slot 10 pattern usize
+  slot 11 - usize
+  slot 12 - usize
+  slot 13 - usize
+  slot 14 - usize
+  slot 15 - usize
   slot 16 - usize
   slot 17 - usize
   slot 18 - address of u8
   slot 19 - u8
   slot 20 - usize
   slot 21 - usize
-  slot 22 - address of u8
+  slot 22 at usize
   slot 23 - usize
-  slot 24 - usize
-  block 1 scope 41 BLOCK length 3
-    1 NUMBER usize 0
-    2 STORE slot 4 <- 1
-    3 JUMP target 2
-  block 2 scope 41 BLOCK length 8
-    4 LOAD usize slot 4
-    5 STORE slot 6 <- 4
-    6 LOAD_FIELD usize slot 1 field 1
-    7 LOAD_FIELD usize slot 1 field 2
-    8 LOAD usize slot 6
-    9 LESS_THAN bool <- 8 7
-    10 STORE slot 5 <- 9
-    11 BRANCH target 5 alternative 6 <- 9
-  block 3 scope 42 BLOCK length 26
-    22 LOAD_FIELD usize slot 1 field 1
-    23 LOAD_FIELD usize slot 1 field 2
-    24 STORE slot 8 <- 22
-    25 STORE slot 9 <- 23
-    26 LOAD usize slot 4
-    27 LOAD usize slot 8
-    28 LOAD usize slot 9
-    29 SLICE_ADDRESS usize <- 27 28 26 26
-    30 STORE slot 10 <- 29
-    31 LOAD usize slot 10
-    32 LOAD_INDIRECT u8 address slot 10 <- 31
-    33 STORE slot 11 <- 32
-    34 LOAD_FIELD usize slot 2 field 1
-    35 LOAD_FIELD usize slot 2 field 2
-    36 STORE slot 12 <- 34
-    37 STORE slot 13 <- 35
-    38 LOAD usize slot 4
-    39 LOAD usize slot 12
-    40 LOAD usize slot 13
-    41 SLICE_ADDRESS usize <- 39 40 38 38
-    42 STORE slot 14 <- 41
-    43 LOAD usize slot 14
-    44 LOAD_INDIRECT u8 address slot 14 <- 43
-    45 LOAD u8 slot 11
-    46 NOT_EQUAL_TO bool <- 45 44
-    47 BRANCH target 7 alternative 8 <- 46
-  block 4 scope 41 BLOCK length 8
-    91 LOAD_FIELD usize slot 1 field 1
-    92 LOAD_FIELD usize slot 1 field 2
-    93 STORE slot 23 <- 92
-    94 LOAD_FIELD usize slot 2 field 1
-    95 LOAD_FIELD usize slot 2 field 2
-    96 LOAD usize slot 23
-    97 LESS_THAN bool <- 96 95
-    98 BRANCH target 14 alternative 15 <- 97
-  block 5 scope 41 BLOCK length 8
-    12 LOAD usize slot 4
-    13 STORE slot 7 <- 12
-    14 LOAD_FIELD usize slot 2 field 1
-    15 LOAD_FIELD usize slot 2 field 2
-    16 LOAD usize slot 7
-    17 LESS_THAN bool <- 16 15
-    18 STORE slot 5 <- 17
-    19 JUMP target 6
-  block 6 scope 41 BLOCK length 2
-    20 LOAD bool slot 5
-    21 BRANCH target 3 alternative 4 <- 20
-  block 7 scope 43 BLOCK length 26
-    48 LOAD_FIELD usize slot 1 field 1
-    49 LOAD_FIELD usize slot 1 field 2
-    50 STORE slot 16 <- 48
-    51 STORE slot 17 <- 49
-    52 LOAD usize slot 4
-    53 LOAD usize slot 16
-    54 LOAD usize slot 17
-    55 SLICE_ADDRESS usize <- 53 54 52 52
-    56 STORE slot 18 <- 55
-    57 LOAD usize slot 18
-    58 LOAD_INDIRECT u8 address slot 18 <- 57
-    59 STORE slot 19 <- 58
-    60 LOAD_FIELD usize slot 2 field 1
-    61 LOAD_FIELD usize slot 2 field 2
-    62 STORE slot 20 <- 60
-    63 STORE slot 21 <- 61
-    64 LOAD usize slot 4
-    65 LOAD usize slot 20
-    66 LOAD usize slot 21
-    67 SLICE_ADDRESS usize <- 65 66 64 64
-    68 STORE slot 22 <- 67
-    69 LOAD usize slot 22
-    70 LOAD_INDIRECT u8 address slot 22 <- 69
-    71 LOAD u8 slot 19
-    72 LESS_THAN bool <- 71 70
-    73 BRANCH target 9 alternative 10 <- 72
-  block 8 scope 42 BLOCK length 1
-    85 JUMP target 13
-  block 9 scope 44 BLOCK length 3
-    74 ATOM u32 identity less atoms {less}
-    75 STORE slot 15 <- 74
-    76 JUMP target 11
-  block 10 scope 43 BLOCK length 1
-    77 JUMP target 12
-  block 11 scope 43 BLOCK length 4
-    81 LOAD u32 slot 15
-    82 STORE slot 3 <- 81
-    83 LOAD u32 slot 3
-    84 LEAVE <- 83
-  block 12 scope 45 BLOCK length 3
-    78 ATOM u32 identity greater atoms {greater}
-    79 STORE slot 15 <- 78
-    80 JUMP target 11
-  block 13 scope 42 BLOCK length 5
-    86 LOAD usize slot 4
-    87 NUMBER usize 1
-    88 ADD usize <- 86 87
-    89 STORE slot 4 <- 88
-    90 JUMP target 2
-  block 14 scope 46 BLOCK length 3
-    99 ATOM u32 identity less atoms {less}
-    100 STORE slot 3 <- 99
-    101 JUMP target 16
-  block 15 scope 41 BLOCK length 8
-    102 LOAD_FIELD usize slot 1 field 1
-    103 LOAD_FIELD usize slot 1 field 2
-    104 STORE slot 24 <- 103
-    105 LOAD_FIELD usize slot 2 field 1
-    106 LOAD_FIELD usize slot 2 field 2
-    107 LOAD usize slot 24
-    108 GREATER_THAN bool <- 107 106
-    109 BRANCH target 17 alternative 18 <- 108
-  block 16 scope 41 BLOCK length 2
-    117 LOAD u32 slot 3
-    118 LEAVE <- 117
-  block 17 scope 47 BLOCK length 3
-    110 ATOM u32 identity greater atoms {greater}
-    111 STORE slot 3 <- 110
-    112 JUMP target 16
-  block 18 scope 41 BLOCK length 1
-    113 JUMP target 19
-  block 19 scope 48 BLOCK length 3
-    114 ATOM u32 identity equal atoms {equal}
-    115 STORE slot 3 <- 114
-    116 JUMP target 16
-item 8 ROUTINE find result usize signature 8 params 2 slots 8 blocks 6 values 35
-  slot 1 source elements 2 of usize param 1
-  slot 2 value u8 param 2
-  slot 3 index usize return
-  slot 4 - usize
-  slot 5 - usize
-  slot 6 - usize
-  slot 7 - address of u8
-  slot 8 - u8
-  block 1 scope 50 BLOCK length 3
+  slot 24 mixed usize
+  slot 25 - address of usize
+  slot 26 - usize
+  slot 27 - usize
+  slot 28 - usize
+  slot 29 - usize
+  slot 30 - usize
+  slot 31 - usize
+  slot 32 - usize
+  slot 33 - usize
+  slot 34 - usize
+  slot 35 - address of u8
+  slot 36 - u8
+  block 1 scope 69 BLOCK length 11
     1 NUMBER usize 0
     2 STORE slot 3 <- 1
-    3 JUMP target 2
-  block 2 scope 50 BLOCK length 7
-    4 LOAD usize slot 3
+    3 LOAD_FIELD usize slot 1 field 1
+    4 LOAD_FIELD usize slot 1 field 2
     5 STORE slot 4 <- 4
-    6 LOAD_FIELD usize slot 1 field 1
-    7 LOAD_FIELD usize slot 1 field 2
-    8 LOAD usize slot 4
-    9 LESS_THAN bool <- 8 7
-    10 BRANCH target 3 alternative 4 <- 9
-  block 3 scope 51 BLOCK length 16
-    11 LOAD_FIELD usize slot 1 field 1
-    12 LOAD_FIELD usize slot 1 field 2
-    13 STORE slot 5 <- 11
-    14 STORE slot 6 <- 12
-    15 LOAD usize slot 3
-    16 LOAD usize slot 5
-    17 LOAD usize slot 6
-    18 SLICE_ADDRESS usize <- 16 17 15 15
-    19 STORE slot 7 <- 18
-    20 LOAD usize slot 7
-    21 LOAD_INDIRECT u8 address slot 7 <- 20
-    22 STORE slot 8 <- 21
-    23 LOAD u8 slot 2
-    24 LOAD u8 slot 8
-    25 EQUAL_TO bool <- 24 23
-    26 BRANCH target 5 alternative 6 <- 25
-  block 4 scope 50 BLOCK length 2
-    34 LOAD usize slot 3
-    35 LEAVE <- 34
-  block 5 scope 51 BLOCK length 2
-    27 LOAD usize slot 3
-    28 LEAVE <- 27
-  block 6 scope 51 BLOCK length 5
-    29 LOAD usize slot 3
-    30 NUMBER usize 1
-    31 ADD usize <- 29 30
-    32 STORE slot 3 <- 31
-    33 JUMP target 2
-item 9 ROUTINE bytes result array signature 9 params 2 slots 3 blocks 1 values 4
+    6 LOAD usize slot 4
+    7 STORE slot 5 <- 6
+    8 NUMBER usize 0
+    9 LOAD usize slot 5
+    10 EQUAL_TO bool <- 9 8
+    11 BRANCH target 2 alternative 3 <- 10
+  block 2 scope 69 BLOCK length 2
+    12 LOAD usize slot 3
+    13 LEAVE <- 12
+  block 3 scope 69 BLOCK length 20
+    14 LOAD_FIELD usize slot 1 field 1
+    15 LOAD_FIELD usize slot 1 field 2
+    16 STORE slot 7 <- 14
+    17 STORE slot 8 <- 15
+    18 NUMBER usize 0
+    19 LOAD usize slot 7
+    20 LOAD usize slot 8
+    21 SLICE_ADDRESS usize <- 19 20 18 18
+    22 STORE slot 9 <- 21
+    23 PLACE_ADDRESS usize
+    24 CONVERSION usize <- 23
+    25 STORE slot 6 <- 24
+    26 LOAD u8 slot 2
+    27 CONVERSION usize <- 26
+    28 STORE slot 11 <- 27
+    29 LOAD_DATUM usize datum 8 ones
+    30 LOAD usize slot 11
+    31 MULTIPLY usize <- 30 29
+    32 STORE slot 10 <- 31
+    33 JUMP target 4
+  block 4 scope 70 BLOCK length 1
+    34 JUMP target 5
+  block 5 scope 70 BLOCK length 6
+    35 LOAD usize slot 3
+    36 STORE slot 12 <- 35
+    37 LOAD usize slot 4
+    38 LOAD usize slot 12
+    39 LESS_THAN bool <- 38 37
+    40 BRANCH target 6 alternative 8 <- 39
+  block 6 scope 70 BLOCK length 14
+    41 LOAD usize slot 6
+    42 STORE slot 13 <- 41
+    43 LOAD usize slot 3
+    44 LOAD usize slot 13
+    45 ADD usize <- 44 43 unchecked
+    46 STORE slot 14 <- 45
+    47 LOAD_DATUM usize datum 7 word_mask
+    48 LOAD usize slot 14
+    49 BITWISE_AND usize <- 48 47
+    50 STORE slot 15 <- 49
+    51 NUMBER usize 0
+    52 LOAD usize slot 15
+    53 NOT_EQUAL_TO bool <- 52 51
+    54 BRANCH target 7 alternative 8 <- 53
+  block 7 scope 71 BLOCK length 16
+    55 LOAD_FIELD usize slot 1 field 1
+    56 LOAD_FIELD usize slot 1 field 2
+    57 STORE slot 16 <- 55
+    58 STORE slot 17 <- 56
+    59 LOAD usize slot 3
+    60 LOAD usize slot 16
+    61 LOAD usize slot 17
+    62 SLICE_ADDRESS usize <- 60 61 59 59 unchecked
+    63 STORE slot 18 <- 62
+    64 LOAD usize slot 18
+    65 LOAD_INDIRECT u8 address slot 18 <- 64
+    66 STORE slot 19 <- 65
+    67 LOAD u8 slot 2
+    68 LOAD u8 slot 19
+    69 EQUAL_TO bool <- 68 67
+    70 BRANCH target 9 alternative 10 <- 69
+  block 8 scope 70 BLOCK length 1
+    78 JUMP target 11
+  block 9 scope 71 BLOCK length 2
+    71 LOAD usize slot 3
+    72 LEAVE <- 71
+  block 10 scope 71 BLOCK length 5
+    73 LOAD usize slot 3
+    74 NUMBER usize 1
+    75 ADD usize <- 73 74 unchecked
+    76 STORE slot 3 <- 75
+    77 JUMP target 5
+  block 11 scope 70 BLOCK length 10
+    79 LOAD usize slot 4
+    80 STORE slot 20 <- 79
+    81 LOAD usize slot 3
+    82 LOAD usize slot 20
+    83 SUBTRACT usize <- 82 81 unchecked
+    84 STORE slot 21 <- 83
+    85 LOAD_DATUM usize datum 6 word
+    86 LOAD usize slot 21
+    87 GREATER_OR_EQUAL bool <- 86 85
+    88 BRANCH target 12 alternative 13 <- 87
+  block 12 scope 72 BLOCK length 37
+    89 LOAD usize slot 6
+    90 STORE slot 23 <- 89
+    91 LOAD usize slot 3
+    92 LOAD usize slot 23
+    93 ADD usize <- 92 91 unchecked
+    94 CONVERSION usize <- 93 unchecked
+    95 RANGE_CHECK usize <- 94 range 1 .. 18446744073709551615 representation
+    96 STORE slot 22 <- 95
+    97 LOAD usize slot 22
+    98 POINTER_ADDRESS usize <- 97
+    99 STORE slot 25 <- 98
+    100 LOAD usize slot 25
+    101 LOAD_INDIRECT usize address slot 25 <- 100
+    102 STORE slot 26 <- 101
+    103 LOAD usize slot 10
+    104 LOAD usize slot 26
+    105 BITWISE_XOR usize <- 104 103
+    106 STORE slot 24 <- 105
+    107 LOAD usize slot 24
+    108 STORE slot 27 <- 107
+    109 LOAD_DATUM usize datum 8 ones
+    110 LOAD usize slot 27
+    111 WRAPPING_SUBTRACT usize <- 110 109
+    112 STORE slot 28 <- 111
+    113 LOAD usize slot 24
+    114 COMPLEMENT usize <- 113
+    115 LOAD usize slot 28
+    116 BITWISE_AND usize <- 115 114
+    117 STORE slot 29 <- 116
+    118 LOAD_DATUM usize datum 9 highs
+    119 LOAD usize slot 29
+    120 BITWISE_AND usize <- 119 118
+    121 STORE slot 30 <- 120
+    122 NUMBER usize 0
+    123 LOAD usize slot 30
+    124 NOT_EQUAL_TO bool <- 123 122
+    125 BRANCH target 14 alternative 15 <- 124
+  block 13 scope 70 BLOCK length 1
+    134 JUMP target 16
+  block 14 scope 72 BLOCK length 1
+    126 JUMP target 13
+  block 15 scope 72 BLOCK length 7
+    127 LOAD usize slot 3
+    128 STORE slot 31 <- 127
+    129 LOAD_DATUM usize datum 6 word
+    130 LOAD usize slot 31
+    131 ADD usize <- 130 129 unchecked
+    132 STORE slot 3 <- 131
+    133 JUMP target 11
+  block 16 scope 70 BLOCK length 6
+    135 LOAD usize slot 3
+    136 STORE slot 32 <- 135
+    137 LOAD usize slot 4
+    138 LOAD usize slot 32
+    139 LESS_THAN bool <- 138 137
+    140 BRANCH target 17 alternative 18 <- 139
+  block 17 scope 73 BLOCK length 16
+    141 LOAD_FIELD usize slot 1 field 1
+    142 LOAD_FIELD usize slot 1 field 2
+    143 STORE slot 33 <- 141
+    144 STORE slot 34 <- 142
+    145 LOAD usize slot 3
+    146 LOAD usize slot 33
+    147 LOAD usize slot 34
+    148 SLICE_ADDRESS usize <- 146 147 145 145 unchecked
+    149 STORE slot 35 <- 148
+    150 LOAD usize slot 35
+    151 LOAD_INDIRECT u8 address slot 35 <- 150
+    152 STORE slot 36 <- 151
+    153 LOAD u8 slot 2
+    154 LOAD u8 slot 36
+    155 EQUAL_TO bool <- 154 153
+    156 BRANCH target 19 alternative 20 <- 155
+  block 18 scope 70 BLOCK length 1
+    164 JUMP target 21
+  block 19 scope 73 BLOCK length 2
+    157 LOAD usize slot 3
+    158 LEAVE <- 157
+  block 20 scope 73 BLOCK length 5
+    159 LOAD usize slot 3
+    160 NUMBER usize 1
+    161 ADD usize <- 159 160 unchecked
+    162 STORE slot 3 <- 161
+    163 JUMP target 16
+  block 21 scope 69 BLOCK length 2
+    165 LOAD usize slot 3
+    166 LEAVE <- 165
+item 15 ROUTINE bytes result array signature 11 params 2 slots 3 blocks 1 values 4
   elements 2 of usize
   slot 1 bytes usize param 1
   slot 2 source aggregate fields struct (usize,usize,[2]usize) usize param 2
   slot 3 view elements 2 of usize return
-  block 1 scope 53 BLOCK length 4
+  block 1 scope 75 BLOCK length 4
     1 STORAGE_ADDRESS usize storage slot 2 field 1
     2 STORAGE_ADDRESS usize storage slot 3
-    3 CALL none callee 28 - signature 40 <- 2 1
+    3 CALL none callee 34 - signature 42 <- 2 1
     4 LEAVE
-item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 blocks 23 values 167
+item 16 ROUTINE aligned_offset result usize signature 12 params 5 slots 42 blocks 23 values 167
   slot 1 base usize param 1
   slot 2 used usize param 2
   slot 3 extent usize param 3
@@ -11426,7 +12367,7 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
   slot 40 - usize
   slot 41 - usize
   slot 42 - u32 atoms {out_of_memory}
-  block 1 scope 122 BLOCK length 12
+  block 1 scope 145 BLOCK length 12
     1 NUMBER usize 0
     2 STORE slot 8 <- 1
     3 NUMBER usize 1
@@ -11439,12 +12380,12 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     10 LOAD usize slot 9
     11 GREATER_THAN bool <- 10 9
     12 BRANCH target 2 alternative 3 <- 11
-  block 2 scope 122 BLOCK length 4
+  block 2 scope 145 BLOCK length 4
     13 ATOM u32 identity out_of_memory atoms {out_of_memory}
     14 STORE slot 10 <- 13
     15 LOAD u32 slot 10
     16 FAIL <- 15
-  block 3 scope 122 BLOCK length 13
+  block 3 scope 145 BLOCK length 13
     17 LOAD usize slot 1
     18 CONVERSION usize <- 17
     19 STORE slot 11 <- 18
@@ -11458,12 +12399,12 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     27 LOAD usize slot 12
     28 GREATER_THAN bool <- 27 26
     29 BRANCH target 4 alternative 5 <- 28
-  block 4 scope 122 BLOCK length 4
+  block 4 scope 145 BLOCK length 4
     30 ATOM u32 identity out_of_memory atoms {out_of_memory}
     31 STORE slot 14 <- 30
     32 LOAD u32 slot 14
     33 FAIL <- 32
-  block 5 scope 122 BLOCK length 14
+  block 5 scope 145 BLOCK length 14
     34 LOAD usize slot 11
     35 STORE slot 16 <- 34
     36 LOAD usize slot 2
@@ -11478,7 +12419,7 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     45 LOAD usize slot 18
     46 GREATER_THAN bool <- 45 44
     47 BRANCH target 6 alternative 7 <- 46
-  block 6 scope 123 BLOCK length 18
+  block 6 scope 146 BLOCK length 18
     48 LOAD usize slot 5
     49 STORE slot 20 <- 48
     50 NUMBER usize 1
@@ -11497,9 +12438,9 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     63 LOAD usize slot 23
     64 EQUAL_TO bool <- 63 62
     65 BRANCH target 8 alternative 9 <- 64
-  block 7 scope 122 BLOCK length 1
+  block 7 scope 145 BLOCK length 1
     97 JUMP target 15
-  block 8 scope 124 BLOCK length 7
+  block 8 scope 147 BLOCK length 7
     66 LOAD usize slot 15
     67 STORE slot 24 <- 66
     68 LOAD usize slot 19
@@ -11507,9 +12448,9 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     70 BITWISE_AND usize <- 69 68
     71 STORE slot 21 <- 70
     72 JUMP target 10
-  block 9 scope 123 BLOCK length 1
+  block 9 scope 146 BLOCK length 1
     73 JUMP target 11
-  block 10 scope 123 BLOCK length 7
+  block 10 scope 146 BLOCK length 7
     81 LOAD usize slot 21
     82 STORE slot 26 <- 81
     83 NUMBER usize 0
@@ -11517,7 +12458,7 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     85 EQUAL_TO bool <- 84 83
     86 LOGICAL_NOT bool <- 85
     87 BRANCH target 12 alternative 13 <- 86
-  block 11 scope 125 BLOCK length 7
+  block 11 scope 148 BLOCK length 7
     74 LOAD usize slot 15
     75 STORE slot 25 <- 74
     76 LOAD usize slot 5
@@ -11525,7 +12466,7 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     78 REMAINDER usize <- 77 76
     79 STORE slot 21 <- 78
     80 JUMP target 10
-  block 12 scope 126 BLOCK length 7
+  block 12 scope 149 BLOCK length 7
     88 LOAD usize slot 5
     89 STORE slot 27 <- 88
     90 LOAD usize slot 21
@@ -11533,11 +12474,11 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     92 SUBTRACT usize <- 91 90
     93 STORE slot 17 <- 92
     94 JUMP target 14
-  block 13 scope 123 BLOCK length 1
+  block 13 scope 146 BLOCK length 1
     95 JUMP target 14
-  block 14 scope 123 BLOCK length 1
+  block 14 scope 146 BLOCK length 1
     96 JUMP target 15
-  block 15 scope 122 BLOCK length 10
+  block 15 scope 145 BLOCK length 10
     98 LOAD usize slot 17
     99 STORE slot 28 <- 98
     100 LOAD usize slot 3
@@ -11548,12 +12489,12 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     105 LOAD usize slot 28
     106 GREATER_THAN bool <- 105 104
     107 BRANCH target 16 alternative 17 <- 106
-  block 16 scope 122 BLOCK length 4
+  block 16 scope 145 BLOCK length 4
     108 ATOM u32 identity out_of_memory atoms {out_of_memory}
     109 STORE slot 30 <- 108
     110 LOAD u32 slot 30
     111 FAIL <- 110
-  block 17 scope 122 BLOCK length 10
+  block 17 scope 145 BLOCK length 10
     112 LOAD usize slot 17
     113 STORE slot 31 <- 112
     114 LOAD usize slot 7
@@ -11564,12 +12505,12 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     119 LOAD usize slot 31
     120 GREATER_THAN bool <- 119 118
     121 BRANCH target 18 alternative 19 <- 120
-  block 18 scope 122 BLOCK length 4
+  block 18 scope 145 BLOCK length 4
     122 ATOM u32 identity out_of_memory atoms {out_of_memory}
     123 STORE slot 33 <- 122
     124 LOAD u32 slot 33
     125 FAIL <- 124
-  block 19 scope 122 BLOCK length 22
+  block 19 scope 145 BLOCK length 22
     126 LOAD usize slot 2
     127 STORE slot 34 <- 126
     128 LOAD usize slot 17
@@ -11592,12 +12533,12 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     145 LOAD usize slot 37
     146 GREATER_THAN bool <- 145 144
     147 BRANCH target 20 alternative 21 <- 146
-  block 20 scope 122 BLOCK length 4
+  block 20 scope 145 BLOCK length 4
     148 ATOM u32 identity out_of_memory atoms {out_of_memory}
     149 STORE slot 39 <- 148
     150 LOAD u32 slot 39
     151 FAIL <- 150
-  block 21 scope 122 BLOCK length 10
+  block 21 scope 145 BLOCK length 10
     152 LOAD usize slot 4
     153 STORE slot 40 <- 152
     154 LOAD usize slot 7
@@ -11608,15 +12549,15 @@ item 10 ROUTINE aligned_offset result usize signature 10 params 5 slots 42 block
     159 LOAD usize slot 40
     160 GREATER_THAN bool <- 159 158
     161 BRANCH target 22 alternative 23 <- 160
-  block 22 scope 122 BLOCK length 4
+  block 22 scope 145 BLOCK length 4
     162 ATOM u32 identity out_of_memory atoms {out_of_memory}
     163 STORE slot 42 <- 162
     164 LOAD u32 slot 42
     165 FAIL <- 164
-  block 23 scope 122 BLOCK length 2
+  block 23 scope 145 BLOCK length 2
     166 LOAD usize slot 6
     167 LEAVE <- 166
-item 11 ROUTINE arena_over result struct signature 11 params 4 slots 7 blocks 1 values 12
+item 17 ROUTINE arena_over result struct signature 13 params 4 slots 7 blocks 1 values 12
   slot 1 arena_over usize param 1
   slot 2 state address of struct (usize,usize) param 2
   slot 3 base usize param 3
@@ -11624,7 +12565,7 @@ item 11 ROUTINE arena_over result struct signature 11 params 4 slots 7 blocks 1 
   slot 5 handle aggregate fields usize usize return
   slot 6 - aggregate fields usize usize
   slot 7 - address of struct (usize,usize)
-  block 1 scope 128 BLOCK length 12
+  block 1 scope 151 BLOCK length 12
     1 LOAD usize slot 4
     2 STORE_FIELD slot 6 field 1 <- 1
     3 NUMBER usize 0
@@ -11637,7 +12578,7 @@ item 11 ROUTINE arena_over result struct signature 11 params 4 slots 7 blocks 1 
     10 LOAD usize slot 3
     11 STORE_FIELD slot 5 field 2 <- 10
     12 LEAVE
-item 12 ROUTINE arena_over_unchecked result struct signature 12 params 4 slots 7 blocks 1 values 12
+item 18 ROUTINE arena_over_unchecked result struct signature 14 params 4 slots 7 blocks 1 values 12
   slot 1 arena_over_unchecked usize param 1
   slot 2 state address of struct (usize,usize) param 2
   slot 3 base usize param 3
@@ -11645,7 +12586,7 @@ item 12 ROUTINE arena_over_unchecked result struct signature 12 params 4 slots 7
   slot 5 handle aggregate fields usize usize return
   slot 6 - aggregate fields usize usize
   slot 7 - address of struct (usize,usize)
-  block 1 scope 130 BLOCK length 12
+  block 1 scope 153 BLOCK length 12
     1 LOAD usize slot 4
     2 STORE_FIELD slot 6 field 1 <- 1
     3 NUMBER usize 0
@@ -11658,13 +12599,13 @@ item 12 ROUTINE arena_over_unchecked result struct signature 12 params 4 slots 7
     10 LOAD usize slot 3
     11 STORE_FIELD slot 5 field 2 <- 10
     12 LEAVE
-item 13 ROUTINE arena_used result usize signature 13 params 1 slots 5 blocks 1 values 13
+item 19 ROUTINE arena_used result usize signature 15 params 1 slots 5 blocks 1 values 13
   slot 1 memory aggregate fields usize usize param 1
   slot 2 count usize return
   slot 3 - address of usize
   slot 4 - address of struct (usize,usize)
   slot 5 - address of usize
-  block 1 scope 132 BLOCK length 13
+  block 1 scope 155 BLOCK length 13
     1 PLACE_ADDRESS usize
     2 STORE slot 3 <- 1
     3 LOAD usize slot 3
@@ -11678,7 +12619,7 @@ item 13 ROUTINE arena_used result usize signature 13 params 1 slots 5 blocks 1 v
     11 STORE slot 2 <- 10
     12 LOAD usize slot 2
     13 LEAVE <- 12
-item 14 ROUTINE arena_alloc result usize signature 14 params 3 slots 25 blocks 3 values 72
+item 20 ROUTINE arena_alloc result usize signature 16 params 3 slots 25 blocks 3 values 72
   slot 1 self aggregate fields usize usize param 1
   slot 2 size usize param 2
   slot 3 alignment usize param 3
@@ -11704,7 +12645,7 @@ item 14 ROUTINE arena_alloc result usize signature 14 params 3 slots 25 blocks 3
   slot 23 - address of struct (usize,usize)
   slot 24 - address of usize
   slot 25 - usize
-  block 1 scope 134 BLOCK length 38
+  block 1 scope 157 BLOCK length 38
     1 PLACE_ADDRESS usize
     2 STORE slot 6 <- 1
     3 LOAD usize slot 6
@@ -11738,17 +12679,17 @@ item 14 ROUTINE arena_alloc result usize signature 14 params 3 slots 25 blocks 3
     31 LOAD usize slot 14
     32 LOAD usize slot 17
     33 LOAD usize slot 18
-    34 CALL usize callee 10 aligned_offset signature 10 failure slot 8 <- 30 31 32 33 29
+    34 CALL usize callee 16 aligned_offset signature 12 failure slot 8 <- 30 31 32 33 29
     35 STORE slot 9 <- 34
     36 LOAD u32 slot 8
     37 FAILURE_TEST bool <- 36
     38 BRANCH target 2 alternative 3 <- 37
-  block 2 scope 134 BLOCK length 4
+  block 2 scope 157 BLOCK length 4
     39 LOAD u32 slot 8
     40 STORE slot 19 <- 39
     41 LOAD u32 slot 19
     42 FAIL <- 41
-  block 3 scope 134 BLOCK length 30
+  block 3 scope 157 BLOCK length 30
     43 LOAD usize slot 9
     44 STORE slot 7 <- 43
     45 PLACE_ADDRESS usize
@@ -11779,12 +12720,12 @@ item 14 ROUTINE arena_alloc result usize signature 14 params 3 slots 25 blocks 3
     70 STORE_INDIRECT address slot 24 <- 69 68
     71 LOAD usize slot 4
     72 LEAVE <- 71
-item 15 ROUTINE arena_free result none signature 15 params 3 slots 4 blocks 1 values 7
+item 21 ROUTINE arena_free result none signature 17 params 3 slots 4 blocks 1 values 7
   slot 1 self aggregate fields usize usize param 1
   slot 2 block usize param 2
   slot 3 size usize param 3
   slot 4 - address of usize
-  block 1 scope 136 BLOCK length 7
+  block 1 scope 159 BLOCK length 7
     1 PLACE_ADDRESS usize
     2 STORE slot 4 <- 1
     3 LOAD usize slot 4
@@ -11792,7 +12733,7 @@ item 15 ROUTINE arena_free result none signature 15 params 3 slots 4 blocks 1 va
     5 LOAD usize slot 2
     6 LOAD usize slot 3
     7 LEAVE
-item 16 ROUTINE arena_grow result bool signature 16 params 5 slots 44 blocks 19 values 168
+item 22 ROUTINE arena_grow result bool signature 18 params 5 slots 41 blocks 16 values 156
   slot 1 self aggregate fields usize usize param 1
   slot 2 block usize param 2
   slot 3 old_size usize param 3
@@ -11801,43 +12742,40 @@ item 16 ROUTINE arena_grow result bool signature 16 params 5 slots 44 blocks 19 
   slot 6 grown bool return
   slot 7 state usize
   slot 8 - address of usize
-  slot 9 - bool
-  slot 10 - usize
-  slot 11 - address of struct (usize,usize)
-  slot 12 - address of usize
-  slot 13 - usize
-  slot 14 - address of struct (usize,usize)
-  slot 15 - address of usize
-  slot 16 base_address usize
-  slot 17 - address of usize
-  slot 18 block_address usize
-  slot 19 - usize
-  slot 20 offset usize
+  slot 9 - usize
+  slot 10 - address of struct (usize,usize)
+  slot 11 - address of usize
+  slot 12 - usize
+  slot 13 - address of struct (usize,usize)
+  slot 14 - address of usize
+  slot 15 base_address usize
+  slot 16 - address of usize
+  slot 17 block_address usize
+  slot 18 - usize
+  slot 19 offset usize
+  slot 20 - usize
   slot 21 - usize
-  slot 22 - bool
-  slot 23 - usize
-  slot 24 - address of struct (usize,usize)
-  slot 25 - address of usize
-  slot 26 - usize
-  slot 27 - address of struct (usize,usize)
-  slot 28 - address of usize
+  slot 22 - address of struct (usize,usize)
+  slot 23 - address of usize
+  slot 24 - usize
+  slot 25 - address of struct (usize,usize)
+  slot 26 - address of usize
+  slot 27 - usize
+  slot 28 - usize
   slot 29 - usize
-  slot 30 - bool
+  slot 30 - usize
   slot 31 - usize
-  slot 32 - usize
-  slot 33 - usize
+  slot 32 - address of struct (usize,usize)
+  slot 33 - address of usize
   slot 34 - usize
-  slot 35 - address of struct (usize,usize)
-  slot 36 - address of usize
+  slot 35 maximum usize
+  slot 36 - usize
   slot 37 - usize
-  slot 38 maximum usize
-  slot 39 - usize
-  slot 40 - usize
+  slot 38 - usize
+  slot 39 - address of struct (usize,usize)
+  slot 40 - address of usize
   slot 41 - usize
-  slot 42 - address of struct (usize,usize)
-  slot 43 - address of usize
-  slot 44 - usize
-  block 1 scope 138 BLOCK length 14
+  block 1 scope 161 BLOCK length 13
     1 TRUTH bool false
     2 STORE slot 6 <- 1
     3 PLACE_ADDRESS usize
@@ -11846,185 +12784,170 @@ item 16 ROUTINE arena_grow result bool signature 16 params 5 slots 44 blocks 19 
     6 LOAD_INDIRECT usize address slot 8 <- 5
     7 STORE slot 7 <- 6
     8 LOAD usize slot 4
-    9 STORE slot 10 <- 8
+    9 STORE slot 9 <- 8
     10 LOAD usize slot 3
-    11 LOAD usize slot 10
+    11 LOAD usize slot 9
     12 LESS_OR_EQUAL bool <- 11 10
-    13 STORE slot 9 <- 12
-    14 BRANCH target 3 alternative 2 <- 12
-  block 2 scope 138 BLOCK length 19
-    15 LOAD usize slot 7
-    16 POINTER_ADDRESS usize <- 15
-    17 STORE slot 11 <- 16
-    18 PLACE_ADDRESS usize
-    19 STORE slot 12 <- 18
-    20 LOAD usize slot 12
-    21 LOAD_INDIRECT usize address slot 12 <- 20
-    22 STORE slot 13 <- 21
-    23 LOAD usize slot 7
-    24 POINTER_ADDRESS usize <- 23
-    25 STORE slot 14 <- 24
-    26 PLACE_ADDRESS usize
-    27 STORE slot 15 <- 26
-    28 LOAD usize slot 15
-    29 LOAD_INDIRECT usize address slot 15 <- 28
-    30 LOAD usize slot 13
-    31 GREATER_THAN bool <- 30 29
-    32 STORE slot 9 <- 31
-    33 JUMP target 3
-  block 3 scope 138 BLOCK length 2
-    34 LOAD bool slot 9
-    35 BRANCH target 4 alternative 5 <- 34
-  block 4 scope 138 BLOCK length 2
-    36 LOAD bool slot 6
-    37 LEAVE <- 36
-  block 5 scope 138 BLOCK length 15
-    38 PLACE_ADDRESS usize
-    39 STORE slot 17 <- 38
-    40 LOAD usize slot 17
-    41 LOAD_INDIRECT usize address slot 17 <- 40
-    42 CONVERSION usize <- 41
-    43 STORE slot 16 <- 42
-    44 LOAD usize slot 2
-    45 CONVERSION usize <- 44
-    46 STORE slot 18 <- 45
-    47 LOAD usize slot 18
-    48 STORE slot 19 <- 47
-    49 LOAD usize slot 16
-    50 LOAD usize slot 19
-    51 LESS_THAN bool <- 50 49
-    52 BRANCH target 6 alternative 7 <- 51
-  block 6 scope 138 BLOCK length 2
-    53 LOAD bool slot 6
-    54 LEAVE <- 53
-  block 7 scope 138 BLOCK length 19
-    55 LOAD usize slot 18
-    56 STORE slot 21 <- 55
-    57 LOAD usize slot 16
-    58 LOAD usize slot 21
-    59 SUBTRACT usize <- 58 57
-    60 STORE slot 20 <- 59
-    61 LOAD usize slot 20
-    62 STORE slot 23 <- 61
-    63 LOAD usize slot 7
-    64 POINTER_ADDRESS usize <- 63
-    65 STORE slot 24 <- 64
-    66 PLACE_ADDRESS usize
-    67 STORE slot 25 <- 66
-    68 LOAD usize slot 25
-    69 LOAD_INDIRECT usize address slot 25 <- 68
-    70 LOAD usize slot 23
-    71 GREATER_THAN bool <- 70 69
-    72 STORE slot 22 <- 71
-    73 BRANCH target 9 alternative 8 <- 71
-  block 8 scope 138 BLOCK length 17
-    74 LOAD usize slot 3
+    13 BRANCH target 3 alternative 2 <- 12
+  block 2 scope 161 BLOCK length 18
+    14 LOAD usize slot 7
+    15 POINTER_ADDRESS usize <- 14
+    16 STORE slot 10 <- 15
+    17 PLACE_ADDRESS usize
+    18 STORE slot 11 <- 17
+    19 LOAD usize slot 11
+    20 LOAD_INDIRECT usize address slot 11 <- 19
+    21 STORE slot 12 <- 20
+    22 LOAD usize slot 7
+    23 POINTER_ADDRESS usize <- 22
+    24 STORE slot 13 <- 23
+    25 PLACE_ADDRESS usize
+    26 STORE slot 14 <- 25
+    27 LOAD usize slot 14
+    28 LOAD_INDIRECT usize address slot 14 <- 27
+    29 LOAD usize slot 12
+    30 GREATER_THAN bool <- 29 28
+    31 BRANCH target 3 alternative 4 <- 30
+  block 3 scope 161 BLOCK length 2
+    32 LOAD bool slot 6
+    33 LEAVE <- 32
+  block 4 scope 161 BLOCK length 15
+    34 PLACE_ADDRESS usize
+    35 STORE slot 16 <- 34
+    36 LOAD usize slot 16
+    37 LOAD_INDIRECT usize address slot 16 <- 36
+    38 CONVERSION usize <- 37
+    39 STORE slot 15 <- 38
+    40 LOAD usize slot 2
+    41 CONVERSION usize <- 40
+    42 STORE slot 17 <- 41
+    43 LOAD usize slot 17
+    44 STORE slot 18 <- 43
+    45 LOAD usize slot 15
+    46 LOAD usize slot 18
+    47 LESS_THAN bool <- 46 45
+    48 BRANCH target 5 alternative 6 <- 47
+  block 5 scope 161 BLOCK length 2
+    49 LOAD bool slot 6
+    50 LEAVE <- 49
+  block 6 scope 161 BLOCK length 18
+    51 LOAD usize slot 17
+    52 STORE slot 20 <- 51
+    53 LOAD usize slot 15
+    54 LOAD usize slot 20
+    55 SUBTRACT usize <- 54 53
+    56 STORE slot 19 <- 55
+    57 LOAD usize slot 19
+    58 STORE slot 21 <- 57
+    59 LOAD usize slot 7
+    60 POINTER_ADDRESS usize <- 59
+    61 STORE slot 22 <- 60
+    62 PLACE_ADDRESS usize
+    63 STORE slot 23 <- 62
+    64 LOAD usize slot 23
+    65 LOAD_INDIRECT usize address slot 23 <- 64
+    66 LOAD usize slot 21
+    67 GREATER_THAN bool <- 66 65
+    68 BRANCH target 8 alternative 7 <- 67
+  block 7 scope 161 BLOCK length 16
+    69 LOAD usize slot 3
+    70 STORE slot 24 <- 69
+    71 LOAD usize slot 7
+    72 POINTER_ADDRESS usize <- 71
+    73 STORE slot 25 <- 72
+    74 PLACE_ADDRESS usize
     75 STORE slot 26 <- 74
-    76 LOAD usize slot 7
-    77 POINTER_ADDRESS usize <- 76
+    76 LOAD usize slot 26
+    77 LOAD_INDIRECT usize address slot 26 <- 76
     78 STORE slot 27 <- 77
-    79 PLACE_ADDRESS usize
-    80 STORE slot 28 <- 79
-    81 LOAD usize slot 28
-    82 LOAD_INDIRECT usize address slot 28 <- 81
-    83 STORE slot 29 <- 82
-    84 LOAD usize slot 20
-    85 LOAD usize slot 29
-    86 SUBTRACT usize <- 85 84
-    87 LOAD usize slot 26
-    88 NOT_EQUAL_TO bool <- 87 86
-    89 STORE slot 22 <- 88
-    90 JUMP target 9
-  block 9 scope 138 BLOCK length 2
-    91 LOAD bool slot 22
-    92 BRANCH target 10 alternative 11 <- 91
-  block 10 scope 138 BLOCK length 2
-    93 LOAD bool slot 6
-    94 LEAVE <- 93
-  block 11 scope 138 BLOCK length 7
+    79 LOAD usize slot 19
+    80 LOAD usize slot 27
+    81 SUBTRACT usize <- 80 79
+    82 LOAD usize slot 24
+    83 NOT_EQUAL_TO bool <- 82 81
+    84 BRANCH target 8 alternative 9 <- 83
+  block 8 scope 161 BLOCK length 2
+    85 LOAD bool slot 6
+    86 LEAVE <- 85
+  block 9 scope 161 BLOCK length 6
+    87 LOAD usize slot 5
+    88 STORE slot 28 <- 87
+    89 NUMBER usize 1
+    90 LOAD usize slot 28
+    91 GREATER_THAN bool <- 90 89
+    92 BRANCH target 10 alternative 12 <- 91
+  block 10 scope 161 BLOCK length 10
+    93 LOAD usize slot 17
+    94 STORE slot 29 <- 93
     95 LOAD usize slot 5
-    96 STORE slot 31 <- 95
-    97 NUMBER usize 1
-    98 LOAD usize slot 31
-    99 GREATER_THAN bool <- 98 97
-    100 STORE slot 30 <- 99
-    101 BRANCH target 12 alternative 13 <- 99
-  block 12 scope 138 BLOCK length 11
-    102 LOAD usize slot 18
-    103 STORE slot 32 <- 102
-    104 LOAD usize slot 5
-    105 LOAD usize slot 32
-    106 REMAINDER usize <- 105 104
-    107 STORE slot 33 <- 106
-    108 NUMBER usize 0
-    109 LOAD usize slot 33
-    110 NOT_EQUAL_TO bool <- 109 108
-    111 STORE slot 30 <- 110
-    112 JUMP target 13
-  block 13 scope 138 BLOCK length 2
-    113 LOAD bool slot 30
-    114 BRANCH target 14 alternative 15 <- 113
-  block 14 scope 138 BLOCK length 2
-    115 LOAD bool slot 6
-    116 LEAVE <- 115
-  block 15 scope 138 BLOCK length 16
-    117 LOAD usize slot 4
-    118 STORE slot 34 <- 117
-    119 LOAD usize slot 7
-    120 POINTER_ADDRESS usize <- 119
-    121 STORE slot 35 <- 120
-    122 PLACE_ADDRESS usize
-    123 STORE slot 36 <- 122
-    124 LOAD usize slot 36
-    125 LOAD_INDIRECT usize address slot 36 <- 124
-    126 STORE slot 37 <- 125
-    127 LOAD usize slot 20
-    128 LOAD usize slot 37
-    129 SUBTRACT usize <- 128 127
-    130 LOAD usize slot 34
-    131 GREATER_THAN bool <- 130 129
-    132 BRANCH target 16 alternative 17 <- 131
-  block 16 scope 138 BLOCK length 2
-    133 LOAD bool slot 6
-    134 LEAVE <- 133
-  block 17 scope 138 BLOCK length 16
-    135 NUMBER usize 0
-    136 STORE slot 39 <- 135
-    137 NUMBER usize 1
-    138 LOAD usize slot 39
-    139 WRAPPING_SUBTRACT usize <- 138 137
-    140 STORE slot 38 <- 139
-    141 LOAD usize slot 4
-    142 STORE slot 40 <- 141
-    143 LOAD usize slot 38
-    144 STORE slot 41 <- 143
-    145 LOAD usize slot 18
-    146 LOAD usize slot 41
-    147 SUBTRACT usize <- 146 145
-    148 LOAD usize slot 40
-    149 GREATER_THAN bool <- 148 147
-    150 BRANCH target 18 alternative 19 <- 149
-  block 18 scope 138 BLOCK length 2
-    151 LOAD bool slot 6
-    152 LEAVE <- 151
-  block 19 scope 138 BLOCK length 16
-    153 LOAD usize slot 7
-    154 POINTER_ADDRESS usize <- 153
-    155 STORE slot 42 <- 154
-    156 PLACE_ADDRESS usize
-    157 STORE slot 43 <- 156
-    158 LOAD usize slot 20
-    159 STORE slot 44 <- 158
-    160 LOAD usize slot 4
-    161 LOAD usize slot 44
-    162 ADD usize <- 161 160
-    163 LOAD usize slot 43
-    164 STORE_INDIRECT address slot 43 <- 163 162
-    165 TRUTH bool true
-    166 STORE slot 6 <- 165
-    167 LOAD bool slot 6
-    168 LEAVE <- 167
-item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 61
+    96 LOAD usize slot 29
+    97 REMAINDER usize <- 96 95
+    98 STORE slot 30 <- 97
+    99 NUMBER usize 0
+    100 LOAD usize slot 30
+    101 NOT_EQUAL_TO bool <- 100 99
+    102 BRANCH target 11 alternative 12 <- 101
+  block 11 scope 161 BLOCK length 2
+    103 LOAD bool slot 6
+    104 LEAVE <- 103
+  block 12 scope 161 BLOCK length 16
+    105 LOAD usize slot 4
+    106 STORE slot 31 <- 105
+    107 LOAD usize slot 7
+    108 POINTER_ADDRESS usize <- 107
+    109 STORE slot 32 <- 108
+    110 PLACE_ADDRESS usize
+    111 STORE slot 33 <- 110
+    112 LOAD usize slot 33
+    113 LOAD_INDIRECT usize address slot 33 <- 112
+    114 STORE slot 34 <- 113
+    115 LOAD usize slot 19
+    116 LOAD usize slot 34
+    117 SUBTRACT usize <- 116 115
+    118 LOAD usize slot 31
+    119 GREATER_THAN bool <- 118 117
+    120 BRANCH target 13 alternative 14 <- 119
+  block 13 scope 161 BLOCK length 2
+    121 LOAD bool slot 6
+    122 LEAVE <- 121
+  block 14 scope 161 BLOCK length 16
+    123 NUMBER usize 0
+    124 STORE slot 36 <- 123
+    125 NUMBER usize 1
+    126 LOAD usize slot 36
+    127 WRAPPING_SUBTRACT usize <- 126 125
+    128 STORE slot 35 <- 127
+    129 LOAD usize slot 4
+    130 STORE slot 37 <- 129
+    131 LOAD usize slot 35
+    132 STORE slot 38 <- 131
+    133 LOAD usize slot 17
+    134 LOAD usize slot 38
+    135 SUBTRACT usize <- 134 133
+    136 LOAD usize slot 37
+    137 GREATER_THAN bool <- 136 135
+    138 BRANCH target 15 alternative 16 <- 137
+  block 15 scope 161 BLOCK length 2
+    139 LOAD bool slot 6
+    140 LEAVE <- 139
+  block 16 scope 161 BLOCK length 16
+    141 LOAD usize slot 7
+    142 POINTER_ADDRESS usize <- 141
+    143 STORE slot 39 <- 142
+    144 PLACE_ADDRESS usize
+    145 STORE slot 40 <- 144
+    146 LOAD usize slot 19
+    147 STORE slot 41 <- 146
+    148 LOAD usize slot 4
+    149 LOAD usize slot 41
+    150 ADD usize <- 149 148
+    151 LOAD usize slot 40
+    152 STORE_INDIRECT address slot 40 <- 151 150
+    153 TRUTH bool true
+    154 STORE slot 6 <- 153
+    155 LOAD bool slot 6
+    156 LEAVE <- 155
+item 23 ROUTINE - result struct signature 20 params 3 slots 16 blocks 7 values 61
   slot 1 new_buffers usize param 1
   slot 2 memory aggregate fields usize usize param 2
   slot 3 count usize param 3
@@ -12048,7 +12971,7 @@ item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 6
     4 LOAD usize slot 6
     5 STORAGE_ADDRESS usize storage slot 4 field 1
     6 EVIDENCE_ADDRESS usize evidence 5
-    7 CALL none callee 18 - signature 20 failure slot 5 <- 5 6 4 3
+    7 CALL none callee 24 - signature 22 failure slot 5 <- 5 6 4 3
     8 LOAD u32 slot 5
     9 FAILURE_TEST bool <- 8
     10 BRANCH target 2 alternative 3 <- 9
@@ -12064,7 +12987,7 @@ item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 6
     18 LOAD usize slot 9
     19 STORAGE_ADDRESS usize storage slot 4 field 2
     20 EVIDENCE_ADDRESS usize evidence 5
-    21 CALL none callee 18 - signature 20 failure slot 8 <- 19 20 18 17
+    21 CALL none callee 24 - signature 22 failure slot 8 <- 19 20 18 17
     22 LOAD u32 slot 8
     23 FAILURE_TEST bool <- 22
     24 BRANCH target 4 alternative 5 <- 23
@@ -12076,7 +12999,7 @@ item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 6
     29 PLACE_ADDRESS usize
     30 LOAD usize slot 11
     31 EVIDENCE_ADDRESS usize evidence 5
-    32 CALL none callee 23 - signature 30 <- 31 30 29
+    32 CALL none callee 29 - signature 32 <- 31 30 29
     33 LOAD u32 slot 10
     34 FAIL <- 33
   block 5 scope 22 BLOCK length 10
@@ -12086,7 +13009,7 @@ item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 6
     38 LOAD usize slot 13
     39 STORAGE_ADDRESS usize storage slot 4 field 3
     40 EVIDENCE_ADDRESS usize evidence 5
-    41 CALL none callee 18 - signature 20 failure slot 12 <- 39 40 38 37
+    41 CALL none callee 24 - signature 22 failure slot 12 <- 39 40 38 37
     42 LOAD u32 slot 12
     43 FAILURE_TEST bool <- 42
     44 BRANCH target 6 alternative 7 <- 43
@@ -12098,18 +13021,18 @@ item 17 ROUTINE - result struct signature 18 params 3 slots 16 blocks 7 values 6
     49 PLACE_ADDRESS usize
     50 LOAD usize slot 15
     51 EVIDENCE_ADDRESS usize evidence 5
-    52 CALL none callee 23 - signature 30 <- 51 50 49
+    52 CALL none callee 29 - signature 32 <- 51 50 49
     53 STORAGE_ADDRESS usize storage slot 2
     54 STORE slot 16 <- 53
     55 PLACE_ADDRESS usize
     56 LOAD usize slot 16
     57 EVIDENCE_ADDRESS usize evidence 5
-    58 CALL none callee 23 - signature 30 <- 57 56 55
+    58 CALL none callee 29 - signature 32 <- 57 56 55
     59 LOAD u32 slot 14
     60 FAIL <- 59
   block 7 scope 22 BLOCK length 1
     61 LEAVE
-item 18 ROUTINE - result struct signature 20 params 4 slots 33 blocks 12 values 103
+item 24 ROUTINE - result struct signature 22 params 4 slots 52 blocks 13 values 168
   slot 1 new_bytes usize param 1
   slot 2 - usize param 2
   slot 3 memory aggregate fields usize usize param 3
@@ -12123,27 +13046,46 @@ item 18 ROUTINE - result struct signature 20 params 4 slots 33 blocks 12 values 
   slot 11 block usize
   slot 12 - u32 atoms {out_of_memory}
   slot 13 - usize
-  slot 14 - usize signature 14
+  slot 14 - usize signature 16
   slot 15 - address of struct (usize,usize)
   slot 16 - usize
   slot 17 - u32 atoms {out_of_memory}
-  slot 18 fresh aggregate fields usize usize [2]usize
-  slot 19 - usize
-  slot 20 index usize
-  slot 21 initial u8
+  slot 18 first usize
+  slot 19 zeroes elements 2 of usize
+  slot 20 - usize
+  slot 21 - usize
   slot 22 - usize
-  slot 23 admitted usize
-  slot 24 - u32 atoms {full}
-  slot 25 - usize
-  slot 26 - address of struct (usize,usize,[2]usize)
-  slot 27 problem u32 atoms {full}
-  slot 28 - usize signature 15
-  slot 29 - address of struct (usize,usize)
+  slot 23 - usize
+  slot 24 - usize
+  slot 25 - address of [1]u8
+  slot 26 - usize
+  slot 27 - usize
+  slot 28 - usize
+  slot 29 - usize
   slot 30 - usize
-  slot 31 - u32 atoms {out_of_memory}
-  slot 32 - address of struct (usize,usize,[2]usize)
-  slot 33 - address of struct (usize,usize,[2]usize)
-  block 1 scope 55 BLOCK length 8
+  slot 31 - elements 2 of usize
+  slot 32 - address of [2]usize
+  slot 33 fresh aggregate fields usize usize [2]usize
+  slot 34 - usize
+  slot 35 initial u8
+  slot 36 admitted usize
+  slot 37 - u32 atoms {full}
+  slot 38 - usize
+  slot 39 - address of struct (usize,usize,[2]usize)
+  slot 40 problem u32 atoms {full}
+  slot 41 - usize signature 17
+  slot 42 - address of struct (usize,usize)
+  slot 43 - usize
+  slot 44 - u32 atoms {out_of_memory}
+  slot 45 - elements 2 of usize
+  slot 46 - usize
+  slot 47 - usize
+  slot 48 - usize
+  slot 49 - usize
+  slot 50 - usize
+  slot 51 - address of struct (usize,usize,[2]usize)
+  slot 52 - address of struct (usize,usize,[2]usize)
+  block 1 scope 77 BLOCK length 8
     1 NUMBER usize 0
     2 STORE slot 6 <- 1
     3 LOAD usize slot 4
@@ -12152,9 +13094,9 @@ item 18 ROUTINE - result struct signature 20 params 4 slots 33 blocks 12 values 
     6 LOAD usize slot 7
     7 EQUAL_TO bool <- 6 5
     8 BRANCH target 2 alternative 3 <- 7
-  block 2 scope 56 BLOCK length 10
+  block 2 scope 78 BLOCK length 10
     9 STORAGE_ADDRESS usize storage slot 8
-    10 CALL none callee 19 - signature 22 <- 9
+    10 CALL none callee 25 - signature 24 <- 9
     11 STORAGE_ADDRESS usize storage slot 8
     12 STORE slot 9 <- 11
     13 STORAGE_ADDRESS usize storage slot 5 field 1
@@ -12163,11 +13105,11 @@ item 18 ROUTINE - result struct signature 20 params 4 slots 33 blocks 12 values 
     16 LOAD usize slot 6
     17 STORE_FIELD slot 5 field 2 <- 16
     18 LEAVE
-  block 3 scope 55 BLOCK length 1
+  block 3 scope 77 BLOCK length 1
     19 JUMP target 4
-  block 4 scope 55 BLOCK length 16
+  block 4 scope 77 BLOCK length 16
     20 LOAD usize slot 2
-    21 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 14 <- 20
+    21 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 16 <- 20
     22 STORE slot 14 <- 21
     23 STORAGE_ADDRESS usize storage slot 3
     24 STORE slot 15 <- 23
@@ -12177,92 +13119,158 @@ item 18 ROUTINE - result struct signature 20 params 4 slots 33 blocks 12 values 
     28 LOAD usize slot 15
     29 LOAD usize slot 16
     30 LOAD usize slot 14
-    31 INDIRECT_CALL usize signature 14 failure slot 12 <- 30 28 29 27
+    31 INDIRECT_CALL usize signature 16 failure slot 12 <- 30 28 29 27
     32 STORE slot 13 <- 31
     33 LOAD u32 slot 12
     34 FAILURE_TEST bool <- 33
     35 BRANCH target 5 alternative 6 <- 34
-  block 5 scope 55 BLOCK length 4
+  block 5 scope 77 BLOCK length 4
     36 LOAD u32 slot 12
     37 STORE slot 17 <- 36
     38 LOAD u32 slot 17
     39 FAIL <- 38
-  block 6 scope 55 BLOCK length 13
+  block 6 scope 77 BLOCK length 31
     40 LOAD usize slot 13
     41 STORE slot 11 <- 40
     42 LOAD usize slot 11
-    43 STORE slot 19 <- 42
-    44 LOAD usize slot 4
-    45 LOAD usize slot 19
-    46 STORAGE_ADDRESS usize storage slot 18
-    47 CALL none callee 20 - signature 24 <- 46 45 44
-    48 NUMBER usize 0
-    49 STORE slot 20 <- 48
-    50 NUMBER u8 0
-    51 STORE slot 21 <- 50
-    52 JUMP target 7
-  block 7 scope 55 BLOCK length 6
-    53 LOAD usize slot 20
-    54 STORE slot 22 <- 53
-    55 LOAD usize slot 4
-    56 LOAD usize slot 22
-    57 LESS_THAN bool <- 56 55
-    58 BRANCH target 8 alternative 9 <- 57
-  block 8 scope 57 BLOCK length 9
-    59 PLACE_ADDRESS usize
-    60 STORE slot 26 <- 59
-    61 LOAD u8 slot 21
-    62 LOAD usize slot 26
-    63 CALL usize callee 21 - signature 26 failure slot 24 <- 62 61
-    64 STORE slot 25 <- 63
-    65 LOAD u32 slot 24
-    66 FAILURE_TEST bool <- 65
-    67 BRANCH target 10 alternative 11 <- 66
-  block 9 scope 55 BLOCK length 8
-    96 STORAGE_ADDRESS usize storage slot 18
-    97 STORE slot 32 <- 96
-    98 STORAGE_ADDRESS usize storage slot 5 field 1
-    99 STORE slot 33 <- 98
-    100 COPY_ARRAY from address slot 32 to address slot 33
-    101 LOAD usize slot 4
-    102 STORE_FIELD slot 5 field 2 <- 101
-    103 LEAVE
-  block 10 scope 57 BLOCK length 19
-    68 LOAD u32 slot 24
-    69 STORE slot 27 <- 68
-    70 LOAD u32 slot 27
-    71 LOAD usize slot 2
-    72 EVIDENCE_FUNCTION usize table evidence 5 entry 3 signature 15 <- 71
-    73 STORE slot 28 <- 72
-    74 STORAGE_ADDRESS usize storage slot 3
-    75 STORE slot 29 <- 74
-    76 LOAD usize slot 11
-    77 STORE slot 30 <- 76
-    78 LOAD usize slot 4
-    79 LOAD usize slot 29
-    80 LOAD usize slot 30
-    81 LOAD usize slot 28
-    82 INDIRECT_CALL none signature 15 <- 81 79 80 78
-    83 ATOM u32 identity out_of_memory atoms {out_of_memory}
-    84 STORE slot 31 <- 83
-    85 LOAD u32 slot 31
-    86 FAIL <- 85
-  block 11 scope 57 BLOCK length 1
-    87 JUMP target 12
-  block 12 scope 57 BLOCK length 8
-    88 LOAD usize slot 25
-    89 STORE slot 23 <- 88
-    90 LOAD usize slot 23
-    91 LOAD usize slot 20
-    92 NUMBER usize 1
-    93 ADD usize <- 91 92
-    94 STORE slot 20 <- 93
-    95 JUMP target 7
-item 19 ROUTINE - result struct signature 22 params 1 slots 3 blocks 1 values 10
+    43 CONVERSION usize <- 42
+    44 CONVERSION usize <- 43
+    45 RANGE_CHECK usize <- 44 range 1 .. 18446744073709551615 representation
+    46 STORE slot 18 <- 45
+    47 LOAD usize slot 18
+    48 POINTER_ADDRESS usize <- 47
+    49 STORE slot 25 <- 48
+    50 STORAGE_ADDRESS usize storage address slot 25
+    51 NUMBER usize 1
+    52 STORE slot 20 <- 50
+    53 STORE slot 21 <- 51
+    54 NUMBER usize 0
+    55 STORE slot 22 <- 54
+    56 NUMBER usize 1
+    57 STORE slot 23 <- 56
+    58 LOAD usize slot 22
+    59 LOAD usize slot 23
+    60 LOAD usize slot 20
+    61 LOAD usize slot 21
+    62 SLICE_ADDRESS usize <- 60 61 58 59
+    63 STORE slot 24 <- 62
+    64 LOAD usize slot 23
+    65 LOAD usize slot 22
+    66 SUBTRACT usize <- 64 65
+    67 LOAD usize slot 24
+    68 STORE_FIELD slot 19 field 1 <- 67
+    69 STORE_FIELD slot 19 field 2 <- 66
+    70 JUMP target 7
+  block 7 scope 79 BLOCK length 21
+    71 LOAD_FIELD usize slot 19 field 1
+    72 LOAD_FIELD usize slot 19 field 2
+    73 STORE slot 26 <- 71
+    74 STORE slot 27 <- 72
+    75 NUMBER usize 0
+    76 STORE slot 28 <- 75
+    77 LOAD usize slot 4
+    78 STORE slot 29 <- 77
+    79 LOAD usize slot 28
+    80 LOAD usize slot 29
+    81 LOAD usize slot 26
+    82 LOAD usize slot 27
+    83 SLICE_ADDRESS usize <- 81 82 79 80 unchecked
+    84 STORE slot 30 <- 83
+    85 LOAD usize slot 29
+    86 LOAD usize slot 28
+    87 SUBTRACT usize <- 85 86 unchecked
+    88 LOAD usize slot 30
+    89 STORE_FIELD slot 19 field 1 <- 88
+    90 STORE_FIELD slot 19 field 2 <- 87
+    91 JUMP target 8
+  block 8 scope 77 BLOCK length 23
+    92 COPY_ARRAY from slot 19 to slot 31
+    93 STORAGE_ADDRESS usize storage slot 31
+    94 STORE slot 32 <- 93
+    95 NUMBER u8 0
+    96 LOAD usize slot 32
+    97 CALL none callee 13 fill signature 9 <- 96 95
+    98 LOAD usize slot 11
+    99 STORE slot 34 <- 98
+    100 LOAD usize slot 4
+    101 LOAD usize slot 34
+    102 STORAGE_ADDRESS usize storage slot 33
+    103 CALL none callee 26 - signature 26 <- 102 101 100
+    104 NUMBER u8 0
+    105 STORE slot 35 <- 104
+    106 PLACE_ADDRESS usize
+    107 STORE slot 39 <- 106
+    108 LOAD u8 slot 35
+    109 LOAD usize slot 39
+    110 CALL usize callee 27 - signature 28 failure slot 37 <- 109 108
+    111 STORE slot 38 <- 110
+    112 LOAD u32 slot 37
+    113 FAILURE_TEST bool <- 112
+    114 BRANCH target 9 alternative 10 <- 113
+  block 9 scope 77 BLOCK length 19
+    115 LOAD u32 slot 37
+    116 STORE slot 40 <- 115
+    117 LOAD u32 slot 40
+    118 LOAD usize slot 2
+    119 EVIDENCE_FUNCTION usize table evidence 5 entry 3 signature 17 <- 118
+    120 STORE slot 41 <- 119
+    121 STORAGE_ADDRESS usize storage slot 3
+    122 STORE slot 42 <- 121
+    123 LOAD usize slot 11
+    124 STORE slot 43 <- 123
+    125 LOAD usize slot 4
+    126 LOAD usize slot 42
+    127 LOAD usize slot 43
+    128 LOAD usize slot 41
+    129 INDIRECT_CALL none signature 17 <- 128 126 127 125
+    130 ATOM u32 identity out_of_memory atoms {out_of_memory}
+    131 STORE slot 44 <- 130
+    132 LOAD u32 slot 44
+    133 FAIL <- 132
+  block 10 scope 77 BLOCK length 1
+    134 JUMP target 11
+  block 11 scope 77 BLOCK length 4
+    135 LOAD usize slot 38
+    136 STORE slot 36 <- 135
+    137 LOAD usize slot 36
+    138 JUMP target 12
+  block 12 scope 81 BLOCK length 22
+    139 LOAD_FIELD usize slot 33 field 3 nested 1
+    140 LOAD_FIELD usize slot 33 field 3 nested 2
+    141 STORE slot 46 <- 139
+    142 STORE slot 47 <- 140
+    143 NUMBER usize 0
+    144 STORE slot 48 <- 143
+    145 LOAD usize slot 4
+    146 STORE slot 49 <- 145
+    147 LOAD usize slot 48
+    148 LOAD usize slot 49
+    149 LOAD usize slot 46
+    150 LOAD usize slot 47
+    151 SLICE_ADDRESS usize <- 149 150 147 148 unchecked
+    152 STORE slot 50 <- 151
+    153 LOAD usize slot 49
+    154 LOAD usize slot 48
+    155 SUBTRACT usize <- 153 154 unchecked
+    156 LOAD usize slot 50
+    157 STORE_FIELD slot 45 field 1 <- 156
+    158 STORE_FIELD slot 45 field 2 <- 155
+    159 COPY_ARRAY from slot 45 to slot 33 field 3
+    160 JUMP target 13
+  block 13 scope 77 BLOCK length 8
+    161 STORAGE_ADDRESS usize storage slot 33
+    162 STORE slot 51 <- 161
+    163 STORAGE_ADDRESS usize storage slot 5 field 1
+    164 STORE slot 52 <- 163
+    165 COPY_ARRAY from address slot 51 to address slot 52
+    166 LOAD usize slot 4
+    167 STORE_FIELD slot 5 field 2 <- 166
+    168 LEAVE
+item 25 ROUTINE - result struct signature 24 params 1 slots 3 blocks 1 values 10
   slot 1 empty_storage usize param 1
   slot 2 store aggregate fields usize usize [2]usize return
   slot 3 prefix elements 2 of usize
-  block 1 scope 70 BLOCK length 10
+  block 1 scope 93 BLOCK length 10
     1 EMPTY_SLICE_BASE usize
     2 NUMBER usize 0
     3 STORE_FIELD slot 3 field 1 <- 1
@@ -12273,13 +13281,13 @@ item 19 ROUTINE - result struct signature 22 params 1 slots 3 blocks 1 values 10
     8 STORE_FIELD slot 2 field 2 <- 7
     9 COPY_ARRAY from slot 3 to slot 2 field 3
     10 LEAVE
-item 20 ROUTINE - result struct signature 24 params 3 slots 5 blocks 1 values 10
+item 26 ROUTINE - result struct signature 26 params 3 slots 5 blocks 1 values 10
   slot 1 storage_over usize param 1
   slot 2 base usize param 2
   slot 3 slots usize param 3
   slot 4 result aggregate fields usize usize [2]usize return
   slot 5 prefix elements 2 of usize
-  block 1 scope 72 BLOCK length 10
+  block 1 scope 95 BLOCK length 10
     1 EMPTY_SLICE_BASE usize
     2 NUMBER usize 0
     3 STORE_FIELD slot 5 field 1 <- 1
@@ -12290,7 +13298,7 @@ item 20 ROUTINE - result struct signature 24 params 3 slots 5 blocks 1 values 10
     8 STORE_FIELD slot 4 field 2 <- 7
     9 COPY_ARRAY from slot 5 to slot 4 field 3
     10 LEAVE
-item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 132
+item 27 ROUTINE - result usize signature 28 params 2 slots 34 blocks 15 values 132
   slot 1 store address of struct (usize,usize,[2]usize) param 1
   slot 2 value u8 param 2
   slot 3 index usize return
@@ -12325,9 +13333,9 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
   slot 32 - usize
   slot 33 - usize
   slot 34 - address of [2]usize
-  block 1 scope 86 BLOCK length 12
+  block 1 scope 109 BLOCK length 12
     1 STORAGE_ADDRESS usize storage address slot 1
-    2 CALL usize callee 22 - signature 28 <- 1
+    2 CALL usize callee 28 - signature 30 <- 1
     3 STORE slot 3 <- 2
     4 LOAD usize slot 3
     5 STORE slot 4 <- 4
@@ -12338,12 +13346,12 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
     10 LOAD usize slot 4
     11 GREATER_OR_EQUAL bool <- 10 9
     12 BRANCH target 2 alternative 3 <- 11
-  block 2 scope 86 BLOCK length 4
+  block 2 scope 109 BLOCK length 4
     13 ATOM u32 identity full atoms {full}
     14 STORE slot 6 <- 13
     15 LOAD u32 slot 6
     16 FAIL <- 15
-  block 3 scope 86 BLOCK length 12
+  block 3 scope 109 BLOCK length 12
     17 LOAD usize slot 3
     18 STORE slot 8 <- 17
     19 NUMBER usize 1
@@ -12356,7 +13364,7 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
     26 LOAD usize slot 9
     27 EQUAL_TO bool <- 26 25
     28 BRANCH target 4 alternative 5 <- 27
-  block 4 scope 87 BLOCK length 9
+  block 4 scope 110 BLOCK length 9
     29 PLACE_ADDRESS usize
     30 STORE slot 11 <- 29
     31 LOAD usize slot 11
@@ -12366,20 +13374,20 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
     35 NUMBER usize 0
     36 EQUAL_TO bool <- 34 35
     37 BRANCH target 6 alternative 7 <- 36
-  block 5 scope 86 BLOCK length 1
+  block 5 scope 109 BLOCK length 1
     86 JUMP target 13
-  block 6 scope 88 BLOCK length 4
+  block 6 scope 111 BLOCK length 4
     38 ATOM u32 identity full atoms {full}
     39 STORE slot 12 <- 38
     40 LOAD u32 slot 12
     41 FAIL <- 40
-  block 7 scope 87 BLOCK length 1
+  block 7 scope 110 BLOCK length 1
     42 JUMP target 8
-  block 8 scope 89 BLOCK length 3
+  block 8 scope 112 BLOCK length 3
     43 LOAD usize slot 10
     44 STORE slot 13 <- 43
     45 JUMP target 9
-  block 9 scope 90 BLOCK length 38
+  block 9 scope 113 BLOCK length 38
     46 LOAD usize slot 13
     47 CONVERSION usize <- 46
     48 CONVERSION usize <- 47
@@ -12418,16 +13426,16 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
     81 STORE_FIELD slot 17 field 2 <- 78
     82 COPY_ARRAY from slot 17 to address slot 1 field 3
     83 JUMP target 10
-  block 10 scope 89 BLOCK length 1
+  block 10 scope 112 BLOCK length 1
     84 JUMP target 11
-  block 11 scope 87 BLOCK length 1
+  block 11 scope 110 BLOCK length 1
     85 JUMP target 12
-  block 12 scope 86 BLOCK length 2
+  block 12 scope 109 BLOCK length 2
     131 LOAD usize slot 3
     132 LEAVE <- 131
-  block 13 scope 91 BLOCK length 1
+  block 13 scope 114 BLOCK length 1
     87 JUMP target 14
-  block 14 scope 92 BLOCK length 42
+  block 14 scope 115 BLOCK length 42
     88 STORAGE_ADDRESS usize storage address slot 1 field 3
     89 STORE slot 24 <- 88
     90 PLACE_ADDRESS usize
@@ -12470,20 +13478,20 @@ item 21 ROUTINE - result usize signature 26 params 2 slots 34 blocks 15 values 1
     127 STORE_FIELD slot 28 field 2 <- 124
     128 COPY_ARRAY from slot 28 to address slot 1 field 3
     129 JUMP target 15
-  block 15 scope 91 BLOCK length 1
+  block 15 scope 114 BLOCK length 1
     130 JUMP target 12
-item 22 ROUTINE - result usize signature 28 params 1 slots 3 blocks 1 values 6
+item 28 ROUTINE - result usize signature 30 params 1 slots 3 blocks 1 values 6
   slot 1 store aggregate fields usize usize [2]usize param 1
   slot 2 count usize return
   slot 3 prefix elements 2 of usize
-  block 1 scope 82 BLOCK length 6
+  block 1 scope 105 BLOCK length 6
     1 COPY_ARRAY from slot 1 field 3 to slot 3
     2 LOAD_FIELD usize slot 3 field 1
     3 LOAD_FIELD usize slot 3 field 2
     4 STORE slot 2 <- 3
     5 LOAD usize slot 2
     6 LEAVE <- 5
-item 23 ROUTINE - result none signature 30 params 3 slots 15 blocks 6 values 48
+item 29 ROUTINE - result none signature 32 params 3 slots 15 blocks 6 values 48
   slot 1 - usize param 1
   slot 2 memory aggregate fields usize usize param 2
   slot 3 value address of struct (struct (usize,usize,[2]usize),usize) param 3
@@ -12496,10 +13504,10 @@ item 23 ROUTINE - result none signature 30 params 3 slots 15 blocks 6 values 48
   slot 10 - usize
   slot 11 problem u32 atoms {not_empty, empty}
   slot 12 - address of usize
-  slot 13 - usize signature 15
+  slot 13 - usize signature 17
   slot 14 - address of struct (usize,usize)
   slot 15 - usize
-  block 1 scope 60 BLOCK length 9
+  block 1 scope 83 BLOCK length 9
     1 PLACE_ADDRESS usize
     2 STORE slot 4 <- 1
     3 LOAD usize slot 4
@@ -12509,30 +13517,30 @@ item 23 ROUTINE - result none signature 30 params 3 slots 15 blocks 6 values 48
     7 LOAD usize slot 5
     8 EQUAL_TO bool <- 7 6
     9 BRANCH target 2 alternative 3 <- 8
-  block 2 scope 60 BLOCK length 1
+  block 2 scope 83 BLOCK length 1
     10 LEAVE
-  block 3 scope 60 BLOCK length 13
+  block 3 scope 83 BLOCK length 13
     11 PLACE_ADDRESS usize
     12 STORE slot 7 <- 11
     13 LOAD usize slot 7
     14 LOAD_INDIRECT usize address slot 7 <- 13
     15 STORE slot 6 <- 14
     16 PLACE_ADDRESS usize
-    17 CALL none callee 24 - signature 32 <- 16
+    17 CALL none callee 30 - signature 34 <- 16
     18 PLACE_ADDRESS usize
-    19 CALL usize callee 25 - signature 34 failure slot 9 <- 18
+    19 CALL usize callee 31 - signature 36 failure slot 9 <- 18
     20 STORE slot 10 <- 19
     21 LOAD u32 slot 9
     22 FAILURE_TEST bool <- 21
     23 BRANCH target 4 alternative 5 <- 22
-  block 4 scope 60 BLOCK length 4
+  block 4 scope 83 BLOCK length 4
     24 LOAD u32 slot 9
     25 STORE slot 11 <- 24
     26 LOAD u32 slot 11
     27 LEAVE
-  block 5 scope 60 BLOCK length 1
+  block 5 scope 83 BLOCK length 1
     28 JUMP target 6
-  block 6 scope 60 BLOCK length 20
+  block 6 scope 83 BLOCK length 20
     29 LOAD usize slot 10
     30 STORE slot 8 <- 29
     31 PLACE_ADDRESS usize
@@ -12541,7 +13549,7 @@ item 23 ROUTINE - result none signature 30 params 3 slots 15 blocks 6 values 48
     34 LOAD usize slot 12
     35 STORE_INDIRECT address slot 12 <- 34 33
     36 LOAD usize slot 1
-    37 EVIDENCE_FUNCTION usize table evidence 5 entry 3 signature 15 <- 36
+    37 EVIDENCE_FUNCTION usize table evidence 5 entry 3 signature 17 <- 36
     38 STORE slot 13 <- 37
     39 STORAGE_ADDRESS usize storage slot 2
     40 STORE slot 14 <- 39
@@ -12551,9 +13559,9 @@ item 23 ROUTINE - result none signature 30 params 3 slots 15 blocks 6 values 48
     44 LOAD usize slot 14
     45 LOAD usize slot 15
     46 LOAD usize slot 13
-    47 INDIRECT_CALL none signature 15 <- 46 44 45 43
+    47 INDIRECT_CALL none signature 17 <- 46 44 45 43
     48 LEAVE
-item 24 ROUTINE - result none signature 32 params 1 slots 8 blocks 1 values 26
+item 30 ROUTINE - result none signature 34 params 1 slots 8 blocks 1 values 26
   slot 1 store address of struct (usize,usize,[2]usize) param 1
   slot 2 - elements 2 of usize
   slot 3 - usize
@@ -12562,7 +13570,7 @@ item 24 ROUTINE - result none signature 32 params 1 slots 8 blocks 1 values 26
   slot 6 - usize
   slot 7 - usize
   slot 8 - address of [2]usize
-  block 1 scope 116 BLOCK length 26
+  block 1 scope 139 BLOCK length 26
     1 STORAGE_ADDRESS usize storage address slot 1 field 3
     2 STORE slot 8 <- 1
     3 PLACE_ADDRESS usize
@@ -12589,7 +13597,7 @@ item 24 ROUTINE - result none signature 32 params 1 slots 8 blocks 1 values 26
     24 STORE_FIELD slot 2 field 2 <- 21
     25 COPY_ARRAY from slot 2 to address slot 1 field 3
     26 LEAVE
-item 25 ROUTINE - result usize signature 34 params 1 slots 11 blocks 7 values 47
+item 31 ROUTINE - result usize signature 36 params 1 slots 11 blocks 7 values 47
   slot 1 store address of struct (usize,usize,[2]usize) param 1
   slot 2 block usize return
   slot 3 - usize
@@ -12601,20 +13609,20 @@ item 25 ROUTINE - result usize signature 34 params 1 slots 11 blocks 7 values 47
   slot 9 - address of usize
   slot 10 - elements 2 of usize
   slot 11 - address of usize
-  block 1 scope 118 BLOCK length 7
+  block 1 scope 141 BLOCK length 7
     1 STORAGE_ADDRESS usize storage address slot 1
-    2 CALL usize callee 22 - signature 28 <- 1
+    2 CALL usize callee 28 - signature 30 <- 1
     3 STORE slot 3 <- 2
     4 NUMBER usize 0
     5 LOAD usize slot 3
     6 NOT_EQUAL_TO bool <- 5 4
     7 BRANCH target 2 alternative 3 <- 6
-  block 2 scope 118 BLOCK length 4
+  block 2 scope 141 BLOCK length 4
     8 ATOM u32 identity not_empty atoms {not_empty}
     9 STORE slot 4 <- 8
     10 LOAD u32 slot 4
     11 FAIL <- 10
-  block 3 scope 118 BLOCK length 9
+  block 3 scope 141 BLOCK length 9
     12 PLACE_ADDRESS usize
     13 STORE slot 6 <- 12
     14 LOAD usize slot 6
@@ -12624,20 +13632,20 @@ item 25 ROUTINE - result usize signature 34 params 1 slots 11 blocks 7 values 47
     18 NUMBER usize 0
     19 EQUAL_TO bool <- 17 18
     20 BRANCH target 4 alternative 5 <- 19
-  block 4 scope 119 BLOCK length 4
+  block 4 scope 142 BLOCK length 4
     21 ATOM u32 identity empty atoms {empty}
     22 STORE slot 7 <- 21
     23 LOAD u32 slot 7
     24 FAIL <- 23
-  block 5 scope 118 BLOCK length 1
+  block 5 scope 141 BLOCK length 1
     25 JUMP target 6
-  block 6 scope 120 BLOCK length 5
+  block 6 scope 143 BLOCK length 5
     26 LOAD usize slot 5
     27 STORE slot 8 <- 26
     28 LOAD usize slot 8
     29 STORE slot 2 <- 28
     30 JUMP target 7
-  block 7 scope 118 BLOCK length 17
+  block 7 scope 141 BLOCK length 17
     31 PLACE_ADDRESS usize
     32 STORE slot 9 <- 31
     33 NUMBER usize 0
@@ -12655,7 +13663,7 @@ item 25 ROUTINE - result usize signature 34 params 1 slots 11 blocks 7 values 47
     45 STORE_INDIRECT address slot 11 <- 44 43
     46 LOAD usize slot 2
     47 LEAVE <- 46
-item 26 ROUTINE - result array signature 36 params 2 slots 10 blocks 3 values 26
+item 32 ROUTINE - result array signature 38 params 2 slots 10 blocks 3 values 26
   elements 2 of usize
   slot 1 make_widget usize param 1
   slot 2 memory aggregate fields usize usize param 2
@@ -12668,7 +13676,7 @@ item 26 ROUTINE - result array signature 36 params 2 slots 10 blocks 3 values 26
   slot 9 - address of struct (usize,usize)
   slot 10 - u32 atoms {out_of_memory}
   block 1 scope 24 BLOCK length 15
-    1 STORAGE_ADDRESS usize storage datum 29 -
+    1 STORAGE_ADDRESS usize storage datum 35 -
     2 NUMBER usize 2
     3 STORE_FIELD slot 5 field 1 <- 1
     4 STORE_FIELD slot 5 field 2 <- 2
@@ -12678,7 +13686,7 @@ item 26 ROUTINE - result array signature 36 params 2 slots 10 blocks 3 values 26
     8 STORAGE_ADDRESS usize storage slot 4
     9 LOAD usize slot 9
     10 EVIDENCE_ADDRESS usize evidence 5
-    11 CALL usize callee 27 - signature 38 failure slot 7 <- 10 9 8
+    11 CALL usize callee 33 - signature 40 failure slot 7 <- 10 9 8
     12 STORE slot 8 <- 11
     13 LOAD u32 slot 7
     14 FAILURE_TEST bool <- 13
@@ -12696,7 +13704,7 @@ item 26 ROUTINE - result array signature 36 params 2 slots 10 blocks 3 values 26
     24 STORE_FIELD slot 3 field 1 <- 22
     25 STORE_FIELD slot 3 field 2 <- 23
     26 LEAVE
-item 27 ROUTINE - result usize signature 38 params 3 slots 13 blocks 3 values 35
+item 33 ROUTINE - result usize signature 40 params 3 slots 13 blocks 3 values 35
   slot 1 - usize param 1
   slot 2 memory aggregate fields usize usize param 2
   slot 3 value aggregate fields [2]usize param 3
@@ -12704,7 +13712,7 @@ item 27 ROUTINE - result usize signature 38 params 3 slots 13 blocks 3 values 35
   slot 5 block usize
   slot 6 - u32 atoms {out_of_memory}
   slot 7 - usize
-  slot 8 - usize signature 14
+  slot 8 - usize signature 16
   slot 9 - address of struct (usize,usize)
   slot 10 - usize
   slot 11 - u32 atoms {out_of_memory}
@@ -12712,7 +13720,7 @@ item 27 ROUTINE - result usize signature 38 params 3 slots 13 blocks 3 values 35
   slot 13 - address of struct ([2]usize)
   block 1 scope 28 BLOCK length 16
     1 LOAD usize slot 1
-    2 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 14 <- 1
+    2 EVIDENCE_FUNCTION usize table evidence 5 entry 1 signature 16 <- 1
     3 STORE slot 8 <- 2
     4 STORAGE_ADDRESS usize storage slot 2
     5 STORE slot 9 <- 4
@@ -12722,7 +13730,7 @@ item 27 ROUTINE - result usize signature 38 params 3 slots 13 blocks 3 values 35
     9 LOAD usize slot 9
     10 LOAD usize slot 10
     11 LOAD usize slot 8
-    12 INDIRECT_CALL usize signature 14 failure slot 6 <- 11 9 10 8
+    12 INDIRECT_CALL usize signature 16 failure slot 6 <- 11 9 10 8
     13 STORE slot 7 <- 12
     14 LOAD u32 slot 6
     15 FAILURE_TEST bool <- 14
@@ -12748,15 +13756,15 @@ item 27 ROUTINE - result usize signature 38 params 3 slots 13 blocks 3 values 35
     33 COPY_ARRAY from address slot 13 to address slot 12
     34 LOAD usize slot 4
     35 LEAVE <- 34
-item 28 ROUTINE - result array signature 40 params 2 slots 3 blocks 1 values 2
+item 34 ROUTINE - result array signature 42 params 2 slots 3 blocks 1 values 2
   elements 2 of usize
   slot 1 used usize param 1
   slot 2 store aggregate fields usize usize [2]usize param 2
   slot 3 view elements 2 of usize return
-  block 1 scope 84 BLOCK length 2
+  block 1 scope 107 BLOCK length 2
     1 COPY_ARRAY from slot 2 field 3 to slot 3
     2 LEAVE
-item 29 DATUM - result array params 0 slots 0 blocks 1 values 1
+item 35 DATUM - result array params 0 slots 0 blocks 1 values 1
   elements 3 of u8
   image 79 75 0
   block 1 scope 1 PROGRAM length 1
@@ -12949,19 +13957,17 @@ item 1 ROUTINE make result struct signature 1 params 2 slots 9 blocks 1 values 2
     27 STORE slot 9 <- 26
     28 COPY_ARRAY from address slot 8 to address slot 9
     29 LEAVE
-item 2 ROUTINE main result i32 signature 2 params 0 slots 11 blocks 8 values 51
+item 2 ROUTINE main result i32 signature 2 params 0 slots 9 blocks 6 values 43
   slot 1 code i32 return
   slot 2 x aggregate fields packed(1:4/32) u32 atoms {a, b, c} packed(8:2/32) [4]u8 packed(31:1/32) bool
   slot 3 p usize
-  slot 4 - bool
-  slot 5 - bool
-  slot 6 - address of u32
-  slot 7 - u32
+  slot 4 - address of u32
+  slot 5 - u32
+  slot 6 - address of struct (packed(1:4/32) u32 atoms {a, b, c},packed(8:2/32) [4]u8,packed(31:1/32) bool)
+  slot 7 - u32 atoms {a, b, c}
   slot 8 - address of struct (packed(1:4/32) u32 atoms {a, b, c},packed(8:2/32) [4]u8,packed(31:1/32) bool)
-  slot 9 - u32 atoms {a, b, c}
-  slot 10 - address of struct (packed(1:4/32) u32 atoms {a, b, c},packed(8:2/32) [4]u8,packed(31:1/32) bool)
-  slot 11 - u8
-  block 1 scope 7 BLOCK length 21
+  slot 9 - u8
+  block 1 scope 7 BLOCK length 20
     1 NUMBER u8 2
     2 STORAGE_ADDRESS usize storage slot 2
     3 CALL none callee 1 make signature 1 <- 2 1
@@ -12974,52 +13980,42 @@ item 2 ROUTINE main result i32 signature 2 params 0 slots 11 blocks 8 values 51
     10 STORE slot 1 <- 9
     11 LOAD usize slot 3
     12 POINTER_ADDRESS usize <- 11
-    13 STORE slot 6 <- 12
-    14 LOAD usize slot 6
-    15 LOAD_INDIRECT u32 address slot 6 <- 14
-    16 STORE slot 7 <- 15
+    13 STORE slot 4 <- 12
+    14 LOAD usize slot 4
+    15 LOAD_INDIRECT u32 address slot 4 <- 14
+    16 STORE slot 5 <- 15
     17 NUMBER u32 2147527176
-    18 LOAD u32 slot 7
+    18 LOAD u32 slot 5
     19 EQUAL_TO bool <- 18 17
-    20 STORE slot 5 <- 19
-    21 BRANCH target 2 alternative 3 <- 19
-  block 2 scope 7 BLOCK length 9
-    22 STORAGE_ADDRESS usize storage slot 2
-    23 STORE slot 8 <- 22
-    24 LOAD_FIELD u32 slot 8 field 1
-    25 STORE slot 9 <- 24
-    26 ATOM u32 identity c atoms {c}
-    27 LOAD u32 slot 9
-    28 EQUAL_TO bool <- 27 26
-    29 STORE slot 5 <- 28
-    30 JUMP target 3
-  block 3 scope 7 BLOCK length 3
-    31 LOAD bool slot 5
-    32 STORE slot 4 <- 31
-    33 BRANCH target 4 alternative 5 <- 31
-  block 4 scope 7 BLOCK length 10
-    34 STORAGE_ADDRESS usize storage slot 2
-    35 STORE slot 10 <- 34
-    36 NUMBER usize 3
-    37 LOAD_ELEMENT u8 slot 10 field 2 <- 36
-    38 STORE slot 11 <- 37
-    39 NUMBER u8 2
-    40 LOAD u8 slot 11
-    41 EQUAL_TO bool <- 40 39
-    42 STORE slot 4 <- 41
-    43 JUMP target 5
-  block 5 scope 7 BLOCK length 2
-    44 LOAD bool slot 4
-    45 BRANCH target 6 alternative 7 <- 44
-  block 6 scope 8 BLOCK length 3
-    46 NUMBER i32 42
-    47 STORE slot 1 <- 46
-    48 JUMP target 8
-  block 7 scope 7 BLOCK length 1
-    49 JUMP target 8
-  block 8 scope 7 BLOCK length 2
-    50 LOAD i32 slot 1
-    51 LEAVE <- 50
+    20 BRANCH target 2 alternative 5 <- 19
+  block 2 scope 7 BLOCK length 8
+    21 STORAGE_ADDRESS usize storage slot 2
+    22 STORE slot 6 <- 21
+    23 LOAD_FIELD u32 slot 6 field 1
+    24 STORE slot 7 <- 23
+    25 ATOM u32 identity c atoms {c}
+    26 LOAD u32 slot 7
+    27 EQUAL_TO bool <- 26 25
+    28 BRANCH target 3 alternative 5 <- 27
+  block 3 scope 7 BLOCK length 9
+    29 STORAGE_ADDRESS usize storage slot 2
+    30 STORE slot 8 <- 29
+    31 NUMBER usize 3
+    32 LOAD_ELEMENT u8 slot 8 field 2 <- 31
+    33 STORE slot 9 <- 32
+    34 NUMBER u8 2
+    35 LOAD u8 slot 9
+    36 EQUAL_TO bool <- 35 34
+    37 BRANCH target 4 alternative 5 <- 36
+  block 4 scope 8 BLOCK length 3
+    38 NUMBER i32 42
+    39 STORE slot 1 <- 38
+    40 JUMP target 6
+  block 5 scope 7 BLOCK length 1
+    41 JUMP target 6
+  block 6 scope 7 BLOCK length 2
+    42 LOAD i32 slot 1
+    43 LEAVE <- 42
 file positive/r660-machine-directives/program.ldn
 unit signatures 1 items 1
 signature 1 () -> none
@@ -14100,115 +15096,79 @@ item 8 ROUTINE branch_exit result i32 signature 8 params 1 slots 4 blocks 4 valu
     9 STORE slot 2 <- 8
     10 LOAD i32 slot 2
     11 LEAVE <- 10
-item 9 ROUTINE main result i32 signature 9 params 0 slots 14 blocks 17 values 77
+item 9 ROUTINE main result i32 signature 9 params 0 slots 8 blocks 11 values 53
   slot 1 code i32 return
-  slot 2 - bool
-  slot 3 - bool
-  slot 4 - bool
-  slot 5 - bool
-  slot 6 - bool
-  slot 7 - bool
+  slot 2 - i32
+  slot 3 - i32
+  slot 4 - i32
+  slot 5 - i32
+  slot 6 - i32
+  slot 7 - i32
   slot 8 - i32
-  slot 9 - i32
-  slot 10 - i32
-  slot 11 - i32
-  slot 12 - i32
-  slot 13 - i32
-  slot 14 - i32
-  block 1 scope 29 BLOCK length 7
+  block 1 scope 29 BLOCK length 6
     1 CALL i32 callee 2 binding_exit signature 2
-    2 STORE slot 8 <- 1
+    2 STORE slot 2 <- 1
     3 NUMBER i32 42
-    4 LOAD i32 slot 8
+    4 LOAD i32 slot 2
     5 EQUAL_TO bool <- 4 3
-    6 STORE slot 7 <- 5
-    7 BRANCH target 2 alternative 3 <- 5
-  block 2 scope 29 BLOCK length 7
-    8 CALL i32 callee 3 assignment_exit signature 3
-    9 STORE slot 9 <- 8
-    10 NUMBER i32 42
-    11 LOAD i32 slot 9
-    12 EQUAL_TO bool <- 11 10
-    13 STORE slot 7 <- 12
-    14 JUMP target 3
-  block 3 scope 29 BLOCK length 3
-    15 LOAD bool slot 7
-    16 STORE slot 6 <- 15
-    17 BRANCH target 4 alternative 5 <- 15
+    6 BRANCH target 2 alternative 9 <- 5
+  block 2 scope 29 BLOCK length 6
+    7 CALL i32 callee 3 assignment_exit signature 3
+    8 STORE slot 3 <- 7
+    9 NUMBER i32 42
+    10 LOAD i32 slot 3
+    11 EQUAL_TO bool <- 10 9
+    12 BRANCH target 3 alternative 9 <- 11
+  block 3 scope 29 BLOCK length 6
+    13 CALL i32 callee 4 update_exit signature 4
+    14 STORE slot 4 <- 13
+    15 NUMBER i32 42
+    16 LOAD i32 slot 4
+    17 EQUAL_TO bool <- 16 15
+    18 BRANCH target 4 alternative 9 <- 17
   block 4 scope 29 BLOCK length 7
-    18 CALL i32 callee 4 update_exit signature 4
-    19 STORE slot 10 <- 18
-    20 NUMBER i32 42
-    21 LOAD i32 slot 10
-    22 EQUAL_TO bool <- 21 20
-    23 STORE slot 6 <- 22
-    24 JUMP target 5
-  block 5 scope 29 BLOCK length 3
-    25 LOAD bool slot 6
-    26 STORE slot 5 <- 25
-    27 BRANCH target 6 alternative 7 <- 25
-  block 6 scope 29 BLOCK length 8
-    28 CALL u8 callee 5 named_return_exit signature 5
-    29 CONVERSION i32 <- 28
-    30 STORE slot 11 <- 29
-    31 NUMBER i32 1
-    32 LOAD i32 slot 11
-    33 EQUAL_TO bool <- 32 31
-    34 STORE slot 5 <- 33
-    35 JUMP target 7
-  block 7 scope 29 BLOCK length 3
-    36 LOAD bool slot 5
-    37 STORE slot 4 <- 36
-    38 BRANCH target 8 alternative 9 <- 36
-  block 8 scope 29 BLOCK length 7
-    39 CALL i32 callee 6 argument_exit signature 6
-    40 STORE slot 12 <- 39
+    19 CALL u8 callee 5 named_return_exit signature 5
+    20 CONVERSION i32 <- 19
+    21 STORE slot 5 <- 20
+    22 NUMBER i32 1
+    23 LOAD i32 slot 5
+    24 EQUAL_TO bool <- 23 22
+    25 BRANCH target 5 alternative 9 <- 24
+  block 5 scope 29 BLOCK length 6
+    26 CALL i32 callee 6 argument_exit signature 6
+    27 STORE slot 6 <- 26
+    28 NUMBER i32 42
+    29 LOAD i32 slot 6
+    30 EQUAL_TO bool <- 29 28
+    31 BRANCH target 6 alternative 9 <- 30
+  block 6 scope 29 BLOCK length 6
+    32 CALL i32 callee 7 operand_exit signature 7
+    33 STORE slot 7 <- 32
+    34 NUMBER i32 42
+    35 LOAD i32 slot 7
+    36 EQUAL_TO bool <- 35 34
+    37 BRANCH target 7 alternative 9 <- 36
+  block 7 scope 29 BLOCK length 7
+    38 TRUTH bool true
+    39 CALL i32 callee 8 branch_exit signature 8 <- 38
+    40 STORE slot 8 <- 39
     41 NUMBER i32 42
-    42 LOAD i32 slot 12
+    42 LOAD i32 slot 8
     43 EQUAL_TO bool <- 42 41
-    44 STORE slot 4 <- 43
-    45 JUMP target 9
-  block 9 scope 29 BLOCK length 3
-    46 LOAD bool slot 4
-    47 STORE slot 3 <- 46
-    48 BRANCH target 10 alternative 11 <- 46
-  block 10 scope 29 BLOCK length 7
-    49 CALL i32 callee 7 operand_exit signature 7
-    50 STORE slot 13 <- 49
-    51 NUMBER i32 42
-    52 LOAD i32 slot 13
-    53 EQUAL_TO bool <- 52 51
-    54 STORE slot 3 <- 53
-    55 JUMP target 11
-  block 11 scope 29 BLOCK length 3
-    56 LOAD bool slot 3
-    57 STORE slot 2 <- 56
-    58 BRANCH target 12 alternative 13 <- 56
-  block 12 scope 29 BLOCK length 8
-    59 TRUTH bool true
-    60 CALL i32 callee 8 branch_exit signature 8 <- 59
-    61 STORE slot 14 <- 60
-    62 NUMBER i32 42
-    63 LOAD i32 slot 14
-    64 EQUAL_TO bool <- 63 62
-    65 STORE slot 2 <- 64
-    66 JUMP target 13
-  block 13 scope 29 BLOCK length 2
-    67 LOAD bool slot 2
-    68 BRANCH target 14 alternative 15 <- 67
-  block 14 scope 30 BLOCK length 3
-    69 NUMBER i32 42
-    70 STORE slot 1 <- 69
-    71 JUMP target 16
-  block 15 scope 29 BLOCK length 1
-    72 JUMP target 17
-  block 16 scope 29 BLOCK length 2
-    76 LOAD i32 slot 1
-    77 LEAVE <- 76
-  block 17 scope 31 BLOCK length 3
-    73 NUMBER i32 1
-    74 STORE slot 1 <- 73
-    75 JUMP target 16
+    44 BRANCH target 8 alternative 9 <- 43
+  block 8 scope 30 BLOCK length 3
+    45 NUMBER i32 42
+    46 STORE slot 1 <- 45
+    47 JUMP target 10
+  block 9 scope 29 BLOCK length 1
+    48 JUMP target 11
+  block 10 scope 29 BLOCK length 2
+    52 LOAD i32 slot 1
+    53 LEAVE <- 52
+  block 11 scope 31 BLOCK length 3
+    49 NUMBER i32 1
+    50 STORE slot 1 <- 49
+    51 JUMP target 10
 file positive/range-subtypes/program.ldn
 unit signatures 4 items 4
 signature 1 (in u8) -> u8
@@ -17297,16 +18257,15 @@ item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 3 bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
+item 2 ROUTINE copy result none signature 1 params 0 slots 8 blocks 11 values 71
   slot 1 source aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 2 typed aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 3 inferred aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 4 target aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 5 back aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 6 - u8
-  slot 7 - bool
-  slot 8 - u8
-  slot 9 - u16
+  slot 7 - u8
+  slot 8 - u16
   block 1 scope 5 BLOCK length 45
     1 NUMBER u8 1
     2 STORE_FIELD slot 1 field 1 <- 1
@@ -17362,38 +18321,33 @@ item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
     50 EQUAL_TO bool <- 48 49
     51 BRANCH target 5 alternative 6 <- 50
   block 4 scope 5 BLOCK length 1
-    75 LEAVE
-  block 5 scope 7 BLOCK length 7
+    71 LEAVE
+  block 5 scope 7 BLOCK length 6
     52 LOAD_VARIANT_FIELD u8 from slot 4 field 2 case 2 payload field 1
-    53 STORE slot 8 <- 52
+    53 STORE slot 7 <- 52
     54 NUMBER u8 2
-    55 LOAD u8 slot 8
+    55 LOAD u8 slot 7
     56 EQUAL_TO bool <- 55 54
-    57 STORE slot 7 <- 56
-    58 BRANCH target 7 alternative 8 <- 56
+    57 BRANCH target 7 alternative 9 <- 56
   block 6 scope 5 BLOCK length 1
-    72 JUMP target 12
-  block 7 scope 7 BLOCK length 7
-    59 LOAD_VARIANT_FIELD u16 from slot 4 field 2 case 2 payload field 2
-    60 STORE slot 9 <- 59
-    61 NUMBER u16 3
-    62 LOAD u16 slot 9
-    63 EQUAL_TO bool <- 62 61
-    64 STORE slot 7 <- 63
-    65 JUMP target 8
-  block 8 scope 7 BLOCK length 2
-    66 LOAD bool slot 7
-    67 BRANCH target 9 alternative 10 <- 66
-  block 9 scope 8 BLOCK length 2
-    68 LOAD_FIELD u8 slot 4 field 1
-    69 JUMP target 11
+    68 JUMP target 11
+  block 7 scope 7 BLOCK length 6
+    58 LOAD_VARIANT_FIELD u16 from slot 4 field 2 case 2 payload field 2
+    59 STORE slot 8 <- 58
+    60 NUMBER u16 3
+    61 LOAD u16 slot 8
+    62 EQUAL_TO bool <- 61 60
+    63 BRANCH target 8 alternative 9 <- 62
+  block 8 scope 8 BLOCK length 2
+    64 LOAD_FIELD u8 slot 4 field 1
+    65 JUMP target 10
+  block 9 scope 7 BLOCK length 1
+    66 JUMP target 10
   block 10 scope 7 BLOCK length 1
-    70 JUMP target 11
-  block 11 scope 7 BLOCK length 1
-    71 JUMP target 4
-  block 12 scope 9 BLOCK length 2
-    73 NUMBER i32 3
-    74 JUMP target 4
+    67 JUMP target 4
+  block 11 scope 9 BLOCK length 2
+    69 NUMBER i32 3
+    70 JUMP target 4
 file positive/variant-zeroed-storage/program.ldn
 unit signatures 1 items 3
 signature 1 () -> none
@@ -17726,7 +18680,7 @@ item 7 DATUM module_callback result usize signature 1 function target 3 params 0
   block 1 scope 1 PROGRAM length 2
     1 FUNCTION_ADDRESS usize target 3 add signature 6
     2 LEAVE <- 1
-item 8 ROUTINE main result i32 signature 7 params 0 slots 156 blocks 34 values 464
+item 8 ROUTINE main result i32 signature 7 params 0 slots 143 blocks 21 values 412
   slot 1 code i32 return
   slot 2 generic_i32 aggregate fields [2]i32
   slot 3 generic_u8 aggregate fields [3]u8
@@ -17838,51 +18792,38 @@ item 8 ROUTINE main result i32 signature 7 params 0 slots 156 blocks 34 values 4
   slot 109 - aggregate fields [2]usize
   slot 110 - address of struct ([2]usize)
   slot 111 - address of struct ([2]usize)
-  slot 112 - bool
-  slot 113 - bool
-  slot 114 - bool
-  slot 115 - bool
-  slot 116 - bool
-  slot 117 - bool
-  slot 118 - bool
-  slot 119 - bool
-  slot 120 - bool
-  slot 121 - bool
-  slot 122 - bool
-  slot 123 - bool
-  slot 124 - bool
-  slot 125 - i32
-  slot 126 - u8
-  slot 127 - i32
-  slot 128 - usize
-  slot 129 - usize
-  slot 130 - address of i32
+  slot 112 - i32
+  slot 113 - u8
+  slot 114 - i32
+  slot 115 - usize
+  slot 116 - usize
+  slot 117 - address of i32
+  slot 118 - i32
+  slot 119 - i32
+  slot 120 - usize
+  slot 121 - usize
+  slot 122 - address of u8
+  slot 123 - u8
+  slot 124 - aggregate fields u32
+  slot 125 - address of struct (u32)
+  slot 126 - address of struct (u32)
+  slot 127 - u32
+  slot 128 - elements 2 of usize
+  slot 129 - i32
+  slot 130 - i32
   slot 131 - i32
-  slot 132 - i32
+  slot 132 - usize
   slot 133 - usize
-  slot 134 - usize
-  slot 135 - address of u8
-  slot 136 - u8
-  slot 137 - aggregate fields u32
-  slot 138 - address of struct (u32)
-  slot 139 - address of struct (u32)
-  slot 140 - u32
-  slot 141 - elements 2 of usize
+  slot 134 - address of usize
+  slot 135 - address of i32
+  slot 136 - i32
+  slot 137 - usize signature 17
+  slot 138 - address of usize signature 17
+  slot 139 - i32
+  slot 140 - i32
+  slot 141 - usize signature 1
   slot 142 - i32
-  slot 143 - i32
-  slot 144 - i32
-  slot 145 - usize
-  slot 146 - usize
-  slot 147 - address of usize
-  slot 148 - address of i32
-  slot 149 - i32
-  slot 150 - usize signature 17
-  slot 151 - address of usize signature 17
-  slot 152 - i32
-  slot 153 - i32
-  slot 154 - usize signature 1
-  slot 155 - i32
-  slot 156 - usize signature 13
+  slot 143 - usize signature 13
   block 1 scope 13 BLOCK length 100
     1 NUMBER i32 10
     2 STORE_FIELD slot 2 field 1 nested 1 <- 1
@@ -17990,7 +18931,7 @@ item 8 ROUTINE main result i32 signature 7 params 0 slots 156 blocks 34 values 4
     103 JUMP target 4
   block 3 scope 13 BLOCK length 1
     104 JUMP target 4
-  block 4 scope 13 BLOCK length 162
+  block 4 scope 13 BLOCK length 161
     105 LOAD i32 slot 41
     106 STORE slot 39 <- 105
     107 NUMBER i32 3
@@ -18147,240 +19088,175 @@ item 8 ROUTINE main result i32 signature 7 params 0 slots 156 blocks 34 values 4
     258 COPY_ARRAY from address slot 110 to address slot 111
     259 COPY_ARRAY from slot 109 field 1 to slot 108
     260 LOAD_FIELD i32 slot 4 field 2
-    261 STORE slot 125 <- 260
+    261 STORE slot 112 <- 260
     262 NUMBER i32 20
-    263 LOAD i32 slot 125
+    263 LOAD i32 slot 112
     264 EQUAL_TO bool <- 263 262
-    265 STORE slot 124 <- 264
-    266 BRANCH target 5 alternative 6 <- 264
-  block 5 scope 13 BLOCK length 7
-    267 LOAD_FIELD u8 slot 5 field 3
-    268 STORE slot 126 <- 267
-    269 NUMBER u8 3
-    270 LOAD u8 slot 126
-    271 EQUAL_TO bool <- 270 269
-    272 STORE slot 124 <- 271
-    273 JUMP target 6
-  block 6 scope 13 BLOCK length 3
-    274 LOAD bool slot 124
-    275 STORE slot 123 <- 274
-    276 BRANCH target 7 alternative 8 <- 274
-  block 7 scope 13 BLOCK length 7
-    277 LOAD_FIELD i32 slot 7 field 2
-    278 STORE slot 127 <- 277
-    279 NUMBER i32 20
-    280 LOAD i32 slot 127
-    281 EQUAL_TO bool <- 280 279
-    282 STORE slot 123 <- 281
-    283 JUMP target 8
-  block 8 scope 13 BLOCK length 3
-    284 LOAD bool slot 123
-    285 STORE slot 122 <- 284
-    286 BRANCH target 9 alternative 10 <- 284
-  block 9 scope 13 BLOCK length 17
-    287 LOAD_FIELD usize slot 18 field 1
-    288 LOAD_FIELD usize slot 18 field 2
-    289 STORE slot 128 <- 287
-    290 STORE slot 129 <- 288
-    291 NUMBER usize 0
-    292 LOAD usize slot 128
-    293 LOAD usize slot 129
-    294 SLICE_ADDRESS usize <- 292 293 291 291
-    295 STORE slot 130 <- 294
-    296 LOAD usize slot 130
-    297 LOAD_INDIRECT i32 address slot 130 <- 296
-    298 STORE slot 131 <- 297
-    299 NUMBER i32 10
-    300 LOAD i32 slot 131
-    301 EQUAL_TO bool <- 300 299
-    302 STORE slot 122 <- 301
-    303 JUMP target 10
-  block 10 scope 13 BLOCK length 3
-    304 LOAD bool slot 122
-    305 STORE slot 121 <- 304
-    306 BRANCH target 11 alternative 12 <- 304
-  block 11 scope 13 BLOCK length 8
-    307 NUMBER usize 0
-    308 LOAD_ELEMENT i32 slot 77 nested 2 <- 307
-    309 STORE slot 132 <- 308
-    310 NUMBER i32 3
-    311 LOAD i32 slot 132
-    312 EQUAL_TO bool <- 311 310
-    313 STORE slot 121 <- 312
-    314 JUMP target 12
-  block 12 scope 13 BLOCK length 3
-    315 LOAD bool slot 121
-    316 STORE slot 120 <- 315
-    317 BRANCH target 13 alternative 14 <- 315
-  block 13 scope 13 BLOCK length 17
-    318 LOAD_FIELD usize slot 83 field 1
-    319 LOAD_FIELD usize slot 83 field 2
-    320 STORE slot 133 <- 318
-    321 STORE slot 134 <- 319
-    322 NUMBER usize 1
-    323 LOAD usize slot 133
-    324 LOAD usize slot 134
-    325 SLICE_ADDRESS usize <- 323 324 322 322
-    326 STORE slot 135 <- 325
-    327 LOAD usize slot 135
-    328 LOAD_INDIRECT u8 address slot 135 <- 327
-    329 STORE slot 136 <- 328
-    330 NUMBER u8 75
-    331 LOAD u8 slot 136
-    332 EQUAL_TO bool <- 331 330
-    333 STORE slot 120 <- 332
-    334 JUMP target 14
-  block 14 scope 13 BLOCK length 3
-    335 LOAD bool slot 120
-    336 STORE slot 119 <- 335
-    337 BRANCH target 15 alternative 16 <- 335
-  block 15 scope 13 BLOCK length 12
-    338 STORAGE_ADDRESS usize storage slot 102 nested 2
-    339 STORE slot 138 <- 338
-    340 STORAGE_ADDRESS usize storage slot 137
-    341 STORE slot 139 <- 340
-    342 COPY_ARRAY from address slot 138 to address slot 139
-    343 LOAD_FIELD u32 slot 137 field 1
-    344 STORE slot 140 <- 343
-    345 NUMBER u32 7
-    346 LOAD u32 slot 140
-    347 EQUAL_TO bool <- 346 345
-    348 STORE slot 119 <- 347
-    349 JUMP target 16
-  block 16 scope 13 BLOCK length 3
-    350 LOAD bool slot 119
-    351 STORE slot 118 <- 350
-    352 BRANCH target 17 alternative 18 <- 350
-  block 17 scope 13 BLOCK length 11
-    353 COPY_ARRAY from slot 108 to slot 141
-    354 STORAGE_ADDRESS usize storage slot 141
-    355 EVIDENCE_FUNCTION usize erased receiver evidence 2 entry 1 signature 12 <- 354
-    356 EVIDENCE_SELF usize bound function <- 355
-    357 INDIRECT_CALL i32 signature 12 <- 355 356
-    358 STORE slot 142 <- 357
-    359 NUMBER i32 41
-    360 LOAD i32 slot 142
-    361 EQUAL_TO bool <- 360 359
-    362 STORE slot 118 <- 361
-    363 JUMP target 18
-  block 18 scope 13 BLOCK length 3
-    364 LOAD bool slot 118
-    365 STORE slot 117 <- 364
-    366 BRANCH target 19 alternative 20 <- 364
-  block 19 scope 13 BLOCK length 7
-    367 LOAD i32 slot 39
-    368 STORE slot 143 <- 367
-    369 NUMBER i32 42
-    370 LOAD i32 slot 143
-    371 EQUAL_TO bool <- 370 369
-    372 STORE slot 117 <- 371
-    373 JUMP target 20
-  block 20 scope 13 BLOCK length 3
-    374 LOAD bool slot 117
-    375 STORE slot 116 <- 374
-    376 BRANCH target 21 alternative 22 <- 374
-  block 21 scope 13 BLOCK length 7
-    377 LOAD_FIELD i32 slot 43 field 1
-    378 STORE slot 144 <- 377
-    379 NUMBER i32 5
-    380 LOAD i32 slot 144
-    381 EQUAL_TO bool <- 380 379
-    382 STORE slot 116 <- 381
-    383 JUMP target 22
-  block 22 scope 13 BLOCK length 3
-    384 LOAD bool slot 116
-    385 STORE slot 115 <- 384
-    386 BRANCH target 23 alternative 24 <- 384
-  block 23 scope 13 BLOCK length 21
-    387 LOAD_FIELD usize slot 67 field 1
-    388 LOAD_FIELD usize slot 67 field 2
-    389 STORE slot 145 <- 387
-    390 STORE slot 146 <- 388
-    391 NUMBER usize 0
-    392 LOAD usize slot 145
-    393 LOAD usize slot 146
-    394 SLICE_ADDRESS usize <- 392 393 391 391
-    395 STORE slot 147 <- 394
-    396 LOAD usize slot 147
-    397 LOAD_INDIRECT usize address slot 147 <- 396
-    398 POINTER_ADDRESS usize <- 397
-    399 STORE slot 148 <- 398
-    400 LOAD usize slot 148
-    401 LOAD_INDIRECT i32 address slot 148 <- 400
-    402 STORE slot 149 <- 401
-    403 NUMBER i32 41
-    404 LOAD i32 slot 149
-    405 EQUAL_TO bool <- 404 403
-    406 STORE slot 115 <- 405
-    407 JUMP target 24
-  block 24 scope 13 BLOCK length 3
-    408 LOAD bool slot 115
-    409 STORE slot 114 <- 408
-    410 BRANCH target 25 alternative 26 <- 408
-  block 25 scope 13 BLOCK length 15
-    411 LOAD usize slot 72
-    412 POINTER_ADDRESS usize <- 411
-    413 STORE slot 151 <- 412
-    414 LOAD usize slot 151
-    415 LOAD_INDIRECT usize address slot 151 <- 414
-    416 STORE slot 150 <- 415
-    417 LOAD i32 slot 22
-    418 LOAD usize slot 150
-    419 INDIRECT_CALL i32 signature 17 <- 418 417
-    420 STORE slot 152 <- 419
-    421 NUMBER i32 42
-    422 LOAD i32 slot 152
-    423 EQUAL_TO bool <- 422 421
-    424 STORE slot 114 <- 423
-    425 JUMP target 26
-  block 26 scope 13 BLOCK length 3
-    426 LOAD bool slot 114
-    427 STORE slot 113 <- 426
-    428 BRANCH target 27 alternative 28 <- 426
-  block 27 scope 13 BLOCK length 7
-    429 LOAD_FIELD i32 datum 5 module_values field 2
-    430 STORE slot 153 <- 429
-    431 NUMBER i32 42
-    432 LOAD i32 slot 153
-    433 EQUAL_TO bool <- 432 431
-    434 STORE slot 113 <- 433
-    435 JUMP target 28
-  block 28 scope 13 BLOCK length 3
-    436 LOAD bool slot 113
-    437 STORE slot 112 <- 436
-    438 BRANCH target 29 alternative 30 <- 436
-  block 29 scope 13 BLOCK length 11
-    439 LOAD_DATUM usize datum 7 module_callback
-    440 STORE slot 154 <- 439
-    441 NUMBER i32 41
-    442 LOAD usize slot 154
-    443 INDIRECT_CALL i32 signature 1 <- 442 441
-    444 STORE slot 155 <- 443
-    445 NUMBER i32 42
-    446 LOAD i32 slot 155
-    447 EQUAL_TO bool <- 446 445
-    448 STORE slot 112 <- 447
-    449 JUMP target 30
-  block 30 scope 13 BLOCK length 2
-    450 LOAD bool slot 112
-    451 BRANCH target 31 alternative 32 <- 450
-  block 31 scope 15 BLOCK length 7
-    452 LOAD usize slot 30
-    453 STORE slot 156 <- 452
-    454 LOAD i32 slot 22
-    455 LOAD usize slot 156
-    456 INDIRECT_CALL i32 signature 13 <- 455 454
-    457 STORE slot 1 <- 456
-    458 JUMP target 33
-  block 32 scope 13 BLOCK length 1
-    459 JUMP target 34
-  block 33 scope 13 BLOCK length 2
-    463 LOAD i32 slot 1
-    464 LEAVE <- 463
-  block 34 scope 16 BLOCK length 3
-    460 NUMBER i32 1
-    461 STORE slot 1 <- 460
-    462 JUMP target 33
+    265 BRANCH target 5 alternative 19 <- 264
+  block 5 scope 13 BLOCK length 6
+    266 LOAD_FIELD u8 slot 5 field 3
+    267 STORE slot 113 <- 266
+    268 NUMBER u8 3
+    269 LOAD u8 slot 113
+    270 EQUAL_TO bool <- 269 268
+    271 BRANCH target 6 alternative 19 <- 270
+  block 6 scope 13 BLOCK length 6
+    272 LOAD_FIELD i32 slot 7 field 2
+    273 STORE slot 114 <- 272
+    274 NUMBER i32 20
+    275 LOAD i32 slot 114
+    276 EQUAL_TO bool <- 275 274
+    277 BRANCH target 7 alternative 19 <- 276
+  block 7 scope 13 BLOCK length 16
+    278 LOAD_FIELD usize slot 18 field 1
+    279 LOAD_FIELD usize slot 18 field 2
+    280 STORE slot 115 <- 278
+    281 STORE slot 116 <- 279
+    282 NUMBER usize 0
+    283 LOAD usize slot 115
+    284 LOAD usize slot 116
+    285 SLICE_ADDRESS usize <- 283 284 282 282
+    286 STORE slot 117 <- 285
+    287 LOAD usize slot 117
+    288 LOAD_INDIRECT i32 address slot 117 <- 287
+    289 STORE slot 118 <- 288
+    290 NUMBER i32 10
+    291 LOAD i32 slot 118
+    292 EQUAL_TO bool <- 291 290
+    293 BRANCH target 8 alternative 19 <- 292
+  block 8 scope 13 BLOCK length 7
+    294 NUMBER usize 0
+    295 LOAD_ELEMENT i32 slot 77 nested 2 <- 294
+    296 STORE slot 119 <- 295
+    297 NUMBER i32 3
+    298 LOAD i32 slot 119
+    299 EQUAL_TO bool <- 298 297
+    300 BRANCH target 9 alternative 19 <- 299
+  block 9 scope 13 BLOCK length 16
+    301 LOAD_FIELD usize slot 83 field 1
+    302 LOAD_FIELD usize slot 83 field 2
+    303 STORE slot 120 <- 301
+    304 STORE slot 121 <- 302
+    305 NUMBER usize 1
+    306 LOAD usize slot 120
+    307 LOAD usize slot 121
+    308 SLICE_ADDRESS usize <- 306 307 305 305
+    309 STORE slot 122 <- 308
+    310 LOAD usize slot 122
+    311 LOAD_INDIRECT u8 address slot 122 <- 310
+    312 STORE slot 123 <- 311
+    313 NUMBER u8 75
+    314 LOAD u8 slot 123
+    315 EQUAL_TO bool <- 314 313
+    316 BRANCH target 10 alternative 19 <- 315
+  block 10 scope 13 BLOCK length 11
+    317 STORAGE_ADDRESS usize storage slot 102 nested 2
+    318 STORE slot 125 <- 317
+    319 STORAGE_ADDRESS usize storage slot 124
+    320 STORE slot 126 <- 319
+    321 COPY_ARRAY from address slot 125 to address slot 126
+    322 LOAD_FIELD u32 slot 124 field 1
+    323 STORE slot 127 <- 322
+    324 NUMBER u32 7
+    325 LOAD u32 slot 127
+    326 EQUAL_TO bool <- 325 324
+    327 BRANCH target 11 alternative 19 <- 326
+  block 11 scope 13 BLOCK length 10
+    328 COPY_ARRAY from slot 108 to slot 128
+    329 STORAGE_ADDRESS usize storage slot 128
+    330 EVIDENCE_FUNCTION usize erased receiver evidence 2 entry 1 signature 12 <- 329
+    331 EVIDENCE_SELF usize bound function <- 330
+    332 INDIRECT_CALL i32 signature 12 <- 330 331
+    333 STORE slot 129 <- 332
+    334 NUMBER i32 41
+    335 LOAD i32 slot 129
+    336 EQUAL_TO bool <- 335 334
+    337 BRANCH target 12 alternative 19 <- 336
+  block 12 scope 13 BLOCK length 6
+    338 LOAD i32 slot 39
+    339 STORE slot 130 <- 338
+    340 NUMBER i32 42
+    341 LOAD i32 slot 130
+    342 EQUAL_TO bool <- 341 340
+    343 BRANCH target 13 alternative 19 <- 342
+  block 13 scope 13 BLOCK length 6
+    344 LOAD_FIELD i32 slot 43 field 1
+    345 STORE slot 131 <- 344
+    346 NUMBER i32 5
+    347 LOAD i32 slot 131
+    348 EQUAL_TO bool <- 347 346
+    349 BRANCH target 14 alternative 19 <- 348
+  block 14 scope 13 BLOCK length 20
+    350 LOAD_FIELD usize slot 67 field 1
+    351 LOAD_FIELD usize slot 67 field 2
+    352 STORE slot 132 <- 350
+    353 STORE slot 133 <- 351
+    354 NUMBER usize 0
+    355 LOAD usize slot 132
+    356 LOAD usize slot 133
+    357 SLICE_ADDRESS usize <- 355 356 354 354
+    358 STORE slot 134 <- 357
+    359 LOAD usize slot 134
+    360 LOAD_INDIRECT usize address slot 134 <- 359
+    361 POINTER_ADDRESS usize <- 360
+    362 STORE slot 135 <- 361
+    363 LOAD usize slot 135
+    364 LOAD_INDIRECT i32 address slot 135 <- 363
+    365 STORE slot 136 <- 364
+    366 NUMBER i32 41
+    367 LOAD i32 slot 136
+    368 EQUAL_TO bool <- 367 366
+    369 BRANCH target 15 alternative 19 <- 368
+  block 15 scope 13 BLOCK length 14
+    370 LOAD usize slot 72
+    371 POINTER_ADDRESS usize <- 370
+    372 STORE slot 138 <- 371
+    373 LOAD usize slot 138
+    374 LOAD_INDIRECT usize address slot 138 <- 373
+    375 STORE slot 137 <- 374
+    376 LOAD i32 slot 22
+    377 LOAD usize slot 137
+    378 INDIRECT_CALL i32 signature 17 <- 377 376
+    379 STORE slot 139 <- 378
+    380 NUMBER i32 42
+    381 LOAD i32 slot 139
+    382 EQUAL_TO bool <- 381 380
+    383 BRANCH target 16 alternative 19 <- 382
+  block 16 scope 13 BLOCK length 6
+    384 LOAD_FIELD i32 datum 5 module_values field 2
+    385 STORE slot 140 <- 384
+    386 NUMBER i32 42
+    387 LOAD i32 slot 140
+    388 EQUAL_TO bool <- 387 386
+    389 BRANCH target 17 alternative 19 <- 388
+  block 17 scope 13 BLOCK length 10
+    390 LOAD_DATUM usize datum 7 module_callback
+    391 STORE slot 141 <- 390
+    392 NUMBER i32 41
+    393 LOAD usize slot 141
+    394 INDIRECT_CALL i32 signature 1 <- 393 392
+    395 STORE slot 142 <- 394
+    396 NUMBER i32 42
+    397 LOAD i32 slot 142
+    398 EQUAL_TO bool <- 397 396
+    399 BRANCH target 18 alternative 19 <- 398
+  block 18 scope 15 BLOCK length 7
+    400 LOAD usize slot 30
+    401 STORE slot 143 <- 400
+    402 LOAD i32 slot 22
+    403 LOAD usize slot 143
+    404 INDIRECT_CALL i32 signature 13 <- 403 402
+    405 STORE slot 1 <- 404
+    406 JUMP target 20
+  block 19 scope 13 BLOCK length 1
+    407 JUMP target 21
+  block 20 scope 13 BLOCK length 2
+    411 LOAD i32 slot 1
+    412 LEAVE <- 411
+  block 21 scope 16 BLOCK length 3
+    408 NUMBER i32 1
+    409 STORE slot 1 <- 408
+    410 JUMP target 20
 item 9 ROUTINE - result array signature 9 params 2 slots 6 blocks 1 values 7
   elements 2 of i32
   slot 1 extract usize param 1
@@ -18430,7 +19306,7 @@ item 1 ROUTINE identity result i32 signature 1 params 1 slots 2 blocks 1 values 
     2 STORE slot 2 <- 1
     3 LOAD i32 slot 2
     4 LEAVE <- 3
-item 2 ROUTINE main result i32 signature 2 params 0 slots 28 blocks 15 values 115
+item 2 ROUTINE main result i32 signature 2 params 0 slots 23 blocks 10 values 95
   slot 1 code i32 return
   slot 2 singleton elements 1 of i32
   slot 3 literal elements 2 of i32
@@ -18446,20 +19322,15 @@ item 2 ROUTINE main result i32 signature 2 params 0 slots 28 blocks 15 values 11
   slot 13 - aggregate fields [2]i32
   slot 14 - address of struct ([2]i32)
   slot 15 - address of struct ([2]i32)
-  slot 16 - bool
-  slot 17 - bool
-  slot 18 - bool
-  slot 19 - bool
-  slot 20 - bool
+  slot 16 - i32
+  slot 17 - i32
+  slot 18 - i32
+  slot 19 - usize
+  slot 20 - usize
   slot 21 - i32
   slot 22 - i32
   slot 23 - i32
-  slot 24 - usize
-  slot 25 - usize
-  slot 26 - i32
-  slot 27 - i32
-  slot 28 - i32
-  block 1 scope 6 BLOCK length 44
+  block 1 scope 6 BLOCK length 43
     1 NUMBER i32 4
     2 CALL i32 callee 1 identity signature 1 <- 1
     3 STORE_FIELD slot 2 field 1 <- 2
@@ -18498,97 +19369,72 @@ item 2 ROUTINE main result i32 signature 2 params 0 slots 28 blocks 15 values 11
     36 COPY_ARRAY from address slot 14 to address slot 15
     37 COPY_ARRAY from slot 13 field 1 to slot 12
     38 LOAD_FIELD i32 slot 2 field 1
-    39 STORE slot 21 <- 38
+    39 STORE slot 16 <- 38
     40 NUMBER i32 4
-    41 LOAD i32 slot 21
+    41 LOAD i32 slot 16
     42 EQUAL_TO bool <- 41 40
-    43 STORE slot 20 <- 42
-    44 BRANCH target 2 alternative 3 <- 42
-  block 2 scope 6 BLOCK length 7
-    45 LOAD_FIELD i32 slot 12 field 2
-    46 STORE slot 22 <- 45
-    47 NUMBER i32 5
-    48 LOAD i32 slot 22
-    49 EQUAL_TO bool <- 48 47
-    50 STORE slot 20 <- 49
-    51 JUMP target 3
-  block 3 scope 6 BLOCK length 3
-    52 LOAD bool slot 20
-    53 STORE slot 19 <- 52
-    54 BRANCH target 4 alternative 5 <- 52
+    43 BRANCH target 2 alternative 8 <- 42
+  block 2 scope 6 BLOCK length 6
+    44 LOAD_FIELD i32 slot 12 field 2
+    45 STORE slot 17 <- 44
+    46 NUMBER i32 5
+    47 LOAD i32 slot 17
+    48 EQUAL_TO bool <- 47 46
+    49 BRANCH target 3 alternative 8 <- 48
+  block 3 scope 6 BLOCK length 6
+    50 LOAD_FIELD i32 slot 4 field 2
+    51 STORE slot 18 <- 50
+    52 NUMBER i32 4
+    53 LOAD i32 slot 18
+    54 EQUAL_TO bool <- 53 52
+    55 BRANCH target 4 alternative 8 <- 54
   block 4 scope 6 BLOCK length 7
-    55 LOAD_FIELD i32 slot 4 field 2
-    56 STORE slot 23 <- 55
-    57 NUMBER i32 4
-    58 LOAD i32 slot 23
-    59 EQUAL_TO bool <- 58 57
-    60 STORE slot 19 <- 59
-    61 JUMP target 5
-  block 5 scope 6 BLOCK length 3
-    62 LOAD bool slot 19
-    63 STORE slot 18 <- 62
-    64 BRANCH target 6 alternative 7 <- 62
-  block 6 scope 6 BLOCK length 8
-    65 LOAD_FIELD usize slot 5 field 1
-    66 LOAD_FIELD usize slot 5 field 2
-    67 STORE slot 24 <- 66
-    68 NUMBER usize 0
-    69 LOAD usize slot 24
-    70 EQUAL_TO bool <- 69 68
-    71 STORE slot 18 <- 70
-    72 JUMP target 7
-  block 7 scope 6 BLOCK length 3
-    73 LOAD bool slot 18
-    74 STORE slot 17 <- 73
-    75 BRANCH target 8 alternative 9 <- 73
-  block 8 scope 6 BLOCK length 8
-    76 LOAD usize slot 6
-    77 CONVERSION usize <- 76
-    78 STORE slot 25 <- 77
-    79 NUMBER usize 42
-    80 LOAD usize slot 25
-    81 EQUAL_TO bool <- 80 79
-    82 STORE slot 17 <- 81
-    83 JUMP target 9
-  block 9 scope 6 BLOCK length 3
-    84 LOAD bool slot 17
-    85 STORE slot 16 <- 84
-    86 BRANCH target 10 alternative 11 <- 84
-  block 10 scope 6 BLOCK length 18
-    87 NUMBER i32 2
-    88 STORE slot 26 <- 87
-    89 LOAD_FIELD usize slot 8 field 1
-    90 LOAD_FIELD usize slot 8 field 2
-    91 CONVERSION i32 <- 90
-    92 LOAD i32 slot 26
-    93 MULTIPLY i32 <- 92 91
-    94 STORE slot 27 <- 93
-    95 NUMBER i32 1
-    96 CALL i32 callee 1 identity signature 1 <- 95
-    97 LOAD i32 slot 27
-    98 ADD i32 <- 97 96
-    99 STORE slot 28 <- 98
-    100 NUMBER i32 5
-    101 LOAD i32 slot 28
-    102 EQUAL_TO bool <- 101 100
-    103 STORE slot 16 <- 102
-    104 JUMP target 11
-  block 11 scope 6 BLOCK length 2
-    105 LOAD bool slot 16
-    106 BRANCH target 12 alternative 13 <- 105
-  block 12 scope 7 BLOCK length 3
-    107 NUMBER i32 42
-    108 STORE slot 1 <- 107
-    109 JUMP target 14
-  block 13 scope 6 BLOCK length 1
-    110 JUMP target 15
-  block 14 scope 6 BLOCK length 2
-    114 LOAD i32 slot 1
-    115 LEAVE <- 114
-  block 15 scope 8 BLOCK length 3
-    111 NUMBER i32 1
-    112 STORE slot 1 <- 111
-    113 JUMP target 14
+    56 LOAD_FIELD usize slot 5 field 1
+    57 LOAD_FIELD usize slot 5 field 2
+    58 STORE slot 19 <- 57
+    59 NUMBER usize 0
+    60 LOAD usize slot 19
+    61 EQUAL_TO bool <- 60 59
+    62 BRANCH target 5 alternative 8 <- 61
+  block 5 scope 6 BLOCK length 7
+    63 LOAD usize slot 6
+    64 CONVERSION usize <- 63
+    65 STORE slot 20 <- 64
+    66 NUMBER usize 42
+    67 LOAD usize slot 20
+    68 EQUAL_TO bool <- 67 66
+    69 BRANCH target 6 alternative 8 <- 68
+  block 6 scope 6 BLOCK length 17
+    70 NUMBER i32 2
+    71 STORE slot 21 <- 70
+    72 LOAD_FIELD usize slot 8 field 1
+    73 LOAD_FIELD usize slot 8 field 2
+    74 CONVERSION i32 <- 73
+    75 LOAD i32 slot 21
+    76 MULTIPLY i32 <- 75 74
+    77 STORE slot 22 <- 76
+    78 NUMBER i32 1
+    79 CALL i32 callee 1 identity signature 1 <- 78
+    80 LOAD i32 slot 22
+    81 ADD i32 <- 80 79
+    82 STORE slot 23 <- 81
+    83 NUMBER i32 5
+    84 LOAD i32 slot 23
+    85 EQUAL_TO bool <- 84 83
+    86 BRANCH target 7 alternative 8 <- 85
+  block 7 scope 7 BLOCK length 3
+    87 NUMBER i32 42
+    88 STORE slot 1 <- 87
+    89 JUMP target 9
+  block 8 scope 6 BLOCK length 1
+    90 JUMP target 10
+  block 9 scope 6 BLOCK length 2
+    94 LOAD i32 slot 1
+    95 LEAVE <- 94
+  block 10 scope 8 BLOCK length 3
+    91 NUMBER i32 1
+    92 STORE slot 1 <- 91
+    93 JUMP target 9
 item 3 DATUM - result array params 0 slots 0 blocks 1 values 1
   elements 3 of u8
   image 79 75 0
@@ -18630,7 +19476,7 @@ item 4 DATUM recovered_point result struct params 0 slots 0 blocks 1 values 1
   image 40
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 5 ROUTINE main result i32 signature 1 params 0 slots 16 blocks 10 values 57
+item 5 ROUTINE main result i32 signature 1 params 0 slots 15 blocks 9 values 53
   slot 1 code i32 return
   slot 2 original aggregate fields variant u8 cases2 () (i32)
   slot 3 hidden aggregate fields struct (variant u8 cases2 () (i32))
@@ -18643,10 +19489,9 @@ item 5 ROUTINE main result i32 signature 1 params 0 slots 16 blocks 10 values 57
   slot 10 - address of struct (variant u8 cases2 () (i32))
   slot 11 - address of struct (variant u8 cases2 () (i32))
   slot 12 - u8
-  slot 13 - bool
-  slot 14 - u32 atoms {north, south}
+  slot 13 - u32 atoms {north, south}
+  slot 14 - i32
   slot 15 - i32
-  slot 16 - i32
   block 1 scope 6 BLOCK length 26
     1 SELECT_VARIANT destination slot 2 field 1 case 2
     2 NUMBER i32 2
@@ -18681,39 +19526,34 @@ item 5 ROUTINE main result i32 signature 1 params 0 slots 16 blocks 10 values 57
   block 3 scope 6 BLOCK length 1
     30 JUMP target 5
   block 4 scope 6 BLOCK length 2
-    56 LOAD i32 slot 1
-    57 LEAVE <- 56
-  block 5 scope 8 BLOCK length 7
+    52 LOAD i32 slot 1
+    53 LEAVE <- 52
+  block 5 scope 8 BLOCK length 6
     31 LOAD_DATUM u32 datum 2 recovered_error
-    32 STORE slot 14 <- 31
+    32 STORE slot 13 <- 31
     33 ATOM u32 identity north atoms {north}
-    34 LOAD u32 slot 14
+    34 LOAD u32 slot 13
     35 EQUAL_TO bool <- 34 33
-    36 STORE slot 13 <- 35
-    37 BRANCH target 6 alternative 7 <- 35
-  block 6 scope 8 BLOCK length 7
-    38 LOAD_FIELD i32 datum 4 recovered_point field 1
-    39 STORE slot 15 <- 38
-    40 NUMBER i32 40
-    41 LOAD i32 slot 15
-    42 EQUAL_TO bool <- 41 40
-    43 STORE slot 13 <- 42
-    44 JUMP target 7
-  block 7 scope 8 BLOCK length 2
-    45 LOAD bool slot 13
-    46 BRANCH target 8 alternative 9 <- 45
-  block 8 scope 9 BLOCK length 7
-    47 LOAD_FIELD i32 datum 4 recovered_point field 1
-    48 STORE slot 16 <- 47
-    49 LOAD_VARIANT_FIELD i32 from slot 6 field 1 case 2 payload field 1
-    50 LOAD i32 slot 16
-    51 ADD i32 <- 50 49
-    52 STORE slot 1 <- 51
-    53 JUMP target 10
+    36 BRANCH target 6 alternative 8 <- 35
+  block 6 scope 8 BLOCK length 6
+    37 LOAD_FIELD i32 datum 4 recovered_point field 1
+    38 STORE slot 14 <- 37
+    39 NUMBER i32 40
+    40 LOAD i32 slot 14
+    41 EQUAL_TO bool <- 40 39
+    42 BRANCH target 7 alternative 8 <- 41
+  block 7 scope 9 BLOCK length 7
+    43 LOAD_FIELD i32 datum 4 recovered_point field 1
+    44 STORE slot 15 <- 43
+    45 LOAD_VARIANT_FIELD i32 from slot 6 field 1 case 2 payload field 1
+    46 LOAD i32 slot 15
+    47 ADD i32 <- 46 45
+    48 STORE slot 1 <- 47
+    49 JUMP target 9
+  block 8 scope 8 BLOCK length 1
+    50 JUMP target 9
   block 9 scope 8 BLOCK length 1
-    54 JUMP target 10
-  block 10 scope 8 BLOCK length 1
-    55 JUMP target 4
+    51 JUMP target 4
 file positive/written-type-scalar-families/main.ldn
 unit signatures 10 items 18
 nominal 1 handle layout(c) struct (u32)
@@ -18850,45 +19690,28 @@ item 17 ROUTINE pointer_integer result usize signature 9 params 1 slots 2 blocks
     3 STORE slot 2 <- 2
     4 LOAD usize slot 2
     5 LEAVE <- 4
-item 18 ROUTINE main result i32 signature 10 params 0 slots 37 blocks 39 values 193
+item 18 ROUTINE main result i32 signature 10 params 0 slots 20 blocks 22 values 125
   slot 1 code i32 return
   slot 2 address usize
   slot 3 wrapped aggregate fields u32
-  slot 4 - bool
-  slot 5 - bool
-  slot 6 - bool
-  slot 7 - bool
-  slot 8 - bool
-  slot 9 - bool
-  slot 10 - bool
-  slot 11 - bool
-  slot 12 - bool
-  slot 13 - bool
-  slot 14 - bool
-  slot 15 - bool
-  slot 16 - bool
-  slot 17 - bool
-  slot 18 - bool
-  slot 19 - bool
-  slot 20 - bool
-  slot 21 - i8
-  slot 22 - i8
-  slot 23 - f32
-  slot 24 - f32
-  slot 25 - f64
-  slot 26 - f64
-  slot 27 - u8
-  slot 28 - u8
-  slot 29 - u16
-  slot 30 - u16
-  slot 31 - f32
-  slot 32 - f32
-  slot 33 - usize
-  slot 34 - aggregate fields u32
-  slot 35 - address of struct (u32)
-  slot 36 - address of struct (u32)
-  slot 37 - u32
-  block 1 scope 15 BLOCK length 15
+  slot 4 - i8
+  slot 5 - i8
+  slot 6 - f32
+  slot 7 - f32
+  slot 8 - f64
+  slot 9 - f64
+  slot 10 - u8
+  slot 11 - u8
+  slot 12 - u16
+  slot 13 - u16
+  slot 14 - f32
+  slot 15 - f32
+  slot 16 - usize
+  slot 17 - aggregate fields u32
+  slot 18 - address of struct (u32)
+  slot 19 - address of struct (u32)
+  slot 20 - u32
+  block 1 scope 15 BLOCK length 14
     1 NUMBER usize 42
     2 CONVERSION usize <- 1
     3 CONVERSION usize <- 2
@@ -18898,228 +19721,143 @@ item 18 ROUTINE main result i32 signature 10 params 0 slots 37 blocks 39 values 
     7 CONVERSION u32 <- 6
     8 STORE_FIELD slot 3 field 1 <- 7
     9 LOAD_DATUM i8 datum 1 folded_integer
-    10 STORE slot 21 <- 9
+    10 STORE slot 4 <- 9
     11 NUMBER i8 128 negated
-    12 LOAD i8 slot 21
+    12 LOAD i8 slot 4
     13 EQUAL_TO bool <- 12 11
-    14 STORE slot 20 <- 13
-    15 BRANCH target 2 alternative 3 <- 13
-  block 2 scope 15 BLOCK length 8
-    16 NUMBER i64 128 negated
-    17 CALL i8 callee 9 int_int signature 1 <- 16
-    18 STORE slot 22 <- 17
-    19 NUMBER i8 128 negated
-    20 LOAD i8 slot 22
-    21 EQUAL_TO bool <- 20 19
-    22 STORE slot 20 <- 21
-    23 JUMP target 3
-  block 3 scope 15 BLOCK length 3
-    24 LOAD bool slot 20
-    25 STORE slot 19 <- 24
-    26 BRANCH target 4 alternative 5 <- 24
+    14 BRANCH target 2 alternative 20 <- 13
+  block 2 scope 15 BLOCK length 7
+    15 NUMBER i64 128 negated
+    16 CALL i8 callee 9 int_int signature 1 <- 15
+    17 STORE slot 5 <- 16
+    18 NUMBER i8 128 negated
+    19 LOAD i8 slot 5
+    20 EQUAL_TO bool <- 19 18
+    21 BRANCH target 3 alternative 20 <- 20
+  block 3 scope 15 BLOCK length 6
+    22 LOAD_DATUM f32 datum 2 folded_float
+    23 STORE slot 6 <- 22
+    24 NUMBER f32 1069547520
+    25 LOAD f32 slot 6
+    26 EQUAL_TO bool <- 25 24
+    27 BRANCH target 4 alternative 20 <- 26
   block 4 scope 15 BLOCK length 7
-    27 LOAD_DATUM f32 datum 2 folded_float
-    28 STORE slot 23 <- 27
-    29 NUMBER f32 1069547520
-    30 LOAD f32 slot 23
-    31 EQUAL_TO bool <- 30 29
-    32 STORE slot 19 <- 31
-    33 JUMP target 5
-  block 5 scope 15 BLOCK length 3
-    34 LOAD bool slot 19
-    35 STORE slot 18 <- 34
-    36 BRANCH target 6 alternative 7 <- 34
-  block 6 scope 15 BLOCK length 8
-    37 NUMBER f64 4609434218613702656
-    38 CALL f32 callee 10 float_float signature 2 <- 37
-    39 STORE slot 24 <- 38
-    40 NUMBER f32 1069547520
-    41 LOAD f32 slot 24
-    42 EQUAL_TO bool <- 41 40
-    43 STORE slot 18 <- 42
-    44 JUMP target 7
-  block 7 scope 15 BLOCK length 3
-    45 LOAD bool slot 18
-    46 STORE slot 17 <- 45
-    47 BRANCH target 8 alternative 9 <- 45
-  block 8 scope 15 BLOCK length 7
-    48 LOAD_DATUM f64 datum 3 folded_integer_float
-    49 STORE slot 25 <- 48
-    50 NUMBER f64 4631107791820423168
-    51 LOAD f64 slot 25
+    28 NUMBER f64 4609434218613702656
+    29 CALL f32 callee 10 float_float signature 2 <- 28
+    30 STORE slot 7 <- 29
+    31 NUMBER f32 1069547520
+    32 LOAD f32 slot 7
+    33 EQUAL_TO bool <- 32 31
+    34 BRANCH target 5 alternative 20 <- 33
+  block 5 scope 15 BLOCK length 6
+    35 LOAD_DATUM f64 datum 3 folded_integer_float
+    36 STORE slot 8 <- 35
+    37 NUMBER f64 4631107791820423168
+    38 LOAD f64 slot 8
+    39 EQUAL_TO bool <- 38 37
+    40 BRANCH target 6 alternative 20 <- 39
+  block 6 scope 15 BLOCK length 7
+    41 NUMBER u64 42
+    42 CALL f64 callee 11 int_float signature 3 <- 41
+    43 STORE slot 9 <- 42
+    44 NUMBER f64 4631107791820423168
+    45 LOAD f64 slot 9
+    46 EQUAL_TO bool <- 45 44
+    47 BRANCH target 7 alternative 20 <- 46
+  block 7 scope 15 BLOCK length 6
+    48 LOAD_DATUM u8 datum 4 folded_float_integer
+    49 STORE slot 10 <- 48
+    50 NUMBER u8 42
+    51 LOAD u8 slot 10
     52 EQUAL_TO bool <- 51 50
-    53 STORE slot 17 <- 52
-    54 JUMP target 9
-  block 9 scope 15 BLOCK length 3
-    55 LOAD bool slot 17
-    56 STORE slot 16 <- 55
-    57 BRANCH target 10 alternative 11 <- 55
-  block 10 scope 15 BLOCK length 8
-    58 NUMBER u64 42
-    59 CALL f64 callee 11 int_float signature 3 <- 58
-    60 STORE slot 26 <- 59
-    61 NUMBER f64 4631107791820423168
-    62 LOAD f64 slot 26
-    63 EQUAL_TO bool <- 62 61
-    64 STORE slot 16 <- 63
-    65 JUMP target 11
-  block 11 scope 15 BLOCK length 3
-    66 LOAD bool slot 16
-    67 STORE slot 15 <- 66
-    68 BRANCH target 12 alternative 13 <- 66
-  block 12 scope 15 BLOCK length 7
-    69 LOAD_DATUM u8 datum 4 folded_float_integer
-    70 STORE slot 27 <- 69
-    71 NUMBER u8 42
-    72 LOAD u8 slot 27
-    73 EQUAL_TO bool <- 72 71
-    74 STORE slot 15 <- 73
-    75 JUMP target 13
+    53 BRANCH target 8 alternative 20 <- 52
+  block 8 scope 15 BLOCK length 7
+    54 NUMBER f64 4631213344936689664
+    55 CALL u8 callee 12 float_int signature 4 <- 54
+    56 STORE slot 11 <- 55
+    57 NUMBER u8 42
+    58 LOAD u8 slot 11
+    59 EQUAL_TO bool <- 58 57
+    60 BRANCH target 9 alternative 20 <- 59
+  block 9 scope 15 BLOCK length 6
+    61 LOAD_DATUM u16 datum 5 folded_bool_integer
+    62 STORE slot 12 <- 61
+    63 NUMBER u16 1
+    64 LOAD u16 slot 12
+    65 EQUAL_TO bool <- 64 63
+    66 BRANCH target 10 alternative 20 <- 65
+  block 10 scope 15 BLOCK length 7
+    67 TRUTH bool true
+    68 CALL u16 callee 13 bool_int signature 5 <- 67
+    69 STORE slot 13 <- 68
+    70 NUMBER u16 1
+    71 LOAD u16 slot 13
+    72 EQUAL_TO bool <- 71 70
+    73 BRANCH target 11 alternative 20 <- 72
+  block 11 scope 15 BLOCK length 2
+    74 LOAD_DATUM bool datum 6 folded_integer_bool
+    75 BRANCH target 12 alternative 20 <- 74
+  block 12 scope 15 BLOCK length 3
+    76 NUMBER u32 1
+    77 CALL bool callee 14 int_bool signature 6 <- 76
+    78 BRANCH target 13 alternative 20 <- 77
   block 13 scope 15 BLOCK length 3
-    76 LOAD bool slot 15
-    77 STORE slot 14 <- 76
-    78 BRANCH target 14 alternative 15 <- 76
-  block 14 scope 15 BLOCK length 8
-    79 NUMBER f64 4631213344936689664
-    80 CALL u8 callee 12 float_int signature 4 <- 79
-    81 STORE slot 28 <- 80
-    82 NUMBER u8 42
-    83 LOAD u8 slot 28
-    84 EQUAL_TO bool <- 83 82
-    85 STORE slot 14 <- 84
-    86 JUMP target 15
-  block 15 scope 15 BLOCK length 3
-    87 LOAD bool slot 14
-    88 STORE slot 13 <- 87
-    89 BRANCH target 16 alternative 17 <- 87
+    79 LOAD_DATUM bool datum 7 folded_float_bool
+    80 LOGICAL_NOT bool <- 79
+    81 BRANCH target 14 alternative 20 <- 80
+  block 14 scope 15 BLOCK length 4
+    82 NUMBER f64 9223372036854775808
+    83 CALL bool callee 15 float_bool signature 7 <- 82
+    84 LOGICAL_NOT bool <- 83
+    85 BRANCH target 15 alternative 20 <- 84
+  block 15 scope 15 BLOCK length 6
+    86 LOAD_DATUM f32 datum 8 folded_bool_float
+    87 STORE slot 14 <- 86
+    88 NUMBER f32 1065353216
+    89 LOAD f32 slot 14
+    90 EQUAL_TO bool <- 89 88
+    91 BRANCH target 16 alternative 20 <- 90
   block 16 scope 15 BLOCK length 7
-    90 LOAD_DATUM u16 datum 5 folded_bool_integer
-    91 STORE slot 29 <- 90
-    92 NUMBER u16 1
-    93 LOAD u16 slot 29
-    94 EQUAL_TO bool <- 93 92
-    95 STORE slot 13 <- 94
-    96 JUMP target 17
-  block 17 scope 15 BLOCK length 3
-    97 LOAD bool slot 13
-    98 STORE slot 12 <- 97
-    99 BRANCH target 18 alternative 19 <- 97
-  block 18 scope 15 BLOCK length 8
-    100 TRUTH bool true
-    101 CALL u16 callee 13 bool_int signature 5 <- 100
-    102 STORE slot 30 <- 101
-    103 NUMBER u16 1
-    104 LOAD u16 slot 30
-    105 EQUAL_TO bool <- 104 103
-    106 STORE slot 12 <- 105
-    107 JUMP target 19
-  block 19 scope 15 BLOCK length 3
-    108 LOAD bool slot 12
-    109 STORE slot 11 <- 108
-    110 BRANCH target 20 alternative 21 <- 108
-  block 20 scope 15 BLOCK length 3
-    111 LOAD_DATUM bool datum 6 folded_integer_bool
-    112 STORE slot 11 <- 111
-    113 JUMP target 21
-  block 21 scope 15 BLOCK length 3
-    114 LOAD bool slot 11
-    115 STORE slot 10 <- 114
-    116 BRANCH target 22 alternative 23 <- 114
-  block 22 scope 15 BLOCK length 4
-    117 NUMBER u32 1
-    118 CALL bool callee 14 int_bool signature 6 <- 117
-    119 STORE slot 10 <- 118
-    120 JUMP target 23
-  block 23 scope 15 BLOCK length 3
-    121 LOAD bool slot 10
-    122 STORE slot 9 <- 121
-    123 BRANCH target 24 alternative 25 <- 121
-  block 24 scope 15 BLOCK length 4
-    124 LOAD_DATUM bool datum 7 folded_float_bool
-    125 LOGICAL_NOT bool <- 124
-    126 STORE slot 9 <- 125
-    127 JUMP target 25
-  block 25 scope 15 BLOCK length 3
-    128 LOAD bool slot 9
-    129 STORE slot 8 <- 128
-    130 BRANCH target 26 alternative 27 <- 128
-  block 26 scope 15 BLOCK length 5
-    131 NUMBER f64 9223372036854775808
-    132 CALL bool callee 15 float_bool signature 7 <- 131
-    133 LOGICAL_NOT bool <- 132
-    134 STORE slot 8 <- 133
-    135 JUMP target 27
-  block 27 scope 15 BLOCK length 3
-    136 LOAD bool slot 8
-    137 STORE slot 7 <- 136
-    138 BRANCH target 28 alternative 29 <- 136
-  block 28 scope 15 BLOCK length 7
-    139 LOAD_DATUM f32 datum 8 folded_bool_float
-    140 STORE slot 31 <- 139
-    141 NUMBER f32 1065353216
-    142 LOAD f32 slot 31
-    143 EQUAL_TO bool <- 142 141
-    144 STORE slot 7 <- 143
-    145 JUMP target 29
-  block 29 scope 15 BLOCK length 3
-    146 LOAD bool slot 7
-    147 STORE slot 6 <- 146
-    148 BRANCH target 30 alternative 31 <- 146
-  block 30 scope 15 BLOCK length 8
-    149 TRUTH bool true
-    150 CALL f32 callee 16 bool_float signature 8 <- 149
-    151 STORE slot 32 <- 150
-    152 NUMBER f32 1065353216
-    153 LOAD f32 slot 32
-    154 EQUAL_TO bool <- 153 152
-    155 STORE slot 6 <- 154
-    156 JUMP target 31
-  block 31 scope 15 BLOCK length 3
-    157 LOAD bool slot 6
-    158 STORE slot 5 <- 157
-    159 BRANCH target 32 alternative 33 <- 157
-  block 32 scope 15 BLOCK length 8
-    160 LOAD usize slot 2
-    161 CALL usize callee 17 pointer_integer signature 9 <- 160
-    162 STORE slot 33 <- 161
-    163 NUMBER usize 42
-    164 LOAD usize slot 33
-    165 EQUAL_TO bool <- 164 163
-    166 STORE slot 5 <- 165
-    167 JUMP target 33
-  block 33 scope 15 BLOCK length 3
-    168 LOAD bool slot 5
-    169 STORE slot 4 <- 168
-    170 BRANCH target 34 alternative 35 <- 168
-  block 34 scope 15 BLOCK length 12
-    171 STORAGE_ADDRESS usize storage slot 3
-    172 STORE slot 35 <- 171
-    173 STORAGE_ADDRESS usize storage slot 34
-    174 STORE slot 36 <- 173
-    175 COPY_ARRAY from address slot 35 to address slot 36
-    176 LOAD_FIELD u32 slot 34 field 1
-    177 STORE slot 37 <- 176
-    178 NUMBER u32 42
-    179 LOAD u32 slot 37
-    180 EQUAL_TO bool <- 179 178
-    181 STORE slot 4 <- 180
-    182 JUMP target 35
-  block 35 scope 15 BLOCK length 2
-    183 LOAD bool slot 4
-    184 BRANCH target 36 alternative 37 <- 183
-  block 36 scope 16 BLOCK length 3
-    185 NUMBER i32 42
-    186 STORE slot 1 <- 185
-    187 JUMP target 38
-  block 37 scope 15 BLOCK length 1
-    188 JUMP target 39
-  block 38 scope 15 BLOCK length 2
-    192 LOAD i32 slot 1
-    193 LEAVE <- 192
-  block 39 scope 17 BLOCK length 3
-    189 NUMBER i32 1
-    190 STORE slot 1 <- 189
-    191 JUMP target 38
+    92 TRUTH bool true
+    93 CALL f32 callee 16 bool_float signature 8 <- 92
+    94 STORE slot 15 <- 93
+    95 NUMBER f32 1065353216
+    96 LOAD f32 slot 15
+    97 EQUAL_TO bool <- 96 95
+    98 BRANCH target 17 alternative 20 <- 97
+  block 17 scope 15 BLOCK length 7
+    99 LOAD usize slot 2
+    100 CALL usize callee 17 pointer_integer signature 9 <- 99
+    101 STORE slot 16 <- 100
+    102 NUMBER usize 42
+    103 LOAD usize slot 16
+    104 EQUAL_TO bool <- 103 102
+    105 BRANCH target 18 alternative 20 <- 104
+  block 18 scope 15 BLOCK length 11
+    106 STORAGE_ADDRESS usize storage slot 3
+    107 STORE slot 18 <- 106
+    108 STORAGE_ADDRESS usize storage slot 17
+    109 STORE slot 19 <- 108
+    110 COPY_ARRAY from address slot 18 to address slot 19
+    111 LOAD_FIELD u32 slot 17 field 1
+    112 STORE slot 20 <- 111
+    113 NUMBER u32 42
+    114 LOAD u32 slot 20
+    115 EQUAL_TO bool <- 114 113
+    116 BRANCH target 19 alternative 20 <- 115
+  block 19 scope 16 BLOCK length 3
+    117 NUMBER i32 42
+    118 STORE slot 1 <- 117
+    119 JUMP target 21
+  block 20 scope 15 BLOCK length 1
+    120 JUMP target 22
+  block 21 scope 15 BLOCK length 2
+    124 LOAD i32 slot 1
+    125 LEAVE <- 124
+  block 22 scope 17 BLOCK length 3
+    121 NUMBER i32 1
+    122 STORE slot 1 <- 121
+    123 JUMP target 21
 file positive/written-type-text-conversions/main.ldn
 unit signatures 3 items 5
 signature 1 (in [2]usize) -> [2]usize from 1
@@ -19178,7 +19916,7 @@ item 2 ROUTINE c_bytes result array signature 2 params 2 slots 6 blocks 4 values
     22 LOAD usize slot 5
     23 STORE_FIELD slot 3 field 2 <- 22
     24 LEAVE
-item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 1462
+item 3 ROUTINE main result i32 signature 3 params 0 slots 130 blocks 200 values 1422
   slot 1 code i32 return
   slot 2 storage elements 10 of u8
   slot 3 source elements 2 of usize
@@ -19283,16 +20021,16 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 
   slot 102 - u8
   slot 103 - u8
   slot 104 - u8
-  slot 105 - bool
-  slot 106 - bool
-  slot 107 - bool
-  slot 108 - bool
-  slot 109 - bool
-  slot 110 - bool
-  slot 111 - bool
-  slot 112 - bool
-  slot 113 - bool
-  slot 114 - bool
+  slot 105 - usize
+  slot 106 - usize
+  slot 107 - usize
+  slot 108 - address of u8
+  slot 109 - u8
+  slot 110 - usize
+  slot 111 - usize
+  slot 112 - address of u8
+  slot 113 - u8
+  slot 114 - usize
   slot 115 - usize
   slot 116 - usize
   slot 117 - usize
@@ -19300,25 +20038,15 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 
   slot 119 - u8
   slot 120 - usize
   slot 121 - usize
-  slot 122 - address of u8
-  slot 123 - u8
+  slot 122 - usize
+  slot 123 - usize
   slot 124 - usize
   slot 125 - usize
-  slot 126 - usize
+  slot 126 - address of u8
   slot 127 - usize
-  slot 128 - address of u8
-  slot 129 - u8
-  slot 130 - usize
-  slot 131 - usize
-  slot 132 - usize
-  slot 133 - usize
-  slot 134 - usize
-  slot 135 - usize
-  slot 136 - address of u8
-  slot 137 - usize
-  slot 138 - usize
-  slot 139 - usize
-  slot 140 - address of u8
+  slot 128 - usize
+  slot 129 - usize
+  slot 130 - address of u8
   block 1 scope 9 BLOCK length 47
     1 NUMBER u8 65
     2 STORE_FIELD slot 2 field 1 <- 1
@@ -20732,7 +21460,7 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 
     1276 NUMBER u8 1
     1277 RANGE_CHECK u8 <- 1276 range 0 .. 0 representation
     1278 JUMP target 176
-  block 176 scope 9 BLOCK length 20
+  block 176 scope 9 BLOCK length 19
     1279 LOAD usize slot 91
     1280 STORE_FIELD slot 90 field 1 <- 1279
     1281 LOAD usize slot 92
@@ -20747,12 +21475,11 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 
     1290 STORE_FIELD slot 87 field 2 <- 1289
     1291 LOAD_FIELD usize slot 24 field 1
     1292 LOAD_FIELD usize slot 24 field 2
-    1293 STORE slot 115 <- 1292
+    1293 STORE slot 105 <- 1292
     1294 NUMBER usize 10
-    1295 LOAD usize slot 115
+    1295 LOAD usize slot 105
     1296 EQUAL_TO bool <- 1295 1294
-    1297 STORE slot 114 <- 1296
-    1298 BRANCH target 187 alternative 188 <- 1296
+    1297 BRANCH target 187 alternative 198 <- 1296
   block 177 scope 9 BLOCK length 4
     1089 LOAD u8 slot 95
     1090 NUMBER u8 191
@@ -20803,194 +21530,145 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 140 blocks 210 values 
     1268 NUMBER u8 191
     1269 LESS_OR_EQUAL bool <- 1267 1268
     1270 BRANCH target 174 alternative 175 <- 1269
-  block 187 scope 9 BLOCK length 17
-    1299 LOAD_FIELD usize slot 24 field 1
-    1300 LOAD_FIELD usize slot 24 field 2
-    1301 STORE slot 116 <- 1299
-    1302 STORE slot 117 <- 1300
-    1303 NUMBER usize 1
-    1304 LOAD usize slot 116
-    1305 LOAD usize slot 117
-    1306 SLICE_ADDRESS usize <- 1304 1305 1303 1303
-    1307 STORE slot 118 <- 1306
-    1308 LOAD usize slot 118
-    1309 LOAD_INDIRECT u8 address slot 118 <- 1308
-    1310 STORE slot 119 <- 1309
-    1311 NUMBER u8 194
-    1312 LOAD u8 slot 119
-    1313 EQUAL_TO bool <- 1312 1311
-    1314 STORE slot 114 <- 1313
-    1315 JUMP target 188
-  block 188 scope 9 BLOCK length 3
-    1316 LOAD bool slot 114
-    1317 STORE slot 113 <- 1316
-    1318 BRANCH target 189 alternative 190 <- 1316
-  block 189 scope 9 BLOCK length 17
-    1319 LOAD_FIELD usize slot 24 field 1
-    1320 LOAD_FIELD usize slot 24 field 2
-    1321 STORE slot 120 <- 1319
-    1322 STORE slot 121 <- 1320
-    1323 NUMBER usize 9
-    1324 LOAD usize slot 120
-    1325 LOAD usize slot 121
-    1326 SLICE_ADDRESS usize <- 1324 1325 1323 1323
-    1327 STORE slot 122 <- 1326
-    1328 LOAD usize slot 122
-    1329 LOAD_INDIRECT u8 address slot 122 <- 1328
-    1330 STORE slot 123 <- 1329
-    1331 NUMBER u8 128
-    1332 LOAD u8 slot 123
-    1333 EQUAL_TO bool <- 1332 1331
-    1334 STORE slot 113 <- 1333
-    1335 JUMP target 190
-  block 190 scope 9 BLOCK length 3
-    1336 LOAD bool slot 113
-    1337 STORE slot 112 <- 1336
-    1338 BRANCH target 191 alternative 192 <- 1336
-  block 191 scope 9 BLOCK length 8
-    1339 LOAD_FIELD usize slot 26 field 1
-    1340 LOAD_FIELD usize slot 26 field 2
-    1341 STORE slot 124 <- 1340
-    1342 NUMBER usize 10
-    1343 LOAD usize slot 124
-    1344 EQUAL_TO bool <- 1343 1342
-    1345 STORE slot 112 <- 1344
-    1346 JUMP target 192
-  block 192 scope 9 BLOCK length 3
-    1347 LOAD bool slot 112
-    1348 STORE slot 111 <- 1347
-    1349 BRANCH target 193 alternative 194 <- 1347
-  block 193 scope 9 BLOCK length 8
-    1350 LOAD_FIELD usize slot 45 field 1
-    1351 LOAD_FIELD usize slot 45 field 2
-    1352 STORE slot 125 <- 1351
-    1353 NUMBER usize 1
-    1354 LOAD usize slot 125
-    1355 EQUAL_TO bool <- 1354 1353
-    1356 STORE slot 111 <- 1355
-    1357 JUMP target 194
-  block 194 scope 9 BLOCK length 3
-    1358 LOAD bool slot 111
-    1359 STORE slot 110 <- 1358
-    1360 BRANCH target 195 alternative 196 <- 1358
-  block 195 scope 9 BLOCK length 17
-    1361 LOAD_FIELD usize slot 45 field 1
-    1362 LOAD_FIELD usize slot 45 field 2
-    1363 STORE slot 126 <- 1361
-    1364 STORE slot 127 <- 1362
-    1365 NUMBER usize 0
-    1366 LOAD usize slot 126
-    1367 LOAD usize slot 127
-    1368 SLICE_ADDRESS usize <- 1366 1367 1365 1365
-    1369 STORE slot 128 <- 1368
-    1370 LOAD usize slot 128
-    1371 LOAD_INDIRECT u8 address slot 128 <- 1370
-    1372 STORE slot 129 <- 1371
-    1373 NUMBER u8 65
-    1374 LOAD u8 slot 129
-    1375 EQUAL_TO bool <- 1374 1373
-    1376 STORE slot 110 <- 1375
-    1377 JUMP target 196
-  block 196 scope 9 BLOCK length 3
-    1378 LOAD bool slot 110
-    1379 STORE slot 109 <- 1378
-    1380 BRANCH target 197 alternative 198 <- 1378
-  block 197 scope 9 BLOCK length 8
-    1381 LOAD_FIELD usize slot 49 field 1
-    1382 LOAD_FIELD usize slot 49 field 2
-    1383 STORE slot 130 <- 1382
-    1384 NUMBER usize 1
-    1385 LOAD usize slot 130
+  block 187 scope 9 BLOCK length 16
+    1298 LOAD_FIELD usize slot 24 field 1
+    1299 LOAD_FIELD usize slot 24 field 2
+    1300 STORE slot 106 <- 1298
+    1301 STORE slot 107 <- 1299
+    1302 NUMBER usize 1
+    1303 LOAD usize slot 106
+    1304 LOAD usize slot 107
+    1305 SLICE_ADDRESS usize <- 1303 1304 1302 1302
+    1306 STORE slot 108 <- 1305
+    1307 LOAD usize slot 108
+    1308 LOAD_INDIRECT u8 address slot 108 <- 1307
+    1309 STORE slot 109 <- 1308
+    1310 NUMBER u8 194
+    1311 LOAD u8 slot 109
+    1312 EQUAL_TO bool <- 1311 1310
+    1313 BRANCH target 188 alternative 198 <- 1312
+  block 188 scope 9 BLOCK length 16
+    1314 LOAD_FIELD usize slot 24 field 1
+    1315 LOAD_FIELD usize slot 24 field 2
+    1316 STORE slot 110 <- 1314
+    1317 STORE slot 111 <- 1315
+    1318 NUMBER usize 9
+    1319 LOAD usize slot 110
+    1320 LOAD usize slot 111
+    1321 SLICE_ADDRESS usize <- 1319 1320 1318 1318
+    1322 STORE slot 112 <- 1321
+    1323 LOAD usize slot 112
+    1324 LOAD_INDIRECT u8 address slot 112 <- 1323
+    1325 STORE slot 113 <- 1324
+    1326 NUMBER u8 128
+    1327 LOAD u8 slot 113
+    1328 EQUAL_TO bool <- 1327 1326
+    1329 BRANCH target 189 alternative 198 <- 1328
+  block 189 scope 9 BLOCK length 7
+    1330 LOAD_FIELD usize slot 26 field 1
+    1331 LOAD_FIELD usize slot 26 field 2
+    1332 STORE slot 114 <- 1331
+    1333 NUMBER usize 10
+    1334 LOAD usize slot 114
+    1335 EQUAL_TO bool <- 1334 1333
+    1336 BRANCH target 190 alternative 198 <- 1335
+  block 190 scope 9 BLOCK length 7
+    1337 LOAD_FIELD usize slot 45 field 1
+    1338 LOAD_FIELD usize slot 45 field 2
+    1339 STORE slot 115 <- 1338
+    1340 NUMBER usize 1
+    1341 LOAD usize slot 115
+    1342 EQUAL_TO bool <- 1341 1340
+    1343 BRANCH target 191 alternative 198 <- 1342
+  block 191 scope 9 BLOCK length 16
+    1344 LOAD_FIELD usize slot 45 field 1
+    1345 LOAD_FIELD usize slot 45 field 2
+    1346 STORE slot 116 <- 1344
+    1347 STORE slot 117 <- 1345
+    1348 NUMBER usize 0
+    1349 LOAD usize slot 116
+    1350 LOAD usize slot 117
+    1351 SLICE_ADDRESS usize <- 1349 1350 1348 1348
+    1352 STORE slot 118 <- 1351
+    1353 LOAD usize slot 118
+    1354 LOAD_INDIRECT u8 address slot 118 <- 1353
+    1355 STORE slot 119 <- 1354
+    1356 NUMBER u8 65
+    1357 LOAD u8 slot 119
+    1358 EQUAL_TO bool <- 1357 1356
+    1359 BRANCH target 192 alternative 198 <- 1358
+  block 192 scope 9 BLOCK length 7
+    1360 LOAD_FIELD usize slot 49 field 1
+    1361 LOAD_FIELD usize slot 49 field 2
+    1362 STORE slot 120 <- 1361
+    1363 NUMBER usize 1
+    1364 LOAD usize slot 120
+    1365 EQUAL_TO bool <- 1364 1363
+    1366 BRANCH target 193 alternative 198 <- 1365
+  block 193 scope 9 BLOCK length 7
+    1367 LOAD_FIELD usize slot 65 field 1
+    1368 LOAD_FIELD usize slot 65 field 2
+    1369 STORE slot 121 <- 1368
+    1370 NUMBER usize 0
+    1371 LOAD usize slot 121
+    1372 EQUAL_TO bool <- 1371 1370
+    1373 BRANCH target 194 alternative 198 <- 1372
+  block 194 scope 9 BLOCK length 7
+    1374 LOAD_FIELD usize slot 66 field 1
+    1375 LOAD_FIELD usize slot 66 field 2
+    1376 STORE slot 122 <- 1375
+    1377 NUMBER usize 0
+    1378 LOAD usize slot 122
+    1379 EQUAL_TO bool <- 1378 1377
+    1380 BRANCH target 195 alternative 198 <- 1379
+  block 195 scope 9 BLOCK length 7
+    1381 LOAD_FIELD usize slot 87 field 1
+    1382 LOAD_FIELD usize slot 87 field 2
+    1383 STORE slot 123 <- 1382
+    1384 NUMBER usize 0
+    1385 LOAD usize slot 123
     1386 EQUAL_TO bool <- 1385 1384
-    1387 STORE slot 109 <- 1386
-    1388 JUMP target 198
-  block 198 scope 9 BLOCK length 3
-    1389 LOAD bool slot 109
-    1390 STORE slot 108 <- 1389
-    1391 BRANCH target 199 alternative 200 <- 1389
-  block 199 scope 9 BLOCK length 8
-    1392 LOAD_FIELD usize slot 65 field 1
-    1393 LOAD_FIELD usize slot 65 field 2
-    1394 STORE slot 131 <- 1393
-    1395 NUMBER usize 0
-    1396 LOAD usize slot 131
-    1397 EQUAL_TO bool <- 1396 1395
-    1398 STORE slot 108 <- 1397
-    1399 JUMP target 200
-  block 200 scope 9 BLOCK length 3
-    1400 LOAD bool slot 108
-    1401 STORE slot 107 <- 1400
-    1402 BRANCH target 201 alternative 202 <- 1400
-  block 201 scope 9 BLOCK length 8
-    1403 LOAD_FIELD usize slot 66 field 1
-    1404 LOAD_FIELD usize slot 66 field 2
-    1405 STORE slot 132 <- 1404
-    1406 NUMBER usize 0
-    1407 LOAD usize slot 132
-    1408 EQUAL_TO bool <- 1407 1406
-    1409 STORE slot 107 <- 1408
-    1410 JUMP target 202
-  block 202 scope 9 BLOCK length 3
-    1411 LOAD bool slot 107
-    1412 STORE slot 106 <- 1411
-    1413 BRANCH target 203 alternative 204 <- 1411
-  block 203 scope 9 BLOCK length 8
-    1414 LOAD_FIELD usize slot 87 field 1
-    1415 LOAD_FIELD usize slot 87 field 2
-    1416 STORE slot 133 <- 1415
-    1417 NUMBER usize 0
-    1418 LOAD usize slot 133
-    1419 EQUAL_TO bool <- 1418 1417
-    1420 STORE slot 106 <- 1419
-    1421 JUMP target 204
-  block 204 scope 9 BLOCK length 3
-    1422 LOAD bool slot 106
-    1423 STORE slot 105 <- 1422
-    1424 BRANCH target 205 alternative 206 <- 1422
-  block 205 scope 9 BLOCK length 27
-    1425 LOAD_FIELD usize slot 24 field 1
-    1426 LOAD_FIELD usize slot 24 field 2
-    1427 STORE slot 134 <- 1425
-    1428 STORE slot 135 <- 1426
-    1429 NUMBER usize 0
-    1430 LOAD usize slot 134
-    1431 LOAD usize slot 135
-    1432 SLICE_ADDRESS usize <- 1430 1431 1429 1429
-    1433 STORE slot 136 <- 1432
-    1434 PLACE_ADDRESS usize
-    1435 CONVERSION usize <- 1434
-    1436 STORE slot 137 <- 1435
-    1437 LOAD_FIELD usize slot 3 field 1
-    1438 LOAD_FIELD usize slot 3 field 2
-    1439 STORE slot 138 <- 1437
-    1440 STORE slot 139 <- 1438
-    1441 NUMBER usize 0
-    1442 LOAD usize slot 138
-    1443 LOAD usize slot 139
-    1444 SLICE_ADDRESS usize <- 1442 1443 1441 1441
-    1445 STORE slot 140 <- 1444
-    1446 PLACE_ADDRESS usize
-    1447 CONVERSION usize <- 1446
-    1448 LOAD usize slot 137
-    1449 EQUAL_TO bool <- 1448 1447
-    1450 STORE slot 105 <- 1449
-    1451 JUMP target 206
-  block 206 scope 9 BLOCK length 2
-    1452 LOAD bool slot 105
-    1453 BRANCH target 207 alternative 208 <- 1452
-  block 207 scope 10 BLOCK length 3
-    1454 NUMBER i32 42
-    1455 STORE slot 1 <- 1454
-    1456 JUMP target 209
-  block 208 scope 9 BLOCK length 1
-    1457 JUMP target 210
-  block 209 scope 9 BLOCK length 2
-    1461 LOAD i32 slot 1
-    1462 LEAVE <- 1461
-  block 210 scope 11 BLOCK length 3
-    1458 NUMBER i32 1
-    1459 STORE slot 1 <- 1458
-    1460 JUMP target 209
+    1387 BRANCH target 196 alternative 198 <- 1386
+  block 196 scope 9 BLOCK length 26
+    1388 LOAD_FIELD usize slot 24 field 1
+    1389 LOAD_FIELD usize slot 24 field 2
+    1390 STORE slot 124 <- 1388
+    1391 STORE slot 125 <- 1389
+    1392 NUMBER usize 0
+    1393 LOAD usize slot 124
+    1394 LOAD usize slot 125
+    1395 SLICE_ADDRESS usize <- 1393 1394 1392 1392
+    1396 STORE slot 126 <- 1395
+    1397 PLACE_ADDRESS usize
+    1398 CONVERSION usize <- 1397
+    1399 STORE slot 127 <- 1398
+    1400 LOAD_FIELD usize slot 3 field 1
+    1401 LOAD_FIELD usize slot 3 field 2
+    1402 STORE slot 128 <- 1400
+    1403 STORE slot 129 <- 1401
+    1404 NUMBER usize 0
+    1405 LOAD usize slot 128
+    1406 LOAD usize slot 129
+    1407 SLICE_ADDRESS usize <- 1405 1406 1404 1404
+    1408 STORE slot 130 <- 1407
+    1409 PLACE_ADDRESS usize
+    1410 CONVERSION usize <- 1409
+    1411 LOAD usize slot 127
+    1412 EQUAL_TO bool <- 1411 1410
+    1413 BRANCH target 197 alternative 198 <- 1412
+  block 197 scope 10 BLOCK length 3
+    1414 NUMBER i32 42
+    1415 STORE slot 1 <- 1414
+    1416 JUMP target 199
+  block 198 scope 9 BLOCK length 1
+    1417 JUMP target 200
+  block 199 scope 9 BLOCK length 2
+    1421 LOAD i32 slot 1
+    1422 LEAVE <- 1421
+  block 200 scope 11 BLOCK length 3
+    1418 NUMBER i32 1
+    1419 STORE slot 1 <- 1418
+    1420 JUMP target 199
 item 4 DATUM - result array params 0 slots 0 blocks 1 values 1
   elements 10 of u8
   image 65 0 105 103 110 111 114 101 100 0

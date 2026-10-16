@@ -11,8 +11,9 @@ with Landin.Panics;
 --  The legacy overload selects none/off: accumulator computation and one
 --  frame cell per scalar value.  Explicit size/speed emission uses a typed,
 --  deterministic GP allocation plan with block-local intervals, reused spill
---  homes and eligible cross-block scalar slots.  Speed emission also keeps
---  eligible float slots and values in XMM8..XMM15 in call-free routines.
+--  homes, eligible cross-block scalar slots and spans of single-block ones.
+--  Speed emission also keeps eligible float slots and values in
+--  XMM8..XMM15 wherever no call falls inside their interval.
 --  Scratch/argument registers and failure transport remain reserved; only
 --  used GP callee saves get homes.
 --  The same allocation and target-byte frame planner serve preflight and
@@ -21,13 +22,23 @@ with Landin.Panics;
 --  or host address; public and address-observed entries stay distinct.
 --
 --  Ordinary add, subtract and multiply each test signed overflow or unsigned
---  carry/borrow at the operation and reach an explicit `ud2` before storing
---  a result; their wrapping forms ignore those flags and store the low-width
---  result immediately.  Multiply uses x86-64's one-operand form so its
---  implicit high half makes unsigned overflow observable too.  Divide and
+--  carry/borrow at the operation and reach an explicit `ud2` before the
+--  result is used; their wrapping forms ignore those flags.  Size and speed
+--  compute an operation in its result's register when it has one, with an
+--  integer constant that fits as an immediate, and write a one- or two-byte
+--  value moving into a register zero-extended to the whole of it.  Unsigned
+--  multiply, and every multiply at none, uses x86-64's one-operand form so
+--  its implicit high half makes unsigned overflow observable too; a signed
+--  one at size and speed is `imul`'s two- or three-operand form, whose
+--  overflow flag is the same.  An element is reached, after its bounds
+--  check, as one `disp(%base,%index,scale)` operand, and an indexed or
+--  slice address whose one use is an indirect access is folded into it.
+--  Divide and
 --  remainder guard a zero divisor before their one-operand instruction;
 --  signed division explicitly traps the minimum over minus one, while signed
 --  remainder produces that pair's specified zero without executing `idiv`.
+--  A known nonzero divisor needs no guard; a power of two is a shift, and at
+--  speed any other is a high multiply by its reciprocal, so neither divides.
 --  Unary minus is checked the same way, because [1890] gives it its own
 --  integer type back: `neg` reports the lowest signed value as overflow and
 --  every nonzero unsigned value as carry.  [0330]'s `~`, `&`, `^` and `|`
@@ -36,8 +47,11 @@ with Landin.Panics;
 --  a bool at zero or one.
 --  Comparisons load their left operand, compare the right at that operand's
 --  width, and materialize a one-byte bool with the signed or unsigned
---  condition [1890] requires.  A shift carries the two rules the hardware
---  does not give: the amount is tested against the type's own width, because
+--  condition [1890] requires.  Optimized, a comparison whose one use is the
+--  branch after it jumps on the flags instead, a float one in an operand
+--  order that sends an unordered NaN where D162 says.
+--  A shift carries the two rules the hardware does not give: the amount is
+--  tested against the type's own width, because
 --  [0320] and D13 fill with zeros beyond it while x86-64 would mask the
 --  count, and a signed amount is tested for being negative, because [1950]
 --  leaves the ones the compiler could not read to the trap.  A call fills

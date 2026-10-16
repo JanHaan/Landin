@@ -818,11 +818,11 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
     expect_line(transcript, "assembly-ready-line",
                 source_lines["assembly-ready"], "debug_assembly")
     expect_value(transcript, "assembly.sum", 0x5a5a5a5a5f)
-    expect_value(transcript, "assembly.block_saved", 0x5a5a5a5a5a)
+    expect_value(transcript, "assembly.block_saved", 0x5a5a5a5a5b)
     caller_saved = re.search(r"^LANDIN-VALUE assembly\.caller_saved=(-?\d+)$",
                              transcript, re.M)
     require(caller_saved is not None
-            and int(caller_saved.group(1)) != 0x5a5a5a5a5a,
+            and int(caller_saved.group(1)) != 0x5a5a5a5a5b,
             "the caller's saved register cannot be told from the block's")
     expect_value(transcript, "assembly.unwound_saved",
                  int(caller_saved.group(1)))

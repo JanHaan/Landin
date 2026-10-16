@@ -687,15 +687,18 @@ C controls, and abstract model assertions.
 outside selection, so no rewrite reaches it; body sharing still compares it.
 Each input is moved into its register at its type's width, zero- or
 sign-extended to the whole register (`movz`/`movs`, `movl`, `movslq`), and
-each output is stored from its register into its slot. The allocator hands out
-only rbx and r12-r15, and none a block of the routine declares: that register
+each output is stored from its register into its slot. In a routine with
+assembly the allocator hands out only rbx and r12-r15, and none a block of
+the routine declares: that register
 is marked saved instead, so the prologue stores it with a `.cfi_offset` and
 every epilogue restores it. No value therefore lives in a register a block
 names or overwrites, which is what lets inputs and outputs move directly.
 
 ## arm64 assembly implementation
 
-`Backend.Arm64` keeps source slots and assembly operands in frame homes.
+`Backend.Arm64` keeps assembly operands in frame homes, and source slots too
+except at speed in a routine without assembly, where an eligible
+nonfloating scalar slot may hold one of x19-x24 over its live interval.
 Its optimized value plan reuses nonoverlapping scalar homes and may promote
 eligible nonfloating temporaries into otherwise unused x19-x28 registers.
 A block's declared registers are excluded from that plan. Each input is loaded

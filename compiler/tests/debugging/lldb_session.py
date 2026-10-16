@@ -158,13 +158,13 @@ def run(debugger, config_path):
         # the x19 it declares given back to the caller through the CFI.
         f = continued('assembly-block', 'debug_assembly')
         caller_x19 = f.FindRegister('x19').GetValueAsUnsigned()
-        record('assembly caller x19 distinct', caller_x19 != 0x5a5a5a5a5a, True)
+        record('assembly caller x19 distinct', caller_x19 != 0x5a5a5a5a5b, True)
         process.GetSelectedThread().StepOver()
         f = frame('assembly-ready', 'debug_assembly')
         record('assembly.sum', f.FindVariable('assembly_sum').GetValueAsUnsigned(),
                0x5a5a5a5a5f)
         record('assembly.block_x19', f.FindRegister('x19').GetValueAsUnsigned(),
-               0x5a5a5a5a5a)
+               0x5a5a5a5a5b)
         caller = process.GetSelectedThread().GetFrameAtIndex(1)
         record('assembly.caller', caller.GetFunctionName(), 'main')
         record('assembly.unwound_x19', caller.FindRegister('x19').GetValueAsUnsigned(),

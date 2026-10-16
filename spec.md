@@ -18259,7 +18259,7 @@ lengthens the code of every access. Both are declined.
 
 **Pinned by** `runtime/large-array-offset-is-addressed` under a static link.
 
-### D296 — A module binding the program never uses is not emitted
+### D296 — A routine or module binding the program cannot reach is not emitted
 
 **The tour said** at [1940] that a module value is known when the program
 starts, and nothing said it is in the image whether used or not. Every
@@ -18267,23 +18267,42 @@ module binding was lowered and emitted as data into each program whose
 sources declared it, so a program importing a thousand system-call numbers
 (D294) for one of them compiled about two and a half times slower and
 emitted twice the assembly, though the linker discarded the unused data.
+Every routine of every imported module was lowered, emitted and assembled
+in the same way: a ten-line hello-world over `core/io` emitted 546
+routines, of which the linker kept 34.
 
-**Chosen:** when the entry module declares a public `main`, a module binding
-is lowered and emitted only if something uses it: a resolved reference from
-any node of any source, as a read, a write, an `addr`, another datum's
-initializer, an array length, a routine body whether called or not, or a
-generic template; its name, or `_` and its name on Mach-O, as a word in an
-`assembler.block`'s text; or an explicit link symbol or placement, a
-section, an alignment, a vector or `keep`. `public` alone is not a use.
-Every binding is still checked, so an unused declaration's errors are
-still errors. A use count can keep too much but never too little, and kept
-bindings are numbered in declaration order, so the output stays a function
-of the sources. Any compilation without a public `main` keeps every
-binding.
+**Chosen:** when the entry module declares a public `main`, a module
+routine, generic instance, evidence table or binding is lowered and emitted
+only if the program can reach it. The roots are every routine the entry
+module defines, so `main`, D232's `panic_handler` and a firmware entry
+among them; a binding with a link symbol; a C definition that is public or
+has a link symbol; a definition in a machine convention, as the process
+entry `_landin_start` is; a definition whose link name a bodyless import
+names; a routine or binding with a placement, a section, an alignment, a
+vector or `keep`; one whose name or link name, or `_` and either on
+Mach-O, is a word in an `assembler.block`'s text; and every module
+declaration that is neither a routine nor a binding, a type whose length
+names a constant among them. A reached routine or binding reaches what any
+resolved reference in it names, in any position, the generic instance any
+of its calls selects, and the conformance whose table a selection, an
+`any` construction or a `for` reads; a reached instance reaches its
+template and the conformances it receives; a reached conformance reaches
+its providers and, for an erased table, D145's parent conformances.
+`public` alone is not a use, and neither is a native routine's link
+symbol, which [1975] makes its linker identity rather than an export.
+Every declaration is still checked, so an unreached declaration's errors
+are still errors. Reachability can keep too much but never too little, and
+kept items are numbered in declaration order, so the output stays a
+function of the sources. Any compilation without a public `main` keeps
+everything.
 
 **The alternatives:** leaving it to the linker, which already discarded the
-data but not the compile time or assembly; and treating `public` as an
-export, which keeps every library table in every program.
+data and code but not the compile time or assembly; treating `public` as an
+export, which keeps every library table in every program; counting a
+routine's body as a use whether the routine is reached or not, which this
+decision first did and which kept every routine; and treating every link
+symbol as an export, which keeps the whole of `platform/posix`, whose
+public routines all carry one so none is mistaken for C's.
 
 **Pinned by** the lowering record `compiler/tests/lowering.ir`, the
 cross-host assembly manifests, and `runtime/linux-system-calls`, which
@@ -18776,9 +18795,11 @@ handled typed storage but not blocks of bytes, so copying, filling and
 comparing were loops written again in each program.
 
 **Chosen:** `mem.copy(into, source)` copies with `memmove`'s rule, from the
-last byte down when the destination starts after the source and from the
-first up otherwise, so overlap is always safe, and fails `out_of_bounds`
-before writing when `into` is shorter; a longer destination keeps its tail.
+last byte down when the destination starts inside the source after its first
+byte and from the first up when it starts at or before the source, so overlap
+is always safe; one wholly after the source may go either way. It fails
+`out_of_bounds` before writing when `into` is shorter; a longer destination
+keeps its tail.
 `mem.fill` sets every byte. `mem.compare` answers the atom set
 `less | equal | greater`, bytes unsigned and a proper prefix first.
 `mem.find` gives the first match's index or the source's length, so
@@ -18790,7 +18811,9 @@ shorter; an `i32` sign or a `bool` from `compare`; and a `missing` atom or a
 union from `find`.
 
 **Pinned by** `runtime/core-mem-blocks`, both overlaps among its oracles, on
-every target.
+every target, and `runtime/core-mem-blocks-alignment`, which holds copy, fill
+and find to a byte-at-a-time model at every alignment: their word loops on
+hosted targets, and the byte loops firmware keeps for its flash.
 
 ### D305 — A text builder writes whole pieces into the caller's buffer
 

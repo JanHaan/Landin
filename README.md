@@ -486,7 +486,15 @@ placement and optional evidence-proved specialization. The driver selects
 size/auto by default; `--optimize=none --specialize=off` selects the reference,
 and `--build-report=PATH` requests deterministic off-target JSON. Build mode
 remains independent. `./scripts/quality.sh` measures the objects a built
-compiler produces.
+compiler produces. At size and speed the simplifier forwards a slot's value
+across writes that cannot reach it and computes identical operations and
+checks within a block once, and the x86-64 and arm64 allocators give slots
+registers over their live intervals; x86-64 also keeps each routine's traps
+after its body and folds indexed accesses into scaled operands. A program
+lowers, emits and assembles only the routines it can reach, so it pays for
+the library it calls rather than everything it imports.
+[The Benchmark Game, measured](docs/benchmarks.md) compares five ports, their
+running and their compile times, with seven other languages.
 
 ## What comes next
 

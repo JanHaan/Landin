@@ -38,6 +38,9 @@ package Landin.Backend.X86_64.Dwarf is
       Cached_Plan : access function
         (Item : Landin.IR.Item_Id) return Plan_Access := null;
       Cached_Frame : access function
-        (Item : Landin.IR.Item_Id) return Frame_Access := null) return String;
+        (Item : Landin.IR.Item_Id) return Frame_Access := null;
+      Trapped : access function
+        (Item : Landin.IR.Item_Id; Value : Landin.IR.Value_Id)
+         return Boolean := null) return String;
 
 end Landin.Backend.X86_64.Dwarf;

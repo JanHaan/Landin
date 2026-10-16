@@ -909,4 +909,179 @@ package body Landin.Backend is
               (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)),
             Assembly_Registers (Of_Unit, Item, Value, Names, Facts)));
 
+   procedure Count_Uses
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Uses : out Use_Counts;
+      References : out Use_Counts)
+   is
+      use type Landin.IR.Slot_Id;
+      Has_Assembly : Boolean := False;
+
+      procedure Count (Slot : Landin.IR.Slot_Id);
+      procedure Count (Place : Landin.IR.Storage);
+
+      procedure Count (Slot : Landin.IR.Slot_Id) is
+      begin
+         if Slot /= Landin.IR.No_Slot then
+            References (Positive (Slot)) := References (Positive (Slot)) + 1;
+         end if;
+      end Count;
+
+      procedure Count (Place : Landin.IR.Storage) is
+      begin
+         case Place.Kind is
+            when Landin.IR.Frame_Slot => Count (Place.Slot);
+            when Landin.IR.Runtime_Address => Count (Place.Address);
+            when Landin.IR.Module_Datum => null;
+         end case;
+      end Count;
+   begin
+      Uses := [others => 0];
+      References := [others => 0];
+      for Index in Uses'Range loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+         begin
+            for Position in 1 .. Landin.IR.Operand_Count
+              (Of_Unit, Item, Value)
+            loop
+               declare
+                  Operand : constant Positive := Positive
+                    (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Position));
+               begin
+                  Uses (Operand) := Uses (Operand) + 1;
+               end;
+            end loop;
+            case Landin.IR.Op_Of (Of_Unit, Item, Value) is
+               when Landin.IR.Load | Landin.IR.Store =>
+                  Count (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+               when Landin.IR.Load_Field | Landin.IR.Store_Field
+                  | Landin.IR.Load_Element | Landin.IR.Store_Element =>
+                  if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value) then
+                     Count (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                  end if;
+               when Landin.IR.Copy_Array | Landin.IR.Copy_Variant =>
+                  Count (Landin.IR.Source_Of (Of_Unit, Item, Value));
+                  Count (Landin.IR.Destination_Of (Of_Unit, Item, Value));
+               when Landin.IR.Load_Variant_Tag
+                  | Landin.IR.Load_Variant_Field =>
+                  Count (Landin.IR.Source_Of (Of_Unit, Item, Value));
+               when Landin.IR.Storage_Address | Landin.IR.Place_Address
+                  | Landin.IR.Clear_Array | Landin.IR.Fill_Array
+                  | Landin.IR.Select_Variant
+                  | Landin.IR.Store_Variant_Field =>
+                  Count (Landin.IR.Destination_Of (Of_Unit, Item, Value));
+               when Landin.IR.Call | Landin.IR.Indirect_Call =>
+                  Count (Landin.IR.Failure_Slot_Of (Of_Unit, Item, Value));
+               when Landin.IR.Assembly =>
+                  Has_Assembly := True;
+               when others => null;
+            end case;
+         end;
+      end loop;
+      if Has_Assembly then
+         for Slot in References'Range loop
+            References (Slot) := References (Slot) + 2;
+         end loop;
+      end if;
+   end Count_Uses;
+
+   --  Whether Through is an indirect access by Carried, its one use.
+   function Accesses
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Through, Carried : Landin.IR.Value_Id;
+      Uses : Use_Counts) return Boolean;
+
+   function Fold_Of
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Block : Landin.IR.Block_Id;
+      Position : Positive;
+      Uses : Use_Counts;
+      References : Use_Counts) return Address_Fold
+   is
+      use type Landin.IR.Value_Id;
+      Value : constant Landin.IR.Value_Id :=
+        Landin.IR.Nth_Value (Of_Unit, Item, Block, Position);
+   begin
+      if Position < Landin.IR.Length (Of_Unit, Item, Block)
+        and then Uses (Positive (Value)) = 1
+      then
+         declare
+            Next : constant Landin.IR.Value_Id :=
+              Landin.IR.Nth_Value (Of_Unit, Item, Block, Position + 1);
+            Pair : constant Address_Fold :=
+              Carried (Of_Unit, Item, Block, Position + 1, Uses, References);
+         begin
+            if Accesses (Of_Unit, Item, Next, Value, Uses) then
+               return (Access_Value => Next, others => <>);
+            elsif Pair.Access_Value /= Landin.IR.No_Value
+              and then Landin.IR.Nth_Operand (Of_Unit, Item, Next, 1) = Value
+            then
+               return Pair;
+            end if;
+         end;
+      end if;
+      return (others => <>);
+   end Fold_Of;
+
+   function Accesses
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Through, Carried : Landin.IR.Value_Id;
+      Uses : Use_Counts) return Boolean
+   is
+      use type Landin.IR.Opcode;
+      use type Landin.IR.Value_Id;
+   begin
+      return Through /= Landin.IR.No_Value
+        and then Uses (Positive (Carried)) = 1
+        and then Landin.IR.Op_Of (Of_Unit, Item, Through)
+          in Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
+        and then Landin.IR.Nth_Operand (Of_Unit, Item, Through, 1) = Carried;
+   end Accesses;
+
+   function Carried
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Block : Landin.IR.Block_Id;
+      Position : Positive;
+      Uses : Use_Counts;
+      References : Use_Counts) return Address_Fold
+   is
+      use type Landin.IR.Opcode;
+      use type Landin.IR.Slot_Id;
+      Length : constant Natural := Landin.IR.Length (Of_Unit, Item, Block);
+      Store : constant Landin.IR.Value_Id :=
+        Landin.IR.Nth_Value (Of_Unit, Item, Block, Position);
+   begin
+      if Position + 2 > Length
+        or else Landin.IR.Op_Of (Of_Unit, Item, Store) /= Landin.IR.Store
+      then
+         return (others => <>);
+      end if;
+      declare
+         Load : constant Landin.IR.Value_Id :=
+           Landin.IR.Nth_Value (Of_Unit, Item, Block, Position + 1);
+         Through : constant Landin.IR.Value_Id :=
+           Landin.IR.Nth_Value (Of_Unit, Item, Block, Position + 2);
+         Slot : constant Landin.IR.Slot_Id :=
+           Landin.IR.Slot_Of (Of_Unit, Item, Store);
+      begin
+         if Landin.IR.Op_Of (Of_Unit, Item, Load) = Landin.IR.Load
+           and then Landin.IR.Slot_Of (Of_Unit, Item, Load) = Slot
+           and then Landin.IR.Is_Address (Of_Unit, Item, Slot)
+           and then Landin.IR.Declares (Of_Unit, Item, Slot)
+             = Landin.IR.No_Declaration
+           and then References (Positive (Slot)) = 2
+           and then Accesses (Of_Unit, Item, Through, Load, Uses)
+         then
+            return (Access_Value => Through, Store => Store, Load => Load);
+         end if;
+      end;
+      return (others => <>);
+   end Carried;
+
 end Landin.Backend;

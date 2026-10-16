@@ -405,14 +405,15 @@ not a verdict.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Eleven of them are collected in `examples.md` and
-use the language and the hosted library:
+single-construct probes. Eighteen of them are collected in `examples.md`
+and use the language and the hosted library; among them:
 
 - [sensors](fixtures/runtime/sensors/main.ldn) polls two kinds of sensor
   through `any`, grows a list of readings in an arena its caller lends, and
   skips or propagates declared failures;
 - [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) traverses one through 100,
-  prints the traditional lines and tallies their atom classifications;
+  prints the traditional lines through a buffered writer and tallies their
+  atom classifications;
 - [greatest common divisor](fixtures/runtime/greatest-common-divisor/main.ldn)
   implements Euclid's remainder reduction;
 - [insertion sort](fixtures/runtime/insertion-sort/main.ldn) sorts
@@ -426,29 +427,41 @@ use the language and the hosted library:
 - [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
   loops over caller-owned storage and a local work array;
 - [fannkuch-redux](fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn)
-  enumerates all permutations of seven values and reports the official
-  checksum and maximum flip count;
+  enumerates all permutations of the order its argument names and reports
+  the official checksum and maximum flip count for seven;
 - [Mandelbrot](fixtures/runtime/benchmark-game-mandelbrot/main.ldn) plots the
-  official 200-by-200 correctness image as a binary portable bitmap;
-- [FASTA](fixtures/runtime/benchmark-game-fasta/main.ldn) emits the official
-  1,000-unit repeated and weighted-random DNA sequences.
+  image of the size its argument names, the official 200-by-200 correctness
+  image as a binary portable bitmap;
+- [FASTA](fixtures/runtime/benchmark-game-fasta/main.ldn) emits the
+  repeated and weighted-random DNA sequences of the length its argument
+  names, the official 1,000-unit output among them;
+- [reverse-complement](fixtures/runtime/benchmark-game-reverse-complement/main.ldn)
+  reads FASTA's output on standard input into a builder growing on the heap
+  and writes each sequence's reverse complement;
+- [binary-trees](fixtures/runtime/benchmark-game-binary-trees/main.ldn)
+  allocates every node of many perfect trees through a region over the heap
+  and frees each tree by releasing its region.
 
-The examples use loops for ordinary traversal, reserve recursion for merge
-sort's divide-and-conquer step, and verify their results through status 42;
-FizzBuzz and the three Benchmark Game programs additionally have exact output
-oracles. Together they exercise aggregate parameters, fixed arrays, slices,
+The examples use loops for ordinary traversal, and reserve recursion for
+merge sort's divide-and-conquer step and binary-trees' trees. The classic
+exercises verify their results through status 42, and FizzBuzz additionally
+has an exact output oracle; the five Benchmark Game programs take their input
+as the Benchmark Game's own programs do, return 0 and are held to exact
+output oracles. Together they exercise aggregate parameters, fixed arrays, slices,
 `inout`, atoms, variants,
 pattern matching, computed indexing, valued loop exits, text literals,
 floating-point arithmetic, concepts, `any` dispatch, lent allocators, binary
 output and hosted I/O. The Benchmark Game
-ports use its published algorithms and small correctness inputs, not its
-performance inputs; they are correctness and compiler-pressure workloads, not
-competitive benchmark targets. Their generated oracles were compared byte for
-byte with the official
+ports use its published algorithms and run any input, but their fixtures run
+only the small correctness inputs, not the performance inputs; they are
+correctness and compiler-pressure workloads, not competitive benchmark
+targets. Their oracles are byte for byte the official
 [fannkuch-redux](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fannkuchredux.html),
 [Mandelbrot](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/mandelbrot.html),
-and [FASTA](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fasta.html)
-outputs.
+[FASTA](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fasta.html),
+[reverse-complement](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/revcomp.html)
+and [binary-trees](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/binarytrees.html)
+outputs, and `check.py` holds each to its official digest.
 
 The narrower runtime fixtures retain the single-construct and composition
 coverage behind those examples. On Linux x86-64, compile one from the
@@ -462,9 +475,9 @@ refine --root=. --target=linux-x86-64 --emit=exe \
 test $? -eq 42
 ```
 
-Each program returns 42 when its result is the expected one. They are runtime
+Each classic exercise returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
-checks all eleven on each full gate run. `AGENTS.md` describes the verified
+checks all eighteen on each full gate run. `AGENTS.md` describes the verified
 explanatory-only reuse exception.
 
 The test program validates its complete suite-name inventory before any

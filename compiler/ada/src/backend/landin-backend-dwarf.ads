@@ -2,6 +2,7 @@
 --  No format-specific facts flow back into those authorities.  Version four
 --  supplies the required types and location lists without a second indexed
 --  address/string representation; source matching remains D192's exact map.
+with Landin.Backend.Debug_Locations;
 with Landin.Debugging;
 with Landin.Optimization;
 with Landin.Resolution;
@@ -50,6 +51,13 @@ package Landin.Backend.Dwarf is
       Mach_O : Boolean;
       --  Older GNU RISC-V assemblers accept one ULEB operand per directive.
       Single_LEB_Operand : Boolean := False;
+      --  A backend whose slot holds its location over only part of the
+      --  routine clears the rest from the slot's availability.
+      with procedure Narrow
+        (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+         Plan : Placement; Slot : Landin.IR.Slot_Id;
+         Live : in out Landin.Backend.Debug_Locations.Flags.Vector)
+        is null;
    function Sections
      (Of_Unit : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -63,6 +71,11 @@ package Landin.Backend.Dwarf is
       Cached_Plan : access function
         (Item : Landin.IR.Item_Id) return Placement_Access := null;
       Cached_Frame : access function
-        (Item : Landin.IR.Item_Id) return Frame_Access := null) return String;
+        (Item : Landin.IR.Item_Id) return Frame_Access := null;
+      --  A backend that lays traps out after a routine's body names the
+      --  values that have them, between the labels `trap` and `trapped`.
+      Trapped : access function
+        (Item : Landin.IR.Item_Id; Value : Landin.IR.Value_Id)
+         return Boolean := null) return String;
 
 end Landin.Backend.Dwarf;

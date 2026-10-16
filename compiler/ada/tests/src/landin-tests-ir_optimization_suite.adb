@@ -70,6 +70,9 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Constant_Shifts (Item : in out Landin.Testing.Context);
    procedure Effect_Preservation (Item : in out Landin.Testing.Context);
    procedure Overwritten_Local_Stores (Item : in out Landin.Testing.Context);
+   procedure Forwarding_Through_Writes
+     (Item : in out Landin.Testing.Context);
+   procedure Block_Value_Numbering (Item : in out Landin.Testing.Context);
    procedure Memory_Events (Item : in out Landin.Testing.Context);
    procedure Static_Dispatch (Item : in out Landin.Testing.Context);
    procedure Exposed_Evidence (Item : in out Landin.Testing.Context);
@@ -289,7 +292,7 @@ package body Landin.Tests.IR_Optimization_Suite is
                                    Opt.Size);
             Landin.Testing.Check_Equal
               (Item, Count (Code, IR.Store) + Removed, Before,
-               "only unread, overwritten local stores disappear");
+               "only overwritten stores and unread temporaries disappear");
             if Trap then
                Landin.Testing.Check_Equal
                  (Item, Count (Code, IR.Divide), 1,
@@ -311,12 +314,21 @@ package body Landin.Tests.IR_Optimization_Suite is
         ("public f: () -> (r: f32) = "
          & "mut x: f32 = 1.0 x = 2.0 r = x end f", 1,
          Unused_Number => True);
+      --  A binary operation carries its left operand through a compiler
+      --  temporary.  Once its load is forwarded, the temporary is unread
+      --  and its store disappears too; declared slots keep theirs.
       Check_Stores
         ("public f: (d: i32) -> (r: i32) = "
-         & "mut x: i32 = 10 / d x = 2 r = x end f", 1, True);
+         & "mut x: i32 = 10 / d x = 2 r = x end f", 2, True);
       Check_Stores
         ("public f: () -> (r: i32) = "
-         & "mut x: i32 = 1 y: i32 = x x = 2 r = y + x end f", 0);
+         & "mut x: i32 = 1 y: i32 = x x = 2 r = y + x end f", 1);
+      Check_Stores
+        ("public f: (a: f64) -> (r: f64) = "
+         & "x: f64 = a * 2.0 r = x * x end f", 2);
+      Check_Stores
+        ("public f: (a: ptr u8, b: ptr u8) -> (r: bool) = "
+         & "r = a == b end f", 1);
       Check_Stores
         ("public f: () -> (r: i32) = "
          & "mut x: i32 = 1 p: ptr mut i32 = addr x "
@@ -325,6 +337,97 @@ package body Landin.Tests.IR_Optimization_Suite is
         ("public f: (flag: bool) -> (r: i32) = "
          & "mut x: i32 = 1 if flag then x = 2 end if r = x end f", 0);
    end Overwritten_Local_Stores;
+
+   procedure Forwarding_Through_Writes
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Loads (Source : String; Loads : Natural; Why : String);
+
+      procedure Check_Loads (Source : String; Loads : Natural; Why : String)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      begin
+         Lower (Item, Work, Source);
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+            Opt.Size);
+         Landin.Testing.Check_Equal
+           (Item, Count (Landin.Stages.Code (Work).all, IR.Load), Loads, Why);
+      end Check_Loads;
+   begin
+      --  B is never addressed, so the call cannot write it and its stored
+      --  sum reaches the last line.  A is passed inout and is reloaded.
+      --  D is loaded at each of its three references, because a load is
+      --  never stretched over another; bump reads its address twice.
+      Check_Loads
+        ("bump: (inout x: i32) -> none = x = x + 1 end bump "
+         & "public f: (d: i32) -> (r: i32) = "
+         & "mut a: i32 = d mut b: i32 = d + 2 bump(a) r = a + b + d end f",
+         6, "only the addressed slot is reloaded after a call");
+      --  A store through a pointer cannot reach a slot nobody addressed:
+      --  B is not loaded at all.  D is loaded twice, P and its carrier once.
+      Check_Loads
+        ("public f: (p: ptr mut i32, d: i32) -> (r: i32) = "
+         & "b: i32 = d + 1 p.val = 0 r = b + d end f",
+         4, "a store through a pointer keeps unaddressed values");
+   end Forwarding_Through_Writes;
+
+   procedure Block_Value_Numbering (Item : in out Landin.Testing.Context) is
+      procedure Check_Count
+        (Source : String; Op : IR.Opcode; Expected : Natural; Why : String);
+
+      procedure Check_Count
+        (Source : String; Op : IR.Opcode; Expected : Natural; Why : String)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      begin
+         Lower (Item, Work, Source);
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+            Opt.Size);
+         Landin.Testing.Check_Equal
+           (Item, Count (Landin.Stages.Code (Work).all, Op), Expected, Why);
+      end Check_Count;
+   begin
+      --  The second and third products are the first one's value.
+      Check_Count
+        ("public f: (a: i32, b: i32) -> (r: i32) = "
+         & "r = a * b + a * b - a * b end f",
+         IR.Multiply, 1, "identical products are computed once");
+      --  [1960]: the second indexing of the same element repeats a check
+      --  the first already passed, in the same block.
+      Check_Count
+        ("public f: (inout v: [4]u8, i: usize) -> none = "
+         & "saved: u8 = v[i] v[i] = saved + 1 end f",
+         IR.Storage_Address, 1, "a passed bounds check is not repeated");
+      --  Another block's check proves nothing here.
+      Check_Count
+        ("public f: (inout v: [4]u8, i: usize, flag: bool) -> none = "
+         & "saved: u8 = v[i] if flag then v[i] = saved end if end f",
+         IR.Storage_Address, 2, "value numbering stays in its block");
+      --  D187: an unchecked sum proves nothing for a later checked one,
+      --  so the two are numbered apart.
+      Check_Count
+        ("public f: (a: i32, b: i32) -> (r: i32) = "
+         & "mut x: i32 = 0 unchecked begin x = a + b end unchecked "
+         & "r = x + (a + b) end f",
+         IR.Add, 3, "an unchecked operation proves no check");
+      --  Integer identities, and none for a float.
+      Check_Count
+        ("public f: (a: i32) -> (r: i32) = r = (a + 0) * 1 end f",
+         IR.Add, 0, "adding zero is the operand");
+      Check_Count
+        ("public f: (a: i32) -> (r: bool) = r = a == a end f",
+         IR.Equal_To, 0, "an integer equals itself");
+      Check_Count
+        ("public f: (a: f64) -> (r: bool) = r = a == a end f",
+         IR.Equal_To, 1, "a float NaN does not equal itself");
+      Check_Count
+        ("public f: (a: f64) -> (r: f64) = r = a + 0.0 end f",
+         IR.Add, 1, "a float -0.0 plus 0.0 is not -0.0");
+   end Block_Value_Numbering;
 
    procedure Static_Dispatch (Item : in out Landin.Testing.Context) is
    begin
@@ -1671,6 +1774,12 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "constant shifts", Constant_Shifts'Access);
       Landin.Testing.Register
         (Into, "ir opt", "effect preservation", Effect_Preservation'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "block value numbering",
+         Block_Value_Numbering'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "forwarding through writes",
+         Forwarding_Through_Writes'Access);
       Landin.Testing.Register
         (Into, "ir opt", "overwritten local stores",
          Overwritten_Local_Stores'Access);

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a quotient or remainder by a known divisor is the one by the same divisor known only at run time, at every width and signedness and for both signs of divisor
+constructs: 0300, 0310, 0330, 1130, 1800, 1890, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

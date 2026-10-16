@@ -43,6 +43,48 @@ package body Landin.Stages.Checking.References is
    use type Ty.Type_Kind;
    use type Ty.Magnitude;
 
+   --  The containers below hold nothing that depends on the routine being
+   --  checked, so they are declared here and elaborated once, not once for
+   --  every routine Check_Function is called for.
+
+   --  A routine's nameable declarations, collected and numbered by
+   --  Check_Function's Locals.
+   package Local_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Res.Declaration_Id);
+
+   package Local_Sorting is new Local_Vectors.Generic_Sorting;
+
+   package Local_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Res.Declaration_Id, Element_Type => Positive);
+
+   --  The lexical cleanup stack, kept the way
+   --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
+   --  syntax, and the call is evaluated on each edge that runs it with
+   --  the origin facts of that edge.
+   type Cleanup_Entry is record
+      Kind   : Landin.Cleanup.Cleanup_Kind := Landin.Cleanup.Deferred_Call;
+      Call   : Syn.Node_Id := Syn.No_Node;
+      Active : Boolean := True;
+   end record;
+
+   package Cleanup_Entries is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Cleanup_Entry);
+
+   --  Where the traversal is: the block being processed, the statement
+   --  within it, and the loop whose body that block is, if any.  The
+   --  borrow check reads the continuation of a call off this stack.
+   --  Labelled marks the body of [1180]'s labelled bare block, whose
+   --  `break` edges continue after its `end`.
+   type Position_Frame is record
+      Block    : Syn.Node_Id := Syn.No_Node;
+      Index    : Natural := 0;
+      Of_Loop  : Syn.Node_Id := Syn.No_Node;
+      Labelled : Boolean := False;
+   end record;
+
+   package Position_Frames is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Position_Frame);
+
    procedure Check_Function
      (Context       : in out Compilation;
       Of_Tree       : Syn.Tree;
@@ -90,14 +132,6 @@ package body Landin.Stages.Checking.References is
       --  program, and a snapshot copies what this function can see.  Every
       --  loop over them therefore still visits declarations in identity
       --  order, and the first one a loop finds is the one it found before.
-      package Local_Vectors is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Res.Declaration_Id);
-
-      package Local_Sorting is new Local_Vectors.Generic_Sorting;
-
-      package Local_Maps is new Ada.Containers.Ordered_Maps
-        (Key_Type => Res.Declaration_Id, Element_Type => Positive);
-
       function Collect_Locals return Local_Vectors.Vector;
 
       function Collect_Locals return Local_Vectors.Vector is
@@ -360,11 +394,14 @@ package body Landin.Stages.Checking.References is
       --  that joining with itself would change: Join drops an untracked
       --  alternative beside a frame or parameter one, so where two tables
       --  share such a row their join still has to rewrite it.
+      type Stored_Fact;
+      type Fact_Access is access Stored_Fact;
       type Stored_Fact is record
          Fact      : Origin_Fact := No_Origin;
          Unsettled : Boolean := False;
+         --  The fact the arena owned before this one; see Arenas.
+         Owned_After : Fact_Access := null;
       end record;
-      type Fact_Access is access Stored_Fact;
 
       type Table_Node;
       type Table_Access is access Table_Node;
@@ -375,6 +412,8 @@ package body Landin.Stages.Checking.References is
       --  a shared subtree with itself returns it untouched when it is 0.
       type Table_Node (Leaf : Boolean) is record
          Unsettled : Natural := 0;
+         --  The node the arena owned before this one; see Arenas.
+         Owned_After : Table_Access := null;
          case Leaf is
             when True =>
                Facts : Fact_Slots;
@@ -388,17 +427,14 @@ package body Landin.Stages.Checking.References is
       procedure Free is new Ada.Unchecked_Deallocation
         (Object => Table_Node, Name => Table_Access);
 
-      package Fact_Lists is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Fact_Access);
-      package Node_Lists is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Table_Access);
-
       --  Every node and fact made for this function, freed when it is done,
-      --  including on exceptional exits.
+      --  including on exceptional exits.  Each is chained to the one made
+      --  before it rather than held in a container, so owning one allocates
+      --  nothing and the arena instantiates no container per routine.
       package Arenas is
          type Owner is new Ada.Finalization.Limited_Controlled with record
-            Facts : Fact_Lists.Vector;
-            Nodes : Node_Lists.Vector;
+            Facts : Fact_Access := null;
+            Nodes : Table_Access := null;
          end record;
          overriding procedure Finalize (Value : in out Owner);
       end Arenas;
@@ -406,14 +442,22 @@ package body Landin.Stages.Checking.References is
       package body Arenas is
          overriding procedure Finalize (Value : in out Owner) is
          begin
-            for Item of Value.Facts loop
-               Free (Item);
+            while Value.Facts /= null loop
+               declare
+                  Item : Fact_Access := Value.Facts;
+               begin
+                  Value.Facts := Item.Owned_After;
+                  Free (Item);
+               end;
             end loop;
-            for Item of Value.Nodes loop
-               Free (Item);
+            while Value.Nodes /= null loop
+               declare
+                  Item : Table_Access := Value.Nodes;
+               begin
+                  Value.Nodes := Item.Owned_After;
+                  Free (Item);
+               end;
             end loop;
-            Value.Facts.Clear;
-            Value.Nodes.Clear;
          end Finalize;
       end Arenas;
 
@@ -447,9 +491,10 @@ package body Landin.Stages.Checking.References is
 
       function Kept (Fact : Origin_Fact) return Fact_Access is
          Made : constant Fact_Access :=
-           new Stored_Fact'(Fact => Fact, Unsettled => Is_Unsettled (Fact));
+           new Stored_Fact'(Fact => Fact, Unsettled => Is_Unsettled (Fact),
+                            Owned_After => Arena.Facts);
       begin
-         Arena.Facts.Append (Made);
+         Arena.Facts := Made;
          return Made;
       end Kept;
 
@@ -458,7 +503,8 @@ package body Landin.Stages.Checking.References is
       function Node (Made : Table_Node) return Table_Access is
          Result : constant Table_Access := new Table_Node'(Made);
       begin
-         Arena.Nodes.Append (Result);
+         Result.Owned_After := Arena.Nodes;
+         Arena.Nodes := Result;
          return Result;
       end Node;
 
@@ -472,12 +518,14 @@ package body Landin.Stages.Checking.References is
          Nothing : constant Fact_Access := Kept (No_Origin);
          Result : Table_Access :=
            Node ((Leaf => True, Facts => [others => Nothing],
-                  Unsettled => Fanout * Count_Of (Nothing)));
+                  Unsettled => Fanout * Count_Of (Nothing),
+                  Owned_After => null));
          Span : Positive := 1;
       begin
          while Span < Root_Span loop
             Result := Node ((Leaf => False, Children => [others => Result],
-                             Unsettled => Fanout * Result.Unsettled));
+                             Unsettled => Fanout * Result.Unsettled,
+                             Owned_After => null));
             Span := Span * Fanout;
          end loop;
          return Result;
@@ -664,19 +712,7 @@ package body Landin.Stages.Checking.References is
         is (Local_Of (Id) /= 0 and then Fact.Derives (Local_Of (Id)));
 
 
-      --  The lexical cleanup stack, kept the way
-      --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
-      --  syntax, and the call is evaluated on each edge that runs it with
-      --  the origin facts of that edge.
-      type Cleanup_Entry is record
-         Kind   : Landin.Cleanup.Cleanup_Kind := Landin.Cleanup.Deferred_Call;
-         Call   : Syn.Node_Id := Syn.No_Node;
-         Active : Boolean := True;
-      end record;
-
-      package Cleanup_Entries is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Cleanup_Entry);
-
+      --  The lexical cleanup stack; see Cleanup_Entry.
       Cleanup_Stack : Cleanup_Entries.Vector;
 
       --  Set while the cleanups of an edge that leaves the function run:
@@ -803,21 +839,7 @@ package body Landin.Stages.Checking.References is
          Checkpoint (Published);
       end Push;
 
-      --  Where the traversal is: the block being processed, the statement
-      --  within it, and the loop whose body that block is, if any.  The
-      --  borrow check reads the continuation of a call off this stack.
-      --  Labelled marks the body of [1180]'s labelled bare block, whose
-      --  `break` edges continue after its `end`.
-      type Position_Frame is record
-         Block    : Syn.Node_Id := Syn.No_Node;
-         Index    : Natural := 0;
-         Of_Loop  : Syn.Node_Id := Syn.No_Node;
-         Labelled : Boolean := False;
-      end record;
-
-      package Position_Frames is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Position_Frame);
-
+      --  Where the traversal is; see Position_Frame.
       Positions : Position_Frames.Vector;
 
       --  Join another table into one: the table becomes the rows' join.

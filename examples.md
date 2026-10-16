@@ -3,8 +3,10 @@
 These are complete Landin programs that the bootstrap compiler accepts,
 lowers, emits, links and runs today on Linux x86-64 and Darwin arm64. They are the same sources
 the runtime suite executes. Each returns 42 only after checking its result,
-except the word count and the line numberer, tools that read their standard
-input and return 0.
+except the Benchmark Game ports, which take their input as an argument or
+on standard input as the Benchmark Game's own programs do, and the word
+count and the line numberer, tools that read their standard input; those
+return 0, and their fixtures hold the output they write.
 
 The implemented hosted language includes aggregate parameters and results,
 fixed arrays [0520], slices [0570], variants [0680], pattern matching [1210],
@@ -27,17 +29,26 @@ refine compile main.ldn -o fizzbuzz
 test $? -eq 42
 ```
 
-FizzBuzz writes its conventional one hundred lines, and the three Benchmark
-Game programs write their official correctness output; the next seven programs
-print nothing. Status 42 means the checks in `main` passed, and any other
-returned status makes the runtime fixture fail. The word count prints the
-totals for whatever its standard input holds and returns 0, and its fixture
-gives it an input of its own and holds the line it prints; the line numberer
-does the same with the lines it numbers. The directory
-listing builds a directory where it runs, prints its listing, removes it
-and returns 42, the shell runner prints its report of a shell it ran
-and returns 42, and the echo prints what came back over loopback and
-returns 42. The gate checks all nine output oracles and all sixteen
+FizzBuzz writes its conventional one hundred lines, and the next seven
+programs print nothing. Status 42 means the checks in `main` passed, and any
+other returned status makes the runtime fixture fail. The five Benchmark
+Game programs write their official correctness output and return 0: the
+fixture names the argument, or the standard input, the Benchmark Game
+specifies for its correctness check, and holds the exact output. A
+Benchmark Game program needs its argument, so FASTA's run is
+
+```sh
+refine compile main.ldn -o fasta
+./fasta 1000
+```
+
+The word count prints the totals for whatever its standard input holds and
+returns 0, and its fixture gives it an input of its own and holds the line it
+prints; the line numberer does the same with the lines it numbers. The
+directory listing builds a directory where it runs, prints its listing,
+removes it and returns 42, the shell runner prints its report of a shell it
+ran and returns 42, and the echo prints what came back over loopback and
+returns 42. The gate checks all eleven output oracles and all eighteen
 programs on each full gate run, on Linux x86-64 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
 exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
@@ -137,7 +148,7 @@ end main
 
 ## FizzBuzz
 
-FizzBuzz is the familiar remainder-and-branching exercise from [Rosetta Code](https://rosettacode.org/wiki/FizzBuzz). The classifier remains a small pure function. A separate hosted presentation layer traverses one through 100, writes contextual text literals through `core/io`, and formats the ordinary numbers with `core/text`; the fixture checks both its exact output and its aggregate tally.
+FizzBuzz is the familiar remainder-and-branching exercise from [Rosetta Code](https://rosettacode.org/wiki/FizzBuzz). The classifier remains a small pure function. A separate hosted presentation layer traverses one through 100, puts contextual text literals into a buffered writer from `core/io`, and appends the ordinary numbers to a `core/text` builder; the hundred lines leave in two writes rather than a hundred. The fixture checks both its exact output and its aggregate tally.
 
 Fixture source: `compiler/tests/fixtures/runtime/fizzbuzz/main.ldn`.
 
@@ -179,41 +190,51 @@ tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
     end match
 end tally
 
-write_number: (host: hosted.system, stream: io.file, value: u32)
+--  A number's line: its decimal digits and a newline, through a builder
+--  over a few bytes of the caller's frame.
+write_number: (inout out: io.buffered_writer(hosted.system), value: u32)
               -> none ! io.io_failed | text.no_space =
-    mut line: [4]u8 = zeroed
-    mut used: usize = try text.write_u32(line[0..<4], 0, value)
-    used = try text.write_byte(line[0..<4], used, 10)
-    try io.write(host, stream, line[0..<used])
+    mut room: [16]u8 = zeroed
+    mut line := text.over(room)
+    try text.append_u32(line, value)
+    try text.append_byte(line, 10)
+    try io.put(out, text.used(line))
 end write_number
 
-write_line: (host: hosted.system, stream: io.file,
+write_line: (inout out: io.buffered_writer(hosted.system),
              kind: fizzbuzz_kind, value: u32)
             -> none ! io.io_failed | text.no_space =
     match kind
-        fizz: try io.write(host, stream, "Fizz\n")
-        buzz: try io.write(host, stream, "Buzz\n")
-        fizz_buzz: try io.write(host, stream, "FizzBuzz\n")
-        number: try write_number(host, stream, value)
+        fizz: try io.put(out, "Fizz\n")
+        buzz: try io.put(out, "Buzz\n")
+        fizz_buzz: try io.put(out, "FizzBuzz\n")
+        number: try write_number(out, value)
     end match
 end write_line
 
-run: (host: hosted.system)
+run: (inout out: io.buffered_writer(hosted.system))
      -> (result: counts) ! io.io_failed | text.no_space =
     result = zeroed
-    stream: io.file = io.out(host)
     first: u32 = 1
     last: u32 = 100
     for value in first..last do
         kind: fizzbuzz_kind = classify(value)
         tally(result, kind)
-        try write_line(host, stream, kind, value)
+        try write_line(out, kind, value)
     end for
+    try io.flush(out)
 end run
 
+--  The lines gather in a buffer and are written when it fills and at the
+--  end; a `defer` still flushes what is waiting on any other way out.
 public main: () -> (code: i32) =
     host := hosted.host()
-    result := run(host) else (problem)
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    result := run(out) else (problem)
         _ = problem
         code = 1
         return
@@ -572,26 +593,37 @@ end main
 
 This is a direct single-threaded port of the Benchmark Game's
 [fannkuch-redux](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fannkuchredux.html)
-algorithm. It uses the official correctness input, seven, and enumerates every
-permutation through fixed caller-owned arrays. The output oracle pins both the
-signed checksum, 228, and the maximum flip count, 16. The performance input,
-twelve, is deliberately not part of the test gate.
+algorithm. Like the Benchmark Game's own programs it takes its input, the
+order, as its argument, and enumerates every permutation through fixed
+caller-owned arrays of sixteen, the largest order it accepts. `text.format`
+writes the signed checksum and the maximum flip count. The fixture runs the
+official correctness input, seven, and its output oracle pins both the
+checksum, 228, and the count, 16. The performance input, twelve, is
+deliberately not part of the test gate:
+
+```sh
+refine compile --optimize speed main.ldn -o fannkuch-redux
+./fannkuch-redux 12
+```
 
 Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn`.
 
 ```landin
 --  A direct single-threaded implementation of the Benchmark Game workload.
---  Its correctness input is seven; the larger performance input is not a gate.
+--  The order is the program's argument: seven for the correctness output,
+--  twelve for the performance run, and never more than sixteen.
 import core/io
 import core/text
 import hosted/io as hosted
+
+bad_size: atom
 
 score: type = struct
     checksum: i32
     maximum: u32
 end score
 
-reverse_prefix: (inout values: [7]u8) -> none =
+reverse_prefix: (inout values: [16]u8) -> none =
     mut left: usize = 0
     mut right: usize = usize(values[0])
     while left < right do
@@ -603,11 +635,15 @@ reverse_prefix: (inout values: [7]u8) -> none =
     end while
 end reverse_prefix
 
-fannkuch: () -> (result: score) =
-    mut order: [7]u8 = [0, 1, 2, 3, 4, 5, 6]
-    mut rotations: [7]usize = zeroed
-    mut depth: usize = lenof order
+fannkuch: (n: usize) -> (result: score) =
+    mut order: [16]u8 = zeroed
+    mut rotations: [16]usize = zeroed
+    mut depth: usize = n
     mut permutation_index: u32 = 0
+    first: usize = 0
+    for at in first..<n do
+        order[at] = u8(at)
+    end for
     result = zeroed
 
     loop do
@@ -617,7 +653,7 @@ fannkuch: () -> (result: score) =
         end while
 
         if order[0] <> 0 then
-            mut permutation: [7]u8 = order
+            mut permutation: [16]u8 = order
             mut flips: u32 = 0
             loop do
                 break when permutation[0] == 0
@@ -636,17 +672,17 @@ fannkuch: () -> (result: score) =
         end if
 
         loop do
-            if depth == lenof order then
+            if depth == n then
                 return
             end if
 
-            first: u8 = order[0]
+            moved: u8 = order[0]
             mut at: usize = 0
             while at < depth do
                 order[at] = order[at + 1]
                 inc at
             end while
-            order[depth] = first
+            order[depth] = moved
             dec rotations[depth]
             break when rotations[depth] > 0
             inc depth
@@ -655,36 +691,46 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (host: hosted.system, stream: io.file, value: u32)
-           -> none ! io.io_failed | text.no_space =
-    mut digits: [10]u8 = zeroed
-    used: usize = try text.write_u32(digits[0..<10], 0, value)
-    try io.write(host, stream, digits[0..<used])
-end write_u32
+--  The order named by the first argument, one to sixteen.
+order_size: (host: hosted.system)
+            -> (n: usize)
+            ! io.no_argument | text.invalid_number | text.number_overflow
+            | bad_size =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+    fail bad_size when n < 1 or n > 16
+end order_size
 
-write_score: (host: hosted.system, value: score)
-             -> none ! io.io_failed | text.no_space =
-    stream: io.file = io.out(host)
-    try write_u32(host, stream, u32(value.checksum))
-    try io.write(host, stream, "\nPfannkuchen(7) = ")
-    try write_u32(host, stream, value.maximum)
-    try io.write(host, stream, "\n")
-end write_score
+report: (host: hosted.system, n: usize, value: score)
+        -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [64]u8 = zeroed
+    mut line := text.over(storage)
+    try text.format(line, "{}\nPfannkuchen({}) = {}\n",
+                    [any(addr value.checksum), any(addr n),
+                     any(addr value.maximum)])
+    try io.write(host, io.out(host), text.used(line))
+end report
 
 public main: () -> (code: i32) =
-    value: score = fannkuch()
     host := hosted.host()
-    write_score(host, value) else (problem)
+    code = 1
+    n := order_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host),
+                 "usage: fannkuch-redux N, where N is 1 to 16\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if value.checksum == 228 and value.maximum == 16 then
-        code = 42
-    else
-        code = 1
-    end if
+    value: score = fannkuch(n)
+    report(host, n, value) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
 end main
 ```
 
@@ -693,17 +739,25 @@ end main
 The Benchmark Game's
 [Mandelbrot](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/mandelbrot.html)
 workload plots the complex rectangle from `-1.5-i` through `0.5+i`. This port
-uses the official 200-by-200 correctness input, performs the scalar `f64`
-iteration in its specified order, packs membership bits most-significant
-first, and writes the exact 5,011-byte binary PBM result. Its internal count of
-15,899 set pixels gives failures a useful scalar symptom as well.
+takes the image's size as its argument, performs the scalar `f64` iteration in
+its specified order, packs membership bits most-significant first into a row
+allocated from the hosted heap, and writes each row through a buffered writer.
+A width that is not a multiple of eight pads each row's last byte with zero
+bits, as PBM requires. The fixture runs the official 200-by-200 correctness
+input and holds the exact 5,011-byte binary PBM result; the performance input
+is 16,000.
 
 Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.ldn`.
 
 ```landin
---  The Benchmark Game correctness image is 200 by 200.  Each membership bit
---  is packed most-significant first and written in binary PBM format.
+--  The image's size is the program's argument: 200 for the correctness
+--  output, 16000 for the performance run.  Each membership bit is packed
+--  most-significant first and written in binary PBM format; a row whose
+--  width is not a multiple of eight pads its last byte with zero bits.
 import core/io
+import core/mem
+import core/text
+import hosted/heap
 import hosted/io as hosted
 
 in_set: (real_coordinate: f64, imaginary_coordinate: f64)
@@ -726,53 +780,89 @@ in_set: (real_coordinate: f64, imaginary_coordinate: f64)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (host: hosted.system) -> (members: u32) ! io.io_failed =
-    size: usize = 200
-    coordinate_size: f64 = f64(size)
-    bytes_per_row: usize = size / 8
-    bits_per_byte: usize = 8
+--  Pack one row of the N by N image into ROW, eight pixels to a byte.
+pack_row: (n: usize, imaginary_coordinate: f64, row: []mut u8) -> none =
+    coordinate_size: f64 = f64(n)
     first: usize = 0
-    mut real_coordinates: [200]f64 = zeroed
-    stream: io.file = io.out(host)
-    mut row_bytes: [25]u8 = zeroed
-    members = 0
-    for pixel_x in first..<size do
-        real_coordinates[pixel_x] = 2.0 * f64(pixel_x) / coordinate_size - 1.5
-    end for
-
-    try io.write(host, stream, "P4\n200 200\n")
-    for row in first..<size do
-        imaginary_coordinate: f64 = 2.0 * f64(row) / coordinate_size - 1.0
-        for byte_column in first..<bytes_per_row do
-            mut packed: u8 = 0
-            for offset in first..<bits_per_byte do
-                packed <<= 1
-                pixel_x: usize = byte_column * bits_per_byte + offset
-                if in_set(real_coordinates[pixel_x], imaginary_coordinate) then
-                    packed |= 1
-                    inc members
-                end if
-            end for
-            row_bytes[byte_column] = packed
+    for byte_column in first..<lenof row do
+        start: usize = byte_column * 8
+        mut bits: usize = n - start
+        if bits > 8 then
+            bits = 8
+        end if
+        mut packed: u8 = 0
+        for offset in first..<bits do
+            packed <<= 1
+            pixel_x: usize = start + offset
+            real_coordinate: f64 = 2.0 * f64(pixel_x) / coordinate_size - 1.5
+            if in_set(real_coordinate, imaginary_coordinate) then
+                packed |= 1
+            end if
         end for
-        output: []u8 = row_bytes[0..<lenof row_bytes]
-        try io.write(host, stream, output)
+        row[byte_column] = packed << u8(8 - bits)
+    end for
+end pack_row
+
+render: (inout out: io.buffered_writer(hosted.system), n: usize, row: []mut u8)
+        -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut room: [48]u8 = zeroed
+    mut header := text.over(room)
+    try text.format(header, "P4\n{} {}\n", [any(addr n), any(addr n)])
+    try io.put(out, text.used(header))
+
+    coordinate_size: f64 = f64(n)
+    first: usize = 0
+    for y in first..<n do
+        pack_row(n, 2.0 * f64(y) / coordinate_size - 1.0, row)
+        try io.put(out, row)
     end for
 end render
 
+--  The image size named by the first argument.
+image_size: (host: hosted.system)
+            -> (n: usize)
+            ! io.no_argument | text.invalid_number | text.number_overflow =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+end image_size
+
 public main: () -> (code: i32) =
     host := hosted.host()
-    members := render(host) else (problem)
+    memory := heap.host()
+    code = 1
+    n := image_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host), "usage: mandelbrot N\n") else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if members == 15899 then
-        code = 42
-    else
-        code = 1
-    end if
+    mut row := mem.new_bytes(memory, (n + 7) / 8) else (problem)
+        _ = problem
+        io.write(host, io.err(host), "mandelbrot: out of memory\n")
+            else (ignored)
+            _ = ignored
+        end
+        return
+    end
+    defer mem.delete_bytes(memory, row)
+
+    mut storage: [16384]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    render(out, n, mem.bytes(row)) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
 end main
 ```
 
@@ -781,18 +871,23 @@ end main
 The Benchmark Game's
 [FASTA](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fasta.html)
 workload combines cyclic copying with weighted random selection. This port
-uses the official correctness input, 1,000: it writes 2,000 ALU nucleotides,
-3,000 IUB symbols, and 5,000 human-frequency symbols in 60-byte lines. It
-builds both cumulative-probability tables at runtime, uses the specified naïve
-LCG once per random nucleotide, and checks its final seed as well as the exact
-10,245-byte output.
+takes the sequence length as its argument; for the official correctness input,
+1,000, it writes 2,000 ALU nucleotides, 3,000 IUB symbols, and 5,000
+human-frequency symbols in 60-byte lines, and the fixture holds the exact
+10,245-byte output. It builds both cumulative-probability tables at runtime,
+lending the arrays whole to slice parameters [0570], and uses the specified
+naïve LCG once per random nucleotide. The lines gather in a 16 KiB buffered
+writer, so the performance input, 25,000,000, writes its 254 MB in large
+pieces rather than four million lines.
 
 Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn`.
 
 ```landin
---  The official correctness input is 1000.  The probability search remains
+--  The sequence length is the program's argument: 1000 for the correctness
+--  output, 25000000 for the performance run.  The probability search remains
 --  linear and the naïve LCG advances once for every random nucleotide.
 import core/io
+import core/text
 import hosted/io as hosted
 
 alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
@@ -842,7 +937,7 @@ select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
     end for
 end select_symbol
 
-write_repeated: (host: hosted.system, stream: io.file,
+write_repeated: (inout out: io.buffered_writer(hosted.system),
                  source: []u8, count: usize) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut emitted: usize = 0
@@ -859,13 +954,12 @@ write_repeated: (host: hosted.system, stream: io.file,
             end if
         end for
         line[width] = 10
-        output: []u8 = line[0..<width + 1]
-        try io.write(host, stream, output)
+        try io.put(out, line[0..<width + 1])
         emitted += width
     end while
 end write_repeated
 
-write_random: (host: hosted.system, stream: io.file, symbols: []u8,
+write_random: (inout out: io.buffered_writer(hosted.system), symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
@@ -879,49 +973,375 @@ write_random: (host: hosted.system, stream: io.file, symbols: []u8,
             line[at] = select_symbol(symbols, cumulative, random)
         end for
         line[width] = 10
-        output: []u8 = line[0..<width + 1]
-        try io.write(host, stream, output)
+        try io.put(out, line[0..<width + 1])
         emitted += width
     end while
 end write_random
 
-run: (host: hosted.system) -> (final_seed: u32) ! io.io_failed =
-    sample_size: usize = 1000
-    stream: io.file = io.out(host)
+--  The three sequences for N, written through OUT.
+fasta: (inout out: io.buffered_writer(hosted.system), n: usize)
+       -> none ! io.io_failed =
     mut seed: u32 = 42
     mut iub: [15]f64 = iub_probabilities
     mut human: [4]f64 = human_probabilities
-    iub_write: []mut f64 = iub[0..<lenof iub]
-    human_write: []mut f64 = human[0..<lenof human]
-    make_cumulative(iub_write)
-    make_cumulative(human_write)
-    iub_read: []f64 = iub[0..<lenof iub]
-    human_read: []f64 = human[0..<lenof human]
+    make_cumulative(iub)
+    make_cumulative(human)
 
-    try io.write(host, stream, ">ONE Homo sapiens alu\n")
-    try write_repeated(host, stream, alu, sample_size * 2)
-    try io.write(host, stream, ">TWO IUB ambiguity codes\n")
-    try write_random(host, stream, iub_symbols, iub_read,
-                     seed, sample_size * 3)
-    try io.write(host, stream, ">THREE Homo sapiens frequency\n")
-    try write_random(host, stream, human_symbols, human_read,
-                     seed, sample_size * 5)
-    final_seed = seed
-end run
+    try io.put(out, ">ONE Homo sapiens alu\n")
+    try write_repeated(out, alu, n * 2)
+    try io.put(out, ">TWO IUB ambiguity codes\n")
+    try write_random(out, iub_symbols, iub, seed, n * 3)
+    try io.put(out, ">THREE Homo sapiens frequency\n")
+    try write_random(out, human_symbols, human, seed, n * 5)
+end fasta
+
+--  The sequence length named by the first argument.
+sequence_size: (host: hosted.system)
+               -> (n: usize)
+               ! io.no_argument | text.invalid_number | text.number_overflow =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+end sequence_size
 
 public main: () -> (code: i32) =
     host := hosted.host()
-    final_seed := run(host) else (problem)
+    code = 1
+    n := sequence_size(host) else (problem)
         _ = problem
-        code = 1
+        io.write(host, io.err(host), "usage: fasta N\n") else (ignored)
+            _ = ignored
+        end
         return
     end
 
-    if final_seed == 111466 then
-        code = 42
-    else
-        code = 1
+    mut storage: [16384]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    fasta(out, n) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main
+```
+
+## Benchmark Game reverse-complement
+
+The Benchmark Game's
+[reverse-complement](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/revcomp.html)
+workload reads FASTA on its standard input and writes each record's header
+unchanged and its sequence reversed, every base replaced by its IUB
+complement, in lines of sixty. Its official input is FASTA's own output for
+1,000, so the fixture's standard input is byte for byte the previous
+program's oracle. A sequence may be as long as the input, so the program
+gathers all of it in a `core/text` builder that grows on the hosted heap
+[1360], and reads each sequence from its last byte back to its first through a
+256-entry complement table, writing through a buffered writer. Like the word
+count, it reads its standard input and returns 0. The performance input is
+FASTA's output for 25,000,000, about 250 MB:
+
+```sh
+refine compile --optimize speed main.ldn -o reverse-complement
+./fasta 25000000 | ./reverse-complement > /dev/null
+```
+
+Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-reverse-complement/main.ldn`.
+
+```landin
+--  The Benchmark Game's reverse-complement workload: read a FASTA file on
+--  standard input and write each record's header line as it is, then its
+--  sequence reversed, every base replaced by its IUB complement, in lines
+--  of sixty.  A sequence may be as long as the input, so the whole input is
+--  gathered in a builder that grows on the heap, and each sequence is then
+--  read from its last byte back to its first.
+import core/io
+import core/mem
+import core/text
+import hosted/heap
+import hosted/io as hosted
+
+--  Each IUB code and the code it pairs with.  A lowercase code pairs with
+--  the same uppercase complement as its uppercase form.
+codes: []u8 = "ACGTUMRWSYKVHDBN"
+pairs: []u8 = "TGCAAKYWSRMBDHVN"
+
+--  Every byte's complement, at the byte's own index.  A byte that is no
+--  IUB code is its own complement.
+complements: () -> (table: [256]u8) =
+    table = zeroed
+    for at in usize(0)..<256 do
+        table[at] = u8(at)
+    end for
+    for at in usize(0)..<lenof codes do
+        table[usize(codes[at])] = pairs[at]
+        table[usize(codes[at]) + 32] = pairs[at]
+    end for
+end complements
+
+--  Append all of standard input to WHOLE, a read at a time.
+read_all: (host: hosted.system, inout whole: text.builder)
+          -> none ! io.io_failed | text.no_space =
+    input: io.file = io.input(host)
+    mut chunk: [65536]u8 = zeroed
+    loop do
+        got: usize = try io.read(host, input, chunk[0..<65536])
+        break when got == 0
+        try text.append(whole, chunk[0..<got])
+    end loop
+end read_all
+
+--  Write SEQUENCE to OUT from its last base to its first, each replaced by
+--  its complement, leaving out its line breaks and breaking it again into
+--  lines of sixty.
+write_reversed: (inout out: io.buffered_writer(hosted.system),
+                 sequence: []u8, table: [256]u8) -> none ! io.io_failed =
+    mut line: [61]u8 = zeroed
+    mut width: usize = 0
+    mut at: usize = lenof sequence
+    while at > 0 do
+        dec at
+        base: u8 = sequence[at]
+        continue when base == 10
+        line[width] = table[usize(base)]
+        inc width
+        if width == 60 then
+            line[60] = 10
+            try io.put(out, line[0..<61])
+            width = 0
+        end if
+    end while
+    if width > 0 then
+        line[width] = 10
+        try io.put(out, line[0..<width + 1])
     end if
+end write_reversed
+
+--  Write every record of INPUT to OUT: its header line, which begins with
+--  `>`, as it is, and then its sequence, every line up to the next header,
+--  turned around.
+records: (inout out: io.buffered_writer(hosted.system), input: []u8)
+         -> none ! io.io_failed =
+    table: [256]u8 = complements()
+    mut at: usize = 0
+    while at < lenof input do
+        if input[at] == 62 then
+            ends: usize = at + mem.find(input[at..<lenof input], 10)
+            try io.put(out, input[at..<ends])
+            try io.put(out, "\n")
+            at = ends
+            if at < lenof input then inc at end if
+        end if
+        ends: usize = at + mem.find(input[at..<lenof input], 62)
+        try write_reversed(out, input[at..<ends], table)
+        at = ends
+    end while
+end records
+
+--  Say on standard error why the program stopped.
+complain: (host: hosted.system, message: []u8) -> none =
+    io.write(host, io.err(host), message) else (ignored)
+        _ = ignored
+    end
+end complain
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    memory := heap.host()
+    mut storage: [65536]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<65536])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    mut whole := text.growing(any(addr memory))
+    defer text.release(whole)
+    code = 1
+
+    read_all(host, whole) else (problem)
+        if problem == text.no_space then
+            complain(host, "revcomp: out of memory\n")
+        else
+            complain(host, "revcomp: standard input could not be read\n")
+        end if
+        return
+    end
+    records(out, text.used(whole)) else (problem)
+        _ = problem
+        complain(host, "revcomp: standard output could not be written\n")
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        complain(host, "revcomp: standard output could not be written\n")
+        return
+    end
+    code = 0
+end main
+```
+
+## Benchmark Game binary-trees
+
+The Benchmark Game's
+[binary-trees](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/binarytrees.html)
+workload builds, walks and frees many perfect binary trees beside one that
+lives throughout. Every node is its own allocation, and its children are a
+pointer union [0480], `leaf | ptr mut node`, so a missing child is an atom
+rather than a null pointer. Each tree's nodes are allocated through a
+`core/region` over the hosted heap, and the tree is given back by releasing
+its region, which frees every node at once [1360]: the allocator is a handle
+the caller chooses, and no tree carries one. The program takes the maximum
+depth as its argument; the fixture runs the correctness input, ten, and holds
+the official output, and the performance input is twenty-one.
+
+Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-binary-trees/main.ldn`.
+
+```landin
+--  A direct single-threaded implementation of the Benchmark Game workload.
+--  The maximum depth is the program's argument: ten for the correctness
+--  output and twenty-one for the performance run.  Every node is its own
+--  allocation, made through a region over the host heap; a tree is given
+--  back by releasing its region, which frees each node through the heap.
+import core/io
+import core/mem
+import core/region
+import core/text
+import hosted/heap
+import hosted/io as hosted
+
+bad_depth: atom
+
+--  A missing child, which only a leaf has.
+leaf: atom
+
+child: type = leaf | ptr mut node
+
+node: type = struct
+    left: child
+    right: child
+end node
+
+nodes_region: type = region.region(heap.system)
+
+min_depth: usize = 4
+
+--  A perfect tree with DEPTH levels below its root.
+build: (memory: nodes_region, depth: usize)
+       -> (root: ptr mut node) ! mem.out_of_memory =
+    mut left: child = leaf
+    mut right: child = leaf
+    if depth > 0 then
+        left = try build(memory, depth - 1)
+        right = try build(memory, depth - 1)
+    end if
+    shape: node = (left: left, right: right)
+    root = try mem.new(memory, shape)
+end build
+
+--  The nodes of TREE, counted by walking all of it.
+check: (tree: ptr mut node) -> (count: usize) =
+    count = 1 + check_child(tree.val.left) + check_child(tree.val.right)
+end check
+
+check_child: (branch: child) -> (count: usize) =
+    match branch
+        leaf: count = 0
+        ptr (subtree): count = check(subtree)
+    end match
+end check_child
+
+--  Build a tree of DEPTH in a region of its own, check it and free it.
+checked_tree: (memory: heap.system, depth: usize)
+              -> (count: usize) ! mem.out_of_memory =
+    mut ledger: region.space(0) = zeroed
+    nodes := region.over(ledger, memory)
+    defer region.release(ledger, memory)
+    tree: ptr mut node = try build(nodes, depth)
+    count = check(tree)
+end checked_tree
+
+--  Write one line of the report.
+say: (host: hosted.system, template: utf8, values: []any text.formattable)
+     -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [96]u8 = zeroed
+    mut line := text.over(storage)
+    try text.format(line, template, values)
+    try io.write(host, io.out(host), text.used(line))
+end say
+
+binary_trees: (host: hosted.system, n: usize)
+              -> none ! mem.out_of_memory | io.io_failed | text.no_space
+                      | text.invalid_format =
+    memory := heap.host()
+    max_depth: usize = if n > min_depth + 2 then n else min_depth + 2 end if
+
+    stretch_depth: usize = max_depth + 1
+    stretch_check: usize = try checked_tree(memory, stretch_depth)
+    try say(host, "stretch tree of depth {}\t check: {}\n",
+            [any(addr stretch_depth), any(addr stretch_check)])
+
+    mut long_ledger: region.space(0) = zeroed
+    long_lived := region.over(long_ledger, memory)
+    defer region.release(long_ledger, memory)
+    long_tree: ptr mut node = try build(long_lived, max_depth)
+
+    mut depth: usize = min_depth
+    while depth <= max_depth do
+        iterations: usize = usize(1) << (max_depth - depth + min_depth)
+        mut total: usize = 0
+        mut made: usize = 0
+        while made < iterations do
+            total += try checked_tree(memory, depth)
+            inc made
+        end while
+        try say(host, "{}\t trees of depth {}\t check: {}\n",
+                [any(addr iterations), any(addr depth), any(addr total)])
+        depth += 2
+    end while
+
+    long_check: usize = check(long_tree)
+    try say(host, "long lived tree of depth {}\t check: {}\n",
+            [any(addr max_depth), any(addr long_check)])
+end binary_trees
+
+--  The depth named by the first argument; above fifty-nine the nodes counted
+--  at depth four would not fit in a usize.
+tree_depth: (host: hosted.system)
+            -> (n: usize) ! io.no_argument | text.invalid_number
+                          | text.number_overflow | bad_depth =
+    first: usize = 0
+    argument := try io.argument_at(host, first)
+    n = try text.parse_usize(text.host_bytes(argument))
+    fail bad_depth when n > 59
+end tree_depth
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    n := tree_depth(host) else (problem)
+        _ = problem
+        io.write(host, io.err(host),
+                 "usage: binary-trees N, where N is 0 to 59\n")
+            else (ignored)
+            _ = ignored
+        end
+        return
+    end
+
+    binary_trees(host, n) else (problem)
+        return when problem <> mem.out_of_memory
+        message: []u8 = "binary-trees: out of memory\n"
+        io.write(host, io.err(host), message) else (ignored)
+            _ = ignored
+        end
+        return
+    end
+    code = 0
 end main
 ```
 

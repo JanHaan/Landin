@@ -35,41 +35,51 @@ tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
     end match
 end tally
 
-write_number: (host: hosted.system, stream: io.file, value: u32)
+--  A number's line: its decimal digits and a newline, through a builder
+--  over a few bytes of the caller's frame.
+write_number: (inout out: io.buffered_writer(hosted.system), value: u32)
               -> none ! io.io_failed | text.no_space =
-    mut line: [4]u8 = zeroed
-    mut used: usize = try text.write_u32(line[0..<4], 0, value)
-    used = try text.write_byte(line[0..<4], used, 10)
-    try io.write(host, stream, line[0..<used])
+    mut room: [16]u8 = zeroed
+    mut line := text.over(room)
+    try text.append_u32(line, value)
+    try text.append_byte(line, 10)
+    try io.put(out, text.used(line))
 end write_number
 
-write_line: (host: hosted.system, stream: io.file,
+write_line: (inout out: io.buffered_writer(hosted.system),
              kind: fizzbuzz_kind, value: u32)
             -> none ! io.io_failed | text.no_space =
     match kind
-        fizz: try io.write(host, stream, "Fizz\n")
-        buzz: try io.write(host, stream, "Buzz\n")
-        fizz_buzz: try io.write(host, stream, "FizzBuzz\n")
-        number: try write_number(host, stream, value)
+        fizz: try io.put(out, "Fizz\n")
+        buzz: try io.put(out, "Buzz\n")
+        fizz_buzz: try io.put(out, "FizzBuzz\n")
+        number: try write_number(out, value)
     end match
 end write_line
 
-run: (host: hosted.system)
+run: (inout out: io.buffered_writer(hosted.system))
      -> (result: counts) ! io.io_failed | text.no_space =
     result = zeroed
-    stream: io.file = io.out(host)
     first: u32 = 1
     last: u32 = 100
     for value in first..last do
         kind: fizzbuzz_kind = classify(value)
         tally(result, kind)
-        try write_line(host, stream, kind, value)
+        try write_line(out, kind, value)
     end for
+    try io.flush(out)
 end run
 
+--  The lines gather in a buffer and are written when it fills and at the
+--  end; a `defer` still flushes what is waiting on any other way out.
 public main: () -> (code: i32) =
     host := hosted.host()
-    result := run(host) else (problem)
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    result := run(out) else (problem)
         _ = problem
         code = 1
         return
