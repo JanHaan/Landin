@@ -1668,6 +1668,28 @@ def register_problems(text, statuses):
     return out
 
 
+def git_ignored(paths):
+    """(the paths among `paths` Git ignores, or None and why it cannot say).
+
+    Without Git -- an exported tree, say -- nothing is ignored.  Git's
+    default check-ignore never excludes a tracked file, even one a local
+    pattern would match, and a new file nobody has ignored stays in.
+    """
+    if not os.path.exists(os.path.join(ROOT, ".git")):
+        return set(), None
+    import subprocess
+    try:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-z", "--stdin"], cwd=ROOT,
+            input=b"".join(os.fsencode(p) + b"\0" for p in paths),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, str(error)
+    if ignored.returncode not in (0, 1):
+        return None, os.fsdecode(ignored.stderr).strip()
+    return {os.fsdecode(p) for p in ignored.stdout.split(b"\0") if p}, None
+
+
 def check_roadmap_citations(full_run):
     """Roadmap items and records are cited in ROADMAP.md and nowhere else.
 
@@ -1683,6 +1705,7 @@ def check_roadmap_citations(full_run):
         return []
     pointers = (CURRENT_ROADMAP_WORK, NEXT_ROADMAP_ITEM, ENDPOINT_ROADMAP_ITEM)
     out = []
+    candidates = []
     for here, dirs, files in os.walk(ROOT):
         #  docs/site contains tracked sources; only its rendered output is
         #  generated and excluded from the citation check.
@@ -1693,23 +1716,33 @@ def check_roadmap_citations(full_run):
                            != os.path.join("docs", "site", "site"))
         for name in sorted(files):
             relative = os.path.relpath(os.path.join(here, name), ROOT)
-            if relative == ROADMAP:
+            if relative != ROADMAP:
+                candidates.append(relative)
+    #  What Git ignores is nobody's citation, and reading it can dominate the
+    #  run: QEMU leaves a sparse core file for every trap fixture a cross
+    #  lane runs, and 2300 of them, 19 GB as read, took 6 to 30 seconds of a
+    #  run whose real files took half of one.
+    ignored, why = git_ignored(candidates)
+    if ignored is None:
+        return [(ROADMAP, 1, "cannot determine ignored files: " + why)]
+    for relative in candidates:
+        if relative in ignored:
+            continue
+        try:
+            with io.open(os.path.join(ROOT, relative), encoding="utf-8") as stream:
+                text = stream.read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if not ROADMAP_CITATION.search(text):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            if any(pattern.match(line) for pattern in pointers):
                 continue
-            try:
-                with io.open(os.path.join(here, name), encoding="utf-8") as stream:
-                    text = stream.read()
-            except (UnicodeDecodeError, OSError):
-                continue
-            if not ROADMAP_CITATION.search(text):
-                continue
-            for n, line in enumerate(text.splitlines(), 1):
-                if any(pattern.match(line) for pattern in pointers):
-                    continue
-                for found in ROADMAP_CITATION.finditer(line):
-                    out.append((relative, n,
-                                "%s is cited outside ROADMAP.md, which is the"
-                                " only place a roadmap identity belongs"
-                                % found.group(1)))
+            for found in ROADMAP_CITATION.finditer(line):
+                out.append((relative, n,
+                            "%s is cited outside ROADMAP.md, which is the"
+                            " only place a roadmap identity belongs"
+                            % found.group(1)))
     return out
 
 
@@ -2357,17 +2390,93 @@ def frontend_codes():
 
 
 
-def grammar_corpus_cache(tour):
-    """Load source verdicts only for this checker, grammar and interpreter.
+def derivation_code_digest(*roots):
+    """A digest of every routine, class and value a verdict depends on.
 
-    The metadata and corpus directory walks stay live.  A source entry is
-    reused only when its bytes still match; timestamps cannot establish that.
+    Followed from `roots` through the global names each one's code reads,
+    nested routines included, so an edit anywhere a verdict can reach
+    changes it and an edit to any other check does not.  It digests the
+    compiled code without its file name and line table, so moving a
+    routine or rewording a comment keeps the verdicts -- spelled out
+    rather than marshalled, because marshal's bytes follow the reference
+    counts of the moment and differ between two runs.  A name reached
+    only through a string, as `globals()[name]`, would be missed; nothing
+    on this path does that.
     """
-    with io.open(__file__, "rb") as stream:
-        checker_digest = hashlib.sha256(stream.read()).hexdigest()
-    with io.open(tour, "rb") as stream:
-        grammar_digest = hashlib.sha256(stream.read()).hexdigest()
-    identity = [checker_digest, grammar_digest, list(sys.version_info[:2])]
+    import types
+    here = globals()
+    parts, seen, pending = [], set(), list(roots)
+
+    def stable(value):
+        if isinstance(value, (set, frozenset)):
+            return repr(sorted(value, key=repr))
+        if isinstance(value, re.Pattern):
+            return repr((value.pattern, value.flags))
+        return repr(value)
+
+    def spelled(code):
+        consts = [spelled(c) if isinstance(c, types.CodeType) else stable(c)
+                  for c in code.co_consts]
+        return repr((code.co_code.hex(), code.co_exceptiontable.hex(),
+                     code.co_names, code.co_varnames, code.co_freevars,
+                     code.co_cellvars, code.co_argcount,
+                     code.co_kwonlyargcount, code.co_flags, consts))
+
+    def names(code):
+        yield from code.co_names
+        for constant in code.co_consts:
+            if isinstance(constant, types.CodeType):
+                yield from names(constant)
+
+    while pending:
+        item = pending.pop()
+        if id(item) in seen:
+            continue
+        seen.add(id(item))
+        if isinstance(item, type):
+            codes = []
+            parts.append("class %s(%s)" % (item.__qualname__, ", ".join(
+                base.__qualname__ for base in item.__bases__)))
+            for name, value in sorted(vars(item).items()):
+                if isinstance(value, types.FunctionType):
+                    codes.append(value.__code__)
+                elif not name.startswith("__"):
+                    parts.append("%s.%s = %s" % (item.__qualname__, name,
+                                                 stable(value)))
+        else:
+            codes = [item.__code__]
+        for code in codes:
+            parts.append(spelled(code))
+            for name in names(code):
+                if name not in here:
+                    continue
+                value = here[name]
+                inner = getattr(value, "__wrapped__", value)
+                if isinstance(inner, (types.FunctionType, type)):
+                    if getattr(inner, "__module__", None) == __name__:
+                        pending.append(inner)
+                elif not isinstance(value, types.ModuleType):
+                    parts.append("%s = %s" % (name, stable(value)))
+    return hashlib.sha256("\n".join(sorted(parts)).encode()).hexdigest()
+
+
+def grammar_corpus_cache(rules, trees):
+    """Load source verdicts only for this grammar, its code and interpreter.
+
+    The key is the grammar as read and the code that derives from it,
+    not spec.md and check.py whole: keyed on the files, any decision
+    added to the register or any edit to another check re-derived the
+    whole corpus, two minutes of a run that otherwise takes twenty
+    seconds.  The metadata and corpus directory walks stay live.  A
+    source entry is reused only when its bytes still match; timestamps
+    cannot establish that.
+    """
+    grammar = json.dumps([sorted(rules.items()),
+                          sorted((name, repr(tree))
+                                 for name, tree in trees.items())])
+    identity = [hashlib.sha256(grammar.encode()).hexdigest(),
+                derivation_code_digest(grammar_source_verdict, grammar_signs),
+                list(sys.version_info[:2])]
     path = os.path.join(ROOT, ".scratch/check-grammar-corpus.json")
     try:
         with io.open(path, encoding="utf-8") as stream:
@@ -2439,7 +2548,7 @@ def check_grammar_corpus(full_run):
         return out
 
     signs = grammar_signs(trees)
-    cache_path, cache_identity, cached = grammar_corpus_cache(tour)
+    cache_path, cache_identity, cached = grammar_corpus_cache(rules, trees)
     fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
 
     #  The corpus is read as bytes, and this is what says so.  Python's
@@ -6728,23 +6837,12 @@ def check_document_reachability(full_run):
                 docs.append(os.path.relpath(os.path.join(here, name), ROOT))
     docs = sorted(docs)
     # Local agent instructions and other ignored notes are not published
-    # documents. Git's default check-ignore never excludes tracked files,
-    # even when a local ignore pattern would match them. Keep new, ordinary
-    # untracked documents in this check too, so pre-commit feedback works.
-    if os.path.exists(os.path.join(ROOT, ".git")):
-        import subprocess
-        try:
-            ignored = subprocess.run(
-                ["git", "check-ignore", "-z", "--stdin"], cwd=ROOT,
-                input=b"".join(os.fsencode(d) + b"\0" for d in docs),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            return [("README.md", 1, "cannot determine local ignored documents: " + str(error))]
-        if ignored.returncode not in (0, 1):
-            return [("README.md", 1, "cannot determine local ignored documents: "
-                     + os.fsdecode(ignored.stderr).strip())]
-        local = {os.fsdecode(p) for p in ignored.stdout.split(b"\0") if p}
-        docs = [d for d in docs if d not in local]
+    # documents.  Keep new, ordinary untracked documents in this check too,
+    # so pre-commit feedback works.
+    local, why = git_ignored(docs)
+    if local is None:
+        return [("README.md", 1, "cannot determine local ignored documents: " + why)]
+    docs = [d for d in docs if d not in local]
     if "README.md" not in docs:
         return [("README.md", 1, "this file is needed by a check and is not here")]
     known = set(docs)

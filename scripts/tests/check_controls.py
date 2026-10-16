@@ -18,6 +18,7 @@ path relative to the directory check.py changes into.
 """
 from contextlib import contextmanager
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -31,6 +32,68 @@ _spec = importlib.util.spec_from_file_location(
     "landin_document_checker", ROOT / "check.py")
 checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)
+
+#  The grammar corpus's verdicts, carried from tree to tree.  Every tree
+#  starts without them, and deriving the corpus from nothing takes two
+#  minutes, which seven controls paid one after another.  Seeded from the
+#  checkout's own cache; a tree whose grammar is still the real one hands
+#  its verdicts on.  A verdict is reused only for the same source bytes
+#  under the same grammar and code, so a control that changes either is
+#  derived afresh exactly as check.py itself would.
+CORPUS_CACHE = ".scratch/check-grammar-corpus.json"
+_corpus = {"verdicts": None, "identity": None}
+
+
+def _real_identity():
+    if _corpus["identity"] is None:
+        rules, trees, _ = checker.read_grammar(str(ROOT / checker.SPEC_NAME))
+        with patch.object(checker, "ROOT", str(ROOT)):
+            _corpus["identity"] = checker.grammar_corpus_cache(rules, trees)[1]
+    return _corpus["identity"]
+
+
+def _cached_identity(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("identity")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+_ignored = None
+
+
+def _git_ignored():
+    """What Git ignores here, as paths relative to ROOT; once per run.
+
+    A copy takes the repository, not what a build or a lane left in it:
+    a cross lane once left 2300 sparse QEMU core files in compiler/ada,
+    and copying compiler/ wrote them out whole, 19 GB a tree.
+    """
+    global _ignored
+    if _ignored is None:
+        import subprocess
+        try:
+            listed = subprocess.run(
+                ["git", "ls-files", "-z", "--others", "--ignored",
+                 "--exclude-standard", "--directory"], cwd=ROOT,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                timeout=60).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            listed = b""
+        _ignored = {os.fsdecode(p).rstrip("/")
+                    for p in listed.split(b"\0") if p}
+    return _ignored
+
+
+def _ignore(directory, names):
+    """shutil's ignore: the generated trees, and whatever Git ignores."""
+    out = set(shutil.ignore_patterns(
+        "build", ".git", ".scratch", "node_modules", "__pycache__",
+        "site")(directory, names))
+    here = os.path.relpath(directory, ROOT)
+    ignored = _git_ignored()
+    return out | {name for name in names
+                  if os.path.normpath(os.path.join(here, name)) in ignored}
 
 
 @contextmanager
@@ -53,9 +116,7 @@ def tree(written=None, copied=()):
                 #  pointing at parent, thirty deep -- which is a test of
                 #  the compiler's path handling and a trap for a copy.
                 shutil.copytree(source, target, dirs_exist_ok=True,
-                                symlinks=True, ignore=shutil.ignore_patterns(
-                                    "build", ".git", ".scratch",
-                                    "node_modules", "__pycache__", "site"))
+                                symlinks=True, ignore=_ignore)
             else:
                 shutil.copy2(source, target)
         for relative, content in (written or {}).items():
@@ -65,6 +126,15 @@ def tree(written=None, copied=()):
                 target.write_bytes(content)
             else:
                 target.write_text(content, encoding="utf-8")
+        cache = root / CORPUS_CACHE
+        if checker.SPEC_NAME in copied and not cache.exists():
+            seed = _corpus["verdicts"]
+            real = ROOT / CORPUS_CACHE
+            if seed is None and _cached_identity(real) == _real_identity():
+                seed = real.read_text(encoding="utf-8")
+            if seed is not None:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(seed, encoding="utf-8")
         here = os.getcwd()
         os.chdir(tmp)
         #  On the path too: some checks import the repository's own
@@ -75,6 +145,8 @@ def tree(written=None, copied=()):
             with patch.object(checker, "ROOT", tmp):
                 yield root
         finally:
+            if _cached_identity(cache) == _real_identity():
+                _corpus["verdicts"] = cache.read_text(encoding="utf-8")
             sys.path.remove(tmp)
             for name in [n for n in sys.modules
                          if n == "scripts" or n.startswith("scripts.")]:

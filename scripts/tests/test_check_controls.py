@@ -620,6 +620,31 @@ class GrammarCorpus(unittest.TestCase):
                     if where.endswith("invented-fix/program.fixed")]
         self.assertTrue(said)
 
+    def test_the_corpus_cache_outlives_prose_and_not_the_grammar(self):
+        #  Keyed on spec.md and check.py whole, every decision added to the
+        #  register re-derived the corpus: two minutes of a twenty-second
+        #  run.  Prose keeps the verdicts; a production, or code a verdict
+        #  depends on, does not.
+        from check_controls import tree
+
+        def identity():
+            rules, trees, _ = checker.read_grammar(checker.SPEC_NAME)
+            return checker.grammar_corpus_cache(rules, trees)[1]
+
+        with tree(copied=["spec.md"]) as root:
+            spec = root / "spec.md"
+            real = identity()
+            spec.write_text(spec.read_text()
+                            + "\nA decision the grammar does not hold.\n")
+            self.assertEqual(identity(), real)
+            with mock.patch.object(checker, "LETTERS", frozenset("ab")):
+                self.assertNotEqual(identity(), real)
+            spec.write_text(spec.read_text().replace(
+                "```landin-grammar\nprogram",
+                "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
+                1))
+            self.assertNotEqual(identity(), real)
+
     def test_a_grammar_rule_nothing_reaches_is_reported(self):
         #  Every rule must be defined and reachable: an unreachable
         #  production is grammar nobody can be held to.
@@ -1251,6 +1276,20 @@ class RoadmapStructure(unittest.TestCase):
             {"docs/site/README.md", "docs/site/llms.py"})
         self.assertTrue(any(PLANNED in why for _, why in said))
         self.assertTrue(any(MEASURED in why for _, why in said))
+
+    def test_what_git_ignores_is_not_read_but_a_new_file_is(self):
+        #  A cross lane once left 2300 QEMU core files, 19 GB as read, in
+        #  compiler/ada; reading them was most of a run.
+        from check_controls import tree
+        with tree(written={
+                "compiler/ada/qemu_trap.core": "See %s.\n" % PLANNED,
+                "docs/draft.md": "See %s for the rest.\n" % PLANNED,
+        }) as root:
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / ".git/info/exclude").write_text("qemu_*.core\n")
+            said = [(where, why) for where, _, why
+                    in checker.check_roadmap_citations(True)]
+        self.assertEqual({where for where, _ in said}, {"docs/draft.md"})
 
     def test_a_letter_and_a_digit_is_not_a_citation(self):
         #  The inherited review records are spelled like a byte, a decision
