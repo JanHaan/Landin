@@ -7,10 +7,12 @@
 #  before use.  A compile error surfaces in the build job, and `gate` needs
 #  every job so any failure fails the gate.
 #
-#  Linux and Darwin jobs select the repository's self-hosted platform labels.
-#  Fork pull requests keep the GitHub-hosted Linux and Darwin images.
-#  Darwin uses the self-hosted Mac's selected tools, or Xcode 26.6 on the
-#  hosted image; environments/macos-arm64/policy.json records the tool policy.
+#  Linux and Darwin jobs run on GitHub-hosted images, the same for every
+#  event: the registered runners took 22 to 24 minutes for gates the hosted
+#  images ran in 17 to 23, and their VMs shared cores with the Linux slots.
+#  Only FreeBSD execution keeps its self-hosted VM controllers.  Darwin uses
+#  Xcode 26.6 on the hosted image; environments/macos-arm64/policy.json
+#  records the tool policy.
 #  Cortex-M runs on Linux x86-64 under its locked QEMU and GDB.
 #  On both Linux architectures the debug and release compilers each run the
 #  whole corpus, and each compiler builds for its own host by default
@@ -44,12 +46,8 @@ concurrency:
 
 jobs:
   # Reuse requires the verified explanatory-only conditions in AGENTS.md.
-  #  The small classifier uses arm64 so it can release the compiler lanes
-  #  while documents and scripts occupy the x86-64 runner.
   inputs:
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
+    runs-on: ubuntu-24.04-arm
     permissions:
       actions: read
       contents: read
@@ -84,9 +82,7 @@ jobs:
   #  without it, so the coverage stays enforced where it matters and this
   #  job stays independent of the object storage.
   documents:
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -101,9 +97,7 @@ jobs:
   #  is its own process and the controls are dealt across shards; the log
   #  gives each process's time.
   scripts:
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -121,16 +115,11 @@ jobs:
   #  and for determinism.  A job cannot wait on another job's step, so
   #  while the build was the suite's first step the manifests waited for
   #  the whole suite.  A compile error is reported here.
-  #
-  #  The self-hosted runner shares 96 CPUs with five other slots and the
-  #  FreeBSD VM, so it compiles twelve units at once; a hosted runner has
-  #  four CPUs.
+  #  Four units at once on the hosted runner's four CPUs.
   linux-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,7 +128,7 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
 
       - name: Build debug executables with bounded parallelism
-        run: ./scripts/build.sh -j${{ runner.environment == 'self-hosted' && 12 || 4 }}
+        run: ./scripts/build.sh -j4
 
       - name: Package debug executables and both build manifests
         run: >-
@@ -157,9 +146,7 @@ jobs:
   compiler:
     needs: [inputs, linux-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       LANDIN_BUILD_REUSE: 'yes'
@@ -181,8 +168,7 @@ jobs:
             -C compiler/ada/build/linux-amd64/debug
           ./scripts/build.sh -q
 
-      #  Eight workers on a hosted runner's four vCPUs, sixteen on the
-      #  self-hosted one, whose host has 96 shared as the build's are.
+      #  Eight workers; the measurements below used four hosted vCPUs.
       #  A work item is one
       #  fixture with its profiles in order, a chain of compile, assemble,
       #  link and run, so the processes wait on each other and more workers
@@ -195,9 +181,7 @@ jobs:
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
       - name: The fixture corpus
-        run: >-
-          LANDIN_TEST_JOBS=${{ runner.environment == 'self-hosted' && 16 || 8 }}
-          LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
       #  Use the compiler this job already built.  The focused mode requires
       #  Emacs and the executable, then waits for a live refine diagnostic.
@@ -242,9 +226,7 @@ jobs:
   linux-release-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       LANDIN_BUILD_MODE: release
@@ -255,7 +237,7 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
 
       - name: Build release executables
-        run: ./scripts/build.sh -j${{ runner.environment == 'self-hosted' && 12 || 4 }}
+        run: ./scripts/build.sh -j4
 
       - name: Package release executables and both build manifests
         run: >-
@@ -272,14 +254,11 @@ jobs:
   #  and the lanes that measure or debug what it emits: object quality and
   #  the GDB sessions.  Release only, because the debug compiler's checks
   #  make those five times slower and add no coverage of their own.
-  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.  The width is the
-  #  debug suite's: sixteen self-hosted, eight on a hosted runner.
+  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
   release:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       LANDIN_BUILD_MODE: release
@@ -303,9 +282,7 @@ jobs:
           ./scripts/build.sh -q
 
       - name: The fixture corpus
-        run: >-
-          LANDIN_TEST_JOBS=${{ runner.environment == 'self-hosted' && 16 || 8 }}
-          LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
@@ -366,9 +343,7 @@ jobs:
   bindings:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -395,17 +370,11 @@ jobs:
   editor-grammar:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # compare shipped grammar and queries with the pinned commit
-
-      - name: Install Node.js and npm on the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: ./scripts/ci_packages.sh nodejs npm
 
       - name: Install the pinned tree-sitter CLI
         working-directory: highlight/tree-sitter
@@ -430,13 +399,11 @@ jobs:
 
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB: 612 s on the runner, and the
-  #  whole job sixteen and a half minutes.  Eight on the self-hosted runner.
+  #  whole job sixteen and a half minutes.
   cortex-m:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       LANDIN_BUILD_MODE: release
@@ -467,8 +434,7 @@ jobs:
 
       - name: Every Cortex-M lane
         run: |
-          LANDIN_CORTEX_JOBS=${{ runner.environment == 'self-hosted' && 8 || 4 }} \
-            python3 environments/cortex-m/run.py \
+          LANDIN_CORTEX_JOBS=4 python3 environments/cortex-m/run.py \
             --tools "$RUNNER_TEMP/cortex-m" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
@@ -492,9 +458,7 @@ jobs:
   scaling:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       LANDIN_BUILD_REUSE: 'yes'
@@ -524,12 +488,10 @@ jobs:
   darwin-release-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -558,12 +520,10 @@ jobs:
   darwin-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: debug
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -593,12 +553,10 @@ jobs:
   darwin-host:
     needs: [inputs, darwin-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: debug
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -657,12 +615,10 @@ jobs:
   darwin-host-release:
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -740,16 +696,14 @@ jobs:
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
   #  and at eight alike.  On the hosted image the whole job took fourteen
-  #  minutes; no timing is assumed for the self-hosted Mac.
+  #  minutes.
   darwin-parity:
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 90
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -796,12 +750,10 @@ jobs:
   lldb:
     needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    runs-on: macos-26
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -832,9 +784,7 @@ jobs:
   arm64-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -865,9 +815,7 @@ jobs:
   arm64-compiler:
     needs: [inputs, arm64-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
       LANDIN_BUILD_REUSE: 'yes'
@@ -928,9 +876,7 @@ jobs:
   arm64-release:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
       LANDIN_BUILD_MODE: release
@@ -1019,9 +965,7 @@ jobs:
     name: freebsd-emit-${{ matrix.arch }}-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -1031,7 +975,7 @@ jobs:
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
-      LANDIN_FREEBSD_JOBS: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '4' || '8' }}
+      LANDIN_FREEBSD_JOBS: '4'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the pinned compiler toolchain
@@ -1126,9 +1070,7 @@ jobs:
     name: rv64-emit-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
     if: false && needs.inputs.outputs.reuse != 'true'
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -1242,8 +1184,7 @@ jobs:
     if: needs.inputs.outputs.reuse != 'true'
     uses: ./.github/workflows/determinism.yml
     with:
-      # Fork fallback uses different Mac images in the two workflows.
-      debug-artifacts: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      debug-artifacts: true
 
   #  The one check a branch rule requires: every job above succeeded.
   gate:
@@ -1253,9 +1194,7 @@ jobs:
             scaling, darwin-debug-build, darwin-release-build, darwin-host,
             darwin-host-release, darwin-parity, lldb, arm64-debug-build,
             arm64-compiler, arm64-release, freebsd-emit, freebsd, determinism]
-    runs-on: >-
-      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Every job succeeded, or was skipped for a verified reused pass

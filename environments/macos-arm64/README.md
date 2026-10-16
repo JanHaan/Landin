@@ -5,13 +5,11 @@
 > environment itself -- the pinned tool homes, the Mac `--host` workflow and
 > LLDB -- is current and still how this machine is used. The gate's
 > `darwin-host`, `darwin-parity` and `lldb` jobs run these lanes on every
-> push, on the self-hosted `landin-darwin-arm64` runner with its selected
-> Command Line Tools, whose tools match `policy.json` exactly. Fork pull
-> requests retain GitHub's `macos-26` image with Xcode 26.6. LLDB must be
-> able to launch a target from the runner session. Its LaunchAgent inherits
-> the logged-in Aqua security session; see the
-> [runner setup](../../docs/environments.md#github-actions-runners) before
-> reinstalling it. For development, use a terminal session because a
+> push, on GitHub's `macos-26` image with Xcode 26.6, whose tools match
+> `policy.json`; see the
+> [runner setup](../../docs/environments.md#github-actions-runners). LLDB
+> must be able to launch a target from the runner session, which the hosted
+> image's does. For development, use a terminal session because a
 > background remote agent session cannot launch the debugged process.
 
 The reproduction sections below preserve the original native environment
