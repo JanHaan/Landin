@@ -24,6 +24,114 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Fail (Item, "this case is meant to fail");
    end Always_Fails;
 
+   --  Material for the shard test: how many times each item of a divided
+   --  case's work was taken, over every run since it was last cleared.
+   Shared_Items : array (0 .. 9) of Natural := [others => 0];
+
+   procedure Takes_Its_Share (Item : in out Landin.Testing.Context);
+
+   procedure Takes_Its_Share (Item : in out Landin.Testing.Context) is
+   begin
+      for Ordinal in Shared_Items'Range loop
+         if Landin.Testing.In_Share (Ordinal) then
+            Shared_Items (Ordinal) := Shared_Items (Ordinal) + 1;
+         end if;
+      end loop;
+      Landin.Testing.Check (Item, True, "the share was taken");
+   end Takes_Its_Share;
+
+   --  The gate runs the inventory as shards on separate runners and
+   --  requires every one, so the shards have to be the complete run
+   --  between them: each ordinary case in exactly one, a divided case in
+   --  all of them over disjoint shares that cover its work.
+   procedure Shards_Partition_The_Inventory
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shards_Partition_The_Inventory
+     (Item : in out Landin.Testing.Context)
+   is
+      LF      : constant Character := Character'Val (10);
+      Names   : constant array (1 .. 7) of String (1 .. 1) :=
+        ["a", "b", "c", "d", "e", "f", "g"];
+      Seen    : array (Names'Range) of Natural := [others => 0];
+      Scratch : Landin.Testing.Registry;
+      Split   : Natural := 0;
+      Ran     : Natural := 0;
+   begin
+      for Name of Names loop
+         Landin.Testing.Register
+           (Scratch, "sample", Name, Always_Passes'Access);
+      end loop;
+      Landin.Testing.Register
+        (Scratch, "sample", "split", Takes_Its_Share'Access,
+         Divided => True);
+      Shared_Items := [others => 0];
+
+      for Index in 1 .. 3 loop
+         declare
+            Transcript : Unbounded.Unbounded_String;
+            Result     : Landin.Testing.Summary;
+         begin
+            Landin.Testing.Run
+              (Scratch, (Index => Index, Count => 3), Transcript, Result);
+
+            declare
+               Text : constant String := Unbounded.To_String (Transcript);
+               Head : constant String :=
+                 "SHARD" & Positive'Image (Index) & " of 3" & LF;
+            begin
+               Landin.Testing.Check
+                 (Item, Text'Length >= Head'Length
+                    and then Text (Text'First .. Text'First + Head'Length - 1)
+                             = Head,
+                  "a shard's transcript says which shard it is");
+               for Number in Names'Range loop
+                  if Contains (Text, "pass  " & Names (Number) & LF) then
+                     Seen (Number) := Seen (Number) + 1;
+                  end if;
+               end loop;
+               if Contains (Text, "pass  split" & LF) then
+                  Split := Split + 1;
+               end if;
+            end;
+            Ran := Ran + Result.Cases;
+            Landin.Testing.Check_Equal
+              (Item, Result.Failed, 0, "a shard's cases pass");
+         end;
+      end loop;
+
+      Landin.Testing.Check
+        (Item, (for all Count of Seen => Count = 1),
+         "every ordinary case ran in exactly one shard");
+      Landin.Testing.Check_Equal
+        (Item, Split, 3, "the divided case ran in every shard");
+      Landin.Testing.Check
+        (Item, (for all Count of Shared_Items => Count = 1),
+         "every item of divided work ran exactly once");
+      Landin.Testing.Check_Equal
+        (Item, Ran, Names'Length + 3, "the shards ran nothing twice");
+      Landin.Testing.Check
+        (Item, (for all Ordinal in Shared_Items'Range =>
+                  Landin.Testing.In_Share (Ordinal)),
+         "outside a divided case every item is owned");
+
+      declare
+         Transcript : Unbounded.Unbounded_String;
+         Result     : Landin.Testing.Summary;
+      begin
+         Shared_Items := [others => 0];
+         Landin.Testing.Run
+           (Scratch, Landin.Testing.Whole, Transcript, Result);
+         Landin.Testing.Check
+           (Item, not Contains (Unbounded.To_String (Transcript), "SHARD"),
+            "the whole run does not call itself a shard");
+         Landin.Testing.Check
+           (Item, Result.Cases = Names'Length + 1
+              and then (for all Count of Shared_Items => Count = 1),
+            "the whole run takes every case and every item once");
+      end;
+   end Shards_Partition_The_Inventory;
+
    procedure Duplicate_Names_Are_Refused
      (Item : in out Landin.Testing.Context);
 
@@ -327,6 +435,9 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Register
         (Into, "harness", "raising cases fail alone",
          Raising_Cases_Fail_Alone'Access);
+      Landin.Testing.Register
+        (Into, "harness", "shards partition the inventory",
+         Shards_Partition_The_Inventory'Access);
    end Register;
 
 end Landin.Tests.Harness_Suite;

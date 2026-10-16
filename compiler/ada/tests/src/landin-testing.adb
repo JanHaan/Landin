@@ -10,6 +10,13 @@ package body Landin.Testing is
 
    Recorded : Timing_Vectors.Vector;
 
+   --  The shard whose share the running case takes: the run's own for a
+   --  Divided case, Whole for any other and outside a run.
+   Current : Shard := Whole;
+
+   function In_Share (Ordinal : Natural) return Boolean
+     is (Owns (Current, Ordinal));
+
    function Last_Timings return Timing_Vectors.Vector is (Recorded);
 
    procedure Note (Item : in out Context; Description : String);
@@ -93,10 +100,11 @@ package body Landin.Testing is
    end Is_Registered;
 
    procedure Register
-     (Into  : in out Registry;
-      Suite : String;
-      Name  : String;
-      Run   : not null Case_Body)
+     (Into    : in out Registry;
+      Suite   : String;
+      Name    : String;
+      Run     : not null Case_Body;
+      Divided : Boolean := False)
    is
    begin
       if Is_Registered (Into, Suite, Name) then
@@ -106,9 +114,10 @@ package body Landin.Testing is
 
       Into.Items.Append
         (Entry_Record'
-           (Suite => Unbounded.To_Unbounded_String (Suite),
-            Name  => Unbounded.To_Unbounded_String (Name),
-            Run   => Run));
+           (Suite   => Unbounded.To_Unbounded_String (Suite),
+            Name    => Unbounded.To_Unbounded_String (Name),
+            Run     => Run,
+            Divided => Divided));
    end Register;
 
    function Has_Suite (In_Registry : Registry; Suite : String) return Boolean
@@ -150,6 +159,15 @@ package body Landin.Testing is
 
    package Sorting is new Entry_Vectors.Generic_Sorting ("<" => Precedes);
 
+   procedure Run_Selected
+     (In_Registry  : Registry;
+      Suite_Filter : String;
+      Case_Filter  : String;
+      Of_Shard     : Shard;
+      Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
+      Result       : out Summary;
+      Record_Timings : Boolean);
+
    procedure Run
      (In_Registry : Registry;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
@@ -157,7 +175,20 @@ package body Landin.Testing is
       Record_Timings : Boolean := False)
    is
    begin
-      Run (In_Registry, "", "", Transcript, Result, Record_Timings);
+      Run_Selected
+        (In_Registry, "", "", Whole, Transcript, Result, Record_Timings);
+   end Run;
+
+   procedure Run
+     (In_Registry : Registry;
+      Of_Shard    : Shard;
+      Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
+      Result      : out Summary;
+      Record_Timings : Boolean := False)
+   is
+   begin
+      Run_Selected
+        (In_Registry, "", "", Of_Shard, Transcript, Result, Record_Timings);
    end Run;
 
    procedure Run
@@ -168,8 +199,27 @@ package body Landin.Testing is
       Result       : out Summary;
       Record_Timings : Boolean := False)
    is
+   begin
+      Run_Selected
+        (In_Registry, Suite_Filter, Case_Filter, Whole, Transcript, Result,
+         Record_Timings);
+   end Run;
+
+   procedure Run_Selected
+     (In_Registry  : Registry;
+      Suite_Filter : String;
+      Case_Filter  : String;
+      Of_Shard     : Shard;
+      Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
+      Result       : out Summary;
+      Record_Timings : Boolean)
+   is
       Ordered : Entry_Vectors.Vector := In_Registry.Items;
-      Current : Unbounded.Unbounded_String;
+      Heading : Unbounded.Unbounded_String;
+      --  Each ordinary case's place among the ordinary cases, counted in
+      --  the sorted order every shard sees, decides which shard owns it.
+      Ordinal : Natural := 0;
+      Owned   : Boolean;
 
       function Matches (Item : Entry_Record) return Boolean;
 
@@ -196,19 +246,38 @@ package body Landin.Testing is
             & LF & LF);
       end if;
 
+      if Of_Shard.Count > 1 then
+         Unbounded.Append
+           (Transcript,
+            "SHARD" & Positive'Image (Of_Shard.Index) & " of"
+            & Positive'Image (Of_Shard.Count) & LF & LF);
+      end if;
+
       for Item of Ordered loop
-         if Matches (Item) then
-            if Item.Suite /= Current then
-               Current := Item.Suite;
+         if Item.Divided then
+            Owned := True;
+         else
+            Owned := Owns (Of_Shard, Ordinal);
+            Ordinal := Ordinal + 1;
+         end if;
+
+         if Owned and then Matches (Item) then
+            if Item.Suite /= Heading then
+               Heading := Item.Suite;
                Unbounded.Append
-                 (Transcript, Unbounded.To_String (Current) & LF);
+                 (Transcript, Unbounded.To_String (Heading) & LF);
             end if;
 
             declare
                State : Context;
                Label : constant String := Unbounded.To_String (Item.Name);
                Began : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+               --  A harness case runs a nested Run; it gets its own shard
+               --  back when that one ends.
+               Outer : constant Shard := Current;
             begin
+               Current := (if Item.Divided then Of_Shard else Whole);
+
                --  A case that raises is a case that failed, not a run that
                --  stopped.  Letting it propagate loses every case after it,
                --  and the transcript then says nothing about either.
@@ -221,6 +290,8 @@ package body Landin.Testing is
                         "raised " & Ada.Exceptions.Exception_Name (Error)
                         & ": " & Ada.Exceptions.Exception_Message (Error));
                end;
+
+               Current := Outer;
 
                if Record_Timings then
                   Recorded.Append
@@ -251,6 +322,6 @@ package body Landin.Testing is
          & ", passed" & Natural'Image (Result.Passed)
          & ", failed" & Natural'Image (Result.Failed)
          & ", checks" & Natural'Image (Result.Checks) & LF);
-   end Run;
+   end Run_Selected;
 
 end Landin.Testing;

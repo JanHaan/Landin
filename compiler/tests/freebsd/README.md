@@ -1,10 +1,14 @@
 # FreeBSD hosted execution
 
 `check.py` emits with Linux `refine`, Clang and a checksum-locked FreeBSD
-sysroot, then executes in a FreeBSD VM. The gate reports six independent
-jobs: runtime, native LLDB and C ABI, each on amd64 and arm64. Six Linux
-emission jobs prepare hashed payloads; an emitted result is not an execution
-verdict. The sysroot and optional local VM base come from official 14.4 release files; hashes are in
+sysroot, then executes in a FreeBSD VM. The gate reports runtime, native
+LLDB and C ABI verdicts separately for amd64 and arm64, each job emitting
+and executing its own lane; an emitted result is not an execution verdict.
+The emulated arm64 runtime lane runs as `--shard=1/2` and `--shard=2/2`:
+each shard takes alternate whole fixtures of the selection, with all their
+levels and profiles, and the first also checks the source verdicts, so the
+two jobs together are the lane. A shard cannot combine with `--case` or a
+transferred payload. The sysroot and optional local VM base come from official 14.4 release files; hashes are in
 [`environments/freebsd/lock.json`](../../../environments/freebsd/lock.json).
 
 The gate runs each lane in one GitHub-hosted Linux x86-64 job, which emits

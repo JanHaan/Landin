@@ -52,6 +52,62 @@ def emit(stub):
         return result, json.loads(out.read_text())
 
 
+def merge(*parts):
+    """Run merge over PARTS and return its result and the merged manifest."""
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = []
+        for n, part in enumerate(parts):
+            path = Path(tmp) / ("p%d.json" % n)
+            path.write_text(json.dumps(part) + "\n")
+            paths.append(str(path))
+        out = Path(tmp) / "whole.json"
+        result = subprocess.run([sys.executable, str(CHECK), "merge", str(out)] + paths,
+                                capture_output=True, text=True)
+        return result, (json.loads(out.read_text()) if out.exists() else None)
+
+
+def by_target(targets):
+    return {"alias-conversion|%s|debug|optimize=none|specialize=off" % target: "a" * 64
+            for target in targets}
+
+
+class Parts(unittest.TestCase):
+    """The gate emits each host's targets in two jobs and joins them."""
+
+    def setUp(self):
+        sys.path.insert(0, str(CHECK.parent))
+        self.addCleanup(sys.path.remove, str(CHECK.parent))
+        import emit_manifest
+        self.targets = emit_manifest.TARGETS
+
+    def test_parts_covering_every_target_make_the_whole(self):
+        half = len(self.targets) // 2
+        result, whole = merge(by_target(self.targets[:half]),
+                              by_target(self.targets[half:]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(whole, by_target(self.targets))
+
+    def test_a_target_in_no_part_fails(self):
+        result, whole = merge(by_target(self.targets[:2]), by_target(self.targets[3:]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no part emitted " + self.targets[2], result.stderr)
+        self.assertIsNone(whole)
+
+    def test_a_key_in_two_parts_fails(self):
+        result, whole = merge(by_target(self.targets), by_target(self.targets[:1]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("is in two parts", result.stderr)
+        self.assertIsNone(whole)
+
+    def test_emit_refuses_an_unknown_or_repeated_target(self):
+        for targets in ("linux-x86-64,linux-x86-64", "linux-rv64", ""):
+            with self.subTest(targets=targets):
+                result = subprocess.run(
+                    [sys.executable, str(CHECK), "emit", "refine", ".", "out.json", targets],
+                    capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
+
 class Comparison(unittest.TestCase):
     def test_agreeing_manifests_pass(self):
         result = compare(BASE, dict(BASE))

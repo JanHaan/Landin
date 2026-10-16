@@ -9,6 +9,8 @@
 #  visibly FILTERED developer run; none replaces the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports
 #  HOST-ONLY scope; it can combine with one --suite or --case selection.
+#  --shard=I/N runs shard I of N of the complete (or --host) run; only all N
+#  together are the complete run, as the gate's shard jobs are.
 #  Linux routine acceptance uses host scope for its debug compiler; Darwin
 #  runs both compiler hosts and selects native workloads separately.
 

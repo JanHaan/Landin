@@ -64,7 +64,7 @@ affect it; the checkout remains the import root. The result is written to
 `OUT/reduced.ldn`. Before trusting that the reduced file shows the same
 defect as the original, compare the two server logs.
 
-The gate's `compiler` job runs one round from seed 500000 with the debug
+The gate's `compiler-checks` job runs one round from seed 500000 with the debug
 compiler, whose contracts are the stronger oracle. Its first run against the
 server found a definition asked of a module whose names were refused raising
 a defect; the server suite pins the fix. The round over the reviewed

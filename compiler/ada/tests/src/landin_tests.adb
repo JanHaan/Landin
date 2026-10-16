@@ -70,6 +70,7 @@ procedure Landin_Tests is
    Suite_Filter : Unbounded.Unbounded_String;
    Case_Filter  : Unbounded.Unbounded_String;
    Fixture      : Unbounded.Unbounded_String;
+   Of_Shard     : Landin.Testing.Shard := Landin.Testing.Whole;
 
    --  Every suite resolves the repository's trees relative to compiler/ada
    --  and writes its scratch files under build/ there.  Run from anywhere
@@ -156,6 +157,9 @@ procedure Landin_Tests is
         (Text_IO.Standard_Error,
          "       and any of --target=NAME --runner=PROGRAM"
          & " --toolchain=DRIVER");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       and, with no selection or --host alone, --shard=I/N");
    end Print_Usage;
 
    --  The lane's own options may accompany any selection, each once; what
@@ -164,10 +168,41 @@ procedure Landin_Tests is
       Rest : array (1 .. 2) of Natural := [0, 0];
       Kept : Natural := 0;
       Seen_Target, Seen_Runner, Seen_Toolchain : Boolean := False;
+      Seen_Shard : Boolean := False;
       Selected : Positive := 1;
 
       function Value (Argument, Prefix : String) return String
         is (Argument (Argument'First + Prefix'Length .. Argument'Last));
+
+      --  I/N with 1 <= I <= N <= 64, both written as plain decimals.
+      function Read_Shard (Text : String) return Boolean;
+
+      function Read_Shard (Text : String) return Boolean is
+         Slash : constant Natural := Ada.Strings.Fixed.Index (Text, "/");
+
+         function Number (Digits_Of : String) return Natural is
+           (if Digits_Of'Length in 1 .. 2
+              and then (for all C of Digits_Of => C in '0' .. '9')
+            then Natural'Value (Digits_Of) else 0);
+      begin
+         if Slash = 0 then
+            return False;
+         end if;
+
+         declare
+            Index : constant Natural :=
+              Number (Text (Text'First .. Slash - 1));
+            Count : constant Natural := Number (Text (Slash + 1 .. Text'Last));
+         begin
+            if Index = 0 or else Count = 0 or else Count > 64
+              or else Index > Count
+            then
+               return False;
+            end if;
+            Of_Shard := (Index => Index, Count => Count);
+            return True;
+         end;
+      end Read_Shard;
    begin
       for Index in 1 .. Ada.Command_Line.Argument_Count loop
          declare
@@ -202,6 +237,14 @@ procedure Landin_Tests is
                Landin.Testing.Lanes.Select_Toolchain
                  (Value (Argument, "--toolchain="));
                Seen_Toolchain := True;
+            elsif Starts_With (Argument, "--shard=") then
+               if Seen_Shard
+                 or else not Read_Shard (Value (Argument, "--shard="))
+               then
+                  Mode := Misuse;
+                  return;
+               end if;
+               Seen_Shard := True;
             elsif Kept = Rest'Last then
                Mode := Misuse;
                return;
@@ -282,6 +325,10 @@ procedure Landin_Tests is
          end if;
       end;
       if Host_Only and then Mode not in Run_Suite | Run_Case then
+         Mode := Misuse;
+      end if;
+      --  A shard is a share of the complete run, so it takes no selection.
+      if Seen_Shard and then Mode not in Run_All | Run_Host then
          Mode := Misuse;
       end if;
    end Read_Arguments;
@@ -416,7 +463,7 @@ begin
    case Mode is
       when Run_All | Run_Host =>
          Landin.Testing.Run
-           (Cases, Transcript, Result,
+           (Cases, Of_Shard, Transcript, Result,
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
       when Run_Suite =>

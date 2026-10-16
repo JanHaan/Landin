@@ -46,11 +46,15 @@ package Landin.Testing is
    --  Raises Compiler_Defect on a duplicate (Suite, Name): two cases with
    --  one name is a harness defect, and silently running one of them is how
    --  a suite starts lying about its coverage.
+   --
+   --  A Divided case shares its work out across the shards of a sharded
+   --  run, below, rather than belonging to one of them.
    procedure Register
-     (Into  : in out Registry;
-      Suite : String;
-      Name  : String;
-      Run   : not null Case_Body);
+     (Into    : in out Registry;
+      Suite   : String;
+      Name    : String;
+      Run     : not null Case_Body;
+      Divided : Boolean := False);
 
    function Is_Registered
      (In_Registry : Registry; Suite : String; Name : String) return Boolean;
@@ -65,6 +69,29 @@ package Landin.Testing is
    function Suite_Count (In_Registry : Registry) return Natural;
 
    function Case_Count (In_Registry : Registry) return Natural;
+
+   --  A run divided across processes, so a gate whose runners have a few
+   --  CPUs each can run the inventory on several at once.  Shard Index of
+   --  Count runs each ordinary case whose place among the ordinary cases,
+   --  sorted as a run sorts them, is Index - 1 modulo Count.  A Divided
+   --  case runs in every shard instead, over its own share of its work:
+   --  the items In_Share answers True for.  So the shards together run
+   --  every case once and every item of divided work once, and the
+   --  transcript of one says SHARD, so it cannot be quoted as the whole.
+   type Shard is record
+      Index : Positive := 1;
+      Count : Positive := 1;
+   end record;
+
+   Whole : constant Shard := (Index => 1, Count => 1);
+
+   function Owns (Of_Shard : Shard; Ordinal : Natural) return Boolean is
+     (Ordinal mod Of_Shard.Count = Of_Shard.Index - 1);
+
+   --  Whether the running case owns item Ordinal, counted from zero, of
+   --  the work it shares out.  True for every item of an ordinary case,
+   --  and outside a sharded run, so a case asks it whatever the run is.
+   function In_Share (Ordinal : Natural) return Boolean;
 
    type Summary is record
       Cases  : Natural := 0;
@@ -101,6 +128,14 @@ package Landin.Testing is
       Result      : out Summary;
       Record_Timings : Boolean := False);
 
+   --  One shard of the complete run; Whole is the complete run itself.
+   procedure Run
+     (In_Registry : Registry;
+      Of_Shard    : Shard;
+      Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
+      Result      : out Summary;
+      Record_Timings : Boolean := False);
+
    --  A focused run is developer feedback, not the repository gate.  Empty
    --  filters mean every value at that level; a case filter therefore needs
    --  the suite that owns it.  The transcript says FILTERED so it cannot be
@@ -125,9 +160,10 @@ private
    end record;
 
    type Entry_Record is record
-      Suite : Unbounded.Unbounded_String;
-      Name  : Unbounded.Unbounded_String;
-      Run   : Case_Body;
+      Suite   : Unbounded.Unbounded_String;
+      Name    : Unbounded.Unbounded_String;
+      Run     : Case_Body;
+      Divided : Boolean := False;
    end record;
 
    package Entry_Vectors is new Ada.Containers.Vectors

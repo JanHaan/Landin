@@ -180,13 +180,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
       type Context_Array is
         array (Positive range <>) of Landin.Testing.Context;
       Results : Context_Array (Work'Range);
+      --  A sharded run's share of the work; every slot otherwise.  The
+      --  caller's counters come from the whole collection, so a shard
+      --  still checks that nothing was left out of it.
+      Owned   : array (Work'Range) of Boolean;
+      Count   : Natural := 0;
    begin
-      if Work'Length = 0 then
+      for Slot in Work'Range loop
+         Owned (Slot) := Landin.Testing.In_Share (Slot - Work'First);
+         if Owned (Slot) then
+            Count := Count + 1;
+         end if;
+      end loop;
+
+      if Count = 0 then
          return;
       end if;
 
       declare
-         Jobs : constant Positive := Positive'Min (Job_Count, Work'Length);
+         Jobs : constant Positive := Positive'Min (Job_Count, Count);
 
          protected Dispenser is
             procedure Next (Slot : out Natural);
@@ -197,6 +209,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
          protected body Dispenser is
             procedure Next (Slot : out Natural) is
             begin
+               while Cursor <= Work'Last and then not Owned (Cursor) loop
+                  Cursor := Cursor + 1;
+               end loop;
+
                if Cursor > Work'Last then
                   Slot := 0;
                else
@@ -2446,10 +2462,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Hosted_Library_Links_And_Runs'Access);
          Landin.Testing.Register
            (Into, "fixture execution", "every positive fixture is emitted",
-            Every_Positive_Fixture_Is_Emitted'Access);
+            Every_Positive_Fixture_Is_Emitted'Access, Divided => True);
          Landin.Testing.Register
            (Into, "fixture execution", "runtime fixtures execute",
-            Runtime_Fixtures_Execute'Access);
+            Runtime_Fixtures_Execute'Access, Divided => True);
       end if;
 
       if Unbounded.Length (Selected) > 0 then

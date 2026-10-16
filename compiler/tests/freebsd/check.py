@@ -377,6 +377,11 @@ def work_items(args):
     if args.case:
         require(set(args.case) <= {p.name for p, _ in candidates}, 'unknown exact case')
         candidates = [(p, m) for p, m in candidates if p.name in args.case]
+    if getattr(args, 'shard', None):
+        # Whole fixtures, so each keeps its levels and profiles together.
+        index, count = args.shard
+        candidates = candidates[index - 1::count]
+        require(candidates, 'empty shard')
     work = []
     for base, meta in candidates:
         levels = [None]
@@ -397,7 +402,8 @@ def build_payload(lane):
         return lane.build_debugger()
     lane.command([*lane.cc, HERE / 'processor.c', '-O2', '-o', lane.bundle / 'processor'], 'processor-build')
     lane.assembler_control()
-    if args.kind == 'runtime' and not args.case:
+    # The source verdicts are not per fixture, so the first shard owns them.
+    if args.kind == 'runtime' and not args.case and (not args.shard or args.shard[0] == 1):
         lane.sources()
     work = work_items(args)
     def build(item):
@@ -489,6 +495,13 @@ def configured_guest(lane, image):
                     guest.checked('sysctl kern.maxdsiz=' + str(previous))
 
 
+def shard(text):
+    index, slash, count = text.partition('/')
+    if not (slash and index.isdigit() and count.isdigit() and 1 <= int(index) <= int(count) <= 64):
+        raise argparse.ArgumentTypeError('expected I/N with 1 <= I <= N <= 64')
+    return int(index), int(count)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--arch', choices=['amd64', 'arm64'], required=True)
@@ -505,13 +518,18 @@ def main():
     parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')
     parser.add_argument('--prepared', type=Path, help='execute a checked Linux payload without a compiler')
     parser.add_argument('--case', action='append', help='exact fixture name, development only')
+    parser.add_argument('--shard', type=shard, metavar='I/N',
+                        help='fixtures I, I+N, ... of the selection; all N together are the lane')
     args = parser.parse_args()
     require(sys.platform.startswith('linux'), 'FreeBSD emission/controller lane must run on Linux')
     require(not (args.prepare_only and args.prepared), 'prepare and execute are distinct stages')
     require(args.refine is not None or args.prepared is not None, 'emission requires refine')
     require(not args.prepared or args.runner_ssh or args.ssh_port, 'prepared execution requires a VM endpoint')
+    require(not (args.shard and (args.case or args.prepared or args.prepare_only)),
+            'a shard is a share of a complete in-process lane')
     args.output.mkdir(parents=True, exist_ok=False)
-    summary = {'target': args.arch, 'kind': args.kind, 'scope': 'filtered' if args.case else 'complete',
+    summary = {'target': args.arch, 'kind': args.kind,
+               'scope': 'filtered' if args.case else 'shard %d of %d' % args.shard if args.shard else 'complete',
                'status': 'failed', 'results': []}
     try:
         if args.prepared:

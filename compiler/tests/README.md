@@ -88,6 +88,16 @@ and recording cannot combine with `--host`. Run Linux workloads on a native
 Linux host and Darwin workloads natively; a filtered run is never a verdict
 on the complete suite.
 
+`--shard=I/N`, alone or with `--host`, runs shard I of N of the complete
+suite, so the gate can run one program on N hosted runners at once. Each
+ordinary case runs in exactly one shard. The few cases that loop over the
+corpus (fixture emission, runtime and ABI execution, the truncation sweep)
+run in every shard over that shard's share of their fixtures, and still
+count the whole corpus, so a fixture missing from the collection fails
+every shard. The transcript begins `SHARD I of N`; only all N together are
+the complete run, which the harness's `shards partition the inventory`
+holds them to.
+
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
 identifies the scope; compiler units, diagnostics and the complete IR golden
@@ -123,9 +133,10 @@ The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
 acceptance ran the complete suite in both modes. Those exact-revision
 acceptance runs are retired. The current `.github/workflows/gate.yml` has
-separate Linux `compiler` and `release` jobs; each runs unfiltered
-`./scripts/test.sh`, so the complete suite runs in both debug and release
-modes. The gate is a safety net, not an exact-revision acceptance verdict.
+separate Linux `compiler` and `release` jobs. `release` runs unfiltered
+`./scripts/test.sh`; `compiler` runs it as three required `--shard` jobs,
+which together are the complete run. So the complete suite runs in both
+debug and release modes. The gate is a safety net, not an exact-revision acceptance verdict.
 See [`docs/process.md`](../../docs/process.md).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,

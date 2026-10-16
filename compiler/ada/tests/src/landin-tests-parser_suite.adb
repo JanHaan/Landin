@@ -1134,8 +1134,10 @@ package body Landin.Tests.Parser_Suite is
             Class   : constant Fixtures.Fixture_Class :=
               Fixtures.Class (Fixture);
          begin
+            --  A sharded run takes its share of the corpus by position.
             if Class in Fixtures.Positive_Program | Fixtures.Negative_Program
               and then Fixtures.Program (Fixture) /= ""
+              and then Landin.Testing.In_Share (Index - 1)
             then
                declare
                   Path : constant String :=
@@ -4650,7 +4652,7 @@ package body Landin.Tests.Parser_Suite is
          Undo_Statements_Retain_Their_Calls'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
-         Survives_Every_Truncation'Access);
+         Survives_Every_Truncation'Access, Divided => True);
       Landin.Testing.Register
         (Into, "parser", "survives deterministic mutations",
          Survives_Deterministic_Mutations'Access);

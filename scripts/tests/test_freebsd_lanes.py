@@ -17,6 +17,26 @@ import vm
 
 
 class FreeBSDControls(unittest.TestCase):
+    def test_shards_partition_each_lane_by_whole_fixture(self):
+        for arch in ('amd64', 'arm64'):
+            for kind in ('runtime', 'abi'):
+                def work(shard):
+                    return LANE.work_items(SimpleNamespace(arch=arch, kind=kind, case=None, shard=shard))
+                whole = [(base, o, s, level) for base, _, o, s, level in work(None)]
+                parts = [[(base, o, s, level) for base, _, o, s, level in work((i, 3))]
+                         for i in (1, 2, 3)]
+                with self.subTest(arch=arch, kind=kind):
+                    self.assertEqual(sorted(map(repr, sum(parts, []))), sorted(map(repr, whole)))
+                    owners = [{base for base, *_ in part} for part in parts]
+                    for i, j in ((0, 1), (0, 2), (1, 2)):
+                        self.assertFalse(owners[i] & owners[j], 'a fixture is split across shards')
+
+    def test_a_shard_takes_no_selection_or_transfer(self):
+        self.assertEqual(LANE.shard('2/3'), (2, 3))
+        for text in ('0/3', '4/3', '3', 'a/b', '1/65'):
+            with self.subTest(text=text), self.assertRaises(Exception):
+                LANE.shard(text)
+
     def test_lld_symlink_keeps_the_elf_driver_invocation_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

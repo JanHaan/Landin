@@ -59,7 +59,8 @@ cannot disagree with itself.  It is checked from two instead:
 `scripts/emit_manifest.py` emits every positive fixture on every target in
 both build modes and every optimization/specialization profile, hashes each
 one, and `.github/workflows/determinism.yml` builds that manifest on each
-host and requires the manifests to agree.
+host, in two parts it joins with `merge`, and requires the manifests to
+agree.
 The initial size/auto comparison across macOS arm64 and Linux x86-64 measured
 1446 identical entries, including 22 matching refusals.  The expanded profile
 matrix now checks that accept/reject verdicts and emitted bytes agree under

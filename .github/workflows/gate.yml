@@ -61,15 +61,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/gate_inputs.py reuse gate.yml \
-            documents scripts linux-debug-build compiler linux-release-build \
+            documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
+            compiler-checks linux-release-build \
             release bindings editor-grammar cortex-m scaling darwin-debug-build \
             darwin-release-build darwin-host darwin-host-release darwin-parity lldb \
-            arm64-debug-build arm64-compiler arm64-release \
+            arm64-debug-build arm64-compiler-1 arm64-compiler-2 \
+            arm64-compiler-checks arm64-release \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
-            freebsd-arm64-runtime freebsd-arm64-debugger freebsd-arm64-abi \
-            'determinism / manifest (x86_64-linux)' \
-            'determinism / manifest (aarch64-linux)' \
-            'determinism / manifest (aarch64-darwin)' 'determinism / agree' gate \
+            freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
+            freebsd-arm64-debugger freebsd-arm64-abi \
+            'determinism / manifest (x86_64-linux 1)' \
+            'determinism / manifest (x86_64-linux 2)' \
+            'determinism / manifest (aarch64-linux 1)' \
+            'determinism / manifest (aarch64-linux 2)' \
+            'determinism / manifest (aarch64-darwin 1)' \
+            'determinism / manifest (aarch64-darwin 2)' 'determinism / agree' gate \
             >> "$GITHUB_OUTPUT"
 
   #  Documents, grammar and the transcription tables.  Nothing to install
@@ -139,13 +145,23 @@ jobs:
           path: ${{ runner.temp }}/linux-amd64-debug.tar.gz
           retention-days: 1
 
-  #  The debug compiler and all 800 cases, then the checks that need a built
-  #  compiler and no corpus.
+  #  The debug compiler's 800 cases, in three shards on three runners: on
+  #  a hosted runner's four CPUs the whole program took 17.5 minutes, 567 s
+  #  of it fixture execution and 212 s one truncation sweep.  Each ordinary
+  #  case runs in one shard; the long cases that loop over the corpus are
+  #  divided, each shard taking its share of their fixtures, and the
+  #  harness's own `shards partition the inventory` holds the three to the
+  #  complete run.  All three are required.
   compiler:
+    name: compiler-${{ matrix.shard }}
     needs: [inputs, linux-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -178,11 +194,40 @@ jobs:
       #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
-      - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+      - name: The fixture corpus, shard ${{ matrix.shard }} of 3
+        run: >-
+          LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
+          ./scripts/test.sh --shard=${{ matrix.shard }}/3
 
-      #  Use the compiler this job already built.  The focused mode requires
-      #  Emacs and the executable, then waits for a live refine diagnostic.
+  #  The checks that need the debug compiler and no corpus, beside its
+  #  shards rather than after one of them.
+  compiler-checks:
+    needs: [inputs, linux-debug-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-amd64-debug
+          path: ${{ runner.temp }}/linux-amd64-debug
+
+      - name: Restore and verify debug executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/debug
+          tar -xzf "$RUNNER_TEMP/linux-amd64-debug/linux-amd64-debug.tar.gz" \
+            -C compiler/ada/build/linux-amd64/debug
+          ./scripts/build.sh -q
+
+      #  The focused mode requires Emacs and the executable, then waits for a
+      #  live refine diagnostic.
       - name: Install the required Emacs client
         run: |
           ./scripts/ci_packages.sh emacs-nox
@@ -807,10 +852,48 @@ jobs:
           retention-days: 1
 
   #  Linux arm64 with the debug compiler: the whole test program, whose lane
-  #  is this host's own, then the checks that need a compiler and no
-  #  corpus.  The same steps as `compiler` on the other architecture.
-  #  Eleven minutes as a job.
+  #  is this host's own, in two shards as `compiler` runs three; its corpus
+  #  took 11.2 minutes on one hosted runner.
   arm64-compiler:
+    name: arm64-compiler-${{ matrix.shard }}
+    needs: [inputs, arm64-debug-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-arm64-debug
+          path: ${{ runner.temp }}/linux-arm64-debug
+
+      - name: Restore and verify debug executables
+        run: |
+          mkdir -p compiler/ada/build/linux-arm64/debug
+          tar -xzf "$RUNNER_TEMP/linux-arm64-debug/linux-arm64-debug.tar.gz" \
+            -C compiler/ada/build/linux-arm64/debug
+          ./scripts/build.sh -q
+
+      - name: The fixture corpus, shard ${{ matrix.shard }} of 2
+        run: >-
+          LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
+          ./scripts/test.sh --shard=${{ matrix.shard }}/2
+
+  #  The checks that need the arm64 debug compiler and no corpus, the same
+  #  as `compiler-checks` on the other architecture.
+  arm64-compiler-checks:
     needs: [inputs, arm64-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
@@ -836,9 +919,6 @@ jobs:
           tar -xzf "$RUNNER_TEMP/linux-arm64-debug/linux-arm64-debug.tar.gz" \
             -C compiler/ada/build/linux-arm64/debug
           ./scripts/build.sh -q
-
-      - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
@@ -965,8 +1045,12 @@ jobs:
   #  expose no KVM, their kernels logging "HYP mode not available" (probed
   #  in run 38921327105).  The release images and base archives are cached
   #  under the lock's digests; check.py verifies them either way.
+  #
+  #  The emulated arm64 runtime lane is the long one, emission and execution
+  #  both by fixture, so it runs as two shards of whole fixtures; the
+  #  first also owns the source verdicts.
   freebsd:
-    name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}
+    name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}${{ matrix.part && format('-{0}', matrix.part) || '' }}
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
@@ -974,13 +1058,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
-        kind: [runtime, debugger, abi]
         include:
-          - arch: amd64
-            qemu: qemu-system-x86
-          - arch: arm64
-            qemu: qemu-system-arm qemu-efi-aarch64 ipxe-qemu
+          - {arch: amd64, kind: runtime}
+          - {arch: amd64, kind: debugger}
+          - {arch: amd64, kind: abi}
+          - {arch: arm64, kind: runtime, part: 1, shard: 1/2}
+          - {arch: arm64, kind: runtime, part: 2, shard: 2/2}
+          - {arch: arm64, kind: debugger}
+          - {arch: arm64, kind: abi}
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
@@ -1004,7 +1089,8 @@ jobs:
           . ./environments/pins.sh
           ./scripts/ci_packages.sh \
             "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 libarchive-tools \
-            qemu-utils ${{ matrix.qemu }}
+            qemu-utils ${{ matrix.arch == 'amd64' && 'qemu-system-x86'
+              || 'qemu-system-arm qemu-efi-aarch64 ipxe-qemu' }}
           test "$(dpkg-query -W -f='${Version}' clang-19)" = "$LANDIN_CLANG_UBUNTU"
           clang-19 --version
       - name: Let the job open KVM
@@ -1018,17 +1104,18 @@ jobs:
             ~/.cache/landin/freebsd/${{ matrix.arch }}.raw.xz
             ~/.cache/landin/freebsd/${{ matrix.arch }}-base.txz
           key: freebsd-${{ matrix.arch }}-${{ hashFiles('environments/freebsd/lock.json') }}
-      - name: Emit, boot and execute FreeBSD ${{ matrix.arch }} ${{ matrix.kind }}
+      - name: Emit, boot and execute FreeBSD ${{ matrix.arch }} ${{ matrix.kind }} ${{ matrix.shard }}
         run: |
           python3 compiler/tests/freebsd/check.py \
             --arch=${{ matrix.arch }} --kind=${{ matrix.kind }} \
+            ${{ matrix.shard && format('--shard={0}', matrix.shard) || '' }} \
             --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output="$RUNNER_TEMP/freebsd-evidence"
       - name: Keep guest identity, feature probes and verdict transcripts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}
+          name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}${{ matrix.part && format('-{0}', matrix.part) || '' }}
           path: |
             ${{ runner.temp }}/freebsd-evidence/*.json
             ${{ runner.temp }}/freebsd-evidence/*.log
@@ -1170,10 +1257,11 @@ jobs:
   gate:
     if: always()
     needs: [inputs, documents, scripts, linux-debug-build, compiler,
-            linux-release-build, release, bindings, editor-grammar, cortex-m,
-            scaling, darwin-debug-build, darwin-release-build, darwin-host,
-            darwin-host-release, darwin-parity, lldb, arm64-debug-build,
-            arm64-compiler, arm64-release, freebsd, determinism]
+            compiler-checks, linux-release-build, release, bindings,
+            editor-grammar, cortex-m, scaling, darwin-debug-build,
+            darwin-release-build, darwin-host, darwin-host-release,
+            darwin-parity, lldb, arm64-debug-build, arm64-compiler,
+            arm64-compiler-checks, arm64-release, freebsd, determinism]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

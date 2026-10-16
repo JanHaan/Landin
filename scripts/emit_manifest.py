@@ -182,7 +182,7 @@ def compile_one(job):
     return key, hashlib.sha256(asm.read_bytes()).hexdigest()
 
 
-def emit(refine, root, out, workers=None):
+def emit(refine, root, out, workers=None, targets=TARGETS):
     refine = Path(refine).resolve()
     fixtures = sorted(
         p for p in (Path(root).resolve() / "compiler/tests/fixtures/positive").iterdir()
@@ -194,7 +194,7 @@ def emit(refine, root, out, workers=None):
         jobs = []
         for fixture in fixtures:
             sources = operands(fixture)
-            for target in TARGETS:
+            for target in targets:
                 for mode in MODES:
                     for optimize in OPTIMIZATIONS:
                         for specialize in SPECIALIZATIONS:
@@ -218,6 +218,35 @@ def emit(refine, root, out, workers=None):
               file=sys.stderr)
         report_faults(faults)
         return 1
+    return 0
+
+
+def merge(out, paths):
+    """One host's manifest from the parts it emitted, target by target.
+
+    The gate emits each host's targets in two jobs so neither waits for
+    the other; compare() holds whole manifests, so the parts are joined
+    first, and a key in two parts or a target in none is a fault rather
+    than a smaller manifest.
+    """
+    manifest, faults = {}, []
+    for path in paths:
+        for key, value in json.loads(Path(path).read_text()).items():
+            if key in manifest:
+                faults.append("%s: %s is in two parts" % (Path(path).name, key))
+            manifest[key] = value
+    present = {key.split("|")[1] for key in manifest}
+    faults.extend("no part emitted %s" % target
+                  for target in TARGETS if target not in present)
+    faults.extend("%s is not a target this check emits" % target
+                  for target in sorted(present - set(TARGETS)))
+    if faults:
+        print("parts do not make one manifest: %d fault(s)" % len(faults),
+              file=sys.stderr)
+        report_faults(faults)
+        return 1
+    Path(out).write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
+    print("%d parts make %s: %d entries" % (len(paths), Path(out).name, len(manifest)))
     return 0
 
 
@@ -255,13 +284,23 @@ def compare(paths):
 def main(argv):
     if len(argv) == 5 and argv[1] == "emit":
         return emit(argv[2], argv[3], argv[4])
+    if len(argv) == 6 and argv[1] == "emit":
+        targets = tuple(argv[5].split(","))
+        if not targets or not set(targets) <= set(TARGETS) or len(set(targets)) != len(targets):
+            print("emit: TARGETS must be distinct names from %s" % ", ".join(TARGETS),
+                  file=sys.stderr)
+            return 2
+        return emit(argv[2], argv[3], argv[4], targets=targets)
+    if len(argv) >= 4 and argv[1] == "merge":
+        return merge(argv[2], argv[3:])
     #  One manifest reaches compare() rather than the usage text, so that
     #  "a comparison needs two sides" is said by the check and not by an
     #  argument count.  A shell glob that matched one file is exactly how
     #  this arrives, and it must not look like a pass.
     if len(argv) >= 3 and argv[1] == "compare":
         return compare(argv[2:])
-    print("usage: emit_manifest.py emit REFINE ROOT OUT.json", file=sys.stderr)
+    print("usage: emit_manifest.py emit REFINE ROOT OUT.json [TARGET,...]", file=sys.stderr)
+    print("       emit_manifest.py merge OUT.json PART.json [...]", file=sys.stderr)
     print("       emit_manifest.py compare A.json B.json [...]", file=sys.stderr)
     return 2
 
