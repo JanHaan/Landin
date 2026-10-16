@@ -42,6 +42,17 @@ runs:
           echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
           echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
         } >> "$GITHUB_ENV"
+    #  GNAT's driver otherwise links against the Command Line Tools SDK it
+    #  was configured with, whatever DEVELOPER_DIR selects; on the hosted
+    #  macos-26 image that SDK's libSystem.tbd names an architecture Xcode
+    #  26.6's linker refuses.  SDKROOT is how environments/macos-arm64
+    #  selects the recorded SDK, so the build uses the selected Xcode's.
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        sdk=$(xcrun --sdk macosx --show-sdk-path)
+        echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
+        echo "SDKROOT=$sdk ($(xcrun --sdk macosx --show-sdk-version))"
     - shell: bash
       run: |
         # Drain version output: an early reader exit can make GNAT report

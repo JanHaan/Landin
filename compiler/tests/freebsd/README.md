@@ -42,7 +42,9 @@ status. The FreeBSD startup objects contribute debug ranges before Landin's
 object, exercising section-relocated lexical ranges.
 
 For a complete local lane, install Clang 19, LLD, LLVM object tools, GNU as,
-QEMU system emulators, arm64 UEFI firmware and bsdtar, then run:
+QEMU system emulators, arm64 UEFI firmware, the iPXE ROMs QEMU's virtio network
+device loads (`ipxe-qemu` on Ubuntu, which installs it only as a recommendation
+for arm64) and bsdtar, then run:
 
 ```sh
 python3 compiler/tests/freebsd/check.py --arch=amd64 --kind=runtime \

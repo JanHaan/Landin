@@ -79,6 +79,11 @@ jobs:
           {
             echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
             echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+            #  As the pinned-toolchain action does: link against the
+            #  selected Xcode's SDK, not GNAT's configured one.
+            if [ "$RUNNER_OS" = macOS ]; then
+              echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)"
+            fi
           } >> "$GITHUB_ENV"
           "$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION/bin/gnat" --version | head -1
 

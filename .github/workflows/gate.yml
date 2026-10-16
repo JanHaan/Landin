@@ -980,7 +980,7 @@ jobs:
           - arch: amd64
             qemu: qemu-system-x86
           - arch: arm64
-            qemu: qemu-system-arm qemu-efi-aarch64
+            qemu: qemu-system-arm qemu-efi-aarch64 ipxe-qemu
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
