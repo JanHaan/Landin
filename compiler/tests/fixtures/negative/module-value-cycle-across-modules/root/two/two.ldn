@@ -1,0 +1,5 @@
+--  The other half.
+import one
+
+--- Worked out from the first module's value.
+public second: i32 = one.first + 1

@@ -180,6 +180,28 @@ deterministic generator: xoshiro256**, seeded from a `u64` or from any
 `entropy`, drawing the same sequence for a seed on every target, Cortex-M0
 included, uniform values below a bound without modulo bias and shuffles;
 it is not cryptographic.
+The network is one more concept outside `world`, `network`, so an image
+that never connects carries none of it. It is a reader and a writer of its
+sockets as well, so a TCP connection is read and written through `read`
+and `write`, a line reader and a buffered writer among them, and its own
+`send` and `receive` say more of a failure than `io_failed`: `timed_out`
+when a limit `set_timeouts` gave has passed and `disconnected` when the
+peer has gone. It listens, accepts, connects, opens UDP sockets, sends a
+datagram to an address and receives one with its sender, shuts one
+direction of a connection, names a socket's own address and its peer's,
+and closes a socket. Every call waits as a blocking socket does, unless a
+limit was set. An `address` is a value: a family, `ipv4` or `ipv6`,
+sixteen bytes and a port, made with `loopback`, `unspecified`,
+`ipv4_address` and `ipv6_address`, read from its text with `parse_ip` and
+`parse_address` and written back with `append_ip` and `append_address`, as
+RFC 5952 writes IPv6, and `text.formattable` too. It has no zone, and
+nothing here resolves a name. A refused connection, an address in use and
+an address this system does not have are atoms of their own. The fake is a
+`memory_network`, a machine of loopback addresses over the caller's socket
+records and their buffers: a connection and a datagram arrive at once and
+in order, a datagram no socket takes is lost, and since nothing in one
+thread could ever end a wait, a call that would wait answers `timed_out`
+at once. A test can take IPv6 away from it and inject a failure.
 `core/text` builds text: a `builder` over the caller's buffer, or one
 growing through an allocator the caller erases, takes typed pieces, bytes,
 text, host strings, decimals of every width and hexadecimal, each whole or
@@ -216,6 +238,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
+| `core/io` network | Reading and writing addresses run in `runtime/network-addresses-firmware`'s 29.8 KB image at size/auto, 31.9 KB at none/off, of which the address code is about 17 KB, `ipv6_octets` alone 4.6 KB. The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 45 KB, is. |
 | `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
@@ -480,6 +503,19 @@ where noted.
 | `linux.auxiliary(25)`'s sixteen bytes as a seed | `random.from_entropy(host)`, or `random.new(seed)` for a fixed sequence |
 | a generator of your own | `core/random`'s `new`, `next`, `below` and `shuffle` |
 | `hosted.system` as `world`, `directories`, `environment` and `programs` | the same, and `clock`, `wall_clock` and `entropy` too |
+
+## Migrating to sockets
+
+A network concept beside the others connects, listens and sends over TCP
+and UDP. Behaviour is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `numbers.socket_number`, `bind_number`, `connect_number` and the rest through `linux.system_call`, or the BSD socket calls declared `extern(c)` | `io.listen`, `io.accept`, `io.connect`, `io.open_datagram`, `io.send`, `io.receive`, `io.send_to`, `io.receive_from`, `io.shutdown` and `io.close_socket` through the `io.network` concept, or `platform/posix`'s `socket`, `bind`, `listen`, `accept`, `connect`, `send` and the rest, Unix-domain sockets among them |
+| a `sockaddr_in` built by hand, `sin_len` on Darwin and FreeBSD | `io.address`, from `io.loopback`, `io.ipv4_address`, `io.ipv6_address` or `io.parse_address`; `posix.internet_address` lays out each system's record |
+| a write to a pipe or a socket nobody reads ending the process with SIGPIPE | the write failing: `posix.epipe`, `io.disconnected` from `io.send`, `io_failed` with EPIPE from `io.write`; the argument initializer ignores SIGPIPE when it finds the default, and `posix.spawn` gives each child the default back |
+| `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock` and `entropy` | the same, and `network` too |
+| `scripts/linux_syscalls.py --tarball` to give a new wrapper its number | `scripts/linux_syscalls.py`, which writes `platform/linux/wrapped.ldn` from the committed numbers; the release is needed only to change the pin |
 
 ## Migrating container providers and indices
 

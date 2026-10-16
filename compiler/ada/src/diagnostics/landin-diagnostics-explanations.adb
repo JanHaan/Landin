@@ -290,12 +290,16 @@ package body Landin.Diagnostics.Explanations is
                & "lished before the program runs [1940] (D136, D202). A mo"
                & "dule value, array bound or fixed configuration expressio"
                & "n can depend on a runtime value or call, contain an unkn"
-               & "own fixed name or form, or depend on itself. Change such"
-               & " an expression to one the closed fold can evaluate. A mo"
-               & "dule function binding without an initializer has no impl"
-               & "icit zero function address; give it an initial function "
-               & "address, such as a declared function or another module f"
-               & "unction value whose image is known.",
+               & "own fixed name or form, or depend on itself, within one "
+               & "module or through several. Change such an expression to "
+               & "one the closed fold can evaluate. A value another module"
+               & " exports, named through that module as `sizes.page`, is "
+               & "known as it is in its own module; a field of a record im"
+               & "age, an element of an array image and a call are not, in"
+               & " either. A module function binding without an initialize"
+               & "r has no implicit zero function address; give it an init"
+               & "ial function address, such as a declared function or ano"
+               & "ther module function value whose image is known.",
             when Catalogue.Impossible_Operand =>
                "An operand the operation cannot take, where the compiler"
                & " knows it [1950]: a divisor of zero, a shift by a negati"

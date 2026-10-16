@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: over 127.0.0.1 and over ::1, a receive on a quiet connection and an accept on a listener nothing connects to, each limited to 50 ms by io.set_timeouts, are io.timed_out after at least 50 ms by the monotonic clock, and the connection then receives what its peer sends
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

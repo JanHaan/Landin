@@ -1,0 +1,166 @@
+--  The facts platform/libc, platform/linux and platform/posix keep for
+--  sockets and for SIGPIPE, handed to a C peer that holds each to the
+--  system's own headers: the domains, kinds, levels and options, the
+--  record sizes, the time limit's and the signal action's layouts, and the
+--  address records platform/posix lays out, which the peer reads as C's
+--  own and builds for platform/posix to read back.
+import core/io
+import core/text
+import platform/libc
+import platform/linux
+import platform/posix
+
+--- Socket and signal numbers, by the peer's index.
+public extern(c) l_number: (index: i32) -> (value: i64) =
+    values: [28]i64 =
+        [i64(libc.af_unix),
+         i64(libc.af_inet),
+         i64(libc.af_inet6),
+         i64(libc.sock_stream),
+         i64(libc.sock_dgram),
+         i64(libc.sol_socket),
+         i64(libc.so_reuseaddr),
+         i64(libc.so_error),
+         i64(libc.so_rcvtimeo),
+         i64(libc.so_sndtimeo),
+         i64(libc.ipproto_tcp),
+         i64(libc.ipproto_ipv6),
+         i64(libc.tcp_nodelay),
+         i64(libc.ipv6_v6only),
+         i64(libc.shut_rd),
+         i64(libc.shut_wr),
+         i64(libc.shut_rdwr),
+         i64(libc.sigpipe),
+         i64(libc.sig_dfl),
+         i64(libc.sig_ign),
+         i64(libc.f_getfd),
+         i64(libc.sockaddr_storage_size),
+         i64(libc.sockaddr_in_size),
+         i64(libc.sockaddr_in6_size),
+         i64(libc.sockaddr_un_path),
+         i64(sizeof libc.time_limit),
+         i64(sizeof libc.signal_action),
+         i64(sizeof libc.signal_set)]
+    value = -1
+    return when index < 0 or usize(index) >= lenof values
+    value = values[usize(index)]
+end l_number
+
+fixed if compiler.os == linux then
+    --  platform/linux's own copies agree with the C library's.
+    public extern(c) l_linux_agrees: () -> (yes: bool) =
+        yes = linux.af_unix == libc.af_unix and linux.af_inet == libc.af_inet
+              and linux.af_inet6 == libc.af_inet6
+              and linux.sock_stream == libc.sock_stream
+              and linux.sock_dgram == libc.sock_dgram
+              and linux.sock_cloexec == libc.sock_cloexec
+              and linux.msg_nosignal == libc.msg_nosignal
+              and linux.sol_socket == libc.sol_socket
+              and linux.so_reuseaddr == libc.so_reuseaddr
+              and linux.so_error == libc.so_error
+              and linux.so_rcvtimeo == libc.so_rcvtimeo
+              and linux.so_sndtimeo == libc.so_sndtimeo
+              and linux.ipproto_tcp == libc.ipproto_tcp
+              and linux.ipproto_ipv6 == libc.ipproto_ipv6
+              and linux.tcp_nodelay == libc.tcp_nodelay
+              and linux.ipv6_v6only == libc.ipv6_v6only
+              and linux.shut_rd == libc.shut_rd
+              and linux.shut_wr == libc.shut_wr
+              and linux.shut_rdwr == libc.shut_rdwr
+              and linux.sigpipe == libc.sigpipe
+              and linux.sig_dfl == libc.sig_dfl
+              and linux.sig_ign == libc.sig_ign
+              and linux.f_getfd == libc.f_getfd
+              and sizeof linux.time_limit == sizeof libc.time_limit
+    end l_linux_agrees
+
+    public extern(c) l_cloexec_flag: () -> (value: i32) =
+        value = libc.sock_cloexec
+    end l_cloexec_flag
+
+    public extern(c) l_no_signal: () -> (value: i32) =
+        value = libc.msg_nosignal
+    end l_no_signal
+elsif compiler.os == freebsd then
+    public extern(c) l_cloexec_flag: () -> (value: i32) =
+        value = libc.sock_cloexec
+    end l_cloexec_flag
+
+    public extern(c) l_no_signal: () -> (value: i32) =
+        value = libc.msg_nosignal
+    end l_no_signal
+
+    public extern(c) l_no_sigpipe: () -> (value: i32) =
+        value = libc.so_nosigpipe
+    end l_no_sigpipe
+
+    public extern(c) l_setsigdef: () -> (value: i16) =
+        value = libc.posix_spawn_setsigdef
+    end l_setsigdef
+else
+    public extern(c) l_no_sigpipe: () -> (value: i32) =
+        value = libc.so_nosigpipe
+    end l_no_sigpipe
+
+    public extern(c) l_setsigdef: () -> (value: i16) =
+        value = libc.posix_spawn_setsigdef
+    end l_setsigdef
+end if
+
+--- Where a field lies in the time limit and the signal action: the
+--- microseconds, the action's flags and its mask.
+public extern(c) l_offset: (index: i32) -> (offset: i64) =
+    mut limit: libc.time_limit = zeroed
+    mut action: libc.signal_action = zeroed
+    offsets: [3]i64 =
+        [i64(usize(addr limit.microseconds) - usize(addr limit)),
+         i64(usize(addr action.flags) - usize(addr action)),
+         i64(usize(addr action.mask) - usize(addr action))]
+    offset = -1
+    return when index < 0 or index > 2
+    offset = offsets[usize(index)]
+end l_offset
+
+--- The record platform/posix lays out for the peer's address `index`,
+--- copied into `into`, and its length.
+public extern(c) l_encoded: (index: i32, into: ptr mut u8) -> (length: u32) =
+    groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
+    record: posix.socket_address =
+        if index == 0 then posix.internet_address(io.ipv4_address(192, 0, 2,
+                                                                  1, 8080))
+        elsif index == 1 then posix.internet_address(io.ipv6_address(groups,
+                                                                     443))
+        else unix_record() end if
+    length = record.length
+    for at in usize(0)..<usize(length) do
+        slot: ptr mut u8 = ptr(usize(into) + at)
+        slot.val = record.bytes[at]
+    end for
+end l_encoded
+
+unix_record: () -> (record: posix.socket_address) =
+    record = posix.unix_address(text.host_over("/tmp/landin.sock")) else (problem)
+        _ = problem
+        posix.internet_address(io.unspecified(io.ipv4, 0))
+    end
+end unix_record
+
+--- Read the C record of `length` bytes at `source` back as an address:
+--- whether it is IPv6, its port and its last byte, or -1 when
+--- platform/posix refuses it.
+public extern(c) l_decoded: (source: ptr u8, length: u32) -> (summary: i64) =
+    mut record: posix.socket_address = (bytes: zeroed, length: length)
+    for at in usize(0)..<usize(length) do
+        slot: ptr u8 = ptr(usize(source) + at)
+        record.bytes[at] = slot.val
+    end for
+    summary = -1
+    at: io.address = posix.address_of(record) else (problem)
+        _ = problem
+        return
+    end
+    last: u8 = if at.family == io.ipv4 then at.octets[3] else at.octets[15]
+               end if
+    summary = (if at.family == io.ipv6 then i64(1) << 32 else i64(0) end if)
+               | (i64(at.port) << 8) | i64(last)
+end l_decoded

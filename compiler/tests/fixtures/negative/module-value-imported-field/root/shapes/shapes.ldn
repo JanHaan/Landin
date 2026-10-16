@@ -1,0 +1,15 @@
+--  A record image and a routine another module reads.
+
+--- A record.
+public pair: type = struct
+    first: i32
+    second: i32
+end pair
+
+--- An image of one.
+public origin: pair = (first: 3, second: 4)
+
+--- A routine.
+public answer: () -> (value: i32) =
+    value = 42
+end answer

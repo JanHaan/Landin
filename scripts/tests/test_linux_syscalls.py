@@ -192,6 +192,61 @@ class Generator(unittest.TestCase):
             self.assertEqual(linux_syscalls.main(arguments), 2)
         self.assertIn("not the pinned", said.getvalue())
 
+    def test_without_a_release_the_wrappers_come_from_the_numbers(self):
+        """A new wrapper needs no download: the committed numbers file is
+        the input, held to being the generator's own rendering."""
+        path, sha = release(self.directory, kernel())
+        module = self.module(["write", "openat"])
+        public = module / "numbers/numbers.ldn"
+        wrapped = module / "wrapped.ldn"
+        released = ["--tarball", str(path), "--module", str(module)]
+        local = ["--module", str(module)]
+        with mock.patch.object(linux_syscalls, "SHA256", sha), \
+                mock.patch.object(linux_syscalls, "VERSION", "9.9"), \
+                mock.patch("sys.stdout", io.StringIO()), \
+                mock.patch("sys.stderr", io.StringIO()) as said:
+            self.assertEqual(linux_syscalls.main(released), 0)
+            self.assertEqual(linux_syscalls.main(local + ["--check"]), 0)
+            #  A wrapper of another call: the check names the stale file,
+            #  and writing it from the numbers alone brings it in step.
+            with open(module / "linux.ldn", "a") as stream:
+                stream.write("y: i64 = riscv_hwprobe_number\n")
+            self.assertEqual(linux_syscalls.main(local + ["--check"]), 1)
+            self.assertIn("wrapped.ldn", said.getvalue())
+            numbers = public.read_text()
+            self.assertEqual(linux_syscalls.main(local), 0)
+            self.assertEqual(public.read_text(), numbers)
+            self.assertIn("riscv_hwprobe_number: i64 = 258\n",
+                          wrapped.read_text())
+            self.assertEqual(linux_syscalls.main(local + ["--check"]), 0)
+            #  What the release gives is what the numbers gave.
+            self.assertEqual(linux_syscalls.main(released + ["--check"]), 0)
+
+    def test_a_numbers_file_not_the_generators_is_refused(self):
+        path, sha = release(self.directory, kernel())
+        module = self.module(["write"])
+        public = module / "numbers/numbers.ldn"
+        local = ["--module", str(module)]
+        with mock.patch.object(linux_syscalls, "SHA256", sha), \
+                mock.patch.object(linux_syscalls, "VERSION", "9.9"), \
+                mock.patch("sys.stdout", io.StringIO()), \
+                mock.patch("sys.stderr", io.StringIO()) as said:
+            self.assertEqual(linux_syscalls.main(local), 2)
+            self.assertIn("does not exist", said.getvalue())
+            self.assertEqual(linux_syscalls.main(
+                ["--tarball", str(path)] + local), 0)
+            original = public.read_text()
+            #  A number typed by hand, which the rendering does not give.
+            public.write_text(original.replace(
+                "public write_number: i64 = 1\n",
+                "public write_number: i64 = 1  \n"))
+            self.assertEqual(linux_syscalls.main(local), 2)
+            self.assertIn("not the generator's output", said.getvalue())
+            public.write_text(original)
+            with mock.patch.object(linux_syscalls, "VERSION", "9.10"):
+                self.assertEqual(linux_syscalls.main(local), 2)
+            self.assertIn("not the pinned 9.10", said.getvalue())
+
     def test_the_wrappers_get_only_their_numbers_on_each_architecture(self):
         module = self.module(["write", "openat", "riscv_hwprobe"])
         text = linux_syscalls.render_wrapped(

@@ -1,0 +1,55 @@
+--  A module value read from another module's values, qualified by the
+--  module's name, is known as the same value is in its own module [1940]:
+--  a scalar, flags combined with `|`, `&` and `~`, a distinct flag set,
+--  atoms, the size and alignment of an imported record, a chain through a
+--  second module, a mutable value's initial image, a routine, a record
+--  copy and a text image, in scalar, array and record images.  A distinct
+--  flag set combined in this module folds through its base too.
+import chain
+import flags
+
+mode_value: type = distinct u8
+mode: type = mode_value
+low: mode = mode_value(1)
+high: mode = mode_value(0x80)
+local_both: mode = low | high
+
+plain: u16 = flags.both & ~flags.readable
+chained: u16 = chain.wider
+every: flags.mode = flags.reads | flags.writes
+copied: flags.mode = flags.every
+masked: flags.mode = flags.every & ~flags.reads
+shade: flags.colour = flags.green
+shades: [2]flags.colour = [flags.red, flags.green]
+measured: [2]usize = [sizeof flags.pair, alignof flags.pair]
+record: flags.pair = (first: u8(alignof flags.pair), second: u32(flags.both))
+copy: flags.pair = flags.origin
+text: []u8 = flags.greeting
+seen: i32 = flags.counter
+callback: type = () -> (value: i32)
+answer: callback = flags.answer
+
+public main: () -> (code: i32) =
+    code = 1
+    return when u8(local_both) <> 0x81
+    code = 2
+    return when plain <> 4 or chained <> 0x15
+    code = 3
+    return when u16(every) <> 5 or copied <> every
+      or u16(masked) <> 4
+    code = 4
+    return when shade <> flags.green or shades[0] <> flags.red
+      or shades[1] <> flags.green
+    code = 5
+    return when measured[0] <> sizeof flags.pair
+      or measured[1] <> alignof flags.pair
+      or measured[1] <> alignof u32
+    code = 6
+    return when usize(record.first) <> alignof flags.pair
+      or record.second <> 5 or copy.first <> 3 or copy.second <> 9
+    code = 7
+    return when lenof text <> 5 or text[0] <> 104 or seen <> 11
+    code = 8
+    return when answer() <> 41
+    code = 42
+end main

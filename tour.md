@@ -3603,6 +3603,10 @@ mut call_count: u32 = 0
 
 ```
 
+A value another module exports is known in the same way, named through that
+module: `limit: u32 = sizes.page * 4`, `ready: flags.state = flags.idle`.
+Qualifying a name changes where it is found, not whether it is known.
+
 A function value in a module struct image is likewise known: it is a static
 routine address, not a call or compile-time execution. Such a field may name a
 declared or no-capture anonymous function, and a module struct containing one

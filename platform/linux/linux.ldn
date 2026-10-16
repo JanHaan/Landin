@@ -373,6 +373,8 @@ fixed if compiler.os == linux then
     --- architecture.
     public o_cloexec: i32 = 524288
 
+    --- `fcntl` command: read a descriptor's flags, `fd_cloexec` among them.
+    public f_getfd: i32 = 1
     --- `fcntl` command: set a descriptor's flags, `fd_cloexec` among them.
     public f_setfd: i32 = 2
     --- `fcntl` flag: the descriptor is closed when the process executes a
@@ -505,6 +507,285 @@ fixed if compiler.os == linux then
         result = isize(system_call(getrandom_number, i64(usize(into)),
                                    i64(length), i64(flags), 0, 0, 0))
     end getrandom
+
+    --- `socket` domain: Unix-domain sockets, named by a path, AF_UNIX.
+    public af_unix: i32 = 1
+    --- `socket` domain: IPv4, AF_INET.
+    public af_inet: i32 = 2
+    --- `socket` domain: IPv6, AF_INET6.
+    public af_inet6: i32 = 10
+    --- `socket` type: a connected byte stream, TCP over IP.
+    public sock_stream: i32 = 1
+    --- `socket` type: datagrams, UDP over IP.
+    public sock_dgram: i32 = 2
+    --- `socket`, `socketpair` and `accept4` flag: the new descriptor is
+    --- closed when the process executes a program, set with it.
+    public sock_cloexec: i32 = 524288
+
+    --- `sendto` flag: a send to a connection its peer has gone from fails
+    --- with EPIPE and raises no SIGPIPE.
+    public msg_nosignal: i32 = 16384
+
+    --- `setsockopt` level: the socket itself.
+    public sol_socket: i32 = 1
+    --- `setsockopt` level: TCP.
+    public ipproto_tcp: i32 = 6
+    --- `setsockopt` level: IPv6.
+    public ipproto_ipv6: i32 = 41
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 2
+    --- `sol_socket` option, read with `getsockopt` as an `i32`: the
+    --- socket's pending error, cleared as it is read.
+    public so_error: i32 = 4
+    --- `sol_socket` option, a `time_limit`: how long a receive waits before
+    --- failing with EAGAIN, none when zero.
+    public so_rcvtimeo: i32 = 20
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 21
+    --- `ipproto_tcp` option, an `i32`: send small segments at once rather
+    --- than gathering them, Nagle's algorithm off.
+    public tcp_nodelay: i32 = 1
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone,
+    --- never IPv4 through mapped addresses.
+    public ipv6_v6only: i32 = 26
+
+    --- `shutdown` side: no more receives.
+    public shut_rd: i32 = 0
+    --- `shutdown` side: no more sends; the peer reads the end.
+    public shut_wr: i32 = 1
+    --- `shutdown` side: neither.
+    public shut_rdwr: i32 = 2
+
+    --- A socket time limit, the kernel's `struct timeval` on a 64-bit
+    --- architecture: whole seconds and the microseconds after them.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i64
+    end time_limit
+
+    --- What the socket calls take for an address they have none of: C's
+    --- null pointer.
+    public no_address: atom
+    --- An address record a call reads, or `no_address`.
+    public address_given: type = no_address | ptr u8
+    --- An address record a call fills, or `no_address`.
+    public address_filled: type = no_address | ptr mut u8
+    --- The cell a call reads a record's room from and writes its length
+    --- into, or `no_address`.
+    public address_length: type = no_address | ptr mut u32
+
+    --  The address an optional pointer is, zero for none.
+    given_address: (given: address_given) -> (address: i64) =
+        address = match given
+            no_address: i64(0)
+            ptr (record): i64(usize(record))
+        end match
+    end given_address
+
+    filled_address: (filled: address_filled) -> (address: i64) =
+        address = match filled
+            no_address: i64(0)
+            ptr (record): i64(usize(record))
+        end match
+    end filled_address
+
+    length_address: (cell: address_length) -> (address: i64) =
+        address = match cell
+            no_address: i64(0)
+            ptr (record): i64(usize(record))
+        end match
+    end length_address
+
+    --- Make a socket of `domain` and `kind`, with `sock_cloexec` among the
+    --- kind's flags, for `protocol`, zero for the kind's own: the new
+    --- descriptor, or minus the errno, EAFNOSUPPORT for a domain the
+    --- kernel does not have.
+    public link(symbol: "_landin_linux_socket") socket:
+        (domain: i32, kind: i32, protocol: i32) -> (result: i32) =
+        result = i32(system_call(socket_number, i64(domain), i64(kind),
+                                 i64(protocol), 0, 0, 0))
+    end socket
+
+    --- Make a pair of connected Unix-domain sockets of `kind` and put them
+    --- in `ends[0]` and `ends[1]`: zero, or minus the errno.
+    public link(symbol: "_landin_linux_socketpair") socketpair:
+        (domain: i32, kind: i32, protocol: i32, ends: ptr mut i32)
+        -> (result: i32) =
+        result = i32(system_call(socketpair_number, i64(domain), i64(kind),
+                                 i64(protocol), i64(usize(ends)), 0, 0))
+    end socketpair
+
+    --- Give `descriptor` the address in the `length` bytes at `address`:
+    --- zero, or minus the errno, EADDRINUSE when it is taken.
+    public link(symbol: "_landin_linux_bind") bind:
+        (descriptor: i32, address: ptr u8, length: u32) -> (result: i32) =
+        result = i32(system_call(bind_number, i64(descriptor),
+                                 i64(usize(address)), i64(length), 0, 0, 0))
+    end bind
+
+    --- Make the bound stream socket `descriptor` accept connections, with
+    --- at most `backlog` waiting, which the kernel caps at its own
+    --- `somaxconn`: zero, or minus the errno.
+    public link(symbol: "_landin_linux_listen") listen:
+        (descriptor: i32, backlog: i32) -> (result: i32) =
+        result = i32(system_call(listen_number, i64(descriptor),
+                                 i64(backlog), 0, 0, 0, 0))
+    end listen
+
+    --- Take the next connection waiting on `descriptor` as a new socket,
+    --- with `flags`, `sock_cloexec` among them, and the peer's address in
+    --- `address` when it is given: the new descriptor, or minus the errno.
+    public link(symbol: "_landin_linux_accept4") accept4:
+        (descriptor: i32, address: address_filled, length: address_length,
+         flags: i32) -> (result: i32) =
+        result = i32(system_call(accept4_number, i64(descriptor),
+                                 filled_address(address),
+                                 length_address(length), i64(flags), 0, 0))
+    end accept4
+
+    --- Connect `descriptor` to the address in the `length` bytes at
+    --- `address`: zero, or minus the errno, ECONNREFUSED when nothing
+    --- listens there.
+    public link(symbol: "_landin_linux_connect") connect:
+        (descriptor: i32, address: ptr u8, length: u32) -> (result: i32) =
+        result = i32(system_call(connect_number, i64(descriptor),
+                                 i64(usize(address)), i64(length), 0, 0, 0))
+    end connect
+
+    --- Send at most `length` bytes from `data` on `descriptor` with
+    --- `flags`, to `address` when it is given and to the connected peer
+    --- when it is not: the count sent, which a stream may find short, or
+    --- minus the errno.  x86-64 and arm64 have no `send`; this is it.
+    public link(symbol: "_landin_linux_sendto") sendto:
+        (descriptor: i32, data: ptr u8, length: usize, flags: i32,
+         address: address_given, address_size: u32) -> (result: isize) =
+        result = isize(system_call(sendto_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), i64(flags),
+                                   given_address(address),
+                                   i64(address_size)))
+    end sendto
+
+    --- Receive at most `length` bytes into `data` from `descriptor` with
+    --- `flags`, and the sender's address in `address` when it is given:
+    --- the count received, zero when a stream's peer has finished sending,
+    --- or minus the errno, EAGAIN when the receive time limit passed.
+    public link(symbol: "_landin_linux_recvfrom") recvfrom:
+        (descriptor: i32, data: ptr mut u8, length: usize, flags: i32,
+         address: address_filled, address_size: address_length)
+        -> (result: isize) =
+        result = isize(system_call(recvfrom_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), i64(flags),
+                                   filled_address(address),
+                                   length_address(address_size)))
+    end recvfrom
+
+    --- Stop receiving, sending or both on `descriptor`, `shut_rd`,
+    --- `shut_wr` or `shut_rdwr`: zero, or minus the errno.
+    public link(symbol: "_landin_linux_shutdown") shutdown:
+        (descriptor: i32, side: i32) -> (result: i32) =
+        result = i32(system_call(shutdown_number, i64(descriptor), i64(side),
+                                 0, 0, 0, 0))
+    end shutdown
+
+    --- Set the option `name` at `level` of `descriptor` to the `length`
+    --- bytes at `value`: zero, or minus the errno.
+    public link(symbol: "_landin_linux_setsockopt") setsockopt:
+        (descriptor: i32, level: i32, name: i32, value: ptr u8, length: u32)
+        -> (result: i32) =
+        result = i32(system_call(setsockopt_number, i64(descriptor),
+                                 i64(level), i64(name), i64(usize(value)),
+                                 i64(length), 0))
+    end setsockopt
+
+    --- Read the option `name` at `level` of `descriptor` into `value`,
+    --- whose room `length` holds and which then holds the option's own
+    --- length: zero, or minus the errno.
+    public link(symbol: "_landin_linux_getsockopt") getsockopt:
+        (descriptor: i32, level: i32, name: i32, value: ptr mut u8,
+         length: ptr mut u32) -> (result: i32) =
+        result = i32(system_call(getsockopt_number, i64(descriptor),
+                                 i64(level), i64(name), i64(usize(value)),
+                                 i64(usize(length)), 0))
+    end getsockopt
+
+    --- Put the address `descriptor` is bound to in `address`, whose room
+    --- `length` holds and which then holds the address's own length: zero,
+    --- or minus the errno.
+    public link(symbol: "_landin_linux_getsockname") getsockname:
+        (descriptor: i32, address: ptr mut u8, length: ptr mut u32)
+        -> (result: i32) =
+        result = i32(system_call(getsockname_number, i64(descriptor),
+                                 i64(usize(address)), i64(usize(length)), 0,
+                                 0, 0))
+    end getsockname
+
+    --- Put the address of the peer `descriptor` is connected to in
+    --- `address`, as `getsockname` does: zero, or minus the errno, ENOTCONN
+    --- when there is none.
+    public link(symbol: "_landin_linux_getpeername") getpeername:
+        (descriptor: i32, address: ptr mut u8, length: ptr mut u32)
+        -> (result: i32) =
+        result = i32(system_call(getpeername_number, i64(descriptor),
+                                 i64(usize(address)), i64(usize(length)), 0,
+                                 0, 0))
+    end getpeername
+
+    --- The signal a write to a pipe or a socket nobody reads raises,
+    --- SIGPIPE.  The same on every architecture.
+    public sigpipe: i32 = 13
+    --- A signal's disposition: the system's default, SIG_DFL.
+    public sig_dfl: u64 = 0
+    --- A signal's disposition: ignored, SIG_IGN.
+    public sig_ign: u64 = 1
+
+    fixed if compiler.arch == rv64 then
+        --- The kernel's `struct sigaction`, as `rt_sigaction` reads and
+        --- fills it: the disposition or handler, its flags and the signals
+        --- blocked while a handler runs.  RV64 has no restorer.
+        public signal_action: type = struct
+            handler: u64
+            flags: u64
+            mask: u64
+        end signal_action
+    else
+        --- The kernel's `struct sigaction`, as `rt_sigaction` reads and
+        --- fills it: the disposition or handler, its flags, the restorer
+        --- x86-64 and arm64 return through and the signals blocked while a
+        --- handler runs.
+        public signal_action: type = struct
+            handler: u64
+            flags: u64
+            restorer: u64
+            mask: u64
+        end signal_action
+    end if
+
+    --- What `rt_sigaction` takes for an action it is not given: C's null
+    --- pointer.
+    public no_action: atom
+    --- An action `rt_sigaction` sets, or `no_action`.
+    public action_given: type = no_action | ptr signal_action
+    --- Where `rt_sigaction` puts the action it replaces, or `no_action`.
+    public action_kept: type = no_action | ptr mut signal_action
+
+    --- Set the action of `signal` to `action` when it is given, and put the
+    --- one it had in `previous` when that is given: zero, or minus the
+    --- errno.  The signal set is the kernel's, eight bytes.
+    public link(symbol: "_landin_linux_rt_sigaction") rt_sigaction:
+        (signal: i32, action: action_given, previous: action_kept)
+        -> (result: i32) =
+        setting: i64 = match action
+            no_action: i64(0)
+            ptr (given): i64(usize(given))
+        end match
+        keeping: i64 = match previous
+            no_action: i64(0)
+            ptr (kept): i64(usize(kept))
+        end match
+        result = i32(system_call(rt_sigaction_number, i64(signal), setting,
+                                 keeping, 8, 0, 0))
+    end rt_sigaction
 
     --- End every thread of the process with `status`.  It does not return.
     public link(symbol: "_landin_linux_exit_group") exit_group:

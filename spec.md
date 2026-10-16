@@ -1507,7 +1507,10 @@ origin of what it views: a literal's is the caller's frame, so a result
 `from` that parameter cannot leave the caller [0780], and a place's is the
 place's own. A generic routine's argument is typed on its own (D138), before
 its parameter is known, so it lends nothing and takes a named array's range
-slice.
+slice. An atom argument whose parameter is written as an atom set that names
+no formal of the routine has nothing to deduce there, and widens into that
+set as [0640] lets an ordinary call's argument widen: `io.shutdown(host,
+socket, io.sending)` needs no local of the set's type first.
 A call of a function returning none has no successful-result type. It is a
 statement [1810] and nothing else: nothing binds it, no argument is one, and
 [1930] cannot discard it, because there is no result there to discard. Its
@@ -1646,6 +1649,24 @@ first, exactly as [1850] found with two declarations of one
 name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
+A name another module exports, written through that module's name,
+`limits.size`, `colours.green` or `sizeof shapes.pair`, is the same
+name: resolution binds it to the declaration itself, so it is known
+exactly when the unqualified name is known in its own module, in a
+scalar value, an array or record image and a measurement alike, and
+it selects no storage. The whole program is one set of modules, so a
+chain may pass through several of them, and one that comes back to
+where it began is refused at each declaration on it, in whichever
+module that declaration is. What has no value before the entry point
+is refused whichever module it comes from, each saying why: a field
+of a record image or an element of an array image reads storage, a
+call runs a routine, and an address needs a data relocation no
+backend emits. A `mut` module value is known by the image it starts
+with, here or in another module, since nothing has written it before
+the entry point; inside a body it holds what was last written and is
+not known.
+A distinct type's flags combined with D302's `|`, `&`, `^` and `~` fold
+through its base at the base's width, as its conversion does.
 A declared or anonymous function is a compile-time-known code address. A module
 function binding may name either directly, or another module function binding
 whose static chain reaches one; a chain that returns to itself is refused like
@@ -13821,6 +13842,13 @@ around a recursive walk makes nested instances depend on traversal order.
 Cloning syntax invents declarations and provenance for a compile-time
 substitution. A checker-owned identity plus overlay avoids all three.
 
+A runtime parameter written as an atom set that names no formal deduces
+nothing, so an atom argument widens into it as [0640] allows in an ordinary
+call; an atom set bound to a formal still matches exactly. This amendment
+came with `io.shutdown(host, connection, io.sending)`, which was L0340, and
+is pinned by `runtime/generic-atom-widening` and
+`negative/generic-atom-outside-set`.
+
 **Pinned by** the checking public-seam case `routine instance views keep source
 facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-repeated-deduction-conflict`,
@@ -14810,6 +14838,37 @@ the import silent and improving the use's message, which reports the same
 mistake once for every use.
 
 **Pinned by** `negative/import-without-a-root-is-refused-there`.
+
+### D324 — A module value reads another module's values as its own
+
+**The tour said** at [1940] that a module value is known when the program
+starts, and an imported module's fixed values were not reached: `linux.eintr`,
+`alignof libc.file_status`, a qualified atom and a combination of another
+module's flags were L0305 or L0304, so libraries repeated each other's
+constants or wrapped them in functions.
+
+**Chosen:** a name another module exports, written through that module's name,
+`limits.size`, `colours.green`, `sizeof shapes.pair`, is the same name and is
+known exactly when its unqualified spelling is in its own module, folded by
+the same walk under the same cycle guard and imaged by the same paths. A chain
+may cross modules, and a cycle is refused at each declaration on it, in
+whichever module that declaration is. `sizeof` and `alignof` of an imported
+type are measurements, not reads. An imported `mut` value is known by its
+starting image, as a local one already was, since nothing runs before the
+entry point to write it. A distinct type's combined flags are imaged through
+its base, which also fixed such a value being emitted as zero within one
+module. A field, an element, a call and an address are still refused from any
+module, each saying why.
+
+**The alternatives:** copying the other module's literal, facts that drift;
+private functions per constant, a call per use and no static image; a separate
+pass for imported constants, a second folder; refusing an imported `mut` value
+alone, which makes qualification change meaning; and refusing a value cycle
+across modules as an import cycle, though mutual imports are legal.
+
+**Pinned by** `runtime/module-values-across-modules` on every target,
+Cortex-M0 included, `negative/module-value-cycle-across-modules` and
+`negative/module-value-imported-field`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -18572,6 +18631,9 @@ pinned kernel release's own tables, x86-64's `syscall_64.tbl` with the
 common and 64 ABIs and the generic table for arm64 and RV64 with each
 architecture's own entries, and the generated file names the release and its
 checksum; the generator can check the committed file instead of writing it.
+With no release named it holds `numbers.ldn` to being its own rendering under
+the pin and writes or checks the wrappers from it, so adding a typed wrapper
+needs no kernel source; the release is needed only to change the pin.
 The wrappers take their numbers from the same tables, through a private
 generated file, so there is one source of numbers. The numbers are a module
 of their own, imported by a program that calls by number, so `platform/linux`
@@ -19042,3 +19104,132 @@ method, with two 64-bit divisions.
 **Pinned by** `runtime/random-sequence`, which holds the reference
 implementation's outputs on every target, Cortex-M0 included, and
 `runtime/library-shared-random`.
+
+### D319 — A network is a concept of its own whose connections are readers and writers
+
+**The tour said** at [1660] that authority is passed, and nothing could talk
+over a network.
+
+**Chosen:** `io.network` is a concept outside `world` that also conforms to
+`reader` and `writer`, so a connection is a `file` that `io.read`, `io.write`,
+the line reader and the buffered writer take. Its entries are `connect`,
+`listen`, `accept`, `open_datagram`, `send`, `receive`, `send_to`,
+`receive_from`, `shutdown`, `local_address`, `peer_address`, `set_timeouts`,
+`set_no_delay` and `close_socket`. A system's errors become atoms:
+ECONNREFUSED is `refused`; ENETUNREACH and EHOSTUNREACH `unreachable`;
+EADDRINUSE `address_in_use`; EADDRNOTAVAIL, EAFNOSUPPORT and EPFNOSUPPORT
+`address_unavailable`; EACCES and EPERM `no_access`; a limit passing, or
+ETIMEDOUT at connect, `timed_out`; EPIPE, ECONNRESET, and ETIMEDOUT or ENOTCONN
+on a connection, `disconnected`; anything else `io_failed` with its errno kept.
+The calls block. `set_timeouts(receive, send)` sets limits, zero meaning none;
+a limit passing leaves the socket usable, and `accept` keeps the receive
+limit on every system, by `poll` on Darwin and FreeBSD. `connect` has no limit
+of its own. Every listener reuses its address and every IPv6 socket is IPv6
+only, so an address names one family everywhere; the backlog is 128. The
+hosted provider retries EINTR, waits out an interrupted connect and reads its
+error, takes the next connection after ECONNABORTED and sends until every byte
+is sent.
+
+**The alternatives:** widening `world`; separate stream and datagram concepts,
+which repeat closing, addresses and limits; a socket that is not a `file`,
+which loses the reader and writer; only the reader and writer, whose
+`io_failed` hides timeouts and a lost peer; deadlines per call, and
+non-blocking calls, which are the event-driven Io's; address reuse as a
+parameter, which Windows means differently; and dual-stack sockets.
+
+**Pinned by** `runtime/network-echo`, the published consumer over TCP and UDP
+and both families, `runtime/network-refused`,
+`runtime/network-address-in-use`, `runtime/network-closed-peer` and
+`runtime/network-receive-timeout`.
+
+### D320 — An address is a family, sixteen bytes and a port, written as the RFCs say
+
+**The tour said** nothing of addresses, and resolving a name is the resolver
+record's in the roadmap's register.
+
+**Chosen:** `io.address` is a public record, as D293's directory is, so a
+provider in another module builds one, of an `ipv4` or `ipv6` family, sixteen
+bytes and a port; it has no zone, so `%zone` is `invalid_address` and a
+link-local address waits. IPv4 is four decimal parts with no leading zero, as
+`inet_pton` reads them. IPv6 is RFC 4291's form in either case, with one `::`
+and an IPv4 tail; it is written as RFC 5952 says, in lower case with the
+longest run of two or more zero groups compressed, the first on a tie, and
+only an IPv4-mapped address dotted. With a port it is `a.b.c.d:p` or
+`[v6]:p`. `io.parse_ip`, `io.parse_address`, `io.append_ip` and
+`io.append_address` read and write them, and an address is `formattable`.
+
+**The alternatives:** an opaque type; a scope identifier; `inet_aton`'s
+shorthands, whose leading zero is octal; and dotted IPv4-compatible addresses.
+
+**Pinned by** `runtime/network-addresses` and
+`runtime/network-addresses-firmware`, which runs on Cortex-M0.
+
+### D321 — A loopback network in memory never waits
+
+**The tour said** at [1660] that every hosted facility has a fake.
+
+**Chosen:** `io.memory_network`, from `io.network_over`, is one machine with
+only loopback addresses, over socket records the caller declares, each
+record's buffer its receive buffer. Delivery is at once, whole and in order;
+a datagram no socket takes, or one its buffer has no room for, is lost. It
+never waits: wherever a real call would, it answers `timed_out` at once,
+after a send has delivered what fits. A send to a closed peer is
+`disconnected` the first time. Ports are given from 49152, and a port overlaps
+as on Linux, the unspecified address taking every one. A test can turn IPv6
+off, fail a chosen call and read the counters. Resets, partial reads and
+TIME_WAIT are not modelled. Its conformance links every entry, about 40 KB,
+so it does not fit a Cortex-M0 image.
+
+**The alternatives:** a fake that waits, which a single-threaded test cannot
+drive; and modelling resets and partial reads, which nothing yet consumes.
+
+**Pinned by** `runtime/network-echo-memory`, which shares its routines with
+the published consumer.
+
+### D322 — SIGPIPE is ignored at start and restored in a child
+
+**The tour said** nothing of signals. By default a write to a pipe or socket
+whose reader has gone ends the process, so neither a socket's EPIPE nor a
+finished child's closed input could be an error.
+
+**Chosen:** the argument initializer ignores SIGPIPE on its first call, and
+only when it finds the default disposition, so a C `main`'s handler or an
+inherited ignore is kept. That one place covers the static Linux entry,
+`--link=libc`, Darwin, FreeBSD and a C `main`; a program that imports no POSIX
+layer keeps the default. `posix.spawn` gives every child the default again,
+on Linux in the clone child before `execve` and elsewhere with
+`posix_spawnattr_setsigdefault`. Every Linux send passes `MSG_NOSIGNAL` and
+every Darwin and FreeBSD socket sets `SO_NOSIGPIPE`, so socket writes are safe
+beside a C handler too; a pipe has no such flag, so the process-wide ignore
+stays.
+
+**The alternatives:** ignoring it in the static entry, which depends on the
+route and makes every static program pay; an unconditional ignore, which
+overrides a C handler; and restoring in a child only what the parent changed.
+
+**Pinned by** `runtime/network-closed-peer`, which dies with status 141
+without the ignore, `runtime/posix-broken-pipe`, which fails when the child
+keeps it, `runtime/posix-broken-pipe-libc` and `abi/sigpipe-handler-kept`.
+
+### D323 — `platform/posix` gives sockets in the system's own records
+
+**The tour said** nothing of sockets beneath the portable concept.
+
+**Chosen:** `posix.socket_address` is the system's own record, laid out once
+per system: Linux's 16-bit family, and Darwin's and FreeBSD's length byte and
+family byte. `posix.socket` takes `internet`, `internet6` or `local` and
+`stream` or `datagram`. Unix-domain sockets are this layer's alone, their
+paths at most 107 bytes on Linux and 103 on Darwin and FreeBSD, with empty,
+NUL-holding and abstract paths refused. Every socket is closed on exec,
+through `SOCK_CLOEXEC` on Linux and FreeBSD and `fcntl` right after `socket`
+and `accept` on Darwin, which leaves the same window as Darwin's pipes (D314). Its
+calls and options are POSIX's own, and a timeout read back whose record has
+the wrong size is `unlisted` rather than trusted.
+
+**The alternatives:** a portable address beneath the portable one, which only
+copies it; and Unix-domain sockets in the portable concept before Windows'
+are designed.
+
+**Pinned by** `runtime/posix-sockets`, which fails when close-on-exec is
+removed, and `abi/libc-socket-facts`, which holds each system's constants and
+layouts to its headers.

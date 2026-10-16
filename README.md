@@ -368,7 +368,15 @@ This is the maintained inventory of what the compiler does today:
   and the system's entropy are three more, outside `world`, with time in
   nanoseconds in a `u64` and no floating point; on Linux the clock is read
   through the vDSO the auxiliary vector names, falling back to the system
-  call, and a manual clock and scripted entropy are their fakes.
+  call, and a manual clock and scripted entropy are their fakes. The
+  network is one more: blocking TCP and UDP over IPv4 and IPv6 that
+  listen, accept, connect, send and receive, with address values read
+  from and written to their text, time limits whose passing is an atom,
+  and a connection read and written as a file, a line reader and a
+  buffered writer among them; a memory network of loopback addresses in
+  the caller's buffers is its fake. A write to a peer that has gone is an
+  error atom, since a hosted process ignores SIGPIPE and gives its children
+  the default back.
   `core/random` is a deterministic generator, xoshiro256**, seeded from a
   fixed seed or from entropy, which draws the same sequence on every target,
   Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered
@@ -390,8 +398,9 @@ This is the maintained inventory of what the compiler does today:
   an atom set.
   `hosted/heap` and `hosted/io` supply the hosted heap and
   system I/O capabilities, written once over `platform/posix`, which gives
-  POSIX's files, directories, memory mappings, `poll`, pipes, spawning and
-  waiting in Landin types, every descriptor closed on exec,
+  POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
+  waiting and sockets, Unix-domain ones among them, in Landin types, every
+  descriptor closed on exec,
   with a descriptor handle type and errno atoms that keep their numbers,
   over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
   A path, a process argument and a directory entry's name are host
@@ -500,7 +509,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.33 — Sockets (planned).**
+**Next roadmap item: R13.34 — The rest of the file system (planned).**
 
 ## License
 

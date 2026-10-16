@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: SIGPIPE is ignored once the hosted entry has established the POSIX layer, so a write to a pipe whose reading end is closed is epipe and the program goes on, while posix.spawn gives a child SIGPIPE's default back, so a shell writing into a pipe the parent has closed is signalled with 13 rather than exiting after a failed write
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

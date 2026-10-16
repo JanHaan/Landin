@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: io.parse_ip and io.parse_address read IPv4's dotted decimal without leading zeros and IPv6's groups, compressed, in either case and with an IPv4 tail, and refuse a zone, a stray colon, a second ::, an overlong group and a port past 65535 as invalid_address; io.append_ip and io.append_address write them back as RFC 5952 does, lower case with the longest zero run shortened and an IPv4-mapped address in dotted decimal, an IPv6 address bracketed before its port, each read back as the same address; the constructors compare as they should, text.format writes an address, and an address that does not fit a builder writes nothing
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0520, 0570, 0640, 0790, 0900, 1030, 1210
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

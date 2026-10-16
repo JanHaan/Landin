@@ -1,0 +1,11 @@
+--  Another module's value is known through its name, but a field of its
+--  record is storage, and a call runs a routine: neither is a module value,
+--  since nothing runs before the entry point [1940].
+import shapes
+
+first: i32 = shapes.origin.first
+called: i32 = shapes.answer()
+
+public main: () -> (code: i32) =
+    code = first + called
+end main

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an atom literal, an atom of a smaller set and a value of the whole set each widen into a generic routine's concrete atom-set parameter, as [0640] lets an ordinary call's argument, while a formal an atom set binds still takes two arguments of that one set
+program: main.ldn
+status: 42
+constructs: 0640, 1290, 1920
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

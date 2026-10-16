@@ -1,0 +1,164 @@
+--  Internet addresses read from their text and written back: IPv4's four
+--  decimal parts, IPv6's groups as RFC 5952 writes them, shortened and in
+--  lower case, an IPv4-mapped address in dotted decimal, and a port after
+--  either, an IPv6 address then in brackets.  Text that is no address is
+--  `invalid_address`, a zone among it.  It runs on every target, firmware
+--  included, since an address is plain data.
+import core/io
+import core/mem
+import core/text
+
+--  Text read without a port and what it is written back as, or "" when it
+--  is no address.
+case: type = struct
+    given: []u8
+    written: []u8
+end case
+
+ips: [30]case =
+    [(given: "127.0.0.1", written: "127.0.0.1"),
+     (given: "0.0.0.0", written: "0.0.0.0"),
+     (given: "255.255.255.255", written: "255.255.255.255"),
+     (given: "192.0.2.10", written: "192.0.2.10"),
+     (given: "256.1.1.1", written: ""),
+     (given: "01.2.3.4", written: ""),
+     (given: "1.2.3", written: ""),
+     (given: "1.2.3.4.5", written: ""),
+     (given: "1..2.3", written: ""),
+     (given: " 1.2.3.4", written: ""),
+     (given: "::", written: "::"),
+     (given: "::1", written: "::1"),
+     (given: "1::", written: "1::"),
+     (given: "2001:DB8:0:0:0:0:0:1", written: "2001:db8::1"),
+     (given: "2001:0db8:0000:0000:0000:ff00:0042:8329",
+      written: "2001:db8::ff00:42:8329"),
+     (given: "2001:db8::1:0:0:1", written: "2001:db8::1:0:0:1"),
+     (given: "2001:0:0:1:0:0:0:1", written: "2001:0:0:1::1"),
+     (given: "1:2:3:4:5:6:7::", written: "1:2:3:4:5:6:7:0"),
+     (given: "::ffff:192.0.2.1", written: "::ffff:192.0.2.1"),
+     (given: "::ffff:c000:201", written: "::ffff:192.0.2.1"),
+     (given: "64:ff9b::192.0.2.33", written: "64:ff9b::c000:221"),
+     (given: "1:2:3:4:5:6:7:8", written: "1:2:3:4:5:6:7:8"),
+     (given: "fe80::1%eth0", written: ""),
+     (given: "1::2::3", written: ""),
+     (given: ":1", written: ""),
+     (given: "1:", written: ""),
+     (given: "12345::", written: ""),
+     (given: "1:2:3:4:5:6:7:8:9", written: ""),
+     (given: "::g", written: ""),
+     (given: "", written: "")]
+
+--  Text read with a port and what it is written back as, or "".
+addresses: [11]case =
+    [(given: "127.0.0.1:80", written: "127.0.0.1:80"),
+     (given: "0.0.0.0:0", written: "0.0.0.0:0"),
+     (given: "[::1]:8080", written: "[::1]:8080"),
+     (given: "[2001:DB8::1]:65535", written: "[2001:db8::1]:65535"),
+     (given: "[::ffff:10.0.0.1]:443", written: "[::ffff:10.0.0.1]:443"),
+     (given: "[::1]", written: ""),
+     (given: "1.2.3.4:65536", written: ""),
+     (given: "1.2.3.4:", written: ""),
+     (given: "::1:80", written: ""),
+     (given: "[fe80::1%eth0]:80", written: ""),
+     (given: "1.2.3.4:x", written: "")]
+
+--  Whether reading C's text, with or without a port, writes it back as it
+--  says, or refuses it when it says "".
+agrees: (item: case, port: bool) -> (yes: bool) ! text.no_space =
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
+    wanted: []u8 = item.written
+    yes = lenof wanted == 0
+    at: io.address = read(item.given, port) else (problem)
+        _ = problem
+        return
+    end
+    yes = false
+    return when lenof wanted == 0
+    if port then
+        try io.append_address(line, at)
+    else
+        try io.append_ip(line, at)
+    end if
+    yes = mem.compare(text.used(line), wanted) == mem.equal
+    return when not yes
+    --  What is written reads back as the same address.
+    again: io.address = read(text.used(line), port) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    yes = io.same_address(at, again)
+end agrees
+
+read: (source: []u8, port: bool) -> (at: io.address) ! io.invalid_address =
+    if port then
+        at = try io.parse_address(source)
+    else
+        at = try io.parse_ip(source)
+    end if
+end read
+
+--  The constructors, the comparisons and the builder's rule that a piece
+--  is written whole or not at all.
+made: () -> (yes: bool) ! text.no_space | text.invalid_format =
+    groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
+    v6: io.address = io.ipv6_address(groups, 443)
+    v4: io.address = io.ipv4_address(192, 0, 2, 1, 80)
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
+    try text.format(line, "{} {}", [any(addr v4), any(addr v6)])
+    yes = mem.compare(text.used(line), "192.0.2.1:80 [2001:db8::1]:443")
+          == mem.equal
+    yes = yes and io.same_address(io.loopback(io.ipv4, 7),
+                                  io.ipv4_address(127, 0, 0, 1, 7))
+    yes = yes and not io.same_address(io.loopback(io.ipv4, 7),
+                                      io.loopback(io.ipv4, 8))
+    yes = yes and not io.same_address(io.unspecified(io.ipv4, 0),
+                                      io.unspecified(io.ipv6, 0))
+    yes = yes and io.is_unspecified(io.unspecified(io.ipv6, 9))
+          and not io.is_unspecified(io.loopback(io.ipv6, 9))
+    moved: io.address = io.with_port(v4, 81)
+    yes = yes and moved.port == 81 and moved.octets[3] == 1
+    --  Twelve bytes have room for `[::1]` but not for its port.
+    mut small: [12]u8 = zeroed
+    mut short := text.over(small[0..<12])
+    try text.append(short, "at ")
+    mut full: bool = false
+    io.append_address(short, v6) else (problem)
+        full = problem == text.no_space
+    end
+    yes = yes and full and text.length(short) == 3
+end made
+
+public main: () -> (code: i32) =
+    code = 1
+    for index in usize(0)..<lenof ips do
+        good: bool = agrees(ips[index], false) else (problem)
+            _ = problem
+            return
+        end
+        if not good then
+            code = 10 + i32(index)
+            return
+        end if
+    end for
+    code = 2
+    for index in usize(0)..<lenof addresses do
+        good: bool = agrees(addresses[index], true) else (problem)
+            _ = problem
+            return
+        end
+        if not good then
+            code = 50 + i32(index)
+            return
+        end if
+    end for
+    code = 3
+    built: bool = made() else (problem)
+        _ = problem
+        return
+    end
+    return when not built
+    code = 42
+end main

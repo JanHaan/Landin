@@ -1,0 +1,49 @@
+--  Values another module reads in its own module values: plain flags, a
+--  distinct flag set, atoms, a record type to measure, a mutable value, a
+--  routine and a record and a text image to copy.
+
+--- A plain flag word.
+public readable: u16 = 0x1
+--- Another.
+public writable: u16 = 0x4
+--- Both, folded in this module.
+public both: u16 = readable | writable
+
+mode_value: type = distinct u16
+
+--- A distinct flag set, which D302 combines with `|`, `&` and `~`.
+public mode: type = mode_value
+--- Reading, in the distinct set.
+public reads: mode = mode_value(1)
+--- Writing, in the distinct set.
+public writes: mode = mode_value(4)
+--- Both, folded in this module.
+public every: mode = reads | writes
+
+--- A colour.
+public red: atom
+--- Another.
+public green: atom
+--- Either.
+public colour: type = red | green
+
+--- A record whose size and alignment another module measures.
+public pair: type = struct
+    first: u8
+    second: u32
+end pair
+
+--- A record image another module copies.
+public origin: pair = (first: 3, second: 9)
+
+--- A text image another module copies.
+public greeting: []u8 = "hello"
+
+--- A mutable value, whose initial image another module may read as a
+--- module value reads its own module's.
+public mut counter: i32 = 11
+
+--- A routine another module's value names.
+public answer: () -> (value: i32) =
+    value = 41
+end answer

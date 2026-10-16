@@ -1,0 +1,28 @@
+--  Under --link=libc the C runtime starts the program and calls the
+--  argument initializer from C's `main`, which ignores SIGPIPE there as
+--  the static entry's call does: a write to a pipe nobody reads is
+--  `epipe`, and the program goes on.
+import platform/posix
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not posix.broken_pipe_ignored()
+    code = 2
+    ends: posix.pipe_ends = posix.pipe() else (problem)
+        _ = problem
+        return
+    end
+    posix.close(ends.reading) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    _ = posix.write(ends.writing, "anyone?") else (problem)
+        if problem == posix.epipe then code = 42 end if
+        0
+    end
+    posix.close(ends.writing) else (problem)
+        _ = problem
+        code = 4
+    end
+end main

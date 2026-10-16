@@ -1,0 +1,8 @@
+--  Two modules' values worked out from each other name nothing at all, as
+--  two values of one module would not [1940]: each is refused, at its own
+--  declaration, rather than folded for ever.
+import one
+
+public main: () -> (code: i32) =
+    code = one.first
+end main

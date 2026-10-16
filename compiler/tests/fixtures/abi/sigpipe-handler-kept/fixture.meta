@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a C main installs its own SIGPIPE handler and then calls the argument initializer, which keeps it, since it ignores SIGPIPE only where it finds the default; a Landin write to a pipe nobody reads runs the handler once and fails with epipe, and a send on a platform/posix socket pair whose other end is closed fails with epipe without raising SIGPIPE
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0940, 1030, 1650, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

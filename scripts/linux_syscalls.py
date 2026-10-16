@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Write platform/linux's system-call numbers from a pinned Linux release.
 
+    scripts/linux_syscalls.py
+    scripts/linux_syscalls.py --check
     scripts/linux_syscalls.py --fetch DIR
     scripts/linux_syscalls.py --tarball linux-7.2.tar.xz
     scripts/linux_syscalls.py --tarball linux-7.2.tar.xz --check
+
+With no release named, the generator reads the numbers the checked-in
+module platform/linux/numbers already holds, holds that file to being its
+own rendering under the pin named below, and writes platform/linux's
+wrapped.ldn from it: adding a wrapper for another call needs no download.
+The release is needed only to change the pin.
 
 The numbers are the kernel's own, read out of the release tarball named by
 VERSION, URL and SHA256 below and never typed by hand.  `--fetch` downloads
@@ -38,7 +46,9 @@ roughly quadrupled the time to compile a small one.  platform/linux's own
 wrappers use the numbers of the calls they make, which the generator finds
 by name in the module's other files and writes, private and under the same
 names, into platform/linux/wrapped.ldn.  `--check` compares both checked-in
-files with what the tarball gives instead of writing them.
+files with what the tarball gives instead of writing them, or, with no
+release named, the numbers file with its own rendering and wrapped.ldn with
+what those numbers give.
 scripts/tests/test_linux_syscalls.py runs all of this on small tables of its
 own and holds the checked-in files to the generator's form.
 """
@@ -337,9 +347,33 @@ def read_back(text):
     return header.group(1), header.group(3), header.group(2), generated
 
 
+def committed(module):
+    """The tables the checked-in numbers file at MODULE holds, held to being
+    the generator's own rendering of them under the pin VERSION, SHA256 and
+    URL, so that the wrappers can be generated without the release."""
+    version, sha256, url = VERSION, SHA256, URL
+    path = module / OUTPUT.relative_to(MODULE)
+    if not path.exists():
+        raise Refused("%s does not exist; generate it from the release with"
+                      " --fetch or --tarball" % path)
+    text = path.read_text(encoding="utf-8")
+    found_version, found_sha, found_url, generated = read_back(text)
+    if (found_version, found_sha, found_url) != (version, sha256, url):
+        raise Refused("%s names Linux %s, not the pinned %s; generate it from"
+                      " the release with --fetch or --tarball"
+                      % (path, found_version, version))
+    if [arch for (arch, _), _, _, _ in generated] != [
+            arch for arch, _ in ARCHITECTURES]:
+        raise Refused("%s does not hold every architecture's table" % path)
+    if render(found_version, found_sha, found_url, generated) != text:
+        raise Refused("%s is not the generator's output; generate it from"
+                      " the release with --fetch or --tarball" % path)
+    return generated
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group()
     source.add_argument("--fetch", type=pathlib.Path, metavar="DIR",
                         help="download the pinned release into DIR first")
     source.add_argument("--tarball", type=pathlib.Path,
@@ -352,12 +386,20 @@ def main(argv=None):
     module = args.module
     outputs = (module / OUTPUT.relative_to(MODULE),
                module / WRAPPED.relative_to(MODULE))
+    released = args.fetch is not None or args.tarball is not None
     try:
-        tarball = (fetch(args.fetch, URL, SHA256) if args.fetch
-                   else args.tarball)
-        generated = tables(Release(tarball, SHA256))
-        texts = (render(VERSION, SHA256, URL, generated),
-                 render_wrapped(VERSION, generated, used_names(module)))
+        if released:
+            tarball = (fetch(args.fetch, URL, SHA256) if args.fetch
+                       else args.tarball)
+            generated = tables(Release(tarball, SHA256))
+            texts = (render(VERSION, SHA256, URL, generated),
+                     render_wrapped(VERSION, generated, used_names(module)))
+        else:
+            #  The numbers file is the input here, already held to its own
+            #  rendering, so only the wrappers' file is written.
+            generated = committed(module)
+            outputs = outputs[1:]
+            texts = (render_wrapped(VERSION, generated, used_names(module)),)
     except (Refused, OSError, tarfile.TarError) as problem:
         print("linux_syscalls: %s" % problem, file=sys.stderr)
         return 2
@@ -371,12 +413,16 @@ def main(argv=None):
                   % (path, VERSION), file=sys.stderr)
         if stale:
             return 1
-        print("linux_syscalls: both files match Linux %s" % VERSION)
+        print("linux_syscalls: %s Linux %s"
+              % ("both files match" if released
+                 else "the numbers and the wrappers' numbers match", VERSION))
         return 0
     for path, text in zip(outputs, texts):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-        print("linux_syscalls: wrote %s from Linux %s" % (path, VERSION))
+        print("linux_syscalls: wrote %s from Linux %s%s"
+              % (path, VERSION,
+                 "" if released else ", as platform/linux/numbers holds it"))
     return 0
 
 

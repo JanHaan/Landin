@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: linked with --link=libc, a Linux program the C runtime started ignores SIGPIPE once C's main has called the argument initializer, so a write to a pipe whose reading end is closed is epipe and the program goes on
+program: main.ldn
+root: ../../../../..
+link: libc
+status: 42
+constructs: 0940, 1030, 1660, 1975
+targets: linux-x86-64, linux-arm64, linux-rv64

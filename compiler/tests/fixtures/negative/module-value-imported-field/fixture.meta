@@ -1,0 +1,10 @@
+class: negative
+summary: a field of another module's record image and a call of another module's routine are not module values, each refused with L0305 saying why, while the module's value named through it is admitted
+program: main.ldn
+root: root
+codes: L0305, L0305
+constructs: 1430, 1940
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: --root=../tests/fixtures/negative/module-value-imported-field/root ../tests/fixtures/negative/module-value-imported-field
+status: 1

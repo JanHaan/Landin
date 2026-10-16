@@ -1,0 +1,63 @@
+--  A receive limit passes as `timed_out`, and the socket stays usable.
+--  A receive on a connection whose peer sends nothing, and an accept on a
+--  listener nothing connects to, each wait out a limit of 50 ms and no
+--  less, by the monotonic clock; then the peer sends and the receive
+--  takes it.  Darwin and FreeBSD do not limit an accept themselves, so
+--  platform/posix waits the limit out there with poll.
+import core/io
+import hosted/io as hosted
+
+--  The limit, and what waiting it out takes at the least.
+limit: u64 = 50
+
+--  Whether a receive and an accept each time out after the limit, and the
+--  connection then receives what is sent.
+timed: (host: hosted.system, family: io.address_family) -> (yes: bool)
+       ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    at: io.address = try io.local_address(host, listener)
+    client: io.file = try io.connect(host, at)
+    server: io.file = try io.accept(host, listener)
+    try io.set_timeouts(host, client, io.milliseconds(limit), io.seconds(0))
+    try io.set_timeouts(host, listener, io.milliseconds(limit),
+                        io.seconds(0))
+    mut buffer: [8]u8 = zeroed
+    began: io.instant = io.now(host)
+    mut received: bool = false
+    got: usize = io.receive(host, client, buffer[0..<8]) else (problem)
+        received = problem == io.timed_out
+        0
+    end
+    waited: io.duration = io.elapsed(began, io.now(host))
+    began_accept: io.instant = io.now(host)
+    mut accepted: bool = false
+    other: io.file = io.accept(host, listener) else (problem)
+        accepted = problem == io.timed_out
+        listener
+    end
+    _ = other
+    waited_accept: io.duration = io.elapsed(began_accept, io.now(host))
+    try io.send(host, server, "late")
+    later: usize = try io.receive(host, client, buffer[0..<8])
+    yes = received and got == 0 and waited >= io.milliseconds(limit)
+          and accepted and waited_accept >= io.milliseconds(limit)
+          and later == 4
+    try io.close_socket(host, server)
+    try io.close_socket(host, client)
+    try io.close_socket(host, listener)
+end timed
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    for family in families do
+        yes: bool = timed(host, family) else (problem)
+            _ = problem
+            return
+        end
+        return when not yes
+        inc code
+    end for
+    code = 42
+end main

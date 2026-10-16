@@ -7,7 +7,9 @@
     "core/io/entropy.ldn",
     "core/io/io.ldn",
     "core/io/lines.ldn",
+    "core/io/loopback.ldn",
     "core/io/memory.ldn",
+    "core/io/network.ldn",
     "core/io/programs.ldn",
     "core/io/time.ldn",
     "core/mem/allocation.ldn",
@@ -24,6 +26,7 @@
     "examples/config_parser/lexer/lexer.ldn",
     "examples/config_parser/parser/parser.ldn",
     "hosted/io/io.ldn",
+    "hosted/io/network.ldn",
     "hosted/io/programs.ldn",
     "hosted/io/time.ldn",
     "platform/libc/libc.ldn",
@@ -33,7 +36,8 @@
     "platform/posix/errno.ldn",
     "platform/posix/libc.ldn",
     "platform/posix/linux.ldn",
-    "platform/posix/posix.ldn"
+    "platform/posix/posix.ldn",
+    "platform/posix/sockets.ldn"
   ],
   "containers": [
     "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
@@ -43,7 +47,9 @@
     "core/io/entropy.ldn",
     "core/io/io.ldn",
     "core/io/lines.ldn",
+    "core/io/loopback.ldn",
     "core/io/memory.ldn",
+    "core/io/network.ldn",
     "core/io/programs.ldn",
     "core/io/time.ldn",
     "core/map/map.ldn",
@@ -71,7 +77,8 @@
     "platform/posix/errno.ldn",
     "platform/posix/libc.ldn",
     "platform/posix/linux.ldn",
-    "platform/posix/posix.ldn"
+    "platform/posix/posix.ldn",
+    "platform/posix/sockets.ldn"
   ],
   "hosted": [
     "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
@@ -82,7 +89,9 @@
     "core/io/entropy.ldn",
     "core/io/io.ldn",
     "core/io/lines.ldn",
+    "core/io/loopback.ldn",
     "core/io/memory.ldn",
+    "core/io/network.ldn",
     "core/io/programs.ldn",
     "core/io/time.ldn",
     "core/mem/allocation.ldn",
@@ -105,6 +114,7 @@
     "examples/derived_hosted/app/reader.ldn",
     "hosted/heap/heap.ldn",
     "hosted/io/io.ldn",
+    "hosted/io/network.ldn",
     "hosted/io/programs.ldn",
     "hosted/io/time.ldn",
     "platform/libc/libc.ldn",
@@ -114,6 +124,7 @@
     "platform/posix/errno.ldn",
     "platform/posix/libc.ldn",
     "platform/posix/linux.ldn",
-    "platform/posix/posix.ldn"
+    "platform/posix/posix.ldn",
+    "platform/posix/sockets.ldn"
   ]
 }

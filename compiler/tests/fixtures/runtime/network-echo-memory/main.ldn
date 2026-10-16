@@ -1,0 +1,344 @@
+--  The network consumer's routines over core/io's memory network, beside
+--  a memory world: the same echo over TCP and UDP and both families, the
+--  same report byte for byte, and the memory network's own oracles: a
+--  refused connection, an address already in use, a write to a closed
+--  peer, an unreachable address, a missing IPv6, waits that would never
+--  end, a lost datagram, a full buffer and an injected failure.
+import core/io
+import core/mem
+import core/text
+
+--  What the client sends over TCP: three lines.
+request: []u8 = "one\ntwo\nhello, world\n"
+
+--  What the client sends over UDP: two datagrams.
+messages: [2][]u8 = ["ping", "hello, datagram"]
+
+--  A reply came from somewhere other than the server it was sent to.
+wrong_sender: atom
+
+--  Serve one connection: read each line through a line reader and write it
+--  back through a buffered writer, until the client has finished sending,
+--  and then finish sending too.  How many lines it echoed.
+serve: (provider: type is io.network, host: provider, connection: io.file)
+       -> (lines: usize) ! ... =
+    mut incoming: [64]u8 = zeroed
+    mut reader := io.lines_over(host, connection, incoming[0..<64])
+    mut outgoing: [64]u8 = zeroed
+    mut writer := io.buffered_over(host, connection, outgoing[0..<64])
+    lines = 0
+    loop do
+        item: io.line = try io.read_line(reader)
+        break when item.finished
+        try io.put(writer, item.bytes)
+        try io.put(writer, "\n")
+        inc lines
+    end loop
+    try io.flush(writer)
+    try io.shutdown(host, connection, io.sending)
+end serve
+
+--  Echo `request` over TCP between a server and a client on FAMILY's
+--  loopback address, and put what the client read back in `echoed`, a line
+--  at a time: how many lines the server echoed.  The listener asks for
+--  port 0, any free one, and says which it got; the client sends all of
+--  its lines and finishes sending before the server accepts, which the
+--  system's buffers allow in one thread.
+tcp_echo: (provider: type is io.network, host: provider,
+           family: io.address_family, inout echoed: text.builder)
+          -> (lines: usize) ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    defer io.close_socket(host, listener) else (problem)
+        _ = problem
+    end
+    at: io.address = try io.local_address(host, listener)
+    client: io.file = try io.connect(host, at)
+    defer io.close_socket(host, client) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
+    try io.send(host, client, request)
+    try io.shutdown(host, client, io.sending)
+    server: io.file = try io.accept(host, listener)
+    defer io.close_socket(host, server) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
+    lines = try serve(host, server)
+    mut incoming: [64]u8 = zeroed
+    mut replies := io.lines_over(host, client, incoming[0..<64])
+    loop do
+        item: io.line = try io.read_line(replies)
+        break when item.finished
+        try text.append(echoed, item.bytes)
+        try text.append_byte(echoed, 10)
+    end loop
+end tcp_echo
+
+--  Echo `messages` over UDP between two sockets on FAMILY's loopback
+--  address: the server sends each datagram back to whoever sent it, and
+--  the client puts each reply in `echoed`, a line each.
+udp_echo: (provider: type is io.network, host: provider,
+           family: io.address_family, inout echoed: text.builder)
+          -> none ! ... =
+    server: io.file = try io.open_datagram(host, io.loopback(family, 0))
+    defer io.close_socket(host, server) else (problem)
+        _ = problem
+    end
+    client: io.file = try io.open_datagram(host, io.loopback(family, 0))
+    defer io.close_socket(host, client) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
+    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
+    at: io.address = try io.local_address(host, server)
+    mut buffer: [64]u8 = zeroed
+    for message in messages do
+        try io.send_to(host, client, message, at)
+        got: io.datagram = try io.receive_from(host, server, buffer[0..<64])
+        try io.send_to(host, server, buffer[0..<got.count], got.sender)
+        back: io.datagram = try io.receive_from(host, client,
+                                                buffer[0..<64])
+        fail wrong_sender when not io.same_address(back.sender, at)
+        try text.append(echoed, buffer[0..<back.count])
+        try text.append_byte(echoed, 10)
+    end for
+end udp_echo
+
+--  Write each line of BYTES to OUT after a bar.
+quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         bytes: []u8) -> none ! ... =
+    mut start: usize = 0
+    for at in usize(0)..<lenof bytes do
+        if bytes[at] == 10 then
+            try io.put(out, "| ")
+            try io.put(out, bytes[start..<at + 1])
+            start = at + 1
+        end if
+    end for
+end quoted
+
+--  Report what came back over PROTOCOL on FAMILY's loopback address: how
+--  many of what the server echoed, and each of them.
+report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         protocol: []u8, family: io.address_family, count: usize,
+         what: []u8, echoed: []u8) -> none ! ... =
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
+    at: io.address = io.loopback(family, 0)
+    try text.append(line, protocol)
+    try text.append(line, " over ")
+    try io.append_ip(line, at)
+    try text.format(line, ": the server echoed {} {}\n",
+                    [any(addr count), any(addr what)])
+    try io.put(out, text.used(line))
+    try quoted(out, echoed)
+end report
+--  What the consumer writes on a system with both loopback addresses.
+expected: []u8 = """TCP over 127.0.0.1: the server echoed 3 lines
+    | one
+    | two
+    | hello, world
+    UDP over 127.0.0.1: the server echoed 2 datagrams
+    | ping
+    | hello, datagram
+    TCP over ::1: the server echoed 3 lines
+    | one
+    | two
+    | hello, world
+    UDP over ::1: the server echoed 2 datagrams
+    | ping
+    | hello, datagram
+    """
+
+--  Echo over TCP and then UDP on FAMILY's loopback address of NETWORK,
+--  and report it to OUT.
+exchange: (network: io.memory_network,
+           inout out: io.buffered_writer(io.memory),
+           family: io.address_family) -> none ! ... =
+    mut room: [256]u8 = zeroed
+    mut echoed := text.over(room[0..<256])
+    lines: usize = try tcp_echo(network, family, echoed)
+    try report(out, "TCP", family, lines, "lines", text.used(echoed))
+    text.clear(echoed)
+    try udp_echo(network, family, echoed)
+    try report(out, "UDP", family, lenof messages, "datagrams",
+               text.used(echoed))
+end exchange
+
+--  A port nothing listens on is refused, and one a listener holds is in
+--  use; a connection to an address of no interface here is unreachable.
+refusals: (network: io.memory_network) -> (yes: bool) ! ... =
+    yes = false
+    listener: io.file = try io.listen(network, io.loopback(io.ipv4, 0))
+    at: io.address = try io.local_address(network, listener)
+    mut taken: bool = false
+    second: io.file = io.listen(network, at) else (problem)
+        taken = problem == io.address_in_use
+        io.file(0)
+    end
+    _ = second
+    try io.close_socket(network, listener)
+    mut refused: bool = false
+    connected: io.file = io.connect(network, at) else (problem)
+        refused = problem == io.refused
+        io.file(0)
+    end
+    _ = connected
+    mut unreachable: bool = false
+    away: io.file = io.connect(network, io.ipv4_address(192, 0, 2, 1,
+                                                        80)) else (problem)
+        unreachable = problem == io.unreachable
+        io.file(0)
+    end
+    _ = away
+    yes = taken and refused and unreachable
+end refusals
+
+--  A send to a connection whose peer has closed is disconnected, and what
+--  the peer sent before it closed is still read, then the end.  A receive
+--  and an accept that would wait time out at once.
+closed_peer: (network: io.memory_network) -> (yes: bool) ! ... =
+    yes = false
+    listener: io.file = try io.listen(network, io.loopback(io.ipv6, 0))
+    at: io.address = try io.local_address(network, listener)
+    client: io.file = try io.connect(network, at)
+    server: io.file = try io.accept(network, listener)
+    mut buffer: [8]u8 = zeroed
+    mut waited: bool = false
+    nothing: usize = io.receive(network, client, buffer[0..<8]) else (problem)
+        waited = problem == io.timed_out
+        0
+    end
+    _ = nothing
+    mut none_waiting: bool = false
+    again: io.file = io.accept(network, listener) else (problem)
+        none_waiting = problem == io.timed_out
+        io.file(0)
+    end
+    _ = again
+    try io.send(network, server, "bye")
+    try io.close_socket(network, server)
+    mut disconnected: bool = false
+    io.send(network, client, "anyone?") else (problem)
+        disconnected = problem == io.disconnected
+    end
+    got: usize = try io.receive(network, client, buffer[0..<8])
+    ended: usize = try io.receive(network, client, buffer[0..<8])
+    try io.close_socket(network, client)
+    try io.close_socket(network, listener)
+    yes = waited and none_waiting and disconnected and got == 3
+          and ended == 0
+end closed_peer
+
+--  A send that does not fit the peer's buffer delivers what fits and times
+--  out, as a real one would after its limit.
+full_buffer: (network: io.memory_network) -> (yes: bool) ! ... =
+    yes = false
+    listener: io.file = try io.listen(network, io.loopback(io.ipv4, 0))
+    at: io.address = try io.local_address(network, listener)
+    client: io.file = try io.connect(network, at)
+    server: io.file = try io.accept(network, listener)
+    big: [80]u8 = zeroed
+    mut stopped: bool = false
+    io.send(network, client, big[0..<80]) else (problem)
+        stopped = problem == io.timed_out
+    end
+    mut buffer: [80]u8 = zeroed
+    got: usize = try io.receive(network, server, buffer[0..<80])
+    try io.close_socket(network, server)
+    try io.close_socket(network, client)
+    try io.close_socket(network, listener)
+    yes = stopped and got == 64
+end full_buffer
+
+--  A datagram sent to a port no socket holds is lost, as UDP's may be.
+lost_datagram: (network: io.memory_network, state: ptr io.network_space)
+               -> (yes: bool) ! ... =
+    socket: io.file = try io.open_datagram(network, io.loopback(io.ipv4, 0))
+    before: usize = state.val.lost
+    try io.send_to(network, socket, "anyone?",
+                   io.loopback(io.ipv4, 9))
+    yes = state.val.lost == before + 1
+    try io.close_socket(network, socket)
+end lost_datagram
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.memory_space = zeroed
+    mut slots: [1]io.memory_file =
+        [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
+          writable: false, opened: false, writing: false)]
+    mut written: [1024]u8 = zeroed
+    mut complained: [64]u8 = zeroed
+    world := io.memory_over(state, slots[0..<1], [], "", written[0..<1024],
+                            complained[0..<64])
+    mut space: io.network_space = zeroed
+    mut b0: [64]u8 = zeroed
+    mut b1: [64]u8 = zeroed
+    mut b2: [64]u8 = zeroed
+    mut sockets: [3]io.network_socket =
+        [io.socket_over(b0[0..<64]), io.socket_over(b1[0..<64]),
+         io.socket_over(b2[0..<64])]
+    network := io.network_over(space, sockets[0..<3])
+    mut storage: [128]u8 = zeroed
+    mut out := io.buffered_over(world, io.out(world), storage[0..<128])
+    exchange(network, out, io.ipv4) else (problem)
+        _ = problem
+        return
+    end
+    exchange(network, out, io.ipv6) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    return when mem.compare(io.written(world), expected) <> mem.equal
+    return when space.connections <> 2 or space.datagrams <> 8
+    code = 2
+    refused: bool = refusals(network) else (problem)
+        _ = problem
+        return
+    end
+    return when not refused
+    code = 3
+    closed: bool = closed_peer(network) else (problem)
+        _ = problem
+        return
+    end
+    return when not closed
+    code = 4
+    full: bool = full_buffer(network) else (problem)
+        _ = problem
+        return
+    end
+    return when not full
+    code = 5
+    lost: bool = lost_datagram(network, addr space) else (problem)
+        _ = problem
+        return
+    end
+    return when not lost
+    code = 6
+    space.without_ipv6 = true
+    mut room: [64]u8 = zeroed
+    mut echoed := text.over(room[0..<64])
+    mut missing: bool = false
+    lines: usize = tcp_echo(network, io.ipv6, echoed) else (problem)
+        missing = problem == io.address_unavailable
+        0
+    end
+    return when not missing or lines <> 0
+    space.without_ipv6 = false
+    code = 7
+    space.fail_at = space.calls + 2
+    mut injected: bool = false
+    _ = tcp_echo(network, io.ipv4, echoed) else (problem)
+        injected = problem == io.io_failed
+        0
+    end
+    return when not injected
+    code = 42
+end main

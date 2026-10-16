@@ -1,7 +1,7 @@
 --  The provider of every core/io concept on hosted targets: reader,
 --  writer, files and process, and so of their composition, world, and
---  directories, the environment, programs, the clocks and entropy beside
---  them.  It is written once, over platform/posix,
+--  directories, the environment, programs, the clocks, entropy and the
+--  network beside them.  It is written once, over platform/posix,
 --  which reaches Linux through its system calls and Darwin and FreeBSD
 --  through their C library: nothing here is written per system.  Import
 --  this module only at a hosted authority root.
@@ -29,8 +29,8 @@ end system_value
 
 --- Hosted implementation of all four I/O capabilities, `io.world`,
 --- `io.directories`, `io.environment`, `io.programs`, the clocks
---- `io.clock` and `io.wall_clock` and the system's `io.entropy`, over
---- platform/posix, as a handle:
+--- `io.clock` and `io.wall_clock`, the system's `io.entropy` and
+--- `io.network`, over platform/posix, as a handle:
 --- copies share the process's descriptors, arguments and environment, and
 --- the last-error and last-signal cells they were made with. File
 --- identifiers belong to this provider; borrowed arguments and variables

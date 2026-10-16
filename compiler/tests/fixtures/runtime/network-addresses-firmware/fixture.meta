@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: within a Cortex-M0 image, an IPv4 and a compressed IPv6 address are read from their text and written back as the same text, a zone and a three-part IPv4 address are invalid_address, and an IPv4 address is written with its port; runtime/network-addresses holds every form on the hosted targets
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0640, 0790, 0900, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

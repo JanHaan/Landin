@@ -1,0 +1,64 @@
+--  A write to a connection whose peer has gone is an error the program
+--  answers, `disconnected`, never SIGPIPE ending the process.  The server
+--  closes its end; the client reads the end of the stream, and the first
+--  send after it may still be taken, the peer's system answering it with a
+--  reset, so the client sends until it hears of that, for at most two
+--  seconds.  A write through the writer concept afterwards fails with
+--  EPIPE kept as the last errno: the process ignores SIGPIPE, which a
+--  write to a socket would otherwise raise.  Over IPv4 and IPv6.
+import core/io
+import hosted/io as hosted
+import platform/posix
+
+--  A connection's peer never said it had gone.
+still_there: atom
+
+--  Send to CLIENT until a send says its peer has gone, sleeping a little
+--  between tries, for at most two seconds.
+sent_until_gone: (host: hosted.system, client: io.file) -> none ! ... =
+    deadline: io.instant = io.later(io.now(host), io.seconds(2))
+    loop do
+        io.send(host, client, "anyone?") else (problem)
+            return when problem == io.disconnected
+            fail problem
+        end
+        fail still_there when io.now(host) >= deadline
+        io.sleep(host, io.milliseconds(10))
+    end loop
+end sent_until_gone
+
+--  Whether a send to a peer that has closed is disconnected, and a write
+--  after it EPIPE.
+closed: (host: hosted.system, family: io.address_family) -> (yes: bool)
+        ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    at: io.address = try io.local_address(host, listener)
+    client: io.file = try io.connect(host, at)
+    server: io.file = try io.accept(host, listener)
+    try io.close_socket(host, listener)
+    try io.close_socket(host, server)
+    mut buffer: [8]u8 = zeroed
+    ended: usize = try io.receive(host, client, buffer[0..<8])
+    try sent_until_gone(host, client)
+    yes = false
+    io.write(host, client, "again?") else (problem)
+        yes = ended == 0 and problem == io.io_failed
+              and hosted.last_errno(host) == posix.number(posix.epipe)
+    end
+    try io.close_socket(host, client)
+end closed
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    for family in families do
+        yes: bool = closed(host, family) else (problem)
+            _ = problem
+            return
+        end
+        return when not yes
+        inc code
+    end for
+    code = 42
+end main

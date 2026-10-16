@@ -42,23 +42,14 @@ public standard_output: descriptor = descriptor_value(1)
 --- Standard error, descriptor 2.
 public standard_error: descriptor = descriptor_value(2)
 
-fixed if compiler.os == darwin then
-    --- The working directory as the directory an `*_at` call's relative
-    --- path is relative to: C's `AT_FDCWD`, which is no open file.
-    public working_directory: descriptor = descriptor_value(-2)
+fixed if compiler.os == linux then
+    --  PATH_MAX: room for the longest path a call takes, its NUL
+    --  included.
+    path_room: type = [4096]u8
+else
     --  PATH_MAX: room for the longest path a call takes, its NUL
     --  included.
     path_room: type = [1024]u8
-elsif compiler.os == freebsd then
-    --- The working directory as the directory an `*_at` call's relative
-    --- path is relative to: C's `AT_FDCWD`, which is no open file.
-    public working_directory: descriptor = descriptor_value(-100)
-    path_room: type = [1024]u8
-else
-    --- The working directory as the directory an `*_at` call's relative
-    --- path is relative to: C's `AT_FDCWD`, which is no open file.
-    public working_directory: descriptor = descriptor_value(-100)
-    path_room: type = [4096]u8
 end if
 
 --- Open for reading only.
@@ -443,6 +434,11 @@ word: usize = sizeof usize
 --- with its own or with C's `environ`, before it reads an argument or a
 --- variable and before starting a thread that may.
 ---
+--- The first call also ignores SIGPIPE when its disposition is the
+--- default, so that a write to a pipe or a socket nobody reads fails with
+--- `epipe` rather than ending the process; a handler a C `main` installed
+--- first is kept.  `spawn` gives every child the default back.
+---
 --- The first call needs a nonnegative count and a non-null table, and
 --- keeps that exact triple without copying: the caller keeps both tables
 --- and their strings readable while any argument or variable lent from
@@ -480,6 +476,9 @@ public extern(c) _landin_host_initialize_arguments:
     end if
     root_count = count
     root_values = values
+    --  A write to a pipe or a socket nobody reads is EPIPE, an error the
+    --  program answers, rather than SIGPIPE ending the process.
+    system_ignore_broken_pipe()
     if variables <> 0 then
         root_environment = environment
         --  On Linux, the auxiliary vector after the initial stack's envp,
@@ -487,6 +486,14 @@ public extern(c) _landin_host_initialize_arguments:
         system_adopt_start(count, values, environment)
     end if
 end _landin_host_initialize_arguments
+
+--- Whether SIGPIPE is ignored in this process, as
+--- `_landin_host_initialize_arguments` makes it when it was the default:
+--- a write to a pipe or a socket nobody reads then fails with `epipe`.
+public link(symbol: "_landin_posix_broken_pipe_ignored") broken_pipe_ignored:
+    () -> (ignored: bool) =
+    ignored = system_broken_pipe_ignored()
+end broken_pipe_ignored
 
 --- The process's arguments as its entry gave them: argv after `argv[0]`
 --- and their count.  `arguments` gives the table, which lends what it
@@ -631,6 +638,14 @@ public link(symbol: "_landin_posix_pipe") pipe:
     ends = try system_pipe()
 end pipe
 
+--- Whether `opened` is closed when the process executes a program, its
+--- `FD_CLOEXEC` flag, as every descriptor this module makes is: or the
+--- errno, `ebadf` for a descriptor that is not open.
+public link(symbol: "_landin_posix_closed_on_exec") closed_on_exec:
+    (opened: descriptor) -> (yes: bool) ! errno =
+    yes = try system_closed_on_exec(opened)
+end closed_on_exec
+
 process_value: type = distinct i32
 
 --- A child process's ID, as `spawn` gives it and `wait` takes it: a
@@ -665,10 +680,16 @@ public inherited_streams: standard_streams = (input: standard_input,
 --- the system takes.  A child must be waited for, with `wait`, or it keeps
 --- its place in the system's table until this process ends.
 ---
+--- The child starts with SIGPIPE's default disposition, whatever this
+--- process's is: this process ignores it, which an exec would otherwise
+--- pass on.
+---
 --- On Linux it is a `clone` that copies this process, as `fork` does,
---- which in the child moves the streams into place and executes the
---- program, and reports a failure to the parent through a pipe closed on
---- exec; on Darwin and FreeBSD it is the C library's `posix_spawn`.  The
+--- which in the child moves the streams into place, gives SIGPIPE its
+--- default and executes the program, and reports a failure to the parent
+--- through a pipe closed on exec; on Darwin and FreeBSD it is the C
+--- library's `posix_spawn`, told to reset SIGPIPE with
+--- `posix_spawnattr_setsigdefault`.  The
 --- block of strings and tables the child is given is mapped for the call
 --- and unmapped after it.
 public link(symbol: "_landin_posix_spawn") spawn:

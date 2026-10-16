@@ -1,0 +1,58 @@
+--  Addresses on firmware: an IPv4 and an IPv6 address read from their
+--  text and written back, text that is no address refused, and an address
+--  written with its port, within a Cortex-M0 image.
+--  runtime/network-addresses holds every form on the hosted targets.
+import core/io
+import core/mem
+import core/text
+
+--  Whether SOURCE reads as an address that is written back as itself.
+round_trip: (source: []u8) -> (yes: bool) ! ... =
+    at: io.address = try io.parse_ip(source)
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    try io.append_ip(line, at)
+    yes = mem.compare(text.used(line), source) == mem.equal
+end round_trip
+
+--  Whether SOURCE is refused as no address.
+refused: (source: []u8) -> (yes: bool) =
+    yes = false
+    at: io.address = io.parse_ip(source) else (problem)
+        yes = problem == io.invalid_address
+        return
+    end
+    _ = at
+end refused
+
+--  Whether an address is written with its port after it.
+with_port: () -> (yes: bool) ! ... =
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    try io.append_address(line, io.ipv4_address(192, 0, 2, 1, 80))
+    yes = mem.compare(text.used(line), "192.0.2.1:80") == mem.equal
+end with_port
+
+public main: () -> (code: i32) =
+    code = 1
+    v4: bool = round_trip("192.0.2.1") else (problem)
+        _ = problem
+        return
+    end
+    return when not v4
+    code = 2
+    v6: bool = round_trip("2001:db8::ff00:42:8329") else (problem)
+        _ = problem
+        return
+    end
+    return when not v6
+    code = 3
+    return when not refused("fe80::1%eth0") or not refused("1.2.3")
+    code = 4
+    port: bool = with_port() else (problem)
+        _ = problem
+        return
+    end
+    return when not port
+    code = 42
+end main

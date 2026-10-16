@@ -8,6 +8,10 @@ import core/text
 import platform/linux
 
 fixed if compiler.os == linux then
+    --- The working directory as the directory an `*_at` call's relative
+    --- path is relative to: C's `AT_FDCWD`, which is no open file.
+    public working_directory: descriptor = descriptor_value(linux.at_fdcwd)
+
     --  The flags `openat` takes for `options`.
     flags_of: (options: open_options) -> (flags: i32) =
         flags = match options.access
@@ -196,6 +200,12 @@ fixed if compiler.os == linux then
         ends = (reading: descriptor(made[0]), writing: descriptor(made[1]))
     end system_pipe
 
+    system_closed_on_exec: (opened: descriptor) -> (yes: bool) ! errno =
+        flags: i32 = linux.fcntl(i32(opened), linux.f_getfd, 0)
+        fail errno_of(-flags) when flags < 0
+        yes = (flags & linux.fd_cloexec) <> 0
+    end system_closed_on_exec
+
     system_duplicate_above: (source: descriptor, lowest: i32)
                             -> (result: descriptor) ! errno =
         made: i32 = linux.fcntl(i32(source), linux.f_dupfd_cloexec,
@@ -239,6 +249,14 @@ fixed if compiler.os == linux then
             --  closes any a C library or an inherited one left open, and a
             --  kernel older than 5.11 that refuses it leaves only those.
             _ = linux.close_range(3, 0 -% 1, linux.close_range_cloexec)
+            --  The parent ignores SIGPIPE, which an exec keeps; the child
+            --  starts with the default, as a program expects to.
+            mut restored: linux.signal_action = zeroed
+            restored.handler = linux.sig_dfl
+            result = linux.rt_sigaction(linux.sigpipe, addr restored,
+                                        linux.no_action)
+        end if
+        if result >= 0 then
             result = linux.execve(path, arguments, environment)
         end if
         problem: u32 = u32(-result)
@@ -373,6 +391,214 @@ fixed if compiler.os == linux then
         fail unlisted when usize(result) > lenof into
         count = usize(result)
     end system_random_bytes
+
+    --  SIGPIPE's disposition, the process's own: ignored when it was the
+    --  default, so that a write to a pipe or a socket nobody reads fails
+    --  with EPIPE rather than ending the process; a handler a C `main`
+    --  installed, and an ignore the process was started with, are kept.
+    system_ignore_broken_pipe: () -> none =
+        mut previous: linux.signal_action = zeroed
+        return when linux.rt_sigaction(linux.sigpipe, linux.no_action,
+                                       addr previous) < 0
+        return when previous.handler <> linux.sig_dfl
+        mut ignoring: linux.signal_action = zeroed
+        ignoring.handler = linux.sig_ign
+        _ = linux.rt_sigaction(linux.sigpipe, addr ignoring, linux.no_action)
+    end system_ignore_broken_pipe
+
+    --  Whether SIGPIPE is ignored, for a program to ask.
+    system_broken_pipe_ignored: () -> (ignored: bool) =
+        mut previous: linux.signal_action = zeroed
+        ignored = linux.rt_sigaction(linux.sigpipe, linux.no_action,
+                                     addr previous) >= 0
+                  and previous.handler == linux.sig_ign
+    end system_broken_pipe_ignored
+
+    system_family_number: (family: socket_family) -> (number: i32) =
+        number = match family
+            internet: linux.af_inet
+            internet6: linux.af_inet6
+            local: linux.af_unix
+        end match
+    end system_family_number
+
+    kind_number: (kind: socket_kind) -> (number: i32) =
+        number = match kind
+            stream: linux.sock_stream
+            datagram: linux.sock_dgram
+        end match
+    end kind_number
+
+    system_socket: (family: socket_family, kind: socket_kind)
+                   -> (made: descriptor) ! errno =
+        result: i32 = linux.socket(system_family_number(family),
+                                   kind_number(kind) | linux.sock_cloexec, 0)
+        fail errno_of(-result) when result < 0
+        made = descriptor(result)
+    end system_socket
+
+    system_socket_pair: (kind: socket_kind) -> (ends: connected_pair)
+                        ! errno =
+        mut made: [2]i32 = zeroed
+        result: i32 = linux.socketpair(linux.af_unix,
+                                       kind_number(kind) | linux.sock_cloexec,
+                                       0, addr made[0])
+        fail errno_of(-result) when result < 0
+        ends = (first: descriptor(made[0]), second: descriptor(made[1]))
+    end system_socket_pair
+
+    system_bind: (socket: descriptor, address: ptr u8, length: u32)
+                 -> none ! errno =
+        result: i32 = linux.bind(i32(socket), address, length)
+        fail errno_of(-result) when result < 0
+    end system_bind
+
+    system_listen: (socket: descriptor, backlog: i32) -> none ! errno =
+        result: i32 = linux.listen(i32(socket), backlog)
+        fail errno_of(-result) when result < 0
+    end system_listen
+
+    system_accept: (listener: descriptor) -> (accepted: descriptor) ! errno =
+        result: i32 = linux.accept4(i32(listener), linux.no_address,
+                                    linux.no_address, linux.sock_cloexec)
+        fail errno_of(-result) when result < 0
+        accepted = descriptor(result)
+    end system_accept
+
+    system_connect: (socket: descriptor, address: ptr u8, length: u32)
+                    -> none ! errno =
+        result: i32 = linux.connect(i32(socket), address, length)
+        fail errno_of(-result) when result < 0
+    end system_connect
+
+    --  Every send is MSG_NOSIGNAL's, so a peer that has gone is EPIPE
+    --  whatever SIGPIPE's disposition is.
+    system_send: (socket: descriptor, bytes: []u8) -> (count: usize)
+                 ! errno =
+        spare: u8 = 0
+        base: ptr u8 = if lenof bytes > 0 then addr bytes[0]
+                       else addr spare end if
+        result: isize = linux.sendto(i32(socket), base, lenof bytes,
+                                     linux.msg_nosignal, linux.no_address,
+                                     0)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_send
+
+    system_receive: (socket: descriptor, into: []mut u8) -> (count: usize)
+                    ! errno =
+        mut spare: u8 = 0
+        base: ptr mut u8 = if lenof into > 0 then addr into[0]
+                           else addr spare end if
+        result: isize = linux.recvfrom(i32(socket), base, lenof into, 0,
+                                       linux.no_address, linux.no_address)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_receive
+
+    system_send_to: (socket: descriptor, bytes: []u8, address: ptr u8,
+                     length: u32) -> (count: usize) ! errno =
+        spare: u8 = 0
+        base: ptr u8 = if lenof bytes > 0 then addr bytes[0]
+                       else addr spare end if
+        result: isize = linux.sendto(i32(socket), base, lenof bytes,
+                                     linux.msg_nosignal, address, length)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_send_to
+
+    system_receive_from: (socket: descriptor, into: []mut u8,
+                          address: ptr mut u8, length: ptr mut u32)
+                         -> (count: usize) ! errno =
+        mut spare: u8 = 0
+        base: ptr mut u8 = if lenof into > 0 then addr into[0]
+                           else addr spare end if
+        result: isize = linux.recvfrom(i32(socket), base, lenof into, 0,
+                                       address, length)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_receive_from
+
+    system_shutdown: (socket: descriptor, how: i32) -> none ! errno =
+        result: i32 = linux.shutdown(i32(socket), how)
+        fail errno_of(-result) when result < 0
+    end system_shutdown
+
+    system_socket_name: (socket: descriptor, address: ptr mut u8,
+                         length: ptr mut u32) -> none ! errno =
+        result: i32 = linux.getsockname(i32(socket), address, length)
+        fail errno_of(-result) when result < 0
+    end system_socket_name
+
+    system_peer_name: (socket: descriptor, address: ptr mut u8,
+                       length: ptr mut u32) -> none ! errno =
+        result: i32 = linux.getpeername(i32(socket), address, length)
+        fail errno_of(-result) when result < 0
+    end system_peer_name
+
+    --  An option's level and name.
+    option_of: (option: socket_option) -> (level: i32, name: i32) =
+        level = linux.sol_socket
+        name = match option
+            reuse_address: linux.so_reuseaddr
+            no_delay: linux.tcp_nodelay
+            ipv6_only: linux.ipv6_v6only
+            receive_limit: linux.so_rcvtimeo
+            send_limit: linux.so_sndtimeo
+            pending: linux.so_error
+        end match
+        if option == no_delay then level = linux.ipproto_tcp end if
+        if option == ipv6_only then level = linux.ipproto_ipv6 end if
+    end option_of
+
+    system_set_number: (socket: descriptor, option: socket_option,
+                        value: i32) -> none ! errno =
+        (level, name) := option_of(option)
+        held: i32 = value
+        given: ptr u8 = ptr(usize(addr held))
+        result: i32 = linux.setsockopt(i32(socket), level, name, given, 4)
+        fail errno_of(-result) when result < 0
+    end system_set_number
+
+    system_get_number: (socket: descriptor, option: socket_option)
+                       -> (value: i32) ! errno =
+        (level, name) := option_of(option)
+        mut held: i32 = 0
+        mut length: u32 = 4
+        filled: ptr mut u8 = ptr(usize(addr held))
+        result: i32 = linux.getsockopt(i32(socket), level, name, filled,
+                                       addr length)
+        fail errno_of(-result) when result < 0
+        value = held
+    end system_get_number
+
+    system_set_time: (socket: descriptor, option: socket_option,
+                      span: time_value) -> none ! errno =
+        (level, name) := option_of(option)
+        (seconds, microseconds) := microseconds_of(span)
+        limit: linux.time_limit = (seconds: seconds,
+                                   microseconds: microseconds)
+        given: ptr u8 = ptr(usize(addr limit))
+        result: i32 = linux.setsockopt(i32(socket), level, name, given,
+                                       u32(sizeof linux.time_limit))
+        fail errno_of(-result) when result < 0
+    end system_set_time
+
+    system_get_time: (socket: descriptor, option: socket_option)
+                     -> (span: time_value) ! errno =
+        (level, name) := option_of(option)
+        mut limit: linux.time_limit = zeroed
+        mut length: u32 = u32(sizeof linux.time_limit)
+        filled: ptr mut u8 = ptr(usize(addr limit))
+        result: i32 = linux.getsockopt(i32(socket), level, name, filled,
+                                       addr length)
+        fail errno_of(-result) when result < 0
+        fail unlisted when length <> u32(sizeof linux.time_limit)
+          or limit.microseconds < 0
+          or limit.microseconds >= 1000000
+        span = (seconds: limit.seconds,
+                nanoseconds: u32(limit.microseconds) * 1000)
+    end system_get_time
 
     system_wait: (child: process_id) -> (word: i32) ! errno =
         mut status: i32 = 0

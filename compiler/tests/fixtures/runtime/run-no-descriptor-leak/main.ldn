@@ -1,9 +1,9 @@
 --  A child receives no descriptor but its three streams.  The parent holds
---  two files and a directory open, and another child's three pipes, while
---  it starts itself again with the argument `check` and the numbers of
---  those descriptors; the copy asks `poll` about each, which answers
---  `poll_invalid` for a closed descriptor and never for an open one, and
---  names any that is open.  It names none, since every descriptor the
+--  two files and a directory open, another child's three pipes, and a
+--  listener, a connection and a UDP socket, while it starts itself again
+--  with the argument `check` and the numbers of those descriptors; the
+--  copy asks `poll` about each, which answers `poll_invalid` for a closed
+--  descriptor and never for an open one, and names any that is open.  It names none, since every descriptor the
 --  hosted provider makes is closed on exec, and the spawn closes whatever
 --  else is open in the child.  The hosted provider's file is its
 --  descriptor's number, so the parent knows which numbers to give.
@@ -79,13 +79,31 @@ parent: (host: hosted.system) -> (code: i32) =
         return
     end
     code = 2
-    mut rooms: [6][4]u8 = zeroed
-    held: [6]io.file = [first, second, io.file(listed.handle), other.input,
-                        other.output, other.errors]
-    mut arguments: [7]text.host_string =
-        [7 of text.host_over("")]
+    listener: io.file = io.listen(host, io.loopback(io.ipv4, 0)) else (problem)
+        _ = problem
+        return
+    end
+    at: io.address = io.local_address(host, listener) else (problem)
+        _ = problem
+        return
+    end
+    connection: io.file = io.connect(host, at) else (problem)
+        _ = problem
+        return
+    end
+    datagrams: io.file = io.open_datagram(host,
+                                          io.loopback(io.ipv4, 0)) else (problem)
+        _ = problem
+        return
+    end
+    mut rooms: [9][4]u8 = zeroed
+    held: [9]io.file = [first, second, io.file(listed.handle), other.input,
+                        other.output, other.errors, listener, connection,
+                        datagrams]
+    mut arguments: [10]text.host_string =
+        [10 of text.host_over("")]
     arguments[0] = text.host_over("check")
-    for at in usize(0)..<6 do
+    for at in usize(0)..<9 do
         digits: []u8 = number(held[at], rooms[at][0..<4]) else (problem)
             _ = problem
             return
@@ -93,7 +111,7 @@ parent: (host: hosted.system) -> (code: i32) =
         arguments[1 + at] = text.host_over(digits)
     end for
     checked: io.child = io.spawn(host, posix.program_name(),
-                                 arguments[0..<7], variables[0..<1],
+                                 arguments[0..<10], variables[0..<1],
                                  io.inheriting) else (problem)
         _ = problem
         return
@@ -118,6 +136,18 @@ parent: (host: hosted.system) -> (code: i32) =
         return
     end
     _ = finished
+    io.close_socket(host, datagrams) else (problem)
+        _ = problem
+        return
+    end
+    io.close_socket(host, connection) else (problem)
+        _ = problem
+        return
+    end
+    io.close_socket(host, listener) else (problem)
+        _ = problem
+        return
+    end
     io.close_directory(host, listed) else (problem)
         _ = problem
         return

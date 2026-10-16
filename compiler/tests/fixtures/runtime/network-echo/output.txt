@@ -1,0 +1,14 @@
+TCP over 127.0.0.1: the server echoed 3 lines
+| one
+| two
+| hello, world
+UDP over 127.0.0.1: the server echoed 2 datagrams
+| ping
+| hello, datagram
+TCP over ::1: the server echoed 3 lines
+| one
+| two
+| hello, world
+UDP over ::1: the server echoed 2 datagrams
+| ping
+| hello, datagram

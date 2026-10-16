@@ -50,6 +50,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's process headers exist only on a hosted system, and Cortex-M0 starts no process.",
       "witness": "compiler/tests/fixtures/abi/libc-process-constants/fixture.meta"
     },
+    "abi/libc-socket-facts": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware reads and writes addresses on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/libc-socket-facts/fixture.meta"
+    },
     "abi/linux-file-identity": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -239,6 +244,11 @@
       "mode": "restriction",
       "reason": "Hosted C peers observe panic contracts; the general Cortex C source surface remains refused. freestanding.py executes the selected and default panic paths through compiler-owned firmware.",
       "witness": "compiler/tests/fixtures/abi/r670-panic/fixture.meta"
+    },
+    "abi/sigpipe-handler-kept": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its signal handler and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals.",
+      "witness": "compiler/tests/fixtures/abi/sigpipe-handler-kept/fixture.meta"
     },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute"
@@ -914,6 +924,9 @@
     "runtime/generic-any-nominal-transport": {
       "mode": "execute"
     },
+    "runtime/generic-atom-widening": {
+      "mode": "execute"
+    },
     "runtime/generic-composed-evidence": {
       "mode": "execute"
     },
@@ -1327,6 +1340,9 @@
     "runtime/module-struct-zeroed-image-is-static": {
       "mode": "execute"
     },
+    "runtime/module-values-across-modules": {
+      "mode": "execute"
+    },
     "runtime/module-values-hold-and-are-updated": {
       "mode": "execute"
     },
@@ -1393,6 +1409,54 @@
     "runtime/nested-variant-parts": {
       "mode": "execute"
     },
+    "runtime/network-address-in-use": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+    },
+    "runtime/network-addresses": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, needs about 45 KiB of flash at size/auto and 48 KiB at none/off, overflowing the 32 KiB profile by 13 and 16 KiB; the address code is about 17 KiB of it, ipv6_octets alone 4.6 KiB, most of it the Cortex-M0 backend's frame homes and copies between them. Each profile still attempts execution; runtime/network-addresses-firmware reads and writes an IPv4 and an IPv6 address within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/network-addresses-firmware": {
+      "mode": "execute"
+    },
+    "runtime/network-closed-peer": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+    },
+    "runtime/network-echo": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory runs the same echo over core/io's memory network instead."
+    },
+    "runtime/network-echo-memory": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The network consumer's routines over core/io's memory network beside a memory world, with its line reader, buffered writer, format and every oracle of the memory network, need about 135 KiB of flash at size/auto, overflowing the 32 KiB profile by 103 KiB; the memory network alone is about 40 KiB, since a provider's conformance table links every entry, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/run-shell-memory's limit records. Each profile still attempts execution; runtime/network-addresses-firmware runs the network's address code within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/network-receive-timeout": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+    },
+    "runtime/network-refused": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+    },
     "runtime/null-pointer-dynamic-traps": {
       "mode": "execute"
     },
@@ -1424,6 +1488,20 @@
       "counterpart": "pointer-unions",
       "mode": "execute",
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/posix-broken-pipe": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no signals, pipes or processes."
+    },
+    "runtime/posix-broken-pipe-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no signals, pipes or C runtime."
     },
     "runtime/posix-directories": {
       "codes": [
@@ -1461,6 +1539,13 @@
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
     },
     "runtime/posix-processes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-sockets": {
       "codes": [
         "L0015"
       ],

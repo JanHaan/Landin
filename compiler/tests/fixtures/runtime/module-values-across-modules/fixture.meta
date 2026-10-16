@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: module values read another module's values through its name as they read their own: a scalar, flags combined with |, & and ~, D302's distinct flags combined there and here, atoms in a scalar and an array image, sizeof and alignof of an imported record in an array image and a record image, a chain through a second module, a mutable value's initial image, a routine, a record copy and a text image
+program: main.ldn
+root: root
+status: 42
+constructs: 0330, 0370, 0640, 0650, 1430, 1940
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

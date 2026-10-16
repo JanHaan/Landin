@@ -1,0 +1,74 @@
+--  SIGPIPE is ignored in the process and given back to its children.  A
+--  write to a pipe whose reading end is closed is `epipe`, and the program
+--  goes on, where SIGPIPE would have ended it.  A child the program starts
+--  has SIGPIPE's default again, which an exec would otherwise keep
+--  ignored: a shell whose output is a pipe the program has closed is ended
+--  by SIGPIPE when it writes, signal 13 on every hosted system, where an
+--  ignoring one would only fail its write.  The shell reads a line first,
+--  so it writes only after the program has closed the pipe's reading end.
+import core/io
+import core/text
+import platform/posix
+
+--  A check that did not hold.
+wrong: atom
+
+--  The program survives a write to a pipe nobody reads.
+writes_into_nothing: () -> none ! ... =
+    ends: posix.pipe_ends = try posix.pipe()
+    try posix.close(ends.reading)
+    mut broken: bool = false
+    _ = posix.write(ends.writing, "anyone?") else (problem)
+        broken = problem == posix.epipe
+        0
+    end
+    try posix.close(ends.writing)
+    fail wrong when not broken
+end writes_into_nothing
+
+--  How the shell that writes into a closed pipe ends.
+child_ending: () -> (status: posix.child_status) ! ... =
+    feeding: posix.pipe_ends = try posix.pipe()
+    draining: posix.pipe_ends = try posix.pipe()
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over("read -r line; echo hello")]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child: posix.process_id =
+        try posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                        variables[0..<1],
+                        (input: feeding.reading, output: draining.writing,
+                         errors: posix.standard_error))
+    try posix.close(feeding.reading)
+    try posix.close(draining.writing)
+    --  Nobody will read what the shell writes, and then it may go on.
+    try posix.close(draining.reading)
+    _ = try posix.write(feeding.writing, "go\n")
+    try posix.close(feeding.writing)
+    loop do
+        status = posix.wait(child) else (problem)
+            continue when problem == posix.eintr
+            fail problem
+        end
+        return
+    end loop
+end child_ending
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not posix.broken_pipe_ignored()
+    code = 2
+    writes_into_nothing() else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    status: posix.child_status = child_ending() else (problem)
+        _ = problem
+        return
+    end
+    match status.how
+        posix.exited(given): code = 100 + given
+        posix.signalled(signal): if signal == 13 then code = 42 end if
+    end match
+end main

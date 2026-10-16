@@ -500,8 +500,11 @@ end f
 A required static value or initial image cannot be established before the
 program runs [1940] (D136, D202). A module value, array bound or fixed
 configuration expression can depend on a runtime value or call, contain an
-unknown fixed name or form, or depend on itself. Change such an expression to
-one the closed fold can evaluate. A module function binding without an
+unknown fixed name or form, or depend on itself, within one module or through
+several. Change such an expression to one the closed fold can evaluate. A value
+another module exports, named through that module as `sizes.page`, is known as
+it is in its own module; a field of a record image, an element of an array
+image and a call are not, in either. A module function binding without an
 initializer has no implicit zero function address; give it an initial function
 address, such as a declared function or another module function value whose
 image is known.

@@ -154,10 +154,10 @@ end environment
 
 --- Composition of reader, writer, files and process over one provider type.
 --- Consumers should request the narrowest capability they use.
---- `directories`, `environment`, `programs`, `clock`, `wall_clock` and
---- `entropy` are not part of it: a program that lists a directory, reads
---- its environment, runs another program, reads the time or wants random
---- bytes names that concept as well.
+--- `directories`, `environment`, `programs`, `clock`, `wall_clock`,
+--- `entropy` and `network` are not part of it: a program that lists a
+--- directory, reads its environment, runs another program, reads the time,
+--- wants random bytes or uses the network names that concept as well.
 public world: type = concept (provider: type) is reader, writer, files, process
 end world
 

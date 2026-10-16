@@ -1,0 +1,10 @@
+class: negative
+summary: two modules' values worked out from each other through their qualified names are each refused with L0305 at their own declaration, as a cycle within one module is, rather than folded for ever
+program: main.ldn
+root: root
+codes: L0305, L0305
+constructs: 1430, 1940
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: --root=../tests/fixtures/negative/module-value-cycle-across-modules/root ../tests/fixtures/negative/module-value-cycle-across-modules
+status: 1

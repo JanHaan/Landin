@@ -1,0 +1,12 @@
+error[L0305]: the value of `first` is worked out from itself
+  --> ../tests/fixtures/negative/module-value-cycle-across-modules/root/one/one.ldn:6:8
+  |
+6 | public first: i32 = two.second + 1
+  |        ^^^^^
+  = note: [1940]: a chain that comes back to where it began names nothing at all
+error[L0305]: the value of `second` is worked out from itself
+  --> ../tests/fixtures/negative/module-value-cycle-across-modules/root/two/two.ldn:5:8
+  |
+5 | public second: i32 = one.first + 1
+  |        ^^^^^^
+  = note: [1940]: a chain that comes back to where it began names nothing at all

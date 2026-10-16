@@ -35,8 +35,9 @@ totals for whatever its standard input holds and returns 0, and its fixture
 gives it an input of its own and holds the line it prints; the line numberer
 does the same with the lines it numbers. The directory
 listing builds a directory where it runs, prints its listing, removes it
-and returns 42, and the shell runner prints its report of a shell it ran
-and returns 42. The gate checks all eight output oracles and all fifteen
+and returns 42, the shell runner prints its report of a shell it ran
+and returns 42, and the echo prints what came back over loopback and
+returns 42. The gate checks all nine output oracles and all sixteen
 programs on each full gate run, on Linux x86-64 and on macOS arm64. `AGENTS.md` describes the verified explanatory-only reuse
 exception. `refine` compiles for the host it runs on unless `--target` says otherwise.
 
@@ -1697,3 +1698,259 @@ the `io.environment` concept, with `io.variable_count`, `io.variable_at` and
 `io.variable_named`, which
 `runtime/environment-variables` shows by starting itself again with an
 environment it builds.
+
+## Echo over loopback
+
+A server and its client in one program: the program listens, connects to
+itself, sends, accepts, echoes and reads the echo back, first over TCP and
+then over UDP, on IPv4's loopback address `127.0.0.1` and then on IPv6's
+`::1`. An address is a value, `io.address`, a family, its bytes and a port,
+made here with `io.loopback`; `io.parse_address` reads one from its text,
+`127.0.0.1:8080` or `[::1]:8080`, and `io.append_ip` writes one back
+without its port, as the report does. Nothing resolves a name to an
+address yet.
+
+The listener asks for port 0, which means any free one, and
+`io.local_address` says which port it got, so the program never collides
+with another that runs beside it. Every call waits until it can do what it
+was asked, as a blocking socket does, so the order matters in one thread:
+the system completes a connection to a listener on its own, so the client
+can connect and send all its lines before the server accepts it, and
+`io.shutdown` with `io.sending` tells the server the client has finished
+sending. A connection is a file of its provider, so the server reads it
+through a line reader [0790] [0800] and writes back through a buffered
+writer, and the client reads the echo through a line reader of its own.
+`io.set_timeouts` limits how long a receive waits: past the limit it is
+`io.timed_out`, rather than waiting for ever on a peer that never sends.
+Over UDP, `io.receive_from` gives each datagram's sender, which the server
+sends it back to with `io.send_to`. A socket is closed with
+`io.close_socket`; a `defer` closes each on every way out [1100].
+
+A failure is an atom of the concept's [0940]: a port nothing listens on
+is `io.refused`, a port another socket holds `io.address_in_use`, and a
+send to a peer that has gone `io.disconnected`. A write to a socket or a
+pipe nobody reads would raise SIGPIPE, which ends a process that has not
+ignored it; a hosted program ignores it from the start, so the write is an
+error the program answers. A system without IPv6's loopback address
+cannot run the second half: the program says so and returns 2, rather than
+passing over it.
+
+Fixture source: `compiler/tests/fixtures/runtime/network-echo/main.ldn`.
+
+```landin
+--  Echo over loopback: a server and its client in one program, over TCP
+--  and over UDP, on IPv4's loopback address and on IPv6's.  The server
+--  reads the client's lines through a line reader and writes them back
+--  through a buffered writer, the client reads them back through a line
+--  reader of its own, and the report goes to standard output through a
+--  buffered writer, flushed on every way out.
+import core/io
+import core/text
+import hosted/io as hosted
+
+--  What the client sends over TCP: three lines.
+request: []u8 = "one\ntwo\nhello, world\n"
+
+--  What the client sends over UDP: two datagrams.
+messages: [2][]u8 = ["ping", "hello, datagram"]
+
+--  A reply came from somewhere other than the server it was sent to.
+wrong_sender: atom
+
+--  Serve one connection: read each line through a line reader and write it
+--  back through a buffered writer, until the client has finished sending,
+--  and then finish sending too.  How many lines it echoed.
+serve: (provider: type is io.network, host: provider, connection: io.file)
+       -> (lines: usize) ! ... =
+    mut incoming: [64]u8 = zeroed
+    mut reader := io.lines_over(host, connection, incoming[0..<64])
+    mut outgoing: [64]u8 = zeroed
+    mut writer := io.buffered_over(host, connection, outgoing[0..<64])
+    lines = 0
+    loop do
+        item: io.line = try io.read_line(reader)
+        break when item.finished
+        try io.put(writer, item.bytes)
+        try io.put(writer, "\n")
+        inc lines
+    end loop
+    try io.flush(writer)
+    try io.shutdown(host, connection, io.sending)
+end serve
+
+--  Echo `request` over TCP between a server and a client on FAMILY's
+--  loopback address, and put what the client read back in `echoed`, a line
+--  at a time: how many lines the server echoed.  The listener asks for
+--  port 0, any free one, and says which it got; the client sends all of
+--  its lines and finishes sending before the server accepts, which the
+--  system's buffers allow in one thread.
+tcp_echo: (provider: type is io.network, host: provider,
+           family: io.address_family, inout echoed: text.builder)
+          -> (lines: usize) ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    defer io.close_socket(host, listener) else (problem)
+        _ = problem
+    end
+    at: io.address = try io.local_address(host, listener)
+    client: io.file = try io.connect(host, at)
+    defer io.close_socket(host, client) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
+    try io.send(host, client, request)
+    try io.shutdown(host, client, io.sending)
+    server: io.file = try io.accept(host, listener)
+    defer io.close_socket(host, server) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
+    lines = try serve(host, server)
+    mut incoming: [64]u8 = zeroed
+    mut replies := io.lines_over(host, client, incoming[0..<64])
+    loop do
+        item: io.line = try io.read_line(replies)
+        break when item.finished
+        try text.append(echoed, item.bytes)
+        try text.append_byte(echoed, 10)
+    end loop
+end tcp_echo
+
+--  Echo `messages` over UDP between two sockets on FAMILY's loopback
+--  address: the server sends each datagram back to whoever sent it, and
+--  the client puts each reply in `echoed`, a line each.
+udp_echo: (provider: type is io.network, host: provider,
+           family: io.address_family, inout echoed: text.builder)
+          -> none ! ... =
+    server: io.file = try io.open_datagram(host, io.loopback(family, 0))
+    defer io.close_socket(host, server) else (problem)
+        _ = problem
+    end
+    client: io.file = try io.open_datagram(host, io.loopback(family, 0))
+    defer io.close_socket(host, client) else (problem)
+        _ = problem
+    end
+    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
+    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
+    at: io.address = try io.local_address(host, server)
+    mut buffer: [64]u8 = zeroed
+    for message in messages do
+        try io.send_to(host, client, message, at)
+        got: io.datagram = try io.receive_from(host, server, buffer[0..<64])
+        try io.send_to(host, server, buffer[0..<got.count], got.sender)
+        back: io.datagram = try io.receive_from(host, client,
+                                                buffer[0..<64])
+        fail wrong_sender when not io.same_address(back.sender, at)
+        try text.append(echoed, buffer[0..<back.count])
+        try text.append_byte(echoed, 10)
+    end for
+end udp_echo
+
+--  Write each line of BYTES to OUT after a bar.
+quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         bytes: []u8) -> none ! ... =
+    mut start: usize = 0
+    for at in usize(0)..<lenof bytes do
+        if bytes[at] == 10 then
+            try io.put(out, "| ")
+            try io.put(out, bytes[start..<at + 1])
+            start = at + 1
+        end if
+    end for
+end quoted
+
+--  Report what came back over PROTOCOL on FAMILY's loopback address: how
+--  many of what the server echoed, and each of them.
+report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+         protocol: []u8, family: io.address_family, count: usize,
+         what: []u8, echoed: []u8) -> none ! ... =
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room[0..<64])
+    at: io.address = io.loopback(family, 0)
+    try text.append(line, protocol)
+    try text.append(line, " over ")
+    try io.append_ip(line, at)
+    try text.format(line, ": the server echoed {} {}\n",
+                    [any(addr count), any(addr what)])
+    try io.put(out, text.used(line))
+    try quoted(out, echoed)
+end report
+
+--  Echo over TCP and then UDP on FAMILY's loopback address, and report it.
+exchange: (host: hosted.system,
+           inout out: io.buffered_writer(hosted.system),
+           family: io.address_family) -> none ! ... =
+    mut room: [256]u8 = zeroed
+    mut echoed := text.over(room[0..<256])
+    lines: usize = try tcp_echo(host, family, echoed)
+    try report(out, "TCP", family, lines, "lines", text.used(echoed))
+    text.clear(echoed)
+    try udp_echo(host, family, echoed)
+    try report(out, "UDP", family, lenof messages, "datagrams",
+               text.used(echoed))
+end exchange
+
+--  Say that the loopback address the program was to use is not on this
+--  system.
+unavailable: (inout out: io.buffered_writer(hosted.system)) -> none =
+    io.put(out, "this system has no such loopback address\n") else (problem)
+        _ = problem
+    end
+end unavailable
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    code = 1
+    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    for family in families do
+        exchange(host, out, family) else (problem)
+            --  A system without IPv6 cannot run the second half, which
+            --  says so rather than passing over it.
+            if problem == io.address_unavailable then unavailable(out) end if
+            code = 2
+            return
+        end
+    end for
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main
+```
+
+which prints
+
+```text
+TCP over 127.0.0.1: the server echoed 3 lines
+| one
+| two
+| hello, world
+UDP over 127.0.0.1: the server echoed 2 datagrams
+| ping
+| hello, datagram
+TCP over ::1: the server echoed 3 lines
+| one
+| two
+| hello, world
+UDP over ::1: the server echoed 2 datagrams
+| ping
+| hello, datagram
+```
+
+The same `serve`, `tcp_echo`, `udp_echo`, `quoted` and `report` run over
+`core/io`'s memory network, beside a memory world, in
+`runtime/network-echo-memory`, which writes the same report byte for byte.
+The memory network is a machine of loopback addresses in the caller's
+buffers: nothing in it waits, so where a real socket would wait it answers
+`io.timed_out` at once. The hosted failures each have a fixture of their
+own: `runtime/network-refused`, `runtime/network-address-in-use`,
+`runtime/network-closed-peer`, in which the client sends until it hears
+that its peer has gone and the process lives on, and
+`runtime/network-receive-timeout`, in which a receive and an accept each
+wait out a 50 ms limit. `platform/posix` gives the same sockets in its own
+terms, Unix-domain sockets among them, in `runtime/posix-sockets`.

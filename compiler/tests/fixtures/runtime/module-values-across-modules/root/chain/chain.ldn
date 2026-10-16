@@ -1,0 +1,5 @@
+--  A link between two modules: a value worked out from another module's.
+import flags
+
+--- The flags module's both, and one more bit.
+public wider: u16 = flags.both | 0x10

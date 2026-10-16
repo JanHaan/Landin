@@ -1,0 +1,9 @@
+class: negative
+summary: an atom outside a generic routine's concrete atom-set parameter does not widen into it, and L0340 says the set is not the one written there nor inside it
+program: program.ldn
+constructs: 0640, 1290, 1920
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0340
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-atom-outside-set/program.ldn
+status: 1

@@ -94,6 +94,38 @@ package body Landin.Stages.Folding is
      (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
      is (Landin.Checking.Type_Of (Types.all, Of_Tree, Node));
 
+   --  The scalar a node's value is carried as: its own type, or the base
+   --  of a D213 distinct type, whose flags D302 combines with `|`, `&`,
+   --  `^` and `~` at the base's width.
+   function Carrier_At
+     (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
+   function Carrier_At
+     (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+   is
+      Kind : constant Ty.Type_Kind := Type_At (Of_Tree, Node);
+      Nominal : Landin.Checking.Nominal_Type_Id;
+   begin
+      if Kind in Ty.Scalar_Name then
+         return Kind;
+      end if;
+      Nominal := Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
+      while Nominal /= Landin.Checking.No_Nominal_Type
+        and then Landin.Checking.Is_Distinct (Types.all, Nominal)
+      loop
+         declare
+            Base : constant Landin.Checking.Signature_Part :=
+              Landin.Checking.Distinct_Base (Types.all, Nominal);
+         begin
+            if Base.Kind in Ty.Scalar_Name then
+               return Base.Kind;
+            end if;
+            Nominal := Base.Nominal;
+         end;
+      end loop;
+      return Kind;
+   end Carrier_At;
+
    --  Ordinary arithmetic, guarded rather than caught: a sum too wide is
    --  entirely in the bytes being looked at.  A zero divisor declines
    --  rather than divides -- [1950] owns that refusal -- and is not an
@@ -180,6 +212,91 @@ package body Landin.Stages.Folding is
 
       Held : constant Ty.Type_Kind :=
         (if Node = Syn.No_Node then Ty.Undecided else Type_At (Of_Tree, Node));
+
+      --  [1940]: a name bound to a module binding whose value is known is
+      --  itself known, in its own module or qualified from another: an
+      --  imported `module.name` is resolved to the binding itself.  An
+      --  omitted initializer is D10's zero image; a chain that comes back
+      --  to its own binding, within a module or across two, is the
+      --  stage's to speak about, through Enter.
+      procedure Bound_Value (Means : Res.Declaration_Id);
+
+      procedure Bound_Value (Means : Res.Declaration_Id) is
+      begin
+         if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
+            --  Static images retain a neutral declaration identity;
+            --  the target backend alone assigns its runtime code.
+            Value := (if Held = Ty.Pointer_Value then 0
+                      else Ty.Folded (Means));
+            Known := True;
+         elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+           and then Reads_Run_Time
+           and then Syn.Is_Mutable
+             (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+              Res.Node_Of (Meanings.all, Means))
+         then
+            null;
+         elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+         then
+            if Global_View and then Final_Values.Contains (Means)
+            then
+               Value := Final_Values.Element (Means);
+               Known := True;
+            elsif Cache.Contains (Means) then
+               --  Not kept, so it read something unfinished.
+               Value := Cache.Element (Means);
+               Known := True;
+               Read_Unfinished := True;
+            elsif Outcomes.Contains (Means) then
+               declare
+                  Found : constant Outcome := Outcomes (Means);
+               begin
+                  Value := Found.Value;
+                  Known := Found.Known;
+                  Overflowed := Found.Overflowed;
+                  Read_Unfinished :=
+                    Read_Unfinished or else Found.Unfinished;
+               end;
+            else
+               declare
+                  Their_Tree : constant
+                    not null access constant Syn.Tree :=
+                      Tree_For (Res.Source_Of (Meanings.all, Means));
+                  Theirs : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Means);
+                  Their_Value : constant Syn.Node_Id :=
+                    Syn.Value_Of (Their_Tree.all, Theirs);
+                  Outer_Unfinished : constant Boolean :=
+                    Read_Unfinished;
+                  Final : constant Boolean :=
+                    Global_View and then Is_Final (Means);
+               begin
+                  Read_Unfinished := False;
+                  if Their_Value = Syn.No_Node then
+                     Value := 0;
+                     Known := True;
+                  elsif Enter (Means) then
+                     Fold (Cache, Their_Tree.all, Their_Value,
+                           Depth + 1, Value, Known, Overflowed);
+                     Leave (Means);
+                  end if;
+                  --  Unknown and overflowing folds retain the
+                  --  stage's ordinary cycle/diagnostic behavior.
+                  if Known and then not Overflowed then
+                     if Final and then not Read_Unfinished then
+                        Final_Values.Include (Means, Value);
+                     else
+                        Cache.Include (Means, Value);
+                     end if;
+                  end if;
+                  Read_Unfinished :=
+                    Outer_Unfinished or else Read_Unfinished
+                    or else not Final;
+               end;
+            end if;
+         end if;
+      end Bound_Value;
+
    begin
       Value      := 0;
       Known      := False;
@@ -263,17 +380,11 @@ package body Landin.Stages.Folding is
                Value := Ty.Folded (Float_Special_Bits (Of_Tree, Node));
                Known := True;
             elsif Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
-              and then Res.Sort_Of
-                (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Node))
-                = Res.Module_Atom
             then
-               --  Resolution binds an imported `module.atom` to the atom
-               --  itself, which is as known as the same atom named
-               --  unqualified in its own module.
-               Value := (if Held = Ty.Pointer_Value then 0
-                         else Ty.Folded
-                           (Res.Bound_To (Meanings.all, Of_Tree, Node)));
-               Known := True;
+               --  Resolution binds an imported `module.atom` and an
+               --  imported `module.value` to the declaration itself, which
+               --  is as known as the same name unqualified in its module.
+               Bound_Value (Res.Bound_To (Meanings.all, Of_Tree, Node));
             end if;
 
          when Syn.Pointer_Conversion =>
@@ -364,88 +475,8 @@ package body Landin.Stages.Folding is
             end;
 
          when Syn.Name_Reference =>
-            --  [1940]: a name bound to a module binding whose value is
-            --  known is itself known.  An omitted initializer is D10's
-            --  zero image; a chain that comes back to its own binding is
-            --  the stage's to speak about, through Enter.
             if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound then
-               declare
-                  Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Node);
-               begin
-                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
-                     --  Static images retain a neutral declaration identity;
-                     --  the target backend alone assigns its runtime code.
-                     Value := (if Held = Ty.Pointer_Value then 0
-                               else Ty.Folded (Means));
-                     Known := True;
-                  elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
-                    and then Reads_Run_Time
-                    and then Syn.Is_Mutable
-                      (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
-                       Res.Node_Of (Meanings.all, Means))
-                  then
-                     null;
-                  elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
-                  then
-                     if Global_View and then Final_Values.Contains (Means)
-                     then
-                        Value := Final_Values.Element (Means);
-                        Known := True;
-                     elsif Cache.Contains (Means) then
-                        --  Not kept, so it read something unfinished.
-                        Value := Cache.Element (Means);
-                        Known := True;
-                        Read_Unfinished := True;
-                     elsif Outcomes.Contains (Means) then
-                        declare
-                           Found : constant Outcome := Outcomes (Means);
-                        begin
-                           Value := Found.Value;
-                           Known := Found.Known;
-                           Overflowed := Found.Overflowed;
-                           Read_Unfinished :=
-                             Read_Unfinished or else Found.Unfinished;
-                        end;
-                     else
-                        declare
-                           Their_Tree : constant
-                             not null access constant Syn.Tree :=
-                               Tree_For (Res.Source_Of (Meanings.all, Means));
-                           Theirs : constant Syn.Node_Id :=
-                             Res.Node_Of (Meanings.all, Means);
-                           Their_Value : constant Syn.Node_Id :=
-                             Syn.Value_Of (Their_Tree.all, Theirs);
-                           Outer_Unfinished : constant Boolean :=
-                             Read_Unfinished;
-                           Final : constant Boolean :=
-                             Global_View and then Is_Final (Means);
-                        begin
-                           Read_Unfinished := False;
-                           if Their_Value = Syn.No_Node then
-                              Value := 0;
-                              Known := True;
-                           elsif Enter (Means) then
-                              Fold (Cache, Their_Tree.all, Their_Value,
-                                    Depth + 1, Value, Known, Overflowed);
-                              Leave (Means);
-                           end if;
-                           --  Unknown and overflowing folds retain the
-                           --  stage's ordinary cycle/diagnostic behavior.
-                           if Known and then not Overflowed then
-                              if Final and then not Read_Unfinished then
-                                 Final_Values.Include (Means, Value);
-                              else
-                                 Cache.Include (Means, Value);
-                              end if;
-                           end if;
-                           Read_Unfinished :=
-                             Outer_Unfinished or else Read_Unfinished
-                             or else not Final;
-                        end;
-                     end if;
-                  end if;
-               end;
+               Bound_Value (Res.Bound_To (Meanings.all, Of_Tree, Node));
             end if;
 
          when Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide
@@ -488,6 +519,7 @@ package body Landin.Stages.Folding is
             | Syn.Shift_Left | Syn.Shift_Right =>
             declare
                Op : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
+               Carried : constant Ty.Type_Kind := Carrier_At (Of_Tree, Node);
                Left, Right : Ty.Folded;
                Left_Known, Right_Known : Boolean;
             begin
@@ -498,7 +530,7 @@ package body Landin.Stages.Folding is
                --  two's-complement pattern.
                if Overflowed
                  or else not (Left_Known and Right_Known)
-                 or else Held not in Ty.Scalar_Name
+                 or else Carried not in Ty.Scalar_Name
                  or else (Right < 0
                           and then Op in Syn.Shift_Left | Syn.Shift_Right)
                then
@@ -506,9 +538,9 @@ package body Landin.Stages.Folding is
                end if;
                declare
                   Bits : constant Landin.Targets.Bit_Width :=
-                    Fold_Width (Ty.Scalar_Name (Held));
+                    Fold_Width (Ty.Scalar_Name (Carried));
                   Signed : constant Boolean :=
-                    Is_Signed_Type (Ty.Scalar_Name (Held));
+                    Is_Signed_Type (Ty.Scalar_Name (Carried));
                   LP : constant Pattern := To_Pattern (Left, Bits);
                   RP : constant Pattern := To_Pattern (Right, Bits);
                   Exhausted : constant Boolean :=
@@ -555,18 +587,19 @@ package body Landin.Stages.Folding is
 
          when Syn.Complement =>
             declare
+               Carried : constant Ty.Type_Kind := Carrier_At (Of_Tree, Node);
                Under : Ty.Folded;
                Sure  : Boolean;
             begin
                Operand (Syn.Operand_Of (Of_Tree, Node), Under, Sure);
-               if Sure and then Held in Ty.Scalar_Name then
+               if Sure and then Carried in Ty.Scalar_Name then
                   declare
                      Bits : constant Landin.Targets.Bit_Width :=
-                       Fold_Width (Ty.Scalar_Name (Held));
+                       Fold_Width (Ty.Scalar_Name (Carried));
                   begin
                      Value := As_Number
                        (Mask (not To_Pattern (Under, Bits), Bits), Bits,
-                        Is_Signed_Type (Ty.Scalar_Name (Held)));
+                        Is_Signed_Type (Ty.Scalar_Name (Carried)));
                      Known := True;
                   end;
                end if;
@@ -891,7 +924,8 @@ package body Landin.Stages.Folding is
                     Path (Top).Pending.Last_Element;
                begin
                   Path (Top).Pending.Delete_Last;
-                  if Syn.Kind (Tree_Of_Top.all, Next) = Syn.Name_Reference
+                  if Syn.Kind (Tree_Of_Top.all, Next)
+                       in Syn.Name_Reference | Syn.Member_Selection
                     and then Res.Verdict_Of (Meanings.all, Tree_Of_Top.all,
                                              Next) = Res.Bound
                   then

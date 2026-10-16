@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a connection over 127.0.0.1 and over ::1 to a port whose listener was just closed is io.refused, the hosted provider keeping ECONNREFUSED as its last errno
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

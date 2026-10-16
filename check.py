@@ -113,6 +113,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/line-numbers/main.ldn"),
     ("Running a shell",
      "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
+    ("Echo over loopback",
+     "compiler/tests/fixtures/runtime/network-echo/main.ldn"),
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads
@@ -132,6 +134,10 @@ SHARED_ROUTINES = {
     "compiler/tests/fixtures/runtime/run-shell/main.ldn": {
         "compiler/tests/fixtures/runtime/run-shell-memory/main.ldn":
             ("capture", "quoted", "report"),
+    },
+    "compiler/tests/fixtures/runtime/network-echo/main.ldn": {
+        "compiler/tests/fixtures/runtime/network-echo-memory/main.ldn":
+            ("serve", "tcp_echo", "udp_echo", "quoted", "report"),
     },
 }
 

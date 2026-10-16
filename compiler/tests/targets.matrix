@@ -17,6 +17,7 @@ abi/environment-from-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64,
 abi/host-string-pass-through | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-directory-record | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-process-constants | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/libc-socket-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
 abi/lp64d-main-return | linux-rv64
@@ -55,6 +56,7 @@ abi/r640-exhaustive-encodings | linux-x86-64, linux-arm64, macos-arm64, freebsd-
 abi/r640-reserved-trap | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r670-noreturn | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r670-panic | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/sigpipe-handler-kept | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 end-to-end/feature-level-armv6-m-lacks-idiv | cortex-m
 end-to-end/feature-level-armv7-m-has-idiv | cortex-m
 end-to-end/feature-level-armv8-1-a-has-lse | macos-arm64
@@ -390,6 +392,7 @@ negative/function-value-type-mismatch | linux-x86-64, linux-arm64, macos-arm64, 
 negative/function-variant-payload-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-any-carrier-frame-escape | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-any-nominal-deduction-conflict | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/generic-atom-outside-set | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-computed-pattern-undeduced | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-explicit-reference-frame | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -624,8 +627,10 @@ negative/module-struct-literal-selection-not-enabled | linux-x86-64, linux-arm64
 negative/module-struct-literal-value-not-known | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/module-struct-mixed-image-cycle | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/module-struct-zeroed-initializer-nested-not-enabled | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/module-value-cycle-across-modules | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/module-value-from-a-call | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/module-value-from-itself | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/module-value-imported-field | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/module-values-name-each-other | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/multiple-result-function-signature-mismatch | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/multiple-return-name-duplicate | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1803,6 +1808,7 @@ runtime/for-value-block-statements | linux-x86-64, linux-arm64, macos-arm64, fre
 runtime/function-valued-struct-fields | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-any-construction-evidence | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-any-nominal-transport | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/generic-atom-widening | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/generic-composed-evidence | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-contextual-text-literals | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-declared-errors | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1924,6 +1930,7 @@ runtime/module-struct-literal-array-image-is-loaded | linux-x86-64, linux-arm64,
 runtime/module-struct-literal-image-is-loaded | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-struct-literal-selected-field-image-is-independent | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-struct-zeroed-image-is-static | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/module-values-across-modules | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/module-values-hold-and-are-updated | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/multiple-named-returns | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/multiplication-exits-with-its-products | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1944,6 +1951,14 @@ runtime/nested-struct-returns-cross-calls | linux-x86-64, linux-arm64, macos-arm
 runtime/nested-struct-scalar-fields | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/nested-struct-zero-storage-keeps-neighbours | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/nested-variant-parts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/network-address-in-use | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/network-addresses | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
+runtime/network-addresses-firmware | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/network-closed-peer | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/network-echo | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/network-echo-memory | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
+runtime/network-receive-timeout | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/network-refused | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/null-pointer-dynamic-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/null-pointer-unchecked-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/null-pointer-union-call-else | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1954,12 +1969,15 @@ runtime/parameterized-type-alias-fixed-array | linux-x86-64, linux-arm64, macos-
 runtime/pointer-to-small-integer-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-union-many | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-unions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-broken-pipe | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-broken-pipe-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/posix-directories | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-errno | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-files | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-poll | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-processes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-sockets | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition-trap | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r250-references | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

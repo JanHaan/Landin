@@ -1,0 +1,12 @@
+error[L0305]: a field selection reads storage, which a module value cannot: nothing runs before the entry point to read it
+  --> ../tests/fixtures/negative/module-value-imported-field/main.ldn:6:14
+  |
+6 | first: i32 = shapes.origin.first
+  |              ^^^^^^^^^^^^^^^^^^^
+  = note: [1940]: a module value folds literals, known names, another module's values named through it and [1820]'s operators on them, never a field or an element
+error[L0305]: a module value has to be one the compiler knows when it reads it, and a call runs a routine to find it
+  --> ../tests/fixtures/negative/module-value-imported-field/main.ldn:7:15
+  |
+7 | called: i32 = shapes.answer()
+  |               ^^^^^^^^^^^^^^^
+  = note: [1940]: nothing runs before the entry point [1460], and there is no compile-time execution

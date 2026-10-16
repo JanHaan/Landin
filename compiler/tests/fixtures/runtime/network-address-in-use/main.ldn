@@ -1,0 +1,65 @@
+--  An address another socket holds is in use.  A second listener at the
+--  first one's port is `address_in_use`, EADDRINUSE, though a listener
+--  may take an address its closed connections still hold, and a second
+--  UDP socket at a datagram socket's port is refused alike.  Over IPv4 and
+--  IPv6.  A listener at a specific address beside one at the unspecified
+--  address and the same port is not among them: Linux refuses it, and
+--  Darwin and FreeBSD let the specific one take what is sent to it.
+import core/io
+import hosted/io as hosted
+import platform/posix
+
+--  Whether binding a socket of the kind `listening` says at AT fails as
+--  in use.
+in_use: (host: hosted.system, at: io.address, listening: bool)
+        -> (yes: bool) =
+    yes = false
+    second: io.file = opened(host, at, listening) else (problem)
+        yes = problem == io.address_in_use
+              and hosted.last_errno(host) == posix.number(posix.eaddrinuse)
+        return
+    end
+    io.close_socket(host, second) else (problem)
+        _ = problem
+    end
+end in_use
+
+--  A listener at AT, or with `listening` false a datagram socket.
+opened: (host: hosted.system, at: io.address, listening: bool)
+        -> (socket: io.file)
+        ! io.address_in_use | io.address_unavailable | io.no_access
+        | io.io_failed =
+    if listening then
+        socket = try io.listen(host, at)
+    else
+        socket = try io.open_datagram(host, at)
+    end if
+end opened
+
+--  Whether every second binding of FAMILY's is refused.
+refusals: (host: hosted.system, family: io.address_family) -> (yes: bool)
+          ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    at: io.address = try io.local_address(host, listener)
+    yes = in_use(host, at, true)
+    try io.close_socket(host, listener)
+    socket: io.file = try io.open_datagram(host, io.loopback(family, 0))
+    taken: io.address = try io.local_address(host, socket)
+    yes = yes and in_use(host, taken, false)
+    try io.close_socket(host, socket)
+end refusals
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    for family in families do
+        yes: bool = refusals(host, family) else (problem)
+            _ = problem
+            return
+        end
+        return when not yes
+        inc code
+    end for
+    code = 42
+end main

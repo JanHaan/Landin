@@ -1,0 +1,38 @@
+--  An atom given to a generic routine whose parameter is a concrete atom
+--  set widens into it, as it does in an ordinary call [0640]: the written
+--  set names no formal, so there is nothing to deduce from it.  An atom
+--  literal, an atom of a smaller set and an atom of the whole set are all
+--  taken, and a formal that is an atom set still takes its argument's set
+--  exactly.
+red: atom
+green: atom
+blue: atom
+colour: type = red | green | blue
+warm: type = red
+
+--  A generic routine whose second parameter is a concrete atom set.
+counted: (item: type, value: item, shade: colour) -> (count: i32) =
+    _ = value
+    count = if shade == red then 1 elsif shade == green then 2 else 3 end if
+end counted
+
+--  A formal that an atom set binds.
+same: (item: type, first: item, second: item) -> (equal: bool) =
+    equal = first == second
+end same
+
+public main: () -> (code: i32) =
+    code = 1
+    return when counted(7, red) <> 1 or counted(7, blue) <> 3
+    code = 2
+    hot: warm = red
+    return when counted(true, hot) <> 1
+    code = 3
+    any_shade: colour = green
+    return when counted(u8(1), any_shade) <> 2
+    code = 4
+    left: colour = blue
+    right: colour = blue
+    return when not same(left, right)
+    code = 42
+end main

@@ -483,6 +483,9 @@ public extern(c) closedir: (stream: ptr mut u8) -> (status: i32)
 public extern(c) unlinkat: (directory: i32, path: ptr u8, flags: i32)
                            -> (status: i32)
 
+--- `fcntl` command: read a descriptor's flags, `fd_cloexec` among them.
+--- The same on every hosted system.
+public f_getfd: i32 = 1
 --- `fcntl` command: set a descriptor's flags, `fd_cloexec` among them.
 --- The same on every hosted system.
 public f_setfd: i32 = 2
@@ -596,4 +599,315 @@ elsif compiler.os == freebsd then
     --- `first` up: FreeBSD's own, since 13.1.
     public extern(c) posix_spawn_file_actions_addclosefrom_np:
         (actions: ptr mut spawn_object, first: i32) -> (error: i32)
+end if
+
+--  Sockets and the SIGPIPE disposition.  Every call is declared on the
+--  three systems, whose C signatures agree; the numbers that differ are
+--  selected by `compiler.os`.  An address is the system's own `struct
+--  sockaddr` record, given as a pointer and a length: platform/posix
+--  lays out each system's records, `sin_len` and all.
+
+--- `socket` domain: Unix-domain sockets, named by a path, AF_UNIX.  The
+--- same on every hosted system.
+public af_unix: i32 = 1
+--- `socket` domain: IPv4, AF_INET.  The same on every hosted system.
+public af_inet: i32 = 2
+--- `socket` type: a connected byte stream, TCP over IP.  The same on every
+--- hosted system.
+public sock_stream: i32 = 1
+--- `socket` type: datagrams, UDP over IP.
+public sock_dgram: i32 = 2
+--- `setsockopt` level: TCP.  The same on every hosted system.
+public ipproto_tcp: i32 = 6
+--- `setsockopt` level: IPv6.
+public ipproto_ipv6: i32 = 41
+--- `ipproto_tcp` option, an `i32`: Nagle's algorithm off.  The same on
+--- every hosted system.
+public tcp_nodelay: i32 = 1
+--- `shutdown` side: no more receives.  The same on every hosted system.
+public shut_rd: i32 = 0
+--- `shutdown` side: no more sends; the peer reads the end.
+public shut_wr: i32 = 1
+--- `shutdown` side: neither.
+public shut_rdwr: i32 = 2
+--- An address record's room on every hosted system, `sizeof (struct
+--- sockaddr_storage)`.
+public sockaddr_storage_size: u32 = 128
+--- `sizeof (struct sockaddr_in)` on every hosted system.
+public sockaddr_in_size: u32 = 16
+--- `sizeof (struct sockaddr_in6)` on every hosted system.
+public sockaddr_in6_size: u32 = 28
+
+--- The signal a write to a pipe or a socket nobody reads raises, SIGPIPE.
+--- The same on every hosted system.
+public sigpipe: i32 = 13
+--- A signal's disposition: the system's default, C's `SIG_DFL`.
+public sig_dfl: u64 = 0
+--- A signal's disposition: ignored, C's `SIG_IGN`.
+public sig_ign: u64 = 1
+
+fixed if compiler.os == linux then
+    --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
+    --- way.
+    public af_inet6: i32 = 10
+    --- `setsockopt` level: the socket itself, SOL_SOCKET.
+    public sol_socket: i32 = 1
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 2
+    --- `sol_socket` option, read as an `i32`: the pending error, cleared as
+    --- it is read.
+    public so_error: i32 = 4
+    --- `sol_socket` option, a `time_limit`: how long a receive waits.
+    public so_rcvtimeo: i32 = 20
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 21
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone.
+    public ipv6_v6only: i32 = 26
+    --- `socket`, `socketpair` and `accept4` flag: closed on exec, set with
+    --- the descriptor.  Darwin has none.
+    public sock_cloexec: i32 = 524288
+    --- `send` flag: a send to a peer that has gone fails with EPIPE and
+    --- raises no SIGPIPE.  Darwin has none.
+    public msg_nosignal: i32 = 16384
+    --- `sizeof (struct sockaddr_un)`'s path: the longest Unix-domain path
+    --- with its NUL.
+    public sockaddr_un_path: u32 = 108
+
+    --- C's `struct timeval`, which a socket time limit is.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i64
+    end time_limit
+
+    --- glibc's `sigset_t`, 1024 bits.
+    public signal_set: type = struct
+        bits: [16]u64
+    end signal_set
+
+    --- C's `struct sigaction` as glibc declares it.
+    public signal_action: type = struct
+        handler: u64
+        mask: signal_set
+        flags: i32
+        padding: i32
+        restorer: u64
+    end signal_action
+elsif compiler.os == darwin then
+    --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
+    --- way.
+    public af_inet6: i32 = 30
+    --- `setsockopt` level: the socket itself, SOL_SOCKET.
+    public sol_socket: i32 = 65535
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 4
+    --- `sol_socket` option, read as an `i32`: the pending error, cleared as
+    --- it is read.
+    public so_error: i32 = 4103
+    --- `sol_socket` option, a `time_limit`: how long a receive waits.
+    public so_rcvtimeo: i32 = 4102
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 4101
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone.
+    public ipv6_v6only: i32 = 27
+    --- `sol_socket` option, an `i32`: a write or send to a peer that has
+    --- gone fails with EPIPE and raises no SIGPIPE.  Linux has none.
+    public so_nosigpipe: i32 = 4130
+    --- `sizeof (struct sockaddr_un)`'s path: the longest Unix-domain path
+    --- with its NUL.
+    public sockaddr_un_path: u32 = 104
+
+    --- C's `struct timeval`, which a socket time limit is: Darwin's
+    --- microseconds are an `int`.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i32
+        padding: i32
+    end time_limit
+
+    --- Darwin's `sigset_t`, 32 bits.
+    public signal_set: type = struct
+        bits: [1]u32
+    end signal_set
+
+    --- C's `struct sigaction` as Darwin declares it.
+    public signal_action: type = struct
+        handler: u64
+        mask: signal_set
+        flags: i32
+    end signal_action
+
+    --- `posix_spawnattr_setflags` flag: the child's signals named by
+    --- `posix_spawnattr_setsigdefault` start at their default disposition.
+    public posix_spawn_setsigdef: i16 = 4
+else
+    --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
+    --- way.
+    public af_inet6: i32 = 28
+    --- `setsockopt` level: the socket itself, SOL_SOCKET.
+    public sol_socket: i32 = 65535
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 4
+    --- `sol_socket` option, read as an `i32`: the pending error, cleared as
+    --- it is read.
+    public so_error: i32 = 4103
+    --- `sol_socket` option, a `time_limit`: how long a receive waits.
+    public so_rcvtimeo: i32 = 4102
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 4101
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone.
+    public ipv6_v6only: i32 = 27
+    --- `sol_socket` option, an `i32`: a write or send to a peer that has
+    --- gone fails with EPIPE and raises no SIGPIPE.  Linux has none.
+    public so_nosigpipe: i32 = 2048
+    --- `socket`, `socketpair` and `accept4` flag: closed on exec, set with
+    --- the descriptor.  Darwin has none.
+    public sock_cloexec: i32 = 268435456
+    --- `send` flag: a send to a peer that has gone fails with EPIPE and
+    --- raises no SIGPIPE.  Darwin has none.
+    public msg_nosignal: i32 = 131072
+    --- `sizeof (struct sockaddr_un)`'s path: the longest Unix-domain path
+    --- with its NUL.
+    public sockaddr_un_path: u32 = 104
+
+    --- C's `struct timeval`, which a socket time limit is.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i64
+    end time_limit
+
+    --- FreeBSD's `sigset_t`, 128 bits.
+    public signal_set: type = struct
+        bits: [4]u32
+    end signal_set
+
+    --- C's `struct sigaction` as FreeBSD declares it.
+    public signal_action: type = struct
+        handler: u64
+        flags: i32
+        mask: signal_set
+    end signal_action
+
+    --- `posix_spawnattr_setflags` flag: the child's signals named by
+    --- `posix_spawnattr_setsigdefault` start at their default disposition.
+    public posix_spawn_setsigdef: i16 = 16
+end if
+
+--- What a socket call takes for an address it has none of, and
+--- `sigaction` for an action it is not given: C's null pointer.
+public no_address: atom
+--- An address record a call fills, or `no_address`.
+public address_filled: type = no_address | ptr mut u8
+--- The cell a call reads a record's room from and writes its length into,
+--- or `no_address`.
+public address_length: type = no_address | ptr mut u32
+--- An action `sigaction` sets, or `no_address`.
+public action_given: type = no_address | ptr signal_action
+--- Where `sigaction` puts the action it replaces, or `no_address`.
+public action_kept: type = no_address | ptr mut signal_action
+
+--- Make a socket of `domain` and `kind` for `protocol`, zero for the kind's
+--- own: the new descriptor, or -1 with the reason in errno.
+public extern(c) socket: (domain: i32, kind: i32, protocol: i32)
+                         -> (descriptor: i32)
+
+--- Make a pair of connected sockets and put them in `ends[0]` and
+--- `ends[1]`: 0, or -1 with the reason in errno.
+public extern(c) socketpair: (domain: i32, kind: i32, protocol: i32,
+                              ends: ptr mut i32) -> (status: i32)
+
+--- Give the socket `descriptor` the address in the `length` bytes at
+--- `address`: 0, or -1 with the reason in errno.
+public extern(c) bind: (descriptor: i32, address: ptr u8, length: u32)
+                       -> (status: i32)
+
+--- Make a bound stream socket accept connections, at most `backlog`
+--- waiting: 0, or -1 with the reason in errno.
+public extern(c) listen: (descriptor: i32, backlog: i32) -> (status: i32)
+
+--- Take the next connection waiting on `descriptor` as a new socket, and
+--- the peer's address in `address` when it is given: the new descriptor,
+--- or -1 with the reason in errno.  It is inherited by a program this
+--- process executes unless `fd_cloexec` is set on it.
+public extern(c) accept: (descriptor: i32, address: address_filled,
+                          length: address_length) -> (accepted: i32)
+
+fixed if compiler.os == linux or compiler.os == freebsd then
+    --- `accept` with `flags`, `sock_cloexec` among them, set as the socket
+    --- is made: Linux's and FreeBSD's; Darwin has none.
+    public extern(c) accept4: (descriptor: i32, address: address_filled,
+                               length: address_length, flags: i32)
+                              -> (accepted: i32)
+end if
+
+--- Connect the socket `descriptor` to the address in the `length` bytes at
+--- `address`: 0, or -1 with the reason in errno.
+public extern(c) connect: (descriptor: i32, address: ptr u8, length: u32)
+                          -> (status: i32)
+
+--- Send at most `length` bytes from `data` to the connected peer with
+--- `flags`: the count sent, or -1 with the reason in errno.
+public extern(c) send: (descriptor: i32, data: ptr u8, length: usize,
+                        flags: i32) -> (count: isize)
+
+--- Receive at most `length` bytes into `data` with `flags`: the count, zero
+--- when a stream's peer has finished sending, or -1 with the reason in
+--- errno.
+public extern(c) recv: (descriptor: i32, data: ptr mut u8, length: usize,
+                        flags: i32) -> (count: isize)
+
+--- Send the `length` bytes from `data` to the address in the
+--- `address_size` bytes at `address`: the count, or -1 with the reason in
+--- errno.
+public extern(c) sendto: (descriptor: i32, data: ptr u8, length: usize,
+                          flags: i32, address: ptr u8, address_size: u32)
+                         -> (count: isize)
+
+--- Receive at most `length` bytes into `data`, and the sender's address in
+--- `address` when it is given: the count, or -1 with the reason in errno.
+public extern(c) recvfrom: (descriptor: i32, data: ptr mut u8, length: usize,
+                            flags: i32, address: address_filled,
+                            address_size: address_length) -> (count: isize)
+
+--- Stop receiving, sending or both on a socket: 0, or -1 with the reason
+--- in errno.
+public extern(c) shutdown: (descriptor: i32, side: i32) -> (status: i32)
+
+--- Set the option `name` at `level` to the `length` bytes at `value`: 0,
+--- or -1 with the reason in errno.
+public extern(c) setsockopt: (descriptor: i32, level: i32, name: i32,
+                              value: ptr u8, length: u32) -> (status: i32)
+
+--- Read the option `name` at `level` into `value`, whose room `length`
+--- holds and which then holds its length: 0, or -1 with the reason in
+--- errno.
+public extern(c) getsockopt: (descriptor: i32, level: i32, name: i32,
+                              value: ptr mut u8, length: ptr mut u32)
+                             -> (status: i32)
+
+--- Put the address the socket is bound to in `address`, as `accept` puts
+--- a peer's: 0, or -1 with the reason in errno.
+public extern(c) getsockname: (descriptor: i32, address: ptr mut u8,
+                               length: ptr mut u32) -> (status: i32)
+
+--- Put the address of the socket's connected peer in `address`: 0, or -1
+--- with the reason in errno, ENOTCONN when there is none.
+public extern(c) getpeername: (descriptor: i32, address: ptr mut u8,
+                               length: ptr mut u32) -> (status: i32)
+
+--- Set the action of `signal` to `action` when it is given, and put the one
+--- it had in `previous` when that is given: 0, or -1 with the reason in
+--- errno.
+public extern(c) sigaction: (signal: i32, action: action_given,
+                             previous: action_kept) -> (status: i32)
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- Name the signals whose disposition a child `posix_spawn` starts with
+    --- `posix_spawn_setsigdef` set is reset to the default: 0, or the
+    --- errno.
+    public extern(c) posix_spawnattr_setsigdefault:
+        (attributes: ptr mut spawn_object, signals: ptr signal_set)
+        -> (error: i32)
 end if

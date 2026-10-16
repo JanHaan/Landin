@@ -16515,6 +16515,22 @@ package body Landin.Stages.Lowering is
          function Selected_Image
            (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Static_Selection;
 
+         --  Whether NODE names a module declaration: a name, or another
+         --  module's value, function or atom selected through its module,
+         --  `lib.table`, which resolution binds to the declaration itself.
+         --  An image takes either from the declaration it names [1940].
+         function Names_Module
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+         is (Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+             or else (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+                      and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                        = Res.Bound
+                      and then Res.Sort_Of
+                        (Meanings.all,
+                         Res.Bound_To (Meanings.all, Of_Tree, Node))
+                          in Res.Module_Binding | Res.Module_Function
+                           | Res.Module_Atom));
+
          --  All static dependencies, including callable leaf selections,
          --  share the same cycle guard and declaration-owned image cache.
          procedure Resolve_Image (Id : Res.Declaration_Id);
@@ -16573,7 +16589,7 @@ package body Landin.Stages.Lowering is
             end if;
             if Syn.Kind (Of_Tree, Value) = Syn.Anonymous_Function then
                return Anonymous_Item (Of_Tree, Value);
-            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
+            elsif Names_Module (Of_Tree, Value)
               and then Res.Verdict_Of (Meanings.all, Of_Tree, Value)
                 = Res.Bound
             then
@@ -16848,7 +16864,7 @@ package body Landin.Stages.Lowering is
                return Selected_Image
                  (Of_Tree, Representation_Source (Of_Tree, Node));
             end if;
-            if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
+            if Names_Module (Of_Tree, Node) then
                declare
                   Id : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
@@ -16990,7 +17006,7 @@ package body Landin.Stages.Lowering is
                return Text_Datum (Of_Tree, Value);
             elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                return IR.No_Item;
-            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
+            elsif Names_Module (Of_Tree, Value)
               and then Res.Verdict_Of (Meanings.all, Of_Tree, Value)
                            = Res.Bound
             then
@@ -17039,7 +17055,7 @@ package body Landin.Stages.Lowering is
                Result.Target := Text_Datum (Of_Tree, Value);
                Result.Value := Ty.Folded
                  (IR.Array_Length (Unit.all, Result.Target) - 1);
-            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
+            elsif Names_Module (Of_Tree, Value) then
                declare
                   Source_Id : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Value);
@@ -17973,6 +17989,16 @@ package body Landin.Stages.Lowering is
                Build_Field
                  (IR.Nth_Field_Shape (Unit.all, Item, 1),
                   Syn.Nth_Argument (Of_Tree, Literal, 1), 1, Top_Field => 1);
+            elsif Distinct_Scalar_Base (Of_Tree, Literal) in Ty.Scalar_Name
+              and then Syn.Kind (Of_Tree, Literal)
+                not in Syn.Name_Reference | Syn.Member_Selection
+                     | Syn.Element_Index
+            then
+               --  D302's combined flags are the representation's value,
+               --  folded at the base's width.
+               Build_Field
+                 (IR.Nth_Field_Shape (Unit.all, Item, 1), Literal, 1,
+                  Top_Field => 1);
             elsif not Is_Struct_Construction (Of_Tree, Literal) then
                declare
                   Source : constant Static_Selection :=
@@ -18244,8 +18270,7 @@ package body Landin.Stages.Lowering is
                                       + Syn.Element_Count
                                           (Of_Tree, Given);
                                  elsif Leaf.Kind = IR.Array_Field_Shape
-                                   and then Syn.Kind (Of_Tree, Given)
-                                     = Syn.Name_Reference
+                                   and then Names_Module (Of_Tree, Given)
                                  then
                                     declare
                                        Source_Id : constant
@@ -18300,9 +18325,8 @@ package body Landin.Stages.Lowering is
                        + Syn.Element_Count
                            (Of_Tree, Construction_Field_Value
                               (Of_Tree, Field));
-                  elsif Syn.Kind
+                  elsif Names_Module
                     (Of_Tree, Construction_Field_Value (Of_Tree, Field))
-                      = Syn.Name_Reference
                     and then IR.Nth_Field_Shape
                       (Unit.all, Item, Which).Kind
                         = IR.Array_Field_Shape
@@ -18607,8 +18631,7 @@ package body Landin.Stages.Lowering is
                                                    Image.Value := Held;
                                                 end if;
                                              end;
-                                          elsif Syn.Kind (Of_Tree, Given)
-                                                  = Syn.Name_Reference
+                                          elsif Names_Module (Of_Tree, Given)
                                           then
                                              declare
                                                 Source_Id : constant
@@ -18826,8 +18849,7 @@ package body Landin.Stages.Lowering is
                                  Images (Which).Value := Held;
                               end if;
                            end;
-                        elsif Syn.Kind (Of_Tree, Value)
-                                = Syn.Name_Reference
+                        elsif Names_Module (Of_Tree, Value)
                         then
                            declare
                               Source_Id : constant Res.Declaration_Id :=
@@ -19194,6 +19216,23 @@ package body Landin.Stages.Lowering is
                return;
             end if;
 
+            --  D302: a distinct scalar's flags combined, `readable |
+            --  writable`, fold through the representation into its one
+            --  field, as a conversion's argument does; a copy of another
+            --  image, named or qualified, keeps the copy path below.
+            if Value /= Syn.No_Node
+              and then Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+              and then Distinct_Scalar_Base (Their_Tree.all, Value)
+                in Ty.Scalar_Name
+              and then Syn.Kind (Their_Tree.all, Value)
+                not in Syn.Name_Reference | Syn.Member_Selection
+                     | Syn.Element_Index
+            then
+               Set_Recursive_Image (Id, Their_Tree.all, Value);
+               Where (Id) := Resolved;
+               return;
+            end if;
+
             --  [0480]/[1870]: a module union takes a static image from an
             --  atom, or from another module union's image.
             if Value /= Syn.No_Node
@@ -19283,8 +19322,7 @@ package body Landin.Stages.Lowering is
                      Text_Datum (Their_Tree.all, Value));
                   Made (Id) := True;
                elsif Value /= Syn.No_Node
-                 and then Syn.Kind (Their_Tree.all, Value)
-                            = Syn.Name_Reference
+                 and then Names_Module (Their_Tree.all, Value)
                  and then Res.Verdict_Of
                    (Meanings.all, Their_Tree.all, Value) = Res.Bound
                then
@@ -19370,8 +19408,7 @@ package body Landin.Stages.Lowering is
                            IR.Element_Total (Lower));
                         Made (Id) := True;
                      end;
-                  elsif Syn.Kind (Their_Tree.all, Value)
-                          = Syn.Name_Reference
+                  elsif Names_Module (Their_Tree.all, Value)
                   then
                      declare
                         Source_Id : constant Res.Declaration_Id :=
@@ -19419,7 +19456,7 @@ package body Landin.Stages.Lowering is
                     = Syn.Mixed_Array_Repetition
             then
                Set_Image_From_Mixed_Repetition (Id, Their_Tree.all, Value);
-            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
+            elsif Names_Module (Their_Tree.all, Value)
               and then Res.Verdict_Of
                          (Meanings.all, Their_Tree.all, Value) = Res.Bound
             then

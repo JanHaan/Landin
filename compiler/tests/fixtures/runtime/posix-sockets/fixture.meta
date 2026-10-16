@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's sockets with their failure oracles, SIGPIPE ignored in the process: a Unix-domain pair carries bytes and then sends and writes epipe once one end is closed; a Unix-domain listener at a random path is connected to and names its path back; an empty path and one with a NUL are einval and one too long enametoolong; IPv4 and IPv6 records read back as their addresses and a Unix-domain record is eafnosupport; over TCP on both loopbacks a taken port is eaddrinuse, the options set, a two-second receive limit reads back, the peer's and the client's names agree, a send after shutting the sending side is epipe, the peer reads the end and a closed port is econnrefused; over UDP a datagram arrives whole with its sender's address; and every socket the layer opens, accepts or pairs is closed on exec
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0680, 0790, 0940, 1030, 1100, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

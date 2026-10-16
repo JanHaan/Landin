@@ -1,0 +1,6 @@
+--  One half of a chain that comes back to where it began.
+import two
+
+--- Worked out from the other module's value, which is worked out from
+--- this one.
+public first: i32 = two.second + 1

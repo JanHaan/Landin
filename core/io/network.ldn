@@ -1,0 +1,595 @@
+--  The network: internet addresses and their text, and a concept beside
+--  the others and outside `world` through which a program connects,
+--  listens, accepts and sends and receives over TCP and UDP.  A provider
+--  without a network, and a firmware image that never asks for one,
+--  carries none of it.  Resolving a name to an address is not here.
+
+import core/mem
+import core/text
+
+--- The text of an address could not be read as one: not four decimal
+--- parts from 0 to 255, not an IPv6 address's groups, a zone, or a port
+--- that is missing, above 65535 or not decimal.
+public invalid_address: atom
+--- Nothing listens at the address a connection was asked for: the system
+--- answered it at once, as a closed port is answered.
+public refused: atom
+--- No route leads to the address: its network or its host cannot be
+--- reached from here.
+public unreachable: atom
+--- Another socket already holds the address and port: a listener or a
+--- datagram socket bound there.
+public address_in_use: atom
+--- The address cannot be used here: no interface of this system holds it,
+--- or the system does not have its family at all, as one without IPv6
+--- does not.
+public address_unavailable: atom
+--- The time limit `set_timeouts` gave passed before anything arrived or
+--- could be sent, or a connection's handshake took longer than the system
+--- waits.  The socket is still usable.
+public timed_out: atom
+--- The connection's peer has gone: it closed or reset the connection, so
+--- what is sent cannot be delivered.  A write to such a connection is this
+--- atom on a hosted system, never the end of the process.
+public disconnected: atom
+
+--- An IPv4 address: four bytes, `127.0.0.1` in its text.
+public ipv4: atom
+--- An IPv6 address: sixteen bytes, `::1` in its text.
+public ipv6: atom
+--- What an address is: `ipv4` or `ipv6`.
+public address_family: type = ipv4 | ipv6
+
+--- An internet address and a port: TCP's and UDP's endpoint.  `family`
+--- says which; an IPv4 address is `octets`' first four bytes, in the
+--- order its text writes them, and the other twelve are zero; an IPv6
+--- address is all sixteen, in network order.  `port` is a number from 0
+--- to 65535, and 0 asks the system for a free one when a socket is bound.
+--- There is no zone: an IPv6 link-local address that needs one, `fe80::1%eth0`,
+--- cannot be written.  Make one with `ipv4_address`, `ipv6_address`,
+--- `loopback`, `unspecified` or `parse_address`, and compare two with
+--- `same_address`.
+public address: type = struct
+    family: address_family
+    octets: [16]u8
+    port: u16
+end address
+
+--- What arrived in one `receive_from`: how many bytes, and the address and
+--- port of the socket that sent them.
+public datagram: type = struct
+    count: usize
+    sender: address
+end datagram
+
+--- Stop receiving: what arrives later is thrown away.
+public receiving: atom
+--- Stop sending: the peer reads the end of the stream once what was sent
+--- before has arrived, while this side may still receive.
+public sending: atom
+--- Stop both receiving and sending.
+public both_directions: atom
+--- Which way of a connection `shutdown` stops: `receiving`, `sending` or
+--- `both_directions`.
+public direction: type = receiving | sending | both_directions
+
+--- The network: TCP connections and UDP datagram sockets over IPv4 and
+--- IPv6, each a `file` of the provider.  It is a reader and a writer of
+--- them as well, so a connection is read and written through `io.read`
+--- and `io.write`, a line reader and a buffered writer among them, whose
+--- failures are `io_failed` with the provider's detail; `send` and
+--- `receive` say more, `timed_out` and `disconnected`.  A connection's
+--- `read` and `receive` return zero once its peer has finished sending.
+---
+--- Every call waits until it can do what it was asked, as a blocking
+--- socket does: `accept` for a connection, `receive` for bytes, `send` for
+--- room, unless `set_timeouts` gave the socket a limit.  A listener takes
+--- connections whose handshake the system completes on its own, so one
+--- thread can connect to its own listener and then accept, and a
+--- connection's sends wait only once the system's buffers are full.
+--- Close every socket with `close_socket`; one dropped unclosed is open
+--- until the process ends, since there are no destructors.
+public network: type = concept (provider: type) is reader, writer
+    --- Connect to a listener at `to` and return the connection.  A port
+    --- nothing listens on is `refused`.
+    connect: (self: provider, to: address) -> (connected: file)
+             ! refused | unreachable | address_unavailable | timed_out
+             | io_failed
+    --- Listen for connections at `at`, port 0 for a free one, which
+    --- `local_address` then gives.  A listener may take an address its
+    --- earlier connections still hold while they close, never one another
+    --- socket listens at, `address_in_use`.
+    listen: (self: provider, at: address) -> (listener: file)
+            ! address_in_use | address_unavailable | no_access | io_failed
+    --- Take the next connection made to a listener, waiting for one.
+    accept: (self: provider, listener: file) -> (accepted: file)
+            ! timed_out | io_failed
+    --- Open a UDP socket bound to `at`, port 0 for a free one.
+    open_datagram: (self: provider, at: address) -> (socket: file)
+                   ! address_in_use | address_unavailable | no_access
+                   | io_failed
+    --- Send all of `bytes` over a connection, waiting while its buffers
+    --- are full.  A failure may follow a part of them.
+    send: (self: provider, connection: file, bytes: []u8) -> none
+          ! disconnected | timed_out | io_failed
+    --- Receive what arrives next on a connection into `into`, waiting for
+    --- something: its count, zero once the peer has finished sending.
+    receive: (self: provider, connection: file, into: []mut u8)
+             -> (count: usize) ! disconnected | timed_out | io_failed
+    --- Send `bytes` as one datagram to `to`.  One that cannot be sent
+    --- whole, longer than the system takes, is `io_failed`.
+    send_to: (self: provider, socket: file, bytes: []u8, to: address)
+             -> none ! unreachable | timed_out | io_failed
+    --- Receive the next datagram into `into`, waiting for one, and say
+    --- who sent it.  A datagram longer than `into` is cut to it, the rest
+    --- thrown away.
+    receive_from: (self: provider, socket: file, into: []mut u8)
+                  -> (received: datagram) ! timed_out | io_failed
+    --- Stop receiving, sending or both on a connection.
+    shutdown: (self: provider, connection: file, stopping: direction)
+              -> none ! io_failed
+    --- The address and port a socket is bound to.
+    local_address: (self: provider, socket: file) -> (at: address)
+                   ! io_failed
+    --- The address and port of a connection's peer.
+    peer_address: (self: provider, connection: file) -> (at: address)
+                  ! io_failed
+    --- Limit how long a receive or an accept, and a send, waits on
+    --- `socket`; a span of zero is no limit.
+    set_timeouts: (self: provider, socket: file, receive_limit: duration,
+                   send_limit: duration) -> none ! io_failed
+    --- Send a connection's small writes at once, `on`, rather than gather
+    --- them while an earlier one is unacknowledged.
+    set_no_delay: (self: provider, connection: file, on: bool) -> none
+                  ! io_failed
+    --- Close a socket, which is consumed even when this fails.
+    close_socket: (self: provider, sink socket: file) -> none ! io_failed
+end network
+
+--- An IPv4 address `a.b.c.d` and a port.
+public ipv4_address: (a: u8, b: u8, c: u8, d: u8, port: u16)
+                     -> (at: address) =
+    at = (family: ipv4, octets: zeroed, port: port)
+    at.octets[0] = a
+    at.octets[1] = b
+    at.octets[2] = c
+    at.octets[3] = d
+end ipv4_address
+
+--- An IPv6 address of eight 16-bit groups, in the order its text writes
+--- them, and a port.
+public ipv6_address: (groups: [8]u16, port: u16) -> (at: address) =
+    at = (family: ipv6, octets: zeroed, port: port)
+    for index in usize(0)..<8 do
+        at.octets[2 * index] = u8(groups[index] >> 8)
+        at.octets[2 * index + 1] = u8(groups[index] & 255)
+    end for
+end ipv6_address
+
+--- The loopback address of `family`, `127.0.0.1` or `::1`, and a port:
+--- this system, reached without a network.
+public loopback: (family: address_family, port: u16) -> (at: address) =
+    at = (family: family, octets: zeroed, port: port)
+    if family == ipv4 then
+        at.octets[0] = 127
+        at.octets[3] = 1
+    else
+        at.octets[15] = 1
+    end if
+end loopback
+
+--- The unspecified address of `family`, `0.0.0.0` or `::`, and a port: a
+--- socket bound to it takes what arrives at the port on every interface.
+public unspecified: (family: address_family, port: u16) -> (at: address) =
+    at = (family: family, octets: zeroed, port: port)
+end unspecified
+
+--- The address `at` with another port.
+public with_port: (at: address, port: u16) -> (result: address) =
+    result = at
+    result.port = port
+end with_port
+
+--- Whether two addresses are the same family, address and port.
+public same_address: (left: address, right: address) -> (same: bool) =
+    same = left.family == right.family and left.port == right.port
+    for index in usize(0)..<16 do
+        if left.octets[index] <> right.octets[index] then
+            same = false
+        end if
+    end for
+end same_address
+
+--- Whether an address is its family's unspecified address, whatever its
+--- port.
+public is_unspecified: (at: address) -> (yes: bool) =
+    yes = true
+    for index in usize(0)..<16 do
+        if at.octets[index] <> 0 then yes = false end if
+    end for
+end is_unspecified
+
+--  A hexadecimal digit's value, and whether the byte is one.
+hex_digit: (byte: u8) -> (value: u32, valid: bool) =
+    valid = true
+    value = 0
+    if byte >= 48 and byte <= 57 then
+        value = u32(byte - 48)
+    elsif byte >= 97 and byte <= 102 then
+        value = u32(byte - 87)
+    elsif byte >= 65 and byte <= 70 then
+        value = u32(byte - 55)
+    else
+        valid = false
+    end if
+end hex_digit
+
+--  An IPv4 address's four parts: decimal, from 0 to 255, with no leading
+--  zero, which some readers take for octal.
+ipv4_octets: (source: []u8) -> (octets: [4]u8) ! invalid_address =
+    octets = zeroed
+    mut part: usize = 0
+    mut value: u32 = 0
+    mut digits: usize = 0
+    for byte in source do
+        if byte == 46 then
+            fail invalid_address when digits == 0 or part == 3
+            octets[part] = u8(value)
+            inc part
+            value = 0
+            digits = 0
+        else
+            fail invalid_address when byte < 48 or byte > 57
+              or (digits > 0 and value == 0)
+            value = value * 10 + u32(byte - 48)
+            fail invalid_address when value > 255
+            inc digits
+        end if
+    end for
+    fail invalid_address when digits == 0 or part <> 3
+    octets[3] = u8(value)
+end ipv4_octets
+
+--  Where in SOURCE, from AT, the next `:` is, or its length.
+next_colon: (source: []u8, at: usize) -> (found: usize) =
+    found = at
+    while found < lenof source and source[found] <> 58 do
+        inc found
+    end while
+end next_colon
+
+--  An IPv6 address's sixteen bytes, from its groups: one to four
+--  hexadecimal digits each, at most one `::` standing for one or more
+--  zero groups, and an IPv4 address in the last 32 bits.
+ipv6_octets: (source: []u8) -> (octets: [16]u8) ! invalid_address =
+    octets = zeroed
+    mut groups: [8]u16 = zeroed
+    mut count: usize = 0
+    mut gap: usize = 9
+    mut at: usize = 0
+    length: usize = lenof source
+    fail invalid_address when length < 2
+    if source[0] == 58 then
+        fail invalid_address when source[1] <> 58
+        gap = 0
+        at = 2
+    end if
+    while at < length do
+        fail invalid_address when count == 8
+        ends: usize = next_colon(source, at)
+        piece: []u8 = source[at..<ends]
+        if ends == length and lenof piece > 4 then
+            --  An IPv4 address is the last 32 bits, and nothing follows it.
+            fail invalid_address when count > 6
+            four: [4]u8 = try ipv4_octets(piece)
+            groups[count] = (u16(four[0]) << 8) | u16(four[1])
+            groups[count + 1] = (u16(four[2]) << 8) | u16(four[3])
+            count += 2
+            at = length
+            break
+        end if
+        fail invalid_address when lenof piece == 0 or lenof piece > 4
+        mut value: u32 = 0
+        for byte in piece do
+            (value: digit, valid) := hex_digit(byte)
+            fail invalid_address when not valid
+            value = value * 16 + digit
+        end for
+        groups[count] = u16(value)
+        inc count
+        at = ends
+        break when at == length
+        --  A `:` follows the group: another group, or a second `:`.
+        inc at
+        fail invalid_address when at == length
+        if source[at] == 58 then
+            fail invalid_address when gap <> 9
+            gap = count
+            inc at
+        end if
+    end while
+    if gap == 9 then
+        fail invalid_address when count <> 8
+    else
+        fail invalid_address when count > 7
+        --  The groups after the gap move to the end.
+        moved: usize = count - gap
+        mut index: usize = 0
+        while index < moved do
+            groups[7 - index] = groups[count - 1 - index]
+            groups[count - 1 - index] = 0
+            inc index
+        end while
+    end if
+    for index in usize(0)..<8 do
+        octets[2 * index] = u8(groups[index] >> 8)
+        octets[2 * index + 1] = u8(groups[index] & 255)
+    end for
+end ipv6_octets
+
+--- Read an address without a port from its text, `127.0.0.1` or
+--- `2001:db8::1`, with port 0: four decimal parts from 0 to 255 without a
+--- leading zero, or an IPv6 address's groups of one to four hexadecimal
+--- digits in either case, at most one `::` and an IPv4 address in the last
+--- 32 bits.  Anything else, a zone such as `%eth0` and surrounding spaces
+--- among it, is `invalid_address`.
+public parse_ip: (source: []u8) -> (at: address) ! invalid_address =
+    at = unspecified(ipv4, 0)
+    if mem.find(source, 58) < lenof source then
+        at.family = ipv6
+        at.octets = try ipv6_octets(source)
+        return
+    end if
+    four: [4]u8 = try ipv4_octets(source)
+    for index in usize(0)..<4 do
+        at.octets[index] = four[index]
+    end for
+end parse_ip
+
+--- Read an address and a port from their text: `127.0.0.1:8080`, or an
+--- IPv6 address in brackets, `[::1]:8080`, as a URL writes them.  The
+--- port is decimal, from 0 to 65535; an address is read as `parse_ip`
+--- reads one.  Anything else is `invalid_address`.
+public parse_address: (source: []u8) -> (at: address) ! invalid_address =
+    length: usize = lenof source
+    mut colon: usize = length
+    mut index: usize = length
+    while index > 0 do
+        dec index
+        if source[index] == 58 then
+            colon = index
+            break
+        end if
+    end while
+    fail invalid_address when colon == length or colon + 1 == length
+    port: u16 = text.parse_u16(source[colon + 1..<length]) else (problem)
+        _ = problem
+        fail invalid_address
+    end
+    host: []u8 = source[0..<colon]
+    if lenof host > 0 and host[0] == 91 then
+        fail invalid_address when lenof host < 2
+          or host[lenof host - 1] <> 93
+        at = (family: ipv6, octets: try ipv6_octets(host[1..<lenof host - 1]),
+              port: port)
+        return
+    end if
+    four: [4]u8 = try ipv4_octets(host)
+    at = ipv4_address(four[0], four[1], four[2], four[3], port)
+end parse_address
+
+--  The IPv6 address's group INDEX.
+group: (at: address, index: usize) -> (value: u32) =
+    value = (u32(at.octets[2 * index]) << 8) | u32(at.octets[2 * index + 1])
+end group
+
+--  Append the IPv4 address in the four bytes from FIRST.
+dotted: (inout into: text.builder, at: address, first: usize)
+        -> none ! text.no_space =
+    for index in usize(0)..<4 do
+        if index > 0 then try text.append_byte(into, 46) end if
+        try text.append_u32(into, u32(at.octets[first + index]))
+    end for
+end dotted
+
+--  Append an IPv6 address as RFC 5952 writes it: lower-case groups
+--  without leading zeros, the longest run of two or more zero groups, the
+--  first of equals, written `::`, and an IPv4-mapped address's last 32
+--  bits in dotted decimal.
+grouped: (inout into: text.builder, at: address) -> none ! text.no_space =
+    mut mapped: bool = group(at, 5) == 65535
+    for index in usize(0)..<5 do
+        if group(at, index) <> 0 then mapped = false end if
+    end for
+    last: usize = if mapped then 6 else 8 end if
+    mut best_start: usize = 8
+    mut best_length: usize = 1
+    mut index: usize = 0
+    while index < last do
+        if group(at, index) == 0 then
+            mut ends: usize = index
+            while ends < last and group(at, ends) == 0 do
+                inc ends
+            end while
+            if ends - index > best_length then
+                best_start = index
+                best_length = ends - index
+            end if
+            index = ends
+        else
+            inc index
+        end if
+    end while
+    index = 0
+    while index < last do
+        if index == best_start then
+            try text.append(into, "::")
+            index += best_length
+        else
+            if index > 0 and index <> best_start + best_length then
+                try text.append_byte(into, 58)
+            end if
+            try text.append_hex_u32(into, group(at, index))
+            inc index
+        end if
+    end while
+    if mapped then
+        if best_start + best_length <> 6 then
+            try text.append_byte(into, 58)
+        end if
+        try dotted(into, at, 12)
+    end if
+end grouped
+
+--- Append an address's text without its port: `127.0.0.1`, or an IPv6
+--- address as RFC 5952 writes it, `::1` and `2001:db8::1`, lower case with
+--- the longest run of zero groups shortened and an IPv4-mapped address as
+--- `::ffff:192.0.2.1`.  `parse_ip` reads it back.  It is written whole or
+--- not at all.
+public append_ip: (inout into: text.builder, at: address)
+                  -> none ! text.no_space =
+    start: usize = text.length(into)
+    address_written(into, at, false) else (problem)
+        text.truncate(into, start)
+        fail problem
+    end
+end append_ip
+
+--- Append an address's text with its port: `127.0.0.1:8080`, or an IPv6
+--- address in brackets, `[::1]:8080`.  `parse_address` reads it back.  It
+--- is written whole or not at all.
+public append_address: (inout into: text.builder, at: address)
+                       -> none ! text.no_space =
+    start: usize = text.length(into)
+    address_written(into, at, true) else (problem)
+        text.truncate(into, start)
+        fail problem
+    end
+end append_address
+
+address_written: (inout into: text.builder, at: address, with_port: bool)
+                 -> none ! text.no_space =
+    bracketed: bool = with_port and at.family == ipv6
+    if bracketed then try text.append_byte(into, 91) end if
+    if at.family == ipv4 then
+        try dotted(into, at, 0)
+    else
+        try grouped(into, at)
+    end if
+    if bracketed then try text.append_byte(into, 93) end if
+    if with_port then
+        try text.append_byte(into, 58)
+        try text.append_u32(into, u32(at.port))
+    end if
+end address_written
+
+address_text: (self: ptr address, inout into: text.builder)
+              -> none ! text.no_space =
+    try append_address(into, self.val)
+end address_text
+
+address is text.formattable (append: address_text)
+
+--- Connect to a listener at `to` through `network` evidence.  Close the
+--- connection with `close_socket`.
+public connect: (provider: type is network, host: provider, to: address)
+                -> (connected: file)
+                ! refused | unreachable | address_unavailable | timed_out
+                | io_failed =
+    connected = try provider.connect(host, to)
+end connect
+
+--- Listen for connections at `at`, port 0 for a free one; close the
+--- listener with `close_socket`.
+public listen: (provider: type is network, host: provider, at: address)
+               -> (listener: file)
+               ! address_in_use | address_unavailable | no_access
+               | io_failed =
+    listener = try provider.listen(host, at)
+end listen
+
+--- Take the next connection made to `listener`, waiting for one unless a
+--- receive limit was set.
+public accept: (provider: type is network, host: provider, listener: file)
+               -> (accepted: file) ! timed_out | io_failed =
+    accepted = try provider.accept(host, listener)
+end accept
+
+--- Open a UDP socket bound to `at`, port 0 for a free one.
+public open_datagram: (provider: type is network, host: provider,
+                       at: address) -> (socket: file)
+                      ! address_in_use | address_unavailable | no_access
+                      | io_failed =
+    socket = try provider.open_datagram(host, at)
+end open_datagram
+
+--- Send all of `bytes` over a connection.  A connection whose peer has
+--- gone is `disconnected`.
+public send: (provider: type is network, host: provider, connection: file,
+              bytes: []u8) -> none ! disconnected | timed_out | io_failed =
+    try provider.send(host, connection, bytes)
+end send
+
+--- Receive what arrives next on a connection into `into`: its count, zero
+--- once the peer has finished sending.
+public receive: (provider: type is network, host: provider,
+                 connection: file, into: []mut u8)
+                -> (count: usize) ! disconnected | timed_out | io_failed =
+    count = try provider.receive(host, connection, into)
+end receive
+
+--- Send `bytes` as one datagram to `to`.
+public send_to: (provider: type is network, host: provider, socket: file,
+                 bytes: []u8, to: address)
+                -> none ! unreachable | timed_out | io_failed =
+    try provider.send_to(host, socket, bytes, to)
+end send_to
+
+--- Receive the next datagram into `into` and say who sent it.
+public receive_from: (provider: type is network, host: provider,
+                      socket: file, into: []mut u8)
+                     -> (received: datagram) ! timed_out | io_failed =
+    received = try provider.receive_from(host, socket, into)
+end receive_from
+
+--- Stop receiving, sending or both on a connection: `io.sending` lets
+--- the peer read the end of what was sent.
+public shutdown: (provider: type is network, host: provider,
+                  connection: file, stopping: direction)
+                 -> none ! io_failed =
+    try provider.shutdown(host, connection, stopping)
+end shutdown
+
+--- The address and port a socket is bound to: a listener's or a datagram
+--- socket's port when it was bound to port 0.
+public local_address: (provider: type is network, host: provider,
+                       socket: file) -> (at: address) ! io_failed =
+    at = try provider.local_address(host, socket)
+end local_address
+
+--- The address and port of a connection's peer.
+public peer_address: (provider: type is network, host: provider,
+                      connection: file) -> (at: address) ! io_failed =
+    at = try provider.peer_address(host, connection)
+end peer_address
+
+--- Limit how long a receive or an accept, and a send, waits on `socket`;
+--- zero is no limit.  A limit that passes is `timed_out`.
+public set_timeouts: (provider: type is network, host: provider,
+                      socket: file, receive_limit: duration,
+                      send_limit: duration) -> none ! io_failed =
+    try provider.set_timeouts(host, socket, receive_limit, send_limit)
+end set_timeouts
+
+--- Send a connection's small writes at once rather than gather them.
+public set_no_delay: (provider: type is network, host: provider,
+                      connection: file, on: bool) -> none ! io_failed =
+    try provider.set_no_delay(host, connection, on)
+end set_no_delay
+
+--- Close a socket.  Treat it as consumed even if closing reports
+--- `io_failed`.
+public close_socket: (provider: type is network, host: provider,
+                      sink socket: file) -> none ! io_failed =
+    try provider.close_socket(host, socket)
+end close_socket

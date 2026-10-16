@@ -1827,6 +1827,8 @@ package body Landin.Stages.Checking is
          Wanted  : Landin.Checking.Atom_Set_Id;
          Site    : Landin.Provenance.Origin;
          Because : String);
+      function Names_Module_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       procedure Check_Place
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -8946,7 +8948,8 @@ package body Landin.Stages.Checking is
                             else "a call"),
                         when Syn.Element_Index => "an element index",
                         when Syn.Member_Selection =>
-                           (if Held = Ty.Fixed_Array
+                           (if Names_Module_Value (Of_Tree, Value) then ""
+                            elsif Held = Ty.Fixed_Array
                             then "a selection below one field"
                             else "a field selection"),
                         when Syn.If_Statement | Syn.Match_Statement
@@ -10655,8 +10658,12 @@ package body Landin.Stages.Checking is
                end if;
                Report_Pattern_Failure
                  (Argument, Position, Pattern_Tree, Pattern,
-                  "this is " & Shown (Actual.Kind) & " and "
-                  & Shown (Expected.Kind) & " belongs here"
+                  (if Actual.Kind = Ty.Atom_Value
+                     and then Expected.Kind = Ty.Atom_Value
+                   then "this atom set is not the one written here, nor"
+                        & " inside it"
+                   else "this is " & Shown (Actual.Kind) & " and "
+                        & Shown (Expected.Kind) & " belongs here")
                   & (if Actual.Kind = Ty.I32
                      then "; in a generic call an untyped literal is `i32`"
                      else ""));
@@ -11056,6 +11063,45 @@ package body Landin.Stages.Checking is
 
             return Constant_Agrees;
          end Match_Type_Pattern;
+
+         --  Whether the written parameter type is a concrete atom set, one
+         --  that names no formal, which the argument's atoms all belong
+         --  to: there is nothing to deduce from it, and [0640] lets the
+         --  argument widen into it as an ordinary call's would.
+         function Widens_Into_Written_Set
+           (Pattern : Syn.Node_Id; Actual : Type_Descriptor) return Boolean;
+
+         function Widens_Into_Written_Set
+           (Pattern : Syn.Node_Id; Actual : Type_Descriptor) return Boolean
+         is
+         begin
+            if Pattern = Syn.No_Node
+              or else Actual.Atoms = Landin.Checking.No_Atom_Set
+            then
+               return False;
+            end if;
+            if Syn.Kind (Template_Tree.all, Pattern)
+                 in Syn.Type_Reference | Syn.Name_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Template_Tree.all, Pattern) = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all,
+                 Res.Bound_To (Meanings.all, Template_Tree.all, Pattern))
+                  = Res.Type_Parameter
+            then
+               return False;
+            end if;
+            declare
+               Expected : constant Type_Descriptor := Normalized_Type
+                 (Template_Tree.all, Pattern, Literal_Context_Bound,
+                  Syn.Origin (Caller_Tree, Call), Identity_Only);
+            begin
+               return Expected.Kind = Ty.Atom_Value
+                 and then Expected.Atoms /= Landin.Checking.No_Atom_Set
+                 and then Landin.Checking.Is_Subset
+                   (Types.all, Actual.Atoms, Expected.Atoms);
+            end;
+         end Widens_Into_Written_Set;
       begin
          for Index in Bound'Range loop
             Bound (Index).Formal := Declaration_At
@@ -11220,6 +11266,16 @@ package body Landin.Stages.Checking is
                   end if;
                   if Got = Ty.Ill_Typed then
                      Good := False;
+                  elsif Got = Ty.Atom_Value
+                    and then Widens_Into_Written_Set
+                      (Pattern, Descriptor_At (Caller_Tree, Argument, Got))
+                  then
+                     --  A written atom set names no formal, so there is
+                     --  nothing to deduce: the argument widens into it as
+                     --  [0640] lets an ordinary call's argument widen, and
+                     --  `io.shutdown(host, socket, io.sending)` needs no
+                     --  local of the set's type first.
+                     null;
                   else
                      declare
                         Actual : constant Type_Descriptor :=
@@ -23187,6 +23243,23 @@ package body Landin.Stages.Checking is
          end;
       end Check_Place;
 
+      --  Whether a member selection names another module's module value,
+      --  atom or function, `lib.limit`, `lib.green` or `lib.handler`, which
+      --  resolution binds to the declaration itself: it selects no storage,
+      --  and is read as the same name unqualified in its own module is
+      --  [1940].
+      function Names_Module_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         return Node /= Syn.No_Node
+           and then Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Node))
+               in Res.Module_Binding | Res.Module_Atom
+                | Res.Module_Function;
+      end Names_Module_Value;
+
       --  D24/D66: a static image may fold scalar syntax but may not read a
       --  selected runtime place or carry a nested array value.  Keep this
       --  recursive refusal shared by array and struct image contexts so a
@@ -23208,9 +23281,15 @@ package body Landin.Stages.Checking is
       begin
          if Where = Syn.No_Node then
             return;
-         elsif Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+         elsif Syn.Kind (Of_Tree, Where)
+                 in Syn.Len_Of | Syn.Size_Of | Syn.Align_Of
+         then
             --  D31's literal elements are checked for their scalar type,
-            --  but are not values stored in this static image.
+            --  but are not values stored in this static image, and a
+            --  measured type, qualified or not, is no storage read.
+            return;
+         elsif Names_Module_Value (Of_Tree, Where) then
+            --  Another module's value or atom, named through its module.
             return;
          end if;
 
@@ -30618,11 +30697,20 @@ package body Landin.Stages.Checking is
                      when Syn.Element_Index    => "an array index",
                      when others               => "");
             begin
-               --  Neither a measured literal nor a static anonymous routine
-               --  executes its expression subtree to form this module image.
+               --  Neither a measurement nor a static anonymous routine
+               --  executes its expression subtree to form this module image:
+               --  a measured type, qualified or not, selects no storage.
                if Syn.Kind (Of_Tree, Where)
-                    in Syn.Len_Of | Syn.Anonymous_Function
+                    in Syn.Len_Of | Syn.Size_Of | Syn.Align_Of
+                     | Syn.Anonymous_Function
                then
+                  return;
+               end if;
+
+               --  Another module's value or atom, `lib.limit`, is read as
+               --  the same name unqualified in its module is; the fold
+               --  decides whether it is known.
+               if Names_Module_Value (Of_Tree, Where) then
                   return;
                end if;
 
@@ -30635,13 +30723,20 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Not_Known_At_Compile_Time,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Where),
-                     Message => (if What = "" then "array arithmetic"
-                                 else What)
-                                & " has no static module value in this"
-                                & " compiler",
-                     Note    => "[1940]: a module initializer is read at"
-                                & " compile time, before any storage can be"
-                                & " selected",
+                     Message => (if What = ""
+                                 then "array arithmetic computes element by"
+                                      & " element, which a module value"
+                                      & " cannot: nothing runs before the"
+                                      & " entry point"
+                                 else What
+                                      & " reads storage, which a module"
+                                      & " value cannot: nothing runs before"
+                                      & " the entry point to read it"),
+                     Note    => "[1940]: a module value folds literals,"
+                                & " known names, another module's values"
+                                & " named through it and [1820]'s"
+                                & " operators on them, never a field or an"
+                                & " element",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Where);
                   return;
@@ -30869,7 +30964,17 @@ package body Landin.Stages.Checking is
             Source  => Syn.Source_Of (Of_Tree),
             Where   => Syn.Where (Of_Tree, Value),
             Message => "a module value has to be one the compiler knows"
-                       & " when it reads it, and this needs runtime control",
+                       & " when it reads it, and "
+                       & (case Syn.Kind (Of_Tree, Value) is
+                             when Syn.Call | Syn.Labeled_Application
+                                | Syn.Try_Expression =>
+                                "a call runs a routine to find it",
+                             when Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block | Syn.Loop_Statement
+                                | Syn.While_Statement | Syn.For_Statement =>
+                                "this needs runtime control",
+                             when others =>
+                                "this is not one it knows"),
             Note    => "[1940]: nothing runs before the entry point"
                        & " [1460], and there is no compile-time execution",
             Into    => Found);

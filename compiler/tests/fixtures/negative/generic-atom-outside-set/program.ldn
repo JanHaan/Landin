@@ -1,0 +1,16 @@
+--  An atom that is not in a generic routine's concrete atom-set parameter
+--  does not widen into it, and the report says that the set is not the one
+--  written there.
+red: atom
+green: atom
+blue: atom
+colour: type = red | green
+
+counted: (item: type, value: item, shade: colour) -> (count: i32) =
+    _ = value
+    count = if shade == red then 1 else 2 end if
+end counted
+
+public main: () -> (code: i32) =
+    code = counted(7, blue)
+end main

@@ -1,0 +1,10 @@
+error[L0340]: this atom set is not the one written here, nor inside it
+  --> ../tests/fixtures/negative/generic-atom-outside-set/program.ldn:15:23
+   |
+15 |     code = counted(7, blue)
+   |                       ^^^^
+  --> ../tests/fixtures/negative/generic-atom-outside-set/program.ldn:9:43
+  |
+9 | counted: (item: type, value: item, shade: colour) -> (count: i32) =
+  |                                           ^^^^^^ the parameter's type, as written
+  = note: D138: an argument to a generic routine is typed on its own, before the parameter is known, and must match the type written for it; only `mut` may relax to read-only

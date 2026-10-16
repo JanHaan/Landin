@@ -1,0 +1,37 @@
+--  A connection to a port nothing listens on is refused.  The program
+--  listens on a free port and closes the listener again, which leaves
+--  nothing behind the port, so the system answers the connection at once
+--  with ECONNREFUSED, which the hosted provider keeps.  Over IPv4 and IPv6.
+import core/io
+import hosted/io as hosted
+import platform/posix
+
+--  Whether a connection to a port just closed is refused.
+refused: (host: hosted.system, family: io.address_family) -> (yes: bool)
+         ! ... =
+    listener: io.file = try io.listen(host, io.loopback(family, 0))
+    at: io.address = try io.local_address(host, listener)
+    try io.close_socket(host, listener)
+    yes = false
+    connected: io.file = io.connect(host, at) else (problem)
+        yes = problem == io.refused
+              and hosted.last_errno(host) == posix.number(posix.econnrefused)
+        return
+    end
+    try io.close_socket(host, connected)
+end refused
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    for family in families do
+        yes: bool = refused(host, family) else (problem)
+            _ = problem
+            return
+        end
+        return when not yes
+        inc code
+    end for
+    code = 42
+end main
