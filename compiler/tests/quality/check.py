@@ -414,8 +414,13 @@ def main() -> None:
                     and actual_indirect == sum(r["indirect_calls"]
                                                for r in routines),
                     f"{key}: emitted dispatch disagrees with source decisions")
-            require(sum(r["shared_with"] != 0 for r in routines)
-                    == (0 if selected else 1),
+            # Only a body that dispatches is the evidence-driven fallback:
+            # the backend also shares any identical library routines, such
+            # as platform/linux's address helpers, which are not this witness.
+            by_item = {r["item"]: r for r in routines}
+            require(sum(r["shared_with"] != 0
+                        and by_item[r["shared_with"]]["indirect_calls"] > 0
+                        for r in routines) == (0 if selected else 1),
                     f"{key}: threshold witness lost its shared fallback")
         # The complete P3 client supplies a real container workload, rather
         # than another policy probe. Its measurements have no size budget;
