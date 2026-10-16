@@ -1,0 +1,258 @@
+--  The facts platform/libc and platform/linux keep for the rest of the
+--  file system, terminals and the account databases, handed to a C peer
+--  that holds each to the system's own headers: the lock calls' numbers
+--  and record, a terminal's record, modes and requests, the window size,
+--  the account and group records; and what platform/posix writes and reads
+--  of a file, a link and root's account, which the peer reads through C.
+import core/text
+import platform/libc
+import platform/linux
+import platform/posix
+
+extern(c) c_shared: (index: i32) -> (value: i64)
+extern(c) c_terminal: (index: i32) -> (value: i64)
+extern(c) c_status_agrees: (path: ptr u8, permissions: u32, size: i64,
+                            user: u32, links: u64, seconds: i64,
+                            nanoseconds: i64) -> (yes: i32)
+extern(c) c_link_agrees: (path: ptr u8, target: ptr u8) -> (yes: i32)
+extern(c) c_account_agrees: (name: ptr u8, home: ptr u8, shell: ptr u8,
+                             group: u32) -> (yes: i32)
+extern(c) c_group_agrees: (name: ptr u8, members: u64) -> (yes: i32)
+
+mut lock_probe: libc.lock_record = zeroed
+mut window_probe: libc.window_record = zeroed
+mut account_probe: libc.account_record = zeroed
+mut group_probe: libc.group_record = zeroed
+
+--  How far into a record ADDRESS lies from BASE.
+offset_of: (base: usize, address: usize) -> (offset: i64) =
+    offset = i64(address - base)
+end offset_of
+
+--  platform/libc's values in the peer's order.
+shared: () -> (values: [37]i64) =
+    lock: usize = usize(addr lock_probe)
+    window: usize = usize(addr window_probe)
+    account: usize = usize(addr account_probe)
+    group: usize = usize(addr group_probe)
+    values = [i64(libc.lock_sh), i64(libc.lock_ex), i64(libc.lock_nb),
+              i64(libc.lock_un), i64(libc.f_getlk), i64(libc.f_setlk),
+              i64(libc.f_setlkw), i64(libc.f_rdlck), i64(libc.f_wrlck),
+              i64(libc.f_unlck), i64(libc.seek_set), i64(libc.o_noctty),
+              i64(libc.at_symlink_follow), i64(sizeof libc.lock_record),
+              offset_of(lock, usize(addr lock_probe.kind)),
+              offset_of(lock, usize(addr lock_probe.whence)),
+              offset_of(lock, usize(addr lock_probe.start)),
+              offset_of(lock, usize(addr lock_probe.length)),
+              offset_of(lock, usize(addr lock_probe.process)),
+              i64(sizeof libc.window_record),
+              offset_of(window, usize(addr window_probe.columns)),
+              i64(sizeof libc.account_record),
+              offset_of(account, usize(addr account_probe.name)),
+              offset_of(account, usize(addr account_probe.password)),
+              offset_of(account, usize(addr account_probe.user)),
+              offset_of(account, usize(addr account_probe.group)),
+              offset_of(account, usize(addr account_probe.comment)),
+              offset_of(account, usize(addr account_probe.home)),
+              offset_of(account, usize(addr account_probe.shell)),
+              i64(sizeof libc.group_record),
+              offset_of(group, usize(addr group_probe.name)),
+              offset_of(group, usize(addr group_probe.password)),
+              offset_of(group, usize(addr group_probe.group)),
+              offset_of(group, usize(addr group_probe.members)),
+              i64(libc.tcsanow), i64(libc.tcsadrain), i64(libc.tcsaflush)]
+end shared
+
+fixed if compiler.os == linux then
+    extern(c) c_kernel: (index: i32) -> (value: i64)
+
+    mut terminal_probe: linux.terminal_record = zeroed
+
+    --  The kernel's terminal record, modes and window requests, which
+    --  platform/linux keeps, in the peer's order.
+    terminal: () -> (values: [27]i64) =
+        base: usize = usize(addr terminal_probe)
+        values = [i64(sizeof linux.terminal_record),
+                  offset_of(base, usize(addr terminal_probe.output_modes)),
+                  offset_of(base, usize(addr terminal_probe.control_modes)),
+                  offset_of(base, usize(addr terminal_probe.local_modes)),
+                  offset_of(base, usize(addr terminal_probe.characters[0])),
+                  19, i64(linux.vmin), i64(linux.vtime), i64(linux.ignbrk),
+                  i64(linux.brkint), i64(linux.parmrk), i64(linux.istrip),
+                  i64(linux.inlcr), i64(linux.igncr), i64(linux.icrnl),
+                  i64(linux.ixon), i64(linux.opost), i64(linux.csize),
+                  i64(linux.cs8), i64(linux.parenb), i64(linux.echo),
+                  i64(linux.echonl), i64(linux.icanon), i64(linux.isig),
+                  i64(linux.iexten), i64(linux.tiocgwinsz),
+                  i64(linux.tiocswinsz)]
+    end terminal
+
+    --  The kernel's own requests and flags, and platform/linux's copies of
+    --  what platform/libc keeps too.
+    kernel_agrees: () -> (yes: bool) =
+        values: [10]i64 = [i64(linux.tcgets), i64(linux.tcsets),
+                           i64(linux.tcsetsw), i64(linux.tcsetsf),
+                           i64(linux.tiocsptlck), i64(linux.tiocgptpeer),
+                           i64(linux.tiocgptn),
+                           offset_of(usize(addr terminal_probe),
+                                     usize(addr terminal_probe.line)),
+                           i64(linux.statx_basic_stats),
+                           i64(linux.at_empty_path)]
+        yes = true
+        for index in usize(0)..<10 do
+            if values[index] <> c_kernel(i32(index)) then yes = false end if
+        end for
+        yes = yes and linux.lock_sh == libc.lock_sh
+              and linux.lock_ex == libc.lock_ex
+              and linux.lock_nb == libc.lock_nb
+              and linux.lock_un == libc.lock_un
+              and linux.f_getlk == libc.f_getlk
+              and linux.f_setlk == libc.f_setlk
+              and linux.f_setlkw == libc.f_setlkw
+              and linux.f_rdlck == libc.f_rdlck
+              and linux.f_wrlck == libc.f_wrlck
+              and linux.f_unlck == libc.f_unlck
+              and linux.o_noctty == libc.o_noctty
+              and linux.at_symlink_follow == libc.at_symlink_follow
+              and sizeof linux.lock_record == sizeof libc.lock_record
+              and sizeof linux.window_record == sizeof libc.window_record
+    end kernel_agrees
+else
+    mut terminal_probe: libc.terminal_record = zeroed
+
+    --  The C library's terminal record, modes and window requests, which
+    --  platform/libc keeps, in the peer's order.
+    terminal: () -> (values: [27]i64) =
+        base: usize = usize(addr terminal_probe)
+        values = [i64(sizeof libc.terminal_record),
+                  offset_of(base, usize(addr terminal_probe.output_modes)),
+                  offset_of(base, usize(addr terminal_probe.control_modes)),
+                  offset_of(base, usize(addr terminal_probe.local_modes)),
+                  offset_of(base, usize(addr terminal_probe.characters[0])),
+                  20, i64(libc.vmin), i64(libc.vtime), i64(libc.ignbrk),
+                  i64(libc.brkint), i64(libc.parmrk), i64(libc.istrip),
+                  i64(libc.inlcr), i64(libc.igncr), i64(libc.icrnl),
+                  i64(libc.ixon), i64(libc.opost), i64(libc.csize),
+                  i64(libc.cs8), i64(libc.parenb), i64(libc.echo),
+                  i64(libc.echonl), i64(libc.icanon), i64(libc.isig),
+                  i64(libc.iexten), i64(libc.tiocgwinsz),
+                  i64(libc.tiocswinsz)]
+    end terminal
+
+    fixed if compiler.os == darwin then
+        extern(c) c_full_sync: () -> (command: i32)
+
+        kernel_agrees: () -> (yes: bool) =
+            yes = libc.f_fullfsync == c_full_sync()
+        end kernel_agrees
+    else
+        kernel_agrees: () -> (yes: bool) =
+            yes = true
+        end kernel_agrees
+    end if
+end if
+
+path: []u8 = "abi-file-facts-scratch"
+link: []u8 = "abi-file-facts-link"
+
+--  BYTES with a NUL after them, in ROOM.
+terminated: (bytes: []u8, room: []mut u8) -> (text: ptr u8 from room) =
+    for at in usize(0)..<lenof bytes do
+        room[at] = bytes[at]
+    end for
+    room[lenof bytes] = 0
+    text = addr room[0]
+end terminated
+
+--  A file platform/posix makes and gives permission bits and times, and a
+--  link to it, as C's stat and readlink read them.
+written_agrees: () -> (yes: bool) ! posix.errno =
+    posix.unlink_at(posix.working_directory, text.host_over(path))
+        else (problem)
+        _ = problem
+    end
+    made: posix.descriptor =
+        try posix.open_at(posix.working_directory, text.host_over(path),
+                          posix.writing, 0o600)
+    _ = try posix.write(made, "seven b")
+    try posix.change_mode(made, 0o640)
+    try posix.set_times(made, (seconds: 1500000000, nanoseconds: 9),
+                        (seconds: 1500000001, nanoseconds: 123456789))
+    try posix.close(made)
+    found: posix.status = try posix.status_at(posix.working_directory,
+                                              text.host_over(path), false)
+    mut room: [64]u8 = zeroed
+    yes = c_status_agrees(terminated(path, room[0..<64]), found.permissions,
+                          i64(found.size), u32(found.user), found.links,
+                          found.modified.seconds,
+                          i64(found.modified.nanoseconds)) == 1
+          and found.permissions == 0o640 and found.size == 7
+          and found.modified.nanoseconds == 123456789
+          and found.user == posix.effective_user()
+    posix.unlink_at(posix.working_directory, text.host_over(link))
+        else (problem)
+        _ = problem
+    end
+    try posix.symbolic_link_at(text.host_over(path), posix.working_directory,
+                               text.host_over(link))
+    mut name_room: [64]u8 = zeroed
+    mut target_room: [64]u8 = zeroed
+    yes = yes and c_link_agrees(terminated(link, name_room[0..<64]),
+                                terminated(path, target_room[0..<64])) == 1
+    try posix.unlink_at(posix.working_directory, text.host_over(link))
+    try posix.unlink_at(posix.working_directory, text.host_over(path))
+end written_agrees
+
+--  Root's account and group zero as platform/posix reads them, which an
+--  ABI program does through the C library, as the C library's own lookup
+--  gives them.
+accounts_agree: () -> (yes: bool) ! posix.errno | posix.no_account =
+    mut buffer: [1024]u8 = zeroed
+    root: posix.account = try posix.account_with_id(posix.user_id(0),
+                                                    buffer[0..<1024])
+    mut name: [256]u8 = zeroed
+    mut home: [256]u8 = zeroed
+    mut shell: [256]u8 = zeroed
+    yes = c_account_agrees(terminated(text.host_bytes(root.name),
+                                      name[0..<256]),
+                           terminated(text.host_bytes(root.home),
+                                      home[0..<256]),
+                           terminated(text.host_bytes(root.shell),
+                                      shell[0..<256]),
+                           u32(root.group)) == 1
+    mut groups: [1024]u8 = zeroed
+    zero: posix.group_entry = try posix.group_with_id(posix.group_id(0),
+                                                      groups[0..<1024])
+    mut group_name: [256]u8 = zeroed
+    yes = yes and c_group_agrees(terminated(text.host_bytes(zero.name),
+                                            group_name[0..<256]),
+                                 u64(posix.member_count(zero))) == 1
+end accounts_agree
+
+public main: () -> (code: i32) =
+    code = 1
+    given: [37]i64 = shared()
+    for index in usize(0)..<37 do
+        return when given[index] <> c_shared(i32(index))
+    end for
+    code = 2
+    modes: [27]i64 = terminal()
+    for index in usize(0)..<27 do
+        return when modes[index] <> c_terminal(i32(index))
+    end for
+    code = 3
+    return when not kernel_agrees()
+    code = 4
+    agrees: bool = written_agrees() else (problem)
+        _ = problem
+        return
+    end
+    return when not agrees
+    code = 5
+    same: bool = accounts_agree() else (problem)
+        _ = problem
+        return
+    end
+    return when not same
+    code = 42
+end main

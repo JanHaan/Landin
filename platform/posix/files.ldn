@@ -1,0 +1,275 @@
+--  The rest of POSIX's file system in Landin types: reading and writing at
+--  an offset, sizes and synchronizing, renaming, hard and symbolic links,
+--  permission bits, owners and file times, advisory locks of both kinds
+--  the systems have, and the working directory's path.  Each path is a
+--  host string, terminated beneath the caller as `open_at`'s is, and each
+--  call relative to a directory takes the directory as `at`, or
+--  `working_directory`.  Written once here, over the `system_*` routines
+--  linux.ldn and libc.ldn give.
+
+import core/text
+
+--  The largest offset a call takes, C's `off_t` being signed.
+largest_offset: u64 = 0x7FFFFFFFFFFFFFFF
+
+--- Read at most `lenof into` bytes of `source`, starting `offset` bytes
+--- into the file, POSIX's `pread`: the count read, zero at or past the
+--- file's end, or the errno, `espipe` for a pipe or a socket and `einval`
+--- for an offset past what the system counts.  The file's position, which
+--- `read` and `write` use, does not move.
+public link(symbol: "_landin_posix_read_at") read_at:
+    (source: descriptor, offset: u64, into: []mut u8)
+    -> (count: usize) ! errno =
+    fail einval when offset > largest_offset
+    count = try system_read_at(source, offset, into)
+end read_at
+
+--- Write at most `lenof bytes` bytes to `to`, starting `offset` bytes
+--- into the file, POSIX's `pwrite`: the count accepted, which may be
+--- short, or the errno.  A write past the end extends the file, and the
+--- bytes between its old end and `offset` read as zeros, a hole that need
+--- take no room on the device.  The position does not move.  On a file
+--- opened `append`, Linux writes at the end whatever `offset` says, and
+--- Darwin and FreeBSD write at `offset`: do not write at an offset to a
+--- file opened to append.
+public link(symbol: "_landin_posix_write_at") write_at:
+    (to: descriptor, offset: u64, bytes: []u8) -> (count: usize) ! errno =
+    fail einval when offset > largest_offset
+    count = try system_write_at(to, offset, bytes)
+end write_at
+
+--- Give the file open as `opened`, which must be open for writing, the
+--- size `size`, POSIX's `ftruncate`: what lies beyond it is cut off, and a
+--- larger size extends the file with zeros.  `einval` for a size past what
+--- the system counts or a file not open for writing.
+public link(symbol: "_landin_posix_truncate") truncate:
+    (opened: descriptor, size: u64) -> none ! errno =
+    fail einval when size > largest_offset
+    try system_truncate(opened, size)
+end truncate
+
+--- Hand what the system holds of the file open as `opened` to its device
+--- before returning, POSIX's `fsync`: its data and its status, or with
+--- `data_only` its data and only so much of its status as reading the data
+--- back needs, its size among it, `fdatasync`.  On Darwin, whose `fsync`
+--- leaves what the device caches in the device, both ask the device to
+--- write that too, `F_FULLFSYNC`, and fall back to `fsync` on a file system
+--- that refuses it.
+public link(symbol: "_landin_posix_synchronize") synchronize:
+    (opened: descriptor, data_only: bool) -> none ! errno =
+    try system_synchronize(opened, data_only)
+end synchronize
+
+--- Give the file `old` names, relative to `old_at`, the name `new`,
+--- relative to `new_at`, POSIX's `renameat`, in one step: no process sees
+--- both names or neither.  A file already named `new` is replaced in the
+--- same step, a directory only by a directory and only when it is empty.
+--- The errno: `enoent` when `old` or `new`'s parent is missing, `exdev`
+--- when the two are on different file systems, which a rename never
+--- crosses, `enotempty` or `eexist` for a directory that is not empty,
+--- `eisdir` for a file onto a directory and `enotdir` the other way, and
+--- `einval` for a directory into itself.
+public link(symbol: "_landin_posix_rename_at") rename_at:
+    (old_at: descriptor, old: text.host_string, new_at: descriptor,
+     new: text.host_string) -> none ! errno =
+    mut old_room: path_room = zeroed
+    old_path: ptr u8 = try terminate(old, old_room[0..<lenof old_room])
+    mut new_room: path_room = zeroed
+    new_path: ptr u8 = try terminate(new, new_room[0..<lenof new_room])
+    try system_rename(old_at, old_path, new_at, new_path)
+end rename_at
+
+--- Give the file `old` names, relative to `old_at`, a second name `new`,
+--- relative to `new_at`, POSIX's `linkat`, a hard link: both names are one
+--- file.  A final symbolic link of `old` is linked itself, not followed.
+--- The errno: `eexist` when `new` is taken, `exdev` across file systems,
+--- `eperm` for a directory, which no system links, and `emlink` for a file
+--- with as many names as it may have.
+public link(symbol: "_landin_posix_link_at") link_at:
+    (old_at: descriptor, old: text.host_string, new_at: descriptor,
+     new: text.host_string) -> none ! errno =
+    mut old_room: path_room = zeroed
+    old_path: ptr u8 = try terminate(old, old_room[0..<lenof old_room])
+    mut new_room: path_room = zeroed
+    new_path: ptr u8 = try terminate(new, new_room[0..<lenof new_room])
+    try system_link(old_at, old_path, new_at, new_path)
+end link_at
+
+--- Make `path`, relative to `at`, a symbolic link whose target is
+--- `target`, POSIX's `symlinkat`: a path the system follows when it meets
+--- the link, relative to the link's own directory unless it begins with
+--- `/`, which need not name anything.  `eexist` when `path` is taken.
+public link(symbol: "_landin_posix_symbolic_link_at") symbolic_link_at:
+    (target: text.host_string, at: descriptor, path: text.host_string)
+    -> none ! errno =
+    mut target_room: path_room = zeroed
+    pointed: ptr u8 = try terminate(target, target_room[0..<lenof target_room])
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_symbolic_link(pointed, at, terminated)
+end symbolic_link_at
+
+--- The target of the symbolic link `path` names, relative to `at`,
+--- POSIX's `readlinkat`, copied into `into` and lent from it: `einval` when
+--- `path` is no symbolic link, and `erange` when the target fills `into`,
+--- since a target as long as the buffer may have been cut.
+public link(symbol: "_landin_posix_read_link_at") read_link_at:
+    (at: descriptor, path: text.host_string, into: []mut u8)
+    -> (target: text.host_string from into) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    fail erange when lenof into == 0
+    count: usize = try system_read_link(at, terminated, into)
+    fail erange when count >= lenof into
+    target = text.host_over(into[0..<count])
+end read_link_at
+
+--- Set the permission bits of the file `path` names, relative to `at`, to
+--- `permissions`, POSIX's `fchmodat`, following a final symbolic link,
+--- whose own bits no system gives a meaning: `einval` for bits beyond
+--- `0o7777`, and `eperm` when the process neither owns the file nor may
+--- override that.
+public link(symbol: "_landin_posix_change_mode_at") change_mode_at:
+    (at: descriptor, path: text.host_string, permissions: u32)
+    -> none ! errno =
+    fail einval when permissions > 0o7777
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_change_mode_at(at, terminated, permissions)
+end change_mode_at
+
+--- Set the permission bits of the file open as `opened`, POSIX's
+--- `fchmod`, as `change_mode_at` sets a path's.
+public link(symbol: "_landin_posix_change_mode") change_mode:
+    (opened: descriptor, permissions: u32) -> none ! errno =
+    fail einval when permissions > 0o7777
+    try system_change_mode(opened, permissions)
+end change_mode
+
+--- Set the owner and group of the file `path` names, relative to `at`,
+--- POSIX's `fchownat`, `unchanged_user` and `unchanged_group` keeping
+--- either; with `follow` false a final symbolic link's own.  `eperm`
+--- unless the process may: only a privileged one gives a file away, and
+--- an owner may give it only to a group the owner is in.  A system may
+--- clear the set-user-ID and set-group-ID bits as it changes the owner.
+public link(symbol: "_landin_posix_change_owner_at") change_owner_at:
+    (at: descriptor, path: text.host_string, user: user_id, group: group_id,
+     follow: bool) -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_change_owner_at(at, terminated, user, group, follow)
+end change_owner_at
+
+--- Set the owner and group of the file open as `opened`, POSIX's
+--- `fchown`, as `change_owner_at` sets a path's.
+public link(symbol: "_landin_posix_change_owner") change_owner:
+    (opened: descriptor, user: user_id, group: group_id) -> none ! errno =
+    try system_change_owner(opened, user, group)
+end change_owner
+
+--- Set when the file `path` names, relative to `at`, was last read and
+--- last written, POSIX's `utimensat`, to `accessed` and `modified`; with
+--- `follow` false a final symbolic link's own.  The system sets the time
+--- it was last changed to now, which nothing else can.  `einval` for
+--- nanoseconds of a second or more; a file system keeping coarser times
+--- rounds them down.
+public link(symbol: "_landin_posix_set_times_at") set_times_at:
+    (at: descriptor, path: text.host_string, accessed: time_value,
+     modified: time_value, follow: bool) -> none ! errno =
+    fail einval when accessed.nanoseconds >= 1000000000
+      or modified.nanoseconds >= 1000000000
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_set_times_at(at, terminated, accessed, modified, follow)
+end set_times_at
+
+--- Set the two times of the file open as `opened`, POSIX's `futimens`, as
+--- `set_times_at` sets a path's.
+public link(symbol: "_landin_posix_set_times") set_times:
+    (opened: descriptor, accessed: time_value, modified: time_value)
+    -> none ! errno =
+    fail einval when accessed.nanoseconds >= 1000000000
+      or modified.nanoseconds >= 1000000000
+    try system_set_times(opened, accessed, modified)
+end set_times
+
+--- The status of the file open as `opened`, POSIX's `fstat`, as
+--- `status_at` gives a path's.
+public link(symbol: "_landin_posix_status_of") status_of:
+    (opened: descriptor) -> (result: status) ! errno =
+    result = try system_status_of(opened)
+end status_of
+
+--- The working directory's absolute path, POSIX's `getcwd`, copied into
+--- `into` and lent from it: `erange` when it does not fit with the NUL
+--- the system adds, and `enoent` when the directory has been removed.
+--- The working directory is the process's, so this module never changes
+--- it: beside threads a change would move every relative path at once,
+--- and a path relative to a directory open as `at` serves instead.
+public link(symbol: "_landin_posix_current_directory") current_directory:
+    (into: []mut u8) -> (path: text.host_string from into) ! errno =
+    fail erange when lenof into == 0
+    count: usize = try system_current_directory(into)
+    fail erange when count > lenof into
+    path = text.host_over(into[0..<count])
+end current_directory
+
+--- A shared lock: any number of holders, none of them exclusive.
+public shared_lock: atom
+--- An exclusive lock: one holder, and no shared one beside it.
+public exclusive_lock: atom
+--- What a lock is: `shared_lock` or `exclusive_lock`.
+public lock_kind: type = shared_lock | exclusive_lock
+
+--- Take a lock of `kind` on the whole file open as `opened`, waiting for
+--- it when `wait` is true, BSD's `flock`, which Linux, Darwin and FreeBSD
+--- all give: or the errno, `eagain` when another holds a lock in the way
+--- and `wait` is false, `eintr` when a signal came while waiting.  The
+--- lock is advisory, binding only programs that ask for it, and belongs to
+--- the open file `opened` is a descriptor of: a second `open_at` of the
+--- same file in the same process is another holder, which it stands in
+--- the way of, while a duplicate of `opened`, and a child that inherited
+--- it, shares it.  It lasts until `unlock`, or until every descriptor of
+--- that open file is closed.  Taking it again changes its kind, and the
+--- change is not atomic: another holder may come between.  Use one kind of
+--- lock on a file, `lock` or `lock_range`, since how the two see each
+--- other differs between systems.
+public link(symbol: "_landin_posix_lock") lock:
+    (opened: descriptor, kind: lock_kind, wait: bool) -> none ! errno =
+    try system_lock(opened, kind, wait)
+end lock
+
+--- Give up the lock `lock` took on the file open as `opened`.
+public link(symbol: "_landin_posix_unlock") unlock:
+    (opened: descriptor) -> none ! errno =
+    try system_unlock(opened)
+end unlock
+
+--- Take a lock of `kind` on `length` bytes of the file open as `opened`
+--- from `start`, a `length` of zero reaching however far the file ever
+--- will, POSIX's record lock, `fcntl`'s `F_SETLK`, or `F_SETLKW` with
+--- `wait`: or the errno, `eagain` or `eacces`, as the system chooses, when
+--- another process holds one in the way and `wait` is false, `edeadlk`
+--- when waiting would deadlock, and `ebadf` for a shared lock on a file not
+--- open for reading or an exclusive one on a file not open for writing.
+---
+--- A record lock belongs to the process, not to a descriptor: the process
+--- never stands in its own way, through any descriptor, and a lock over
+--- one it already holds replaces that part of it.  Closing any descriptor
+--- of the file, even one opened elsewhere in the program for a moment,
+--- gives up every record lock the process holds on it.  A child does not
+--- inherit one.  `lock` has none of these hazards and no byte ranges.
+public link(symbol: "_landin_posix_lock_range") lock_range:
+    (opened: descriptor, kind: lock_kind, start: u64, length: u64,
+     wait: bool) -> none ! errno =
+    fail einval when start > largest_offset or length > largest_offset
+    try system_lock_range(opened, kind, start, length, wait, true)
+end lock_range
+
+--- Give up the process's record locks on `length` bytes of the file open
+--- as `opened` from `start`, as `lock_range` counts them.
+public link(symbol: "_landin_posix_unlock_range") unlock_range:
+    (opened: descriptor, start: u64, length: u64) -> none ! errno =
+    fail einval when start > largest_offset or length > largest_offset
+    try system_lock_range(opened, shared_lock, start, length, false, false)
+end unlock_range

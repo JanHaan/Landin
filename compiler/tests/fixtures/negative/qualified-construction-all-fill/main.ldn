@@ -1,0 +1,7 @@
+--  A construction through another module's name, as through the record's
+--  own, labels at least one field before its `of` fill.
+import screens
+
+nothing: () -> (size: screens.window) =
+    size = screens.window(of zeroed)
+end nothing

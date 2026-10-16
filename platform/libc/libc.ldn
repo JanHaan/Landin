@@ -911,3 +911,455 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
 end if
+
+--  The rest of the file system: positional reads and writes, sizes,
+--  synchronizing, renaming, links, permission bits, owners, file times,
+--  locks, the working directory, terminals, and the user and group
+--  databases.  Every call is declared on the three systems where its C
+--  signature agrees; a `mode_t` is 16 bits on Darwin and FreeBSD and 32 on
+--  Linux, so the calls taking one are declared beside the system's.
+
+--- Read at most `length` bytes from `descriptor` into `data`, starting
+--- `offset` bytes into the file, without moving its position: the count,
+--- zero at or past its end, or -1 with the reason in errno.
+public extern(c) pread: (descriptor: i32, data: ptr mut u8, length: usize,
+                         offset: i64) -> (count: isize)
+
+--- Write at most `length` bytes from `data` to `descriptor`, starting
+--- `offset` bytes into the file, without moving its position: the count,
+--- or -1 with the reason in errno.
+public extern(c) pwrite: (descriptor: i32, data: ptr u8, length: usize,
+                          offset: i64) -> (count: isize)
+
+--- Give the file open as `descriptor` the size `length`, cutting it or
+--- extending it with zeros: 0, or -1 with the reason in errno.
+public extern(c) ftruncate: (descriptor: i32, length: i64) -> (status: i32)
+
+--- Hand the file's data and status to its device: 0, or -1 with the reason
+--- in errno.  On Darwin the device may still hold them in its own cache;
+--- `fcntl` with `f_fullfsync` asks it to write them.
+public extern(c) fsync: (descriptor: i32) -> (status: i32)
+
+--- Put the working directory's absolute path, with a NUL after it, in the
+--- `length` bytes at `into`: `into`'s address, or zero with the reason in
+--- errno, ERANGE when it does not fit.
+public extern(c) getcwd: (into: ptr mut u8, length: usize) -> (result: usize)
+
+--- Give the file `old`, relative to `old_directory`, the name `new`,
+--- relative to `new_directory`, replacing a file already named `new` in
+--- one step: 0, or -1 with the reason in errno.
+public extern(c) renameat: (old_directory: i32, old: ptr u8,
+                            new_directory: i32, new: ptr u8) -> (status: i32)
+
+--- Give the file `old` a second name `new`, each relative to its
+--- directory, not following a final symbolic link of `old` unless `flags`
+--- holds `at_symlink_follow`: 0, or -1 with the reason in errno.
+public extern(c) linkat: (old_directory: i32, old: ptr u8,
+                          new_directory: i32, new: ptr u8, flags: i32)
+                         -> (status: i32)
+
+--- Make `path`, relative to `directory`, a symbolic link to `target`: 0,
+--- or -1 with the reason in errno.
+public extern(c) symlinkat: (target: ptr u8, directory: i32, path: ptr u8)
+                            -> (status: i32)
+
+--- Put the target of the symbolic link `path`, relative to `directory`, in
+--- at most `length` bytes at `into`, with no NUL: the count, or -1 with the
+--- reason in errno.
+public extern(c) readlinkat: (directory: i32, path: ptr u8, into: ptr mut u8,
+                              length: usize) -> (count: isize)
+
+--- Set the owner and group of the file `path` names, relative to
+--- `directory`, either kept when it is `0xFFFFFFFF`, not following a final
+--- symbolic link with `at_symlink_nofollow`: 0, or -1 with the reason in
+--- errno.
+public extern(c) fchownat: (directory: i32, path: ptr u8, user: u32,
+                            group: u32, flags: i32) -> (status: i32)
+
+--- Set the owner and group of the file open as `descriptor`: 0, or -1 with
+--- the reason in errno.
+public extern(c) fchown: (descriptor: i32, user: u32, group: u32)
+                         -> (status: i32)
+
+--- Set the last access and modification times of the file `path` names,
+--- relative to `directory`, to the two `timespec`s at `times`, access
+--- first, a final symbolic link's own with `at_symlink_nofollow`: 0, or -1
+--- with the reason in errno.
+public extern(c) utimensat: (directory: i32, path: ptr u8, times: ptr timespec,
+                             flags: i32) -> (status: i32)
+
+--- Set the two times of the file open as `descriptor`, as `utimensat`
+--- does: 0, or -1 with the reason in errno.
+public extern(c) futimens: (descriptor: i32, times: ptr timespec)
+                           -> (status: i32)
+
+--- Take, change or give up the whole-file lock on the open file
+--- `descriptor` belongs to: `lock_sh` or `lock_ex`, with `lock_nb` not to
+--- wait, or `lock_un`.  0, or -1 with the reason in errno, EWOULDBLOCK when
+--- another open file holds it and `lock_nb` was given.
+public extern(c) flock: (descriptor: i32, operation: i32) -> (status: i32)
+
+--- `flock` operation: a shared lock.  The same on every hosted system.
+public lock_sh: i32 = 1
+--- `flock` operation: an exclusive lock.
+public lock_ex: i32 = 2
+--- `flock` flag: fail at once rather than wait.
+public lock_nb: i32 = 4
+--- `flock` operation: give the lock up.
+public lock_un: i32 = 8
+
+--- `ioctl(descriptor, request, ...)`, declared variadic as C declares it,
+--- its one variadic argument a pointer for the requests here: its result,
+--- or -1 with the reason in errno.
+public extern(c) ioctl: (descriptor: i32, request: u64, ...) -> (result: i32)
+
+--- Whether `descriptor` is a terminal: 1, or 0 with the reason in errno,
+--- ENOTTY for any other open file.
+public extern(c) isatty: (descriptor: i32) -> (yes: i32)
+
+--- The process's real user ID.  It cannot fail.
+public extern(c) getuid: () -> (user: u32)
+--- The process's effective user ID, which permission checks use.
+public extern(c) geteuid: () -> (user: u32)
+--- The process's real group ID.
+public extern(c) getgid: () -> (group: u32)
+--- The process's effective group ID.
+public extern(c) getegid: () -> (group: u32)
+
+--- Fill `result` with the status of the file open as `descriptor`: 0, or
+--- -1 with the reason in errno.
+public extern(c) fstat: (descriptor: i32, result: ptr mut file_status)
+                        -> (status: i32)
+
+--- `tcsetattr` timing: set the terminal's settings at once.  The same on
+--- every hosted system.
+public tcsanow: i32 = 0
+--- `tcsetattr` timing: once all written output has been sent.
+public tcsadrain: i32 = 1
+--- `tcsetattr` timing: once output has been sent, discarding input not yet
+--- read.
+public tcsaflush: i32 = 2
+
+--- A terminal's size, `struct winsize`: rows and columns, and pixels.  The
+--- same on every hosted system.
+public window_record: type = struct
+    rows: u16
+    columns: u16
+    width: u16
+    height: u16
+end window_record
+
+--- A record lock's start counts from the file's start, `SEEK_SET`.
+public seek_set: i16 = 0
+
+--- C's `struct group`, the same on every hosted system: the group's name,
+--- password, ID and its members, a null-terminated table of names.
+public group_record: type = struct
+    name: usize
+    password: usize
+    group: u32
+    padding: u32
+    members: usize
+end group_record
+
+--- Find the account with user ID `user`, filling `into` with pointers into
+--- the `length` bytes at `buffer` and putting `into`'s address in `found`,
+--- or zero when there is none: 0, or the errno, ERANGE when the buffer is
+--- too small.  The C library asks every database the system names, NSS
+--- on Linux.
+public extern(c) getpwuid_r: (user: u32, into: ptr mut account_record,
+                              buffer: ptr mut u8, length: usize,
+                              found: ptr mut usize) -> (error: i32)
+
+--- Find the account named `name`, as `getpwuid_r` finds one by ID.
+public extern(c) getpwnam_r: (name: ptr u8, into: ptr mut account_record,
+                              buffer: ptr mut u8, length: usize,
+                              found: ptr mut usize) -> (error: i32)
+
+--- Find the group with group ID `group`, as `getpwuid_r` finds an account.
+public extern(c) getgrgid_r: (group: u32, into: ptr mut group_record,
+                              buffer: ptr mut u8, length: usize,
+                              found: ptr mut usize) -> (error: i32)
+
+--- Find the group named `name`, as `getgrgid_r` finds one by ID.
+public extern(c) getgrnam_r: (name: ptr u8, into: ptr mut group_record,
+                              buffer: ptr mut u8, length: usize,
+                              found: ptr mut usize) -> (error: i32)
+
+fixed if compiler.os == linux then
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, to `mode`, following a final symbolic link with
+    --- `flags` zero: 0, or -1 with the reason in errno.
+    public extern(c) fchmodat: (directory: i32, path: ptr u8, mode: u32,
+                                flags: i32) -> (status: i32)
+    --- Set the permission bits of the file open as `descriptor`: 0, or -1
+    --- with the reason in errno.
+    public extern(c) fchmod: (descriptor: i32, mode: u32) -> (status: i32)
+    --- Hand the file's data to its device, and its status only where
+    --- reading the data back needs it: 0, or -1 with the reason in errno.
+    --- Darwin declares none.
+    public extern(c) fdatasync: (descriptor: i32) -> (status: i32)
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 1024
+    --- `open` flag: a terminal opened does not become the controlling one.
+    public o_noctty: i32 = 256
+    --- `fcntl` command: describe a record lock in the way, `F_GETLK`.
+    public f_getlk: i32 = 5
+    --- `fcntl` command: take or give up a record lock at once, `F_SETLK`.
+    public f_setlk: i32 = 6
+    --- `fcntl` command: take a record lock, waiting for it, `F_SETLKW`.
+    public f_setlkw: i32 = 7
+    --- A record lock's type: shared.
+    public f_rdlck: i16 = 0
+    --- A record lock's type: exclusive.
+    public f_wrlck: i16 = 1
+    --- A record lock's type: none.
+    public f_unlck: i16 = 2
+
+    --- C's `struct flock`, a record lock: its type, where its start counts
+    --- from, its start and length, zero to the end of the file however far
+    --- it reaches, and the process holding it, which `f_getlk` fills.
+    public lock_record: type = struct
+        kind: i16
+        whence: i16
+        padding: i32
+        start: i64
+        length: i64
+        process: i32
+        spare: i32
+    end lock_record
+
+    --- glibc's `struct passwd`: the account's name, password, user and
+    --- group IDs, comment, home directory and shell, the strings pointers
+    --- into the buffer the call was given.
+    public account_record: type = struct
+        name: usize
+        password: usize
+        user: u32
+        group: u32
+        comment: usize
+        home: usize
+        shell: usize
+    end account_record
+elsif compiler.os == darwin then
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, to `mode`, following a final symbolic link with
+    --- `flags` zero: 0, or -1 with the reason in errno.
+    public extern(c) fchmodat: (directory: i32, path: ptr u8, mode: u16,
+                                flags: i32) -> (status: i32)
+    --- Set the permission bits of the file open as `descriptor`: 0, or -1
+    --- with the reason in errno.
+    public extern(c) fchmod: (descriptor: i32, mode: u16) -> (status: i32)
+
+    --- `fcntl` command, Darwin's own: hand the file to its device and have
+    --- the device write what it holds in its own cache, which `fsync`
+    --- leaves there.  A file system that cannot fails with ENOTSUP.
+    public f_fullfsync: i32 = 51
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 64
+    --- `open` flag: a terminal opened does not become the controlling one.
+    public o_noctty: i32 = 131072
+    --- `fcntl` command: describe a record lock in the way, `F_GETLK`.
+    public f_getlk: i32 = 7
+    --- `fcntl` command: take or give up a record lock at once, `F_SETLK`.
+    public f_setlk: i32 = 8
+    --- `fcntl` command: take a record lock, waiting for it, `F_SETLKW`.
+    public f_setlkw: i32 = 9
+    --- A record lock's type: shared.
+    public f_rdlck: i16 = 1
+    --- A record lock's type: exclusive.
+    public f_wrlck: i16 = 3
+    --- A record lock's type: none.
+    public f_unlck: i16 = 2
+
+    --- C's `struct flock`, a record lock: its start and length, zero to the
+    --- end of the file however far it reaches, the process holding it,
+    --- which `f_getlk` fills, its type and where its start counts from.
+    public lock_record: type = struct
+        start: i64
+        length: i64
+        process: i32
+        kind: i16
+        whence: i16
+    end lock_record
+
+    --- Darwin's `struct passwd`: the account's name, password, user and
+    --- group IDs, password change time, class, comment, home directory,
+    --- shell and expiry, the strings pointers into the call's buffer.
+    public account_record: type = struct
+        name: usize
+        password: usize
+        user: u32
+        group: u32
+        changed: i64
+        class: usize
+        comment: usize
+        home: usize
+        shell: usize
+        expires: i64
+    end account_record
+
+    --- A terminal's settings, Darwin's `struct termios`, whose flags and
+    --- speeds are C `long`s: the input, output, control and local modes,
+    --- the control characters, `vmin` and `vtime` among them, and the
+    --- speeds.
+    public terminal_record: type = struct
+        input_modes: u64
+        output_modes: u64
+        control_modes: u64
+        local_modes: u64
+        characters: [20]u8
+        padding: u32
+        input_speed: u64
+        output_speed: u64
+    end terminal_record
+else
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, to `mode`, following a final symbolic link with
+    --- `flags` zero: 0, or -1 with the reason in errno.
+    public extern(c) fchmodat: (directory: i32, path: ptr u8, mode: u16,
+                                flags: i32) -> (status: i32)
+    --- Set the permission bits of the file open as `descriptor`: 0, or -1
+    --- with the reason in errno.
+    public extern(c) fchmod: (descriptor: i32, mode: u16) -> (status: i32)
+    --- Hand the file's data to its device, and its status only where
+    --- reading the data back needs it: 0, or -1 with the reason in errno.
+    --- Darwin declares none.
+    public extern(c) fdatasync: (descriptor: i32) -> (status: i32)
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 1024
+    --- `open` flag: a terminal opened does not become the controlling one.
+    public o_noctty: i32 = 32768
+    --- `fcntl` command: describe a record lock in the way, `F_GETLK`.
+    public f_getlk: i32 = 11
+    --- `fcntl` command: take or give up a record lock at once, `F_SETLK`.
+    public f_setlk: i32 = 12
+    --- `fcntl` command: take a record lock, waiting for it, `F_SETLKW`.
+    public f_setlkw: i32 = 13
+    --- A record lock's type: shared.
+    public f_rdlck: i16 = 1
+    --- A record lock's type: exclusive.
+    public f_wrlck: i16 = 3
+    --- A record lock's type: none.
+    public f_unlck: i16 = 2
+
+    --- C's `struct flock`, a record lock: its start and length, zero to the
+    --- end of the file however far it reaches, the process holding it,
+    --- which `f_getlk` fills, its type, where its start counts from and the
+    --- system holding it, zero for this one.
+    public lock_record: type = struct
+        start: i64
+        length: i64
+        process: i32
+        kind: i16
+        whence: i16
+        system: i32
+        padding: i32
+    end lock_record
+
+    --- FreeBSD's `struct passwd`: Darwin's, and which fields are filled.
+    public account_record: type = struct
+        name: usize
+        password: usize
+        user: u32
+        group: u32
+        changed: i64
+        class: usize
+        comment: usize
+        home: usize
+        shell: usize
+        expires: i64
+        fields: i32
+        padding: i32
+    end account_record
+
+    --- A terminal's settings, FreeBSD's `struct termios`: the input,
+    --- output, control and local modes, the control characters, `vmin`
+    --- and `vtime` among them, and the speeds.
+    public terminal_record: type = struct
+        input_modes: u32
+        output_modes: u32
+        control_modes: u32
+        local_modes: u32
+        characters: [20]u8
+        input_speed: u32
+        output_speed: u32
+    end terminal_record
+end if
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- Read the terminal `descriptor`'s settings into `into`: 0, or -1 with
+    --- the reason in errno, ENOTTY for any other file.
+    public extern(c) tcgetattr: (descriptor: i32, into: ptr mut terminal_record)
+                                -> (status: i32)
+    --- Set the terminal `descriptor`'s settings to `settings`, when `timing`
+    --- says: 0, or -1 with the reason in errno.
+    public extern(c) tcsetattr: (descriptor: i32, timing: i32,
+                                 settings: ptr terminal_record) -> (status: i32)
+
+    --- `terminal_record` input mode: ignore a break.  Darwin and FreeBSD
+    --- share 4.4BSD's numbers.
+    public ignbrk: u32 = 1
+    --- Input mode: a break interrupts.
+    public brkint: u32 = 2
+    --- Input mode: mark a parity error.
+    public parmrk: u32 = 8
+    --- Input mode: strip the eighth bit.
+    public istrip: u32 = 32
+    --- Input mode: read a newline as a carriage return.
+    public inlcr: u32 = 64
+    --- Input mode: ignore a carriage return.
+    public igncr: u32 = 128
+    --- Input mode: read a carriage return as a newline.
+    public icrnl: u32 = 256
+    --- Input mode: XON and XOFF control output.
+    public ixon: u32 = 512
+    --- Output mode: process output.
+    public opost: u32 = 1
+    --- Control mode: the character size's bits.
+    public csize: u32 = 768
+    --- Control mode: eight-bit characters.
+    public cs8: u32 = 768
+    --- Control mode: parity.
+    public parenb: u32 = 4096
+    --- Local mode: input is echoed.
+    public echo: u32 = 8
+    --- Local mode: a newline is echoed even without `echo`.
+    public echonl: u32 = 16
+    --- Local mode: the interrupt, quit and suspend characters raise their
+    --- signals.
+    public isig: u32 = 128
+    --- Local mode: input is read a line at a time and may be edited.
+    public icanon: u32 = 256
+    --- Local mode: the implementation's own input processing.
+    public iexten: u32 = 1024
+    --- `terminal_record` character index: how few bytes a read returns,
+    --- outside line mode.
+    public vmin: usize = 16
+    --- `terminal_record` character index: how long a read waits, in tenths
+    --- of a second, outside line mode.
+    public vtime: usize = 17
+
+    --- `ioctl` request: read a terminal's `window_record`.
+    public tiocgwinsz: u64 = 0x40087468
+    --- `ioctl` request: set a terminal's `window_record`.
+    public tiocswinsz: u64 = 0x80087467
+
+    --- Open a new pseudo-terminal's controller with the `open` flags given:
+    --- its descriptor, or -1 with the reason in errno.
+    public extern(c) posix_openpt: (flags: i32) -> (descriptor: i32)
+    --- Give the caller the pseudo-terminal of the controller `descriptor`:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) grantpt: (descriptor: i32) -> (status: i32)
+    --- Let the pseudo-terminal of the controller `descriptor` be opened: 0,
+    --- or -1 with the reason in errno.
+    public extern(c) unlockpt: (descriptor: i32) -> (status: i32)
+    --- Put the path of the controller `descriptor`'s terminal, with a NUL,
+    --- in the `length` bytes at `into`: 0, or nonzero, the errno itself
+    --- or -1 with it in errno, ERANGE when it does not fit.
+    public extern(c) ptsname_r: (descriptor: i32, into: ptr mut u8,
+                                 length: usize) -> (status: i32)
+end if

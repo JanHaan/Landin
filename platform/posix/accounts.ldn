@@ -1,0 +1,554 @@
+--  Users and groups: the IDs the system gives a process and a file, and
+--  the user and group databases that name them.  On Darwin and FreeBSD,
+--  and on Linux under --link=libc, an account is looked up through the C
+--  library, which asks every database the system is set to, a directory
+--  service or NSS's among them.  A static Linux program has no C library
+--  to ask, and reads /etc/passwd and /etc/group itself: an account kept
+--  anywhere else needs --link=libc.  `compiler.c_runtime` tells the two
+--  apart when the program is compiled.
+
+import core/text
+import platform/libc
+
+user_value: type = distinct u32
+group_value: type = distinct u32
+
+--- A user ID, `uid_t`: a handle the system gives an account, not a number
+--- to count with; `user_id(n)` and `u32(u)` convert.
+public user_id: type = user_value
+
+--- A group ID, `gid_t`, as `user_id` is a user's.
+public group_id: type = group_value
+
+--- What `change_owner_at` takes to keep a file's owner: `(uid_t)-1`.
+public unchanged_user: user_id = user_value(0xFFFFFFFF)
+
+--- What `change_owner_at` takes to keep a file's group: `(gid_t)-1`.
+public unchanged_group: group_id = group_value(0xFFFFFFFF)
+
+--- No account or group has the ID or name asked for.
+public no_account: atom
+
+--- A line of a database file that is not an entry: a field missing or
+--- too many, an empty name, or an ID that is not a decimal `u32` below
+--- `0xFFFFFFFF`.
+public malformed_entry: atom
+
+--- One account of the user database, POSIX's `struct passwd`: its name,
+--- its password field as the database keeps it, `x` or `*` where the
+--- password is kept elsewhere, its user and group IDs, the comment that
+--- often holds a full name, its home directory and its shell.  Each is a
+--- host string lent from the buffer the account was read into.
+public account: type = struct
+    name: text.host_string
+    password: text.host_string
+    user: user_id
+    group: group_id
+    comment: text.host_string
+    home: text.host_string
+    shell: text.host_string
+end account
+
+--- One group of the group database, POSIX's `struct group`: its name, its
+--- password field, its ID and its members' names, as /etc/group writes
+--- them, separated by commas, which `member_count` and `member` read.
+--- Each is a host string lent from the buffer the group was read into.
+public group_entry: type = struct
+    name: text.host_string
+    password: text.host_string
+    group: group_id
+    members: text.host_string
+end group_entry
+
+--- The process's real user ID, POSIX's `getuid`: who started it.
+public link(symbol: "_landin_posix_real_user") real_user:
+    () -> (user: user_id) =
+    user = user_value(system_real_user())
+end real_user
+
+--- The process's effective user ID, POSIX's `geteuid`, which the system
+--- checks permissions against: zero, `root`, may read and write any file
+--- whatever its permission bits say.
+public link(symbol: "_landin_posix_effective_user") effective_user:
+    () -> (user: user_id) =
+    user = user_value(system_effective_user())
+end effective_user
+
+--- The process's real group ID, POSIX's `getgid`.
+public link(symbol: "_landin_posix_real_group") real_group:
+    () -> (group: group_id) =
+    group = group_value(system_real_group())
+end real_group
+
+--- The process's effective group ID, POSIX's `getegid`.
+public link(symbol: "_landin_posix_effective_group") effective_group:
+    () -> (group: group_id) =
+    group = group_value(system_effective_group())
+end effective_group
+
+--  The fields of a database line: where each begins and ends.
+field: type = struct
+    start: usize
+    stop: usize
+end field
+
+--  Split LINE at its colons into exactly COUNT fields, or fail.
+fields_of: (line: []u8, count: usize, inout into: [7]field)
+           -> none ! malformed_entry =
+    mut found: usize = 0
+    mut start: usize = 0
+    for at in usize(0)..<lenof line do
+        if line[at] == 58 then
+            fail malformed_entry when found + 1 >= count
+            into[found] = (start: start, stop: at)
+            inc found
+            start = at + 1
+        end if
+    end for
+    fail malformed_entry when found + 1 <> count
+    into[found] = (start: start, stop: lenof line)
+end fields_of
+
+--  A database ID: nonempty decimal digits, below 0xFFFFFFFF, which is
+--  `(uid_t)-1` and names no one.
+identity_of: (digits: []u8) -> (value: u32) ! malformed_entry =
+    value = text.parse_u32(digits) else (problem)
+        _ = problem
+        fail malformed_entry
+    end
+    fail malformed_entry when value == 0xFFFFFFFF
+end identity_of
+
+--- Read one line of /etc/passwd's form, without its newline, as an
+--- account lent from `line`: seven fields separated by colons, `name`,
+--- `password`, `user`, `group`, `comment`, `home` and `shell`, the IDs
+--- decimal.  A line with another number of fields, an empty name or an
+--- ID that is not a decimal below `0xFFFFFFFF` is `malformed_entry`.  A
+--- comment, an empty line and an NIS line beginning `+` or `-`, which a
+--- lookup skips, are no accounts either.
+public link(symbol: "_landin_posix_parse_account") parse_account:
+    (line: []u8) -> (found: account from line) ! malformed_entry =
+    mut at: [7]field = [7 of (start: 0, stop: 0)]
+    try fields_of(line, 7, at)
+    fail malformed_entry when at[0].stop == at[0].start
+      or line[0] == 35 or line[0] == 43 or line[0] == 45
+    user: u32 = try identity_of(line[at[2].start..<at[2].stop])
+    group: u32 = try identity_of(line[at[3].start..<at[3].stop])
+    found = (name: text.host_over(line[at[0].start..<at[0].stop]),
+             password: text.host_over(line[at[1].start..<at[1].stop]),
+             user: user_value(user), group: group_value(group),
+             comment: text.host_over(line[at[4].start..<at[4].stop]),
+             home: text.host_over(line[at[5].start..<at[5].stop]),
+             shell: text.host_over(line[at[6].start..<at[6].stop]))
+end parse_account
+
+--- Read one line of /etc/group's form, without its newline, as a group
+--- lent from `line`: four fields, `name`, `password`, `group` and the
+--- members separated by commas, as `parse_account` reads an account.
+public link(symbol: "_landin_posix_parse_group") parse_group:
+    (line: []u8) -> (found: group_entry from line) ! malformed_entry =
+    mut at: [7]field = [7 of (start: 0, stop: 0)]
+    try fields_of(line, 4, at)
+    fail malformed_entry when at[0].stop == at[0].start
+      or line[0] == 35 or line[0] == 43 or line[0] == 45
+    group: u32 = try identity_of(line[at[2].start..<at[2].stop])
+    found = (name: text.host_over(line[at[0].start..<at[0].stop]),
+             password: text.host_over(line[at[1].start..<at[1].stop]),
+             group: group_value(group),
+             members: text.host_over(line[at[3].start..<at[3].stop]))
+end parse_group
+
+--- How many members `entry` names: the names between its commas, an
+--- empty one, as `,,` or a trailing comma leaves, not among them.
+public link(symbol: "_landin_posix_member_count") member_count:
+    (entry: group_entry) -> (count: usize) =
+    names: []u8 = text.host_bytes(entry.members)
+    count = 0
+    mut start: usize = 0
+    for at in usize(0)..<lenof names + 1 do
+        if at == lenof names or names[at] == 44 then
+            if at > start then inc count end if
+            start = at + 1
+        end if
+    end for
+end member_count
+
+--- The member `index` of `entry`, from zero, as `member_count` counts
+--- them, lent as the group is; an index at or past the count traps.
+public link(symbol: "_landin_posix_member") member:
+    (entry: group_entry, index: usize)
+    -> (name: text.host_string from entry) =
+    names: []u8 = text.host_bytes(entry.members)
+    mut start: usize = 0
+    mut seen: usize = 0
+    for at in usize(0)..<lenof names + 1 do
+        if at == lenof names or names[at] == 44 then
+            if at > start then
+                if seen == index then
+                    name = text.host_over(names[start..<at])
+                    return
+                end if
+                inc seen
+            end if
+            start = at + 1
+        end if
+    end for
+    compiler.unreachable()
+end member
+
+--- The account with the user ID `user`, read into `buffer` and lent from
+--- it: `no_account` when there is none, `erange` when `buffer` is too small
+--- for it, and the errno of reading the database otherwise.  Through the C
+--- library on Darwin, FreeBSD and Linux under --link=libc, which asks
+--- every database the system is set to; a static Linux program reads
+--- /etc/passwd, the first entry with that ID, skipping every line that is
+--- not one.  A kilobyte holds an ordinary account.
+public link(symbol: "_landin_posix_account_with_id") account_with_id:
+    (user: user_id, buffer: []mut u8)
+    -> (found: account from buffer) ! errno | no_account =
+    found = try system_account(buffer, true, u32(user), no_name[0..<0])
+end account_with_id
+
+--- The account named `name`, read into `buffer`, as `account_with_id`
+--- finds one by its ID; a name holding a NUL or a colon names none.
+public link(symbol: "_landin_posix_account_named") account_named:
+    (name: text.host_string, buffer: []mut u8)
+    -> (found: account from buffer) ! errno | no_account =
+    found = try system_account(buffer, false, 0, text.host_bytes(name))
+end account_named
+
+--- The group with the group ID `group`, read into `buffer` and lent from
+--- it, as `account_with_id` finds an account, from /etc/group on a static
+--- Linux program.  Its members' names are separated by commas whatever
+--- database gave them.
+public link(symbol: "_landin_posix_group_with_id") group_with_id:
+    (group: group_id, buffer: []mut u8)
+    -> (found: group_entry from buffer) ! errno | no_account =
+    found = try system_group(buffer, true, u32(group), no_name[0..<0])
+end group_with_id
+
+--- The group named `name`, read into `buffer`, as `group_with_id` finds
+--- one by its ID.
+public link(symbol: "_landin_posix_group_named") group_named:
+    (name: text.host_string, buffer: []mut u8)
+    -> (found: group_entry from buffer) ! errno | no_account =
+    found = try system_group(buffer, false, 0, text.host_bytes(name))
+end group_named
+
+no_name: [1]u8 = [0]
+
+--  Whether NAME could be in a database: nonempty, with no NUL and no
+--  colon, which no entry's name holds.
+name_valid: (name: []u8) -> (yes: bool) =
+    yes = lenof name > 0
+    for byte in name do
+        if byte == 0 or byte == 58 then yes = false end if
+    end for
+end name_valid
+
+fixed if compiler.os == linux and not compiler.c_runtime then
+    --  A static Linux program reads the files.  Each line of the database
+    --  is read into the caller's buffer; a line longer than the buffer is
+    --  skipped, and when no entry matched, one skipped may have, so the
+    --  answer is then `erange`.
+    passwd_path: []u8 = "/etc/passwd"
+    group_path: []u8 = "/etc/group"
+
+    --  Whether an entry's name or ID is the one asked for.
+    matches: (by_id: bool, wanted_id: u32, found_id: u32, wanted: []u8,
+              found: []u8) -> (yes: bool) =
+        if by_id then
+            yes = wanted_id == found_id
+            return
+        end if
+        yes = lenof wanted == lenof found
+        for at in usize(0)..<lenof found do
+            if yes and wanted[at] <> found[at] then yes = false end if
+        end for
+    end matches
+
+    --  The next whole line of the database in BUFFER: where it begins and
+    --  ends, or an empty line marked `ended` at the end of the file.  The
+    --  bytes from CURSOR to FILLED are read and not yet scanned.
+    scan: type = struct
+        cursor: usize
+        filled: usize
+        ended: bool
+        skipped: bool
+    end scan
+
+    line_at: type = struct
+        start: usize
+        stop: usize
+        ended: bool
+    end line_at
+
+    --  Read the next line, refilling BUFFER from SOURCE, moving what is
+    --  left of a line to its front first.  A line that fills the buffer
+    --  with no newline is skipped to its end, and noted.
+    next_line: (source: descriptor, buffer: []mut u8, inout state: scan)
+               -> (line: line_at) ! errno =
+        mut skipping: bool = false
+        loop do
+            mut at: usize = state.cursor
+            while at < state.filled and buffer[at] <> 10 do
+                inc at
+            end while
+            if at < state.filled then
+                start: usize = state.cursor
+                state.cursor = at + 1
+                if skipping then
+                    skipping = false
+                    continue
+                end if
+                line = (start: start, stop: at, ended: false)
+                return
+            end if
+            if state.ended then
+                --  The last line need not end with a newline.
+                line = (start: state.cursor, stop: state.filled, ended: false)
+                if skipping or state.cursor == state.filled then
+                    line.ended = true
+                end if
+                state.cursor = state.filled
+                return
+            end if
+            --  Keep the start of the line, and read after it.
+            kept: usize = state.filled - state.cursor
+            if kept == lenof buffer then
+                state.skipped = true
+                skipping = true
+                state.cursor = 0
+                state.filled = 0
+            else
+                for index in usize(0)..<kept do
+                    buffer[index] = buffer[state.cursor + index]
+                end for
+                state.cursor = 0
+                state.filled = kept
+            end if
+            got: usize = read(source, buffer[state.filled..<lenof buffer])
+                else (problem)
+                continue when problem == eintr
+                fail problem
+            end
+            if got == 0 then
+                state.ended = true
+            else
+                state.filled += got
+            end if
+        end loop
+    end next_line
+
+    --  Open a database file.
+    database: (path: []u8) -> (opened: descriptor) ! errno =
+        loop do
+            opened = open_at(working_directory, text.host_over(path),
+                             reading, 0) else (problem)
+                continue when problem == eintr
+                fail problem
+            end
+            return
+        end loop
+    end database
+
+    --  Forget a database file, whatever its close says.
+    closed: (opened: descriptor) -> none =
+        close(opened) else (problem)
+            _ = problem
+        end
+    end closed
+
+    system_account: (buffer: []mut u8, by_id: bool, wanted_id: u32,
+                     wanted: []u8)
+                    -> (found: account from buffer) ! errno | no_account =
+        fail no_account when not by_id and not name_valid(wanted)
+        fail erange when lenof buffer == 0
+        source: descriptor = try database(passwd_path)
+        defer closed(source)
+        mut state: scan = (cursor: 0, filled: 0, ended: false,
+                           skipped: false)
+        loop do
+            line: line_at = try next_line(source, buffer, state)
+            if line.ended then
+                fail erange when state.skipped
+                fail no_account
+            end if
+            entry: account = parse_account(buffer[line.start..<line.stop])
+                else (problem)
+                _ = problem
+                continue
+            end
+            if matches(by_id, wanted_id, u32(entry.user), wanted,
+                       text.host_bytes(entry.name)) then
+                found = entry
+                return
+            end if
+        end loop
+    end system_account
+
+    system_group: (buffer: []mut u8, by_id: bool, wanted_id: u32,
+                   wanted: []u8)
+                  -> (found: group_entry from buffer) ! errno | no_account =
+        fail no_account when not by_id and not name_valid(wanted)
+        fail erange when lenof buffer == 0
+        source: descriptor = try database(group_path)
+        defer closed(source)
+        mut state: scan = (cursor: 0, filled: 0, ended: false,
+                           skipped: false)
+        loop do
+            line: line_at = try next_line(source, buffer, state)
+            if line.ended then
+                fail erange when state.skipped
+                fail no_account
+            end if
+            entry: group_entry = parse_group(buffer[line.start..<line.stop])
+                else (problem)
+                _ = problem
+                continue
+            end
+            if matches(by_id, wanted_id, u32(entry.group), wanted,
+                       text.host_bytes(entry.name)) then
+                found = entry
+                return
+            end if
+        end loop
+    end system_group
+else
+    --  Through the C library.  The record the call fills is this module's,
+    --  and its strings lie in the caller's buffer, which each is held to
+    --  before it is lent: a pointer outside it is `unlisted`.
+
+    --  The string at ADDRESS, which must lie in BUFFER and end there.
+    inside: (buffer: []mut u8, address: usize)
+            -> (bytes: []u8 from buffer) ! errno =
+        bytes = buffer[0..<0]
+        fail unlisted when lenof buffer == 0
+        base: usize = usize(addr buffer[0])
+        fail unlisted when address < base or address >= base + lenof buffer
+        start: usize = address - base
+        mut stop: usize = start
+        while stop < lenof buffer and buffer[stop] <> 0 do
+            inc stop
+        end while
+        fail unlisted when stop == lenof buffer
+        bytes = buffer[start..<stop]
+    end inside
+
+    --  Whether a lookup that found nothing failed only because there was
+    --  nothing to find: POSIX has it return zero then, and the C libraries
+    --  have answered ENOENT, ESRCH, EBADF and EPERM for the same.
+    not_found: (error: i32) -> (yes: bool) =
+        problem: errno = errno_of(error)
+        yes = error == 0 or problem == enoent or problem == esrch
+              or problem == ebadf or problem == eperm
+    end not_found
+
+    --  Copy NAME with a NUL after it into ROOM, for a call that takes one.
+    name_in: (name: []u8, room: []mut u8) -> (terminated: ptr u8 from room)
+             ! errno =
+        fail erange when lenof name >= lenof room
+        for at in usize(0)..<lenof name do
+            room[at] = name[at]
+        end for
+        room[lenof name] = 0
+        terminated = addr room[0]
+    end name_in
+
+    system_account: (buffer: []mut u8, by_id: bool, wanted_id: u32,
+                     wanted: []u8)
+                    -> (found: account from buffer) ! errno | no_account =
+        fail no_account when not by_id and not name_valid(wanted)
+        fail erange when lenof buffer == 0
+        mut record: libc.account_record = zeroed
+        mut result: usize = 0
+        mut error: i32 = 0
+        if by_id then
+            error = libc.getpwuid_r(wanted_id, addr record, addr buffer[0],
+                                    lenof buffer, addr result)
+        else
+            mut room: [256]u8 = zeroed
+            named: ptr u8 = try name_in(wanted, room[0..<256])
+            error = libc.getpwnam_r(named, addr record, addr buffer[0],
+                                    lenof buffer, addr result)
+        end if
+        fail no_account when result == 0 and not_found(error)
+        fail errno_of(error) when error <> 0
+        fail no_account when result == 0
+        found = (name: text.host_over(try inside(buffer, record.name)),
+                 password: text.host_over(try inside(buffer, record.password)),
+                 user: user_value(record.user),
+                 group: group_value(record.group),
+                 comment: text.host_over(try inside(buffer, record.comment)),
+                 home: text.host_over(try inside(buffer, record.home)),
+                 shell: text.host_over(try inside(buffer, record.shell)))
+    end system_account
+
+    --  The group's strings are copied to the front of the caller's buffer,
+    --  members joined by commas, and the C library given the back half to
+    --  fill.
+    system_group: (buffer: []mut u8, by_id: bool, wanted_id: u32,
+                   wanted: []u8)
+                  -> (found: group_entry from buffer) ! errno | no_account =
+        fail no_account when not by_id and not name_valid(wanted)
+        fail erange when lenof buffer < 2
+        half: usize = lenof buffer / 2
+        scratch: []mut u8 = buffer[half..<lenof buffer]
+        mut record: libc.group_record = zeroed
+        mut result: usize = 0
+        mut error: i32 = 0
+        if by_id then
+            error = libc.getgrgid_r(wanted_id, addr record, addr scratch[0],
+                                    lenof scratch, addr result)
+        else
+            mut room: [256]u8 = zeroed
+            named: ptr u8 = try name_in(wanted, room[0..<256])
+            error = libc.getgrnam_r(named, addr record, addr scratch[0],
+                                    lenof scratch, addr result)
+        end if
+        fail no_account when result == 0 and not_found(error)
+        fail errno_of(error) when error <> 0
+        fail no_account when result == 0
+        name: []u8 = try inside(scratch, record.name)
+        password: []u8 = try inside(scratch, record.password)
+        mut used: usize = 0
+        name_at: usize = used
+        used = try placed(buffer, half, used, name)
+        password_at: usize = used
+        used = try placed(buffer, half, used, password)
+        members_at: usize = used
+        --  The members' table: pointers, the last one null.
+        fail unlisted when record.members == 0
+        mut entry: usize = record.members
+        mut first: bool = true
+        loop do
+            fail unlisted when entry < usize(addr scratch[0])
+              or entry + sizeof usize > usize(addr scratch[0]) + lenof scratch
+            slot: ptr usize = ptr(entry)
+            break when slot.val == 0
+            if not first then
+                used = try placed(buffer, half, used, ",")
+            end if
+            first = false
+            used = try placed(buffer, half, used, try inside(scratch, slot.val))
+            entry += sizeof usize
+        end loop
+        name_end: usize = name_at + lenof name
+        password_end: usize = password_at + lenof password
+        found = (name: text.host_over(buffer[name_at..<name_end]),
+                 password: text.host_over(buffer[password_at..<password_end]),
+                 group: group_value(record.group),
+                 members: text.host_over(buffer[members_at..<used]))
+    end system_group
+
+    --  Copy BYTES into the front half of BUFFER at USED: where the next
+    --  goes, or `erange` past the half.
+    placed: (buffer: []mut u8, half: usize, used: usize, bytes: []u8)
+            -> (next: usize) ! errno =
+        fail erange when lenof bytes > half - used
+        for at in usize(0)..<lenof bytes do
+            buffer[used + at] = bytes[at]
+        end for
+        next = used + lenof bytes
+    end placed
+end if

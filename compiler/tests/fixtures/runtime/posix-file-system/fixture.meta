@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix reads and writes at an offset, a write far past the end leaving a hole of zeros and a read past it nothing, truncates and synchronizes, renames onto a taken name in one step, links hard and symbolically, sets permission bits, owners and times by path, by a link's own and by descriptor and reads them back to the nanosecond, and gives the working directory's path, with the errno POSIX names for each failure: an offset C cannot hold, truncating a read-only descriptor, a missing name, a file onto a directory and the reverse, a taken link name, a target longer than its buffer, a link that is no link, a dangling and a looping link, bits beyond 0o7777, giving a file away unless root, nanoseconds of a second, a buffer too small for the path and a closed descriptor
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

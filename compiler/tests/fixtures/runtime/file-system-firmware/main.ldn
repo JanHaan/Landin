@@ -1,0 +1,56 @@
+--  core/io's file system within a Cortex-M0 image: the names
+--  `make_temporary` gives, made from entropy a test scripts, and memory
+--  terminals answering for their one screen.  The memory volume, the fake
+--  of the whole concept, links every entry of its conformance and does
+--  not fit the image, as runtime/volume-memory's limit records.
+import core/io
+import core/text
+
+--  The name of the file a temporary path gives, in a directory and not,
+--  and a buffer too small for it.
+names: () -> (ok: bool) ! ... =
+    bytes: [16]u8 = [10, 11, 12, 13, 14, 15, 16, 17, 0, 1, 2, 3, 4, 5, 6,
+                     255]
+    mut entropy_state: io.entropy_space = zeroed
+    source := io.entropy_over(entropy_state, bytes[0..<16])
+    mut first: [8]u8 = zeroed
+    try io.fill_random(source, first[0..<8])
+    mut second: [8]u8 = zeroed
+    try io.fill_random(source, second[0..<8])
+    mut room: [40]u8 = zeroed
+    plain: text.host_string = try io.temporary_path(text.host_over(""), first,
+                                                    room[0..<40])
+    mut other: [40]u8 = zeroed
+    nested: text.host_string =
+        try io.temporary_path(text.host_over("logs/"), second, other[0..<40])
+    mut small: [8]u8 = zeroed
+    mut met: bool = false
+    _ = io.temporary_path(text.host_over("logs"), second, small[0..<8])
+        else (problem)
+        met = problem == io.io_failed
+        plain
+    end
+    ok = met and text.host_equal(plain, ".tmp-0a0b0c0d0e0f1011")
+         and text.host_equal(nested, "logs/.tmp-00010203040506ff")
+end names
+
+public main: () -> (code: i32) =
+    code = 1
+    ok: bool = names() else (problem)
+        _ = problem
+        return
+    end
+    return when not ok
+    code = 2
+    screens: [1]io.screen = [(stream: io.file(1), size: (rows: 24,
+                                                         columns: 80))]
+    terminals := io.terminals_over(screens[0..<1])
+    size: io.window = io.window_size(terminals, io.file(1)) else (problem)
+        _ = problem
+        return
+    end
+    return when size.columns <> 80 or size.rows <> 24
+      or not io.is_terminal(terminals, io.file(1))
+      or io.is_terminal(terminals, io.file(2))
+    code = 42
+end main

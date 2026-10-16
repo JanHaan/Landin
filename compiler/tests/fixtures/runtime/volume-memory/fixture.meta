@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io's memory volume, the fake of io.file_system over the program's own nodes, creates, writes past the end leaving zeros, reads past it nothing, appends, refuses a taken name, a missing directory, a path longer than any node's room and a write that finds its node full, follows a link or not, refuses a dangling one, makes a file read-only and refuses it for writing, truncates and synchronizes, renames onto a taken name, renames a directory with what is in it, refuses one into itself, a missing name and a name a file is open on, lists links as links, refuses removing a directory that is not empty, names temporary files from scripted entropy and tries a taken one again, gives its working directory and fails the call a test chooses; core/io's memory terminals answer for their screens alone
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0560, 0570, 0900, 0940, 1030, 1100, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

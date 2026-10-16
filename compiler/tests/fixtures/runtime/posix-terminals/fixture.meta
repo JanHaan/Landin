@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix finds that the program's own input and output, which every lane gives /dev/null and captures, and a descriptor that is not open are no terminals, and that asking them a size or settings is ENOTTY; a pseudo-terminal it opens, both ends closed on exec, is a terminal whose size is set and read back, whose settings made raw pass a carriage return through unchanged and read back as they were set, and which, given back the settings it was found with, reads exactly those and turns a typed carriage return into a newline again
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

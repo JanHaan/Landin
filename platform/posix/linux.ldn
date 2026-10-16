@@ -24,7 +24,7 @@ fixed if compiler.os == linux then
         if options.truncate then flags = flags | linux.o_trunc end if
         if options.append then flags = flags | linux.o_append end if
         if options.directory then flags = flags | linux.o_directory end if
-        flags = flags | linux.o_cloexec
+        flags = flags | linux.o_cloexec | linux.o_noctty
     end flags_of
 
     system_open: (at: descriptor, path: ptr u8, options: open_options,
@@ -59,22 +59,46 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
     end system_close
 
+    --  A statx time as POSIX's.
+    time_of: (stamp: linux.statx_time) -> (time: time_value) =
+        time = (seconds: stamp.seconds, nanoseconds: stamp.nanoseconds)
+    end time_of
+
     --  statx's record is the kernel's own on every architecture, so it
-    --  needs no layout check.
+    --  needs no layout check.  Every basic field is asked for.
+    status_of_record: (record: linux.file_status) -> (result: status) =
+        result = (device: (u64(record.device_major) << 32)
+                           | u64(record.device_minor),
+                  inode: record.inode, kind: kind_of_mode(u32(record.mode)),
+                  size: record.size,
+                  permissions: u32(record.mode) & 0o7777,
+                  links: u64(record.links), user: user_id(record.uid),
+                  group: group_id(record.gid),
+                  accessed: time_of(record.accessed),
+                  modified: time_of(record.modified),
+                  changed: time_of(record.changed))
+    end status_of_record
+
     system_status: (at: descriptor, path: ptr u8, follow: bool)
                    -> (result: status) ! errno =
         mut record: linux.file_status = zeroed
         flags: i32 = if follow then 0 else linux.at_symlink_nofollow end if
         outcome: i32 = linux.statx(i32(at), path, flags,
-                                   linux.statx_type | linux.statx_ino
-                                   | linux.statx_size,
-                                   addr record)
+                                   linux.statx_basic_stats, addr record)
         fail errno_of(-outcome) when outcome < 0
-        result = (device: (u64(record.device_major) << 32)
-                           | u64(record.device_minor),
-                  inode: record.inode, kind: kind_of_mode(u32(record.mode)),
-                  size: record.size)
+        result = status_of_record(record)
     end system_status
+
+    --  The status of an open file: statx of an empty path relative to it.
+    system_status_of: (opened: descriptor) -> (result: status) ! errno =
+        mut record: linux.file_status = zeroed
+        empty: [1]u8 = [0]
+        outcome: i32 = linux.statx(i32(opened), addr empty[0],
+                                   linux.at_empty_path,
+                                   linux.statx_basic_stats, addr record)
+        fail errno_of(-outcome) when outcome < 0
+        result = status_of_record(record)
+    end system_status_of
 
     system_open_directory: (at: descriptor, path: ptr u8)
                            -> (opened: directory_stream) ! errno =
@@ -606,4 +630,176 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
         word = status
     end system_wait
+
+    system_read_at: (source: descriptor, offset: u64, into: []mut u8)
+                    -> (count: usize) ! errno =
+        mut spare: u8 = 0
+        base: ptr mut u8 = if lenof into > 0 then addr into[0]
+                           else addr spare end if
+        result: isize = linux.pread64(i32(source), base, lenof into,
+                                      i64(offset))
+        fail errno_of(i32(-result)) when result < 0
+        fail unlisted when usize(result) > lenof into
+        count = usize(result)
+    end system_read_at
+
+    system_write_at: (to: descriptor, offset: u64, bytes: []u8)
+                     -> (count: usize) ! errno =
+        spare: u8 = 0
+        base: ptr u8 = if lenof bytes > 0 then addr bytes[0]
+                       else addr spare end if
+        result: isize = linux.pwrite64(i32(to), base, lenof bytes,
+                                       i64(offset))
+        fail errno_of(i32(-result)) when result < 0
+        fail unlisted when usize(result) > lenof bytes
+        count = usize(result)
+    end system_write_at
+
+    system_truncate: (opened: descriptor, size: u64) -> none ! errno =
+        result: i32 = linux.ftruncate(i32(opened), i64(size))
+        fail errno_of(-result) when result < 0
+    end system_truncate
+
+    system_synchronize: (opened: descriptor, data_only: bool)
+                        -> none ! errno =
+        result: i32 = if data_only then linux.fdatasync(i32(opened))
+                      else linux.fsync(i32(opened)) end if
+        fail errno_of(-result) when result < 0
+    end system_synchronize
+
+    system_rename: (old_at: descriptor, old: ptr u8, new_at: descriptor,
+                    new: ptr u8) -> none ! errno =
+        result: i32 = linux.renameat2(i32(old_at), old, i32(new_at), new, 0)
+        fail errno_of(-result) when result < 0
+    end system_rename
+
+    system_link: (old_at: descriptor, old: ptr u8, new_at: descriptor,
+                  new: ptr u8) -> none ! errno =
+        result: i32 = linux.linkat(i32(old_at), old, i32(new_at), new, 0)
+        fail errno_of(-result) when result < 0
+    end system_link
+
+    system_symbolic_link: (target: ptr u8, at: descriptor, path: ptr u8)
+                          -> none ! errno =
+        result: i32 = linux.symlinkat(target, i32(at), path)
+        fail errno_of(-result) when result < 0
+    end system_symbolic_link
+
+    system_read_link: (at: descriptor, path: ptr u8, into: []mut u8)
+                      -> (count: usize) ! errno =
+        result: isize = linux.readlinkat(i32(at), path, addr into[0],
+                                         lenof into)
+        fail errno_of(i32(-result)) when result < 0
+        count = usize(result)
+    end system_read_link
+
+    system_change_mode_at: (at: descriptor, path: ptr u8, permissions: u32)
+                           -> none ! errno =
+        result: i32 = linux.fchmodat(i32(at), path, permissions)
+        fail errno_of(-result) when result < 0
+    end system_change_mode_at
+
+    system_change_mode: (opened: descriptor, permissions: u32)
+                        -> none ! errno =
+        result: i32 = linux.fchmod(i32(opened), permissions)
+        fail errno_of(-result) when result < 0
+    end system_change_mode
+
+    system_change_owner_at: (at: descriptor, path: ptr u8, user: user_id,
+                             group: group_id, follow: bool)
+                            -> none ! errno =
+        flags: i32 = if follow then 0 else linux.at_symlink_nofollow end if
+        result: i32 = linux.fchownat(i32(at), path, u32(user), u32(group),
+                                     flags)
+        fail errno_of(-result) when result < 0
+    end system_change_owner_at
+
+    system_change_owner: (opened: descriptor, user: user_id, group: group_id)
+                         -> none ! errno =
+        result: i32 = linux.fchown(i32(opened), u32(user), u32(group))
+        fail errno_of(-result) when result < 0
+    end system_change_owner
+
+    --  The two times as the kernel's pair of `timespec`s, access first.
+    times_of: (accessed: time_value, modified: time_value)
+              -> (times: [2]linux.timespec) =
+        times = [(seconds: accessed.seconds,
+                  nanoseconds: i64(accessed.nanoseconds)),
+                 (seconds: modified.seconds,
+                  nanoseconds: i64(modified.nanoseconds))]
+    end times_of
+
+    system_set_times_at: (at: descriptor, path: ptr u8, accessed: time_value,
+                          modified: time_value, follow: bool)
+                         -> none ! errno =
+        times: [2]linux.timespec = times_of(accessed, modified)
+        flags: i32 = if follow then 0 else linux.at_symlink_nofollow end if
+        result: i32 = linux.utimensat(i32(at), path, addr times[0], flags)
+        fail errno_of(-result) when result < 0
+    end system_set_times_at
+
+    system_set_times: (opened: descriptor, accessed: time_value,
+                       modified: time_value) -> none ! errno =
+        times: [2]linux.timespec = times_of(accessed, modified)
+        result: i32 = linux.utimensat(i32(opened), linux.no_path,
+                                      addr times[0], 0)
+        fail errno_of(-result) when result < 0
+    end system_set_times
+
+    --  The kernel puts the path and its NUL in the buffer and gives their
+    --  length; a directory outside the process's root comes back as a path
+    --  that does not begin with `/`, which is no path to it.
+    system_current_directory: (into: []mut u8) -> (count: usize) ! errno =
+        result: isize = linux.getcwd(addr into[0], lenof into)
+        fail errno_of(i32(-result)) when result < 0
+        fail unlisted when result == 0 or usize(result) > lenof into
+        fail enoent when into[0] <> 47
+        count = usize(result) - 1
+    end system_current_directory
+
+    system_lock: (opened: descriptor, kind: lock_kind, wait: bool)
+                 -> none ! errno =
+        mut operation: i32 = if kind == shared_lock then linux.lock_sh
+                             else linux.lock_ex end if
+        if not wait then operation = operation | linux.lock_nb end if
+        result: i32 = linux.flock(i32(opened), operation)
+        fail errno_of(-result) when result < 0
+    end system_lock
+
+    system_unlock: (opened: descriptor) -> none ! errno =
+        result: i32 = linux.flock(i32(opened), linux.lock_un)
+        fail errno_of(-result) when result < 0
+    end system_unlock
+
+    --  Take a record lock of KIND, or with TAKING false give one up.
+    system_lock_range: (opened: descriptor, kind: lock_kind, start: u64,
+                        length: u64, wait: bool, taking: bool)
+                       -> none ! errno =
+        mut record: linux.lock_record = zeroed
+        record.kind = if not taking then linux.f_unlck
+                      elsif kind == shared_lock then linux.f_rdlck
+                      else linux.f_wrlck end if
+        record.start = i64(start)
+        record.length = i64(length)
+        command: i32 = if wait then linux.f_setlkw else linux.f_setlk end if
+        result: i32 = linux.fcntl(i32(opened), command,
+                                  i64(usize(addr record)))
+        fail errno_of(-result) when result < 0
+    end system_lock_range
+
+    system_real_user: () -> (user: u32) =
+        user = linux.getuid()
+    end system_real_user
+
+    system_effective_user: () -> (user: u32) =
+        user = linux.geteuid()
+    end system_effective_user
+
+    system_real_group: () -> (group: u32) =
+        group = linux.getgid()
+    end system_real_group
+
+    system_effective_group: () -> (group: u32) =
+        group = linux.getegid()
+    end system_effective_group
 end if

@@ -286,6 +286,11 @@ accepts any supported LP64 contract; generated bindings assert their selected
 contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
 the scanner, parser, type checker or native backend.
+`compiler.c_runtime` is another early bool: true when C's runtime starts the
+program and its library is linked, always on Darwin and FreeBSD and on Linux
+under `--link=libc`, and false for a static Linux request, a check without
+emission among them, and on firmware. The driver sets the request's half
+from `--link`; the configuration stage reads the target's half.
 
 D209--D211 add independent `--optimize=none|size|speed` (default size) and
 `--specialize=off|auto|all` (default auto) controls. The driver runs verified

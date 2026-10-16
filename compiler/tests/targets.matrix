@@ -16,6 +16,7 @@ abi/darwin-varargs-stack-slots | macos-arm64
 abi/environment-from-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/host-string-pass-through | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-directory-record | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/libc-file-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-process-constants | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-socket-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
@@ -754,6 +755,7 @@ negative/pointer-union-present-arm-named-twice | linux-x86-64, linux-arm64, maco
 negative/pointer-union-two-pointers | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-zeroed | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/public-on-statement | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/qualified-construction-all-fill | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r430-assertion-arity | linux-x86-64, synthetic-32, freebsd-x86-64
 negative/r430-assertion-call | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/r430-assertion-false | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
@@ -1222,6 +1224,7 @@ negative/sunk-inout-field-in-loop | linux-x86-64, linux-arm64, macos-arm64, free
 negative/sunk-inout-not-restored | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/system-compared-with-architecture | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
 negative/system-outside-configuration | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
+negative/temporary-outlives-buffer | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-exact-identities | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-mutable-source | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-optional-cstring | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1519,6 +1522,7 @@ positive/precedence-exclusion-over-alternation | linux-x86-64, linux-arm64, maco
 positive/precedence-product-over-sum | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/precedence-shift-over-conjunction | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/precedence-sum-over-shift | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/qualified-construction-fill | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r430-fixed-options | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 positive/r430-inactive-tools | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 positive/r440-array-callback-type-argument | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
@@ -1718,6 +1722,7 @@ runtime/control-expression-function-values | linux-x86-64, linux-arm64, macos-ar
 runtime/copy-before-sink-remains-live | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-io-buffered-writer | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/core-io-erased-system | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/core-io-file-system | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-io-identity-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-io-line-reader | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/core-mem-allocators | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1784,6 +1789,7 @@ runtime/erased-parameterized-recovery | linux-x86-64, linux-arm64, macos-arm64, 
 runtime/erased-self-snapshot-transport | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/erased-shaped-argument-spills | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/evaluation-order-is-left-then-right | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/file-system-firmware | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m
 runtime/first-program | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-array-any-shapes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-array-bound-expression | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1975,15 +1981,20 @@ runtime/parameterized-type-alias-fixed-array | linux-x86-64, linux-arm64, macos-
 runtime/pointer-to-small-integer-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-union-many | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-unions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-accounts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-accounts-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/posix-broken-pipe | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-broken-pipe-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/posix-directories | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-errno | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-file-system | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-files | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-locks | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-poll | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-processes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-sockets | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-terminals | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition-trap | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r250-references | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2235,6 +2246,7 @@ runtime/text-conversion-truncated-traps | linux-x86-64, linux-arm64, macos-arm64
 runtime/text-literal-bytes | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-ordinary-conversions | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-range-slicing | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/tree-copy | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/try-inferred-in-generic-argument | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
 runtime/try-nominal-inference | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2282,6 +2294,7 @@ runtime/variant-struct-payloads | linux-x86-64, linux-arm64, macos-arm64, freebs
 runtime/variant-whole-copy-is-distinct | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/variant-zeroed-storage-is-distinct | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/view-taken-again-through-inout | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+runtime/volume-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/whole-array-elements | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/whole-arrays-copy-between-storage | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/word-count | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

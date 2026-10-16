@@ -1,0 +1,6 @@
+class: positive
+summary: a record another module declares is constructed through the module's name with a trailing of fill, zeroed or a value for each field left, as a record of the module's own is
+program: main.ldn
+root: root
+constructs: 0700, 0720, 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

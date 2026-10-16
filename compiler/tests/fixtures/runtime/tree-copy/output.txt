@@ -1,0 +1,16 @@
+directory 0755 +11 .
+link +0 dangling -> missing
+link +1 link-to-notes -> notes
+link +2 link-to-readme -> readme
+file 0444 19 +3 locked
+directory 0755 +5 notes
+file 0600 15 +4 notes/todo
+file 0644 20 +7 readme
+file 0644 20 +7 readme-again
+file 0755 22 +8 run
+file 0644 1048580 +9 sparse.bin
+11 entries copied twice, 1 socket skipped each time
+the second copy replaced 6 files and 3 links in place
+readme has two names in the source and one in the copy
+locked is read-only and refuses a write
+sparse.bin reads as zeros in its hole and as nothing past its end

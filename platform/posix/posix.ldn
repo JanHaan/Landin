@@ -90,10 +90,11 @@ public writing: open_options = (access: write_only, create: true,
 --- (or `working_directory`), with `options`; a file it creates gets the
 --- permission bits `permissions`, which the process umask filters.  The
 --- descriptor is closed when the process executes a program, POSIX's
---- `O_CLOEXEC`, set as it is opened.  The new descriptor, or the errno: `enoent` for a missing name, `enotdir`
---- when a component is not a directory, `eacces` when refused, `eexist`
---- for an `exclusive` name that is taken, `eintr` when a signal came
---- first.
+--- `O_CLOEXEC`, set as it is opened, and a terminal opened never becomes
+--- the process's controlling terminal, `O_NOCTTY`.  The new descriptor,
+--- or the errno: `enoent` for a missing name, `enotdir` when a component
+--- is not a directory, `eacces` when refused, `eexist` for an `exclusive`
+--- name that is taken, `eintr` when a signal came first.
 public link(symbol: "_landin_posix_open_at") open_at:
     (at: descriptor, path: text.host_string,
      options: open_options, permissions: u32)
@@ -150,15 +151,27 @@ public file_kind: type = regular | directory | symbolic_link | fifo
     | unknown_kind
 
 --- A file's status, POSIX's `stat`: the device and inode that identify
---- it, what it is and its size in bytes.  On Linux the device is the
+--- it, what it is and its size in bytes; its permission bits, the mode
+--- without its type, `0o644` for one its owner may write and everyone
+--- read; how many names it has, its owner and group; and when it was last
+--- read, last written and last changed in any way, a change of its status
+--- included, as the wall clock read then.  On Linux the device is the
 --- kernel's major number in the upper 32 bits and its minor in the lower,
 --- as `statx` reports them; elsewhere it is the system's `st_dev`.  Two
---- paths name the same file when both identify it alike.
+--- paths name the same file when both identify it alike.  A time the file
+--- system does not keep reads as the system gives it, often zero.
 public status: type = struct
     device: u64
     inode: u64
     kind: file_kind
     size: u64
+    permissions: u32
+    links: u64
+    user: user_id
+    group: group_id
+    accessed: time_value
+    modified: time_value
+    changed: time_value
 end status
 
 --- The status of the file `path` names, relative to the directory open as

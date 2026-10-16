@@ -3289,6 +3289,77 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Fixed_Facts_Come_From_The_Target;
 
+   --  `compiler.c_runtime` says whether C's runtime starts the program and
+   --  its library is linked: always on Darwin and FreeBSD, on Linux only
+   --  with --link=libc, and never on firmware.  A check without emission
+   --  is a static Linux request.
+   procedure C_Runtime_Comes_From_The_Link
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Runtime_Comes_From_The_Link
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Program : constant String :=
+        "public main: () -> (code: i32) =" & LF & "    code = 0" & LF
+        & "end main" & LF;
+   begin
+      Host.Add_File
+        ("system.ldn",
+         "compiler.assert(compiler.c_runtime == (compiler.os == darwin"
+         & " or compiler.os == freebsd))" & LF & Program);
+      Host.Add_File
+        ("library.ldn", "compiler.assert(compiler.c_runtime)" & LF & Program);
+      for Target in 1 .. 4 loop
+         declare
+            Args : constant Landin.Platform.Path_List := Both
+              ((if Target = 1 then "--target=linux-x86-64"
+                elsif Target = 2 then "--target=darwin-arm64"
+                elsif Target = 3 then "--target=freebsd-x86-64"
+                else "--target=synthetic-32"), "system.ldn");
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "the C runtime follows the system: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end loop;
+      declare
+         Args : Landin.Platform.Path_List;
+      begin
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("--emit=asm");
+         Args.Append ("--link=libc");
+         Args.Append ("-o");
+         Args.Append ("library.s");
+         Args.Append ("library.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "--link=libc links the C runtime on Linux: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("--target=linux-x86-64", "library.ldn"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status /= Landin.Driver.Status_Success
+              and then Ada.Strings.Fixed.Index
+                (Unbounded.To_String (Result.Report), "L0324") > 0,
+            "a static Linux request links no C runtime: "
+            & Unbounded.To_String (Result.Report));
+      end;
+   end C_Runtime_Comes_From_The_Link;
+
    procedure Invalid_Options_Are_Refused
      (Item : in out Landin.Testing.Context);
 
@@ -5844,6 +5915,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "fixed facts come from the target",
          Fixed_Facts_Come_From_The_Target'Access);
+      Landin.Testing.Register
+        (Into, "driver", "the C runtime comes from the link",
+         C_Runtime_Comes_From_The_Link'Access);
       Landin.Testing.Register
         (Into, "driver", "invalid options are refused",
          Invalid_Options_Are_Refused'Access);

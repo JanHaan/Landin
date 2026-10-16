@@ -10599,8 +10599,12 @@ package body Landin.Syntax.Parser is
                Order_Complained : Boolean := False;
                Fill_Seen        : Boolean := False;
                Fill_Complained  : Boolean := False;
+               --  A construction's callee is a type's name, written as it is
+               --  declared or through its module, `io.window(rows: 1, of
+               --  zeroed)`: [1810]'s `indexed` is either, so either takes
+               --  the trailing `of` fill.
                Direct           : constant Boolean :=
-                 Kind (Result, Callee) = Name_Reference;
+                 Kind (Result, Callee) in Name_Reference | Member_Selection;
                --  [1820]'s `arguments` may end in [1630]'s operands on any
                --  call, as the grammar derives them; which callee takes them
                --  is the checker's question, because only `assembler.block`

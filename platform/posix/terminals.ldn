@@ -1,0 +1,392 @@
+--  Terminals: whether a descriptor is one, its size in characters, its
+--  settings and raw mode, and pseudo-terminals.  A terminal's settings are
+--  each system's own record, the kernel's `struct termios` on Linux and the
+--  C library's on Darwin and FreeBSD, which this module reads, changes and
+--  writes back whole, so a program restores exactly what it found.
+
+import core/text
+import platform/libc
+import platform/linux
+
+--- A terminal's size: rows and columns of characters, and its width and
+--- height in pixels, which most terminals leave zero.
+public window_size: type = struct
+    rows: u16
+    columns: u16
+    width: u16
+    height: u16
+end window_size
+
+--- Whether `opened` is a terminal, POSIX's `isatty`: false for a file, a
+--- pipe, a socket, and a descriptor that is not open.
+public link(symbol: "_landin_posix_is_terminal") is_terminal:
+    (opened: descriptor) -> (yes: bool) =
+    yes = system_is_terminal(opened)
+end is_terminal
+
+--- The size of the terminal `opened`, `TIOCGWINSZ`: `enotty` for anything
+--- but a terminal.  A terminal nothing has sized is zero by zero.
+public link(symbol: "_landin_posix_window_size_of") window_size_of:
+    (opened: descriptor) -> (size: window_size) ! errno =
+    size = try system_window_size(opened)
+end window_size_of
+
+--- Set the size of the terminal `opened`, `TIOCSWINSZ`, as a terminal
+--- emulator does for the program it runs, which the system tells of the
+--- change with SIGWINCH: `enotty` for anything but a terminal.
+public link(symbol: "_landin_posix_set_window_size") set_window_size:
+    (opened: descriptor, size: window_size) -> none ! errno =
+    try system_set_window_size(opened, size)
+end set_window_size
+
+fixed if compiler.os == linux then
+    terminal_settings: type = linux.terminal_record
+else
+    terminal_settings: type = libc.terminal_record
+end if
+
+--- A terminal's settings, POSIX's `struct termios`, in the system's own
+--- record: read one with `terminal_mode_of`, make a raw one from it with
+--- `raw_mode`, and give either back with `set_terminal_mode`.  Its field
+--- belongs to this module.
+public terminal_mode: type = struct
+    settings: terminal_settings
+end terminal_mode
+
+--- Change a terminal's settings at once, `TCSANOW`.
+public immediately: atom
+--- Change them once everything written has been sent, `TCSADRAIN`.
+public after_output: atom
+--- Change them once everything written has been sent, discarding what was
+--- typed and not yet read, `TCSAFLUSH`: how a program enters raw mode and
+--- leaves it.
+public discarding_input: atom
+--- When `set_terminal_mode` changes the settings.
+public mode_change: type = immediately | after_output | discarding_input
+
+--- The settings of the terminal `opened`, POSIX's `tcgetattr`: `enotty`
+--- for anything but a terminal.
+public link(symbol: "_landin_posix_terminal_mode_of") terminal_mode_of:
+    (opened: descriptor) -> (mode: terminal_mode) ! errno =
+    mode = try system_terminal_mode(opened)
+end terminal_mode_of
+
+--- Give the terminal `opened` the settings `mode`, when `change` says,
+--- POSIX's `tcsetattr`.  The system may take some of them and not others,
+--- which reading them back shows.  A program that changes a terminal
+--- gives it back the settings it found, on every way out: there are no
+--- destructors, so `defer` is the idiom, and a program ended by a signal
+--- leaves the terminal as it was changed.
+public link(symbol: "_landin_posix_set_terminal_mode") set_terminal_mode:
+    (opened: descriptor, mode: terminal_mode, change: mode_change)
+    -> none ! errno =
+    try system_set_terminal_mode(opened, mode, change)
+end set_terminal_mode
+
+--- `mode` made raw, as C's `cfmakeraw` makes it: input read a byte at a
+--- time as it is typed, with no echo, no line editing, no signal from a
+--- control character, no translation of carriage returns and eight-bit
+--- characters; output passed through unprocessed, so a newline moves down
+--- without returning; and a read waiting for at least one byte.
+public link(symbol: "_landin_posix_raw_mode") raw_mode:
+    (mode: terminal_mode) -> (raw: terminal_mode) =
+    raw = system_raw_mode(mode)
+end raw_mode
+
+--- Whether `mode` reads a line at a time with echo, a terminal's ordinary
+--- settings, `ICANON` and `ECHO`: false for one `raw_mode` made.
+public link(symbol: "_landin_posix_reads_lines") reads_lines:
+    (mode: terminal_mode) -> (yes: bool) =
+    yes = system_reads_lines(mode)
+end reads_lines
+
+--- Whether two settings are the same in every mode and character, as a
+--- program restoring a terminal checks it.
+public link(symbol: "_landin_posix_same_terminal_mode") same_terminal_mode:
+    (left: terminal_mode, right: terminal_mode) -> (same: bool) =
+    same = system_same_mode(left, right)
+end same_terminal_mode
+
+--- A pseudo-terminal's two descriptors: the `controller`, which a
+--- terminal emulator reads what the program writes from and writes what
+--- is typed to, and the `terminal`, which the program uses as a terminal
+--- like any other.
+public pseudo_terminal: type = struct
+    controller: descriptor
+    terminal: descriptor
+end pseudo_terminal
+
+--- Open a new pseudo-terminal, POSIX's `posix_openpt`, `grantpt`,
+--- `unlockpt` and the terminal's path, both ends closed on exec and
+--- neither made the process's controlling terminal: `enoent` or `enodev`
+--- where the system has none, as a container without /dev/pts may not.
+--- On Linux it is /dev/ptmx and `TIOCGPTPEER`, Linux 4.13's; on Darwin the
+--- controller is marked closed on exec just after it is opened.  Close
+--- both when done.
+public link(symbol: "_landin_posix_open_pseudo_terminal") open_pseudo_terminal:
+    () -> (pair: pseudo_terminal) ! errno =
+    pair = try system_open_pseudo_terminal()
+end open_pseudo_terminal
+
+fixed if compiler.os == linux then
+    system_is_terminal: (opened: descriptor) -> (yes: bool) =
+        mut record: linux.terminal_record = zeroed
+        yes = linux.ioctl(i32(opened), linux.tcgets,
+                          i64(usize(addr record))) == 0
+    end system_is_terminal
+
+    system_window_size: (opened: descriptor) -> (size: window_size) ! errno =
+        mut record: linux.window_record = zeroed
+        result: i32 = linux.ioctl(i32(opened), linux.tiocgwinsz,
+                                  i64(usize(addr record)))
+        fail errno_of(-result) when result < 0
+        size = (rows: record.rows, columns: record.columns,
+                width: record.width, height: record.height)
+    end system_window_size
+
+    system_set_window_size: (opened: descriptor, size: window_size)
+                            -> none ! errno =
+        record: linux.window_record = (rows: size.rows, columns: size.columns,
+                                       width: size.width,
+                                       height: size.height)
+        result: i32 = linux.ioctl(i32(opened), linux.tiocswinsz,
+                                  i64(usize(addr record)))
+        fail errno_of(-result) when result < 0
+    end system_set_window_size
+
+    system_terminal_mode: (opened: descriptor) -> (mode: terminal_mode)
+                          ! errno =
+        mode = (settings: zeroed)
+        result: i32 = linux.ioctl(i32(opened), linux.tcgets,
+                                  i64(usize(addr mode.settings)))
+        fail errno_of(-result) when result < 0
+    end system_terminal_mode
+
+    system_set_terminal_mode: (opened: descriptor, mode: terminal_mode,
+                               change: mode_change) -> none ! errno =
+        request: u64 = match change
+            immediately: linux.tcsets
+            after_output: linux.tcsetsw
+            discarding_input: linux.tcsetsf
+        end match
+        result: i32 = linux.ioctl(i32(opened), request,
+                                  i64(usize(addr mode.settings)))
+        fail errno_of(-result) when result < 0
+    end system_set_terminal_mode
+
+    system_raw_mode: (mode: terminal_mode) -> (raw: terminal_mode) =
+        input: u32 = linux.ignbrk | linux.brkint | linux.parmrk | linux.istrip
+                     | linux.inlcr | linux.igncr | linux.icrnl | linux.ixon
+        local: u32 = linux.echo | linux.echonl | linux.icanon | linux.isig
+                     | linux.iexten
+        control: u32 = linux.csize | linux.parenb
+        raw = mode
+        raw.settings.input_modes = raw.settings.input_modes & ~input
+        raw.settings.output_modes = raw.settings.output_modes & ~linux.opost
+        raw.settings.local_modes = raw.settings.local_modes & ~local
+        raw.settings.control_modes = (raw.settings.control_modes & ~control)
+                                      | linux.cs8
+        raw.settings.characters[linux.vmin] = 1
+        raw.settings.characters[linux.vtime] = 0
+    end system_raw_mode
+
+    system_reads_lines: (mode: terminal_mode) -> (yes: bool) =
+        wanted: u32 = linux.icanon | linux.echo
+        yes = (mode.settings.local_modes & wanted) == wanted
+    end system_reads_lines
+
+    system_same_mode: (left: terminal_mode, right: terminal_mode)
+                      -> (same: bool) =
+        same = left.settings.input_modes == right.settings.input_modes
+               and left.settings.output_modes == right.settings.output_modes
+               and left.settings.control_modes == right.settings.control_modes
+               and left.settings.local_modes == right.settings.local_modes
+               and left.settings.line == right.settings.line
+        for index in usize(0)..<19 do
+            if left.settings.characters[index]
+              <> right.settings.characters[index] then
+                same = false
+            end if
+        end for
+    end system_same_mode
+
+    ptmx: []u8 = "/dev/ptmx"
+
+    system_open_pseudo_terminal: () -> (pair: pseudo_terminal) ! errno =
+        controller: descriptor =
+            try open_at(working_directory, text.host_over(ptmx),
+                        (access: read_write, create: false, exclusive: false,
+                         truncate: false, append: false, directory: false),
+                        0)
+        unlocked: i32 = 0
+        result: i32 = linux.ioctl(i32(controller), linux.tiocsptlck,
+                                  i64(usize(addr unlocked)))
+        if result < 0 then
+            _ = linux.close(i32(controller))
+            fail errno_of(-result)
+        end if
+        peer: i32 = linux.ioctl(i32(controller), linux.tiocgptpeer,
+                                i64(linux.o_rdwr | linux.o_noctty
+                                    | linux.o_cloexec))
+        if peer >= 0 then
+            pair = (controller: controller, terminal: descriptor(peer))
+            return
+        end if
+        --  A kernel before 4.13, or an emulator that does not pass the
+        --  request on, opens the terminal by its number's path instead.
+        terminal: descriptor = named_terminal(controller) else (problem)
+            _ = linux.close(i32(controller))
+            fail problem
+        end
+        pair = (controller: controller, terminal: terminal)
+    end system_open_pseudo_terminal
+
+    --  Open the terminal of CONTROLLER at /dev/pts/N.
+    named_terminal: (controller: descriptor) -> (terminal: descriptor)
+                    ! errno =
+        mut number: i32 = 0
+        result: i32 = linux.ioctl(i32(controller), linux.tiocgptn,
+                                  i64(usize(addr number)))
+        fail errno_of(-result) when result < 0
+        fail unlisted when number < 0
+        mut room: [32]u8 = zeroed
+        mut path := text.over(room[0..<32])
+        text.append(path, "/dev/pts/") else (problem)
+            _ = problem
+            fail enametoolong
+        end
+        text.append_u32(path, u32(number)) else (problem)
+            _ = problem
+            fail enametoolong
+        end
+        terminal = try open_at(working_directory,
+                               text.host_over(text.used(path)),
+                               (access: read_write, create: false,
+                                exclusive: false, truncate: false,
+                                append: false, directory: false), 0)
+    end named_terminal
+else
+    --  The errno the calling thread's last failing call left, as an atom.
+    terminal_failure: () -> (problem: errno) =
+        cell: ptr mut i32 = libc.errno_cell()
+        problem = errno_of(cell.val)
+    end terminal_failure
+
+    system_is_terminal: (opened: descriptor) -> (yes: bool) =
+        yes = libc.isatty(i32(opened)) == 1
+    end system_is_terminal
+
+    system_window_size: (opened: descriptor) -> (size: window_size) ! errno =
+        mut record: libc.window_record = zeroed
+        fail terminal_failure() when libc.ioctl(i32(opened), libc.tiocgwinsz,
+                                                addr record) <> 0
+        size = (rows: record.rows, columns: record.columns,
+                width: record.width, height: record.height)
+    end system_window_size
+
+    system_set_window_size: (opened: descriptor, size: window_size)
+                            -> none ! errno =
+        record: libc.window_record = (rows: size.rows, columns: size.columns,
+                                      width: size.width, height: size.height)
+        fail terminal_failure() when libc.ioctl(i32(opened), libc.tiocswinsz,
+                                                addr record) <> 0
+    end system_set_window_size
+
+    system_terminal_mode: (opened: descriptor) -> (mode: terminal_mode)
+                          ! errno =
+        mode = (settings: zeroed)
+        fail terminal_failure() when libc.tcgetattr(i32(opened),
+                                                    addr mode.settings) <> 0
+    end system_terminal_mode
+
+    system_set_terminal_mode: (opened: descriptor, mode: terminal_mode,
+                               change: mode_change) -> none ! errno =
+        timing: i32 = match change
+            immediately: libc.tcsanow
+            after_output: libc.tcsadrain
+            discarding_input: libc.tcsaflush
+        end match
+        fail terminal_failure() when libc.tcsetattr(i32(opened), timing,
+                                                    addr mode.settings) <> 0
+    end system_set_terminal_mode
+
+    fixed if compiler.os == darwin then
+        --  Darwin's modes are C `long`s.
+        flags: type = u64
+    else
+        flags: type = u32
+    end if
+
+    system_raw_mode: (mode: terminal_mode) -> (raw: terminal_mode) =
+        input: flags = flags(libc.ignbrk | libc.brkint | libc.parmrk
+                             | libc.istrip | libc.inlcr | libc.igncr
+                             | libc.icrnl | libc.ixon)
+        local: flags = flags(libc.echo | libc.echonl | libc.icanon
+                             | libc.isig | libc.iexten)
+        control: flags = flags(libc.csize | libc.parenb)
+        raw = mode
+        raw.settings.input_modes = raw.settings.input_modes & ~input
+        raw.settings.output_modes = raw.settings.output_modes
+                                    & ~flags(libc.opost)
+        raw.settings.local_modes = raw.settings.local_modes & ~local
+        raw.settings.control_modes = (raw.settings.control_modes & ~control)
+                                      | flags(libc.cs8)
+        raw.settings.characters[libc.vmin] = 1
+        raw.settings.characters[libc.vtime] = 0
+    end system_raw_mode
+
+    system_reads_lines: (mode: terminal_mode) -> (yes: bool) =
+        wanted: flags = flags(libc.icanon | libc.echo)
+        yes = (mode.settings.local_modes & wanted) == wanted
+    end system_reads_lines
+
+    system_same_mode: (left: terminal_mode, right: terminal_mode)
+                      -> (same: bool) =
+        same = left.settings.input_modes == right.settings.input_modes
+               and left.settings.output_modes == right.settings.output_modes
+               and left.settings.control_modes == right.settings.control_modes
+               and left.settings.local_modes == right.settings.local_modes
+               and left.settings.input_speed == right.settings.input_speed
+               and left.settings.output_speed == right.settings.output_speed
+        for index in usize(0)..<20 do
+            if left.settings.characters[index]
+              <> right.settings.characters[index] then
+                same = false
+            end if
+        end for
+    end system_same_mode
+
+    system_open_pseudo_terminal: () -> (pair: pseudo_terminal) ! errno =
+        made: i32 = libc.posix_openpt(libc.o_rdwr | libc.o_noctty)
+        fail terminal_failure() when made < 0
+        controller: descriptor = descriptor(made)
+        undo forgotten(controller)
+        if libc.fcntl(made, libc.f_setfd, libc.fd_cloexec) <> 0
+          or libc.grantpt(made) <> 0 or libc.unlockpt(made) <> 0 then
+            fail terminal_failure()
+        end if
+        mut name: path_room = zeroed
+        status: i32 = libc.ptsname_r(made, addr name[0], lenof name)
+        if status <> 0 then
+            fail errno_of(status) when status > 0
+            fail terminal_failure()
+        end if
+        mut length: usize = 0
+        while length < lenof name and name[length] <> 0 do
+            inc length
+        end while
+        terminal: descriptor =
+            try open_at(working_directory, text.host_over(name[0..<length]),
+                        (access: read_write, create: false, exclusive: false,
+                         truncate: false, append: false, directory: false),
+                        0)
+        pair = (controller: controller, terminal: terminal)
+    end system_open_pseudo_terminal
+
+    --  Close a descriptor just opened when what follows it fails.
+    forgotten: (opened: descriptor) -> none =
+        close(opened) else (problem)
+            _ = problem
+        end
+    end forgotten
+end if

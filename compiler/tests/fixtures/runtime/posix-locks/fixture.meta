@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's whole-file locks belong to the open file, so a second open of the file in one process stands in the way of an exclusive lock, shared ones stand together, closing another descriptor of the file leaves the lock and a copy of the process meets it; its record locks belong to the process, so two descriptors of one process never conflict, a copy of the process meets them, closing any descriptor of the file gives them all up, and a shared one needs the file open for reading, EBADF; each kind on a file of its own, since the systems differ in how the two see each other
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

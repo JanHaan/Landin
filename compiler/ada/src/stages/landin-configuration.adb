@@ -187,7 +187,7 @@ package body Landin.Configuration is
       elsif Namespace = "compiler" and then Member
         in "arch" | "os" | "word_size" | "byte_order" | "build_mode"
          | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
-         | "c_riscv_lp64d"
+         | "c_riscv_lp64d" | "c_runtime"
       then
          return "D202: compiler." & Member
            & " is available only in fixed configuration expressions";
@@ -225,6 +225,14 @@ package body Landin.Configuration is
 
    function Mode (In_Table : Table) return Build_Mode
      is (In_Table.Selected_Mode);
+
+   procedure Set_C_Runtime (Into : in out Table; Linked : Boolean) is
+   begin
+      Into.C_Runtime_Linked := Linked;
+   end Set_C_Runtime;
+
+   function C_Runtime_Requested (In_Table : Table) return Boolean
+     is (In_Table.C_Runtime_Linked);
 
    procedure Add_Override
      (Into : in out Table; Name : String; Value : String) is

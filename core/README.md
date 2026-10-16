@@ -202,6 +202,25 @@ records and their buffers: a connection and a datagram arrive at once and
 in order, a datagram no socket takes is lost, and since nothing in one
 thread could ever end a wait, a call that would wait answers `timed_out`
 at once. A test can take IPv6 away from it and inject a failure.
+The rest of the file system is one more concept outside `world`,
+`file_system`, beside `files` and `directories` rather than widening
+either, so a sink or a firmware world that only lists or only reads
+carries none of it. It opens a path with `open_options`, appending and
+exclusive creation among them; renames in one step, replacing a file
+already at the new name, which with `make_temporary` and `synchronize` is
+how a file is replaced whole; gives a `status` of size, kind,
+modification time and a read-only flag, which `set_read_only` sets;
+truncates; reads and writes at an offset without moving a file's position,
+a write past the end leaving zeros; makes temporary files exclusively
+under names drawn from an `entropy` the caller passes; and gives the
+working directory's path, never changing it, since the working directory
+is the whole process's. `terminals` is another: whether a stream is a
+terminal and its size. Mode bits, owners, links, file times, locks, a
+terminal's raw mode and accounts are POSIX's and stay in `platform/posix`.
+The fakes are a `memory_volume`, a file system in memory over the
+caller's nodes, with their paths, kinds and the room each file may grow
+into, that conforms to `reader`, `writer`, `files`, `directories` and
+`file_system` alike, and `memory_terminals` over the caller's screens.
 `core/text` builds text: a `builder` over the caller's buffer, or one
 growing through an allocator the caller erases, takes typed pieces, bytes,
 text, host strings, decimals of every width and hexadecimal, each whole or
@@ -239,6 +258,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
 | `core/io` network | Reading and writing addresses run in `runtime/network-addresses-firmware`'s 29.8 KB image at size/auto, 31.9 KB at none/off, of which the address code is about 17 KB, `ipv6_octets` alone 4.6 KB. The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 45 KB, is. |
+| `core/io` file system | The names `make_temporary` tries and the memory terminals run in `runtime/file-system-firmware`'s 18.7 KB image at size/auto, 22.2 KB at none/off. The memory volume does not fit the profile: its conformances link every entry of `reader`, `writer`, `files`, `directories` and `file_system`, so `runtime/volume-memory` needs about 106 KB at size/auto and is a recorded image limit, and a program over the volume alone that makes, writes, renames and reads one file still needed about 61 KB. |
 | `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
@@ -516,6 +536,24 @@ and UDP. Behaviour is unchanged except where noted.
 | a write to a pipe or a socket nobody reads ending the process with SIGPIPE | the write failing: `posix.epipe`, `io.disconnected` from `io.send`, `io_failed` with EPIPE from `io.write`; the argument initializer ignores SIGPIPE when it finds the default, and `posix.spawn` gives each child the default back |
 | `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock` and `entropy` | the same, and `network` too |
 | `scripts/linux_syscalls.py --tarball` to give a new wrapper its number | `scripts/linux_syscalls.py`, which writes `platform/linux/wrapped.ldn` from the committed numbers; the release is needed only to change the pin |
+
+## Migrating to the rest of the file system
+
+Two concepts beside the others give the rest of the file system and
+terminals, and `platform/posix` the rest of POSIX's. Behaviour is unchanged
+except where noted.
+
+| Was | Now |
+|---|---|
+| `renameat2`, `pread64`, `pwrite64`, `ftruncate`, `fsync` and the rest by number through `linux.system_call`, or declared `extern(c)` on Darwin and FreeBSD | `io.rename`, `io.read_at`, `io.write_at`, `io.truncate`, `io.synchronize`, `io.status_of` and `io.current_directory` through `io.file_system`, or `platform/posix`'s `rename_at`, `read_at`, `write_at`, `truncate`, `synchronize`, `status_of` and `current_directory` |
+| `io.open_write` and a file read back to append to it | `io.open_file(host, path, io.appending)`, and `io.creating` for a name no other file may have |
+| a temporary name made up by the program and checked before it is opened | `io.make_temporary(host, host, directory, buffer)`, created exclusively under a name drawn from entropy |
+| `posix.descriptor(i32(usize(file)))` for a hosted `io.file` | `hosted.descriptor_of(file)`, and `hosted.file_of(descriptor)` the other way |
+| `posix.status` of device, inode, kind and size | the same and the permission bits, links, owner, group and three times |
+| links, permission bits, owners, file times, locks and terminals by number or `extern(c)` | `posix.link_at`, `symbolic_link_at`, `read_link_at`, `change_mode_at`, `change_owner_at`, `set_times_at`, `lock`, `lock_range`, `terminal_mode_of`, `set_terminal_mode`, `raw_mode` and `open_pseudo_terminal` |
+| /etc/passwd read by hand, or `getpwuid_r` declared `extern(c)` | `posix.account_with_id`, `account_named`, `group_with_id` and `group_named`, through the C library wherever there is one and from the files on a static Linux program |
+| an open of a terminal that could make it the process's controlling terminal | every `platform/posix` open is `O_NOCTTY` |
+| `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock`, `entropy` and `network` | the same, and `file_system` and `terminals` too |
 
 ## Migrating container providers and indices
 

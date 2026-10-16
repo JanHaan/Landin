@@ -48,6 +48,12 @@ package Landin.Configuration is
    procedure Set_Mode (Into : in out Table; Mode : Build_Mode);
    function Mode (In_Table : Table) return Build_Mode;
 
+   --  Whether the request links the C runtime and library on a system
+   --  that may go without them, Linux with --link=libc: the half of
+   --  `compiler.c_runtime` that the target alone does not decide.
+   procedure Set_C_Runtime (Into : in out Table; Linked : Boolean);
+   function C_Runtime_Requested (In_Table : Table) return Boolean;
+
    --  Shared explanation for a tool member outside its enabled context.
    function Tool_Advice (Namespace, Member : String) return String;
 
@@ -144,6 +150,7 @@ private
       Linked   : Libraries.Vector;
       Declared : Option_Sites.Vector;
       Selected_Mode : Build_Mode := Debug;
+      C_Runtime_Linked : Boolean := False;
    end record;
 
 end Landin.Configuration;

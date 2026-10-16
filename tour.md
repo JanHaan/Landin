@@ -3704,6 +3704,10 @@ bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
 the selected C ABI rather
 than inferring it from pointer width or architecture: Linux and Apple
 arm64 share `compiler.arch == arm64` and answer differently here.
+`compiler.c_runtime` says whether C's runtime starts the program and its
+library is linked: always on Darwin and FreeBSD, on Linux only when the
+build asks with `--link=libc`, and never on firmware, so a library calls
+the C library only where it is there.
 `compiler.os` names the target's hosted system, `linux`, `darwin`, `freebsd`
 or `freestanding`, independently of its C calling convention. Linux and
 FreeBSD share a C transport on each architecture, but libc record layouts

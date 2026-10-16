@@ -2322,6 +2322,11 @@ package body Landin.Driver is
                (if Mode = "debug" then Landin.Configuration.Debug
                 else Landin.Configuration.Release));
          end loop;
+         --  `compiler.c_runtime` is true on Linux exactly when the request
+         --  keeps C's runtime; the other systems always link it.
+         Landin.Configuration.Set_C_Runtime
+           (Landin.Stages.Configurations (Context).all,
+            Link_Mode = Link_Libc);
          for Option of Options loop
             declare
                Separator : constant Natural :=

@@ -55,7 +55,8 @@ HOSTED = ("Standard input, files and directories",
           "The POSIX layer and host strings",
           "Formatting, buffered text and byte blocks",
           "The environment and processes", "Time and randomness", "Sockets",
-          "The rest of the file system", "Dynamic loading")
+          "The rest of the file system", "The recurring parser frictions",
+          "Dynamic loading")
 
 
 class RoadmapProgress(unittest.TestCase):

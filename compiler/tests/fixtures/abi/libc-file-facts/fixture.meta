@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: platform/libc's lock numbers and struct flock, struct winsize, struct passwd and struct group, TCSA timings and O_NOCTTY and AT_SYMLINK_FOLLOW, each system's terminal record, modes and window requests, the kernel's struct termios, requests and statx flags on Linux and F_FULLFSYNC on Darwin, each held to the system's own C headers; a file platform/posix makes and gives permission bits and times, and a link to it, read the same through C's stat and readlink, and root's account and group zero read through platform/posix as the C library's own lookups give them
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

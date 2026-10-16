@@ -421,7 +421,7 @@ not a verdict.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Eighteen of them are collected in `examples.md`
+single-construct probes. Nineteen of them are collected in `examples.md`
 and use the language and the hosted library; among them:
 
 - [sensors](fixtures/runtime/sensors/main.ldn) polls two kinds of sensor
@@ -493,7 +493,7 @@ test $? -eq 42
 
 Each classic exercise returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
-checks all eighteen on each full gate run. `AGENTS.md` describes the verified
+checks all nineteen on each full gate run. `AGENTS.md` describes the verified
 explanatory-only reuse exception.
 
 The test program validates its complete suite-name inventory before any

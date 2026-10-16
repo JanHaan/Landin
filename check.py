@@ -121,6 +121,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
     ("Echo over loopback",
      "compiler/tests/fixtures/runtime/network-echo/main.ldn"),
+    ("Copying a tree",
+     "compiler/tests/fixtures/runtime/tree-copy/main.ldn"),
 ]
 
 #  A running example returns 42 once its own checks pass.  One that reads
@@ -150,6 +152,10 @@ SHARED_ROUTINES = {
     "compiler/tests/fixtures/runtime/network-echo/main.ldn": {
         "compiler/tests/fixtures/runtime/network-echo-memory/main.ldn":
             ("serve", "tcp_echo", "udp_echo", "quoted", "report"),
+    },
+    "compiler/tests/fixtures/runtime/posix-accounts/main.ldn": {
+        "compiler/tests/fixtures/runtime/posix-accounts-libc/main.ldn":
+            ("looked_up",),
     },
 }
 

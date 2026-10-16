@@ -1762,7 +1762,13 @@ whose plain `char` is unsigned, and RV64 Linux LP64D, also with unsigned
 plain `char`.
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
 and `compiler.c_riscv_lp64d` are their respective fixed bool configuration facts, each true for its own ABI
-alone, not guesses from pointer width or architecture spelling. The ordinary
+alone, not guesses from pointer width or architecture spelling.
+`compiler.c_runtime` is a fixed bool configuration fact too: true when C's
+runtime starts the program and its library is linked, which on Darwin and
+FreeBSD is always and on Linux only for a request with `--link=libc`, and
+false for every other Linux request, a check that emits nothing among
+them, and on a target with no hosted system. A source selects C library
+calls by it, so a static Linux program never reaches one. The ordinary
 `platform/c` aliases assert one supported fact before exposing `c_char`, `c_schar`,
 `c_uchar`, `c_short`, `c_ushort`,
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
@@ -19256,3 +19262,138 @@ are designed.
 **Pinned by** `runtime/posix-sockets`, which fails when close-on-exec is
 removed, and `abi/libc-socket-facts`, which holds each system's constants and
 layouts to its headers.
+
+### D325 — The rest of the file system is a concept of its own
+
+**The tour said** at [1660] that a program reaches its host through
+capabilities, and D268's `files` opened, read, wrote and closed through a
+hidden position.
+
+**Chosen:** `io.file_system` is a concept outside `world` beside `files` and
+`directories`, with `open_file`, `rename`, `status_of`, `status_of_file`,
+`set_read_only`, `synchronize`, `truncate`, `read_at`, `write_at`,
+`make_temporary` and `current_directory`. Opening takes an `open_options`
+record of `read`, `write`, `append`, `create`, `exclusive` and `truncate`, with
+presets `updating`, `appending` and `creating`; an impossible combination is
+`io_failed`, EINVAL kept, before the system is asked. `rename` replaces a
+taken name in one step, as POSIX and Windows' replacing move do; ENOENT is
+`not_found`, EACCES, EPERM and EROFS `no_access`, and everything else, EXDEV
+and ENOTDIR among them, `io_failed` with its errno, since rename's ENOTDIR also
+means a directory onto a file and D287 does not apply. `io.status` is a size,
+an `entry_kind`, a modification `wall_time` and `read_only`, which means no
+permission bit lets anyone write; `set_read_only(false)` restores the owner's
+write bit alone, in two calls. `synchronize(data_only)` is `fsync` or
+`fdatasync`, and on Darwin `F_FULLFSYNC`, falling back to `fsync` where a file
+system refuses it. `truncate` takes an open file only. `read_at` may return
+short and returns zero at or past the end; `write_at` writes everything,
+leaving a hole of zeros past the end; writing at an offset to a file opened
+for appending is a documented hazard, since Linux ignores the offset there.
+The working directory can be read and is never changed, since it is
+process-wide state beside threads. `io.terminals` is a second concept, whether
+a stream is a terminal and its window size, failing `not_a_terminal`. The
+fakes are `io.memory_volume`, a node-based volume for all five file concepts,
+which does not fit Cortex-M0 because its conformances link every entry, and
+`io.memory_terminals`.
+
+**The alternatives:** widening `files` or `world`, which every conformance and
+memory image would carry; a concept refining all five, which every provider
+would have to meet; atom-valued access fields or a builder for opening; a
+replacing rename's opposite, which FreeBSD cannot do; permission bits in
+`core`, which D297 keeps out; `access(2)`, whose answer depends on who asks;
+plain `fsync` on Darwin, which leaves the drive's cache; a path `truncate`,
+which races; a seek position; refusing offset writes to appending files, an
+extra call each time; and changing the working directory.
+
+**Pinned by** `runtime/tree-copy`, the published consumer, whose oracles are a
+rename onto an existing name, a link listed without being followed, a write
+refused on a read-only file and a read past the end; `runtime/core-io-file-system`,
+`runtime/volume-memory` and `runtime/file-system-firmware`, which runs on
+Cortex-M0.
+
+### D326 — A temporary file is made exclusively from entropy the caller passes
+
+**The tour said** nothing of temporary files.
+
+**Chosen:** `io.make_temporary(host, names, directory, buffer)` creates
+`.tmp-` and sixteen hexadecimal digits in a directory, exclusively, close on
+exec and with mode 0600, the digits drawn from the `io.entropy` source given
+as `names`; a taken name is tried again up to sixteen times, then `io_failed`
+with EEXIST kept. Nothing removes the file: the caller renames it into place
+or removes it. The result names the file `from` the caller's buffer.
+
+**The alternatives:** `O_TMPFILE`, Linux's alone; `mkstemp`, which a static
+Linux program has no C library for; the provider's own entropy, which leaves
+the collision path untestable; and removal on close, which needs destructors.
+
+**Pinned by** `runtime/core-io-file-system`, which forces a collision, and
+`negative/temporary-outlives-buffer`.
+
+### D327 — `platform/posix` gives links, modes, owners, times and both kinds of lock
+
+**The tour said** nothing of these beneath the portable concepts.
+
+**Chosen:** every open in the POSIX layer is `O_NOCTTY`, so opening a terminal
+never makes it the controlling one. `posix.status` gains permission bits, a
+link count, a `user_id`, a `group_id` and three times. `link_at` never follows
+the old name's last link, and `read_link_at` fails `erange` when the target
+fills the buffer. `change_mode(_at)` follows links, since Linux's `fchmodat`
+cannot do otherwise, and refuses bits above 0o7777; `change_owner(_at)` and
+`set_times(_at)` take a `follow` flag, and times are always both given. Both
+kinds of lock every system has are offered: `lock` and `unlock`, `flock`'s,
+whole-file and owned by the open file, and `lock_range` and `unlock_range`,
+POSIX record locks owned by the process, not inherited by a child and all
+dropped when any descriptor of the file is closed, a hazard documented and
+pinned. A refused lock is `eagain`, or `eacces` for a record lock, and the
+documentation advises one kind per file.
+
+**The alternatives:** an open option for the controlling terminal, which widens
+every options literal; Linux's open-file-description locks, Linux's alone;
+and one kind of lock.
+
+**Pinned by** `runtime/posix-file-system`, `runtime/posix-locks` and
+`abi/libc-file-facts`, which holds each system's records and constants to its
+headers.
+
+### D328 — A terminal's mode is the system's own record
+
+**The tour said** nothing of terminals.
+
+**Chosen:** `posix.terminal_mode` wraps each system's own record, the kernel's
+`termios` through `ioctl` on Linux, never the C library's, and `tcgetattr` on
+Darwin and FreeBSD. `posix.raw_mode` applies `cfmakeraw`'s flags, and restoring
+the mode is the caller's, with `defer`. `posix.open_pseudo_terminal` opens
+`/dev/ptmx` and asks `TIOCGPTPEER` on Linux, falling back to `/dev/pts/N`, and
+uses `posix_openpt`, `grantpt`, `unlockpt` and `ptsname_r` elsewhere, both ends
+closed on exec.
+
+**The alternatives:** one portable terminal record, which the systems' flags do
+not share; and restoring the mode when a value's storage ends, which needs
+destructors.
+
+**Pinned by** `runtime/posix-terminals`, over a pseudo-terminal it opens.
+
+### D329 — Accounts are read where the system keeps them, chosen by `compiler.c_runtime`
+
+**The tour said** at [1975] that the compiler states fixed facts about the
+target, and nothing said whether a C runtime is present.
+
+**Chosen:** the fixed fact `compiler.c_runtime` is true on Darwin and FreeBSD,
+true on Linux only under `--link=libc`, and false otherwise. On a C runtime
+the account and group lookups use the `get*_r` calls, which ask NSS or the
+directory service; a static Linux program reads `/etc/passwd` and `/etc/group`
+itself, a line at a time in the caller's buffer, taking the first match, so
+accounts kept elsewhere need `--link=libc`. A comment, a NIS `+` or `-` line,
+a line with the wrong number of fields, an empty name or an identifier that
+is not a decimal below 0xFFFFFFFF is no entry; a line too long for the buffer
+is skipped, and if nothing matched after one the answer is `erange`; empty
+member names are skipped. On the C route a missing entry, or ENOENT, ESRCH,
+EBADF or EPERM with none, is `no_account`.
+
+**The alternatives:** deciding when the program runs, though a static program
+can refer to no C symbol at all (D280); an option the driver sets out of
+sight; and reading the files on Linux even under the C runtime, which hides
+the accounts NSS keeps.
+
+**Pinned by** `runtime/posix-accounts`, which parses a database given on
+standard input, `runtime/posix-accounts-libc` and the driver case `the C
+runtime comes from the link`.

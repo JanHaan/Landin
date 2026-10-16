@@ -1,0 +1,22 @@
+no account
+no account
+account root user 0 group 0 comment root home /root shell /bin/sh password x
+account daemon user 1 group 1 comment The daemon home /usr/sbin shell /usr/sbin/nologin password *
+no account
+no account
+no account
+no account
+no account
+no account
+no account
+no account
+no account
+account empty user 7 group 7 comment  home  shell  password 
+no account
+account émile user 1000 group 1000 comment Émile Zola home /home/émile shell /bin/zsh password x
+group wheel id 0 members 2: [root] [daemon]
+group staff id 20 members 0:
+group solo id 30 members 1: [one]
+group commas id 40 members 2: [a] [b]
+no group
+no group

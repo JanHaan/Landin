@@ -1,0 +1,6 @@
+--  A record another module declares, which the fixture constructs.
+--- A terminal's size in characters.
+public window: type = struct
+    rows: u16
+    columns: u16
+end window

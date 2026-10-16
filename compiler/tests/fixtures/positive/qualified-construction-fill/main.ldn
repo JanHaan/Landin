@@ -1,0 +1,14 @@
+--  A record another module declares is constructed through that module's
+--  name with a trailing `of` fill for the fields it does not label, as a
+--  record of the module's own is.
+import screens
+
+--  A terminal of 24 rows whose columns the fill leaves zero.
+narrow: () -> (size: screens.window) =
+    size = screens.window(rows: 24, of zeroed)
+end narrow
+
+--  A terminal of 24 rows whose columns the fill gives 80.
+standard: () -> (size: screens.window) =
+    size = screens.window(rows: 24, of 80)
+end standard

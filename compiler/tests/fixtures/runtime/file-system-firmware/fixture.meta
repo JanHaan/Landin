@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io's file system within a Cortex-M0 image: the names make_temporary gives, made from scripted entropy, in a directory and not, refusing a buffer too small with io_failed, and memory terminals answering for their one screen and no other file; the memory volume does not fit, as runtime/volume-memory's limit records
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

@@ -1,0 +1,180 @@
+--  platform/posix's terminals.  The program's own streams are no terminal
+--  under any lane, which gives it /dev/null as its input and captures what
+--  it writes, so asking one for a size or settings is ENOTTY.  A
+--  pseudo-terminal is one: its size is set and read back, its settings
+--  made raw, which passes a carriage return through as it is typed, and
+--  given back exactly as they were found, which turns one into a newline
+--  again.
+import core/text
+import platform/posix
+
+--  Write LINE to standard output.
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [64]u8 = zeroed
+    mut made := text.over(line[0..<64])
+    number: i32 = posix.number(problem)
+    text.format(made, "{}={}\n", [any(addr name), any(addr number)])
+        else (ignored)
+        _ = ignored
+    end
+    say(text.used(made))
+end said
+
+--  Whether asking OPENED for its size is refused, ENOTTY.
+size_refused: (opened: posix.descriptor) -> (refused: bool) =
+    refused = false
+    size: posix.window_size = posix.window_size_of(opened) else (problem)
+        said("winsize-not-terminal", problem)
+        refused = problem == posix.enotty
+        return
+    end
+    _ = size
+end size_refused
+
+--  Whether asking OPENED for its settings is refused, ENOTTY.
+mode_refused: (opened: posix.descriptor) -> (refused: bool) =
+    refused = false
+    mode: posix.terminal_mode = posix.terminal_mode_of(opened) else (problem)
+        said("tcgetattr-not-terminal", problem)
+        refused = problem == posix.enotty
+        return
+    end
+    _ = mode
+end mode_refused
+
+--  The program's standard input and output are no terminals, nor is a
+--  descriptor that is not open, and the first two refuse a terminal's
+--  questions.
+no_terminal: () -> (ok: bool) =
+    ok = not posix.is_terminal(posix.standard_input)
+         and not posix.is_terminal(posix.standard_output)
+         and not posix.is_terminal(posix.descriptor(-1))
+         and size_refused(posix.standard_input)
+         and mode_refused(posix.standard_output)
+end no_terminal
+
+--  Read COUNT bytes from TERMINAL into INTO, waiting up to five seconds for
+--  each part: how many came.
+gathered: (terminal: posix.descriptor, into: []mut u8) -> (count: usize) =
+    count = 0
+    while count < lenof into do
+        mut watched: [1]posix.poll_entry =
+            [posix.watch(terminal, posix.poll_input)]
+        ready: usize = posix.poll(watched[0..<1], 5000) else (problem)
+            said("poll", problem)
+            return
+        end
+        return when ready == 0
+        got: usize = posix.read(terminal, into[count..<lenof into])
+            else (problem)
+            said("read", problem)
+            return
+        end
+        return when got == 0
+        count += got
+    end while
+end gathered
+
+--  Type BYTES at the pseudo-terminal's controller and read what its
+--  terminal gives, into INTO: whether it is WANTED.
+typed: (pair: posix.pseudo_terminal, bytes: []u8, wanted: []u8,
+        into: []mut u8) -> (yes: bool) =
+    yes = false
+    sent: usize = posix.write(pair.controller, bytes) else (problem)
+        said("write", problem)
+        return
+    end
+    return when sent <> lenof bytes
+    count: usize = gathered(pair.terminal, into[0..<lenof wanted])
+    return when count <> lenof wanted
+    yes = true
+    for at in usize(0)..<count do
+        if into[at] <> wanted[at] then yes = false end if
+    end for
+end typed
+
+--  A pseudo-terminal: a terminal of the size set, read a line at a time
+--  until made raw, and the same as it was found once given back.
+pseudo: (pair: posix.pseudo_terminal) -> (ok: bool) =
+    ok = false
+    return when not posix.is_terminal(pair.terminal)
+    first: bool = posix.closed_on_exec(pair.controller) else (problem)
+        said("cloexec", problem)
+        false
+    end
+    second: bool = posix.closed_on_exec(pair.terminal) else (problem)
+        said("cloexec", problem)
+        false
+    end
+    return when not first or not second
+    posix.set_window_size(pair.terminal,
+                          (rows: 24, columns: 80, width: 0, height: 0))
+        else (problem)
+        said("set-winsize", problem)
+        return
+    end
+    size: posix.window_size = posix.window_size_of(pair.terminal)
+        else (problem)
+        said("winsize", problem)
+        return
+    end
+    return when size.rows <> 24 or size.columns <> 80
+    original: posix.terminal_mode = posix.terminal_mode_of(pair.terminal)
+        else (problem)
+        said("tcgetattr", problem)
+        return
+    end
+    return when not posix.reads_lines(original)
+    raw: posix.terminal_mode = posix.raw_mode(original)
+    posix.set_terminal_mode(pair.terminal, raw, posix.discarding_input)
+        else (problem)
+        said("tcsetattr", problem)
+        return
+    end
+    taken: posix.terminal_mode = posix.terminal_mode_of(pair.terminal)
+        else (problem)
+        said("tcgetattr", problem)
+        return
+    end
+    return when posix.reads_lines(taken)
+      or not posix.same_terminal_mode(raw, taken)
+    mut buffer: [8]u8 = zeroed
+    return when not typed(pair, "x\r", "x\r", buffer[0..<8])
+    posix.set_terminal_mode(pair.terminal, original, posix.discarding_input)
+        else (problem)
+        said("tcsetattr", problem)
+        return
+    end
+    back: posix.terminal_mode = posix.terminal_mode_of(pair.terminal)
+        else (problem)
+        said("tcgetattr", problem)
+        return
+    end
+    return when not posix.same_terminal_mode(original, back)
+    ok = typed(pair, "y\r", "y\n", buffer[0..<8])
+end pseudo
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not no_terminal()
+    code = 2
+    pair: posix.pseudo_terminal = posix.open_pseudo_terminal() else (problem)
+        said("openpt", problem)
+        return
+    end
+    code = 3
+    good: bool = pseudo(pair)
+    posix.close(pair.terminal) else (problem)
+        said("close", problem)
+    end
+    posix.close(pair.controller) else (problem)
+        said("close", problem)
+    end
+    return when not good
+    code = 42
+end main

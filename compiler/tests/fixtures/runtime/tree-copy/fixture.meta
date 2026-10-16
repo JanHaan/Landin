@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published tree copy builds a scratch tree and copies it twice as cp -a does, each file into a temporary file renamed into place and each symbolic link made under a fresh name and renamed, keeping contents with their holes, permission bits and times and links as links, skipping a socket; the second copy replaces every entry of the first in one step, the listing reports links without following them, a read-only file refuses a write through a read-only descriptor and to an open for writing unless the process is root, a read past the end of a sparse file gives nothing, and a file with two names is two files in the copy
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 0570, 0790, 0900, 0940, 0960, 1030, 1100, 1110, 1130, 1150, 1210, 1280, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

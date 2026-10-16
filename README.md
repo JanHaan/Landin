@@ -376,7 +376,15 @@ This is the maintained inventory of what the compiler does today:
   buffered writer among them; a memory network of loopback addresses in
   the caller's buffers is its fake. A write to a peer that has gone is an
   error atom, since a hosted process ignores SIGPIPE and gives its children
-  the default back.
+  the default back. The rest of the file system is another: opening with
+  options, appending and exclusive creation among them, renaming that
+  replaces a taken name in one step, a status of size, kind, modification
+  time and a read-only flag, read-only files, synchronizing, truncation,
+  reading and writing at an offset, temporary files created exclusively
+  under names drawn from entropy, and the working directory's path; and
+  terminals, whether a stream is one and its size, one more. A memory
+  volume over the caller's nodes fakes the file system, and memory
+  terminals the terminals.
   `core/random` is a deterministic generator, xoshiro256**, seeded from a
   fixed seed or from entropy, which draws the same sequence on every target,
   Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered
@@ -399,7 +407,12 @@ This is the maintained inventory of what the compiler does today:
   `hosted/heap` and `hosted/io` supply the hosted heap and
   system I/O capabilities, written once over `platform/posix`, which gives
   POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
-  waiting and sockets, Unix-domain ones among them, in Landin types, every
+  waiting and sockets, Unix-domain ones among them, reading and writing at
+  an offset, renaming, hard and symbolic links, permission bits, owners and
+  file times, whole-file and record locks, terminals, their raw mode and
+  pseudo-terminals, and the user and group databases, read from
+  /etc/passwd and /etc/group by a static Linux program and through the C
+  library elsewhere, in Landin types, every
   descriptor closed on exec,
   with a descriptor handle type and errno atoms that keep their numbers,
   over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
@@ -520,7 +533,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.34 — The rest of the file system (planned).**
+**Next roadmap item: R13.36 — The recurring parser frictions (planned).**
 
 ## Questions, bugs and ideas
 

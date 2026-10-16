@@ -1,0 +1,185 @@
+--  Users and groups.  The program reads lines of /etc/passwd's form from
+--  its standard input, an empty line and then lines of /etc/group's,
+--  through platform/posix's parsers, and says what each holds or that it
+--  is no entry: a comment, an NIS line, a field missing or too many, an
+--  empty name, and an ID that is not a decimal below 0xFFFFFFFF.  It then
+--  looks up the real databases, which every system holds root in, and
+--  checks what each lookup refuses, writing nothing a system could
+--  answer its own way.
+import core/io
+import core/text
+import hosted/io as hosted
+import platform/posix
+
+--  A lookup gave something other than what it was asked for.
+mismatched: atom
+
+--  Write what the account LINE holds, or that it holds none.
+account_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
+              -> none ! ... =
+    mut room: [256]u8 = zeroed
+    mut made := text.over(room[0..<256])
+    found: posix.account = posix.parse_account(line) else (problem)
+        _ = problem
+        try io.put(out, "no account\n")
+        return
+    end
+    user: u32 = u32(found.user)
+    group: u32 = u32(found.group)
+    try text.format(made, "account {} user {} group {} comment {} home {} shell {} password {}\n",
+                    [any(addr found.name), any(addr user), any(addr group),
+                     any(addr found.comment), any(addr found.home),
+                     any(addr found.shell), any(addr found.password)])
+    try io.put(out, text.used(made))
+end account_line
+
+--  Write what the group LINE holds, or that it holds none.
+group_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
+            -> none ! ... =
+    mut room: [256]u8 = zeroed
+    mut made := text.over(room[0..<256])
+    found: posix.group_entry = posix.parse_group(line) else (problem)
+        _ = problem
+        try io.put(out, "no group\n")
+        return
+    end
+    group: u32 = u32(found.group)
+    count: usize = posix.member_count(found)
+    try text.format(made, "group {} id {} members {}:",
+                    [any(addr found.name), any(addr group), any(addr count)])
+    for index in usize(0)..<count do
+        name: text.host_string = posix.member(found, index)
+        try text.format(made, " [{}]", [any(addr name)])
+    end for
+    try text.append(made, "\n")
+    try io.put(out, text.used(made))
+end group_line
+
+--  Parse every line of standard input.
+parsed: (host: hosted.system, inout out: io.buffered_writer(hosted.system))
+        -> none ! ... =
+    mut buffer: [128]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<128])
+    mut groups: bool = false
+    loop do
+        item: io.line = try io.read_line(lines)
+        break when item.finished
+        bytes: []u8 = item.bytes
+        if lenof bytes == 0 then
+            groups = true
+        elsif groups then
+            try group_line(out, item.bytes)
+        else
+            try account_line(out, item.bytes)
+        end if
+    end loop
+end parsed
+
+fixed if compiler.os == linux then
+    --  The group whose ID is zero.
+    group_zero: utf8 = "root"
+else
+    group_zero: utf8 = "wheel"
+end if
+
+--  The real databases: root and group zero by ID and by name, the
+--  process's own account when it has one, and the refusals.
+looked_up: () -> none ! ... =
+    mut buffer: [1024]u8 = zeroed
+    root: posix.account =
+        try posix.account_with_id(posix.user_id(0), buffer[0..<1024])
+    fail mismatched when not text.host_equal(root.name, "root")
+      or root.group <> posix.group_id(0)
+    mut again: [1024]u8 = zeroed
+    named: posix.account =
+        try posix.account_named(text.host_over("root"), again[0..<1024])
+    fail mismatched when named.user <> posix.user_id(0)
+    mut groups: [1024]u8 = zeroed
+    wheel: posix.group_entry =
+        try posix.group_with_id(posix.group_id(0), groups[0..<1024])
+    fail mismatched when not text.host_equal(wheel.name, group_zero)
+    mut by_name: [1024]u8 = zeroed
+    zero: posix.group_entry =
+        try posix.group_named(text.host_over(text.bytes(group_zero)),
+                              by_name[0..<1024])
+    fail mismatched when zero.group <> posix.group_id(0)
+    --  A process may run as a user no database names, as a container's
+    --  may; when one does, it is found by its name too.
+    me: posix.user_id = posix.real_user()
+    mut mine: [1024]u8 = zeroed
+    found: bool = true
+    own: posix.account = posix.account_with_id(me, mine[0..<1024])
+        else (problem)
+        fail problem when problem <> posix.no_account
+        root
+    end
+    if own.user == me then
+        mut back: [1024]u8 = zeroed
+        same: posix.account = try posix.account_named(own.name,
+                                                      back[0..<1024])
+        fail mismatched when same.user <> me
+    end if
+    _ = found
+    --  What no database holds, a name no database could, and a buffer too
+    --  small for an account.
+    mut met: bool = false
+    _ = posix.account_with_id(posix.user_id(4294967000), buffer[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.account_named(text.host_over("landin-no-such-account"),
+                            buffer[0..<1024]) else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.account_named(text.host_over("root:x"), buffer[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    mut tiny: [4]u8 = zeroed
+    _ = posix.account_with_id(posix.user_id(0), tiny[0..<4]) else (problem)
+        met = problem == posix.erange
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.group_with_id(posix.group_id(4294967000), groups[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        wheel
+    end
+    fail mismatched when not met
+end looked_up
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    code = 1
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    defer io.flush(out) else (problem)
+        _ = problem
+    end
+    parsed(host, out) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    looked_up() else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

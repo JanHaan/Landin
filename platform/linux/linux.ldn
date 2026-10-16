@@ -508,6 +508,350 @@ fixed if compiler.os == linux then
                                    i64(length), i64(flags), 0, 0, 0))
     end getrandom
 
+    --- Read at most `length` bytes from `descriptor` into `data`, starting
+    --- `offset` bytes into the file, without moving its position: the
+    --- count read, zero at or past its end, or minus the errno, ESPIPE for
+    --- a pipe or a socket, which has no offsets.
+    public link(symbol: "_landin_linux_pread64") pread64:
+        (descriptor: i32, data: ptr mut u8, length: usize, offset: i64)
+        -> (result: isize) =
+        result = isize(system_call(pread64_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), offset, 0,
+                                   0))
+    end pread64
+
+    --- Write at most `length` bytes from `data` to `descriptor`, starting
+    --- `offset` bytes into the file, without moving its position: the
+    --- count accepted, or minus the errno.  A write past the end extends
+    --- the file, and what lies between reads as zeros.  On a file opened
+    --- with `o_append` Linux writes at the end whatever `offset` says.
+    public link(symbol: "_landin_linux_pwrite64") pwrite64:
+        (descriptor: i32, data: ptr u8, length: usize, offset: i64)
+        -> (result: isize) =
+        result = isize(system_call(pwrite64_number, i64(descriptor),
+                                   i64(usize(data)), i64(length), offset, 0,
+                                   0))
+    end pwrite64
+
+    --- Give the file open as `descriptor` the size `length`, cutting what
+    --- lies beyond it or extending it with zeros: zero, or minus the errno.
+    public link(symbol: "_landin_linux_ftruncate") ftruncate:
+        (descriptor: i32, length: i64) -> (result: i32) =
+        result = i32(system_call(ftruncate_number, i64(descriptor), length,
+                                 0, 0, 0, 0))
+    end ftruncate
+
+    --- Write what the system holds of the file open as `descriptor` to its
+    --- device, its data and its status: zero, or minus the errno.
+    public link(symbol: "_landin_linux_fsync") fsync:
+        (descriptor: i32) -> (result: i32) =
+        result = i32(system_call(fsync_number, i64(descriptor), 0, 0, 0, 0,
+                                 0))
+    end fsync
+
+    --- `fsync` of the data alone, and of the status only where reading the
+    --- data back needs it, as a size does: zero, or minus the errno.
+    public link(symbol: "_landin_linux_fdatasync") fdatasync:
+        (descriptor: i32) -> (result: i32) =
+        result = i32(system_call(fdatasync_number, i64(descriptor), 0, 0, 0,
+                                 0, 0))
+    end fdatasync
+
+    --- Put the working directory's absolute path, with a NUL after it, in
+    --- the `length` bytes at `into`: the bytes put there, NUL included, or
+    --- minus the errno, ERANGE when they do not fit.
+    public link(symbol: "_landin_linux_getcwd") getcwd:
+        (into: ptr mut u8, length: usize) -> (result: isize) =
+        result = isize(system_call(getcwd_number, i64(usize(into)),
+                                   i64(length), 0, 0, 0, 0))
+    end getcwd
+
+    --- Give the file `old`, relative to `old_directory`, the name `new`,
+    --- relative to `new_directory`, with `flags`, zero for POSIX's
+    --- `renameat`: a file already named `new` is replaced in the one step.
+    --- Zero, or minus the errno, EXDEV across file systems.  arm64 and RV64
+    --- have no `rename`; this is every architecture's.
+    public link(symbol: "_landin_linux_renameat2") renameat2:
+        (old_directory: i32, old: ptr u8, new_directory: i32, new: ptr u8,
+         flags: u32) -> (result: i32) =
+        result = i32(system_call(renameat2_number, i64(old_directory),
+                                 i64(usize(old)), i64(new_directory),
+                                 i64(usize(new)), i64(flags), 0))
+    end renameat2
+
+    --- Give the file `old`, relative to `old_directory`, a second name
+    --- `new`, relative to `new_directory`, a hard link, not following a
+    --- final symbolic link of `old` unless `flags` holds
+    --- `at_symlink_follow`: zero, or minus the errno, EEXIST when `new` is
+    --- taken.
+    public link(symbol: "_landin_linux_linkat") linkat:
+        (old_directory: i32, old: ptr u8, new_directory: i32, new: ptr u8,
+         flags: i32) -> (result: i32) =
+        result = i32(system_call(linkat_number, i64(old_directory),
+                                 i64(usize(old)), i64(new_directory),
+                                 i64(usize(new)), i64(flags), 0))
+    end linkat
+
+    --- Make `path`, relative to `directory`, a symbolic link whose target is
+    --- `target`, which need name nothing: zero, or minus the errno, EEXIST
+    --- when `path` is taken.
+    public link(symbol: "_landin_linux_symlinkat") symlinkat:
+        (target: ptr u8, directory: i32, path: ptr u8) -> (result: i32) =
+        result = i32(system_call(symlinkat_number, i64(usize(target)),
+                                 i64(directory), i64(usize(path)), 0, 0, 0))
+    end symlinkat
+
+    --- Put the target of the symbolic link `path`, relative to `directory`,
+    --- in at most `length` bytes at `into`, with no NUL after it: the bytes
+    --- put there, as many as fit, or minus the errno, EINVAL when `path` is
+    --- no symbolic link.
+    public link(symbol: "_landin_linux_readlinkat") readlinkat:
+        (directory: i32, path: ptr u8, into: ptr mut u8, length: usize)
+        -> (result: isize) =
+        result = isize(system_call(readlinkat_number, i64(directory),
+                                   i64(usize(path)), i64(usize(into)),
+                                   i64(length), 0, 0))
+    end readlinkat
+
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, following a final symbolic link, to `mode`: zero, or
+    --- minus the errno, EPERM when the process neither owns the file nor
+    --- may override that.  The call takes no flags.
+    public link(symbol: "_landin_linux_fchmodat") fchmodat:
+        (directory: i32, path: ptr u8, mode: u32) -> (result: i32) =
+        result = i32(system_call(fchmodat_number, i64(directory),
+                                 i64(usize(path)), i64(mode), 0, 0, 0))
+    end fchmodat
+
+    --- Set the permission bits of the file open as `descriptor` to `mode`:
+    --- zero, or minus the errno.
+    public link(symbol: "_landin_linux_fchmod") fchmod:
+        (descriptor: i32, mode: u32) -> (result: i32) =
+        result = i32(system_call(fchmod_number, i64(descriptor), i64(mode),
+                                 0, 0, 0, 0))
+    end fchmod
+
+    --- Set the owner and group of the file `path` names, relative to
+    --- `directory`, to `user` and `group`, either left as it is when it is
+    --- `0xFFFFFFFF`; a final symbolic link is followed unless `flags` holds
+    --- `at_symlink_nofollow`.  Zero, or minus the errno, EPERM unless the
+    --- process may.
+    public link(symbol: "_landin_linux_fchownat") fchownat:
+        (directory: i32, path: ptr u8, user: u32, group: u32, flags: i32)
+        -> (result: i32) =
+        result = i32(system_call(fchownat_number, i64(directory),
+                                 i64(usize(path)), i64(user), i64(group),
+                                 i64(flags), 0))
+    end fchownat
+
+    --- Set the owner and group of the file open as `descriptor`, as
+    --- `fchownat` does: zero, or minus the errno.
+    public link(symbol: "_landin_linux_fchown") fchown:
+        (descriptor: i32, user: u32, group: u32) -> (result: i32) =
+        result = i32(system_call(fchown_number, i64(descriptor), i64(user),
+                                 i64(group), 0, 0, 0))
+    end fchown
+
+    --- What `utimensat` takes for a path it is not given: C's null
+    --- pointer, so the call sets the times of the descriptor itself.
+    public no_path: atom
+    --- A path a call may be given, or `no_path`.
+    public path_given: type = no_path | ptr u8
+
+    --- Set the last access and modification times of the file `path`
+    --- names, relative to `directory`, or of `directory` itself when the
+    --- path is `no_path`, to the two `timespec`s at `times`, access first:
+    --- zero, or minus the errno.  A final symbolic link is followed unless
+    --- `flags` holds `at_symlink_nofollow`, which sets the link's own.
+    public link(symbol: "_landin_linux_utimensat") utimensat:
+        (directory: i32, path: path_given, times: ptr timespec, flags: i32)
+        -> (result: i32) =
+        named: i64 = match path
+            no_path: i64(0)
+            ptr (given): i64(usize(given))
+        end match
+        result = i32(system_call(utimensat_number, i64(directory), named,
+                                 i64(usize(times)), i64(flags), 0, 0))
+    end utimensat
+
+    --- Take, change or give up the whole-file lock on the open file
+    --- `descriptor` belongs to, as `operation` says: `lock_sh` or `lock_ex`,
+    --- with `lock_nb` not to wait for it, or `lock_un`.  Zero, or minus the
+    --- errno, EWOULDBLOCK when another open file holds it and `lock_nb`
+    --- was given.
+    public link(symbol: "_landin_linux_flock") flock:
+        (descriptor: i32, operation: i32) -> (result: i32) =
+        result = i32(system_call(flock_number, i64(descriptor),
+                                 i64(operation), 0, 0, 0, 0))
+    end flock
+
+    --- `ioctl(descriptor, request, argument)`, the argument an integer or
+    --- a pointer as `i64(usize(p))`: its result, or minus the errno,
+    --- ENOTTY when the request is not one for this kind of file.
+    public link(symbol: "_landin_linux_ioctl") ioctl:
+        (descriptor: i32, request: u64, argument: i64) -> (result: i32) =
+        result = i32(system_call(ioctl_number, i64(descriptor), i64(request),
+                                 argument, 0, 0, 0))
+    end ioctl
+
+    --- The process's real user ID.  It cannot fail.
+    public link(symbol: "_landin_linux_getuid") getuid: () -> (user: u32) =
+        user = u32(system_call(getuid_number, 0, 0, 0, 0, 0, 0))
+    end getuid
+
+    --- The process's effective user ID, which permission checks use.
+    public link(symbol: "_landin_linux_geteuid") geteuid: () -> (user: u32) =
+        user = u32(system_call(geteuid_number, 0, 0, 0, 0, 0, 0))
+    end geteuid
+
+    --- The process's real group ID.
+    public link(symbol: "_landin_linux_getgid") getgid: () -> (group: u32) =
+        group = u32(system_call(getgid_number, 0, 0, 0, 0, 0, 0))
+    end getgid
+
+    --- The process's effective group ID.
+    public link(symbol: "_landin_linux_getegid") getegid: () -> (group: u32) =
+        group = u32(system_call(getegid_number, 0, 0, 0, 0, 0, 0))
+    end getegid
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 1024
+    --- `statx` flag: with an empty path, the status of the directory
+    --- descriptor itself, which may be any open file.
+    public at_empty_path: i32 = 4096
+    --- `statx` mask: every field POSIX's `stat` gives, the type, mode,
+    --- links, owner, group, times, inode, size and blocks.
+    public statx_basic_stats: u32 = 2047
+    --- `openat` flag: a terminal opened does not become the process's
+    --- controlling terminal.
+    public o_noctty: i32 = 256
+
+    --- `flock` operation: a shared lock.
+    public lock_sh: i32 = 1
+    --- `flock` operation: an exclusive lock.
+    public lock_ex: i32 = 2
+    --- `flock` flag: fail at once rather than wait for the lock.
+    public lock_nb: i32 = 4
+    --- `flock` operation: give the lock up.
+    public lock_un: i32 = 8
+
+    --- `fcntl` command: say whether a lock described by a `lock_record`
+    --- could be taken, or describe one that stands in its way.
+    public f_getlk: i32 = 5
+    --- `fcntl` command: take or give up a record lock, failing at once
+    --- when another process holds one in its way.
+    public f_setlk: i32 = 6
+    --- `fcntl` command: take or give up a record lock, waiting for it.
+    public f_setlkw: i32 = 7
+    --- A record lock's type: shared, for reading.
+    public f_rdlck: i16 = 0
+    --- A record lock's type: exclusive, for writing.
+    public f_wrlck: i16 = 1
+    --- A record lock's type: none, to give a lock up.
+    public f_unlck: i16 = 2
+
+    --- A record lock, the kernel's `struct flock` on a 64-bit
+    --- architecture: its type, where its start counts from (0 for the
+    --- file's start), its start and length, zero for as far as the file
+    --- will ever reach, and the process that holds it, which `f_getlk`
+    --- fills.
+    public lock_record: type = struct
+        kind: i16
+        whence: i16
+        padding: i32
+        start: i64
+        length: i64
+        process: i32
+        spare: i32
+    end lock_record
+
+    --- `ioctl` request: read a terminal's `terminal_record`.
+    public tcgets: u64 = 0x5401
+    --- `ioctl` request: set a terminal's `terminal_record` at once.
+    public tcsets: u64 = 0x5402
+    --- `ioctl` request: set it once all written output has been sent.
+    public tcsetsw: u64 = 0x5403
+    --- `ioctl` request: set it once output has been sent, discarding input
+    --- not yet read.
+    public tcsetsf: u64 = 0x5404
+    --- `ioctl` request: read a terminal's `window_record`.
+    public tiocgwinsz: u64 = 0x5413
+    --- `ioctl` request: set a terminal's `window_record`.
+    public tiocswinsz: u64 = 0x5414
+    --- `ioctl` request on a pseudo-terminal's controller: lock or, given
+    --- zero, unlock its terminal for opening.
+    public tiocsptlck: u64 = 0x40045431
+    --- `ioctl` request on a pseudo-terminal's controller: open its
+    --- terminal with the `openat` flags given, since Linux 4.13.
+    public tiocgptpeer: u64 = 0x5441
+    --- `ioctl` request on a pseudo-terminal's controller: put its
+    --- terminal's number, the N of /dev/pts/N, in an `i32`.
+    public tiocgptn: u64 = 0x80045430
+
+    --- A terminal's settings, the kernel's `struct termios`, which
+    --- `tcgets` reads: its input, output, control and local modes, the line
+    --- discipline and the control characters, `vtime` and `vmin` among
+    --- them.  It is the kernel's record, not the C library's larger one.
+    public terminal_record: type = struct
+        input_modes: u32
+        output_modes: u32
+        control_modes: u32
+        local_modes: u32
+        line: u8
+        characters: [19]u8
+    end terminal_record
+
+    --- `terminal_record` input mode: ignore a break.
+    public ignbrk: u32 = 1
+    --- Input mode: a break interrupts.
+    public brkint: u32 = 2
+    --- Input mode: mark a parity error.
+    public parmrk: u32 = 8
+    --- Input mode: strip the eighth bit.
+    public istrip: u32 = 32
+    --- Input mode: read a newline as a carriage return.
+    public inlcr: u32 = 64
+    --- Input mode: ignore a carriage return.
+    public igncr: u32 = 128
+    --- Input mode: read a carriage return as a newline.
+    public icrnl: u32 = 256
+    --- Input mode: XON and XOFF control output.
+    public ixon: u32 = 1024
+    --- Output mode: process output, a newline written as two bytes.
+    public opost: u32 = 1
+    --- Control mode: the character size's bits.
+    public csize: u32 = 48
+    --- Control mode: eight-bit characters.
+    public cs8: u32 = 48
+    --- Control mode: parity.
+    public parenb: u32 = 256
+    --- Local mode: the interrupt, quit and suspend characters raise their
+    --- signals.
+    public isig: u32 = 1
+    --- Local mode: input is read a line at a time and may be edited.
+    public icanon: u32 = 2
+    --- Local mode: input is echoed.
+    public echo: u32 = 8
+    --- Local mode: a newline is echoed even without `echo`.
+    public echonl: u32 = 64
+    --- Local mode: the implementation's own input processing.
+    public iexten: u32 = 32768
+    --- `terminal_record` character index: how long a read waits, in tenths
+    --- of a second, outside line mode.
+    public vtime: usize = 5
+    --- `terminal_record` character index: how few bytes a read returns,
+    --- outside line mode.
+    public vmin: usize = 6
+
+    --- A terminal's size, `struct winsize`: rows and columns of
+    --- characters, and pixels, which most terminals leave zero.
+    public window_record: type = struct
+        rows: u16
+        columns: u16
+        width: u16
+        height: u16
+    end window_record
+
     --- `socket` domain: Unix-domain sockets, named by a path, AF_UNIX.
     public af_unix: i32 = 1
     --- `socket` domain: IPv4, AF_INET.

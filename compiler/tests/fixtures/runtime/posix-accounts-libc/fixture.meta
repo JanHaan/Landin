@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: a Linux program linked with --link=libc, where compiler.c_runtime is true, looks root and group zero up by ID and by name through the C library and NSS rather than reading /etc/passwd and /etc/group itself, finds the process's own account by name when it has one, and refuses an ID and a name no database holds, a name holding a colon and a buffer too small with ERANGE, as runtime/posix-accounts does on a static one
+program: main.ldn
+root: ../../../../..
+link: libc
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64

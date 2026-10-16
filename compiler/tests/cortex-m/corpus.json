@@ -45,6 +45,11 @@
       "reason": "The C library's struct dirent and its flags exist only on a hosted system, so the C peer that reads them is hosted; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/libc-directory-record/fixture.meta"
     },
+    "abi/libc-file-facts": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's lock, terminal and account records, and a file and an account read through C, exist only on a hosted system; runtime/file-system-firmware runs core/io's file system pieces that fit on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/libc-file-facts/fixture.meta"
+    },
     "abi/libc-process-constants": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's process headers exist only on a hosted system, and Cortex-M0 starts no process.",
@@ -538,6 +543,13 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
     },
+    "runtime/core-io-file-system": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
+    },
     "runtime/core-io-identity-memory": {
       "mode": "execute"
     },
@@ -848,6 +860,9 @@
       "mode": "execute"
     },
     "runtime/evaluation-order-is-left-then-right": {
+      "mode": "execute"
+    },
+    "runtime/file-system-firmware": {
       "mode": "execute"
     },
     "runtime/first-program": {
@@ -1517,6 +1532,20 @@
       "mode": "execute",
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
+    "runtime/posix-accounts": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io and platform/posix on the freestanding target before checking declarations: firmware has no account database and no standard input, which this fixture reads."
+    },
+    "runtime/posix-accounts-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no C runtime and no account database."
+    },
     "runtime/posix-broken-pipe": {
       "codes": [
         "L0015"
@@ -1545,12 +1574,26 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
     },
+    "runtime/posix-file-system": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no file system, terminal, lock or account database."
+    },
     "runtime/posix-files": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-locks": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no file system, no lock and no second process."
     },
     "runtime/posix-memory": {
       "codes": [
@@ -1579,6 +1622,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-terminals": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no file system, terminal, lock or account database."
     },
     "runtime/r230-composition": {
       "mode": "execute"
@@ -2487,6 +2537,13 @@
       "profile_limit": "selected-image",
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
+    "runtime/tree-copy": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io and platform/posix on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
+    },
     "runtime/try-inferred-in-generic-argument": {
       "mode": "execute"
     },
@@ -2635,6 +2692,11 @@
     },
     "runtime/view-taken-again-through-inout": {
       "mode": "execute"
+    },
+    "runtime/volume-memory": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "core/io's memory volume with every oracle of the fake and the memory terminals needs about 106 KiB of flash at size/auto and 120 KiB at none/off, overflowing the 32 KiB profile by 74 KiB and 88 KiB: a provider's conformance table links every entry of reader, writer, files, directories and file_system, and a smaller program over the volume alone, making, writing, renaming and reading one file, still overflowed by 28 KiB at size/auto, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records for the memory network. Each profile still attempts execution; runtime/file-system-firmware runs the temporary names and the memory terminals within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/whole-array-elements": {
       "mode": "execute"

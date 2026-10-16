@@ -88,6 +88,18 @@ listed: () -> (seen: u32) ! posix.errno =
     try posix.close_directory(stream)
 end listed
 
+--  Whether the scratch directory is gone, its status ENOENT.
+gone: () -> (yes: bool) =
+    yes = false
+    found: posix.status =
+        posix.status_at(posix.working_directory, text.host_over(top), false)
+        else (problem)
+            yes = problem == posix.enoent
+            return
+        end
+    _ = found
+end gone
+
 public main: () -> (code: i32) =
     clear()
     code = 1
@@ -174,10 +186,6 @@ public main: () -> (code: i32) =
 
     code = 8
     clear()
-    _ = posix.status_at(posix.working_directory, text.host_over(top),
-                        false) else (problem)
-        return when problem <> posix.enoent
-        posix.status(device: 0, inode: 0, kind: posix.unknown_kind, size: 0)
-    end
+    return when not gone()
     code = 42
 end main

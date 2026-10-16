@@ -328,6 +328,7 @@ package body Landin.Stages.Configuration is
                      return Truth;
                   elsif Word in "c_sysv_lp64" | "c_darwin_lp64"
                               | "c_aapcs64_lp64" | "c_riscv_lp64d"
+                              | "c_runtime"
                   then
                      return Truth;
                   elsif Word = "os" then
@@ -403,7 +404,7 @@ package body Landin.Stages.Configuration is
                  or else Spelled (Syn.Name (Of_Tree, Node))
                    not in "arch" | "os" | "word_size" | "byte_order"
                         | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
-                        | "c_aapcs64_lp64" | "c_riscv_lp64d"
+                        | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_runtime"
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
@@ -576,6 +577,25 @@ package body Landin.Stages.Configuration is
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.RiscV_LP64D);
+                  elsif Word = "c_runtime" then
+                     --  Darwin and FreeBSD reach their systems only through
+                     --  their C libraries; Linux links one when the request
+                     --  asks, and firmware never does.
+                     declare
+                        System : constant
+                          Landin.Targets.Capabilities.Hosted_System :=
+                            Landin.Targets.Capabilities.Hosted_System_Of
+                              (Target (Context));
+                     begin
+                        return Boolean_Result
+                          (System in Landin.Targets.Capabilities.Darwin
+                                   | Landin.Targets.Capabilities.FreeBSD
+                           or else
+                             (System = Landin.Targets.Capabilities.Linux
+                              and then
+                                Landin.Configuration.C_Runtime_Requested
+                                  (Activity.all)));
+                     end;
                   elsif Word = "os" then
                      return (Kind => Operating_System, System_Value =>
                        Landin.Targets.Capabilities.Hosted_System_Of

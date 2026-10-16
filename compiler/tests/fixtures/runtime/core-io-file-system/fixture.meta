@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the hosted io.file_system refuses open options no open can have with io_failed and EINVAL kept, a taken name made exclusively with already_exists and a missing file without create with not_found, appends at the end and updates in place, renames onto a taken name and refuses a missing one, gives a link's status followed and not, makes a file read-only, which refuses an open for writing unless the process is root, reads nothing past the end and leaves zeros before a write past it, truncates and synchronizes, makes temporary files of their owner's alone whose names, made from scripted entropy that repeats, are tried again, giving up after io.temporary_tries with EEXIST kept and refusing a missing directory, and names the working directory platform/posix does; io.terminals finds standard input and output no terminals and refuses a size with not_a_terminal
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

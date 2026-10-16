@@ -1,0 +1,298 @@
+--  platform/posix's advisory locks, as each system has them, between two
+--  open files of one process and between two processes.  A whole-file
+--  lock belongs to the open file: a second open of the same file in the
+--  same process stands in its way, and closing some other descriptor of
+--  the file leaves it.  A record lock belongs to the process: the process
+--  never stands in its own way, another process does, and closing any
+--  descriptor of the file gives every record lock up, the hazard the
+--  documentation names.  The two kinds are taken on two files, since how
+--  they see each other differs between systems.  The second process is a
+--  copy of this one, which tries a lock, says by its code how it went and
+--  ends.
+import core/text
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  The file whole-file locks are taken on, and the one record locks are.
+whole_path: []u8 = "posix-locks-whole-scratch"
+range_path: []u8 = "posix-locks-range-scratch"
+
+--  Write LINE to standard output.
+say: (line: []u8) -> none =
+    _ = posix.write(posix.standard_output, line) else 0
+end say
+
+--  Write NAME, `=` and the number PROBLEM has on this system.
+said: (name: []u8, problem: posix.errno) -> none =
+    mut line: [64]u8 = zeroed
+    mut made := text.over(line[0..<64])
+    number: i32 = posix.number(problem)
+    text.format(made, "{}={}\n", [any(addr name), any(addr number)])
+        else (ignored)
+        _ = ignored
+    end
+    say(text.used(made))
+end said
+
+--  Write the code a child ended with.
+said_code: (code: i32) -> none =
+    mut line: [32]u8 = zeroed
+    mut made := text.over(line[0..<32])
+    text.format(made, "child={}\n", [any(addr code)]) else (ignored)
+        _ = ignored
+    end
+    say(text.used(made))
+end said_code
+
+fixed if compiler.os == linux then
+    --  A copy of this process: zero in the copy, its ID in this one.
+    forked: () -> (child: i64) =
+        child = linux.fork()
+    end forked
+else
+    extern(c) fork: () -> (child: i32)
+
+    --  A copy of this process: zero in the copy, its ID in this one.
+    forked: () -> (child: i64) =
+        child = i64(fork())
+    end forked
+end if
+
+--  Open PATH to read and write, a new open file each time.
+opened: (path: []u8) -> (made: posix.descriptor) ! posix.errno =
+    made = try posix.open_at(posix.working_directory, text.host_over(path),
+                             (access: posix.read_write, create: true,
+                              exclusive: false, truncate: false,
+                              append: false, directory: false), 0o644)
+end opened
+
+--  Whether a lock attempt was refused because another holds one: EAGAIN,
+--  EWOULDBLOCK being its other name, or for a record lock EACCES, which
+--  POSIX lets a system give instead.
+held: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eagain or problem == posix.eacces
+end held
+
+--  What a copy of the process does, ending it with its code: zero when
+--  each lock it tries goes as WHOLE and RANGE say, `true` meaning that it
+--  is taken.
+attempt: (whole: bool, range: bool) -> noreturn =
+    entire: posix.descriptor = opened(whole_path) else (problem)
+        said("child-open", problem)
+        posix.exit(10)
+    end
+    part: posix.descriptor = opened(range_path) else (problem)
+        said("child-open", problem)
+        posix.exit(10)
+    end
+    mut code: i32 = 0
+    mut took: bool = true
+    posix.lock(entire, posix.exclusive_lock, false) else (problem)
+        took = false
+        if not held(problem) then code = 11 end if
+    end
+    if took <> whole then code = 12 end if
+    took = true
+    posix.lock_range(part, posix.exclusive_lock, 0, 10, false) else (problem)
+        took = false
+        if not held(problem) then code = 13 end if
+    end
+    if took <> range then code = 14 end if
+    --  A range no lock covers is taken whatever else is held.
+    posix.lock_range(part, posix.exclusive_lock, 20, 5, false) else (problem)
+        said("child-free-range", problem)
+        code = 15
+    end
+    posix.exit(code)
+end attempt
+
+--  Run `attempt` in a copy of the process and say whether it ended with
+--  code zero.
+child_agrees: (whole: bool, range: bool) -> (yes: bool) =
+    yes = false
+    started: i64 = forked()
+    if started == 0 then
+        attempt(whole, range)
+    end if
+    if started < 0 then
+        say("fork failed\n")
+        return
+    end if
+    ended: posix.child_status = posix.wait(posix.process_id(i32(started)))
+        else (problem)
+        said("wait", problem)
+        return
+    end
+    match ended.how
+        posix.exited(code): begin
+            if code <> 0 then said_code(code) end if
+            yes = code == 0
+        end
+        posix.signalled(signal): _ = signal
+    end match
+end child_agrees
+
+--  Whole-file locks between two open files of this process: an exclusive
+--  one stands in the way of any other, shared ones stand beside each
+--  other, and one given up makes way.
+whole_files: (first: posix.descriptor, second: posix.descriptor)
+             -> (ok: bool) =
+    ok = false
+    posix.lock(first, posix.exclusive_lock, false) else (problem)
+        said("flock", problem)
+        return
+    end
+    mut met: bool = false
+    posix.lock(second, posix.shared_lock, false) else (problem)
+        met = held(problem)
+    end
+    return when not met
+    posix.unlock(first) else (problem)
+        said("unlock", problem)
+        return
+    end
+    posix.lock(second, posix.exclusive_lock, false) else (problem)
+        said("flock-after", problem)
+        return
+    end
+    posix.unlock(second) else (problem)
+        said("unlock", problem)
+        return
+    end
+    posix.lock(first, posix.shared_lock, false) else (problem)
+        said("flock-shared", problem)
+        return
+    end
+    posix.lock(second, posix.shared_lock, true) else (problem)
+        said("flock-shared", problem)
+        return
+    end
+    met = false
+    posix.lock(second, posix.exclusive_lock, false) else (problem)
+        met = held(problem)
+    end
+    return when not met
+    posix.unlock(first) else (problem)
+        said("unlock", problem)
+        return
+    end
+    posix.unlock(second) else (problem)
+        said("unlock", problem)
+        return
+    end
+    ok = true
+end whole_files
+
+--  Close a descriptor, saying when it fails.
+closed: (done: posix.descriptor) -> (ok: bool) =
+    ok = true
+    posix.close(done) else (problem)
+        said("close", problem)
+        ok = false
+    end
+end closed
+
+public main: () -> (code: i32) =
+    code = 1
+    first: posix.descriptor = opened(whole_path) else (problem)
+        said("open", problem)
+        return
+    end
+    second: posix.descriptor = opened(whole_path) else (problem)
+        said("open", problem)
+        return
+    end
+    ranged: posix.descriptor = opened(range_path) else (problem)
+        said("open", problem)
+        return
+    end
+    again: posix.descriptor = opened(range_path) else (problem)
+        said("open", problem)
+        return
+    end
+    code = 2
+    return when not whole_files(first, second)
+
+    --  This process holds an exclusive whole-file lock through FIRST, and
+    --  exclusive record locks on the first ten bytes through RANGED and on
+    --  the same bytes and more through AGAIN, since a process never stands
+    --  in its own way.  Closing SECOND, another descriptor of the first
+    --  file, leaves FIRST's lock, which belongs to FIRST's open file.
+    code = 3
+    posix.lock(first, posix.exclusive_lock, false) else (problem)
+        said("flock", problem)
+        return
+    end
+    posix.lock_range(ranged, posix.exclusive_lock, 0, 10, false)
+        else (problem)
+        said("fcntl", problem)
+        return
+    end
+    posix.lock_range(again, posix.exclusive_lock, 5, 10, false)
+        else (problem)
+        said("fcntl-own", problem)
+        return
+    end
+    return when not closed(second)
+    --  Another process meets both.
+    code = 4
+    return when not child_agrees(false, false)
+
+    --  Closing a third descriptor of the second file, opened for a moment,
+    --  gives up every record lock this process holds on it.
+    code = 5
+    third: posix.descriptor = opened(range_path) else (problem)
+        said("open", problem)
+        return
+    end
+    return when not closed(third)
+    return when not child_agrees(false, true)
+
+    --  Given up explicitly, both locks make way.
+    code = 6
+    posix.lock_range(ranged, posix.exclusive_lock, 0, 10, false)
+        else (problem)
+        said("fcntl", problem)
+        return
+    end
+    posix.unlock_range(ranged, 0, 0) else (problem)
+        said("fcntl-unlock", problem)
+        return
+    end
+    posix.unlock(first) else (problem)
+        said("unlock", problem)
+        return
+    end
+    return when not child_agrees(true, true)
+
+    --  A shared record lock needs the file open for reading.
+    code = 7
+    writing: posix.descriptor =
+        posix.open_at(posix.working_directory, text.host_over(range_path),
+                      (access: posix.write_only, create: false,
+                       exclusive: false, truncate: false, append: false,
+                       directory: false), 0) else (problem)
+            said("open", problem)
+            return
+        end
+    mut met: bool = false
+    posix.lock_range(writing, posix.shared_lock, 0, 1, false) else (problem)
+        met = problem == posix.ebadf
+    end
+    return when not met
+    code = 8
+    descriptors: [4]posix.descriptor = [first, ranged, again, writing]
+    for done in descriptors do
+        return when not closed(done)
+    end for
+    paths: [2][]u8 = [whole_path, range_path]
+    for name in paths do
+        posix.unlink_at(posix.working_directory, text.host_over(name))
+            else (problem)
+            said("unlink", problem)
+            return
+        end
+    end for
+    code = 42
+end main

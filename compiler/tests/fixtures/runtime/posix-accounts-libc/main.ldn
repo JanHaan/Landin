@@ -1,0 +1,105 @@
+--  Users and groups under --link=libc on Linux: the C library's lookups,
+--  which ask every database NSS is set to, where a static program reads
+--  /etc/passwd and /etc/group itself.  `compiler.c_runtime` is what
+--  platform/posix chooses the route by, and the lookups and refusals are
+--  runtime/posix-accounts' own.
+import core/text
+import platform/posix
+
+compiler.assert(compiler.c_runtime)
+
+--  A lookup gave something other than what it was asked for.
+mismatched: atom
+
+fixed if compiler.os == linux then
+    --  The group whose ID is zero.
+    group_zero: utf8 = "root"
+else
+    group_zero: utf8 = "wheel"
+end if
+
+--  The real databases: root and group zero by ID and by name, the
+--  process's own account when it has one, and the refusals.
+looked_up: () -> none ! ... =
+    mut buffer: [1024]u8 = zeroed
+    root: posix.account =
+        try posix.account_with_id(posix.user_id(0), buffer[0..<1024])
+    fail mismatched when not text.host_equal(root.name, "root")
+      or root.group <> posix.group_id(0)
+    mut again: [1024]u8 = zeroed
+    named: posix.account =
+        try posix.account_named(text.host_over("root"), again[0..<1024])
+    fail mismatched when named.user <> posix.user_id(0)
+    mut groups: [1024]u8 = zeroed
+    wheel: posix.group_entry =
+        try posix.group_with_id(posix.group_id(0), groups[0..<1024])
+    fail mismatched when not text.host_equal(wheel.name, group_zero)
+    mut by_name: [1024]u8 = zeroed
+    zero: posix.group_entry =
+        try posix.group_named(text.host_over(text.bytes(group_zero)),
+                              by_name[0..<1024])
+    fail mismatched when zero.group <> posix.group_id(0)
+    --  A process may run as a user no database names, as a container's
+    --  may; when one does, it is found by its name too.
+    me: posix.user_id = posix.real_user()
+    mut mine: [1024]u8 = zeroed
+    found: bool = true
+    own: posix.account = posix.account_with_id(me, mine[0..<1024])
+        else (problem)
+        fail problem when problem <> posix.no_account
+        root
+    end
+    if own.user == me then
+        mut back: [1024]u8 = zeroed
+        same: posix.account = try posix.account_named(own.name,
+                                                      back[0..<1024])
+        fail mismatched when same.user <> me
+    end if
+    _ = found
+    --  What no database holds, a name no database could, and a buffer too
+    --  small for an account.
+    mut met: bool = false
+    _ = posix.account_with_id(posix.user_id(4294967000), buffer[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.account_named(text.host_over("landin-no-such-account"),
+                            buffer[0..<1024]) else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.account_named(text.host_over("root:x"), buffer[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
+    met = false
+    mut tiny: [4]u8 = zeroed
+    _ = posix.account_with_id(posix.user_id(0), tiny[0..<4]) else (problem)
+        met = problem == posix.erange
+        root
+    end
+    fail mismatched when not met
+    met = false
+    _ = posix.group_with_id(posix.group_id(4294967000), groups[0..<1024])
+        else (problem)
+        met = problem == posix.no_account
+        wheel
+    end
+    fail mismatched when not met
+end looked_up
+
+public main: () -> (code: i32) =
+    code = 3
+    looked_up() else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

@@ -1,0 +1,23 @@
+# a comment, which a lookup skips
+#disabled:x:9:9::/:/bin/sh
+root:x:0:0:root:/root:/bin/sh
+daemon:*:1:1:The daemon:/usr/sbin:/usr/sbin/nologin
++nis::::::
+-excluded::::::
+letters:x:one:1::/:/bin/sh
+short:x:5:5
+long:x:5:5:a:b:c:d
+toolarge:x:4294967296:1::/:/bin/sh
+minus:x:-1:1::/:/bin/sh
+reserved:x:4294967295:1::/:/bin/sh
+blank-id:x::1::/:/bin/sh
+empty::7:7:::
+:x:8:8::/:/bin/sh
+émile:x:1000:1000:Émile Zola:/home/émile:/bin/zsh
+
+wheel:*:0:root,daemon
+staff:x:20:
+solo:x:30:one
+commas:x:40:a,,b,
+unknown:x:4x:
+two:x:50

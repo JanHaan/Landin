@@ -66,7 +66,7 @@ static void release_waiter(void)
 int __wrap_open(const char *path, int flags, ...)
 {
     ++local_open_calls;
-    if (local_open_calls != 1 || flags != (O_RDONLY | O_CLOEXEC)
+    if (local_open_calls != 1 || flags != (O_RDONLY | O_CLOEXEC | O_NOCTTY)
         || strcmp(path, "r440-thread") != 0) {
         local_fault = 1;
     }
