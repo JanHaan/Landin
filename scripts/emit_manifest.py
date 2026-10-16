@@ -58,6 +58,9 @@ TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
 MODES = ("debug", "release")
 OPTIMIZATIONS = ("none", "size", "speed")
 SPECIALIZATIONS = ("off", "auto", "all")
+#  Four at once unless LANDIN_MANIFEST_JOBS says otherwise: the gate's
+#  self-hosted x86-64 runner has CPUs to spare and the manifest is its
+#  longest wait after the suite.
 MAX_WORKERS = 4
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
@@ -188,7 +191,9 @@ def emit(refine, root, out, workers=None):
         p for p in (Path(root).resolve() / "compiler/tests/fixtures/positive").iterdir()
         if p.is_dir())
     if workers is None:
-        workers = min(MAX_WORKERS, os.cpu_count() or 1)
+        asked = os.environ.get("LANDIN_MANIFEST_JOBS", "")
+        workers = (int(asked) if asked.isdigit() and int(asked) >= 1
+                   else min(MAX_WORKERS, os.cpu_count() or 1))
     manifest, refused = {}, 0
     with tempfile.TemporaryDirectory() as tmp:
         jobs = []

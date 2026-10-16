@@ -582,15 +582,16 @@ class BuildArchives(unittest.TestCase):
             r"run: >-\n((?: {10}.+\n)+)", workflow)]
         packages = [command for command in commands
                     if command.startswith("tar -czf ")]
-        release = ("bin", "bin/refine", "bin/landin_tests",
-                   "source-manifest.txt", "tests-manifest.txt")
-        debug = ("bin/refine", "source-manifest.txt")
+        #  Debug builds supply their host's suite as well as determinism,
+        #  so they carry the test program and its stamp as release does.
+        build = ("bin", "bin/refine", "bin/landin_tests",
+                 "source-manifest.txt", "tests-manifest.txt")
         expected = {
-            "compiler/ada/build/linux-amd64/release": release,
-            "compiler/ada/build/darwin-arm64/release": release,
-            "compiler/ada/build/linux-amd64/debug": debug,
-            "compiler/ada/build/linux-arm64/debug": debug,
-            "compiler/ada/build/darwin-arm64/debug": debug,
+            "compiler/ada/build/linux-amd64/release": build,
+            "compiler/ada/build/darwin-arm64/release": build,
+            "compiler/ada/build/linux-amd64/debug": build,
+            "compiler/ada/build/linux-arm64/debug": build,
+            "compiler/ada/build/darwin-arm64/debug": build,
         }
         self.assertEqual(len(packages), len(expected))
         self.assertEqual({shlex.split(command)[shlex.split(command).index("-C") + 1]

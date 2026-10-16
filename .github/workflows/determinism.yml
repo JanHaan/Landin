@@ -40,14 +40,17 @@ jobs:
             hosted: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
+            jobs: 16
           - host: ["self-hosted", "Linux", "ARM64", "linux-arm64"]
             hosted: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
+            jobs: 4
           - host: ["self-hosted", "macOS", "ARM64", "darwin-arm64"]
             hosted: macos-15
             platform: aarch64-darwin
             build: darwin-arm64
+            jobs: 4
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && matrix.hosted || matrix.host }}
@@ -77,7 +80,12 @@ jobs:
             -C compiler/ada/build/${{ matrix.build }}/debug
           LANDIN_BUILD_REUSE=yes ./scripts/build.sh --compiler-only -q
 
+      #  The arm64 and Darwin hosts each share their CPUs with a VM and
+      #  other slots, so only the x86-64 runner is widened; a hosted
+      #  runner keeps four.
       - name: Emit this host's manifest
+        env:
+          LANDIN_MANIFEST_JOBS: ${{ runner.environment == 'self-hosted' && matrix.jobs || 4 }}
         run: |
           python3 scripts/emit_manifest.py emit \
             compiler/ada/build/${{ matrix.build }}/debug/bin/refine \

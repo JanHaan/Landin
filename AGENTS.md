@@ -32,6 +32,14 @@ python3 check.py
 # most 2.5 times per doubling of the program.
 ./scripts/scaling.sh
 
+# Every scripts/tests module at once, check.py's controls in shards, as the
+# gate's scripts job runs them; about two minutes on sixteen workers.
+python3 scripts/script_tests.py
+
+# Follow HEAD's gate run and return at its first failed job, rather than
+# when its last lane ends.
+python3 scripts/gate_watch.py
+
 # Check one specification/prototype file (the narrowest supported test scope)
 python3 check.py prototype-2-parser.md
 
@@ -130,19 +138,22 @@ still succeed. The linked full run contains the target-test results.
 |---|---|---|
 | `inputs` | self-hosted `linux-arm64` | verify a recent full pass for an identical candidate, or a full main pass for a declared explanatory edit |
 | `documents` | self-hosted `linux-amd64` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=8`, the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `scripts` | self-hosted `linux-amd64` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, and the determinism, quality and debugging controls |
+| `linux-debug-build` | self-hosted `linux-amd64` | build the debug executables once for the `compiler` job and the Linux x86-64 determinism manifest |
+| `compiler` | self-hosted `linux-amd64` | the debug compiler's complete suite at `LANDIN_TEST_JOBS=16` (8 on a hosted runner), the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
 | `linux-release-build` | self-hosted `linux-amd64` | build the release executables once for the Linux release, Cortex-M and scaling jobs |
 | `release` | self-hosted `linux-amd64` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `bindings` | self-hosted `linux-amd64` | the C binding generator against its pinned Clang |
 | `editor-grammar` | self-hosted `linux-amd64` | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `cortex-m` | self-hosted `linux-amd64` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
+| `cortex-m` | self-hosted `linux-amd64` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=8` (4 on a hosted runner) |
 | `scaling` | self-hosted `linux-amd64` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
+| `darwin-debug-build` | self-hosted `darwin-arm64` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
 | `darwin-release-build` | self-hosted `darwin-arm64` | build the release executables once for the Darwin host, parity and LLDB jobs |
 | `darwin-host` | self-hosted `darwin-arm64` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
 | `darwin-host-release` | self-hosted `darwin-arm64` | the release compiler host suite and the same follow-on checks |
 | `darwin-parity` | self-hosted `darwin-arm64` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `lldb` | self-hosted `darwin-arm64` | the LLDB sessions |
+| `arm64-debug-build` | self-hosted `linux-arm64` | build the debug executables once for the `arm64-compiler` job and the Linux arm64 determinism manifest |
 | `arm64-compiler` | self-hosted `linux-arm64` | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | self-hosted `linux-arm64` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
 | `freebsd-emit` matrix | self-hosted `linux-amd64` | emit both FreeBSD targets with the checked Linux release compiler and locked sysroot; check source verdicts, assembler boundaries and linked instructions; transfer hashed payloads |
@@ -151,7 +162,7 @@ still succeed. The linked full run contains the target-test results.
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | self-hosted `freebsd-amd64`, `freebsd-arm64` | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
 | `rv64-emit` matrix | self-hosted `linux-amd64` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
-| `determinism` | self-hosted `linux-amd64`, `linux-arm64`, `darwin-arm64` | the called workflow emits the fixture manifest on each host and compares them |
+| `determinism` | self-hosted `linux-amd64`, `linux-arm64`, `darwin-arm64` | the called workflow emits the fixture manifest on each host and compares them, starting once the three debug builds succeed rather than after their suites |
 
 Linux and Darwin lanes use the registered `landin-linux-amd64`,
 `landin-linux-arm64` and `landin-darwin-arm64` runners for pushes, manual
@@ -162,8 +173,8 @@ uses the caller's event to choose the same Linux and Darwin hosts. Links,
 Pages and release workflows also use the self-hosted hosts.
 See [the runner environment requirements](docs/environments.md#github-actions-runners).
 
-A release compile error surfaces in its host's build job; debug compile
-errors surface in the debug verification jobs. In
+A compile error surfaces in its host's debug or release build job; Linux
+arm64's release lane still builds its own. In
 [run 37227405592](https://github.com/JanHaan/Landin/actions/runs/37227405592),
 the successful shared release-build jobs took 300 seconds on Linux and 447
 on Darwin; their compilation steps took 273 and 425 seconds respectively.

@@ -43,7 +43,10 @@ the candidate CI run, rather than every local editing loop.
 
 Push the final candidate to a branch and let its complete gate finish. Use
 completion notifications and investigate failed logs instead of repeatedly
-watching or rerunning the matrix. Before promotion, verify the complete job
+watching or rerunning the matrix. A failed gate reports itself only when its
+last lane ends, so follow it with `python3 scripts/gate_watch.py`, which
+returns at the first failed job with its step and log command; a pushed fix
+cancels the superseded run. Before promotion, verify the complete job
 listing and the tested tree; a changed merge tree needs its own full pass.
 The identical-candidate reuse policy in `AGENTS.md` compares all tracked
 bytes, paths and modes, including workflow definitions and tool pins, with

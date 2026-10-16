@@ -1,10 +1,11 @@
 #  The gate: every target, unless verified explanatory edits reuse a full pass.
 #  RV64 is the exception: suspended until further notice (see rv64-emit).
 #
-#  Verification lanes have separate verdicts.  A release build job on each
-#  host supplies an artifact to its same-host lanes; consumers check its
-#  source and toolchain manifest before use.  A compile error surfaces in
-#  the build job, and `gate` needs every job so any failure fails the gate.
+#  Verification lanes have separate verdicts.  Debug and release build jobs
+#  supply artifacts to their same-host lanes (Linux arm64's release lane
+#  builds its own); consumers check the source and toolchain manifests
+#  before use.  A compile error surfaces in the build job, and `gate` needs
+#  every job so any failure fails the gate.
 #
 #  Linux and Darwin jobs select the repository's self-hosted platform labels.
 #  Fork pull requests keep the GitHub-hosted Linux and Darwin images.
@@ -62,9 +63,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/gate_inputs.py reuse gate.yml \
-            documents scripts compiler linux-release-build release bindings \
-            editor-grammar cortex-m scaling darwin-release-build darwin-host \
-            darwin-host-release darwin-parity lldb arm64-compiler arm64-release \
+            documents scripts linux-debug-build compiler linux-release-build \
+            release bindings editor-grammar cortex-m scaling darwin-debug-build \
+            darwin-release-build darwin-host darwin-host-release darwin-parity lldb \
+            arm64-debug-build arm64-compiler arm64-release \
             freebsd-emit-amd64-runtime freebsd-emit-amd64-debugger freebsd-emit-amd64-abi \
             freebsd-emit-arm64-runtime freebsd-emit-arm64-debugger freebsd-emit-arm64-abi \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
@@ -94,7 +96,10 @@ jobs:
   #  The Python suites no other job runs: every scripts/tests module,
   #  check.py's controls among them, and the determinism, quality and
   #  debugging controls.  Each check.py control breaks one input and
-  #  requires the check to notice; about five and a half minutes.
+  #  requires the check to notice.  One after another the modules took
+  #  eleven and a half minutes, ten of them the controls, so every module
+  #  is its own process and the controls are dealt across shards; the log
+  #  gives each process's time.
   scripts:
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
@@ -103,12 +108,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: scripts/tests
-        run: |
-          set -eu
-          for test in scripts/tests/test_*.py; do
-            echo "== $test"
-            python3 "$test"
-          done
+        run: python3 scripts/script_tests.py
 
       - name: The determinism, quality and debugging controls
         run: |
@@ -117,23 +117,72 @@ jobs:
           python3 compiler/tests/quality/test_check.py
           python3 compiler/tests/debugging/test_check.py
 
-  #  The debug compiler and all 800 cases, then the checks that need a built
-  #  compiler and no corpus.  scripts/test.sh builds first, so this is also
-  #  where a compile error is reported.
-  compiler:
+  #  Compile the debug executables once on Linux x86-64 for the debug suite
+  #  and for determinism.  A job cannot wait on another job's step, so
+  #  while the build was the suite's first step the manifests waited for
+  #  the whole suite.  A compile error is reported here.
+  #
+  #  The self-hosted runner shares 96 CPUs with five other slots and the
+  #  FreeBSD VM, so it compiles twelve units at once; a hosted runner has
+  #  four CPUs.
+  linux-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      #  Eight workers; the measurements below used four hosted vCPUs.
+      - name: Build debug executables with bounded parallelism
+        run: ./scripts/build.sh -j${{ runner.environment == 'self-hosted' && 12 || 4 }}
+
+      - name: Package debug executables and both build manifests
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-amd64-debug.tar.gz"
+          -C compiler/ada/build/linux-amd64/debug bin source-manifest.txt tests-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-amd64-debug
+          path: ${{ runner.temp }}/linux-amd64-debug.tar.gz
+          retention-days: 1
+
+  #  The debug compiler and all 800 cases, then the checks that need a built
+  #  compiler and no corpus.
+  compiler:
+    needs: [inputs, linux-debug-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: >-
+      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+          && 'ubuntu-24.04' || fromJSON('["self-hosted", "Linux", "X64", "linux-amd64"]') }}
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-amd64-debug
+          path: ${{ runner.temp }}/linux-amd64-debug
+
+      - name: Restore and verify debug executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/debug
+          tar -xzf "$RUNNER_TEMP/linux-amd64-debug/linux-amd64-debug.tar.gz" \
+            -C compiler/ada/build/linux-amd64/debug
+          ./scripts/build.sh -q
+
+      #  Eight workers on a hosted runner's four vCPUs, sixteen on the
+      #  self-hosted one, whose host has 96 shared as the build's are.
       #  A work item is one
       #  fixture with its profiles in order, a chain of compile, assemble,
       #  link and run, so the processes wait on each other and more workers
@@ -145,21 +194,10 @@ jobs:
       #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
-      - name: Build debug executables with bounded parallelism
-        run: ./scripts/build.sh -j4
-
-      - name: Package the checked debug compiler for determinism
-        run: >-
-          tar -czf "$RUNNER_TEMP/linux-amd64-debug.tar.gz"
-          -C compiler/ada/build/linux-amd64/debug bin/refine source-manifest.txt
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: linux-amd64-debug
-          path: ${{ runner.temp }}/linux-amd64-debug.tar.gz
-          retention-days: 1
-
       - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: >-
+          LANDIN_TEST_JOBS=${{ runner.environment == 'self-hosted' && 16 || 8 }}
+          LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
       #  Use the compiler this job already built.  The focused mode requires
       #  Emacs and the executable, then waits for a live refine diagnostic.
@@ -217,7 +255,7 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
 
       - name: Build release executables
-        run: ./scripts/build.sh -j4
+        run: ./scripts/build.sh -j${{ runner.environment == 'self-hosted' && 12 || 4 }}
 
       - name: Package release executables and both build manifests
         run: >-
@@ -234,7 +272,8 @@ jobs:
   #  and the lanes that measure or debug what it emits: object quality and
   #  the GDB sessions.  Release only, because the debug compiler's checks
   #  make those five times slower and add no coverage of their own.
-  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
+  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.  The width is the
+  #  debug suite's: sixteen self-hosted, eight on a hosted runner.
   release:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
@@ -264,7 +303,9 @@ jobs:
           ./scripts/build.sh -q
 
       - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: >-
+          LANDIN_TEST_JOBS=${{ runner.environment == 'self-hosted' && 16 || 8 }}
+          LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
@@ -389,7 +430,7 @@ jobs:
 
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB: 612 s on the runner, and the
-  #  whole job sixteen and a half minutes.
+  #  whole job sixteen and a half minutes.  Eight on the self-hosted runner.
   cortex-m:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
@@ -426,7 +467,8 @@ jobs:
 
       - name: Every Cortex-M lane
         run: |
-          LANDIN_CORTEX_JOBS=4 python3 environments/cortex-m/run.py \
+          LANDIN_CORTEX_JOBS=${{ runner.environment == 'self-hosted' && 8 || 4 }} \
+            python3 environments/cortex-m/run.py \
             --tools "$RUNNER_TEMP/cortex-m" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
@@ -511,16 +553,15 @@ jobs:
           path: ${{ runner.temp }}/darwin-release.tar.gz
           retention-days: 1
 
-  #  The debug compiler as a native Darwin host: every compiler case,
-  #  without the two that execute Linux programs, then determinism closures,
-  #  native report identity and the server.
-  darwin-host:
+  #  Compile the Darwin debug executables once for the host suite and
+  #  determinism, which then need not wait for the suite.
+  darwin-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
       LANDIN_BUILD_MODE: debug
@@ -535,15 +576,50 @@ jobs:
       - name: Build debug executables with bounded parallelism
         run: ./scripts/build.sh -j3
 
-      - name: Package the checked debug compiler for determinism
+      - name: Package debug executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/darwin-arm64-debug.tar.gz"
-          -C compiler/ada/build/darwin-arm64/debug bin/refine source-manifest.txt
+          -C compiler/ada/build/darwin-arm64/debug bin source-manifest.txt tests-manifest.txt
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: darwin-arm64-debug
           path: ${{ runner.temp }}/darwin-arm64-debug.tar.gz
           retention-days: 1
+
+  #  The debug compiler as a native Darwin host: every compiler case,
+  #  without the two that execute Linux programs, then determinism closures,
+  #  native report identity and the server.
+  darwin-host:
+    needs: [inputs, darwin-debug-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: >-
+      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+          && 'macos-26' || fromJSON('["self-hosted", "macOS", "ARM64", "darwin-arm64"]') }}
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '/Applications/Xcode_26.6.app/Contents/Developer' || '' }}
+      LANDIN_BUILD_MODE: debug
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: darwin-arm64-debug
+          path: ${{ runner.temp }}/darwin-arm64-debug
+
+      - name: Restore and verify debug executables
+        run: |
+          mkdir -p compiler/ada/build/darwin-arm64/debug
+          tar -xzf "$RUNNER_TEMP/darwin-arm64-debug/darwin-arm64-debug.tar.gz" \
+            -C compiler/ada/build/darwin-arm64/debug
+          ./scripts/build.sh -q
 
       #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
       #  compiler defaults to darwin-arm64 (D257), so the lane is named.
@@ -751,17 +827,15 @@ jobs:
       - name: LLDB source debugging
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
 
-  #  Linux arm64 with the debug compiler: the whole test program, whose lane
-  #  is this host's own, then the checks that need a compiler and no
-  #  corpus.  The same steps as `compiler` on the other architecture.
-  #  Eleven minutes as a job.
-  arm64-compiler:
+  #  Compile the Linux arm64 debug executables once for arm64-compiler and
+  #  determinism, which then need not wait for the suite.
+  arm64-debug-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
           && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -773,15 +847,49 @@ jobs:
       - name: Build debug executables with bounded parallelism
         run: ./scripts/build.sh -j4
 
-      - name: Package the checked debug compiler for determinism
+      - name: Package debug executables and both build manifests
         run: >-
           tar -czf "$RUNNER_TEMP/linux-arm64-debug.tar.gz"
-          -C compiler/ada/build/linux-arm64/debug bin/refine source-manifest.txt
+          -C compiler/ada/build/linux-arm64/debug bin source-manifest.txt tests-manifest.txt
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-arm64-debug
           path: ${{ runner.temp }}/linux-arm64-debug.tar.gz
           retention-days: 1
+
+  #  Linux arm64 with the debug compiler: the whole test program, whose lane
+  #  is this host's own, then the checks that need a compiler and no
+  #  corpus.  The same steps as `compiler` on the other architecture.
+  #  Eleven minutes as a job.
+  arm64-compiler:
+    needs: [inputs, arm64-debug-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: >-
+      ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+          && 'ubuntu-24.04-arm' || fromJSON('["self-hosted", "Linux", "ARM64", "linux-arm64"]') }}
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-arm64-debug
+          path: ${{ runner.temp }}/linux-arm64-debug
+
+      - name: Restore and verify debug executables
+        run: |
+          mkdir -p compiler/ada/build/linux-arm64/debug
+          tar -xzf "$RUNNER_TEMP/linux-arm64-debug/linux-arm64-debug.tar.gz" \
+            -C compiler/ada/build/linux-arm64/debug
+          ./scripts/build.sh -q
 
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
@@ -923,7 +1031,7 @@ jobs:
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
-      LANDIN_FREEBSD_JOBS: '4'
+      LANDIN_FREEBSD_JOBS: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '4' || '8' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the pinned compiler toolchain
@@ -1127,8 +1235,10 @@ jobs:
 
   #  Build and compare assembly manifests on Linux and macOS in the same
   #  workflow run, so a host disagreement also fails the aggregate status.
+  #  The manifests start once each host's debug build is checked, beside
+  #  that host's suite rather than after it.
   determinism:
-    needs: [inputs, compiler, arm64-compiler, darwin-host]
+    needs: [inputs, linux-debug-build, arm64-debug-build, darwin-debug-build]
     if: needs.inputs.outputs.reuse != 'true'
     uses: ./.github/workflows/determinism.yml
     with:
@@ -1138,9 +1248,10 @@ jobs:
   #  The one check a branch rule requires: every job above succeeded.
   gate:
     if: always()
-    needs: [inputs, documents, scripts, compiler, linux-release-build, release,
-            bindings, editor-grammar, cortex-m, scaling, darwin-release-build,
-            darwin-host, darwin-host-release, darwin-parity, lldb,
+    needs: [inputs, documents, scripts, linux-debug-build, compiler,
+            linux-release-build, release, bindings, editor-grammar, cortex-m,
+            scaling, darwin-debug-build, darwin-release-build, darwin-host,
+            darwin-host-release, darwin-parity, lldb, arm64-debug-build,
             arm64-compiler, arm64-release, freebsd-emit, freebsd, determinism]
     runs-on: >-
       ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
