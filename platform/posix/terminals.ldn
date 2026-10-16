@@ -272,14 +272,24 @@ else
         problem = errno_of(cell.val)
     end terminal_failure
 
+    --  Why a terminal's request on OPENED failed, as `terminal_failure`,
+    --  except that a descriptor open on something else is `enotty`, as
+    --  Darwin's `isatty` reports it: Darwin's /dev/null and other devices
+    --  refuse with ENODEV, and its sockets with EOPNOTSUPP.
+    refusal: (opened: descriptor) -> (problem: errno) =
+        problem = terminal_failure()
+        return when problem == ebadf
+        if libc.isatty(i32(opened)) <> 1 then problem = enotty end if
+    end refusal
+
     system_is_terminal: (opened: descriptor) -> (yes: bool) =
         yes = libc.isatty(i32(opened)) == 1
     end system_is_terminal
 
     system_window_size: (opened: descriptor) -> (size: window_size) ! errno =
         mut record: libc.window_record = zeroed
-        fail terminal_failure() when libc.ioctl(i32(opened), libc.tiocgwinsz,
-                                                addr record) <> 0
+        fail refusal(opened) when libc.ioctl(i32(opened), libc.tiocgwinsz,
+                                             addr record) <> 0
         size = (rows: record.rows, columns: record.columns,
                 width: record.width, height: record.height)
     end system_window_size
@@ -288,15 +298,15 @@ else
                             -> none ! errno =
         record: libc.window_record = (rows: size.rows, columns: size.columns,
                                       width: size.width, height: size.height)
-        fail terminal_failure() when libc.ioctl(i32(opened), libc.tiocswinsz,
-                                                addr record) <> 0
+        fail refusal(opened) when libc.ioctl(i32(opened), libc.tiocswinsz,
+                                             addr record) <> 0
     end system_set_window_size
 
     system_terminal_mode: (opened: descriptor) -> (mode: terminal_mode)
                           ! errno =
         mode = (settings: zeroed)
-        fail terminal_failure() when libc.tcgetattr(i32(opened),
-                                                    addr mode.settings) <> 0
+        fail refusal(opened) when libc.tcgetattr(i32(opened),
+                                                 addr mode.settings) <> 0
     end system_terminal_mode
 
     system_set_terminal_mode: (opened: descriptor, mode: terminal_mode,
@@ -306,8 +316,8 @@ else
             after_output: libc.tcsadrain
             discarding_input: libc.tcsaflush
         end match
-        fail terminal_failure() when libc.tcsetattr(i32(opened), timing,
-                                                    addr mode.settings) <> 0
+        fail refusal(opened) when libc.tcsetattr(i32(opened), timing,
+                                                 addr mode.settings) <> 0
     end system_set_terminal_mode
 
     fixed if compiler.os == darwin then
