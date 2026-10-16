@@ -7,14 +7,15 @@ emission jobs prepare hashed payloads; an emitted result is not an execution
 verdict. The sysroot and optional local VM base come from official 14.4 release files; hashes are in
 [`environments/freebsd/lock.json`](../../../environments/freebsd/lock.json).
 
-The recurring `freebsd-amd64` and `freebsd-arm64` Linux runners control
-FreeBSD 15.1 KVM guests with host CPU passthrough. A fresh local amd64 VM
-uses KVM; a fresh local arm64 VM uses QEMU's `max` CPU under system emulation.
+The gate runs each lane in one GitHub-hosted Linux x86-64 job, which emits
+and then boots a fresh VM from the locked 14.4 image, as a local run does: amd64
+under KVM with host CPU passthrough, arm64 under QEMU's `max` CPU in system
+emulation, because the hosted arm64 images expose no KVM.
 A guest C probe confirms every additional selected
 feature before any higher-level Landin program executes: CPUID plus XCR0
 for x86-64-v3, and `elf_aux_info(AT_HWCAP)` for LSE, CRC32 and RDM. Lack of
-support fails, with no skipped higher-level verdict. The recurring VM's
-confirmed LSE supplies the capable execution lane.
+support fails, with no skipped higher-level verdict. The emulated `max`
+CPU's confirmed LSE supplies the capable arm64 execution lane.
 
 Runtime and ABI selection reads fixture metadata and fails when empty.
 The two I/O fixtures that use Linux `/sys` and `/dev/full` reuse the existing

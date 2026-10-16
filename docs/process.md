@@ -21,8 +21,8 @@ what they cost.
 | candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; RV64 Linux emission and physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners, suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 | promotion to main | verify the candidate's complete successful gate and promote the unchanged tree | the gate reuses the full candidate pass; documents and script controls still run |
 
-Every event runs the Linux and Darwin lanes on GitHub-hosted images; only
-the FreeBSD VM lanes use dedicated self-hosted runners.
+Every event runs every lane on GitHub-hosted images; the FreeBSD lanes boot
+their VMs inside the job.
 See [the runner requirements](environments.md#github-actions-runners) for
 labels, tools and scheduling.
 

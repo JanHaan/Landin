@@ -339,7 +339,7 @@ class RV64Controls(unittest.TestCase):
             body = workflow.split(job, 1)[1].split('\n\n', 1)[0]
             self.assertIn("if: false && needs.inputs.outputs.reuse != 'true'", body)
         aggregate = workflow.split('  gate:\n', 1)[1]
-        self.assertIn('freebsd-emit, freebsd, determinism]', aggregate)
+        self.assertIn('arm64-release, freebsd, determinism]', aggregate)
         inputs = workflow.split('  inputs:\n', 1)[1].split('  documents:\n', 1)[0]
         self.assertNotIn('rv64', inputs)
         manifest = (ROOT / 'scripts/emit_manifest.py').read_text()

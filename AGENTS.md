@@ -156,19 +156,18 @@ still succeed. The linked full run contains the target-test results.
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` job and the Linux arm64 determinism manifest |
 | `arm64-compiler` | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane, the default target, the determinism closures, native report identity and the scripted server sessions |
 | `arm64-release` | `ubuntu-24.04-arm` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
-| `freebsd-emit` matrix | `ubuntu-24.04` | emit both FreeBSD targets with the checked Linux release compiler and locked sysroot; check source verdicts, assembler boundaries and linked instructions; transfer hashed payloads |
-| `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | self-hosted `freebsd-amd64`, `freebsd-arm64` | execute the applicable runtime corpus in accelerated FreeBSD VMs hosted on Linux, including guest CPU confirmation |
-| `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | self-hosted `freebsd-amd64`, `freebsd-arm64` | native FreeBSD LLDB source stops, frames, local values and unwinding |
-| `freebsd-amd64-abi`, `freebsd-arm64-abi` | self-hosted `freebsd-amd64`, `freebsd-arm64` | nonempty C ABI fixture sets against independently compiled FreeBSD C peers |
+| `freebsd-amd64-runtime`, `freebsd-arm64-runtime` | `ubuntu-24.04` | emit with the checked Linux release compiler and locked sysroot, check source verdicts, assembler boundaries and linked instructions, then execute the applicable runtime corpus in a fresh FreeBSD 14.4 VM, amd64 under KVM and arm64 emulated, including guest CPU confirmation |
+| `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | `ubuntu-24.04` | the same emission, then native FreeBSD LLDB source stops, frames, local values and unwinding in the VM |
+| `freebsd-amd64-abi`, `freebsd-arm64-abi` | `ubuntu-24.04` | the same emission, then nonempty C ABI fixture sets against independently compiled FreeBSD C peers in the VM |
 | `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
 | `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest on each host and compares them, starting once the three debug builds succeed rather than after their suites |
 
 Linux and Darwin lanes run on GitHub-hosted images for every event, as do
 the called determinism workflow and the links, Pages and release workflows;
-the registered Linux and Darwin runners measured slower and are no longer
-selected. The FreeBSD execution lanes retain their dedicated self-hosted VM
-runners. See [the runner environment requirements](docs/environments.md#github-actions-runners).
+the registered runners measured slower and are no longer selected. The
+FreeBSD lanes boot their VMs inside the hosted job, arm64 under emulation
+because GitHub's arm64 images offer no KVM. See [the runner environment requirements](docs/environments.md#github-actions-runners).
 
 A compile error surfaces in its host's debug or release build job; Linux
 arm64's release lane still builds its own. In

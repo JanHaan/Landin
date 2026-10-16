@@ -30,9 +30,10 @@ checks compiler behavior for Cortex; they do not execute embedded workloads.
 FreeBSD x86-64 and arm64 run in [system VMs](../environments/freebsd/README.md)
 on Linux. Each has separate recurring runtime, native guest LLDB and C ABI
 verdicts. Linux x86-64 emits and inspects hashed payloads against a
-checksum-locked FreeBSD 14.4 sysroot. The self-hosted `freebsd-amd64` and
-`freebsd-arm64` Linux controllers execute them in their FreeBSD 15.1 KVM
-guests; the evidence records the actual guest version and CPU probes.
+checksum-locked FreeBSD 14.4 sysroot. The same hosted job boots a fresh VM
+from the locked 14.4 image and executes them, amd64 under KVM and arm64
+under emulation; the evidence records the actual guest version and CPU
+probes.
 
 RV64 Linux LP64D is cross-emitted on the supported Linux compiler host and
 executed on the RISE service's physical runners with the sole label
@@ -48,16 +49,15 @@ gate, the called determinism workflow and the links, Pages and release
 workflows: `ubuntu-24.04` for Linux x86-64, `ubuntu-24.04-arm` for Linux
 arm64 and `macos-26` with `DEVELOPER_DIR` set to Xcode 26.6 for Darwin,
 which `environments/macos-arm64/policy.json` records. The repository is
-public, so these minutes are free. Only FreeBSD execution selects
-self-hosted labels:
-
-| runner name | required platform label | role |
-|---|---|---|
-| `landin-freebsd-amd64` | `freebsd-amd64` | accelerated FreeBSD x86-64 VM execution, ABI and debugging |
-| `landin-freebsd-arm64` | `freebsd-arm64` | accelerated FreeBSD arm64 VM execution, ABI and debugging |
+public, so these minutes are free. No job selects a self-hosted runner.
+FreeBSD runs in a VM each job boots: amd64 under KVM, which the x86-64 image
+offers, and arm64 under QEMU's system emulation, because the arm64 images
+expose none. A probe on 2026-10-16 (run 38921327105) found `/dev/kvm` on
+`ubuntu-24.04` and none on `ubuntu-24.04-arm` or `ubuntu-22.04-arm`, whose
+kernels log `kvm: HYP mode not available`.
 
 From 2026-10-07 to 2026-10-16 the Linux and Darwin jobs ran on registered
-runners instead, on three Linux machines and a Mac whose macOS VMs shared
+runners instead, and FreeBSD on self-hosted VM controllers, on three Linux machines and a Mac whose macOS VMs shared
 their cores with the Linux slots and the FreeBSD VMs. At the switch the
 hosted gates had taken 17 to 23 minutes and the registered ones took 22 to
 24: the x86-64 debug suite went from 9.5 to 13.5 minutes and Darwin parity
@@ -81,8 +81,7 @@ Emacs is installed, and the hosted image has none: the grammar needs
 tree-sitter ABI 15, which Ubuntu's Emacs 29 lacks. LLDB launches programs
 on the hosted macOS image, as it did before the switch.
 
-The FreeBSD VM controllers keep their SSH and guest setup; see the
-[FreeBSD VMs](../environments/freebsd/README.md).
+See the [FreeBSD VMs](../environments/freebsd/README.md) for the guests.
 
 ## Environments
 

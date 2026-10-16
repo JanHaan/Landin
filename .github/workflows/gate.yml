@@ -10,7 +10,7 @@
 #  Linux and Darwin jobs run on GitHub-hosted images, the same for every
 #  event: the registered runners took 22 to 24 minutes for gates the hosted
 #  images ran in 17 to 23, and their VMs shared cores with the Linux slots.
-#  Only FreeBSD execution keeps its self-hosted VM controllers.  Darwin uses
+#  FreeBSD runs in VMs the jobs boot themselves.  Darwin uses
 #  Xcode 26.6 on the hosted image; environments/macos-arm64/policy.json
 #  records the tool policy.
 #  Cortex-M runs on Linux x86-64 under its locked QEMU and GDB.
@@ -65,8 +65,6 @@ jobs:
             release bindings editor-grammar cortex-m scaling darwin-debug-build \
             darwin-release-build darwin-host darwin-host-release darwin-parity lldb \
             arm64-debug-build arm64-compiler arm64-release \
-            freebsd-emit-amd64-runtime freebsd-emit-amd64-debugger freebsd-emit-amd64-abi \
-            freebsd-emit-arm64-runtime freebsd-emit-arm64-debugger freebsd-emit-arm64-abi \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime freebsd-arm64-debugger freebsd-arm64-abi \
             'determinism / manifest (x86_64-linux)' \
@@ -959,19 +957,30 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" \
             --clang clang-19 --output "$RUNNER_TEMP/bindings"
 
-  # Emit and inspect on Linux x86-64, then execute the checked payloads in
-  # the matching accelerated FreeBSD VMs hosted on the Linux self-hosted runners.
-  freebsd-emit:
-    name: freebsd-emit-${{ matrix.arch }}-${{ matrix.kind }}
+  #  Emit and inspect on Linux x86-64, then boot a fresh VM from the locked
+  #  official FreeBSD image and execute there, all in one hosted job per
+  #  lane.  amd64 runs under KVM, which the hosted x86-64 image offers once
+  #  the job may open /dev/kvm.  arm64 runs under QEMU's system emulation
+  #  with its `max` CPU, which has LSE, CRC32 and RDM: GitHub's arm64 images
+  #  expose no KVM, their kernels logging "HYP mode not available" (probed
+  #  in run 38921327105).  The release images and base archives are cached
+  #  under the lock's digests; check.py verifies them either way.
+  freebsd:
+    name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
         kind: [runtime, debugger, abi]
+        include:
+          - arch: amd64
+            qemu: qemu-system-x86
+          - arch: arm64
+            qemu: qemu-system-arm qemu-efi-aarch64
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
@@ -990,60 +999,31 @@ jobs:
           tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
             -C compiler/ada/build/linux-amd64/release
           ./scripts/build.sh -q
-      - name: Install the cross driver and ELF tools
+      - name: Install the cross driver, ELF tools and QEMU
         run: |
           . ./environments/pins.sh
           ./scripts/ci_packages.sh \
-            "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 libarchive-tools
+            "clang-19=$LANDIN_CLANG_UBUNTU" lld-19 llvm-19 libarchive-tools \
+            qemu-utils ${{ matrix.qemu }}
           test "$(dpkg-query -W -f='${Version}' clang-19)" = "$LANDIN_CLANG_UBUNTU"
           clang-19 --version
-      - name: Emit and inspect FreeBSD ${{ matrix.arch }} ${{ matrix.kind }}
+      - name: Let the job open KVM
+        if: matrix.arch == 'amd64'
         run: |
-          python3 compiler/tests/freebsd/check.py --prepare-only \
-            --arch=${{ matrix.arch }} --kind=${{ matrix.kind }} \
-            --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
-            --cache="$RUNNER_TEMP/freebsd-cache" --output="$RUNNER_TEMP/freebsd-payload"
-          tar -czf "$RUNNER_TEMP/freebsd-payload.tar.gz" -C "$RUNNER_TEMP/freebsd-payload" .
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          sudo chmod 666 /dev/kvm
+          ls -l /dev/kvm
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          name: freebsd-payload-${{ matrix.arch }}-${{ matrix.kind }}
-          path: ${{ runner.temp }}/freebsd-payload.tar.gz
-          retention-days: 1
-      - name: Keep failed emission diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: freebsd-emit-${{ matrix.arch }}-${{ matrix.kind }}
           path: |
-            ${{ runner.temp }}/freebsd-payload/*.json
-            ${{ runner.temp }}/freebsd-payload/*.log
-          retention-days: 14
-
-  freebsd:
-    name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}
-    needs: [inputs, freebsd-emit]
-    if: needs.inputs.outputs.reuse != 'true'
-    runs-on: [self-hosted, "freebsd-${{ matrix.arch }}"]
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-        kind: [runtime, debugger, abi]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: freebsd-payload-${{ matrix.arch }}-${{ matrix.kind }}
-          path: ${{ runner.temp }}/freebsd-input
-      - name: Execute and debug in the Linux-hosted FreeBSD VM
+            ~/.cache/landin/freebsd/${{ matrix.arch }}.raw.xz
+            ~/.cache/landin/freebsd/${{ matrix.arch }}-base.txz
+          key: freebsd-${{ matrix.arch }}-${{ hashFiles('environments/freebsd/lock.json') }}
+      - name: Emit, boot and execute FreeBSD ${{ matrix.arch }} ${{ matrix.kind }}
         run: |
-          mkdir "$RUNNER_TEMP/freebsd-prepared"
-          tar -xzf "$RUNNER_TEMP/freebsd-input/freebsd-payload.tar.gz" -C "$RUNNER_TEMP/freebsd-prepared"
           python3 compiler/tests/freebsd/check.py \
             --arch=${{ matrix.arch }} --kind=${{ matrix.kind }} \
-            --prepared="$RUNNER_TEMP/freebsd-prepared" --output="$RUNNER_TEMP/freebsd-evidence" \
-            --runner-ssh='ssh -T -p 2222 -i /home/runner/.ssh/freebsd -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 ci@freebsd-vm'
+            --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output="$RUNNER_TEMP/freebsd-evidence"
       - name: Keep guest identity, feature probes and verdict transcripts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1193,7 +1173,7 @@ jobs:
             linux-release-build, release, bindings, editor-grammar, cortex-m,
             scaling, darwin-debug-build, darwin-release-build, darwin-host,
             darwin-host-release, darwin-parity, lldb, arm64-debug-build,
-            arm64-compiler, arm64-release, freebsd-emit, freebsd, determinism]
+            arm64-compiler, arm64-release, freebsd, determinism]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
