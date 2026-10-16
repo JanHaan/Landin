@@ -2443,8 +2443,12 @@ def derivation_code_digest(*roots):
                 elif not name.startswith("__"):
                     parts.append("%s.%s = %s" % (item.__qualname__, name,
                                                  stable(value)))
-        else:
+        elif isinstance(item, types.FunctionType):
             codes = [item.__code__]
+        else:
+            #  Not code at all: a test's stand-in, say.
+            parts.append(stable(item))
+            codes = []
         for code in codes:
             parts.append(spelled(code))
             for name in names(code):

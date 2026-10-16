@@ -50,7 +50,7 @@ class LexicalCache(unittest.TestCase):
 
 
 class GrammarCorpusCache(unittest.TestCase):
-    def test_reuses_only_matching_source_grammar_and_checker_bytes(self):
+    def test_reuses_only_matching_source_grammar_and_derivation_code(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             (root / "spec.md").write_text("grammar one")
@@ -68,7 +68,8 @@ class GrammarCorpusCache(unittest.TestCase):
             with patch.object(CHECK, "ROOT", raw), \
                  patch.object(CHECK, "__file__", str(root / "check.py")), \
                  patch.object(CHECK, "read_grammar",
-                              return_value=({}, {"program": ()}, [])), \
+                              return_value=({}, {"program": ()}, [])) \
+                    as reader, \
                  patch.object(CHECK, "grammar_signs", return_value=set()), \
                  patch.object(CHECK, "landin_tokens",
                               side_effect=lambda source, *_: (source, None)), \
@@ -100,16 +101,30 @@ class GrammarCorpusCache(unittest.TestCase):
 
                 source.write_text("good")
                 self.assertEqual(faults(), [])
-                (root / "spec.md").write_text("grammar two")
-                self.assertEqual(faults(), [])
+                self.assertEqual(len(calls), 3)
+
+                #  Prose in the specification and code no verdict reaches
+                #  keep the verdicts; the grammar as read and the code that
+                #  derives from it do not.
+                (root / "spec.md").write_text("grammar one, explained")
                 (root / "check.py").write_text("checker two")
                 self.assertEqual(faults(), [])
+                self.assertEqual(len(calls), 3)
+                reader.return_value = ({"program": '"x"'},
+                                       {"program": ("lit", "x")}, [])
+                self.assertEqual(faults(), [])
+                self.assertEqual(len(calls), 4)
+                with patch.object(CHECK, "derivation_code_digest",
+                                  return_value="other code"):
+                    self.assertEqual(faults(), [])
                 self.assertEqual(len(calls), 5)
+                self.assertEqual(faults(), [])
+                self.assertEqual(len(calls), 6)
 
                 (case / "other.ldn").write_text("bad")
                 self.assertTrue(any("other.ldn" in where for where, _, _
                                     in CHECK.check_grammar_corpus(True)))
-                self.assertEqual(len(calls), 6)
+                self.assertEqual(len(calls), 7)
 class FixtureMetadataCache(unittest.TestCase):
     def test_reuses_metadata_without_leaking_the_firmware_row(self):
         with tempfile.TemporaryDirectory() as temporary:
