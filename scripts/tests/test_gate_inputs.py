@@ -458,6 +458,7 @@ READERS = {
     ".github/workflows/pages.yml": "its own publishing workflow",
     "scripts/links_inputs.py": "links.yml scope selection; controls always run",
     ".github/workflows/release.yml": "a v* tag",
+    ".github/DISCUSSION_TEMPLATE/": "GitHub's discussion forms, and the documents job's target check",
     "lychee.toml": "links.yml",
     "highlight/pyproject.toml": "a comment naming ROADMAP.md",
     "highlight/textmate/package.json": "the extension's own README",
