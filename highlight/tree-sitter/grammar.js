@@ -28,6 +28,25 @@ const PREC = {
   call: 120,
 };
 
+// A contextual word the lexer may offer as its own token where a
+// declaration, a label or a parameter could begin, read as the name it is
+// everywhere else.
+function contextualName($) {
+  return alias(choice('distinct', 'link', 'option', 'as', 'caller'), $.identifier);
+}
+
+// A statement's label, as it is written, left and closed, which may be a
+// contextual word the lexer offers as its own token there.
+function endName($) {
+  return choice($.identifier, contextualName($));
+}
+
+// A field's or an argument's label, which `caller` may be where a
+// parameter list could also begin.
+function labelName($) {
+  return choice($._declaration_name, alias('caller', $.identifier));
+}
+
 module.exports = grammar({
   name: 'landin',
 
@@ -101,14 +120,15 @@ module.exports = grammar({
     [$._type, $.indexed_expression],
     [$.identifier_list, $.type_declaration, $.concept_declaration, $.function_declaration],
     [$.identifier_list, $.function_declaration],
-    [$.identifier_list, $.field_value],
     [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.field_value],
     [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.labeled_block],
     [$.identifier_list, $.type_formal],
-    [$.identifier_list, $.destructured_field, $.field_value],
     [$.identifier_list, $.destructured_field],
     [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.destructured_field, $.field_value],
     [$.identifier_list, $.variant_part],
+    // `link(` begins a link attribute or calls something named `link`; the
+    // attribute's own labels decide.
+    [$.link_symbol, $.indexed_expression],
   ],
 
   rules: {
@@ -168,7 +188,7 @@ module.exports = grammar({
       field('name', $._declaration_name), ':', $.c_declared_signature,
       optional(seq(
         '=', optional(field('body', $.block)),
-        'end', optional(field('end_name', $.identifier)),
+        'end', optional(field('end_name', endName($))),
       )),
     ),
     c_convention: $ => seq(
@@ -280,7 +300,7 @@ module.exports = grammar({
       'concept', $.type_formals,
       optional(seq('is', commaSep1($.declaration_reference))),
       repeat($.concept_entry),
-      'end', optional($.identifier),
+      'end', optional(endName($)),
     ),
     concept_entry: $ => seq(field('name', $._declaration_name), ':', $.signature),
 
@@ -352,7 +372,7 @@ module.exports = grammar({
     variant_part: $ => seq(
       field('name', $._declaration_name), ':', 'variant',
       $.variant_case, repeat(seq('|', $.variant_case)),
-      'end', optional($.identifier),
+      'end', optional(endName($)),
     ),
     variant_case: $ => seq(
       field('name', $._declaration_name),
@@ -364,7 +384,7 @@ module.exports = grammar({
       field('name', $._declaration_name), ':',
       $.declared_signature, '=',
       optional(field('body', $.block)),
-      'end', optional(field('end_name', $.identifier)),
+      'end', optional(field('end_name', endName($))),
     ),
     anonymous_function: $ => prec.dynamic(1, seq(
       $.signature, '=', optional(field('body', $.block)), 'end',
@@ -459,25 +479,25 @@ module.exports = grammar({
     // globally, including in every ordinary identifier position.
     loop_statement: $ => choice(
       seq('loop', 'do', optional($.block), 'end', 'loop'),
-      seq(field('label', $.identifier), ':', 'loop', 'do', optional($.block),
-          'end', field('end_label', $.identifier)),
+      seq(field('label', endName($)), ':', 'loop', 'do', optional($.block),
+          'end', field('end_label', endName($))),
     ),
     while_statement: $ => choice(
       seq('while', field('condition', $._condition), 'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
           'end', 'while'),
-      seq(field('label', $.identifier), ':', 'while', field('condition', $._condition),
+      seq(field('label', endName($)), ':', 'while', field('condition', $._condition),
           'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
-          'end', field('end_label', $.identifier)),
+          'end', field('end_label', endName($))),
     ),
     for_statement: $ => choice(
       seq(optional('try'), 'for', $._traversal, 'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
           'end', 'for'),
-      seq(field('label', $.identifier), ':', optional('try'), 'for', $._traversal, 'do', optional($.block),
+      seq(field('label', endName($)), ':', optional('try'), 'for', $._traversal, 'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
-          'end', field('end_label', $.identifier)),
+          'end', field('end_label', endName($))),
     ),
     _traversal: $ => seq(
       field('element', $.identifier), optional(seq(',', field('index', $.identifier))),
@@ -486,13 +506,13 @@ module.exports = grammar({
     ),
     break_statement: $ => prec.right(seq(
       'break',
-      optional(field('label', $.identifier)),
+      optional(field('label', endName($))),
       optional(seq('with', field('value', $._expression))),
       optional(seq('when', field('condition', $._expression))),
     )),
     continue_statement: $ => prec.right(seq(
       'continue',
-      optional(field('label', $.identifier)),
+      optional(field('label', endName($))),
       optional(seq('when', field('condition', $._expression))),
     )),
     unchecked_block: $ => seq('unchecked', 'begin', optional($.block), 'end', 'unchecked'),
@@ -545,8 +565,8 @@ module.exports = grammar({
     bare_block: $ => prec.dynamic(4, seq('begin', optional($.block), 'end')),
     // D234: a labelled bare block is left by a `break` naming it.
     labeled_block: $ => prec.dynamic(4, seq(
-      field('label', $.identifier), ':', 'begin', optional($.block),
-      'end', field('end_label', $.identifier),
+      field('label', endName($)), ':', 'begin', optional($.block),
+      'end', field('end_label', endName($)),
     )),
 
     place: $ => $.indexed_expression,
@@ -637,7 +657,7 @@ module.exports = grammar({
     struct_literal: $ => prec(50, seq(
       '(', commaSep1($.field_value), optional(seq(',', $.of_keyword, $._expression)), ')',
     )),
-    field_value: $ => seq(field('name', $._declaration_name), ':', field('value', $._expression)),
+    field_value: $ => seq(field('name', labelName($)), ':', field('value', $._expression)),
 
     labeled_application: $ => choice(
       prec(PREC.call, seq(
@@ -653,7 +673,7 @@ module.exports = grammar({
       commaSep1($.labeled_argument),
       optional(seq(',', $.of_keyword, $._expression)),
     ),
-    labeled_argument: $ => seq(field('name', $._declaration_name), ':', field('value', $.argument_rhs)),
+    labeled_argument: $ => seq(field('name', labelName($)), ':', field('value', $.argument_rhs)),
     argument_rhs: $ => choice($._expression, $._type),
 
     // [1630]'s operands follow a block's text.  The grammar lets any
@@ -680,8 +700,11 @@ module.exports = grammar({
     // Explicit left recursion rather than a repeat: the postfix production
     // itself carries the precedence, so a `[` or `.` after a selector
     // extends the chain instead of closing the statement around it.
+    // A contextual word the lexer may offer as its own token where a
+    // declaration, a label or a parameter could begin is still a name in
+    // an expression: refine reserves only [1760]'s fifty words.
     indexed_expression: $ => choice(
-      prec.dynamic(1, choice($.identifier, $.scalar_type, alias('distinct', $.identifier))),
+      prec.dynamic(1, choice($.identifier, $.scalar_type, contextualName($))),
       prec.dynamic(2, prec.left(PREC.selection, seq(
         $.indexed_expression,
         choice($.member_selection, $.index_selection),
