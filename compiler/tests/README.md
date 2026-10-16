@@ -280,14 +280,19 @@ source-debugger acceptance in `debugging/check.py` for this host's own Linux
 target, x86-64 or arm64; `--target=linux-arm64` with `--qemu` and `--driver`
 selects the other under QEMU's GDB stub, as cross evidence. It uses GDB to test the
 emitted program's line information, breakpoints, stepping, stack frames and
-selected parameters and locals. Routine debugger risk runs the full release
+selected parameters and locals. At speed it debugs `debugging/registers.ldn`
+alone, stopping past the last use of variables speed may keep in registers,
+and reads them there; `REGISTER_STOPS` in `check.py` names the ones each
+stop requires to be in a register.
+Routine debugger risk runs the full release
 matrix; milestones run it with both debug and release Ada compilers. The script fails if its tools or
 debugger operations are unavailable; missing debugger evidence is not a pass.
 
 On native macOS arm64, use `./scripts/debug.sh --target=darwin-arm64 --output DIR`
 with a fresh output directory. `debugging/darwin.py` checks the shared selected
 Linux source-debugging fixture under none/off, size/auto and size/all, plus
-all thirteen scalar types in `darwin-scalars.ldn`. LLDB's SB API asserts source lines, stepping,
+all thirteen scalar types in `darwin-scalars.ldn` and, under speed/auto and
+speed/off, the register stops in `registers.ldn` that the Linux lane makes. LLDB's SB API asserts source lines, stepping,
 nested caller values, represented aggregate/variant members, generic instances,
 source aliases and unavailable locals. It requires the packaged dSYM and a
 normal status-42 inferior exit; missing assertions or transport is a failure.

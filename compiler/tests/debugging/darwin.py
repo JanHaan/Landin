@@ -29,7 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--profile', choices=('none-off', 'size-auto', 'size-all'))
+    parser.add_argument('--profile', choices=('none-off', 'size-auto', 'size-all',
+                                              *(key for key, _, _ in linux.REGISTER_PROFILES)))
     parser.add_argument('--parity', action='store_true')
     parser.add_argument('--workload', choices=linux.WORKLOADS, help='development only')
     args = parser.parse_args()
@@ -59,7 +60,7 @@ def main():
     # Preserve original source identities and odd filename bytes. The compilation
     # reads the repository snapshots, whose exact bytes are retained separately.
     scalar_source = HERE / 'darwin-scalars.ldn'
-    all_sources = (*linux.SOURCES, scalar_source)
+    all_sources = (*linux.SOURCES, scalar_source, linux.REGISTER_SOURCE)
     for source in all_sources:
         shutil.copyfile(source, sources / source.name)
     results = []
@@ -165,6 +166,33 @@ def main():
         scalar_result = json.loads(Path(scalar_config['result']).read_text())
         assert scalar_result == {'status': 'passed', 'scalar_types': 13}
         print(key, 'passed', flush=True)
+    # At speed, each variable read where its register still holds it past
+    # its last use; registers.ldn alone runs there.
+    register_results = []
+    for name, opt, spec in linux.REGISTER_PROFILES:
+        if args.profile and args.profile != name:
+            continue
+        label = 'registers-' + name
+        executable = output / label
+        run(label + '-compile', [args.refine.resolve(), str(linux.REGISTER_SOURCE.relative_to(ROOT)),
+                                 '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
+                                 '--optimize=' + opt, '--specialize=' + spec])
+        run(label + '-execute', [executable], 42)
+        config = {'executable': str(executable), 'source': str(linux.REGISTER_SOURCE),
+                  'cwd': str(ROOT), 'lines': linux.REGISTER_LINES, 'stops': linux.REGISTER_STOPS,
+                  'result': str(output / (label + '-session.json'))}
+        config_path = output / (label + '-config.json')
+        config_path.write_text(json.dumps(config, indent=2) + '\n')
+        script = output / (label + '.lldb')
+        script.write_text('command script import ' + json.dumps(str(HERE / 'lldb_session.py')) + '\n'
+                          + 'script lldb_session.registers(lldb.debugger, ' + repr(str(config_path)) + ')\nquit\n')
+        transcript = run(label + '-lldb', [tools['lldb']['path'], '--no-lldbinit', '-b', '-s', script])
+        assert 'LANDIN REGISTER LLDB PASSED' in transcript, transcript[-6000:]
+        session = json.loads(Path(config['result']).read_text())
+        assert session['status'] == 'passed'
+        register_results.append({'optimize': opt, 'specialize': spec, 'status': 'passed',
+                                 'checks': len(session['checks'])})
+        print(label, 'passed', flush=True)
     # Filename deployment is optional: no debugger artifacts are required by
     # the executable or its three-u32 caller coordinates. Default and explicit
     # none must produce identical compiler assembly and caller-only maps.
@@ -226,6 +254,7 @@ def main():
         assert digest(tool['path']) == tool['sha256'], 'tool changed during acceptance'
     summary = {'scope': 'source-debugging', 'status': 'passed', 'filtered': args.profile is not None,
                'refine_sha256': digest(args.refine), 'tools': tools, 'results': results,
+               'registers': register_results,
                'panic': panic_evidence,
                'sources': {str(s.relative_to(ROOT)): digest(s) for s in all_sources}}
     (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')

@@ -343,6 +343,68 @@ class ParserTranscriptTests(unittest.TestCase):
                 "exited with code 052", "exited with code 01"), self.lines)
 
 
+def register_transcript(lines: dict[str, int], pc: str = "0x401063",
+                        held: str = "42") -> str:
+    source = "compiler/tests/debugging/registers.ldn"
+
+    def section(name: str, body: str) -> str:
+        return f"LANDIN-BEGIN {name}\n{body}\nLANDIN-END {name}"
+
+    def frame(function: str, line: int) -> str:
+        return (f"#0  {function} (argument=...) at {source}:{line}\n"
+                f"Line {line} of \"{source}\" starts at address 0x0")
+
+    return "\n".join((
+        section("register-pick-ready-line",
+                frame("register_pick", lines["pick-ready"])),
+        section("register-pick-ready-pc", pc),
+        section("register-pick-ready-chosen-address",
+                'Symbol "chosen" is multi-location:\n'
+                "  Base address 0x0  Range 0x40104d-0x401064: a variable in $rbx\n."),
+        "LANDIN-VALUE register-pick-ready.chosen=41",
+        "LANDIN-VALUE register-pick-ready.picked=41",
+        section("register-inner-ready-line",
+                frame("register_inner", lines["inner-ready"])),
+        section("register-inner-ready-pc", "0x401019"),
+        "LANDIN-VALUE register-inner-ready.argument=41",
+        f"LANDIN-VALUE register-inner-ready.held={held}",
+        section("register-inner-ready-caller",
+                f"#1  0x000000000040106a in register_pick (argument=...) at {source}:18"),
+        "LANDIN-VALUE register-inner-ready-caller.picked=41",
+        section("inferior-exit", "[Inferior 1 (process 1) exited with code 052]"),
+    )) + "\n"
+
+
+class RegisterTranscriptTests(unittest.TestCase):
+    lines = CHECK.REGISTER_LINES
+
+    def test_registers_past_their_last_use_are_accepted(self) -> None:
+        CHECK.check_register_transcript(register_transcript(self.lines), self.lines)
+
+    def test_a_range_ending_before_the_stop_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "chosen is not in a register"):
+            CHECK.check_register_transcript(
+                register_transcript(self.lines, pc="0x401064"), self.lines)
+
+    def test_an_unavailable_variable_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "held=42"):
+            CHECK.check_register_transcript(
+                register_transcript(self.lines, held="<optimized out>"), self.lines)
+
+    def test_memory_is_not_a_register(self) -> None:
+        self.assertFalse(CHECK.register_at(
+            "Range 0x10-0x20: a variable at frame base reg $rbp offset 0+-40", 0x18))
+        self.assertTrue(CHECK.register_at(
+            'Symbol "chosen" is a variable in $x19.', 0x18))
+
+    def test_the_session_starts_after_its_first_breakpoint(self) -> None:
+        script = CHECK.register_gdb_script(["run"], self.lines).splitlines()
+        self.assertLess(script.index("tbreak compiler/tests/debugging/registers.ldn:"
+                                     + str(self.lines["pick-ready"])),
+                        script.index("run"))
+        self.assertIn("info address chosen", script)
+
+
 class WorkloadRegistrationTests(unittest.TestCase):
     def test_default_measures_every_complete_prototype_in_every_profile(self) -> None:
         calls = []

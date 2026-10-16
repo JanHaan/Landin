@@ -657,24 +657,34 @@ package body Landin.Backend.Dwarf is
             end loop;
          end Add_Scope_Path;
 
+         --  Overwriter, when not No_Value, is a value Live leaves out
+         --  whose first instruction still finds the location: the range
+         --  ending before it extends over that instruction's first
+         --  address, the only place a debugger can stop before it runs.
          procedure Location_List
            (Loc : String; Expr : US.Unbounded_String;
-            Live : Debug_Locations.Flags.Vector);
+            Live : Debug_Locations.Flags.Vector;
+            Overwriter : Value_Id := No_Value);
          procedure Location_List
            (Loc : String; Expr : US.Unbounded_String;
-            Live : Debug_Locations.Flags.Vector)
+            Live : Debug_Locations.Flags.Vector;
+            Overwriter : Value_Id := No_Value)
          is
             First, Last : Value_Id := No_Value;
-            procedure Flush;
-            procedure Flush is
+            procedure Flush (Entered : Boolean := False);
+            procedure Flush (Entered : Boolean := False) is
                E : constant String := Loc & "_expr_" & N (Natural (First));
             begin
                if First /= No_Value then
                   US.Append (Locations,
                     HT & ".quad " & L ("value", Item, Natural (First)) & LF
-                    & HT & ".quad " & L
-                      ((if Op_Of (Of_Unit, Item, Last) in Leave | Fail
-                        then "epilogue" else "after"), Item, Natural (Last))
+                    & HT & ".quad "
+                    & (if Entered
+                       then L ("value", Item, Natural (Last)) & "+1"
+                       else L
+                         ((if Op_Of (Of_Unit, Item, Last) in Leave | Fail
+                           then "epilogue" else "after"),
+                          Item, Natural (Last)))
                     & LF
                     & HT & ".short " & E & "_end-" & E & LF
                     & E & ":" & LF & US.To_String (Expr)
@@ -701,6 +711,12 @@ package body Landin.Backend.Dwarf is
                            if Op_Of (Of_Unit, Item, Value) in Leave | Fail then
                               Flush;
                            end if;
+                        elsif Value = Overwriter then
+                           if First = No_Value then
+                              First := Value;
+                           end if;
+                           Last := Value;
+                           Flush (Entered => True);
                         else
                            Flush;
                         end if;
@@ -889,9 +905,10 @@ package body Landin.Backend.Dwarf is
                        Debug_Locations.Available
                          (Availability, Of_Unit, Meanings, Info,
                           Item, Slot, Parameter);
+                     Overwriter : Value_Id := No_Value;
                   begin
-                     Narrow (Of_Unit, Item, Plan, Slot, Live);
-                     Location_List (Loc, Expr, Live);
+                     Narrow (Of_Unit, Item, Plan, Slot, Live, Overwriter);
+                     Location_List (Loc, Expr, Live, Overwriter);
                   end;
                end;
             end loop;

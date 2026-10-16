@@ -31,6 +31,7 @@ HOSTED_SOURCE = ROOT / "examples/derived_hosted/app/app.ldn"
 HOSTED_FIXTURE = HERE.parent / "fixtures/runtime/derived-hosted-memory"
 PARSER_SOURCE = ROOT / "examples/config_parser/parser/parser.ldn"
 PARSER_FIXTURE = HERE.parent / "fixtures/runtime/derived-parser"
+REGISTER_SOURCE = HERE / "registers.ldn"
 WORKLOAD_COMPILE_TIMEOUT = 900
 CONTAINER_DONE_VALUES = (
     "signed_order", "unsigned_order_ok", "numbers_ok", "arrays_ok", "raw_ok",
@@ -43,6 +44,11 @@ PRIMARY_PROFILES = (("none-off", "none", "off"),
 FALLBACK_PROFILE = ("size-all", "size", "all")
 WORKLOAD_PROFILES = (*PRIMARY_PROFILES, FALLBACK_PROFILE)
 WORKLOADS = ("parser", "containers", "hosted")
+#  Speed, where a source variable's register holds it over only part of
+#  its routine.  registers.ldn alone runs there: its stops are each where
+#  a variable is in its register past its last use.
+REGISTER_PROFILES = (("speed-auto", "speed", "auto"),
+                     ("speed-off", "speed", "off"))
 DEBUG_SECTIONS = (".debug_info", ".debug_abbrev", ".debug_line",
                   ".debug_loc", ".debug_frame")
 
@@ -438,6 +444,74 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
+
+
+def register_gdb_script(start_commands: list[str],
+                        source_lines: dict[str, int]) -> str:
+    source_name = os.path.relpath(REGISTER_SOURCE, ROOT)
+    lines = [*gdb_setup()]
+    for index, (stop, expected) in enumerate(REGISTER_STOPS.items()):
+        lines.append(f"tbreak {source_name}:{source_lines[stop]}")
+        lines.extend(start_commands if index == 0 else ["continue"])
+        scope = f"register-{stop}"
+        emit_section(lines, scope + "-line", ["frame", "info line"])
+        emit_section(lines, scope + "-pc", ["output/x $pc", 'printf "\\n"'])
+        for name in expected["registers"]:
+            emit_section(lines, f"{scope}-{name}-address",
+                         [f"info address {name}"])
+        emit_values(lines, scope,
+                    tuple((name, name) for name in expected["values"]))
+        if "caller" in expected:
+            lines.append("up")
+            emit_section(lines, scope + "-caller", ["frame"])
+            emit_values(lines, scope + "-caller", tuple(
+                (name, name) for name in expected["caller_values"]))
+            lines.append("down")
+    lines.append("delete breakpoints")
+    emit_section(lines, "inferior-exit", ["continue"])
+    return "\n".join(lines) + "\n"
+
+
+def register_at(address: str, pc: int) -> bool:
+    """Whether GDB's `info address` places a variable in a register at pc."""
+    if re.search(r"\bis a variable in \$\w+", address):
+        return True
+    for low, high, place in re.findall(
+            r"Range (0x[0-9a-f]+)-(0x[0-9a-f]+): ([^\n]*)", address):
+        if int(low, 16) <= pc < int(high, 16):
+            return place.startswith("a variable in $")
+    return False
+
+
+def check_register_transcript(transcript: str,
+                              source_lines: dict[str, int]) -> None:
+    for phrase in ("No symbol ", "No source file named"):
+        require(phrase not in transcript,
+                f"GDB transcript contains {phrase!r}\n{transcript}")
+    for stop, expected in REGISTER_STOPS.items():
+        scope = f"register-{stop}"
+        expect_line(transcript, scope + "-line", source_lines[stop],
+                    expected["function"], REGISTER_SOURCE.name)
+        pc_text = marker_section(transcript, scope + "-pc").strip()
+        require(re.fullmatch(r"0x[0-9a-f]+", pc_text) is not None,
+                f"{scope} did not report its pc: {pc_text!r}")
+        for name in expected["registers"]:
+            address = marker_section(transcript, f"{scope}-{name}-address")
+            require(register_at(address, int(pc_text, 16)),
+                    f"{scope}: {name} is not in a register at {pc_text}:"
+                    f" {address!r}")
+        for name, value in expected["values"].items():
+            expect_value(transcript, f"{scope}.{name}", value)
+        if "caller" in expected:
+            caller = marker_section(transcript, scope + "-caller")
+            require(re.search(r"#1\s+.*\b" + re.escape(expected["caller"])
+                              + r"\b", caller) is not None,
+                    f"{scope} has no {expected['caller']} caller: {caller!r}")
+            for name, value in expected["caller_values"].items():
+                expect_value(transcript, f"{scope}-caller.{name}", value)
+    inferior_exit = marker_section(transcript, "inferior-exit")
+    require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
+            f"debugged registers program did not return 42: {inferior_exit!r}")
 
 
 def container_lines() -> dict[str, int]:
@@ -1280,6 +1354,25 @@ ARM64_ASSEMBLY_LINES = {
 GENERIC_NEXT_LINES = tuple(
     source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4)
 ) + (source_line(MAIN_SOURCE, "end debug_generic"),)
+#  Each stop in registers.ldn, in the order the program meets them: its
+#  routine, the values its frame and its caller's frame show, and the
+#  variables it must find in a register, which is what the stop asks.
+#  Shared with the LLDB session.
+REGISTER_STOPS = {
+    "pick-ready": {"function": "register_pick",
+                   "values": {"chosen": 41, "picked": 41},
+                   "registers": ["chosen"]},
+    "inner-ready": {"function": "register_inner",
+                    "values": {"argument": 41, "held": 42},
+                    "registers": [],
+                    "caller": "register_pick",
+                    "caller_values": {"picked": 41}},
+}
+REGISTER_LINES = {
+    "pick-ready": source_line(REGISTER_SOURCE,
+                              "result = register_inner(picked)"),
+    "inner-ready": source_line(REGISTER_SOURCE, "result = held + 1"),
+}
 CALLER_LINE = source_line(ODD_SOURCE, "code = debug_outer(")
 CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
                      ODD_SOURCE.read_text().splitlines()
@@ -1523,6 +1616,47 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     }
 
 
+def measure_registers(refine: Path, tools: dict[str, str], gdb: str,
+                      runner: str, qemu: str | None, retained: Path,
+                      scratch: Path, profile: tuple[str, str, str]) -> dict:
+    key, optimize, specialize = profile
+    key = "registers-" + key
+    executable = scratch / f"debug-{key}"
+    toolchain = ([f"--toolchain={tools['gcc']}"]
+                 if tools.get("gcc") else [])
+    compiler_args = [str(refine), "--target=" + LANE["target"],
+                     "--debug=full", os.path.relpath(REGISTER_SOURCE, ROOT),
+                     "--emit=exe", "-o", str(executable),
+                     f"--optimize={optimize}", f"--specialize={specialize}",
+                     *toolchain]
+    run(compiler_args, cwd=ROOT)
+    require(executable.is_file(), f"compiler did not create {executable.name}")
+    shutil.copy2(executable, retained / f"{key}.elf")
+    locations = run([tools["readelf"], "--debug-dump=loc", str(executable)])
+    (retained / f"{key}.debug-loc.txt").write_text(locations)
+    run(guest_command(executable, runner, qemu), cwd=scratch,
+        expected_status=42, empty_output=True)
+    debugger_cwd = scratch / f"debugger-cwd-{key}"
+    debugger_cwd.mkdir()
+    script_path = retained / f"{key}.gdb"
+    transcript_path = retained / f"{key}.gdb.txt"
+    with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
+        transcript = run_gdb(gdb, executable, script_path, transcript_path,
+                             debugger_cwd, runner, qemu, Path(tmp),
+                             lambda start: register_gdb_script(
+                                 start, REGISTER_LINES))
+    check_register_transcript(transcript, REGISTER_LINES)
+    return {
+        "profile": {"optimize": optimize, "specialize": specialize},
+        "compiler_request": compiler_args[1:],
+        "executable_sha256": hashlib.sha256(
+            executable.read_bytes()).hexdigest(),
+        "debug_loc_sha256": hashlib.sha256(locations.encode()).hexdigest(),
+        "gdb_script": script_path.read_text(),
+        "gdb_transcript": transcript,
+    }
+
+
 def measure_workloads(measurement: Callable[[str, tuple[str, str, str]], dict],
                       selected: str | None = None) -> dict[str, dict]:
     require(selected is None or selected in WORKLOADS, "unknown debugger workload")
@@ -1593,9 +1727,14 @@ def main() -> None:
         with tempfile.TemporaryDirectory(prefix="debugging-") as tmp:
             scratch = Path(tmp)
             measurements = {}
+            register_measurements = {}
             if args.workload is None:
                 for profile in PRIMARY_PROFILES:
                     measurements[profile[0]] = measure(
+                        refine, tools, gdb, runner, qemu,
+                        args.output, scratch, profile)
+                for profile in REGISTER_PROFILES:
+                    register_measurements[profile[0]] = measure_registers(
                         refine, tools, gdb, runner, qemu,
                         args.output, scratch, profile)
                 if not has_concrete_specialization(
@@ -1629,6 +1768,7 @@ def main() -> None:
         "debugger_cwd_is_distinct": True,
         "specialization_fallback_used": "size-all" in measurements,
         "measurements": measurements,
+        "register_measurements": register_measurements,
         "panic": panic_evidence,
         "parser_measurements": workloads.get("parser", {}),
         "container_measurements": workloads.get("containers", {}),

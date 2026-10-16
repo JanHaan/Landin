@@ -25,18 +25,20 @@ import outside_user  # noqa: E402
 
 class Documents(unittest.TestCase):
     def test_the_readme_shows_a_first_program_and_its_output(self):
-        source, printed, status, given = outside_user.first_program()
+        source, printed, status, given, arguments = \
+            outside_user.first_program()
         self.assertIn("public main", source)
         self.assertTrue(printed.endswith(b"\n") and printed.strip())
         self.assertEqual(status, 0)
         self.assertEqual(given, b"")
+        self.assertEqual(arguments, [])
 
     def test_every_example_is_its_fixture_with_its_oracle(self):
         found = list(outside_user.examples())
         listed = (ROOT / "examples.md").read_text().count("Fixture source: `")
         self.assertEqual(len(found), listed)
-        reading = 0
-        for name, source, expected, status, given in found:
+        reading = sized = 0
+        for name, source, expected, status, given, arguments in found:
             fixture = ROOT / "compiler/tests/fixtures/runtime" / name
             self.assertEqual(source, (fixture / "main.ldn").read_text(),
                              name)
@@ -46,11 +48,17 @@ class Documents(unittest.TestCase):
                 #  A program that reads its input is a tool, which returns
                 #  0, and is held to the output for the input it is given.
                 reading += 1
+            if arguments:
+                #  A Benchmark Game port takes its size as its argument and
+                #  is held, as one, to the game's output for that size.
+                sized += 1
+            if given or arguments:
                 self.assertEqual(status, 0, name)
                 self.assertIsNotNone(expected, name)
             else:
                 self.assertEqual(status, 42, name)
         self.assertGreaterEqual(reading, 1)
+        self.assertGreaterEqual(sized, 1)
 
     def test_a_program_reads_the_input_it_is_given(self):
         ran, _ = outside_user.run(

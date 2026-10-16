@@ -7,6 +7,8 @@ package body Landin.Backend.X86_64.Dwarf is
    LF : constant Character := Character'Val (10);
    HT : constant Character := Character'Val (9);
    use type Allocation.Location_Kind;
+   use type Allocation.Register_Id;
+   use type Allocation.SSE_Register;
    function N (Value : Natural) return String is
      (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
 
@@ -82,25 +84,62 @@ package body Landin.Backend.X86_64.Dwarf is
    --  else: the register belongs to other locations before and after.
    --  An interval opening at a store excludes that store's own
    --  instruction, which precedes the write; one open from the entry
-   --  includes everything before its last position.
+   --  includes everything before its last position.  The register still
+   --  holds the slot's value after that position, through the rest of
+   --  its block, until a value writes it: that value is the Overwriter,
+   --  and the encoder describes the slot at its first address too.  The
+   --  next block may be entered from elsewhere, where the register is
+   --  already another location's.
    procedure Narrow
      (Of_Unit : Unit; Item : Item_Id; Plan : Allocation.Plan;
       Slot : Slot_Id;
-      Live : in out Landin.Backend.Debug_Locations.Flags.Vector);
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Value_Id);
 
    procedure Narrow
      (Of_Unit : Unit; Item : Item_Id; Plan : Allocation.Plan;
       Slot : Slot_Id;
-      Live : in out Landin.Backend.Debug_Locations.Flags.Vector)
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Value_Id)
    is
       Place : constant Allocation.Location := Plan.Slot (Positive (Slot));
       Opened : Boolean := Place.From = No_Value;
       Closed : Boolean := False;
+      --  Whether the interval has closed in this block and nothing has
+      --  written the register since.  Only selection's own discipline
+      --  promises that: a callee-saved register outlives every call, and
+      --  an XMM register any operation but a call.  A caller-saved one
+      --  is touched by the operations Allocation.Untouched names.
+      Keeps : constant Boolean :=
+        Place.Kind = Allocation.SSE
+        or else (Place.Kind = Allocation.GP
+                 and then Place.Register in Allocation.Saved_Register);
+      Holding : Boolean := False;
+
+      function Same (Other : Allocation.Location) return Boolean is
+        (Other.Kind = Place.Kind
+         and then (if Place.Kind = Allocation.SSE
+                   then Other.Float_Register = Place.Float_Register
+                   else Other.Register = Place.Register));
+
+      --  Whether Value writes the slot's register: as its own location,
+      --  by storing to another slot held there, as assembly, which may
+      --  name any register, or, for an XMM register, by calling.
+      function Writes (Value : Value_Id) return Boolean is
+        (Op_Of (Of_Unit, Item, Value) = Assembly
+         or else (Place.Kind = Allocation.SSE
+                  and then Op_Of (Of_Unit, Item, Value)
+                    in Call | Indirect_Call)
+         or else Same (Plan.Value (Positive (Value)))
+         or else (Op_Of (Of_Unit, Item, Value) = Store
+                  and then Same (Plan.Slot
+                    (Positive (Slot_Of (Of_Unit, Item, Value))))));
    begin
       if Place.From = No_Value and then Place.Through = No_Value then
          return;
       end if;
       for Block in 1 .. Block_Count (Of_Unit, Item) loop
+         Holding := False;
          for Position in 1 .. Length (Of_Unit, Item, Block_Id (Block)) loop
             declare
                Value : constant Value_Id :=
@@ -108,11 +147,19 @@ package body Landin.Backend.X86_64.Dwarf is
             begin
                if Opened and then not Closed then
                   Closed := Value = Place.Through;
+                  Holding := Closed and then Keeps;
+               elsif Holding and then not Writes (Value) then
+                  null;
                else
+                  if Holding and then Live (Positive (Value)) then
+                     Overwriter := Value;
+                  end if;
+                  Holding := False;
                   Live (Positive (Value)) := False;
                   if Value = Place.From then
                      Opened := True;
                      Closed := Place.From = Place.Through;
+                     Holding := Closed and then Keeps;
                   end if;
                end if;
             end;

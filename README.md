@@ -457,7 +457,10 @@ This is the maintained inventory of what the compiler does today:
   specialization are independent switches.
 - **Debugging.** DWARF and GDB on Linux, native LLDB in both FreeBSD VMs
   for source-line stops, frames, local values and unwinding, LLDB with dSYM and exact Mach-O
-  identity on Darwin, and line and function debugging on Cortex-M0. Debug
+  identity on Darwin, and line and function debugging on Cortex-M0. At speed
+  a local held in a register is described past its last use until the
+  register is written over, and the GDB and LLDB sessions read such locals
+  there. Debug
   provenance stays independent of DWARF for a possible future PDB emitter; PDB
   is not implemented.
 - **Derived programs.** Prototypes 2, 3 and 4 run as the recovering

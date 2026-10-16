@@ -1,0 +1,23 @@
+--  At speed a source variable may hold a register over its live interval
+--  alone, and one stored once and never read again only from that store.
+--  The register still holds the variable's value after its last use, until
+--  something writes over it.  Each stop the debugger lanes make here is in
+--  that stretch, at speed, and they read the variable there.
+register_inner: (argument: i32) -> (result: i32) =
+    held: i32 = argument + 1
+    result = held + 1
+end register_inner
+
+--  The branch keeps `chosen` in a register across blocks, and its last use
+--  is `picked`'s initializer; the call on the next line preserves the
+--  register, and only after it does anything write over it.
+register_pick: (argument: i32) -> (result: i32) =
+    mut chosen: i32 = argument + 1
+    if argument > 100 then chosen = 0 end if
+    picked: i32 = chosen
+    result = register_inner(picked) - 1
+end register_pick
+
+public main: () -> (code: i32) =
+    code = register_pick(40)
+end main

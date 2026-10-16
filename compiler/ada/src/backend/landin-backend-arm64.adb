@@ -858,20 +858,40 @@ package body Landin.Backend.Arm64 is
    --  else: the register belongs to other locations before and after.
    --  An interval opening at a store excludes that store's own
    --  instruction, which precedes the write; one open from the entry
-   --  includes everything before its last position.
+   --  includes everything before its last position.  The register, which
+   --  every call preserves, still holds the slot's value after that
+   --  position, through the rest of its block, until a value writes it:
+   --  that value is the Overwriter, and the encoder describes the slot at
+   --  its first address too.  The next block may be entered from
+   --  elsewhere, where the register is already another location's.
    procedure Narrow
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Plan : Allocation_Plan; Slot : Landin.IR.Slot_Id;
-      Live : in out Landin.Backend.Debug_Locations.Flags.Vector);
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Landin.IR.Value_Id);
 
    procedure Narrow
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Plan : Allocation_Plan; Slot : Landin.IR.Slot_Id;
-      Live : in out Landin.Backend.Debug_Locations.Flags.Vector)
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Landin.IR.Value_Id)
    is
       Place : constant Slot_Location := Plan.Slots (Positive (Slot));
       Opened : Boolean := Place.From = Landin.IR.No_Value;
       Closed : Boolean := False;
+      --  Whether the interval has closed in this block and nothing has
+      --  written the register since.
+      Holding : Boolean := False;
+
+      --  Whether Value writes the slot's register: as its own location,
+      --  by storing to another slot held there, or as assembly, which may
+      --  name any register.
+      function Writes (Value : Landin.IR.Value_Id) return Boolean is
+        (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly
+         or else Plan.Values (Positive (Value)).Register = Place.Register
+         or else (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Store
+                  and then Plan.Slots (Positive (Landin.IR.Slot_Of
+                    (Of_Unit, Item, Value))).Register = Place.Register));
    begin
       if Place.From = Landin.IR.No_Value
         and then Place.Through = Landin.IR.No_Value
@@ -879,6 +899,7 @@ package body Landin.Backend.Arm64 is
          return;
       end if;
       for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+         Holding := False;
          for Position in 1 .. Landin.IR.Length
            (Of_Unit, Item, Landin.IR.Block_Id (Block))
          loop
@@ -888,11 +909,19 @@ package body Landin.Backend.Arm64 is
             begin
                if Opened and then not Closed then
                   Closed := Value = Place.Through;
+                  Holding := Closed;
+               elsif Holding and then not Writes (Value) then
+                  null;
                else
+                  if Holding and then Live (Positive (Value)) then
+                     Overwriter := Value;
+                  end if;
+                  Holding := False;
                   Live (Positive (Value)) := False;
                   if Value = Place.From then
                      Opened := True;
                      Closed := Place.From = Place.Through;
+                     Holding := Closed;
                   end if;
                end if;
             end;

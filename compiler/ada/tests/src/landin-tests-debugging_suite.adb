@@ -1179,8 +1179,100 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Retained_Facts_On_Failure;
 
+   --  At speed a variable's register still holds it after its last use,
+   --  until a value writes over it there.  `held` is stored and never
+   --  read again, since the add reads the stored value itself, so it holds
+   --  its register only from that store; `chosen` holds one across blocks
+   --  until `picked`'s initializer reads it.  Each is described from its
+   --  last use to the first address of the value that writes over it,
+   --  where the line after it begins.
+   procedure Registers_Outlast_Last_Use
+     (Item : in out Landin.Testing.Context);
+
+   procedure Registers_Outlast_Last_Use
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "inner: (argument: i32) -> (result: i32) =" & LF
+        & "held: i32 = argument + 1 result = held + 1 end inner" & LF
+        & "pick: (argument: i32) -> (result: i32) =" & LF
+        & "mut chosen: i32 = argument + 1" & LF
+        & "if argument > 100 then chosen = 0 end if" & LF
+        & "picked: i32 = chosen result = inner(picked) - 1 end pick" & LF
+        & "public main: () -> (code: i32) = code = pick(40) end main";
+
+      --  The location list a variable named Name refers to, through the
+      --  list's terminating entry; "" when there is none.
+      function List_Of (Text, Name : String) return String;
+
+      function List_Of (Text, Name : String) return String is
+         Named : constant Natural :=
+           Ada.Strings.Fixed.Index (Text, ".asciz """ & Name & """" & LF);
+         Reference : constant Natural :=
+           (if Named = 0 then 0
+            else Ada.Strings.Fixed.Index (Text, ".long .Ldebug_loc_", Named));
+         Line_End : constant Natural :=
+           (if Reference = 0 then 0
+            else Ada.Strings.Fixed.Index (Text, [1 => LF], Reference));
+      begin
+         if Line_End = 0 then
+            return "";
+         end if;
+         declare
+            Label : constant String :=
+              Text (Reference + 6 .. Line_End - 1) & ":" & LF;
+            First : constant Natural := Ada.Strings.Fixed.Index (Text, Label);
+            Last : constant Natural :=
+              (if First = 0 then 0
+               else Ada.Strings.Fixed.Index (Text, ".quad 0,0" & LF, First));
+         begin
+            return (if Last = 0 then "" else Text (First .. Last));
+         end;
+      end List_Of;
+
+      procedure Check (Target : String);
+
+      procedure Check (Target : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("--target=" & Target);
+         Args.Append ("main.ldn");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("out.s");
+         Args.Append ("--debug=full");
+         Args.Append ("--optimize=speed");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, Target & " speed debug emission");
+         declare
+            Text : constant String := Host.Written ("out.s");
+            Held : constant String := List_Of (Text, "held");
+            Chosen : constant String := List_Of (Text, "chosen");
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Held, ".quad .Ldebug_value_"),
+               Target & ": a variable stored and never read is described");
+            Landin.Testing.Check
+              (Item, Contains (Chosen, "+1" & LF),
+               Target & ": a register past its interval is described up to"
+               & " the value writing over it");
+         end;
+      end Check;
+   begin
+      Check ("linux-x86-64");
+      Check ("linux-arm64");
+   end Registers_Outlast_Last_Use;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "registers outlast their last use at speed",
+         Registers_Outlast_Last_Use'Access);
       Landin.Testing.Register
         (Into, "debugging", "module data and slices are described",
          Module_Data_And_Slices_Are_Described'Access);

@@ -572,7 +572,9 @@ that store through its last use, as a value does. Size holds a source
 variable it gives a register there for the whole routine, and gives single
 block spans to compiler temporaries alone, so every source variable's
 debugger location covers the routine; at speed a source variable's debugger
-location covers only its interval. Address-observed, parameter-at-a-C-entry,
+location covers its interval and, after the interval's last position, the
+rest of that block until a value writes over the register, including the
+first address of that value. Address-observed, parameter-at-a-C-entry,
 result and C transport slots keep stack homes, and source debugger locations
 follow the allocation plan.
 Argument spills preserve left-to-right

@@ -52,11 +52,16 @@ package Landin.Backend.Dwarf is
       --  Older GNU RISC-V assemblers accept one ULEB operand per directive.
       Single_LEB_Operand : Boolean := False;
       --  A backend whose slot holds its location over only part of the
-      --  routine clears the rest from the slot's availability.
+      --  routine clears the rest from the slot's availability.  It may
+      --  name, as Overwriter, the one value it clears that writes over
+      --  the location and that still finds the slot's value there when
+      --  it begins; the description then covers that value's first
+      --  address.  The encoder passes No_Value in.
       with procedure Narrow
         (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
          Plan : Placement; Slot : Landin.IR.Slot_Id;
-         Live : in out Landin.Backend.Debug_Locations.Flags.Vector)
+         Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+         Overwriter : in out Landin.IR.Value_Id)
         is null;
    function Sections
      (Of_Unit : Landin.IR.Unit;

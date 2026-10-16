@@ -244,3 +244,66 @@ def scalars(debugger, config_path):
     finally:
         if process.GetState() not in (lldb.eStateExited, lldb.eStateDetached):
             process.Kill()
+
+
+def registers(debugger, config_path):
+    """At speed, read each variable where its register holds it past its last use."""
+    config = json.loads(Path(config_path).read_text())
+    debugger.SetAsync(False)
+    target = debugger.CreateTarget(config['executable'])
+    assert target.IsValid(), 'LLDB target creation failed'
+    symbol_file = str(target.GetModuleAtIndex(0).GetSymbolFileSpec())
+    print('SYMBOL FILE', symbol_file)
+    assert '.dSYM/Contents/Resources/DWARF/' in symbol_file, 'session must use the packaged dSYM'
+    source = config['source']
+    lines = config['lines']
+    checks = []
+
+    def record(label, actual, expected):
+        print(label, repr(actual), 'expected', repr(expected))
+        assert actual == expected, (label, actual, expected)
+        checks.append(label)
+
+    def read(f, scope, name, expected):
+        v = f.FindVariable(name)
+        error = lldb.SBError()
+        actual = v.GetValueAsSigned(error) if v.IsValid() else 'missing'
+        print(scope + '.' + name, 'at', repr(v.GetLocation()))
+        record(scope + '.' + name, actual if error.Success() else str(error), expected)
+
+    process = None
+    try:
+        for index, (stop, expected) in enumerate(config['stops'].items()):
+            bp = target.BreakpointCreateByLocation(source, lines[stop])
+            assert bp.GetNumLocations() > 0, ('unresolved source breakpoint', stop)
+            if process is None:
+                process = target.LaunchSimple(None, None, config['cwd'])
+            else:
+                process.Continue()
+            assert process.GetState() == lldb.eStateStopped, process.GetState()
+            thread = process.GetSelectedThread()
+            f = thread.GetFrameAtIndex(0)
+            record(stop + '.function', f.GetFunctionName(), expected['function'])
+            record(stop + '.line', f.GetLineEntry().GetLine(), lines[stop])
+            for name in expected['registers']:
+                # A register's name, where a variable in memory has an address.
+                location = f.FindVariable(name).GetLocation() or ''
+                print(stop + '.' + name, 'location', repr(location))
+                record(stop + '.' + name + '.register',
+                       location != '' and not location.startswith('0x'), True)
+            for name, value in expected['values'].items():
+                read(f, stop, name, value)
+            if 'caller' in expected:
+                caller = thread.GetFrameAtIndex(1)
+                record(stop + '.caller', caller.GetFunctionName(), expected['caller'])
+                for name, value in expected['caller_values'].items():
+                    read(caller, stop + '.caller', name, value)
+            target.BreakpointDelete(bp.GetID())
+        process.Continue()
+        record('inferior exited', process.GetState(), lldb.eStateExited)
+        record('inferior status', process.GetExitStatus(), 42)
+        Path(config['result']).write_text(json.dumps({'status': 'passed', 'checks': checks}, indent=2) + '\n')
+        print('LANDIN REGISTER LLDB PASSED', len(checks))
+    finally:
+        if process is not None and process.GetState() not in (lldb.eStateExited, lldb.eStateDetached):
+            process.Kill()
