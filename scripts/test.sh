@@ -28,11 +28,17 @@ fi
 #  trees relative to it, and LANDIN_REFINE tells the end-to-end cases which
 #  executable they are meant to be checking.
 cd "$LANDIN_ADA_DIR"
-#  No core files: a trap fixture traps on purpose, and QEMU's user
-#  emulation writes the core of every one it runs into this directory,
-#  whatever the system does with native cores -- 388 sparse files a cross
-#  run, 19 GB as read after six, which every walk of the tree then read.
-ulimit -c 0
+#  No core files under a cross runner: a trap fixture traps on purpose, and
+#  QEMU's user emulation writes the core of every one it runs into this
+#  directory, whatever the system does with native cores -- 388 sparse
+#  files a cross run, 19 GB as read after six.  Only there: with the limit
+#  on every run, the memory gate's "a gate sees retained run growth" failed
+#  three gate runs of four on atki77 and in none without it.
+for Argument in "$@"; do
+    case "$Argument" in
+        --runner=*) ulimit -c 0 ;;
+    esac
+done
 LANDIN_REFINE="$LANDIN_BUILD_DIR/bin/refine"
 export LANDIN_REFINE
 
