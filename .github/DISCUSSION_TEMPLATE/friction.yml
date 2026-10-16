@@ -1,0 +1,54 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Landin is meant to be usable by people who have not read its source.
+        Anything that made you stop is worth reporting here, even when the
+        tool did nothing wrong: friction is a finding, not a complaint.
+
+        A maintainer records each finding in the usability register of
+        [ROADMAP.md](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md#register)
+        and links the record here.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What you met
+      multiple: true
+      options:
+        - Something I could not guess (a flag, a path, an environment variable, an order of steps)
+        - I had to work around refine or another tool
+        - A refusal that did not say what to do, or said something misleading
+        - I had to read the source to learn how to use something
+        - The documentation disagrees with what the tool does
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: doing
+    attributes:
+      label: What you were doing
+      description: The goal, not the steps.
+    validations:
+      required: true
+  - type: textarea
+    id: met
+    attributes:
+      label: What happened
+      description: The commands, output and documents exactly as you met them.
+    validations:
+      required: true
+  - type: textarea
+    id: looked
+    attributes:
+      label: Where you looked
+      description: The documents or sections you read before asking.
+  - type: textarea
+    id: helped
+    attributes:
+      label: What would have helped
+      description: A sentence in a document, a better message, a different default.
+  - type: input
+    id: version
+    attributes:
+      label: refine version
+      description: The first line of `refine version`, if the compiler was involved.

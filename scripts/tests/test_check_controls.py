@@ -1377,5 +1377,63 @@ class Registers(unittest.TestCase):
         self.assertTrue(said)
 
 
+class DiscussionTargets(unittest.TestCase):
+    """The discussion forms offer the targets the compiler describes."""
+
+    INPUTS = [checker.TARGET_SELECTION, checker.DISCUSSION_FORMS]
+    FORM = checker.DISCUSSION_FORMS + "/bug-reports.yml"
+
+    def broken(self, path, old, new):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            target = root / path
+            text = target.read_text()
+            self.assertIn(old, text)
+            target.write_text(text.replace(old, new, 1))
+            return [why for _, _, why
+                    in checker.check_discussion_targets(True)]
+
+    def test_the_real_forms_agree(self):
+        self.assertEqual(
+            faults(checker.check_discussion_targets, copied=self.INPUTS), [])
+
+    def test_missing_forms_are_reported_rather_than_skipped(self):
+        said = reasons(checker.check_discussion_targets,
+                       copied=self.INPUTS[:1])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_dropped_target_is_reported(self):
+        said = self.broken(self.FORM, "        - linux-rv64\n", "")
+        self.assertTrue(any("the compiler describes" in why for why in said))
+
+    def test_a_target_the_compiler_does_not_describe_is_reported(self):
+        said = self.broken(self.FORM, "        - cortex-m0\n",
+                           "        - cortex-m0\n        - cortex-m4\n")
+        self.assertTrue(any("cortex-m4" in why for why in said))
+
+    def test_a_newly_described_target_is_reported(self):
+        #  The direction a compiler change causes: a target added to the
+        #  selection table and to no form.
+        said = self.broken(checker.TARGET_SELECTION,
+                           'when 7 => "cortex-m0"', 'when 7 => "cortex-m33"')
+        self.assertTrue(any("cortex-m33" in why for why in said))
+
+    def test_the_checking_only_target_is_not_offered(self):
+        said = self.broken(self.FORM, "        - cortex-m0\n",
+                           "        - cortex-m0\n        - synthetic-32\n")
+        self.assertTrue(said)
+
+    def test_a_form_with_no_target_list_is_reported(self):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            for form in (root / checker.DISCUSSION_FORMS).iterdir():
+                if form.name in ("bug-reports.yml", "show-and-tell.yml"):
+                    form.unlink()
+            said = [why for _, _, why
+                    in checker.check_discussion_targets(True)]
+        self.assertTrue(any("held to nothing" in why for why in said))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,106 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One problem per discussion, please. Search the existing reports
+        first; a matching one is better with your details added to it.
+
+        Do not report a security vulnerability here: report it privately,
+        through [GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What went wrong
+      options:
+        - refine crashed or hung
+        - A valid program was refused
+        - An invalid program was accepted
+        - The compiled program behaves wrongly
+        - A diagnostic is wrong (as opposed to merely unhelpful)
+        - refine fmt
+        - refine lsp
+        - Debug information (GDB or LLDB)
+        - Building or installing refine
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: refine version --json
+      description: The whole output; it names the exact revision and build.
+      render: json
+    validations:
+      required: true
+  - type: dropdown
+    id: obtained
+    attributes:
+      label: How you obtained refine
+      options:
+        - Release asset
+        - nix build .#refine-bin
+        - nix build .#refine
+        - Built from a checkout with scripts/build.sh
+        - Another way (say which below)
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target
+      description: The `--target` you compiled for, or the default.
+      multiple: true
+      options:
+        - linux-x86-64
+        - linux-arm64
+        - darwin-arm64
+        - freebsd-x86-64
+        - freebsd-arm64
+        - linux-rv64
+        - cortex-m0
+        - Not target-specific
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Operating system, version and architecture that ran refine.
+      placeholder: Ubuntu 24.04, x86-64
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Smallest source that shows it
+      description: >
+        Reduce it as far as you can. For several files, give each one's path
+        above its contents, or link a repository.
+      render: landin
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command line, as you typed it.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Complete output, including any diagnostic codes such as L0201.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: >
+        Cite the tour or specification paragraph that says so, such as
+        [1820], when there is one.
+    validations:
+      required: true

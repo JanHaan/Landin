@@ -1,0 +1,38 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Programs, libraries, editor integrations or experiments built with
+        Landin. Unfinished work is welcome.
+  - type: textarea
+    id: what
+    attributes:
+      label: What you made
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: A repository, page or recording, if there is one.
+  - type: dropdown
+    id: targets
+    attributes:
+      label: Targets it runs on
+      multiple: true
+      options:
+        - linux-x86-64
+        - linux-arm64
+        - darwin-arm64
+        - freebsd-x86-64
+        - freebsd-arm64
+        - linux-rv64
+        - cortex-m0
+        - Not applicable
+  - type: textarea
+    id: hard
+    attributes:
+      label: What was hard
+      description: >
+        Anything that got in your way. We read this as a source of findings,
+        so be specific.

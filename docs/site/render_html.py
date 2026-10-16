@@ -1680,6 +1680,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
   <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
+  <a class="src" href="{REPO}/discussions">{icons.use("messages-square")}<span>discuss</span></a>
   <a class="src" href="{REPO}">{icons.use("git-branch")}<span>source</span></a>
   <input class="menu-x" id="menu" type="checkbox" autocomplete="off"
          aria-label="documents and sections" aria-controls="side">
@@ -1703,7 +1704,8 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 {esc(source_note)}
-The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>.
+The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>;
+questions, bugs and ideas go to <a href="{REPO}/discussions">its discussions</a>.
 <br>Copyright &#169; 2026 Jan Haan.
 Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 <a href="{REPO}/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.

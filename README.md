@@ -511,6 +511,18 @@ designation changes automatically.
 
 **Next roadmap item: R13.34 — The rest of the file system (planned).**
 
+## Questions, bugs and ideas
+
+Ask questions, report bugs and friction, and propose ideas or changes to the
+language in [Discussions](https://github.com/JanHaan/Landin/discussions);
+each category's form says what a report needs. The repository has no issue
+tracker. Open work lives in `ROADMAP.md`, and a discussion that leads to
+some becomes an item or a register record there. Report a security
+vulnerability privately, through
+[GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
+and never in a discussion. Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 Copyright (c) 2026 Jan Haan. `MIT OR Apache-2.0`: use this under either

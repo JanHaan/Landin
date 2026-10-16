@@ -5920,6 +5920,97 @@ def check_borrowed_icons(full_run):
     return out
 
 
+DISCUSSION_FORMS = ".github/DISCUSSION_TEMPLATE"
+TARGET_SELECTION = "compiler/ada/src/stages/landin-targets-selection.adb"
+#  Described so that layout can be checked at 32 bits on any machine, and
+#  `refine targets` lists it as checking only: nothing emits or runs for it,
+#  so nobody reports a bug on it or ships a program to it.
+CHECKING_ONLY_TARGETS = ("synthetic-32",)
+TARGET_SHAPED = re.compile(r"^[a-z]+(?:-[a-z0-9]+)+$")
+
+
+def dropdown_options(text):
+    """Each `options:` list in a form, as (line, [plain scalar items]).
+
+    Not a YAML reader, and it needs to be none: a form is written by hand
+    in one indentation style, and what this wants is the items under one
+    key.  A checkbox's `- label:` items are mappings, not names, and are
+    left out.
+    """
+    lines = text.splitlines()
+    out = []
+    for n, line in enumerate(lines, 1):
+        key = re.match(r"^(\s*)options:\s*$", line)
+        if not key:
+            continue
+        depth = len(key.group(1))
+        items = []
+        for following in lines[n:]:
+            item = re.match(r"^(\s*)- (.*)$", following)
+            if not item or len(item.group(1)) < depth:
+                break
+            value = item.group(2).strip()
+            if not re.match(r"^[A-Za-z_]+:\s", value):
+                items.append(value.strip("\"'"))
+        out.append((n, items))
+    return out
+
+
+def check_discussion_targets(full_run):
+    """A discussion form offers exactly the targets the compiler describes.
+
+    The bug report and show-and-tell forms ask which target a program was
+    compiled for, and a list someone typed once is a list that loses the
+    next target added and keeps one withdrawn.  So any dropdown that offers
+    one target offers them all, in the order `refine targets` prints them,
+    and nothing else shaped like a target name; its other choices are
+    prose, like `Not target-specific`.  The selection package's name table
+    is the one `refine --target=` and the language server both read.
+    """
+    if not full_run:
+        return []
+    names = os.path.join(ROOT, TARGET_SELECTION)
+    forms = os.path.join(ROOT, DISCUSSION_FORMS)
+    missing = absent((names, forms))
+    if missing:
+        return missing
+    with io.open(names, encoding="utf-8") as stream:
+        table = stream.read()
+    described = [name for name in re.findall(
+        r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
+        if name not in CHECKING_ONLY_TARGETS]
+    if not described:
+        return [(TARGET_SELECTION, 1,
+                 "no described target name was found in Described_Name")]
+    out = []
+    offered = 0
+    for name in sorted(os.listdir(forms)):
+        if not name.endswith((".yml", ".yaml")):
+            continue
+        relative = os.path.join(DISCUSSION_FORMS, name)
+        with io.open(os.path.join(forms, name), encoding="utf-8") as stream:
+            text = stream.read()
+        for line, items in dropdown_options(text):
+            targets = [item for item in items if TARGET_SHAPED.match(item)]
+            if not targets:
+                continue
+            offered += 1
+            if targets != described:
+                out.append((relative, line,
+                            "the target choices are %s; the compiler "
+                            "describes %s, in that order"
+                            % (", ".join(targets), ", ".join(described))))
+            elif items[:len(targets)] != targets:
+                out.append((relative, line,
+                            "the target choices come first, before the "
+                            "prose ones"))
+    if not offered:
+        out.append((DISCUSSION_FORMS, 1,
+                    "no discussion form offers a target, so the target "
+                    "list is held to nothing"))
+    return out
+
+
 def check_icon(full_run):
     """The mark wears the site's own colours, and only one file says which.
 
@@ -7492,6 +7583,7 @@ def main(argv):
     extra += check_hosted_derivation(full_run)
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
+    extra += check_discussion_targets(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     extra += check_diagnostic_matrix(full_run)

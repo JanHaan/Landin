@@ -1,6 +1,6 @@
 """The small icons a page uses, vendored rather than fetched.
 
-All seven come from Lucide.  They are copied in
+All eight come from Lucide.  They are copied in
 here as their own shapes rather than pulled from a package or a CDN, for
 the reasons everything else in this directory is: a page that carries its
 drawing needs no request to show it, and a build that reads a file in this
@@ -59,6 +59,13 @@ ICONS = {
                    '<path d="M15 6a9 9 0 0 0-9 9V3"/>'
                    '<circle cx="18" cy="6" r="3"/>'
                    '<circle cx="6" cy="18" r="3"/>'),
+    "messages-square": ("0 0 24 24", STROKE,
+                        '<path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414'
+                        '.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2'
+                        '-2h10a2 2 0 0 1 2 2z"/>'
+                        '<path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212'
+                        '.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2'
+                        '-2v-1"/>'),
 }
 
 WHY = {
@@ -69,6 +76,7 @@ WHY = {
     "moon": "the theme toggle, offering the dark one",
     "menu": "the sidebar drawer, below 60rem",
     "git-branch": "the link to the repository",
+    "messages-square": "the link to the repository's discussions",
 }
 
 

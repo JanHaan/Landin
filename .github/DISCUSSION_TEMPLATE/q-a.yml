@@ -1,0 +1,44 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about using Landin or reading its documents. When an
+        answer settles your question, mark it as the answer.
+
+        If `refine` crashed, refused a valid program or produced a wrong
+        program, use **Bug reports** instead. If the tool worked but you could
+        not find out how to use it, **Friction** is the better home.
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Writing Landin programs
+        - Reading the tour or the specification
+        - Installing or building refine
+        - Targets and cross-compilation
+        - Editors, highlighting and the language server
+        - Debugging Landin programs
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: >
+        Cite tour or specification paragraphs by their construct ID, such as
+        [0940], when your question is about one.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you tried
+      description: Source, commands and output, if any.
+      render: landin
+  - type: input
+    id: version
+    attributes:
+      label: refine version
+      description: The first line of `refine version`, if you are using the compiler.

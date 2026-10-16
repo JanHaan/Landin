@@ -1,0 +1,74 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For changes to the language itself: its syntax, its rules and what
+        they mean. Library, tooling and target ideas belong in **Ideas**.
+
+        [spec.md](https://github.com/JanHaan/Landin/blob/main/spec.md) is the
+        normative specification and
+        [tour.md](https://github.com/JanHaan/Landin/blob/main/tour.md)
+        explains it by example. Several ideas have been tried and dropped
+        already: see the tour's
+        [WHAT WAS TRIED AND DROPPED](https://github.com/JanHaan/Landin/blob/main/tour.md#what-was-tried-and-dropped)
+        and the roadmap's
+        [retained positions](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md#retained-positions).
+        A proposal that revisits one is welcome when it brings new evidence.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - A new construct
+        - A change to an existing construct
+        - Removing something
+        - The tour and specification disagree, or say nothing
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What you cannot write today, or what is awkward to write. A real
+        program fragment persuades more than an abstract one.
+      render: landin
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: Syntax and meaning, with the motivating example rewritten.
+    validations:
+      required: true
+  - type: input
+    id: constructs
+    attributes:
+      label: Affected constructs
+      description: The tour and specification paragraphs it touches.
+      placeholder: "[0940], [1270]"
+  - type: textarea
+    id: fit
+    attributes:
+      label: Fit with the design constraints
+      description: >
+        Landin targets everything from a 32 KB microcontroller to hosted
+        applications, uses manual memory with arenas and no garbage
+        collection, reference counting or destructors, threads allocators as
+        capabilities, and has no compile-time execution or macros. How does
+        the proposal sit with those?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and prior attempts
+      description: What else you considered, and how this differs from anything already dropped.
+  - type: checkboxes
+    id: read
+    attributes:
+      label: Before posting
+      options:
+        - label: I have read WHAT WAS TRIED AND DROPPED and the retained positions.
+          required: true

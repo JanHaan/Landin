@@ -1,0 +1,45 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas for the library, the compiler's commands, editors, targets and
+        documentation. Changes to the language itself belong in
+        **Language design**.
+
+        Open work is planned in
+        [ROADMAP.md](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md);
+        a good idea here becomes an item or a register record there.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Standard library (core, hosted, platform)
+        - refine's commands and output
+        - Editors, highlighting and the language server
+        - Formatting
+        - Debugging
+        - A new target or platform
+        - Installation and packaging
+        - Documentation and the website
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: What you are trying to do, and what stands in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do instead today
+      description: The workaround, if there is one.
