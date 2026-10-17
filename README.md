@@ -538,7 +538,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R12.10 — Describe devices (planned).**
+**Next roadmap item: R13.70 — The newcomer's path (planned).**
 
 ## Questions, bugs and ideas
 

@@ -56,7 +56,7 @@ HOSTED = ("Standard input, files and directories",
           "Formatting, buffered text and byte blocks",
           "The environment and processes", "Time and randomness", "Sockets",
           "The rest of the file system", "The recurring parser frictions",
-          "Dynamic loading")
+          "Dynamic loading", "The newcomer's path")
 
 
 class RoadmapProgress(unittest.TestCase):
