@@ -2002,31 +2002,40 @@ elimination; `random.below(0)` is refused as what it is; and `next_u32`'s
 reason is xoshiro256**'s own.
 
 The library's shape, decided as R13.13's renames were: each facility once,
-with byte equality, hashing and three-way order in `core/cmp` and `[]u8`
-ordered; one decimal writer, the builder's, and one home for parsing in
-`core/text`, whose legacy byte layer and cursor are retired; the containers'
-slot allocation written once in `core/mem`, and the arena a provider of its
-own beside pool, region and fault; one fake of files and directories, and one
-way to open and to close a file, `file_system` refining `files`; and
-`hosted/io`'s errno mapping, retried open and quiet close written once, with
-the raw constants D298 and D300 left unused removed. `core/io` splits along
-its seams into `core/time`, `core/net` and fakes under `core/io/fake` named
-one way. `core/tree` is named for what it is or leaves `core`. `hosted/io` is
-renamed so that no importer needs an alias (SR-181). `platform/posix` keeps
-each facility's backends in its own file, splits `posix.ldn` by facility,
-names its C route for what selects it (SR-183) and keeps the `/etc/passwd`
-parsers private; `platform/libc` is one file per system (SR-184); `vdso` is a
-submodule of `platform/linux`; and `platform/cpu` is named for the M
-profile. The closed sets carried in integers and bools become atom sets or
-variants: the loopback socket's role, a scripted program's ending, which
-stream a child read failed on, the builder's ownership, a zero-capacity
-region, a vacant pool slot and the bare flags of `status_of` and
-`synchronize`. Principal types and providers' counters follow one naming
-rule, a byte is written as a character rather than a number (SR-182), and
-SR-14's points are each changed or retired. The stale documentation it
-found is corrected: `last_errno`'s zero, `docs/library.md`'s heap, D282's
-header words, dynamic loading's systems in `core/README.md`, `vdso_image`
-and the module headers that describe how things were.
+with byte equality, hashing and three-way order in `core/cmp`, its `less`,
+`equal` and `greater` moved there from `core/mem`, and `[]u8` ordered; one
+decimal writer, the builder's, and one home for parsing in `core/text`, whose
+legacy byte layer and cursor are retired, with `parse_*` and `core/io`'s
+network no longer copying its scanners and hex digits; `text.format` writing
+through any byte sink, a buffered writer among them, rather than a builder
+and a copy; the containers' slot allocation written once in `core/mem`, and
+the arena a provider of its own beside pool, region and fault; one fake of
+files and directories, the volume, with the memory world kept as firmware's
+own world over it; one way to open and to close a file, `file_system`
+refining `files`; and `hosted/io`'s errno mapping, retried open and quiet
+close, and `platform/posix`'s close-and-ignore helpers, each written once,
+with the declarations and constants D298 and D300 left unused removed,
+`platform/libc`'s `malloc` and `free` among them. `core/io` splits along its
+seams into `core/time`, `core/net` and fakes under `core/io/fake` named one
+way. `core/tree` is named for what it is or leaves `core`. `hosted/io` is
+renamed so that no importer needs an alias (SR-181), and its files mirror
+`core/io`'s, `file_system`, directories and entropy each in its own.
+`platform/posix` keeps each facility's backends in its own file, splits
+`posix.ldn` by facility, names its C route for what selects it (SR-183) and
+keeps the `/etc/passwd` parsers private; `platform/libc` is one file per
+system (SR-184); `vdso` is a submodule of `platform/linux`; and `platform/cpu`
+is named for the M profile, as `platform/cortex_m` would be. The closed sets
+carried in integers and bools become atom sets or variants: the loopback
+socket's role, a scripted program's ending, which stream a child read failed
+on, the builder's ownership, a zero-capacity region, a vacant pool slot and
+the bare flags of `status_of` and `synchronize`. Principal types, providers'
+counters and the fakes' constructors follow one naming rule, a byte is
+written as a character rather than a number (SR-182), and SR-14's points are
+each changed or retired. The stale documentation it found is corrected:
+`last_errno`'s zero; `docs/library.md`'s heap, its `libc.allocation` and its
+hand-written descriptor conversion where `hosted.descriptor_of` exists;
+D282's header words; dynamic loading's systems in `core/README.md`;
+`vdso_image`; and the module headers that describe how things were.
 
 Formatting: `refine fmt` replaces a file without privilege and keeps what it
 cannot see, by a replacement decided in `spec.md`'s register, and a refusal
