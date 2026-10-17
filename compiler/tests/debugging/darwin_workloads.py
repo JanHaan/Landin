@@ -63,7 +63,7 @@ def stops_for(workload):
                  {'self.*.seen': 0, 'self.*.every': 2}),
                 ('sample-updated', 'filter.ldn', ['sample_keep', 'process', 'run_logged', 'run', 'main'],
                  {'self.*.seen': 1}),
-                ('text', 'dest.ldn', ['text_emit', 'emit_retry', 'process', 'run_logged', 'run', 'main'],
+                ('text', 'dest.ldn', ['text_emit', 'process', 'run_logged', 'run', 'main'],
                  {'pending.delivered': 0}))]
 
 

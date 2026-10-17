@@ -345,8 +345,7 @@ none/off, size/auto and size/all. GDB stops inside the runtime-selected
 `sample_keep` and `text_emit` providers, identifies their actual source lines,
 inspects the sampling state before and after its increment and the destination
 delivery cursor, and requires the caller stack to include `process`, `run_logged`,
-`run` and the fixture entry point. The text destination also retains its
-`emit_retry` caller frame. The whole
+`run` and the fixture entry point. The whole
 memory-world application then completes its status-42 oracle. The same full
 source inventory, assembly hashes, executable identity, line-table, stripping
 and source-map checks apply to this application and its reached library

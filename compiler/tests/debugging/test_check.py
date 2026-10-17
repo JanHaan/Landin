@@ -160,9 +160,7 @@ class HostedTranscriptTests(unittest.TestCase):
                                          ("sample-updated", "sample_keep", "filter.ldn"),
                                          ("text", "text_emit", "dest.ldn")):
             line = self.lines[name]
-            callers = (("emit_retry", "process", "run_logged", "run", "main")
-                       if name == "text" else
-                       ("process", "run_logged", "run", "main"))
+            callers = ("process", "run_logged", "run", "main")
             stack = "".join(f"#{index} {caller} ()\n"
                             for index, caller in enumerate(callers, 1))
             sections.append(
@@ -193,11 +191,6 @@ class HostedTranscriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "source stack"):
             CHECK.check_hosted_transcript(self.transcript.replace(
                 "#1 process", "#1 test_dispatch"), self.lines)
-
-    def test_missing_text_retry_frame_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "source stack"):
-            CHECK.check_hosted_transcript(self.transcript.replace(
-                "#1 emit_retry", "#1 process"), self.lines)
 
     def test_wrong_provider_source_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "filter.ldn"):

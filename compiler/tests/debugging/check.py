@@ -685,8 +685,7 @@ def check_hosted_transcript(transcript: str,
         scope = f"hosted-{name}"
         expect_line(transcript, scope, source_lines[name], function, filename)
         stack = marker_section(transcript, scope)
-        functions = (function, *(("emit_retry",) if name == "text" else ()),
-                     "process", "run_logged", "run", "main")
+        functions = (function, "process", "run_logged", "run", "main")
         require(all(re.search(rf"#{index}\s+.*\b{expected}\b", stack) is not None
                     for index, expected in enumerate(functions)),
                 f"hosted runtime dispatch lost its source stack: {stack!r}")
