@@ -24,11 +24,10 @@ end by_system_call
 
 --  The clock `clock` read through the vDSO function at ADDRESS.
 by_vdso: (address: usize, clock: i32) -> (at: i64) =
-    held: usize = address
-    function: ptr linux.vdso_clock_gettime = ptr(usize(addr held))
+    function: linux.vdso_clock_gettime = linux.vdso_clock_gettime(address)
     mut record: linux.timespec = zeroed
     at = -1
-    return when function.val(clock, addr record) <> 0
+    return when function(clock, addr record) <> 0
     at = record.seconds * 1000000000 + record.nanoseconds
 end by_vdso
 

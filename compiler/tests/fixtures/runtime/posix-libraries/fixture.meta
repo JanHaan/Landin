@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: platform/posix loads a shared object the harness built, makes a function found in it a value of a written C function type and calls it, passes it a Landin callback and reads its data, refuses a missing library and a missing symbol with the loader's own words naming them, counts two loads of one object as two uses, calls it again after reopening, and refuses an object needing another's symbol while that one's are local but loads it once they are global
+program: main.ldn
+root: ../../../../..
+link: libc
+c-shared: plugin.c, provider.c, consumer.c
+status: 42
+constructs: 0940, 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

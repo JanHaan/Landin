@@ -951,7 +951,9 @@ A union of atoms and one pointer is used as a pointer before it is matched
 [0480]. Match it first: the `ptr` arm binds the pointer, and each atom arm
 names the empty case. A pointer case is constructed only from a pointer, and
 a known zero address is reserved for the union's empty atom [0460]. Match the
-union, or construct it from an atom or a pointer.
+union, or construct it from an atom or a pointer. A C function value is not
+made from a known zero address either, since no code is there [1975]: a
+lookup that finds nothing is a failure to recover from, not a function.
 
 ```landin
 none_found: atom
@@ -1238,7 +1240,9 @@ available toolchain [1550]. The diagnostic and its note identify the cause:
 the target has no backend, its source debug mode is unsupported, firmware
 forbids `linker.library`, a static Linux link cannot be made (no library
 holding `platform/linux` was found, or the program asks for `linker.library` or
-refers to C symbols nothing in it defines), no toolchain is selected, or the
+refers to C symbols nothing in it defines, each named with the routine that
+refers to it, as `platform/posix`'s loader refers to `dlopen`), no toolchain
+is selected, or the
 named tool is unavailable. Choose a target with a backend,
 change the debug or firmware configuration, link with `--link=libc`, or
 select or install a toolchain as the note directs.

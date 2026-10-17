@@ -826,6 +826,38 @@ package body Landin.Tests.Fixture_Suite is
          & "targets: linux-x86-64" & LF & "c-sources: peer.c" & LF
          & "c-args: -DVALUE=1" & LF);
 
+      --  A shared object is loaded by a program that links the C
+      --  library, is named by its stem, and is a file that is there.
+      Host.Add_Directory ("root/unit/shared-outside-programs");
+      Host.Add_File
+        ("root/unit/shared-outside-programs/fixture.meta",
+         "class: unit" & LF & "summary: misplaced shared objects" & LF
+         & "targets: linux-x86-64" & LF & "c-shared: plugin.c" & LF);
+      Host.Add_Directory ("root/runtime/shared-without-libc");
+      Host.Add_File ("root/runtime/shared-without-libc/plugin.c", "");
+      Host.Add_File
+        ("root/runtime/shared-without-libc/fixture.meta",
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: no loader" & LF & "constructs: 1580" & LF
+         & "program: main.ldn" & LF & "targets: linux-x86-64" & LF
+         & "c-shared: plugin.c" & LF);
+      Host.Add_Directory ("root/runtime/shared-one-stem");
+      Host.Add_File ("root/runtime/shared-one-stem/plugin.c", "");
+      Host.Add_File ("root/runtime/shared-one-stem/other/plugin.c", "");
+      Host.Add_File
+        ("root/runtime/shared-one-stem/fixture.meta",
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: one object twice" & LF & "constructs: 1580" & LF
+         & "program: main.ldn" & LF & "targets: linux-x86-64" & LF
+         & "link: libc" & LF & "c-shared: plugin.c, other/plugin.c" & LF);
+      Host.Add_Directory ("root/runtime/shared-missing");
+      Host.Add_File
+        ("root/runtime/shared-missing/fixture.meta",
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: absent library source" & LF & "constructs: 1580" & LF
+         & "program: main.ldn" & LF & "targets: linux-x86-64" & LF
+         & "link: libc" & LF & "c-shared: absent.c" & LF);
+
       Host.Add_Directory ("root/unit/root-in-unit");
       Host.Add_File
         ("root/unit/root-in-unit/fixture.meta",
@@ -993,6 +1025,33 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check
         (Item, Mentions (Found, "c-args belong only to an ABI fixture"),
          "C arguments outside the ABI class are reported");
+      Landin.Testing.Check
+        (Item,
+         Mentions (Found, "c-shared belongs only to a runtime or ABI fixture"),
+         "shared objects outside the executable classes are reported");
+      Landin.Testing.Check
+        (Item,
+         Mentions
+           (Found,
+            "root/runtime/shared-without-libc/fixture.meta: a runtime"
+            & " fixture with c-shared needs link: libc"),
+         "a program that loads objects without the C library is reported");
+      Landin.Testing.Check
+        (Item,
+         Mentions
+           (Found,
+            "two c-shared sources would build one object: other/plugin.c"),
+         "two shared sources of one stem are reported");
+      Landin.Testing.Check
+        (Item,
+         Mentions
+           (Found,
+            "root/runtime/shared-missing/fixture.meta: c-shared names"
+            & " absent.c, which is missing or not a file"),
+         "a missing shared source is reported");
+      Landin.Testing.Check
+        (Item, Shared_Stem ("plugins/plugin.c") = "plugin",
+         "a shared object is named for its source's stem");
       Landin.Testing.Check
         (Item,
          Mentions

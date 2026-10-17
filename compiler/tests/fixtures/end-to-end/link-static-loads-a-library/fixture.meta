@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a static Linux link of a program that loads a shared object through platform/posix is refused before any tool runs, naming the library routines that need the C library's loader and --link=libc
+program: main.ldn
+constructs: 1580, 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=exe --dry-run ../tests/fixtures/end-to-end/link-static-loads-a-library/main.ldn
+status: 1

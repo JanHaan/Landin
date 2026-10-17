@@ -318,6 +318,14 @@ well as a descriptor; indirect calls carry a descriptor even when the
 concrete routine is unknown. The verifier can therefore check a call without
 mistaking every pointer-sized quantity for a compatible function.
 
+One operation gives a pointer-sized quantity a descriptor on purpose. A C
+function type applied to an address, as a loaded library's symbol is found,
+lowers to a range check that traps on zero followed by `Code_Address`, which
+changes no bits and carries the C signature the source named. Unlike a
+function address it names no routine, so nothing about the callee is known
+and no call through it is resolved to one. The verifier admits it only from
+a plain `usize` and only with a C signature.
+
 Landin's concepts describe required operations. Evidence tables supply the
 implementations for a particular type. The IR describes those tables and
 their ordered entries, and has operations to obtain a table address or

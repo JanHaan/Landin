@@ -1,0 +1,14 @@
+--  No code is at address zero: a C function value made from a zero the
+--  compiler cannot see traps where it is made, inside `unchecked` too,
+--  before anything could call it.  Returning instead fails the fixture.
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+
+extern(c) zero_address: () -> (address: usize)
+
+public main: () -> (code: i32) =
+    code = 7
+    unchecked begin
+        nothing: adder = adder(zero_address())
+        _ = nothing
+    end unchecked
+end main

@@ -1,0 +1,174 @@
+--  platform/posix's loader: a shared object the harness built from
+--  plugin.c is loaded, a function found in it is made a value of the C
+--  function type the program names and called, and it calls back into a
+--  Landin routine it was given.  Its oracles: a missing library and a
+--  missing symbol, each with the loader's own words naming what was
+--  missing; two loads that count two uses of one object; a library still
+--  callable after one of its two uses is closed and again after it is
+--  reopened; and an object whose undefined symbol another object defines,
+--  refused while that one's symbols are local and loaded once they are
+--  global.  The harness passes the three objects' paths as the first
+--  arguments: plugin.c's, provider.c's and consumer.c's.
+import core/text
+import platform/posix
+
+compiler.assert(compiler.c_runtime)
+
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+callback: type = extern(c) (value: i32) -> (result: i32)
+applier: type = extern(c) (call: callback, value: i32) -> (result: i32)
+consumer: type = extern(c) () -> (result: i32)
+
+--  A load, a lookup or a call gave something other than it should have.
+mismatched: atom
+
+--  Which check the program reached, which `main` returns when one fails.
+mut reached: i32 = 0
+
+--  What the plugin calls back.
+extern(c) doubled: (value: i32) -> (result: i32) =
+    result = value * 2
+end doubled
+
+--  Whether NEEDLE is somewhere in HAYSTACK.
+holds: (haystack: []u8, needle: []u8) -> (yes: bool) =
+    yes = false
+    if lenof needle > lenof haystack then return end if
+    for start in usize(0)..<lenof haystack - lenof needle + 1 do
+        mut same: bool = true
+        for at in usize(0)..<lenof needle do
+            if haystack[start + at] <> needle[at] then same = false end if
+        end for
+        if same then
+            yes = true
+            return
+        end if
+    end for
+end holds
+
+--  The last part of PATH, after its last slash.
+last_part: (path: []u8) -> (part: []u8 from path) =
+    mut start: usize = 0
+    for at in usize(0)..<lenof path do
+        if path[at] == 47 then start = at + 1 end if
+    end for
+    part = path[start..<lenof path]
+end last_part
+
+--  The loader's words for the last failure name WANTED, and asking again
+--  gives nothing.
+explained: (wanted: []u8) -> none ! mismatched =
+    mut room: [1024]u8 = zeroed
+    message: []u8 = posix.library_failure(room[0..<1024])
+    fail mismatched when not holds(message, wanted)
+    mut again: [1024]u8 = zeroed
+    fail mismatched when lenof posix.library_failure(again[0..<1024]) <> 0
+end explained
+
+checked: () -> none ! ... =
+    table: posix.argument_table = posix.arguments()
+    fail mismatched when table.count < 3
+    plugin_path: text.host_string = posix.argument(table, 0)
+    provider_path: text.host_string = posix.argument(table, 1)
+    consumer_path: text.host_string = posix.argument(table, 2)
+
+    --  A function found and called, and a callback into the program.
+    reached = 1
+    plugin: posix.library =
+        try posix.open_library(plugin_path, posix.local_symbols)
+    add: adder = adder(try posix.find_symbol(plugin, "add"))
+    fail mismatched when add(40, 2) <> 42
+    apply: applier = applier(try posix.find_symbol(plugin, "apply"))
+    fail mismatched when apply(doubled, 21) <> 42
+
+    --  A library that is not there, named in the loader's words.
+    reached = 2
+    plugin_bytes: []u8 = text.host_bytes(plugin_path)
+    suffix: []u8 = ".missing"
+    mut missing_room: [4096]u8 = zeroed
+    fail mismatched when lenof plugin_bytes + lenof suffix > 4096
+    for at in usize(0)..<lenof plugin_bytes do
+        missing_room[at] = plugin_bytes[at]
+    end for
+    for at in usize(0)..<lenof suffix do
+        missing_room[lenof plugin_bytes + at] = suffix[at]
+    end for
+    missing: []u8 = missing_room[0..<lenof plugin_bytes + lenof suffix]
+    mut refused: bool = false
+    _ = posix.open_library(text.host_over(missing), posix.local_symbols)
+        else (problem)
+        refused = problem == posix.no_library
+        try explained(last_part(missing))
+        plugin
+    end
+    fail mismatched when not refused
+
+    --  Data found by its address, which the call above changed.
+    reached = 3
+    uses: ptr i32 = ptr(try posix.find_symbol(plugin, "plugin_uses"))
+    fail mismatched when uses.val <> 1
+
+    --  A symbol that is not there.
+    reached = 4
+    refused = false
+    _ = posix.find_symbol(plugin, "landin_absent_symbol") else (problem)
+        refused = problem == posix.no_symbol
+        try explained("landin_absent_symbol")
+        0
+    end
+    fail mismatched when not refused
+
+    --  A second load of the same object is the same object: its function
+    --  is at the same address, and closing one use leaves it loaded.
+    reached = 5
+    again: posix.library =
+        try posix.open_library(plugin_path, posix.local_symbols)
+    first: usize = try posix.find_symbol(plugin, "add")
+    second: usize = try posix.find_symbol(again, "add")
+    fail mismatched when first <> second
+    try posix.close_library(again)
+    fail mismatched when add(20, 22) <> 42
+    try posix.close_library(plugin)
+
+    --  Loaded again after its last use was closed.
+    reached = 6
+    reopened: posix.library =
+        try posix.open_library(plugin_path, posix.local_symbols)
+    sum: adder = adder(try posix.find_symbol(reopened, "add"))
+    fail mismatched when sum(2, 40) <> 42
+    try posix.close_library(reopened)
+
+    --  The consumer needs the provider's symbol: refused while it is
+    --  local to the provider, by the symbol's name.
+    reached = 7
+    local: posix.library =
+        try posix.open_library(provider_path, posix.local_symbols)
+    refused = false
+    _ = posix.open_library(consumer_path, posix.local_symbols)
+        else (problem)
+        refused = problem == posix.no_library
+        try explained("provided_value")
+        local
+    end
+    fail mismatched when not refused
+    try posix.close_library(local)
+
+    --  Loaded once the provider's symbols are global.
+    reached = 8
+    global: posix.library =
+        try posix.open_library(provider_path, posix.global_symbols)
+    consuming: posix.library =
+        try posix.open_library(consumer_path, posix.local_symbols)
+    consume: consumer = consumer(try posix.find_symbol(consuming, "consume"))
+    fail mismatched when consume() <> 42
+    try posix.close_library(consuming)
+    try posix.close_library(global)
+    reached = 42
+end checked
+
+public main: () -> (code: i32) =
+    checked() else (problem)
+        _ = problem
+    end
+    code = reached
+end main

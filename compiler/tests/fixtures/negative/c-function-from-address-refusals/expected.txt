@@ -1,0 +1,50 @@
+error[L0301]: only a C function type makes a function value from an address
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:9:23
+  |
+9 |     aliased: native = native(address)
+  |                       ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:9:23
+  |
+9 |     aliased: native = native(address)
+  |                       ^^^^^^ the function type applied here
+  = note: [1975]: write the type extern(c); code outside the program is reached only through C entry points
+error[L0301]: a C function value is made from a `usize` address, not `u32`
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:10:27
+   |
+10 |     narrow: adder = adder(small)
+   |                           ^^^^^
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:10:21
+   |
+10 |     narrow: adder = adder(small)
+   |                     ^^^^^ the function type applied here
+  = note: [1975]: convert a pointer with `usize(p)` first; an address carries no origin [0810]
+error[L0335]: a function value cannot be made from a known zero address
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:11:22
+   |
+11 |     nothing: adder = adder(0)
+   |                      ^^^^^^^^
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:11:22
+   |
+11 |     nothing: adder = adder(0)
+   |                      ^^^^^ the function type applied here
+  = note: [1975]: no code is at address zero; a lookup that finds nothing is its failure, not a function
+error[L0301]: a C function value is made from a `usize` address, not a pointer
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:12:28
+   |
+12 |     pointer: adder = adder(p)
+   |                            ^
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:12:22
+   |
+12 |     pointer: adder = adder(p)
+   |                      ^^^^^ the function type applied here
+  = note: [1975]: convert a pointer with `usize(p)` first; an address carries no origin [0810]
+error[L0301]: only a C function type makes a function value from an address
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:13:16
+   |
+13 |     written := (a: i32, b: i32) -> (r: i32)(address)
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn:13:16
+   |
+13 |     written := (a: i32, b: i32) -> (r: i32)(address)
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the function type applied here
+  = note: [1975]: write the type extern(c); code outside the program is reached only through C entry points

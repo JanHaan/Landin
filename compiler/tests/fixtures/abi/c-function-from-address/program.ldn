@@ -1,0 +1,22 @@
+--  A C function type applied to an address makes a C function value of
+--  the code there, as a loader's symbol lookup gives one: written in place
+--  and through an alias, with an integer and a floating argument, and
+--  passed back to C as the same function pointer it came from.
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+
+extern(c) address_of_add: () -> (address: usize)
+extern(c) address_of_scaled: () -> (address: usize)
+extern(c) same_as_add: (given: adder) -> (result: i32)
+
+public main: () -> (code: i32) =
+    code = 1
+    add: adder = adder(address_of_add())
+    if add(40, 2) <> 42 then return end if
+    code = 2
+    written := extern(c) (value: f64, times: i32) -> (result: f64)(
+        address_of_scaled())
+    if written(10.5, 4) <> 42.0 then return end if
+    code = 3
+    if same_as_add(add) <> 42 then return end if
+    code = 42
+end main

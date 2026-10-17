@@ -1363,3 +1363,62 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
     public extern(c) ptsname_r: (descriptor: i32, into: ptr mut u8,
                                  length: usize) -> (status: i32)
 end if
+
+--- What `dlopen` returns when it loads nothing: C's null pointer, with the
+--- reason in `dlerror`'s text.
+public not_loaded: atom
+
+--- A `dlopen` result: the loaded object's handle, or `not_loaded`.
+public loaded_object: type = not_loaded | ptr mut u8
+
+--- A `dlsym` or `dlerror` result: an address, or `no_address` for C's
+--- null pointer when they have nothing.
+public found_address: type = no_address | ptr u8
+
+--- Load the shared object at the NUL-terminated `path`, or find it by the
+--- system's search when `path` holds no slash, as `mode` says: its handle,
+--- or `not_loaded` with the reason in `dlerror`.  Loading an object
+--- already loaded counts another use of it and returns the same handle.
+--- In glibc's libc since 2.34, and in libdl before it; in Darwin's and
+--- FreeBSD's libc.
+public extern(c) dlopen: (path: ptr u8, mode: i32) -> (handle: loaded_object)
+
+--- The address of the NUL-terminated symbol `name` in the object `handle`
+--- names or in what it loaded with it, or `no_address` with the reason in
+--- `dlerror`.  The address has no type: what is there is the caller's to
+--- know.
+public extern(c) dlsym: (handle: ptr mut u8, name: ptr u8)
+                        -> (address: found_address)
+
+--- Count one use of `handle` as over: 0, or nonzero with the reason in
+--- `dlerror`.  The object may be unloaded once no use is left, and every
+--- address found in it is then no longer the program's to use.
+public extern(c) dlclose: (handle: ptr mut u8) -> (status: i32)
+
+--- The text of the last failure of `dlopen`, `dlsym` or `dlclose` on this
+--- thread, NUL-terminated, or `no_address` when there was none since it was
+--- last asked.  Asking clears it, and the next of those calls may overwrite
+--- it, so it is read at once.
+public extern(c) dlerror: () -> (text: found_address)
+
+--- `dlopen` mode: bind every symbol the object needs as it is loaded.  The
+--- same on every hosted system.
+public rtld_now: i32 = 2
+
+fixed if compiler.os == darwin then
+    --- `dlopen` mode: the object's symbols resolve no other object's
+    --- references.  Darwin's default is `rtld_global`, so it is always
+    --- given.
+    public rtld_local: i32 = 4
+    --- `dlopen` mode: the object's symbols resolve the references of an
+    --- object loaded after it.
+    public rtld_global: i32 = 8
+else
+    --- `dlopen` mode: the object's symbols resolve no other object's
+    --- references.  Darwin's default is `rtld_global`, so it is always
+    --- given.
+    public rtld_local: i32 = 0
+    --- `dlopen` mode: the object's symbols resolve the references of an
+    --- object loaded after it.
+    public rtld_global: i32 = 256
+end if

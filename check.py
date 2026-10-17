@@ -3899,8 +3899,10 @@ def lowering_verifies():
 def fixture_sources():
     """Every Landin or companion file a fixture names is a file that is there.
 
-    `with` names the rest of a module [1840], and `c-sources` names the ordered
-    C companions of an ABI fixture. A name that points at nothing is the same
+    `with` names the rest of a module [1840], `c-sources` names the ordered
+    C companions of an ABI fixture, and `c-shared` the C sources a runtime or
+    ABI fixture's harness builds into shared objects its program loads. A
+    name that points at nothing is the same
     dead data `expect` without `args` already is: the fixture would compile one
     file and claim to have compiled two. The grammar corpus independently sees
     only `.ldn`; C sources and included headers are not Landin inputs.
@@ -3922,7 +3924,7 @@ def fixture_sources():
             text = io.open(meta, encoding="utf-8").read()
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
-            for key in ("program", "with", "c-sources", "expect",
+            for key in ("program", "with", "c-sources", "c-shared", "expect",
                         "run_expect", "stdin"):
                 named = re.search(r"^%s: (.+)$" % key, text, re.M)
                 if not named:
@@ -4963,7 +4965,8 @@ def prototype_row_evidence(name, fields):
         if fields.get("root"):
             inputs.append("rooted")
         for label, field in (("args", "args"), ("run_args", "run_args"),
-                             ("stdin", "stdin"), ("peer", "c-sources")):
+                             ("stdin", "stdin"), ("peer", "c-sources"),
+                             ("shared", "c-shared")):
             if fields.get(field):
                 inputs.append("%s %s" % (label, fields[field]))
         status = fields.get("status")

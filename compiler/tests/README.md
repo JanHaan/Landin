@@ -538,6 +538,7 @@ emits assembly text.
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |
 | `c-sources` | yes for ABI | comma-separated, ordered C companion sources relative to the fixture directory |
 | `c-args` | no | whitespace-separated C compiler and linker arguments for an ABI fixture |
+| `c-shared` | no, and runtime or ABI only | comma-separated, ordered C sources relative to the fixture directory, each built into a shared object of its own that the program loads; their paths are its first arguments, before `run_args`. A runtime fixture that names it says `link: libc` |
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
@@ -646,6 +647,24 @@ target driver in the order written. `c-args`, when present, is a
 whitespace-separated argument-vector suffix; no shell interprets it. Both keys
 belong only to ABI fixtures, duplicate keys or C source paths are faults, and C
 source files in `with` are faults.
+
+`c-shared` names C sources the harness builds into shared objects for the
+program to load while it runs, as `platform/posix.open_library` does. Its
+entries follow `c-sources`' path rules, and no two may share a stem, which
+names the object. Each lane builds every one with its own C driver, the one
+it links the program with, before the program runs, with `-std=c11 -Wall
+-Wextra -Werror -fPIC` and the optimization its C peers get, and `-shared` on
+Linux and FreeBSD or `-dynamiclib -Wl,-undefined,dynamic_lookup` on Darwin,
+so that an object may leave a symbol for the loader to find in another, as an
+ELF shared object may. `c-args` does not reach them. The object is named for
+its source's stem and the executable it serves, beside it: `<executable>-<stem>.so`,
+or `.dylib` on Darwin. The program is given their paths as its first
+arguments, in metadata order, before `run_args`: an absolute or harness-relative
+path on the Linux and Darwin hosts, and the guest's or the RISC-V machine's
+own path where a lane carries the objects there with the executable. A
+runtime fixture that names `c-shared` must link with the C library, `link:
+libc`, because a static Linux program has no loader (D280).
+`runtime/posix-libraries` is the first.
 
 The ABI harness runs `refine` for Linux x86-64 with the Landin inputs followed
 by `--target=linux-x86-64 --emit=asm --link=libc -o <assembly>`, because the

@@ -120,9 +120,20 @@ class Lane(SHARED.Lane):
             # level arguments and startup policy; reuse that boundary here.
             self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '-o', executable],
                          label + '-link')
+        # `c-shared:` sources become shared objects the program loads, which
+        # the bundle carries beside it; their paths there are its first
+        # arguments (compiler/tests/README.md).
+        shared = []
+        for name in [n.strip() for n in meta.get('c-shared', '').split(',') if n.strip()]:
+            library = self.bundle / (label + '-' + Path(name).stem + '.so')
+            self.command([*self.cc, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
+                          '-fPIC', '-shared', base / name, '-o', library],
+                         label + '-shared-' + Path(name).stem)
+            shared.append(library.name)
+            peers.append({'source': name, 'source_sha256': sha(base / name), 'object_sha256': sha(library)})
         return {'case': str(base.relative_to(ROOT / 'compiler/tests/fixtures')),
                 'label': label, 'optimize': optimize, 'specialize': specialize, 'level': level,
-                'executable_sha256': sha(executable), 'c_peers': peers, 'meta': meta}
+                'executable_sha256': sha(executable), 'c_peers': peers, 'shared': shared, 'meta': meta}
 
     def build_debugger(self):
         source = HERE / 'debug.ldn'
@@ -255,7 +266,9 @@ def execute(args, manifest):
         meta, label = result['meta'], result['label']
         merged = meta.get('stream', 'merged') == 'merged'
         with open(standard_input(result), 'rb') as given:
-            completed = subprocess.run([str(bundle / label), *shlex.split(meta.get('run_args', ''))],
+            completed = subprocess.run([str(bundle / label),
+                                        *[str((bundle / name).resolve()) for name in result.get('shared', [])],
+                                        *shlex.split(meta.get('run_args', ''))],
                                        cwd=ROOT / 'compiler/ada', stdin=given, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT if merged else subprocess.PIPE, timeout=90)
         (args.output / (label + '.stdout')).write_bytes(completed.stdout)

@@ -841,6 +841,13 @@ package body Landin.IR.Dump is
                            (Signature_Of (Of_Unit, Item, Value)));
                end;
 
+            when Code_Address =>
+               return Lead & " signature "
+                 & Trimmed
+                     (Signature_Id'Image
+                        (Signature_Of (Of_Unit, Item, Value)))
+                 & Operands (Item, Value);
+
             when Evidence_Address =>
                return Lead & " evidence "
                  & Trimmed

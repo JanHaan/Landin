@@ -1,0 +1,14 @@
+--  Only a C function type makes a function value from an address, and
+--  only from a `usize` that is not a known zero: a native function type,
+--  written or aliased, another integer, a pointer and a known zero are
+--  each refused where they are written.
+adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+native: type = (a: i32, b: i32) -> (r: i32)
+
+bad: (address: usize, small: u32, p: ptr u8) -> none =
+    aliased: native = native(address)
+    narrow: adder = adder(small)
+    nothing: adder = adder(0)
+    pointer: adder = adder(p)
+    written := (a: i32, b: i32) -> (r: i32)(address)
+end bad

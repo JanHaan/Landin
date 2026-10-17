@@ -188,9 +188,21 @@ class Lane:
                               'object_sha256': sha(obj)})
             assembler = ['-fno-integrated-as', '-Wa,-march=generic64'] if self.args.arch == 'amd64' else ['-march=' + (level or 'armv8-a')]
             self.command([self.driver, *assembler, assembly, *objects, *cargs, '-o', executable], label + '-link')
+        # `c-shared:` sources become shared objects the program loads, which
+        # the bundle carries beside it; their guest paths are its first
+        # arguments (compiler/tests/README.md).
+        shared = []
+        for name in [n.strip() for n in meta.get('c-shared', '').split(',') if n.strip()]:
+            library = self.bundle / (label + '-' + Path(name).stem + '.so')
+            self.command([*self.cc, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
+                          '-fPIC', '-shared', base / name, '-o', library],
+                         label + '-shared-' + Path(name).stem)
+            shared.append(library.name)
+            peers.append({'source': name, 'source_sha256': sha(base / name),
+                          'object_sha256': sha(library)})
         return {'case': str(base.relative_to(ROOT / 'compiler/tests/fixtures')),
                 'label': label, 'optimize': optimize, 'specialize': specialize, 'level': level,
-                'executable_sha256': sha(executable), 'c_peers': peers,
+                'executable_sha256': sha(executable), 'c_peers': peers, 'shared': shared,
                 'meta': meta, 'base': str(base)}
 
     def payload(self):
@@ -285,7 +297,8 @@ class Lane:
         for result in results:
             label, meta = result['label'], result['meta']
             path = self.remote_bundle / label
-            command = shlex.join([str(path), *shlex.split(meta.get('run_args', ''))])
+            command = shlex.join([str(path), *[str(self.remote_bundle / name) for name in result.get('shared', [])],
+                                  *shlex.split(meta.get('run_args', ''))])
             out, err, status = (str(path) + suffix for suffix in ('.stdout', '.stderr', '.status'))
             redirection = '2>&1' if meta.get('stream', 'merged') == 'merged' else '2>' + shlex.quote(err)
             given = shlex.quote(str(self.standard_input(result)))

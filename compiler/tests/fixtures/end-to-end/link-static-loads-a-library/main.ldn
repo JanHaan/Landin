@@ -1,0 +1,18 @@
+--  A static Linux program has no loader, so one that loads a shared
+--  object is refused before any tool runs, naming the routine that needs
+--  the C library's loader and --link=libc.
+import core/text
+import platform/posix
+
+public main: () -> (code: i32) =
+    loaded: posix.library = posix.open_library(
+        text.host_over("libm.so.6"), posix.local_symbols) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    posix.close_library(loaded) else (problem)
+        _ = problem
+    end
+    code = 0
+end main

@@ -561,7 +561,10 @@ package body Landin.Diagnostics.Explanations is
                & "se. A pointer case is constructed only from a pointer, a"
                & "nd a known zero address is reserved for the union's empt"
                & "y atom [0460]. Match the union, or construct it from an "
-               & "atom or a pointer.",
+               & "atom or a pointer. A C function value is not made from a"
+               & " known zero address either, since no code is there [1975"
+               & "]: a lookup that finds nothing is a failure to recover f"
+               & "rom, not a function.",
             when Catalogue.Packed_Image =>
                "A packed image or its layout is used outside [0730]'s ru"
                & "les. Packed fields have explicit, disjoint bit positions"
@@ -731,12 +734,14 @@ package body Landin.Diagnostics.Explanations is
                & "forbids `linker.library`, a static Linux link cannot be "
                & "made (no library holding `platform/linux` was found, or "
                & "the program asks for `linker.library` or refers to C sym"
-               & "bols nothing in it defines), no toolchain is selected, o"
-               & "r the named tool is unavailable. Choose a target with a "
-               & "backend, change the debug or firmware configuration, lin"
-               & "k with `--link=libc`, or select or install a toolchain a"
-               & "s the note directs. `--toolchain=` only helps when a too"
-               & "lchain is absent or unavailable.",
+               & "bols nothing in it defines, each named with the routine "
+               & "that refers to it, as `platform/posix`'s loader refers t"
+               & "o `dlopen`), no toolchain is selected, or the named tool"
+               & " is unavailable. Choose a target with a backend, change "
+               & "the debug or firmware configuration, link with `--link=l"
+               & "ibc`, or select or install a toolchain as the note direc"
+               & "ts. `--toolchain=` only helps when a toolchain is absent"
+               & " or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"

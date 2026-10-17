@@ -318,6 +318,12 @@ package Landin.IR is
       --  [0870]: a routine's target-neutral code identity and D117
       --  signature descriptor, lowered to one target code address.
       Function_Address,
+      --  [1975]: a C function value made from the address its one `usize`
+      --  operand holds, as a looked-up symbol's address is.  It carries the
+      --  C signature the source names and changes no bits: the operand has
+      --  already been held to being nonzero.  Unlike Function_Address it
+      --  names no routine, so nothing about the callee is known.
+      Code_Address,
       --  An evidence table's static address and one source-order
       --  concept-function word loaded from a hidden evidence parameter.
       --  The semantic entry index is retained; only a backend turns it
@@ -3735,6 +3741,18 @@ package Landin.IR is
                   and then Kind_Of (Into, Target) = Routine
                   and then Signature_Of (Into, Target) /= No_Signature
                   and then Landin.Provenance.Is_Known (Site);
+
+   function Emit_Code_Address
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Value     : Value_Id;
+      Signature : Signature_Id;
+      Site      : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Value)
+                  and then Holds (Into, Signature)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Code_Address'Result, Code_Address);
 
    function Emit_Evidence_Address
      (Into     : in out Unit;

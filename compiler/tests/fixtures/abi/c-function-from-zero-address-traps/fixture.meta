@@ -1,0 +1,8 @@
+class: abi
+profiles: standard
+summary: a C function value made from a zero address the compiler cannot see traps where it is made, inside unchecked too, before it could be called
+program: program.ldn
+c-sources: peer.c
+traps: yes
+constructs: 1120, 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -3860,7 +3860,8 @@ package body Landin.Backend.Arm64 is
                   Emit ((if Landin.Types.Is_Signed (Kind (Value))
                     then "b.gt " else "b.hi ") & Trap);
                   Store_Value (Value);
-               when Landin.IR.Conversion | Landin.IR.Pointer_Address =>
+               when Landin.IR.Conversion | Landin.IR.Pointer_Address
+                  | Landin.IR.Code_Address =>
                   declare
                      From : constant Landin.Types.Scalar_Name := Kind (Operand
                        (1));
@@ -4838,6 +4839,7 @@ package body Landin.Backend.Arm64 is
 
                      when Landin.IR.Failure_Test
                         | Landin.IR.Function_Address
+                        | Landin.IR.Code_Address
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call

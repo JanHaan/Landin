@@ -60,11 +60,18 @@ package Landin.Backend.Entry_Point is
    --  initializer and the panic handler the entry and the backend call,
    --  and whatever any datum or evidence table names, which is counted
    --  whole because a datum is cheap to keep.  In item order, each name
-   --  once.
-   function Unsatisfied_Imports
-     (Of_Unit  : Landin.IR.Unit;
-      Meanings : Landin.Resolution.Table;
-      Names    : Landin.Source.Names.Table) return Landin.Platform.Path_List;
+   --  once.  Beside each, in Referrers, what in the program first refers
+   --  to it, so a refusal can say which routine asked for the C library:
+   --  `main` for one of the entry module's, `platform/posix`'s
+   --  `open_library` for one of another module's, or "" when nothing the
+   --  program declares does.
+   procedure Unsatisfied_Imports
+     (Of_Unit   : Landin.IR.Unit;
+      Meanings  : Landin.Resolution.Table;
+      Modules   : Landin.Modules.Table;
+      Names     : Landin.Source.Names.Table;
+      Imports   : out Landin.Platform.Path_List;
+      Referrers : out Landin.Platform.Path_List);
 
    function Firmware_Start
      (Of_Unit  : Landin.IR.Unit;

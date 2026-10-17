@@ -22379,6 +22379,114 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
+                  --  [1975]: a C function type applied to an address makes
+                  --  a C function value of that code, as a looked-up
+                  --  symbol's address is made one.  Nothing checks that
+                  --  code of that signature is there; that is the
+                  --  program's, as a C cast's is.
+                  if Syn.Kind (Of_Tree, Node) = Syn.Call
+                    and then Syn.Argument_Count (Of_Tree, Node) = 1
+                    and then not Is_Scalar_Conversion
+                    and then not Is_Text_Conversion
+                    and then
+                      ((Written and then Destination.Kind = Ty.Function_Value
+                        --  A written function type applied to a function
+                        --  is no conversion; an address is this one.
+                        and then Synthesise
+                          (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1))
+                            in Ty.Integer_Name | Ty.Untyped_Integer
+                             | Ty.Pointer_Value)
+                       or else
+                         (Named
+                          and then Res.Sort_Of (Meanings.all, Means)
+                            = Res.Module_Type
+                          and then Settled_Type (Means) = Ty.Function_Value))
+                  then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, 1);
+                        Target : constant Landin.Checking.Signature_Id :=
+                          (if Written then Destination.Signature
+                           else Landin.Checking.Signature_Of
+                             (Types.all, Means));
+                        Got : Ty.Type_Kind := Synthesise (Of_Tree, Value);
+                     begin
+                        if Target = Landin.Checking.No_Signature
+                          or else Got = Ty.Ill_Typed
+                        then
+                           Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        if not Landin.Checking.Signature_Uses_C_ABI
+                          (Types.all, Target)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Node),
+                              Message => "only a C function type makes a"
+                                         & " function value from an address",
+                              Note    => "[1975]: write the type extern(c);"
+                                         & " code outside the program is"
+                                         & " reached only through C entry"
+                                         & " points",
+                              Related => Syn.Origin (Of_Tree, Callee),
+                              Because => "the function type applied here",
+                              Into    => Found);
+                           Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        if Got = Ty.Untyped_Integer then
+                           Commit_To (Of_Tree, Value, Ty.Usize);
+                           if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Value) = Ty.Ill_Typed
+                           then
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Node);
+                              return Kept (Ty.Ill_Typed);
+                           end if;
+                           Got := Ty.Usize;
+                        end if;
+                        if Got /= Ty.Usize then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "a C function value is made from a"
+                                         & " `usize` address, not "
+                                         & Shown (Got),
+                              Note    => "[1975]: convert a pointer with"
+                                         & " `usize(p)` first; an address"
+                                         & " carries no origin [0810]",
+                              Related => Syn.Origin (Of_Tree, Callee),
+                              Because => "the function type applied here",
+                              Into    => Found);
+                           Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        if Pointer_Is_Known_Zero (Of_Tree, Value) then
+                           Bad.Report
+                             (Item    => Bad.Pointer_Union_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Node),
+                              Message => "a function value cannot be made"
+                                         & " from a known zero address",
+                              Note    => "[1975]: no code is at address"
+                                         & " zero; a lookup that finds"
+                                         & " nothing is its failure, not a"
+                                         & " function",
+                              Related => Syn.Origin (Of_Tree, Callee),
+                              Because => "the function type applied here",
+                              Into    => Found);
+                           Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        Landin.Checking.Note_Signature
+                          (Types.all, Of_Tree, Node, Target);
+                        return Kept (Ty.Function_Value);
+                     end;
+                  end if;
+
                   if Is_Text_Conversion then
                      declare
                         Value : constant Syn.Node_Id :=

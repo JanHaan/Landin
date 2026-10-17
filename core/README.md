@@ -28,7 +28,8 @@ makes on Linux, and the raw `system_call` that makes any of them, and
 `platform/linux/numbers` names every call's number, generated from a pinned
 kernel release; both declare nothing on Darwin and FreeBSD. `platform/libc`
 declares the C library `platform/posix` calls on Darwin and FreeBSD, and
-which a Linux program linked with `--link=libc` may call, with the facts
+which a Linux program linked with `--link=libc` may call, its loader among
+it, which `platform/posix` loads shared objects through on every system, with the facts
 that differ between systems selected by `compiler.os`; the compiler names
 none of it. The three `platform` modules' scope is the hosted POSIX
 systems, and firmware refuses each by name. `platform/c` holds the

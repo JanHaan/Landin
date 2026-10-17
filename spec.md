@@ -1797,6 +1797,21 @@ actuals, static images and indirect calls. Neither matching machine widths nor
 `layout(c)` makes a Landin function a C callback. Function values are code
 addresses; `ptr handler` instead addresses a stored function value.
 
+A C function type applied to one `usize`, written in place or through an
+alias, `adder(address)`, makes a C function value of the code at that
+address, as a loader's symbol lookup gives one. Nothing can check that code
+of that signature is there: that is the program's, as it is a C cast's. The
+bits are unchanged; zero, the address of no code, traps where the value is
+made, inside `unchecked` too, and a known zero is refused with L0335. The
+address carries no origin [0810], so the value is not held to the life of
+the object it was found in, and a `from` clause cannot name one for it,
+because a function value holds no reference (L0339). Only the C convention
+is made so: a native Landin function type applied to an address is refused
+with L0301, since code outside the program is reached only through its C
+entry points, and so are an integer of another type and a pointer, which
+`usize(p)` converts first. Nothing converts a function value back to an
+address.
+
 The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
 signed plain C `char`, and Linux and FreeBSD arm64's standard AAPCS64 LP64,
@@ -18227,7 +18242,10 @@ is `--link` on a target with no hosted system or without `--emit=exe` or
 naming `--link=libc`, when no library holding `platform/linux` was found, when
 the program asks for `linker.library`, or when it refers to a bodyless
 external symbol no program item defines. The refusal counts only what the
-entry reaches, since every backend collects per-item sections (D303).
+entry reaches, since every backend collects per-item sections (D303), and
+names each missing symbol with the routine that refers to it, `dlopen, which
+platform/posix's open_library refers to`, so a program loading a library
+learns which of its calls asked for the C library (D336).
 `-v`, `--dry-run` and the build report name the mode. An emitted `.s` under
 static mode includes `platform/linux` and still links under a C driver.
 
@@ -19147,7 +19165,8 @@ name alone where there are no version tables. Every offset is held inside the
 image before it is read, by arithmetic that cannot overflow, and the image is
 bounded by its first page for the headers and its first load segment, at most
 a mebibyte. The function's address is cached in a plain module word on first
-use, single-threaded state like the heap's. A missing symbol, a malformed
+use, single-threaded state like the heap's, and called through D335's
+conversion of that address to a C function value. A missing symbol, a malformed
 image or a nonzero answer falls back to the system call. Since D279's
 adoption it serves `--link=libc` too, and `io.now` costs about 116 ns either
 way.
@@ -19556,3 +19575,66 @@ only after a call's `else`, though the same discard happens without one.
 
 **Pinned by** `negative/value-ending-a-statement-branch-is-refused` and
 `negative/none-call-else-value`.
+
+### D335 — A C function type applied to an address makes a C function value
+
+**The tour said** at [1580] that a C function type describes C code Landin
+calls, and nothing turned an address into one: the vDSO's clock was called
+through a type pun in memory, and a symbol a loader finds had no route to a
+typed call.
+
+**Chosen:** a C function type applied to one `usize`, written in place or
+through an alias, `adder(address)`, makes a C function value of the code at
+that address. Nothing can check that code of that signature is there; that is
+the program's, as a C cast is. The bits are unchanged. Zero traps where the
+value is made, inside `unchecked` too, and a known zero is refused with L0335.
+The address carries no origin [0810]. A native function type applied to an
+address is L0301, since Landin's own convention is no ABI, and so is an
+integer of another type or a pointer, which `usize(p)` converts first. Nothing
+converts a function value back to an address. The conversion is the IR's
+`code_address`, a move on every backend.
+
+**The alternatives:** the pun through `ptr F`, a workaround the vDSO lived
+with; an import of `dlsym` per signature, which L0347 refuses as incompatible
+declarations of one symbol; a generic lookup, which nothing can constrain to
+C function types; taking `ptr u8` directly, where `usize` is already the
+address without an origin; and converting back, which nothing needs.
+
+**Pinned by** `abi/c-function-from-address`, `abi/c-function-from-zero-address-traps`,
+`negative/c-function-from-address-refusals` and `runtime/linux-vdso`.
+
+### D336 — A loaded library is a handle, and its function values dangle once it closes
+
+**The tour said** at [1590] that the platform's loader owns linkage, and
+nothing loaded a library while a program ran.
+
+**Chosen:** `posix.open_library(path, scope)` loads a C library with
+`RTLD_NOW` and an explicit `local_symbols` or `global_symbols`, since Darwin's
+default scope is global and the others' local, wherever the system's loader
+started the process: on Darwin and FreeBSD always, and on Linux under
+`--link=libc`, where glibc 2.34 or musl provide the loader in the C library. A
+`library` is an opaque handle passed by value, as D288 has services, since the
+loader counts the opens and two loads of one object give the same handle; it
+cannot be zeroed into being. `posix.find_symbol` gives an address, which D335
+makes a typed function value. Loading fails with an `errno` atom or
+`no_library`, a lookup with `no_symbol`, closing with `no_library`; the
+loader's own words are opt-in, `posix.library_failure(into)` copying
+`dlerror`'s text into the caller's buffer, cut to fit, read at once on the same
+thread. A function value has no origin (D113), so one from a closed library
+dangles, as a pointer after `free` does, and the documentation says so. A
+static Linux program that reaches these calls is refused by D280's L0500,
+naming the routines that ask for the C library. Code loaded so is C, or Landin
+only through C entry points.
+
+**The alternatives:** a library edited `inout` and invalidated by closing,
+though repeated opens share one handle; a `distinct usize`, which could be
+zeroed into `RTLD_DEFAULT`; giving function values origins for one source of
+code; `RTLD_LAZY`, whose failure ends the process at the first call; the
+system's default scope, which differs; no message, or a buffer on every call;
+and a code of its own for the static refusal, which is D280's.
+
+**Pinned by** `runtime/posix-libraries`, which loads libraries the fixture
+builds, calls into them and back, and holds a missing library, a missing
+symbol, reopening and both scopes to their answers;
+`end-to-end/link-static-loads-a-library`; and `abi/libc-loading-facts`, which
+holds the flags to each system's `dlfcn.h`.

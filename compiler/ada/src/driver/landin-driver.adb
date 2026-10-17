@@ -1754,15 +1754,18 @@ package body Landin.Driver is
             --  linker's undefined references.
             if Emit = Emit_Executable and then Static_Link then
                declare
-                  Needed : constant Landin.Platform.Path_List :=
-                    Landin.Backend.Entry_Point.Unsatisfied_Imports
-                      (Landin.Stages.Code (Context).all,
-                       Landin.Stages.Meanings (Context).all,
-                       Landin.Stages.Identities (Context).all);
+                  Needed : Landin.Platform.Path_List;
+                  Referrers : Landin.Platform.Path_List;
                   Requests : constant Natural :=
                     Landin.Configuration.Library_Count
                       (Landin.Stages.Configurations (Context).all);
                begin
+                  Landin.Backend.Entry_Point.Unsatisfied_Imports
+                    (Landin.Stages.Code (Context).all,
+                     Landin.Stages.Meanings (Context).all,
+                     Landin.Stages.Modules (Context).all,
+                     Landin.Stages.Identities (Context).all,
+                     Needed, Referrers);
                   if Landin.Modules.Find_Logical
                        (Landin.Stages.Modules (Context).all, "platform/linux")
                      = Landin.Modules.No_Module
@@ -1785,20 +1788,29 @@ package body Landin.Driver is
                         & " and library");
                      return;
                   elsif not Needed.Is_Empty then
+                     --  Each name with what in the program refers to it, so
+                     --  a library routine that needs the C library, as
+                     --  platform/posix's loader does, is named by its own
+                     --  name and not only by the C symbol it calls.
                      declare
                         Listed : Unbounded.Unbounded_String;
                      begin
-                        for Name of Needed loop
+                        for Index in 1 .. Natural (Needed.Length) loop
                            Unbounded.Append
                              (Listed,
-                              (if Unbounded.Length (Listed) = 0 then ""
-                               else ", ") & "`" & Name & "`");
+                              (if Index = 1 then ""
+                               elsif Index = Natural (Needed.Length)
+                               then ", or "
+                               else ", ")
+                              & "`" & Needed (Index) & "`, which "
+                              & (if Referrers (Index) = "" then "the program"
+                                 else Referrers (Index))
+                              & " refers to");
                         end loop;
                         Note_No_Toolchain
                           ("a static link of " & Landin.Targets.Name (Facts)
                            & " has no C library to define "
-                           & Unbounded.To_String (Listed)
-                           & ", which the program refers to",
+                           & Unbounded.To_String (Listed),
                            "link with --link=libc, which keeps C's runtime"
                            & " and library");
                      end;

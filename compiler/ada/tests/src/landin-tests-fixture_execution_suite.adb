@@ -1422,6 +1422,100 @@ package body Landin.Tests.Fixture_Execution_Suite is
          else Directory & "/" & Standard_Input (Case_Item));
    end Feed_Standard_Input;
 
+   --  Build each of the fixture's `c-shared` sources, below its fixture
+   --  DIRECTORY, into a shared object of its own beside BUILT with the
+   --  lane's C driver, and hand back their paths, which the program is
+   --  given first among its arguments.  An ELF object may leave a symbol
+   --  for the loader to find in another object; a Darwin one is linked to
+   --  do the same, with `-undefined dynamic_lookup`.
+   procedure Build_Shared_Objects
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Directory : String;
+      Built     : String;
+      Label     : String;
+      Item      : in out Landin.Testing.Context;
+      Objects   : out Landin.Platform.Path_List;
+      Ready     : out Boolean);
+
+   procedure Build_Shared_Objects
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Directory : String;
+      Built     : String;
+      Label     : String;
+      Item      : in out Landin.Testing.Context;
+      Objects   : out Landin.Platform.Path_List;
+      Ready     : out Boolean)
+   is
+      Facts  : constant Landin.Targets.Target_Facts := Lanes.Target;
+      Darwin : constant Boolean :=
+        Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+          = Landin.Targets.Capabilities.Darwin;
+      Driver : constant String :=
+        Landin.Backend.Toolchain.Driver_For (Facts, Lanes.Toolchain);
+      Rest   : constant String := C_Shared (Case_Item);
+      First  : Integer := Rest'First;
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+
+      procedure Build_One (Named : String);
+
+      procedure Build_One (Named : String) is
+         Source : constant String :=
+           Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+         Object : constant String :=
+           Built & "-" & Shared_Stem (Source)
+           & (if Darwin then ".dylib" else ".so");
+         Args   : Landin.Platform.Path_List;
+         Built_One : Boolean;
+      begin
+         if not Ready or else Source = "" then
+            return;
+         end if;
+         Landin.Platform.Add (Args, Directory & "/" & Source);
+         Landin.Platform.Add (Args, "-std=c11");
+         Landin.Platform.Add (Args, "-Wall");
+         Landin.Platform.Add (Args, "-Wextra");
+         Landin.Platform.Add (Args, "-Werror");
+         Landin.Platform.Add (Args, "-fPIC");
+         if Darwin then
+            Landin.Platform.Add (Args, "-dynamiclib");
+            Landin.Platform.Add (Args, "-Wl,-undefined,dynamic_lookup");
+         else
+            Landin.Platform.Add (Args, "-shared");
+         end if;
+         Landin.Platform.Add (Args, "-o");
+         Landin.Platform.Add (Args, Object);
+         Produce_Output
+           (Host, Runner, Driver, Label & " shared " & Source, Object,
+            Args, Item, Built_One);
+         Ready := Built_One;
+         Objects.Append (Object);
+      end Build_One;
+   begin
+      Objects.Clear;
+      Ready := True;
+      if Rest = "" then
+         return;
+      end if;
+      if Driver = "" then
+         Landin.Testing.Fail
+           (Item, Label & ": " & Landin.Targets.Name (Facts)
+            & " names no C toolchain driver for its shared objects");
+         Ready := False;
+         return;
+      end if;
+      for Index in Rest'Range loop
+         if Rest (Index) = ',' then
+            Build_One (Rest (First .. Index - 1));
+            First := Index + 1;
+         end if;
+      end loop;
+      if First <= Rest'Last then
+         Build_One (Rest (First .. Rest'Last));
+      end if;
+   end Build_Shared_Objects;
+
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
@@ -1530,7 +1624,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Label & ": the executable needs " & Level);
             end;
          end if;
-         Runtime_Arguments := Split (Run_Args (Case_Item));
+         declare
+            Objects : Landin.Platform.Path_List;
+            Shared  : Boolean;
+         begin
+            Build_Shared_Objects
+              (Case_Item, Host, Fixture_Root & "/runtime/" & Name (Case_Item),
+               Built, Label, Item, Objects, Shared);
+            if not Shared then
+               return;
+            end if;
+            Runtime_Arguments := Objects;
+            for Argument of Split (Run_Args (Case_Item)) loop
+               Runtime_Arguments.Append (Argument);
+            end loop;
+         end;
          Feed_Standard_Input
            (Runner, Case_Item, Fixture_Root & "/runtime/" & Name (Case_Item));
          Run_With_Stream
@@ -1706,7 +1814,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Host, Runner, Driver, Label & " C link", Built,
          Driver_Arguments, Item, Ready);
       if Ready then
-         Runtime_Arguments := Split (Run_Args (Case_Item));
+         declare
+            Objects : Landin.Platform.Path_List;
+            Shared  : Boolean;
+         begin
+            Build_Shared_Objects
+              (Case_Item, Host, Directory, Built, Label, Item, Objects,
+               Shared);
+            if not Shared then
+               return;
+            end if;
+            Runtime_Arguments := Objects;
+            for Argument of Split (Run_Args (Case_Item)) loop
+               Runtime_Arguments.Append (Argument);
+            end loop;
+         end;
          Feed_Standard_Input (Runner, Case_Item, Directory);
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item,

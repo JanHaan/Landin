@@ -1771,6 +1771,35 @@ package body Landin.Stages.Lowering is
          return Ty.Ill_Typed;
       end Conversion_Scalar;
 
+      --  [1975]: whether NODE applies a C function type to an address,
+      --  written or through an alias, which the checker admitted only for
+      --  one `usize` and a C signature.
+      function Is_Code_Conversion
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Code_Conversion
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Callee : Syn.Node_Id;
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Call
+           or else Syn.Argument_Count (Of_Tree, Node) /= 1
+           or else Type_At (Of_Tree, Node) /= Ty.Function_Value
+         then
+            return False;
+         end if;
+         Callee := Syn.Callee_Of (Of_Tree, Node);
+         if Syn.Kind (Of_Tree, Callee) in Syn.Type_Reference_Kind then
+            return True;
+         end if;
+         return Syn.Kind (Of_Tree, Callee)
+                  in Syn.Name_Reference | Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Callee))
+               = Res.Module_Type;
+      end Is_Code_Conversion;
+
       --  [0650]: the scalar base of a value of a distinct type whose base
       --  is a scalar, which `==`, `<>` and an unsigned base's bit
       --  operators read; No_Value for any other value.
@@ -9523,6 +9552,30 @@ package body Landin.Stages.Lowering is
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
                         Ty.Scalar_Name (Conversion_Scalar (Of_Tree, Node)),
+                        Site);
+                  end;
+               end if;
+               if Is_Code_Conversion (Of_Tree, Node) then
+                  --  [1975]: no code is at address zero, which is tested
+                  --  as `ptr`'s is, and never removed by `unchecked`.
+                  declare
+                     Value : constant IR.Value_Id := Lower_Expression
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1), Scope);
+                     Address : IR.Value_Id;
+                  begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     Address := IR.Emit_Range_Check
+                       (Unit.all, Filling, Value, Ty.Usize, 1,
+                        Ty.Folded
+                          (Landin.Targets.Maximum_Object_Size (Facts)), Site,
+                        Representation => True);
+                     return IR.Emit_Code_Address
+                       (Unit.all, Filling, Address,
+                        Signature_For
+                          (Landin.Checking.Signature_Of
+                             (Types.all, Of_Tree, Node)),
                         Site);
                   end;
                end if;

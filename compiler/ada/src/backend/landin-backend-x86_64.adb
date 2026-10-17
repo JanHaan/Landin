@@ -3678,7 +3678,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                   end;
 
-               when Landin.IR.Pointer_Address =>
+               when Landin.IR.Pointer_Address | Landin.IR.Code_Address =>
                   Carry
                     (Landin.Targets.Byte_8,
                      Value_Operand (Operand (1)), Value_Operand (Value));
@@ -7186,6 +7186,7 @@ package body Landin.Backend.X86_64 is
 
                      when Landin.IR.Failure_Test
                         | Landin.IR.Function_Address
+                        | Landin.IR.Code_Address
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call

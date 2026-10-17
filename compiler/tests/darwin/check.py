@@ -301,7 +301,20 @@ def main(argv=None):
                 _, file_output, _ = run.command(["/usr/bin/file", executable], label + "-file", cwd)
                 assembly_contract(assembly.read_text())
                 require(b"Mach-O 64-bit executable arm64" in file_output, "wrong executable target")
-                status, stdout, stderr = run.command([executable, *shlex.split(meta.get("run_args", ""))],
+                #  `c-shared:` sources become dylibs the program loads, their
+                #  paths its first arguments; an undefined symbol is left for
+                #  the loader, as an ELF shared object's is
+                #  (compiler/tests/README.md).
+                shared = []
+                for part in [p.strip() for p in meta.get("c-shared", "").split(",") if p.strip()]:
+                    dylib = directory / (label + "-" + Path(part).stem + ".dylib")
+                    run.command(["/usr/bin/clang", "-arch", "arm64", "-std=c11", "-O2",
+                                 "-Wall", "-Wextra", "-Werror", "-fPIC", "-dynamiclib",
+                                 "-Wl,-undefined,dynamic_lookup", base / part, "-o", dylib],
+                                label + "-shared-" + Path(part).stem, cwd)
+                    shared.append(dylib)
+                status, stdout, stderr = run.command([executable, *shared,
+                                                      *shlex.split(meta.get("run_args", ""))],
                                                      label + "-execute", cwd, expected=None, timeout=30,
                                                      merged=meta.get("stream") == "merged",
                                                      stdin=standard_input(base, meta))

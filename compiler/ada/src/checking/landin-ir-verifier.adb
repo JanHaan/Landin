@@ -241,7 +241,7 @@ package body Landin.IR.Verifier is
             when Load => 0,
             when Slice_Address => 4,
             when Empty_Slice_Base => 0,
-            when Conversion | Pointer_Address => 1,
+            when Conversion | Pointer_Address | Code_Address => 1,
             when Range_Check   => 1,
             when Memory_Access => 0,
             when Assembly      => 0,
@@ -6752,6 +6752,35 @@ package body Landin.IR.Verifier is
                                           Value => V);
                                     end if;
                                  end;
+                              end;
+
+                           when Code_Address =>
+                              --  [1975]: only a C signature is made from
+                              --  an address, and from a plain `usize`.
+                              declare
+                                 Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Id, V);
+                                 Source : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                              begin
+                                 if not Holds (Of_Unit, Signature) then
+                                    return
+                                      (Kind => Signature_Out_Of_Range,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 elsif not Signature_Uses_C_ABI
+                                     (Of_Unit, Signature)
+                                   or else Result_Of (Of_Unit, Id, Source)
+                                     /= Landin.Types.Usize
+                                   or else Signature_Of (Of_Unit, Id, Source)
+                                     /= No_Signature
+                                 then
+                                    return
+                                      (Kind =>
+                                         Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
                               end;
 
                            when Function_Address =>

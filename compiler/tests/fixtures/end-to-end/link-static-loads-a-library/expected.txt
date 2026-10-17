@@ -1,0 +1,2 @@
+error[L0500]: a static link of linux-x86-64 has no C library to define `dlclose`, which platform/posix's `close_library` refers to, or `dlopen`, which platform/posix's `open_library` refers to
+  = note: link with --link=libc, which keeps C's runtime and library

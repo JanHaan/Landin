@@ -380,16 +380,16 @@ fixed if compiler.os == linux then
         end match
     end clock_number
 
-    --  The vDSO's function is called through a cell holding its address,
-    --  as a function value is one: the cell is the address's own copy.
+    --  The vDSO's function is made a value of its C type from its address,
+    --  as a looked-up symbol is.
     system_clock_time: (clock: clock_kind) -> (time: time_value) ! errno =
         mut record: linux.timespec = zeroed
         mut result: i32 = -1
         address: u64 = vdso_clock_address()
         if address <> no_vdso_clock then
-            held: usize = usize(address)
-            function: ptr linux.vdso_clock_gettime = ptr(usize(addr held))
-            result = function.val(clock_number(clock), addr record)
+            function: linux.vdso_clock_gettime =
+                linux.vdso_clock_gettime(usize(address))
+            result = function(clock_number(clock), addr record)
         end if
         if result <> 0 then
             result = linux.clock_gettime(clock_number(clock), addr record)

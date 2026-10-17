@@ -110,12 +110,43 @@ package body Landin.Backend.Entry_Point is
       return Landin.IR.No_Item;
    end Argument_Initializer;
 
-   function Unsatisfied_Imports
-     (Of_Unit  : Landin.IR.Unit;
-      Meanings : Landin.Resolution.Table;
-      Names    : Landin.Source.Names.Table) return Landin.Platform.Path_List
+   procedure Unsatisfied_Imports
+     (Of_Unit   : Landin.IR.Unit;
+      Meanings  : Landin.Resolution.Table;
+      Modules   : Landin.Modules.Table;
+      Names     : Landin.Source.Names.Table;
+      Imports   : out Landin.Platform.Path_List;
+      Referrers : out Landin.Platform.Path_List)
    is
-      Result : Landin.Platform.Path_List;
+      --  The item whose references are being followed, or No_Item for a
+      --  root.
+      Referring : Landin.IR.Item_Id := Landin.IR.No_Item;
+
+      --  How a refusal names the item that refers to an import.
+      function Referrer_Name (Item : Landin.IR.Item_Id) return String;
+
+      function Referrer_Name (Item : Landin.IR.Item_Id) return String is
+         Declared : Landin.IR.Declaration_Id;
+         Module : Landin.Modules.Module_Id;
+      begin
+         if Item = Landin.IR.No_Item then
+            return "";
+         end if;
+         Declared := Landin.IR.Declares (Of_Unit, Item);
+         if Declared = Landin.IR.No_Declaration then
+            return "";
+         end if;
+         Module := Landin.Modules.Module_Of
+           (Modules, Landin.Resolution.Source_Of (Meanings, Declared));
+         return
+           (if Module = Landin.Modules.Entry_Module
+              or else Module = Landin.Modules.No_Module
+            then ""
+            else Landin.Modules.Logical_Path (Modules, Module) & "'s ")
+           & "`" & Landin.Source.Names.Spelling
+               (Names, Landin.Resolution.Name_Of (Meanings, Declared))
+           & "`";
+      end Referrer_Name;
 
       --  The name the linker sees, before any platform prefix.
       function Link_Name (Item : Landin.IR.Item_Id) return String;
@@ -182,8 +213,9 @@ package body Landin.Backend.Entry_Point is
                   null;
                elsif Defined (Name) then
                   Reach_Name (Name);
-               elsif not Result.Contains (Name) then
-                  Result.Append (Name);
+               elsif not Imports.Contains (Name) then
+                  Imports.Append (Name);
+                  Referrers.Append (Referrer_Name (Referring));
                end if;
             end;
          else
@@ -217,6 +249,8 @@ package body Landin.Backend.Entry_Point is
    begin
       --  The roots: the entry, what the entry and the backend call by name,
       --  every datum, and every evidence table.
+      Imports.Clear;
+      Referrers.Clear;
       Reach_Name ("_landin_start");
       Reach_Name ("main");
       Reach_Name ("_landin_host_initialize_arguments");
@@ -241,6 +275,7 @@ package body Landin.Backend.Entry_Point is
             Item : constant Landin.IR.Item_Id := Pending (Waiting);
          begin
             Waiting := Waiting - 1;
+            Referring := Item;
             Reach (Landin.IR.Function_Target (Of_Unit, Item));
             Reach (Landin.IR.Address_Target (Of_Unit, Item));
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
@@ -276,7 +311,6 @@ package body Landin.Backend.Entry_Point is
             end if;
          end;
       end loop;
-      return Result;
    end Unsatisfied_Imports;
 
    function Firmware_Start

@@ -2962,7 +2962,8 @@ package body Landin.Backend.Cortex_M is
                      end if;
                      Store_Value (Value);
                   end;
-               when Landin.IR.Conversion | Landin.IR.Pointer_Address =>
+               when Landin.IR.Conversion | Landin.IR.Pointer_Address
+                  | Landin.IR.Code_Address =>
                   declare
                      From : constant Landin.Types.Scalar_Name :=
                        Kind (Operand (1));
@@ -4942,6 +4943,7 @@ package body Landin.Backend.Cortex_M is
 
                      when Landin.IR.Failure_Test
                         | Landin.IR.Function_Address
+                        | Landin.IR.Code_Address
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call

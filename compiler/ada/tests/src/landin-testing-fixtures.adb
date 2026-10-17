@@ -235,6 +235,20 @@ package body Landin.Testing.Fixtures is
    function C_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.C_Options));
 
+   function C_Shared (Item : Fixture) return String
+     is (Unbounded.To_String (Item.C_Libraries));
+
+   function Shared_Stem (Source : String) return String is
+      First : Integer := Source'First;
+   begin
+      for Index in Source'Range loop
+         if Source (Index) = '/' then
+            First := Index + 1;
+         end if;
+      end loop;
+      return Source (First .. Source'Last - 2);
+   end Shared_Stem;
+
    function Link_Mode (Item : Fixture) return String
      is (Unbounded.To_String (Item.Link));
 
@@ -462,6 +476,7 @@ package body Landin.Testing.Fixtures is
       Seen_Fixed   : Boolean := False;
       Seen_C_Sources : Boolean := False;
       Seen_C_Args  : Boolean := False;
+      Seen_C_Shared : Boolean := False;
       Seen_Link    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
@@ -818,6 +833,62 @@ package body Landin.Testing.Fixtures is
                   end if;
                end;
 
+            elsif Key = "c-shared" then
+               if Seen_C_Shared then
+                  Complain ("duplicate key: c-shared");
+                  return;
+               end if;
+               Seen_C_Shared := True;
+
+               if Expected not in Runtime | Abi then
+                  Complain
+                    ("c-shared belongs only to a runtime or ABI fixture");
+               end if;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+                  Seen  : Landin.Platform.Path_List;
+                  Stems : Landin.Platform.Path_List;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One : constant String := Trimmed (Text);
+                  begin
+                     if not Is_Relative_C_Source (One) then
+                        Ok := False;
+                        Complain
+                          ("c-shared path is not a relative .c file: "
+                           & (if One = "" then "<empty>" else One));
+                     elsif Seen.Contains (One) then
+                        Ok := False;
+                        Complain ("duplicate c-shared path: " & One);
+                     elsif Stems.Contains (Shared_Stem (One)) then
+                        --  The stem names the object, so two sources of
+                        --  one stem would build one file.
+                        Ok := False;
+                        Complain
+                          ("two c-shared sources would build one object: "
+                           & One);
+                     else
+                        Seen.Append (One);
+                        Stems.Append (Shared_Stem (One));
+                     end if;
+                  end Consider;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.C_Libraries := Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
             elsif Key = "c-args" then
                if Seen_C_Args then
                   Complain ("duplicate key: c-args");
@@ -967,6 +1038,7 @@ package body Landin.Testing.Fixtures is
                Fixed   => Unbounded.Null_Unbounded_String,
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
+               C_Libraries => Unbounded.Null_Unbounded_String,
                Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
                Profiles => Standard,
@@ -1079,6 +1151,14 @@ package body Landin.Testing.Fixtures is
 
       if Seen_Class and then Item.Class = Abi and then not Seen_C_Sources then
          Complain ("an ABI fixture needs c-sources");
+      end if;
+
+      --  A program that loads a shared object needs the system's loader,
+      --  which a static Linux program does not have (D280).
+      if Seen_Class and then Item.Class = Runtime and then Seen_C_Shared
+        and then Unbounded.To_String (Item.Link) /= "libc"
+      then
+         Complain ("a runtime fixture with c-shared needs link: libc");
       end if;
 
       --  A `.ldn` program is written in the language, so it is evidence
@@ -1239,7 +1319,11 @@ package body Landin.Testing.Fixtures is
 
             if Accepted then
                declare
-                  Sources : constant String := C_Sources (Item);
+                  Sources : constant String :=
+                    C_Sources (Item)
+                    & (if C_Sources (Item) /= "" and then C_Shared (Item) /= ""
+                       then "," else "")
+                    & C_Shared (Item);
                   First   : Integer := Sources'First;
                   Valid   : Boolean := True;
                begin
@@ -1261,7 +1345,11 @@ package body Landin.Testing.Fixtures is
                              or else Host.Is_Directory (Source_Path)
                            then
                               Into.Problems.Append
-                                (Meta & ": c-sources names " & One
+                                (Meta & ": "
+                                 & (if Index - 1 <= Sources'First
+                                         + C_Sources (Item)'Length - 1
+                                    then "c-sources" else "c-shared")
+                                 & " names " & One
                                  & ", which is missing or not a file");
                               Valid := False;
                            end if;

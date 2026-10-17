@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: platform/libc's dlopen modes RTLD_NOW, RTLD_LOCAL and RTLD_GLOBAL, each held to the system's own dlfcn.h, where Darwin's local and global differ from Linux's and FreeBSD's
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

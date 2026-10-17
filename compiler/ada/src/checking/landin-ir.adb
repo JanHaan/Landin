@@ -3021,7 +3021,8 @@ package body Landin.IR is
         Held (Of_Unit, Item, Value);
    begin
       if Instruction_Held.Op
-           in Function_Address | Evidence_Function | Load | Load_Datum
+           in Function_Address | Code_Address | Evidence_Function | Load
+              | Load_Datum
               | Load_Field | Load_Element | Load_Variant_Field | Load_Indirect
       then
          return Instruction_Held.Signature;
@@ -5132,6 +5133,25 @@ package body Landin.IR is
                          Named => Target,
                          Signature => Signature_Of (Into, Target),
                          others => <>)));
+
+   function Emit_Code_Address
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Value     : Value_Id;
+      Signature : Signature_Id;
+      Site      : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Code_Address,
+                     Result => Landin.Types.Usize,
+                     Signature => Signature,
+                     Site => Site, others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      return Append (Into, Item, Made);
+   end Emit_Code_Address;
 
    function Emit_Evidence_Address
      (Into     : in out Unit;

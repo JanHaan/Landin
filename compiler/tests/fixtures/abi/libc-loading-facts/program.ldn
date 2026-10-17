@@ -1,0 +1,16 @@
+--  platform/libc's dlopen modes, held to the system's own <dlfcn.h>.
+import platform/libc
+
+extern(c) loading_fact: (index: i64) -> (value: i64)
+
+public main: () -> (code: i32) =
+    code = 1
+    if loading_fact(0) <> i64(libc.rtld_now) then return end if
+    code = 2
+    if loading_fact(1) <> i64(libc.rtld_local) then return end if
+    code = 3
+    if loading_fact(2) <> i64(libc.rtld_global) then return end if
+    code = 4
+    if loading_fact(3) <> -1 then return end if
+    code = 42
+end main

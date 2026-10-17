@@ -1,0 +1,137 @@
+--  Shared objects loaded while the program runs, by the system's own
+--  loader: POSIX's dlopen, dlsym, dlclose and dlerror.  The loader is the
+--  one that started the process, so this is there wherever a C runtime
+--  started the program: on Darwin and FreeBSD always, and on Linux under
+--  --link=libc.  A static Linux program has no loader, and one that loads
+--  a library is refused before it links, naming --link=libc (D280).
+--
+--  What is loaded is C, or code of any language reached only through its
+--  C entry points.  A symbol is found as an address with no type; the
+--  program names the C function type it is, `adder(address)`, and nothing
+--  can check that it is right, as a C cast cannot.  A function found in a
+--  library is the program's to call only while the library stays loaded:
+--  once its last use is closed, every address found in it may name
+--  nothing, and no check of the language follows a function value back
+--  to the library it came from.
+
+import core/text
+import platform/libc
+
+library_value: type = struct
+    handle: ptr mut u8
+end library_value
+
+--- A loaded shared object: a handle the system's loader gives, which
+--- counts one use of it until `close_library` gives that use back.
+--- Loading an object already loaded gives the same handle and counts
+--- another use.
+public library: type = library_value
+
+--- The object's symbols resolve no other object's references: POSIX's
+--- `RTLD_LOCAL`, the usual choice, so two libraries that define one name
+--- do not meet.  Darwin's own default is the other one; this layer always
+--- says which.
+public local_symbols: atom
+
+--- The object's symbols also resolve the references of every object
+--- loaded after it: POSIX's `RTLD_GLOBAL`, for a library whose own
+--- plugins call back into it by name.
+public global_symbols: atom
+
+--- Whose references a loaded object's symbols resolve.
+public symbol_scope: type = local_symbols | global_symbols
+
+--- The loader loaded nothing: the file is missing or is not a shared
+--- object for this system, or a symbol it needs is defined nowhere.
+--- `library_failure` gives the loader's own words.
+public no_library: atom
+
+--- The library defines no symbol of that name, nor do the objects it
+--- loaded with it.  `library_failure` gives the loader's own words.
+public no_symbol: atom
+
+--  The longest symbol name `find_symbol` takes, with its NUL.
+symbol_room: type = [4096]u8
+
+--- Load the shared object at `path`, or the one the system's search finds
+--- when `path` holds no slash, with its symbols visible as `scope` says.
+--- Every symbol the object needs is bound as it is loaded, POSIX's
+--- `RTLD_NOW`, so a missing one is `no_library` here and never a failure
+--- at a later call.  The library, or `no_library`; a path holding a NUL
+--- is `einval` and one longer than the system takes `enametoolong`, as
+--- every path of this module is.
+public link(symbol: "_landin_posix_open_library") open_library:
+    (path: text.host_string, scope: symbol_scope)
+    -> (loaded: library) ! errno | no_library =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    match libc.dlopen(terminated, mode_of(scope))
+        libc.not_loaded: fail no_library
+        ptr (handle): loaded = (handle: handle)
+    end match
+end open_library
+
+--  The dlopen mode: every symbol bound as the object is loaded, and the
+--  scope asked for, which is always given because Darwin's default is
+--  not the other systems'.
+mode_of: (scope: symbol_scope) -> (mode: i32) =
+    mode = libc.rtld_now | libc.rtld_local
+    if scope == global_symbols then
+        mode = libc.rtld_now | libc.rtld_global
+    end if
+end mode_of
+
+--- The address of the symbol `name` in `loaded`, or in an object it
+--- loaded with it: never zero, or `no_symbol`.  A name holding a NUL is
+--- `einval`, and one of 4096 bytes or more `enametoolong`.  What is at
+--- the address is the program's to know: a function is made a value by
+--- naming its C function type, `adder(address)`, and is the program's to
+--- call only while `loaded` stays loaded.
+public link(symbol: "_landin_posix_find_symbol") find_symbol:
+    (loaded: library, name: []u8) -> (address: usize) ! errno | no_symbol =
+    fail enametoolong when lenof name >= sizeof symbol_room
+    mut room: symbol_room = zeroed
+    for at in usize(0)..<lenof name do
+        fail einval when name[at] == 0
+        room[at] = name[at]
+    end for
+    match libc.dlsym(loaded.handle, addr room[0])
+        libc.no_address: fail no_symbol
+        ptr (found): address = usize(found)
+    end match
+end find_symbol
+
+--- Give back the use of the library `loaded` counts.  Once no use is
+--- left the loader may unload it, and every address found in it may then
+--- name nothing.  `no_library` when the loader refuses.  A handle whose
+--- every use was already given back names nothing either: closing it again
+--- is not this module's to catch, as it is not C's.
+public link(symbol: "_landin_posix_close_library") close_library:
+    (loaded: library) -> none ! no_library =
+    fail no_library when libc.dlclose(loaded.handle) <> 0
+end close_library
+
+--- The loader's own words for the last `no_library` or `no_symbol` on
+--- this thread, copied into `into` and lent from it, cut at its length:
+--- empty when there has been none since they were last asked for.  Asking
+--- clears them, and the next call of this module that loads, finds or
+--- closes may replace them, so they are asked for at once.  They are for
+--- a person to read; their wording is each system's own.
+public link(symbol: "_landin_posix_library_failure") library_failure:
+    (into: []mut u8) -> (message: []u8 from into) =
+    message = into[0..<0]
+    match libc.dlerror()
+        libc.no_address: return
+        ptr (text): message = into[0..<copied(text, into)]
+    end match
+end library_failure
+
+--  Copy the NUL-terminated TEXT into INTO, as much as fits: how much.
+copied: (text: ptr u8, into: []mut u8) -> (count: usize) =
+    length: usize = libc.strlen(text)
+    count = if length < lenof into then length else lenof into end if
+    for at in usize(0)..<count do
+        byte: ptr u8 = ptr(usize(text) + at)
+        into[at] = byte.val
+    end for
+end copied

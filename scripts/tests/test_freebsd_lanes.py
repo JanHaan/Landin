@@ -196,6 +196,31 @@ class FreeBSDControls(unittest.TestCase):
         #  No `stdin:` key is an empty input, never the guest shell's own.
         self.assertIn('/tmp/landin-control/bundle/empty </dev/null >', script)
 
+    def test_a_fixture_is_given_its_shared_objects_by_their_guest_paths(self):
+        #  compiler/tests/README.md: `c-shared:` objects travel in the bundle
+        #  and are the program's first arguments, before `run_args`.
+        lane = LANE.Lane.__new__(LANE.Lane)
+        lane.source_root = Path('/home/runner/work/Landin/Landin')
+        lane.remote_prefix = '/tmp/landin-control'
+        lane.remote_bundle = Path(lane.remote_prefix) / 'bundle'
+        results = [{'case': 'runtime/posix-libraries', 'label': 'loads',
+                    'shared': ['loads-plugin.so', 'loads-provider.so'],
+                    'meta': {'run_args': 'last', 'stream': 'output'}}]
+        written = []
+
+        class Stop(Exception):
+            pass
+
+        def checked(command, **keywords):
+            written.append(keywords.get('input', b'').decode())
+            raise Stop()
+        with self.assertRaises(Stop):
+            lane.execute(SimpleNamespace(checked=checked), results)
+        self.assertIn('/tmp/landin-control/bundle/loads '
+                      '/tmp/landin-control/bundle/loads-plugin.so '
+                      '/tmp/landin-control/bundle/loads-provider.so last <',
+                      written[0])
+
     def test_guest_failure_cannot_supply_a_feature_verdict(self):
         guest = vm.Guest(1)
         with patch.object(guest, 'run', return_value=type('Result', (), {

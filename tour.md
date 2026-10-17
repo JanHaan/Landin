@@ -3955,6 +3955,12 @@ width. Dynamic construction checks the converted address and traps on zero,
 even in `unchecked`; losing origin is not permission to create null. Absent
 allocator backing uses a named union, not a fake `ptr(1)` allocation.
 
+A function found while the program runs, as a loaded library's symbol is, is
+an address until the program names its C type: `adder(address)`, with
+`adder: type = extern(c) (a: i32, b: i32) -> (r: i32)`, is a function value
+of the code there. Nothing can check the type, as nothing checks a C cast,
+and the value is the program's to call only while the library stays loaded.
+
 The ordinary `platform/c` aliases name C's signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
 `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64

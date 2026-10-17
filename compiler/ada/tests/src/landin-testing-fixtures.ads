@@ -136,6 +136,19 @@ package Landin.Testing.Fixtures is
    function C_Sources (Item : Fixture) return String;
    function C_Args    (Item : Fixture) return String;
 
+   --  A runtime or ABI fixture's C sources that the harness builds, each
+   --  into a shared object of its own, before the program runs: the same
+   --  comma-separated relative `.c` paths as `c-sources`.  Each object is
+   --  named for its source's stem, and its path is handed to the program
+   --  as one of its first arguments, in this order, before `run_args`.
+   --  The program loads them itself, so a runtime fixture that names any
+   --  links with the C library.
+   function C_Shared (Item : Fixture) return String;
+
+   --  The stem of one `c-shared` entry, which names its shared object:
+   --  `plugin` for `plugins/plugin.c`.
+   function Shared_Stem (Source : String) return String;
+
    --  How a runtime fixture's hosted executable is linked, `static`
    --  or `libc`, or "" for the target's default.  A program that calls the
    --  C library names `libc`, because a static Linux link has none.
@@ -231,6 +244,7 @@ private
       Fixed     : Ada.Strings.Unbounded.Unbounded_String;
       C_Files   : Ada.Strings.Unbounded.Unbounded_String;
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
+      C_Libraries : Ada.Strings.Unbounded.Unbounded_String;
       Link      : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;

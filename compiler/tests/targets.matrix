@@ -9,6 +9,8 @@ prototype-3 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/auxiliary-from-c | linux-x86-64, linux-arm64, linux-rv64
+abi/c-function-from-address | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/c-function-from-zero-address-traps | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/clock-agrees-with-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/core-io-file-identity | macos-arm64, freebsd-x86-64, freebsd-arm64
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -17,6 +19,7 @@ abi/environment-from-c | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64,
 abi/host-string-pass-through | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-directory-record | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-file-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/libc-loading-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-process-constants | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-socket-facts | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
@@ -73,6 +76,7 @@ end-to-end/link-needs-hosted-system | cortex-m
 end-to-end/link-static-dry-run | linux-x86-64
 end-to-end/link-static-dry-run-arm64 | linux-x86-64, linux-arm64
 end-to-end/link-static-linker-library | linux-arm64
+end-to-end/link-static-loads-a-library | linux-x86-64
 end-to-end/link-static-needs-linux | macos-arm64
 end-to-end/link-static-unreached-c-import | linux-x86-64
 end-to-end/link-static-unsatisfied-c-import | linux-x86-64
@@ -189,6 +193,7 @@ negative/borrow-read-after-inout-loop | linux-x86-64, linux-arm64, macos-arm64, 
 negative/borrow-read-through-view-address | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/borrow-survives-untaken-replacement | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/borrowed-source-inout | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/c-function-from-address-refusals | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-array-result-dropped-by-omission | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-of-a-non-function | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-result-dropped-by-omission | linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2008,6 +2013,7 @@ runtime/posix-directories | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-
 runtime/posix-errno | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-file-system | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-files | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-libraries | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-locks | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-memory | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-poll | linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

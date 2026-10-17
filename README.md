@@ -413,9 +413,10 @@ This is the maintained inventory of what the compiler does today:
   waiting and sockets, Unix-domain ones among them, reading and writing at
   an offset, renaming, hard and symbolic links, permission bits, owners and
   file times, whole-file and record locks, terminals, their raw mode and
-  pseudo-terminals, and the user and group databases, read from
+  pseudo-terminals, the user and group databases, read from
   /etc/passwd and /etc/group by a static Linux program and through the C
-  library elsewhere, in Landin types, every
+  library elsewhere, and shared objects loaded with the system's own loader,
+  on Darwin, FreeBSD and Linux under `--link=libc`, in Landin types, every
   descriptor closed on exec,
   with a descriptor handle type and errno atoms that keep their numbers,
   over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
@@ -433,7 +434,8 @@ This is the maintained inventory of what the compiler does today:
   is generated from public signatures and doc comments, with module browsing,
   search, source links and examples taken directly from runtime fixtures.
 - **The C boundary.** The C ABI of each hosted target, `layout(c)`, callbacks
-  and variadic calls, with [`bindings/`](bindings/README.md) generating
+  and variadic calls, a C function value made from an address a loader
+  found, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are
   refused by name.
 - **Targets.** Linux x86-64, Linux arm64, Linux RV64, Darwin arm64 and
@@ -536,7 +538,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.35 — Dynamic loading (planned).**
+**Next roadmap item: R12.10 — Describe devices (planned).**
 
 ## Questions, bugs and ideas
 

@@ -10,6 +10,16 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its initial stack and the C library's getauxval exist only on a hosted Linux system, and Cortex-M0 starts no process.",
       "witness": "compiler/tests/fixtures/abi/auxiliary-from-c/fixture.meta"
     },
+    "abi/c-function-from-address": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps C function types disabled (L0346), so no C function value is made there from an address.",
+      "witness": "compiler/tests/fixtures/abi/c-function-from-address/fixture.meta"
+    },
+    "abi/c-function-from-zero-address-traps": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps C function types disabled (L0346), so no C function value is made there from an address.",
+      "witness": "compiler/tests/fixtures/abi/c-function-from-zero-address-traps/fixture.meta"
+    },
     "abi/clock-agrees-with-c": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's clocks exist only on a hosted system; runtime/clock-manual runs core/io's manual clock on Cortex-M0.",
@@ -49,6 +59,11 @@
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's lock, terminal and account records, and a file and an account read through C, exist only on a hosted system; runtime/file-system-firmware runs core/io's file system pieces that fit on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/libc-file-facts/fixture.meta"
+    },
+    "abi/libc-loading-facts": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: dlfcn.h and the loader exist only on a hosted system, and firmware refuses platform/libc by name.",
+      "witness": "compiler/tests/fixtures/abi/libc-loading-facts/fixture.meta"
     },
     "abi/libc-process-constants": {
       "mode": "restriction",
@@ -1596,6 +1611,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-libraries": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations: firmware has no loader to load a shared object with, and no C runtime."
     },
     "runtime/posix-locks": {
       "codes": [
